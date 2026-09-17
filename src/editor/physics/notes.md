@@ -11,7 +11,9 @@ Physics-related tools, UI, and collision shape generation for the editor.
   - **Push** -- apply force in the pointing direction
   - **Pull** -- apply force toward the pointer
 
-  Manages constraint lifecycle, damping overrides, and visual feedback (debug lines). Supports both desktop mouse and XR controller input.
+  Manages damping overrides and visual feedback (debug lines); the drag constraint itself is a `Physics_drag_constraint`. Supports both desktop mouse and XR controller input.
+
+- **`Physics_drag_constraint`** -- The pull of an interactive physics drag, shared by the Physics tool's right-drag and the Transform tool's drag of a jointed dynamic body (`transform/physics_driven_drag.hpp`): a collisionless kinematic drag point body plus a point-to-point constraint from a pivot on the dragged dynamic body to it (`Physics_drag_constraint_settings`: frequency 0 = rigid, else a spring with damping ratio and max force; optional Jolt solver iteration overrides). `attach()` wakes the dragged body and keeps it awake (`begin_move`), `move_drag_point()` teleports or kinematically moves the drag point, `detach()` removes constraint then drag point body and lets the body sleep again; the dragged body keeps its velocity. The owner detaches on scene close / removal of the dragged node, before the world or body goes away.
 
 - **`Physics_window`** -- ImGui window for physics simulation settings (gravity, time step, debug visualization toggles).
 

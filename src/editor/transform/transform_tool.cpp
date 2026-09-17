@@ -250,8 +250,21 @@ Transform_tool::Transform_tool(
             on_render_scene_view(message);
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(message);
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(message);
+        }
+    );
 
     m_drag_command.set_host(this);
+
+    m_rotate_subtool = &rotate_tool;
+    m_scale_subtool  = &scale_tool;
 
     auto record_fn = [this]() { record_transform_operation(); };
     move_tool.set_transform_shared(shared, record_fn);
@@ -306,7 +319,7 @@ void Transform_tool::on_active_item(Active_item_changed_message&)
     // Entries are captured at drag start (world_from_node_before) and consumed
     // by adjust(); reordering them mid-drag would apply the delta against the
     // wrong baselines.
-    if (m_active_handle != Handle::e_handle_none) {
+    if ((m_active_handle != Handle::e_handle_none) || m_scripted_drag_active) {
         return;
     }
     update_target_nodes(nullptr);
@@ -331,6 +344,19 @@ void Transform_tool::on_node_touched(Node_touched_message& message)
 void Transform_tool::on_render_scene_view(Render_scene_view_message& message)
 {
     update_for_view(message.scene_view);
+}
+
+void Transform_tool::on_close_scene(Close_scene_message& message)
+{
+    // A drag in progress must not keep a spring or a kinematic hold on the
+    // bodies of a closing scene (AGENTS.md "Scene-hosted references in
+    // editor parts"): the physics world goes away with the scene.
+    m_physics_drag.on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+}
+
+void Transform_tool::on_items_removed(Items_removed_message& message)
+{
+    m_physics_drag.on_items_removed(*message.removed.get());
 }
 
 void Transform_tool::viewport_toolbar()
@@ -715,6 +741,9 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
         const mat4 anchor_from_world         = shared.world_from_anchor_initial_state.get_inverse_matrix();
         const mat4 previous_anchor_from_node = anchor_from_world         * world_from_node;
         const mat4 updated_world_from_node   = updated_world_from_anchor * previous_anchor_from_node;
+        if (m_physics_drag.drive(node.get(), updated_world_from_node)) {
+            continue; // pulled through physics; the simulation writes the node
+        }
 
         const auto& parent = node->get_parent_node();
         const mat4 parent_from_world = [&]() -> mat4 {
@@ -753,7 +782,11 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
             continue;
         }
 
-        node->set_world_from_node(erhe::scene::translate(entry.world_from_node_before, translation));
+        const Trs_transform updated_world_from_node = erhe::scene::translate(entry.world_from_node_before, translation);
+        if (m_physics_drag.drive(node.get(), updated_world_from_node.get_matrix())) {
+            continue; // pulled through physics; the simulation writes the node
+        }
+        node->set_world_from_node(updated_world_from_node);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     update_transforms();
@@ -766,6 +799,10 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
     // the setting on and exactly one selected node - a bone with a valid
     // ancestor chain. Everything else falls through to plain FK translation.
     if ((m_active_tool == nullptr) || !shared.settings.translate_ik_enable) {
+        return false;
+    }
+    // A bone pulled through physics is moved by the simulation, not by IK.
+    if (!shared.entries.empty() && m_physics_drag.is_spring_driven(shared.entries.front().node.get())) {
         return false;
     }
     if (!m_ik_drag_attempted) {
@@ -836,7 +873,11 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
                 continue;
             }
 
-            node->set_world_from_node(erhe::scene::rotate(entry.world_from_node_before, rotation));
+            const Trs_transform updated_world_from_node = erhe::scene::rotate(entry.world_from_node_before, rotation);
+            if (m_physics_drag.drive(node.get(), updated_world_from_node.get_matrix())) {
+                continue; // pulled through physics; the simulation writes the node
+            }
+            node->set_world_from_node(updated_world_from_node);
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
     } else {
@@ -1250,6 +1291,11 @@ auto Transform_tool::on_drag_ready() -> bool
 {
     log_trs_tool->trace("TRS on_drag_ready");
 
+    if (m_scripted_drag_active) {
+        log_trs_tool->trace("Transform tool cannot start drag - a scripted drag is held");
+        return false;
+    }
+
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         log_trs_tool->trace("Transform tool cannot start drag - Hover scene is not set");
@@ -1318,6 +1364,13 @@ auto Transform_tool::on_drag_ready() -> bool
     if (started) {
         m_drag_scene_view = scene_view;
     }
+    if (started && !shared.component_mode) {
+        const Transform_drag_kind kind =
+            (m_active_tool == m_scale_subtool)  ? Transform_drag_kind::scale  :
+            (m_active_tool == m_rotate_subtool) ? Transform_drag_kind::rotate :
+                                                  Transform_drag_kind::translate;
+        m_physics_drag.begin(m_context, shared.entries, kind);
+    }
     if (started && shared.component_mode) {
         begin_component_edit();
     }
@@ -1331,6 +1384,9 @@ void Transform_tool::end_drag()
     if (m_active_tool != nullptr) {
         m_active_tool->end();
     }
+    // After the record above: the operation captured the release pose. The
+    // released bodies keep their velocity.
+    m_physics_drag.end();
 
     // In component mode the node record path (record_transform_operation, called via
     // Subtool::end above) is a no-op because shared.entries is empty; queue the mesh
@@ -2303,12 +2359,18 @@ void Transform_tool::record_transform_operation()
 
     Compound_operation::Parameters compompound_parameters;
     for (auto& entry : shared.entries) {
+        // A node pulled through physics already sits where the simulation
+        // released it, and its body is moving: the operation records that
+        // pose without snapping the body to rest.
+        const bool spring_driven = m_physics_drag.is_spring_driven(entry.node.get());
         auto node_operation = std::make_shared<Node_transform_operation>(
             Node_transform_operation::Parameters{
                 .node                    = entry.node,
                 .parent_from_node_before = entry.parent_from_node_before,
                 .parent_from_node_after  = entry.node->parent_from_node_transform(),
-                .xform_op_stack_before   = entry.xform_op_stack_before
+                .xform_op_stack_before   = entry.xform_op_stack_before,
+                .first_execute           = spring_driven ? Node_transform_first_execute::record_only : Node_transform_first_execute::apply,
+                .xform_op_stack_after    = spring_driven ? entry.node->copy_xform_op_stack() : std::optional<erhe::scene::Xform_op_stack>{}
             }
         );
         compompound_parameters.operations.push_back(node_operation);
@@ -2359,6 +2421,39 @@ void Transform_tool::record_transform_operation()
             std::move(compompound_parameters)
         )
     );
+}
+
+auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind) -> bool
+{
+    if ((m_active_handle != Handle::e_handle_none) || m_scripted_drag_active) {
+        return false;
+    }
+    if (shared.component_mode || shared.entries.empty()) {
+        return false;
+    }
+    m_scripted_drag_active = true;
+    m_physics_drag.begin(m_context, shared.entries, kind);
+    return true;
+}
+
+void Transform_tool::end_scripted_drag()
+{
+    if (!m_scripted_drag_active) {
+        return;
+    }
+    record_transform_operation();
+    m_physics_drag.end();
+    m_scripted_drag_active = false;
+}
+
+auto Transform_tool::is_scripted_drag_active() const -> bool
+{
+    return m_scripted_drag_active;
+}
+
+auto Transform_tool::is_node_pulled_through_physics(const erhe::scene::Node* const node) const -> bool
+{
+    return m_physics_drag.is_spring_driven(node);
 }
 
 void Transform_tool::create_node_from_anchor()

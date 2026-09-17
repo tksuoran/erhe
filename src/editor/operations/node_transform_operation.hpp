@@ -13,6 +13,19 @@ namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 
+// What the first execute() does with the node.
+enum class Node_transform_first_execute : unsigned int {
+    // Writes parent_from_node_after and snaps the node's rigid body to it at
+    // rest (a discrete move).
+    apply       = 0,
+    // The node already sits at parent_from_node_after, placed there by the
+    // physics simulation during a drag that pulled its dynamic body: record
+    // the xformOp stack only, leaving the node and its moving body alone so
+    // the body keeps the velocity it was released with. Undo and redo snap
+    // as usual.
+    record_only = 1
+};
+
 class Node_transform_operation : public Operation
 {
 public:
@@ -28,6 +41,10 @@ public:
         // back whole.
         std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before;
         float                              time_duration{0.0f};
+        Node_transform_first_execute       first_execute{Node_transform_first_execute::apply};
+        // record_only: the node's stack next to parent_from_node_after, taken
+        // when the drag ended (no value when the node has no stack).
+        std::optional<erhe::scene::Xform_op_stack> xform_op_stack_after;
     };
 
     explicit Node_transform_operation(const Parameters& parameters);

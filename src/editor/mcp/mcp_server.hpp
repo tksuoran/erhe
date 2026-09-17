@@ -15,6 +15,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include <glm/glm.hpp>
+
+#include <optional>
+
 namespace httplib {
     class Server;
 }
@@ -42,6 +46,7 @@ namespace editor {
 
 class App_context;
 class Brush;
+enum class Transform_drag_kind : unsigned int;
 class Scene_root;
 class Viewport_scene_view;
 
@@ -224,6 +229,7 @@ private:
     auto query_active_scene     (const nlohmann::json& args) -> std::string;
     auto action_set_active_scene(const nlohmann::json& args) -> std::string;
     auto action_transform_selection(const nlohmann::json& args) -> std::string;
+    auto action_drag_selection     (const nlohmann::json& args) -> std::string;
     auto action_set_node_transform(const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
@@ -457,6 +463,27 @@ private:
     // (e.g. a minimized window that never renders).
     bool                                             m_defer_current_request{false};
     std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
+    // The request being dispatched (main thread only): lets a deferring
+    // handler tell its own re-run from a new call of the same tool.
+    const Queued_request*                            m_current_request{nullptr};
+
+    // drag_selection: one scripted Transform tool drag stepping one frame per
+    // pass of its deferred request (main thread only).
+    class Selection_drag_steps
+    {
+    public:
+        const Queued_request* request        {nullptr};
+        Transform_drag_kind   kind           {};
+        glm::vec3             translation    {0.0f};
+        glm::vec3             rotation_axis  {0.0f, 1.0f, 0.0f};
+        float                 rotation_angle {0.0f}; // radians
+        glm::vec3             center         {0.0f}; // rotate / scale
+        glm::vec3             scale          {1.0f};
+        int                   frame_count    {1};
+        int                   frame          {0};
+        bool                  release        {true};
+    };
+    std::optional<Selection_drag_steps>              m_selection_drag_steps;
 
     // reset_editor_state has queued the close of every open scene and is
     // deferring itself until the scene list is empty (main thread only).

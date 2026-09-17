@@ -1333,6 +1333,158 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_drag_selection(const json& args) -> std::string
+{
+    Transform_tool* transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    Transform_tool_shared& shared = transform_tool->shared;
+
+    auto nodes_json = [&shared, transform_tool]() -> json {
+        json nodes = json::array();
+        for (const Transform_entry& entry : shared.entries) {
+            if (!entry.node) {
+                continue;
+            }
+            const glm::vec3 t = entry.node->world_from_node_transform().get_translation();
+            nodes.push_back({
+                {"name",                   entry.node->get_name()},
+                {"id",                     entry.node->get_id()},
+                {"world_translation",      {t.x, t.y, t.z}},
+                {"pulled_through_physics", transform_tool->is_node_pulled_through_physics(entry.node.get())}
+            });
+        }
+        return nodes;
+    };
+
+    // Re-run of this request's deferral: apply the next frame's step.
+    const bool continuation =
+        m_selection_drag_steps.has_value() &&
+        (m_selection_drag_steps->request == m_current_request);
+
+    if (!continuation) {
+        const std::string action = args.value("action", "drag");
+        if (action == "release") {
+            if (!transform_tool->is_scripted_drag_active()) {
+                return make_error_content("No held drag_selection drag to release");
+            }
+            if (m_selection_drag_steps.has_value()) {
+                return make_error_content("A drag_selection drag is still stepping; release after it returns");
+            }
+            json nodes = nodes_json();
+            transform_tool->end_scripted_drag();
+            return make_json_content({{"released", true}, {"nodes", nodes}}).dump();
+        }
+        if (action != "drag") {
+            return make_error_content("Invalid action '" + action + "' (expected 'drag' or 'release')");
+        }
+        if (m_selection_drag_steps.has_value() || transform_tool->is_scripted_drag_active()) {
+            return make_error_content("A drag_selection drag is already in progress (held drags end with action 'release')");
+        }
+
+        std::string parse_error;
+        auto read_vec3 = [&args, &parse_error](const char* key, glm::vec3& out_value) -> bool {
+            if (!args.contains(key)) {
+                return false;
+            }
+            const json& value = args.at(key);
+            if (!value.is_array() || (value.size() != 3) || !value[0].is_number() || !value[1].is_number() || !value[2].is_number()) {
+                parse_error = std::string{key} + " must be an array of 3 numbers";
+                return false;
+            }
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            return true;
+        };
+
+        Selection_drag_steps steps{};
+        const bool has_translation = read_vec3("translation", steps.translation);
+        const bool has_rotation    = read_vec3("rotation_axis", steps.rotation_axis);
+        const bool has_scale       = read_vec3("scale", steps.scale);
+        const bool has_center      = read_vec3("center", steps.center);
+        if (!parse_error.empty()) {
+            return make_error_content(parse_error);
+        }
+        const int kind_count = (has_translation ? 1 : 0) + (has_rotation ? 1 : 0) + (has_scale ? 1 : 0);
+        if (kind_count != 1) {
+            return make_error_content("Provide exactly one of translation, rotation_axis (with rotation_angle_deg) or scale");
+        }
+        if (has_rotation) {
+            if (!args.contains("rotation_angle_deg") || !args.at("rotation_angle_deg").is_number()) {
+                return make_error_content("rotation_axis needs a numeric rotation_angle_deg");
+            }
+            if (glm::length(steps.rotation_axis) < 1.0e-6f) {
+                return make_error_content("rotation_axis must be non-zero");
+            }
+            steps.rotation_axis  = glm::normalize(steps.rotation_axis);
+            steps.rotation_angle = glm::radians(args.at("rotation_angle_deg").get<float>());
+        }
+        steps.kind =
+            has_translation ? Transform_drag_kind::translate :
+            has_rotation    ? Transform_drag_kind::rotate    :
+                              Transform_drag_kind::scale;
+        steps.frame_count = args.value("frames", 30);
+        if (steps.frame_count < 1) {
+            return make_error_content("frames must be at least 1");
+        }
+        steps.release = args.value("release", true);
+
+        if (shared.component_mode) {
+            return make_error_content("drag_selection drags node selections; a mesh component selection is active");
+        }
+        if (shared.entries.empty()) {
+            return make_error_content("Nothing to drag - select node(s) with select_items");
+        }
+        if (!has_center) {
+            steps.center = shared.world_from_anchor_initial_state.get_translation();
+        }
+        if (!transform_tool->begin_scripted_drag(steps.kind)) {
+            return make_error_content("Drag refused: a pointer drag is active");
+        }
+        steps.request = m_current_request;
+        m_selection_drag_steps = steps;
+    }
+
+    Selection_drag_steps& steps = m_selection_drag_steps.value();
+    ++steps.frame;
+    const float fraction = static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count);
+    switch (steps.kind) {
+        case Transform_drag_kind::translate: {
+            transform_tool->adjust_translation(steps.translation * fraction);
+            break;
+        }
+        case Transform_drag_kind::rotate: {
+            const glm::quat rotation    = glm::angleAxis(steps.rotation_angle * fraction, steps.rotation_axis);
+            const glm::mat4 translate   = erhe::math::create_translation<float>(-steps.center);
+            const glm::mat4 untranslate = erhe::math::create_translation<float>( steps.center);
+            transform_tool->adjust(untranslate * glm::mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix());
+            transform_tool->update_transforms();
+            break;
+        }
+        case Transform_drag_kind::scale: {
+            transform_tool->adjust_scale(steps.center, glm::mix(glm::vec3{1.0f}, steps.scale, fraction));
+            break;
+        }
+    }
+
+    if (steps.frame < steps.frame_count) {
+        m_defer_current_request = true;
+        return {};
+    }
+
+    const Selection_drag_steps finished = steps;
+    m_selection_drag_steps.reset();
+    json nodes = nodes_json();
+    if (finished.release) {
+        transform_tool->end_scripted_drag();
+    }
+    return make_json_content({
+        {"frames",   finished.frame_count},
+        {"released", finished.release},
+        {"nodes",    nodes}
+    }).dump();
+}
+
 auto Mcp_server::action_set_node_transform(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");

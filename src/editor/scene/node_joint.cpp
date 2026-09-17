@@ -240,6 +240,14 @@ void Node_joint::set_physics_world(erhe::physics::IWorld* value)
     m_physics_world = value;
 }
 
+auto Node_joint::constrains_rigid_body(const erhe::physics::IRigid_body* const rigid_body) const -> bool
+{
+    if (!m_constraint || (rigid_body == nullptr)) {
+        return false;
+    }
+    return (m_rigid_body_a == rigid_body) || (m_rigid_body_b == rigid_body);
+}
+
 void Node_joint::handle_rigid_body_removed(erhe::physics::IRigid_body* rigid_body)
 {
     if (!m_constraint) {

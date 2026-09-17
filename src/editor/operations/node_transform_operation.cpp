@@ -105,6 +105,12 @@ void Node_transform_operation::execute(App_context& context)
         if (m_xform_op_stack_after_recorded) {
             // Redo: restore the recorded transform and stack verbatim.
             m_parameters.node->restore_local_transform(m_parameters.parent_from_node_after, m_xform_op_stack_after);
+        } else if (m_parameters.first_execute == Node_transform_first_execute::record_only) {
+            // A physics-driven drag: the simulation placed the node and its
+            // body is moving; record without writing or snapping.
+            m_xform_op_stack_after          = m_parameters.xform_op_stack_after;
+            m_xform_op_stack_after_recorded = true;
+            return;
         } else {
             m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
             m_xform_op_stack_after          = m_parameters.node->copy_xform_op_stack();

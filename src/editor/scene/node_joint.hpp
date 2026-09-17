@@ -82,6 +82,8 @@ public:
     [[nodiscard]] auto get_enable_collision() const -> bool;
     void               set_enable_collision(bool enable_collision);
     [[nodiscard]] auto get_constraint      () const -> erhe::physics::IConstraint*;
+    // True while a live constraint of this joint references rigid_body.
+    [[nodiscard]] auto constrains_rigid_body(const erhe::physics::IRigid_body* rigid_body) const -> bool;
 
     // Tears down and recreates the constraint, re-capturing the joint frames
     // from the current node transforms. Call after editing the shared

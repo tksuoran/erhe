@@ -40,6 +40,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::physics {
+    class IRigid_body;
     class IWorld;
     class Trigger_event;
 }
@@ -358,6 +359,11 @@ public:
     // departing body (returning those joints to the pending state).
     void register_node_joint    (const std::shared_ptr<Node_joint>& node_joint);
     void unregister_node_joint  (const std::shared_ptr<Node_joint>& node_joint);
+    // True when a live Node_joint constraint of this scene references
+    // rigid_body. Asked at events (selection, drag start), never per frame:
+    // a selected jointed dynamic body stays dynamic, and a Transform tool drag
+    // pulls it through physics instead of writing its node transform.
+    [[nodiscard]] auto is_jointed_rigid_body(const erhe::physics::IRigid_body* rigid_body) const -> bool;
 
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(double dt, const Physics_config& physics);

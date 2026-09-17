@@ -436,6 +436,8 @@ erhe_target_sources_grouped(
     prefabs/prefab_library.cpp
     prefabs/prefab_library.hpp
     physics/collision_generator.hpp
+    physics/physics_drag_constraint.cpp
+    physics/physics_drag_constraint.hpp
     physics/physics_tool.cpp
     physics/physics_tool.hpp
     physics/physics_window.cpp
@@ -645,6 +647,8 @@ erhe_target_sources_grouped(
     transform/mesh_component_transform.hpp
     transform/move_tool.cpp
     transform/move_tool.hpp
+    transform/physics_driven_drag.cpp
+    transform/physics_driven_drag.hpp
     transform/rotate_tool.cpp
     transform/rotate_tool.hpp
     transform/rotation_inspector.cpp

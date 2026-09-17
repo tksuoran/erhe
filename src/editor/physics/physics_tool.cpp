@@ -144,12 +144,7 @@ Physics_tool::Physics_tool(
 
 Physics_tool::~Physics_tool() noexcept
 {
-    if (m_target_constraint) {
-        if (m_physics_world != nullptr) {
-            m_physics_world->remove_constraint(m_target_constraint.get());
-        }
-        m_target_constraint.reset();
-    }
+    m_drag_constraint.detach();
 }
 
 void Physics_tool::on_message(Hover_scene_view_message& message)
@@ -159,10 +154,6 @@ void Physics_tool::on_message(Hover_scene_view_message& message)
         set_hover_scene_view(message.scene_view);
 
         if (m_physics_world != nullptr) {
-            if (m_target_constraint) {
-                m_physics_world->remove_constraint(m_target_constraint.get());
-                m_target_constraint.reset();
-            }
             release_target();
             m_physics_world = nullptr;
         }
@@ -264,25 +255,7 @@ auto Physics_tool::acquire_target() -> bool
     //log_physics->trace("Node pos: {}", node_position);
     //log_physics->trace("Rigid body pos: {}", rigid_body_position);
 
-    if (m_target_constraint) {
-        m_physics_world->remove_constraint(m_target_constraint.get());
-        m_target_constraint.reset();
-    }
-
-    if (m_constraint_world_point_rigid_body) {
-        m_physics_world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
-        m_constraint_world_point_rigid_body.reset();
-    }
-    m_constraint_world_point_rigid_body = m_physics_world->create_rigid_body_shared(
-        erhe::physics::IRigid_body_create_info{
-            .collision_shape   = erhe::physics::ICollision_shape::create_empty_shape_shared(),
-            .mass              = 10.0f,
-            .debug_label       = "Physics Tool",
-            .enable_collisions = false,
-            .motion_mode       = erhe::physics::Motion_mode::e_kinematic_non_physical
-        }
-    );
-    m_physics_world->add_rigid_body(m_constraint_world_point_rigid_body.get());
+    m_drag_constraint.detach();
 
     // TODO investigate Jolt damping
     m_original_linear_damping  = rigid_body->get_linear_damping();
@@ -304,59 +277,27 @@ auto Physics_tool::acquire_target() -> bool
     rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
     rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
 
-    move_drag_point_instant(m_goal_position_in_world);
-
-    const erhe::physics::Point_to_point_constraint_settings constraint_settings{
-        .rigid_body_a = m_target_node_physics->get_rigid_body(),
-        .rigid_body_b = m_constraint_world_point_rigid_body.get(),
-        .pivot_in_a   = m_grab_position_in_collision_shape, // shape center of mass taken into account
-        .pivot_in_b   = glm::vec3{0.0f, 0.0f, 0.0f},
-        .frequency    = m_frequency,
-        .damping      = m_damping
-    };
-
-    m_target_node_physics->get_rigid_body()->begin_move();
-
-    m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
-        constraint_settings
+    m_drag_constraint.attach(
+        *m_physics_world,
+        *rigid_body,
+        m_grab_position_in_collision_shape, // shape center of mass taken into account
+        m_goal_position_in_world,
+        Physics_drag_constraint_settings{
+            .frequency = m_frequency,
+            .damping   = m_damping
+        }
     );
-    m_physics_world->add_constraint(m_target_constraint.get());
 
     return true;
-}
-
-void Physics_tool::move_drag_point_instant(glm::vec3 position)
-{
-    m_constraint_world_point_rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_non_physical);
-    m_constraint_world_point_rigid_body->set_world_transform(
-        erhe::physics::Transform{
-            glm::mat3{1.0f},
-            position
-        }
-    );
-}
-
-void Physics_tool::move_drag_point_kinematic(glm::vec3 position)
-{
-    m_constraint_world_point_rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
-    m_constraint_world_point_rigid_body->set_world_transform(
-        erhe::physics::Transform{
-            glm::mat3{1.0f},
-            position
-        }
-    );
 }
 
 void Physics_tool::release_target()
 {
     log_physics->trace("PT Target released");
 
-    if (m_target_constraint) {
-        if (m_physics_world != nullptr) {
-            m_physics_world->remove_constraint(m_target_constraint.get());
-        }
-        m_target_constraint.reset();
-    }
+    // Removes the constraint and the drag point body; the target keeps its
+    // velocity and may sleep again.
+    m_drag_constraint.detach();
 
     if (m_target_node_physics) {
         erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
@@ -365,7 +306,6 @@ void Physics_tool::release_target()
         rigid_body->set_gravity_factor(m_original_gravity);
         //rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
         //rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-        rigid_body->end_move();
         m_target_node_physics.reset();
     }
 
@@ -378,11 +318,6 @@ void Physics_tool::release_target()
     m_to_end_direction                 = glm::vec3{0.0};
     m_to_start_direction               = glm::vec3{0.0};
     m_target_mesh_size                 = 0.0;
-
-    if (m_constraint_world_point_rigid_body) {
-        m_physics_world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
-        m_constraint_world_point_rigid_body.reset();
-    }
 }
 
 auto Physics_tool::get_last_target_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&
@@ -449,7 +384,7 @@ auto Physics_tool::on_drag() -> bool
     if (!m_target_mesh) {
         return false;
     }
-    if (!m_target_constraint) {
+    if (!m_drag_constraint.is_attached()) {
         return false;
     }
 
@@ -487,7 +422,7 @@ auto Physics_tool::on_drag() -> bool
         m_target_distance = distance;
     }
 
-    move_drag_point_kinematic(m_goal_position_in_world);
+    m_drag_constraint.move_drag_point(m_goal_position_in_world, Drag_point_motion::kinematic);
 
     // TODO investigate jolt damping
     if (m_extra_damping_enable) {
@@ -536,7 +471,7 @@ void Physics_tool::tool_render(const Render_context& context)
     }
 
     line_renderer.set_thickness(0.4f);
-    if (m_target_constraint) {
+    if (m_drag_constraint.is_attached()) {
         const float d = 0.05f;
         const glm::vec3 dx{d, 0.0f, 0.0f};
         const glm::vec3 dy{0.0f, d, 0.0f};
@@ -553,8 +488,8 @@ void Physics_tool::tool_render(const Render_context& context)
     constexpr glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
     constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
 
-    if (m_show_drag_body && m_constraint_world_point_rigid_body) {
-        const glm::mat4 m = m_constraint_world_point_rigid_body->get_world_transform();
+    if (m_show_drag_body && (m_drag_constraint.get_drag_point_body() != nullptr)) {
+        const glm::mat4 m = m_drag_constraint.get_drag_point_body()->get_world_transform();
         const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
         const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
         const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
@@ -635,8 +570,8 @@ void Physics_tool::tool_properties(erhe::imgui::Imgui_window&)
     ImGui::Text("Info:");
     ImGui::Text("Distance: %f",    m_target_distance);
     ImGui::Text("Target Size: %f", m_target_mesh_size);
-    if (m_target_constraint) {
-        const glm::mat4 transform = m_constraint_world_point_rigid_body->get_world_transform();
+    if (m_drag_constraint.is_attached()) {
+        const glm::mat4 transform = m_drag_constraint.get_drag_point_body()->get_world_transform();
         std::string constraint_position      = fmt::format("{}", glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}});
         std::string node_position            = fmt::format("{}", m_grab_position_in_node);
         std::string collision_shape_position = fmt::format("{}", m_grab_position_in_collision_shape);

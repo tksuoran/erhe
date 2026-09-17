@@ -280,14 +280,15 @@ Scene_root::Scene_root(
                     if (rigid_body == nullptr) {
                         continue;
                     }
-                    log_physics->trace("release physics: {}", node->describe());
-                    node_physics->end_interaction();
+                    // Only a body the selection made kinematic is handed back
+                    // (a jointed dynamic body was left dynamic on select).
                     const auto i = std::remove(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
                     if (i == m_physics_disabled_nodes.end()) {
-                        log_physics->error("node {} not in physics disabled nodes", item->get_name());
-                    } else {
-                        m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
+                        continue;
                     }
+                    m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
+                    log_physics->trace("release physics: {}", node->describe());
+                    node_physics->end_interaction();
                 }
 
                 for (const auto& item : selection_change.newly_selected) {
@@ -304,6 +305,16 @@ Scene_root::Scene_root(
                     }
                     auto* rigid_body = node_physics->get_rigid_body();
                     if (rigid_body == nullptr) {
+                        continue;
+                    }
+                    // A dynamic body held by a live joint stays dynamic while
+                    // selected: making it kinematic would take it out of its
+                    // joint. A Transform tool drag pulls it through physics.
+                    if (
+                        (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_dynamic) &&
+                        is_jointed_rigid_body(rigid_body)
+                    ) {
+                        log_physics->trace("selected jointed dynamic body stays dynamic: {}", node->describe());
                         continue;
                     }
                     log_physics->trace("acquire physics: {}", node->describe());
@@ -1845,6 +1856,16 @@ void Scene_root::register_node_joint(const std::shared_ptr<Node_joint>& node_joi
     // order); when this returns false the joint stays pending and is retried
     // from register_node_physics().
     static_cast<void>(node_joint->try_create_constraint());
+}
+
+auto Scene_root::is_jointed_rigid_body(const erhe::physics::IRigid_body* const rigid_body) const -> bool
+{
+    for (const std::shared_ptr<Node_joint>& node_joint : m_node_joints) {
+        if (node_joint->constrains_rigid_body(rigid_body)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_joint)

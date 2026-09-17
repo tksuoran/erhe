@@ -456,6 +456,12 @@ auto Mcp_server::process_queued_requests() -> int
             req->result_promise.set_value(
                 make_jsonrpc_error(nullptr, -32000, "Request expired before processing: " + req->tool_name)
             );
+            if (m_selection_drag_steps.has_value() && (m_selection_drag_steps->request == req.get())) {
+                // The steps stop; the scripted drag stays held until a
+                // drag_selection release.
+                m_selection_drag_steps.reset();
+                log_mcp->warn("MCP server: drag_selection expired mid-drag; the drag is held - release it with action 'release'");
+            }
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;
         }
@@ -469,7 +475,9 @@ auto Mcp_server::process_queued_requests() -> int
         // logged loudly so the offending handler can still be tracked down.
         std::string result;
         try {
+            m_current_request = req.get();
             result = dispatch_tool_call(req->tool_name, req->arguments);
+            m_current_request = nullptr;
         } catch (const std::exception& e) {
             log_mcp->error("MCP server: handler for '{}' threw: {}", req->tool_name, e.what());
             result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw an exception: " + e.what());
@@ -558,6 +566,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_active_scene",               &Mcp_server::query_active_scene                   },
         { "set_active_scene",               &Mcp_server::action_set_active_scene              },
         { "transform_selection",            &Mcp_server::action_transform_selection           },
+        { "drag_selection",                 &Mcp_server::action_drag_selection                },
         { "set_node_transform",             &Mcp_server::action_set_node_transform            },
         { "place_brush",                    &Mcp_server::action_place_brush                   },
         { "place_brush_instances",          &Mcp_server::action_place_brush_instances         },

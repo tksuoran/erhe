@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "physics/physics_drag_constraint.hpp"
 #include "scene/node_raytrace.hpp"
 
 #include "erhe_physics/irigid_body.hpp"
@@ -98,9 +99,6 @@ private:
     // drop the reference when it names one of the removed items.
     void on_items_removed(const Removed_items& removed);
 
-    void move_drag_point_instant  (glm::vec3 position);
-    void move_drag_point_kinematic(glm::vec3 position);
-
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
@@ -126,8 +124,7 @@ private:
     glm::vec3                                   m_goal_position_in_world          {0.0f, 0.0f, 0.0f}; // Goal position for drag point in world space
 
     erhe::physics::IWorld*                      m_physics_world{nullptr};
-    std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
-    std::shared_ptr<erhe::physics::IRigid_body> m_constraint_world_point_rigid_body;
+    Physics_drag_constraint                     m_drag_constraint;
 
     float m_force_distance          {1.0f};
 

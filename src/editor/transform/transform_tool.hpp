@@ -6,6 +6,7 @@
 #include "transform/ik_drag.hpp"
 #include "transform/lattice_point_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
+#include "transform/physics_driven_drag.hpp"
 #include "transform/rotation_inspector.hpp"
 #include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
@@ -252,6 +253,21 @@ public:
     void touch();
     void record_transform_operation();
 
+    // A drag driven by code instead of the pointer (the MCP drag_selection
+    // tool): begin_scripted_drag() starts a node drag of the selection the
+    // way a gizmo press does - including the physics pull of jointed dynamic
+    // bodies - the caller then feeds adjust_translation() / adjust() /
+    // adjust_scale() once per frame, and end_scripted_drag() records the
+    // undoable operation and releases the bodies like a gizmo release.
+    // Refused while a pointer drag, a scripted drag or a component selection
+    // is active, or when nothing is selected.
+    auto begin_scripted_drag(Transform_drag_kind kind) -> bool;
+    void end_scripted_drag  ();
+    [[nodiscard]] auto is_scripted_drag_active() const -> bool;
+    // True while the current drag pulls the node's jointed dynamic body
+    // through physics instead of writing the node transform.
+    [[nodiscard]] auto is_node_pulled_through_physics(const erhe::scene::Node* node) const -> bool;
+
     // Create a real, undoable scene Node at the current gizmo anchor frame.
     void create_node_from_anchor();
 
@@ -312,6 +328,8 @@ private:
     void on_animation_update(Animation_update_message& message);
     void on_node_touched    (Node_touched_message& message);
     void on_render_scene_view(Render_scene_view_message& message);
+    void on_close_scene     (Close_scene_message& message);
+    void on_items_removed   (Items_removed_message& message);
     void update_for_view    (Scene_view* scene_view);
     // True when scene_view shows the active scene (the scene the gizmo
     // targets); the gizmo is visible, hoverable and draggable only there.
@@ -355,6 +373,8 @@ private:
     erhe::message_bus::Subscription<Animation_update_message>  m_animation_update_subscription;
     erhe::message_bus::Subscription<Node_touched_message>      m_node_touched_subscription;
     erhe::message_bus::Subscription<Render_scene_view_message> m_render_scene_view_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>       m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>     m_items_removed_subscription;
     Transform_tool_drag_command         m_drag_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;
@@ -381,6 +401,13 @@ private:
     Subtool*                            m_hover_tool      {nullptr};
     Subtool*                            m_active_tool     {nullptr};
     Subtool*                            m_last_active_tool{nullptr};
+    Subtool*                            m_rotate_subtool  {nullptr};
+    Subtool*                            m_scale_subtool   {nullptr};
+    // Dynamic bodies of the dragged nodes, taken over for the drag: jointed
+    // ones are pulled through physics, others held kinematic (see
+    // Physics_driven_drag). Started with the node drag, ended at release.
+    Physics_driven_drag                 m_physics_drag;
+    bool                                m_scripted_drag_active{false};
     Rotation_inspector                  m_rotation;
 
     Property_editor                     m_property_editor;
