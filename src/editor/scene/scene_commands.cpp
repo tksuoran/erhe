@@ -71,6 +71,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <unordered_set>
 
 
@@ -656,10 +657,11 @@ auto Scene_commands::create_new_camera(erhe::Hierarchy* parent) -> std::shared_p
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_camera,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = new_camera,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
@@ -683,10 +685,11 @@ auto Scene_commands::create_new_xform(erhe::Hierarchy* parent) -> std::shared_pt
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_xform,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = new_xform,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
@@ -710,10 +713,11 @@ auto Scene_commands::create_new_mesh(erhe::Hierarchy* parent) -> std::shared_ptr
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_mesh,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = new_mesh,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
@@ -733,10 +737,11 @@ auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_pt
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_scope,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = new_scope,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
@@ -889,10 +894,11 @@ auto Scene_commands::create_new_light(erhe::Hierarchy* parent) -> std::shared_pt
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_light,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = new_light,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
@@ -917,10 +923,11 @@ auto Scene_commands::create_new_layout(erhe::Hierarchy* parent) -> std::shared_p
                 .operations = {
                     std::make_shared<Item_insert_remove_operation>(
                         Item_insert_remove_operation::Parameters{
-                            .context = m_context,
-                            .item    = new_node,
-                            .parent  = get_insert_parent(*scene_root, parent),
-                            .mode    = Item_insert_remove_operation::Mode::insert
+                            .context         = m_context,
+                            .item            = new_node,
+                            .parent          = get_insert_parent(*scene_root, parent),
+                            .mode            = Item_insert_remove_operation::Mode::insert,
+                            .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
                         }
                     ),
                     std::make_shared<Node_attach_operation>(new_layout, new_node)
@@ -1345,10 +1352,11 @@ auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::sh
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = node,
-                .parent  = get_insert_parent(*scene_root, parent),
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = m_context,
+                .item            = node,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );

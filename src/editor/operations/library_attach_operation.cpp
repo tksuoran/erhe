@@ -16,6 +16,7 @@
 
 #include <fmt/format.h>
 
+#include <limits>
 #include <mutex>
 
 namespace editor {
@@ -60,10 +61,11 @@ auto make_resource_insert_operation(
 
     return std::make_shared<Item_insert_remove_operation>(
         Item_insert_remove_operation::Parameters{
-            .context = context,
-            .item    = prim,
-            .parent  = parent,
-            .mode    = Item_insert_remove_operation::Mode::insert
+            .context         = context,
+            .item            = prim,
+            .parent          = parent,
+            .mode            = Item_insert_remove_operation::Mode::insert,
+            .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
         }
     );
 }
