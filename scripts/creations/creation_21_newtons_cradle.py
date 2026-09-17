@@ -3,9 +3,11 @@
 
 A large chrome Newton's cradle on a walnut desk. Five steel balls hang
 from the two top rails in the classic V suspension (two threads per
-ball), and every ball is a dynamic rigid body on a HINGE joint to the
-world at the midpoint of its two thread anchors - the axis the V
-suspension physically allows. The left ball is built lifted; releasing
+ball), and every ball is a dynamic rigid body on a HINGE joint at the
+midpoint of its two thread anchors - the axis the V suspension
+physically allows. Each hinge joins a "Ball N Hinge" node under the ball
+to a fixed "Ball N Pivot" node under Cradle Frame > Cradle Pivots, so
+dragging a ball never moves its pivot. The left ball is built lifted; releasing
 the physics clock lets it fall, and the collision momentum travels
 through the row to kick out the right ball.
 
@@ -196,6 +198,7 @@ def build_cradle(c, m):
         {"angular_axes": [False, False, True], "min": -1.4, "max": 1.4},
     ])
 
+    pivots = c.group("Cradle Pivots", [0.0, Y_RAIL, 0.0], parent_node_id=frame)
     balls = c.group("Cradle Balls", [0.0, Y_RAIL, 0.0], parent_node_id=cradle)
     ball_names = []
     pins = []
@@ -241,12 +244,21 @@ def build_cradle(c, m):
 
         c.body(ball_id, shape="sphere", radius=BALL_RADIUS, mass=BALL_MASS,
                material_name="Cradle Steel", motion_mode="dynamic")
-        # Hinge pin on the line through both thread anchors.
-        pins.append((name, c.anchor(f"{name} Pivot", ball_id, pivot)))
+        # Hinge on the line through both thread anchors: the ball's end
+        # rides the ball, the fixed end lives in the cradle frame.
+        pins.append((c.anchor(f"{name} Hinge", ball_id, pivot),
+                     c.anchor(f"{name} Pivot", pivots, pivot)))
     c.settle()
-    # Joints once the bodies exist: each ball hinged to the world.
-    for name, pin in pins:
-        c.joint(pin, settings_name="Cradle Hinge")
+    # Joints once the bodies exist. The connected node carries the fixed
+    # side: Node_joint re-captures both frames whenever the constraint is
+    # rebuilt (a viewport drag rebuilds it), and a world-anchored joint
+    # without a connected node takes its world frame from the joint node
+    # itself - which moves with the dragged ball, dragging the pivot along.
+    # "Cradle Pivots" has no rigid body on its ancestor chain, so the
+    # joint anchors to the world at each Pivot node's frame, which only
+    # moves when the cradle itself is moved.
+    for hinge, pivot_node in pins:
+        c.joint(hinge, connected_node_id=pivot_node, settings_name="Cradle Hinge")
     c.settle()
     return cradle, ball_names
 

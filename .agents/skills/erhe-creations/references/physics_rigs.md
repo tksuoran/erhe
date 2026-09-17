@@ -67,8 +67,19 @@ Momentum passed ball to ball needs each collision solved on its own.
 
 - Rig per ball: dynamic node with `create_physics_body shape="sphere"`
   (a hull of the faceted render mesh deflects contacts), explicit equal
-  mass, an anchor child at the pivot and a hinge to the world (linear
-  locked, angular x/y locked, z ranged). Visual threads/caps are
+  mass, and a hinge (linear locked, angular x/y locked, z ranged) from a
+  "Hinge" anchor under the ball to a "Pivot" node under the frame
+  (`c.joint(hinge, connected_node_id=pivot)`).
+- **A world-anchored joint needs a connected node that stays put.**
+  `Node_joint` re-captures both frames whenever its constraint is
+  rebuilt (a viewport drag of the body rebuilds it), and without a
+  connected node the world-side frame is the joint node's own world
+  pose. With the anchor under the dragged body, the pivot travels with
+  the drag (measured: the pivot went from z 0 to z 0.037 and the ball
+  settled out of the row plane). Point `connected_node_id` at a node
+  with no rigid body on its ancestor chain (it then anchors to the world
+  at that node's frame) or at a node under the static frame body.
+  Creations 7-8 still use the anchor-only form. Visual threads/caps are
   motion_mode "none" children of the ball.
 - One shared physics material: restitution 1 with combine maximum,
   friction 0, linear and angular damping 0.
