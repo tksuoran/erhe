@@ -185,11 +185,17 @@ void Node_joint::set_connected_node(const std::shared_ptr<erhe::scene::Node>& no
 
 void Node_joint::on_property_changed(const erhe::property::Property_changed_args& args)
 {
-    if (!erhe::property::is_owner_type_or_descendant(c_joint_owner, args.property.get_owner_type())) {
+    // Only the joint's own entry-stored values shape the constraint. The
+    // properties the joint inherits from Item_base (visible, active, name,
+    // ...) pass the owner-type test too, and a rebuild re-captures the joint
+    // frames from the current node poses and teleports both bodies to rest:
+    // toggling a swinging ball's visibility stopped it dead.
+    // connected_node is bridged: set_connected_node already rebuilt.
+    if (
+        (&args.property != joint_settings_property.get_ptr()) &&
+        (&args.property != enable_collision_property.get_ptr())
+    ) {
         return;
-    }
-    if (&args.property == connected_node_property.get_ptr()) {
-        return; // bridged: set_connected_node already updated the member and rebuilt
     }
     refresh_mirror();
     rebuild();
