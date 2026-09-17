@@ -60,3 +60,33 @@ apply_physics_force shove).
   (yaw-insensitive) - a shoved creature legitimately re-plants facing a
   new heading. A shove also slides it 1-2 m: re-frame the aftermath
   camera on the body's actual position, not the build position.
+
+## Collision chains: Newton's cradle (creation 21 carries reference code)
+
+Momentum passed ball to ball needs each collision solved on its own.
+
+- Rig per ball: dynamic node with `create_physics_body shape="sphere"`
+  (a hull of the faceted render mesh deflects contacts), explicit equal
+  mass, an anchor child at the pivot and a hinge to the world (linear
+  locked, angular x/y locked, z ranged). Visual threads/caps are
+  motion_mode "none" children of the ball.
+- One shared physics material: restitution 1 with combine maximum,
+  friction 0, linear and angular damping 0.
+- Jolt (default backend) solves every contact inside its speculative
+  contact distance (2 cm, Jolt default, not overridden by erhe) in the
+  same velocity solve, so touching balls share the impulse: with a
+  0.5 mm gap balls 2-5 all swung off together to 0.16 m and ball 1
+  bounced back. The gap must exceed that distance plus one fixed step
+  of travel (steps are 240 Hz): 2.2 cm gap -> far ball reaches 0.408 m
+  of the 0.410 m lift.
+- Box3D transfers cleanly with the 0.5 mm gap (far ball 0.406 m); the
+  2.2 cm gap also works there (0.400 m, middle balls follow through
+  about 4 cm).
+- Jolt applies restitution only above 1 m/s approach speed (Jolt default
+  `mMinVelocityForRestitution`); lift the first ball high enough that
+  impact speed stays well above it (40 deg on a 0.64 m pendulum gives
+  about 1.7 m/s).
+- Verify transfer numerically, not by eye: under the manual clock step
+  0.02 s at a time and print every ball's row-axis displacement
+  (`capture_far_ball_peak` in creation 21); the step where the far ball
+  stops rising is also the action screenshot.

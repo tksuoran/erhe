@@ -240,6 +240,22 @@ creations up beyond single showcase scenes.
 
 ## Creations timeline
 
+### 21 - Newton's Cradle (2026-09-17)
+
+![Newton's Cradle](images/creations/21_newtons_cradle.png)
+
+A large chrome Newton's cradle on a walnut desk beside a stack of books,
+and it works: each of the five steel balls is a dynamic sphere body on
+a hinge joint to the world, on the line through its two V-suspension
+threads. All balls share a lossless physics material (restitution 1, no
+friction, no damping). The left ball is built lifted to 40 degrees. The
+script steps the simulation clock, prints every ball's displacement,
+and captures the frame where the far ball tops out. How much gap the
+balls need depends on the physics backend: Jolt solves touching
+contacts together and swings the whole row off unless the balls hang
+2.2 cm apart, while Box3D passes the momentum along with the balls
+nearly touching (the skill's `physics_rigs.md` has the numbers).
+
 ### 20 - Frog (2026-08-11)
 
 ![Frog](images/creations/20_frog.png)

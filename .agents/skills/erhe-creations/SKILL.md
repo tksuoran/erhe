@@ -38,7 +38,10 @@ parts: segment-aligned articulated legs + toes, probed surface accents
 (iris/nostril/tympanum), low-frequency mottle texture, CSG pad slits,
 and a LIVE POSE RIG - every part posed by a transform_from_node driven
 by a scene node under Frog > "Frog Rig" -
-see geometry_graph_sculpt.md + csg_hulls.md).
+see geometry_graph_sculpt.md + csg_hulls.md),
+newtons cradle = five hinged dynamic spheres on a lossless physics
+material; the ball gap that makes momentum transfer work depends on the
+physics backend - see physics_rigs.md "Collision chains").
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -110,6 +113,16 @@ they carry the current idioms.
   `--reuse` scene close/reopen cycles the fresh scene's viewport window
   can spawn as a tiny corner window instead of taking the docked slot -
   kill and relaunch the editor (fresh launch restores the user layout).
+- **Debug headless editor startup outlasts create_scene's request
+  timeout** (2026-09-17): a fresh `build_vs2026_vulkan_headless/bin/Debug`
+  editor drops the first `create_scene` as expired while its first frames
+  are still building, and `new_scene()` then raises. Launch it first
+  (`common.launch_editor(...)`), wait for `Main loop: completed frame 12`
+  in `logs/log.txt`, then run the script with `--reuse`.
+- **Look nodes up by type, not bare name**: `create_shape` with a pooled
+  brush names the library brush after the shape, so `get_node_details
+  node_name="Ball 1"` can answer with the Brush entry (no transform).
+  Filter `get_scene_nodes` by `type == "Mesh"` + parent instead.
 - **Wireframe overlay in screenshots**: the per-viewport Visual Style
   defaults come from `config/editor/default_viewport_config.json`, read
   at EVERY viewport construction (`make_viewport_config`). If the user's
@@ -383,7 +396,8 @@ file is read before any creation work:
   tables. Creations 9-10, 13, 15.
 - `references/physics_rigs.md` - joint plumbing (anchors, limits,
   drives), toggle/wake semantics, ragdolls, load-bearing motor rigs
-  (the standing spider) and pose probes. Creations 7-8, 14.
+  (the standing spider), pose probes and collision chains (Newton's
+  cradle ball gap per backend). Creations 7-8, 14, 21.
 - `references/csg_hulls.md` - CSG carving (batched tools), authored
   convex-hull silhouettes, lattice/FFD deformation, bent-strip trim,
   probed hull-hugging bands, ship-scale composition. Creation 16.
