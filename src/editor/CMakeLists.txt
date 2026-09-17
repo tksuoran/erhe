@@ -525,8 +525,6 @@ erhe_target_sources_grouped(
     scene/draw_mode_renderer.hpp
     scene/node_joint.cpp
     scene/node_joint.hpp
-    operations/ik_settings_change_operation.cpp
-    operations/ik_settings_change_operation.hpp
     scene/node_ik_settings.cpp
     scene/node_ik_settings.hpp
     scene/node_physics.cpp

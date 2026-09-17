@@ -71,7 +71,7 @@ constexpr int   c_max_iterations  = 16;
 
     const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(&joint);
     if (ik_settings) {
-        const Ik_settings_data& data = ik_settings->data;
+        const Ik_settings_data& data = ik_settings->get_data();
         for (int axis = 0; axis < 3; ++axis) {
             constraint.lock [axis] = constraint.lock[axis] || data.lock[axis];
             constraint.limit[axis] = data.limit[axis];

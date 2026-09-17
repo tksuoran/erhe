@@ -2051,6 +2051,42 @@ every migration:
   is the headless editor launched with stderr redirected to a file (the
   crash handler prints a symbolized backtrace there).
 
+### 4.19 Ik_settings
+
+`Ik_settings` (the editor's per-bone IK attachment,
+`doc/ik-settings-requirements.md`) registers its fields as entry-stored
+properties, owner type `Ik_settings::property_owner_type()`, UI group
+`IK`: `lock_x`, `lock_y`, `lock_z`, `limit_x`, `limit_y`, `limit_z`
+(bool), `limit_min` and `limit_max` (vec3 radians, `angle_degrees`
+presentation, coerced per component to [-pi, 0] and [0, pi]), `stiffness`
+(vec3, coerced to [0, 0.99], `developer_only` because the solver does not
+read it yet) and `rest_rotation` (quat). Every field inherits (D30), so a
+node or a style holds `Ik_settings.limit_x` for the attachments below it,
+except `rest_rotation`: the reference orientation of one bone has no
+meaning shared down a chain. The D30 rule does not look at `inherits`, so
+a holder still offers and stores `Ik_settings.rest_rotation`; the value
+stays on the holder and no attachment reads it (covered by the property
+test). The defaults are the `Ik_settings_data` initializers.
+`Ik_settings_data` is the mirror of the effective values, refreshed by
+`Ik_settings::on_property_changed`; readers (the IK drag's
+`resolve_constraint`, the `ERHE_rig` export) take `get_data()`, and
+writers go through `set_lock(axis)`, `set_limit(axis)`, `set_limit_min`,
+`set_limit_max`, `set_stiffness` and `set_rest_rotation`, which write
+local values (`Scene_commands::attach_new_ik_settings` captures the rest
+rotation through the setter before the attach). The clone constructor
+copies the mirror; the entries copy through D10. The generic section
+draws every row; the whole-struct `Ik_settings_change_operation` and the
+hand-written rows with their drag latch are gone, and
+`Properties::ik_settings_actions` keeps only "Set rest from current
+pose", which records a `Property_set_operation` of `rest_rotation`, the
+operation the generic rows and MCP `set_item_property` record.
+`ERHE_rig` keeps writing the explicit effective fields and adds the
+`properties` map of local values; on load the map is the attachment's
+complete local set (`clear_local_properties_not_listed`, the
+`ERHE_layout` rule). Tests: `src/editor/transform/test/
+test_ik_settings_properties.cpp` (target `editor_ik_solver_tests`, which
+compiles `node_ik_settings.cpp` and links `erhe::scene`).
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

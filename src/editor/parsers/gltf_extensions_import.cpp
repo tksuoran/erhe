@@ -309,7 +309,7 @@ void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
     }
 }
 
-// ERHE_rig: per-bone IK settings -> Ik_settings attachment
+// ERHE_rig: per-bone IK settings -> Ik_settings attachment properties
 // (doc/ik-settings-requirements.md section 6). Absent fields keep defaults;
 // out-of-range limits and stiffness are clamped to their valid ranges
 // (min in [-pi, 0], max in [0, pi], stiffness in [0, 0.99]).
@@ -334,7 +334,7 @@ void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
         }
         const nlohmann::json& ij = *ik_it;
         auto ik_settings = std::make_shared<Ik_settings>(ij.value("name", std::string{"IK settings"}));
-        Ik_settings_data& ik = ik_settings->data;
+        const Ik_settings_data defaults{};
         const auto read_bool3 = [&ij](const char* key, std::array<bool, 3>& out_values) {
             const auto it = ij.find(key);
             if ((it == ij.end()) || !it->is_array() || (it->size() < 3)) {
@@ -346,11 +346,17 @@ void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
                 }
             }
         };
-        read_bool3("lock",  ik.lock);
-        read_bool3("limit", ik.limit);
-        ik.limit_min = glm::clamp(to_vec3(ij.value("min",       nlohmann::json{}), ik.limit_min), glm::vec3{-glm::pi<float>()}, glm::vec3{0.0f});
-        ik.limit_max = glm::clamp(to_vec3(ij.value("max",       nlohmann::json{}), ik.limit_max), glm::vec3{0.0f},             glm::vec3{glm::pi<float>()});
-        ik.stiffness = glm::clamp(to_vec3(ij.value("stiffness", nlohmann::json{}), ik.stiffness), glm::vec3{0.0f},             glm::vec3{0.99f});
+        std::array<bool, 3> lock  = defaults.lock;
+        std::array<bool, 3> limit = defaults.limit;
+        read_bool3("lock",  lock);
+        read_bool3("limit", limit);
+        for (int axis = 0; axis < 3; ++axis) {
+            ik_settings->set_lock (axis, lock [static_cast<std::size_t>(axis)]);
+            ik_settings->set_limit(axis, limit[static_cast<std::size_t>(axis)]);
+        }
+        ik_settings->set_limit_min(glm::clamp(to_vec3(ij.value("min",       nlohmann::json{}), defaults.limit_min), glm::vec3{-glm::pi<float>()}, glm::vec3{0.0f}));
+        ik_settings->set_limit_max(glm::clamp(to_vec3(ij.value("max",       nlohmann::json{}), defaults.limit_max), glm::vec3{0.0f},             glm::vec3{glm::pi<float>()}));
+        ik_settings->set_stiffness(glm::clamp(to_vec3(ij.value("stiffness", nlohmann::json{}), defaults.stiffness), glm::vec3{0.0f},             glm::vec3{0.99f}));
         const auto rest_it = ij.find("rest_rotation");
         if (
             (rest_it != ij.end()) && rest_it->is_array() && (rest_it->size() >= 4) &&
@@ -364,11 +370,24 @@ void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
                 (*rest_it)[2].get<float>()  // z
             };
             if (glm::length(rest) > 1.0e-6f) {
-                ik.rest_rotation = glm::normalize(rest);
+                ik_settings->set_rest_rotation(glm::normalize(rest));
             }
         }
         ik_settings->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         apply_flags(*ik_settings, ij);
+        // The explicit fields above wrote local values; the properties map
+        // is the attachment's complete local set (the ERHE_layout /
+        // ERHE_light rule), so a field it does not name is cleared again
+        // and a value held by the node above inherits after the reload.
+        const auto properties_it = ij.find("properties");
+        if ((properties_it != ij.end()) && properties_it->is_object()) {
+            erhe::gltf::clear_local_properties_not_listed(
+                *ik_settings,
+                [properties_it](const std::string_view property_name) -> bool {
+                    return properties_it->contains(std::string{property_name});
+                }
+            );
+        }
         node->attach(ik_settings);
     }
 }

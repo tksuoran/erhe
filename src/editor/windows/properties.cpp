@@ -13,12 +13,12 @@
 #include "texture_graph/graph_texture.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
-#include "operations/ik_settings_change_operation.hpp"
 #include <algorithm>
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_set_operation.hpp"
 
 #include "app_scenes.hpp"
 #include "preview/material_preview.hpp"
@@ -150,9 +150,6 @@ void Properties::on_items_removed(const Removed_items& removed)
     if (m_inspected_material && removed.lookup.contains(m_inspected_material.get())) {
         m_inspected_material.reset();
     }
-    if (m_ik_settings_drag_target && removed.lookup.contains(m_ik_settings_drag_target.get())) {
-        m_ik_settings_drag_target.reset(); // in-progress drag session dies with the item
-    }
 }
 
 void Properties::on_close_scene(erhe::Item_host* const closing_host)
@@ -167,9 +164,6 @@ void Properties::on_close_scene(erhe::Item_host* const closing_host)
     }
     if (m_inspected_material && (asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*m_inspected_material, closing_host)) {
         m_inspected_material.reset();
-    }
-    if (m_ik_settings_drag_target && (m_ik_settings_drag_target->get_item_host() == closing_host)) {
-        m_ik_settings_drag_target.reset();
     }
 }
 
@@ -1040,109 +1034,30 @@ void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::p
     pop_group();
 }
 
-void Properties::queue_ik_settings_change(const std::shared_ptr<Ik_settings>& ik_settings, const Ik_settings_data& before)
-{
-    if (!ik_settings || (before == ik_settings->data)) {
-        return;
-    }
-    m_context.operation_stack->queue(
-        std::make_shared<Ik_settings_change_operation>(ik_settings, before, ik_settings->data)
-    );
-}
-
-void Properties::ik_settings_properties(const std::shared_ptr<Ik_settings>& ik_settings)
+void Properties::ik_settings_actions(const std::shared_ptr<Ik_settings>& ik_settings)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Undo is recorded immediately per completed edit, with the before-copy
-    // captured at the start of the interaction - deliberately NOT the
-    // material_properties inspect latch: a single-slot latch flaps and
-    // silently loses records when several Ik_settings attachments render
-    // at once (multi-selection), and its retained initial state goes stale
-    // across undo. A checkbox or button click is a complete edit by
-    // itself; the drag widget snapshots on activation and queues on
-    // deactivation-after-edit. (Property_editor::use_state() is also
-    // unsuitable here: it samples ImGui item state only for the LAST
-    // widget an entry submitted, losing edits from multi-widget rows.)
-
-    add_entry(
-        "Lock",
-        [this, ik_settings]() {
-            Ik_settings_data&      data   = ik_settings->data;
-            const Ik_settings_data before = data;
-            bool changed = false;
-            changed |= ImGui::Checkbox("X##ik_lock", &data.lock[0]); ImGui::SameLine();
-            changed |= ImGui::Checkbox("Y##ik_lock", &data.lock[1]); ImGui::SameLine();
-            changed |= ImGui::Checkbox("Z##ik_lock", &data.lock[2]);
-            if (changed) {
-                queue_ik_settings_change(ik_settings, before);
-            }
-        },
-        "IK DOF locks: a locked axis does not rotate under IK.\n"
-        "Locks win over limits on the same axis. A lock on the bone's\n"
-        "twist axis has no effect (IK never generates twist)."
-    );
-
-    static constexpr const char* axis_labels  [] = { "Limit X", "Limit Y", "Limit Z" };
-    static constexpr const char* axis_tooltips[] = {
-        "Enable a rotation limit about local X, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])",
-        "Enable a rotation limit about local Y, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])",
-        "Enable a rotation limit about local Z, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])"
-    };
-    for (int axis = 0; axis < 3; ++axis) {
-        add_entry(
-            axis_labels[axis],
-            [this, ik_settings, axis]() {
-                Ik_settings_data&      data   = ik_settings->data;
-                const Ik_settings_data before = data;
-                bool enabled = data.limit[axis];
-                if (ImGui::Checkbox("##limit_enable", &enabled)) {
-                    data.limit[axis] = enabled;
-                    queue_ik_settings_change(ik_settings, before);
-                }
-                if (data.limit[axis]) {
-                    float min_degrees = glm::degrees(data.limit_min[axis]);
-                    float max_degrees = glm::degrees(data.limit_max[axis]);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    // min in [-180, 0], max in [0, 180] (see Ik_settings_data)
-                    float min_max[2] = { min_degrees, max_degrees };
-                    if (ImGui::DragFloat2("##limit_range", min_max, 0.5f, 0.0f, 0.0f, "%.1f")) {
-                        data.limit_min[axis] = glm::radians(std::clamp(min_max[0], -180.0f, 0.0f));
-                        data.limit_max[axis] = glm::radians(std::clamp(min_max[1], 0.0f, 180.0f));
-                    }
-                    // The item-state queries below refer to the DragFloat2
-                    // just submitted. `before` predates any change this
-                    // frame, including the activation frame's first delta.
-                    if (ImGui::IsItemActivated()) {
-                        m_ik_settings_drag_target = ik_settings;
-                        m_ik_settings_drag_before = before;
-                    }
-                    if (ImGui::IsItemDeactivatedAfterEdit()) {
-                        if (m_ik_settings_drag_target == ik_settings) {
-                            queue_ik_settings_change(ik_settings, m_ik_settings_drag_before);
-                            m_ik_settings_drag_target.reset();
-                        } else {
-                            queue_ik_settings_change(ik_settings, before);
-                        }
-                    } else if (ImGui::IsItemDeactivated() && (m_ik_settings_drag_target == ik_settings)) {
-                        m_ik_settings_drag_target.reset(); // no edit committed
-                    }
-                }
-            },
-            axis_tooltips[axis]
-        );
-    }
-
+    // The locks, limits, stiffness and rest rotation are generic property
+    // rows (doc/property-system.md section 4.19); the action remains here.
+    // It records the same undoable write the generic rows and the MCP
+    // set_item_property tool record.
     add_entry(
         "Rest",
         [this, ik_settings]() {
             if (ImGui::Button("Set rest from current pose", ImVec2{-FLT_MIN, 0.0f})) {
-                erhe::scene::Node* node = ik_settings->get_node();
+                const erhe::scene::Node* const node = ik_settings->get_node();
                 if (node != nullptr) {
-                    const Ik_settings_data before = ik_settings->data;
-                    ik_settings->data.rest_rotation = node->parent_from_node_transform().get_rotation();
-                    queue_ik_settings_change(ik_settings, before);
+                    const erhe::property::Dependency_property& property = Ik_settings::rest_rotation_property.get();
+                    const erhe::property::Property_value       after{node->parent_from_node_transform().get_rotation()};
+                    m_context.operation_stack->queue(
+                        std::make_shared<Property_set_operation>(
+                            ik_settings,
+                            property,
+                            ik_settings->read_local_state(property),
+                            to_local_state(after)
+                        )
+                    );
                 }
             }
         },
@@ -1197,7 +1112,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     }
     if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
-    if (ik_settings)      { ik_settings_properties(ik_settings); }
+    if (ik_settings)      { ik_settings_actions(ik_settings); }
     if (collision_filter) { collision_filter_properties(collision_filter); }
     if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }

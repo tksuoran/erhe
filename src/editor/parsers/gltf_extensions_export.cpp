@@ -504,11 +504,13 @@ void add_gltf_editor_state(
         // ERHE_rig: per-bone IK settings (Ik_settings attachment; emitted
         // for every node carrying one, all-default included - the
         // attachment's presence is user intent). Angles in radians,
-        // rest_rotation as glTF-order quaternion [x, y, z, w].
+        // rest_rotation as glTF-order quaternion [x, y, z, w]. The explicit
+        // fields are the effective values; "properties" is the local set
+        // (doc/property-system.md section 4.19).
         // doc/ik-settings-requirements.md section 6.
         const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(node.get());
         if (ik_settings) {
-            const Ik_settings_data& ik = ik_settings->data;
+            const Ik_settings_data& ik = ik_settings->get_data();
             nlohmann::json rig_json{
                 {"ik", nlohmann::json{
                     {"name",          ik_settings->get_name()},
@@ -519,6 +521,7 @@ void add_gltf_editor_state(
                     {"stiffness",     json_vec3(ik.stiffness)},
                     {"rest_rotation", json_vec4(glm::vec4{ik.rest_rotation.x, ik.rest_rotation.y, ik.rest_rotation.z, ik.rest_rotation.w})},
                     {"flags",         json_flags(*ik_settings)},
+                    {"properties",    json_properties(*ik_settings)},
                 }}
             };
             append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_rig\":{}", rig_json.dump()));

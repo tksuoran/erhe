@@ -11,10 +11,13 @@ CPMAddPackage(
 set(_target "editor_ik_solver_tests")
 add_executable(${_target}
     main.cpp
-    # The editor source under test is compiled directly into the test
+    # The editor sources under test are compiled directly into the test
     # executable: the editor itself is an executable, so there is no editor
-    # library to link against. ik_solver.cpp is pure (glm + std only).
+    # library to link against. ik_solver.cpp is pure (glm + std only);
+    # node_ik_settings.cpp needs erhe::scene (its registered properties).
     ${CMAKE_CURRENT_SOURCE_DIR}/../ik_solver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/node_ik_settings.cpp
+    test_ik_settings_properties.cpp
     test_ik_solver.cpp
 )
 
@@ -23,6 +26,8 @@ target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 target_link_libraries(${_target}
     PRIVATE
+        erhe::scene
+        erhe::log
         glm::glm-header-only
         GTest::gtest
 )

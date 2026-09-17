@@ -1315,7 +1315,7 @@ auto Scene_commands::attach_new_ik_settings(erhe::scene::Node& node) -> std::sha
     }
     auto ik_settings = std::make_shared<Ik_settings>("IK settings");
     ik_settings->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    ik_settings->data.rest_rotation = capture_ik_rest_rotation(node);
+    ik_settings->set_rest_rotation(capture_ik_rest_rotation(node));
     m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(ik_settings, node.shared_node_from_this()));
     return ik_settings;
 }

@@ -31,7 +31,12 @@ are NOT part of this extension: they are Item flags and ride
         "max": [0.0, 3.1415927, 3.1415927],
         "stiffness": [0.0, 0.0, 0.0],
         "rest_rotation": [0.0, 0.0, 0.0, 1.0],
-        "flags": ["content", "show_in_ui"]
+        "flags": ["content", "show_in_ui"],
+        "properties": {
+            "lock_z": "true",
+            "limit_min": "-2.6179938 -3.1415927 -3.1415927",
+            "rest_rotation": "0 0 0 1"
+        }
     }
 }
 ```
@@ -47,6 +52,14 @@ are NOT part of this extension: they are Item flags and ride
   reference orientation whose deviation the limits bound (the limited
   quantity is `inverse(rest_rotation) * parent_from_node_rotation`,
   enforced via swing/twist decomposition).
+- `properties`: the attachment's local property values by name
+  (`doc/property-system.md` D23 and section 4.19), the attachment's
+  complete local set: the explicit fields above are the effective values
+  for readers without the property system, and a field the map does not
+  name holds no local value after the load, so a value inherited from the
+  node chain (`ERHE_node` `properties`, `Ik_settings.limit_x`) or a style
+  inherits again. `rest_rotation` does not inherit and is normally local.
+  A file without the map loads every explicit field as a local value.
 - Absent fields keep the attachment's defaults (forward compatibility);
   unknown fields are ignored.
 

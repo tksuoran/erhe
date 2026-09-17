@@ -188,6 +188,15 @@ change touches the settings store from on_property_changed.
 | joint_settings | entry | object reference to a Physics_joint_settings; inherits (D30) |
 | enable_collision | entry | inherits; the mirror follows and the constraint rebuilds |
 
+### Ik_settings (`src/editor/scene/node_ik_settings.cpp`, section 4.19)
+
+| Property | Storage | Notes |
+|---|---|---|
+| lock_x, lock_y, lock_z, limit_x, limit_y, limit_z | entry | inherits (D30); the Ik_settings_data mirror follows |
+| limit_min, limit_max | entry | inherits; radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
+| stiffness | entry | inherits; developer-only (inert); coerced to [0, 0.99] |
+| rest_rotation | entry | not inherited (a per-bone pose); captured at attach, "Set rest from current pose" writes it |
+
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 
 | Property | Storage | Notes |

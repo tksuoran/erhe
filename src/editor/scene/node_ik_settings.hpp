@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/node_attachment.hpp"
+#include "erhe_property/dependency_property.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -11,14 +12,14 @@
 
 namespace editor {
 
-// Value part of Ik_settings, separated so Properties editing can snapshot
-// before/after copies for one-undo-per-edit (Ik_settings_change_operation,
-// the Material_change_operation pattern).
+// Effective values of an Ik_settings attachment, as the IK solver reads
+// them (doc/property-system.md section 4.19: a mirror of the registered
+// properties, refreshed by Ik_settings::on_property_changed).
 //
 // Parameters are per local axis x = 0, y = 1, z = 2. lock wins over limit
 // on the same axis. Limits are radians with min in [-pi, 0] and max in
 // [0, pi], so the rest angle 0 is always legal. stiffness (0..0.99) is
-// serialized but inert in this slice (no UI, no solver enforcement yet).
+// serialized but inert in this slice (no solver enforcement yet).
 class Ik_settings_data
 {
 public:
@@ -65,7 +66,41 @@ public:
         return erhe::Item_type::node_attachment | erhe::Item_type::ik_settings;
     }
 
-    Ik_settings_data data;
+    // Registered properties (doc/property-system.md section 4.19), entry
+    // stored, UI group "IK". Every one inherits from the node chain (D30)
+    // except rest_rotation, a per-bone pose. limit_min / limit_max are
+    // radians shown in degrees, coerced per component to [-pi, 0] and
+    // [0, pi]; stiffness is coerced to [0, 0.99] and developer-only (inert).
+    static const erhe::property::Property<bool>      lock_x_property;
+    static const erhe::property::Property<bool>      lock_y_property;
+    static const erhe::property::Property<bool>      lock_z_property;
+    static const erhe::property::Property<bool>      limit_x_property;
+    static const erhe::property::Property<bool>      limit_y_property;
+    static const erhe::property::Property<bool>      limit_z_property;
+    static const erhe::property::Property<glm::vec3> limit_min_property;
+    static const erhe::property::Property<glm::vec3> limit_max_property;
+    static const erhe::property::Property<glm::vec3> stiffness_property;
+    static const erhe::property::Property<glm::quat> rest_rotation_property;
+
+    [[nodiscard]] static auto lock_property (int axis) -> const erhe::property::Property<bool>&;
+    [[nodiscard]] static auto limit_property(int axis) -> const erhe::property::Property<bool>&;
+
+    void on_property_changed(const erhe::property::Property_changed_args& args) override;
+
+    // The effective values (mirror). Writers go through the setters below,
+    // which write local values to the property store.
+    [[nodiscard]] auto get_data() const -> const Ik_settings_data& { return m_data; }
+    void set_lock         (int axis, bool value);
+    void set_limit        (int axis, bool value);
+    void set_limit_min    (const glm::vec3& value);
+    void set_limit_max    (const glm::vec3& value);
+    void set_stiffness    (const glm::vec3& value);
+    void set_rest_rotation(const glm::quat& value);
+
+private:
+    void refresh_mirror();
+
+    Ik_settings_data m_data;
 };
 
 } // namespace editor

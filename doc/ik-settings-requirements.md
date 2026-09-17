@@ -33,8 +33,10 @@ window and persist with the scene.
 
 - New node attachment `Ik_settings` (working name; editor domain,
   `src/editor/scene/node_ik_settings.{hpp,cpp}` next to `Node_physics`),
-  a pure data attachment in the mold of `erhe::scene::Layout_item`: public
-  fields, no runtime behavior, custom clone constructor only.
+  a pure data attachment: no runtime behavior, custom clone constructor
+  only. The fields below are registered properties (entry-stored, UI group
+  "IK", `doc/property-system.md` section 4.19); `Ik_settings_data` is the
+  mirror of their effective values the solver reads through `get_data()`.
 - Fields, per rotation axis X/Y/Z (all following Blender's `bPoseChannel`
   `ikflag` / `limitmin` / `limitmax` / `ikstiffness` shape):
   - `lock[3]` (bool, default false) - the axis does not rotate under IK at
@@ -57,8 +59,8 @@ window and persist with the scene.
     about the axis; 0 = free. Capped below 1 (as Blender caps it at 0.99)
     so stiffness can never alias a hard DOF lock. **Inert in this slice**
     (decided with the user): the field exists and serializes so the
-    `ERHE_rig` schema is stable from day one, but the UI hides it and the
-    solver ignores it until the constrained solver is proven stable;
+    `ERHE_rig` schema is stable from day one, but its property row is
+    developer-only and the solver ignores it until the constrained solver is proven stable;
     enforcement (per-iteration scale-down, see section 4) is a later slice.
 - `rest_rotation` (quaternion): the reference orientation that defines the
   zero of the limits. The limited quantity is
@@ -298,20 +300,24 @@ formulation adapted to swing/twist limits:
   name "IK Settings", `can_add` gate = node has `Item_flags::bone`. This
   makes it appear in the Properties "Add Attachment" popup, the Hierarchy
   window, and the MCP scene actions for free.
-- Properties section (`Properties::ik_settings_properties` in
-  `src/editor/windows/properties.cpp`, dispatched from `item_properties`
-  like `layout_item_properties`): per axis - Lock checkbox; Limit checkbox
-  enabling a min/max degree pair (the `optional_float_editor` /
-  `physics_joint_settings_properties` widget pattern; edited in degrees,
-  stored in radians; min clamped to [-180 deg, 0 deg], max to [0 deg, 180 deg] per
-  section 1); no Stiffness widget in this slice (the field is inert - section 1); plus the "Set rest from current pose" button (section 1).
+- Properties section: the generic registered-property rows (group "IK",
+  `doc/property-system.md` section 4.19) - Lock X/Y/Z and Limit X/Y/Z
+  checkboxes, Limit Min / Limit Max as vec3 rows edited in degrees and
+  stored in radians (coerced per component to [-180 deg, 0 deg] and
+  [0 deg, 180 deg] per section 1), Stiffness developer-only (the field is
+  inert - section 1), Rest Rotation as Euler degrees. The "Set rest from
+  current pose" button (section 1) stays an action in
+  `Properties::ik_settings_actions` (`src/editor/windows/properties.cpp`,
+  called from `item_diagnostics`).
 - Undo: attachment add/remove already routes through
-  `Node_attach_operation`. Field edits get an `Ik_settings_change_operation`
-  (before/after copy of the POD, modeled on `Material_change_operation`
-  with the same `Editor_state` latch pattern), so one completed edit = one
-  undo step. Channel-lock toggles in the Locks row go through
-  `Item_set_flag_bits_operation` so they are undoable too (the
-  developer-mode flag list may keep its current direct-set behavior).
+  `Node_attach_operation`. Field edits, the rest re-capture button and the
+  MCP `set_item_property` tool all record one `Property_set_operation`
+  (the local state before and after), so one completed edit = one undo
+  step. Channel-lock toggles are registered `Node` properties and record
+  the same operation (section 2).
+- Being properties, the IK fields (all but `rest_rotation`) inherit from
+  the node chain (D30 of `doc/property-system.md`): a node or a style can
+  hold `Ik_settings.limit_x` for the IK settings attachments below it.
 
 ### 6. Serialization - `ERHE_rig`
 
@@ -337,12 +343,17 @@ formulation adapted to swing/twist limits:
           "min":           [-2.62, -3.14159274, -3.14159274],
           "max":           [0.0,    3.14159274,  3.14159274],
           "stiffness":     [0.0, 0.0, 0.0],
-          "rest_rotation": [0.0, 0.0, 0.0, 1.0]
+          "rest_rotation": [0.0, 0.0, 0.0, 1.0],
+          "properties":    {"limit_x": "true", "limit_min": "-2.62 -3.1415927 -3.1415927", "lock_z": "true", "rest_rotation": "0 0 0 1"}
       }
   }
   ```
 
   Angles in radians; `rest_rotation` as glTF-order quaternion [x, y, z, w].
+  The explicit fields carry the effective values; `properties` is the
+  attachment's local values, and on import it is the complete local set
+  (a field it does not name is cleared, so a value inherited from the node
+  chain stays inherited after a reload).
   Absent fields take defaults on import (forward compatibility); unknown
   fields are ignored with a log warning.
 - Documentation set, mirroring `ERHE_layout`: spec page
@@ -443,7 +454,8 @@ formulation adapted to swing/twist limits:
 Implemented as specified. Key locations:
 
 - `Ik_settings` attachment - `src/editor/scene/node_ik_settings.{hpp,cpp}`
-  (`Ik_settings_data` value struct for before/after undo copies); created
+  (registered properties since 2026-09-17, `Ik_settings_data` the mirror
+  of their effective values; `doc/property-system.md` section 4.19); created
   via `Scene_commands::attach_new_ik_settings` (bind-pose rest capture in
   `capture_ik_rest_rotation`, `scene_commands.cpp`); registered in the
   attachment catalog (`attachment_types.cpp`, bone-gated).
@@ -475,14 +487,12 @@ Implemented as specified. Key locations:
   schema `doc/gltf_extensions/schema/ERHE_rig.schema.json`); export in
   `gltf_extensions_export.cpp`, import in `gltf_extensions_import.cpp`
   (`import_rigs`, per-element JSON type guards, range clamps).
-- Properties UI - `Properties::ik_settings_properties`
-  (`properties.cpp`): per-axis Lock / Limit (degrees) / Set-rest rows.
-  Undo deliberately does NOT use the material inspect-latch pattern: a
-  single-slot latch flaps and loses records when several Ik_settings
-  render at once, and its retained initial state goes stale across undo.
-  Instead every completed edit immediately queues one
-  `Ik_settings_change_operation` with a before-copy captured at
-  interaction start (`queue_ik_settings_change`).
+- Properties UI - generic registered-property rows (group "IK"); the
+  "Set rest from current pose" action is `Properties::ik_settings_actions`
+  (`properties.cpp`). Every edit records one `Property_set_operation`; the
+  former whole-struct `Ik_settings_change_operation` and its drag latch
+  are gone (2026-09-17). Property tests:
+  `src/editor/transform/test/test_ik_settings_properties.cpp`.
 
 Notes from the implementation review (all confirmed findings fixed):
 

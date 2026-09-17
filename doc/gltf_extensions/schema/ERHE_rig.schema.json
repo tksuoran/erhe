@@ -18,7 +18,8 @@
                 "max":           {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 3.14159266}, "minItems": 3, "maxItems": 3},
                 "stiffness":     {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 0.99}, "minItems": 3, "maxItems": 3},
                 "rest_rotation": {"$ref": "#/$defs/quat"},
-                "flags":         {"type": "array", "items": {"type": "string"}}
+                "flags":         {"type": "array", "items": {"type": "string"}},
+                "properties":    {"type": "object", "additionalProperties": {"type": "string"}}
             }
         }
     },
