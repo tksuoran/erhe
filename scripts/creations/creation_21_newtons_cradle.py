@@ -39,8 +39,13 @@ Iteration:
                    in the running editor's scene.
   --jolt | --box3d ball gap for the editor's physics backend.
   --keep-windows   leave editor window visibility and focus untouched.
+  --scene-only     build the scene and nothing else: no screenshots, no
+                   swing probe, no window changes, no recording pause; the
+                   scene's one camera is placed once to face the cradle
+                   (left alone with --only) and physics is left ON.
 """
 
+import contextlib
 import math
 import os
 import sys
@@ -299,7 +304,12 @@ def capture_far_ball_peak(c, ball_names):
     return best
 
 
-def add_backend_arguments(parser):
+def add_script_arguments(parser):
+    parser.add_argument("--scene-only", action="store_true",
+                        help="build the scene only: no screenshots, swing "
+                             "probe, window changes or recording pause; the "
+                             "scene camera is placed once to face the cradle "
+                             "and physics is left on")
     backend = parser.add_mutually_exclusive_group()
     backend.add_argument("--jolt", dest="backend", action="store_const",
                          const="jolt", help=f"ball gap for the Jolt backend "
@@ -312,24 +322,28 @@ def add_backend_arguments(parser):
 
 def main():
     global BALL_GAP
-    args = standard_args("Newton's Cradle", add_backend_arguments)
+    args = standard_args("Newton's Cradle", add_script_arguments)
     BALL_GAP = BALL_GAPS[args.backend]
     print(f"physics backend: {args.backend} (ball gap {BALL_GAP} m)")
     if reframe(args, "Newton's Cradle", BASE, SHOTS):
         return
     only = args.only
     reuse = args.reuse or bool(only)
-    c = Creation("Newton's Cradle", port=args.port, pause_s=args.pause,
+    scene_only = args.scene_only
+    c = Creation("Newton's Cradle", port=args.port,
+                 pause_s=0.0 if scene_only else args.pause,
                  editor_exe=args.editor_exe, reuse=reuse,
                  keep_scenes=args.keep_scenes or bool(only),
-                 manage_windows=not args.keep_windows)
+                 manage_windows=not (args.keep_windows or scene_only))
     if only:
         c.attach_scene()
         c.delete_nodes(names=[only])
     else:
         print(f"scene: {c.new_scene()}")
 
-    with fail_soft(c, BASE):
+    # fail_soft captures a failure screenshot; --scene-only takes none.
+    guard = contextlib.nullcontext() if scene_only else fail_soft(c, BASE)
+    with guard:
         c.set_physics(False)
         m = {
             "chrome": c.ensure_material("chrome", base_color=[0.96, 0.96, 0.97],
@@ -397,6 +411,15 @@ def main():
             if name == "Newton's Cradle":
                 ball_names = result[1]
         c.settle()
+
+        if scene_only:
+            if not only:
+                c.place_camera(*SHOTS[1][1:])
+                if not args.no_save:
+                    c.save(SAVE_PATH)
+            c.set_physics(True)
+            print("Newton's Cradle scene built (physics ON).")
+            return
 
         if only:
             eye, target = c.frame(only, azimuth=25.0, elevation=20.0)
