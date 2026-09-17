@@ -55,8 +55,12 @@ class Creation:
     helpers used by every creation script."""
 
     def __init__(self, title, port=3743, wait_s=120.0, pause_s=10.0,
-                 editor_exe=None, reuse=False, keep_scenes=False):
+                 editor_exe=None, reuse=False, keep_scenes=False,
+                 manage_windows=True):
         self.title = title
+        # manage_windows=False (--keep-windows): presentation() leaves every
+        # editor window's visibility and focus alone.
+        self.manage_windows = manage_windows
         if not reuse:
             launch_editor(editor_exe or DEFAULT_EDITOR_EXE)
         self.client = McpClient(port)
@@ -422,7 +426,10 @@ class Creation:
         focus this creation's viewport so the capture shows only it. The
         hide pass runs ONCE per scene (repeated per screenshot it was 147
         calls / 0.8 s a run - 36% of all MCP calls, pure cosmetics); later
-        calls only re-focus the viewport."""
+        calls only re-focus the viewport. Does nothing when the creation
+        was made with manage_windows=False (--keep-windows)."""
+        if not self.manage_windows:
+            return
         if self._presented_scene == self.scene:
             if self._my_viewport:
                 self.mutate("set_window_visibility",
@@ -1468,7 +1475,8 @@ def reframe(args, title, base_path, views):
     if not getattr(args, "reframe", None):
         return False
     c = Creation(title, port=args.port, pause_s=0,
-                 editor_exe=args.editor_exe, reuse=args.reuse)
+                 editor_exe=args.editor_exe, reuse=args.reuse,
+                 manage_windows=not getattr(args, "keep_windows", False))
     scene = c.load(args.reframe)
     print(f"reframe: loaded {args.reframe} as scene {scene}")
     c.screenshot_views(base_path, views)
@@ -1497,6 +1505,10 @@ def standard_args(description, add_arguments=None):
     parser.add_argument("--keep-scenes", action="store_true",
                         help="with --reuse: keep the editor's existing scenes "
                              "instead of closing them before this run")
+    parser.add_argument("--keep-windows", action="store_true",
+                        help="never show, hide or focus editor windows "
+                             "(screenshots then capture the editor as laid "
+                             "out; scripts that support it)")
     parser.add_argument("--reframe", metavar="GLB", default=None,
                         help="skip the build: load_scene this saved .glb and "
                              "run only the script's camera/lights/screenshot "

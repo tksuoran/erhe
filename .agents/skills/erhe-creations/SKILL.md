@@ -123,6 +123,10 @@ they carry the current idioms.
   brush names the library brush after the shape, so `get_node_details
   node_name="Ball 1"` can answer with the Brush entry (no transform).
   Filter `get_scene_nodes` by `type == "Mesh"` + parent instead.
+- `--keep-windows` (common.standard_args, 2026-09-17; creation 21 and
+  `--reframe` honor it): `presentation()` then never shows, hides or
+  focuses windows - use it when running against a user's live editor,
+  whose window visibility the editor persists to desktop_windows.json.
 - **Wireframe overlay in screenshots**: the per-viewport Visual Style
   defaults come from `config/editor/default_viewport_config.json`, read
   at EVERY viewport construction (`make_viewport_config`). If the user's

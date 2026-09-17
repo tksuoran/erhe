@@ -38,6 +38,7 @@ Iteration:
   --only <object>  rebuild one object (Newton's Cradle | Books | Desk)
                    in the running editor's scene.
   --jolt | --box3d ball gap for the editor's physics backend.
+  --keep-windows   leave editor window visibility and focus untouched.
 """
 
 import math
@@ -320,7 +321,8 @@ def main():
     reuse = args.reuse or bool(only)
     c = Creation("Newton's Cradle", port=args.port, pause_s=args.pause,
                  editor_exe=args.editor_exe, reuse=reuse,
-                 keep_scenes=args.keep_scenes or bool(only))
+                 keep_scenes=args.keep_scenes or bool(only),
+                 manage_windows=not args.keep_windows)
     if only:
         c.attach_scene()
         c.delete_nodes(names=[only])
