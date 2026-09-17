@@ -198,10 +198,12 @@ def build_cradle(c, m):
                        restitution_combine="maximum", static_friction=0.0,
                        dynamic_friction=0.0, friction_combine="minimum",
                        linear_damping=0.0, angular_damping=0.0)
+    # The swing axis (angular z) has no limit: nothing in a real cradle
+    # stops a ball at a fixed angle, and a hard limit is what a knocked
+    # ball slammed into (Jolt separated the hinge up to 6 mm there).
     c.joint_settings("Cradle Hinge", [
         {"linear_axes": [True, True, True], "min": 0.0, "max": 0.0},
         {"angular_axes": [True, True, False], "min": 0.0, "max": 0.0},
-        {"angular_axes": [False, False, True], "min": -1.4, "max": 1.4},
     ])
 
     pivots = c.group("Cradle Pivots", [0.0, Y_RAIL, 0.0], parent_node_id=frame)

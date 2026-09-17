@@ -6,8 +6,8 @@ and closes none). For every case it rebuilds the Newton's cradle of
 scripts/creations/creation_21_newtons_cradle.py (--reuse --scene-only
 --no-save, which CLOSES the editor's open scenes first) so each drag starts
 from a cradle at rest: an undamped cradle keeps the energy of every earlier
-release, and a leftover swing can drive an undragged ball into its hinge
-limit and fail a later case for a reason that is not that case's drag.
+release, and a leftover swing lets balls collide in ways that belong to an
+earlier case, not to that case's drag.
 
 Each case drags one ball through one tool with release=false, holds the drag
 (--hold-s), releases it and watches the row (--after-s):

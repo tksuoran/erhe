@@ -67,7 +67,7 @@ Momentum passed ball to ball needs each collision solved on its own.
 
 - Rig per ball: dynamic node with `create_physics_body shape="sphere"`
   (a hull of the faceted render mesh deflects contacts), explicit equal
-  mass, and a hinge (linear locked, angular x/y locked, z ranged) from a
+  mass, and a hinge (linear locked, angular x/y locked, z free) from a
   "Hinge" anchor under the ball to a "Pivot" node under the frame
   (`c.joint(hinge, connected_node_id=pivot)`).
 - **A world-anchored joint needs a connected node that stays put.**
