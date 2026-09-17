@@ -1778,7 +1778,7 @@ void Item_tree::imgui_row(const Flat_row& row)
             draw_list->AddText(
                 icon.font,
                 m_cached_icon_font_size,
-                ImVec2{row_pos.x + m_icon_x_offset, row_pos.y + m_icon_y_offset},
+                ImVec2{row_pos.x + row.icon_x_offset, row_pos.y + m_icon_y_offset},
                 dimmed
                     ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
                     : ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
@@ -1954,7 +1954,11 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
             row.primary_icon = Row_icon{.font = icon.font, .code = icon.code, .color = icon.color, .live_color_light = icon.live_color_light, .live_color_material = icon.live_color_material};
             primary_width = icon_set.get_icon_width(icon);
         }
-        row.label_x_offset = m_icon_x_offset + primary_width + style.ItemInnerSpacing.x;
+        // The header row (the Scene item) never collapses and has no arrow,
+        // so its icon takes the arrow's place; the rows below it keep the
+        // arrow space, which indents them one level relative to the header.
+        row.icon_x_offset  = (item == m_header_item) ? style.FramePadding.x : m_icon_x_offset;
+        row.label_x_offset = row.icon_x_offset + primary_width + style.ItemInnerSpacing.x;
         row.label_width    = ImGui::CalcTextSize(row.label_text.data(), row.label_text.data() + row.label_text.size()).x;
 
         // R5.8 reference badge: a content-library REFERENCE entry (a listing
@@ -2189,8 +2193,9 @@ void Item_tree::imgui_tree(float ui_scale)
         m_label_y_offset = style.FramePadding.y;
         m_flat_rows.clear();
         // Optional header (the selectable Scene item, issue #240) is flattened
-        // first at indent 0 so it and the root's rows are siblings; the scene
-        // root node's child nodes below are unaffected.
+        // first. The root's rows are flattened at the same indent: the header
+        // row draws its icon where the other rows reserve the arrow, so the
+        // root's rows read as its children, one level deeper.
         if (m_header_item) {
             flatten_visible_rows(m_header_item, 0.0f);
         }

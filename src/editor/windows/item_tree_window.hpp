@@ -159,6 +159,7 @@ private:
         ImGuiTreeNodeFlags                         tree_node_flags{0}; // everything except Selected (queried live)
         float                                      indent         {0.0f};
         Row_icon                                   primary_icon;
+        float                                      icon_x_offset  {0.0f}; // primary icon, from row content start
         float                                      label_x_offset {0.0f}; // from row content start
         float                                      label_width    {0.0f};
         std::array<Row_icon, max_right_icon_count> right_icons;
