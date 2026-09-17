@@ -4,7 +4,6 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_defer/defer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -200,21 +199,36 @@ auto project_ray(
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Hide the mesh for the cast and restore its exact local state after,
-    // so an inherited visibility is not baked into a local value.
-    std::optional<erhe::property::Local_state> stored_visibility_state{};
-    if (ignore_mesh != nullptr) {
-        stored_visibility_state = ignore_mesh->read_local_state(erhe::Item_base::visible_property.get());
-        ignore_mesh->hide();
-    }
-    ERHE_DEFER(
-        if (ignore_mesh != nullptr) {
-            ignore_mesh->apply_local_state(erhe::Item_base::visible_property.get(), stored_visibility_state);
+    // Hits on ignore_mesh are stepped over by restarting the cast just past
+    // them (moving the origin, which every raytrace backend honors). The
+    // scene is only read: hiding the mesh for the cast (as this did before)
+    // is a scene edit, and one made every rendered frame from
+    // Physics_tool::tool_render() stalled the dragged body's simulation.
+    constexpr int   c_max_ignored_hits = 64;
+    constexpr float c_step_past_hit    = 1.0e-4f;
+    erhe::raytrace::Ray cast     = ray;
+    float               consumed = 0.0f;
+    for (int i = 0; i < c_max_ignored_hits; ++i) {
+        hit = erhe::raytrace::Hit{};
+        raytrace_scene->intersect(cast, hit);
+        if (hit.instance == nullptr) {
+            return false;
         }
-    );
-
-    raytrace_scene->intersect(ray, hit);
-    return hit.instance != nullptr;
+        if ((ignore_mesh == nullptr) || (get_hit_node(hit) != ignore_mesh)) {
+            ray.t_far = consumed + cast.t_far;
+            return true;
+        }
+        const float step = cast.t_far + c_step_past_hit;
+        consumed += step;
+        if (consumed >= ray.t_far) {
+            break;
+        }
+        cast.origin = cast.origin + (step * cast.direction);
+        cast.t_near = 0.0f;
+        cast.t_far  = ray.t_far - consumed;
+    }
+    hit = erhe::raytrace::Hit{};
+    return false;
 }
 
 }
