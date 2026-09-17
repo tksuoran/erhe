@@ -73,10 +73,26 @@ public:
     std::array<Constraint_axis_drive, 6> drives{}; // 0..2 translation XYZ, 3..5 rotation XYZ
 };
 
+// Read-only diagnostics of a live constraint, for logging. The load is what
+// the backend reports for the last step: Box3D the constraint force (N) and
+// torque (N m), Jolt the accumulated constraint impulse (lambda, N s and
+// N m s) of the last step.
+class Constraint_diagnostics
+{
+public:
+    const char* kind        {"unknown"}; // backend joint type
+    bool        has_load    {false};
+    const char* load_unit   {""};
+    glm::vec3   linear_load {0.0f, 0.0f, 0.0f};
+    glm::vec3   angular_load{0.0f, 0.0f, 0.0f};
+};
+
 class IConstraint
 {
 public:
     virtual ~IConstraint() noexcept = default; // TODO move to .cpp;
+
+    [[nodiscard]] virtual auto get_diagnostics() const -> Constraint_diagnostics { return Constraint_diagnostics{}; }
 
     [[nodiscard]] static auto create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*;
 

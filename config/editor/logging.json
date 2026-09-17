@@ -24,6 +24,7 @@
     "editor.operations": "info",
     "editor.parsers": "info",
     "editor.physics": "info",
+    "editor.physics_drag": "info",
     "editor.physics_frame": "info",
     "editor.pointer": "info",
     "editor.post_processing": "info",

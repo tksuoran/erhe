@@ -2,6 +2,7 @@
 
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_physics/iconstraint.hpp"
 
 #include <memory>
 
@@ -15,6 +16,23 @@ namespace erhe::physics {
 namespace erhe::scene   { class Xformable; using Node = Xformable; }
 
 namespace editor {
+
+class Node_physics;
+
+// What the live constraint of a Node_joint was built from, kept for read-only
+// diagnostics (the physics drag monitor). The Node_physics pointers stay valid
+// while the constraint lives: Scene_root tears the constraint down before a
+// referenced body leaves the world.
+class Node_joint_constraint_state
+{
+public:
+    const Node_physics*                                        node_physics_a{nullptr};
+    const Node_physics*                                        node_physics_b{nullptr}; // nullptr = world
+    erhe::physics::Transform                                   frame_in_a{};            // in body A node space
+    erhe::physics::Transform                                   frame_in_b{};            // in body B node space, or world space when B is the world
+    std::array<erhe::physics::Constraint_axis_limit, 6>        limits{};                // 0..2 translation XYZ, 3..5 rotation XYZ
+    std::array<erhe::physics::Constraint_axis_drive, 6>        drives{};
+};
 
 // Node attachment that joins the nearest self-or-ancestor rigid body of its
 // node (body A) to the nearest self-or-ancestor rigid body of a connected
@@ -84,6 +102,9 @@ public:
     [[nodiscard]] auto get_constraint      () const -> erhe::physics::IConstraint*;
     // True while a live constraint of this joint references rigid_body.
     [[nodiscard]] auto constrains_rigid_body(const erhe::physics::IRigid_body* rigid_body) const -> bool;
+    // Read-only diagnostics: the frames, bodies and axis settings of the live
+    // constraint; nullptr while the joint has no live constraint.
+    [[nodiscard]] auto get_constraint_state () const -> const Node_joint_constraint_state*;
 
     // Tears down and recreates the constraint, re-capturing the joint frames
     // from the current node transforms. Call after editing the shared
@@ -117,6 +138,7 @@ private:
     erhe::physics::IRigid_body*                  m_rigid_body_a{nullptr};
     erhe::physics::IRigid_body*                  m_rigid_body_b{nullptr}; // nullptr = world
     bool                                         m_collision_pair_disabled{false};
+    Node_joint_constraint_state                  m_constraint_state{}; // valid only while m_constraint exists
 };
 
 }

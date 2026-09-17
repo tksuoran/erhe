@@ -248,6 +248,11 @@ auto Node_joint::constrains_rigid_body(const erhe::physics::IRigid_body* const r
     return (m_rigid_body_a == rigid_body) || (m_rigid_body_b == rigid_body);
 }
 
+auto Node_joint::get_constraint_state() const -> const Node_joint_constraint_state*
+{
+    return m_constraint ? &m_constraint_state : nullptr;
+}
+
 void Node_joint::handle_rigid_body_removed(erhe::physics::IRigid_body* rigid_body)
 {
     if (!m_constraint) {
@@ -396,6 +401,14 @@ auto Node_joint::try_create_constraint() -> bool
     m_physics_world->add_constraint(m_constraint.get());
     m_rigid_body_a = body_a;
     m_rigid_body_b = body_b;
+    m_constraint_state = Node_joint_constraint_state{
+        .node_physics_a = node_physics_a.get(),
+        .node_physics_b = node_physics_b.get(),
+        .frame_in_a     = constraint_settings.frame_in_a,
+        .frame_in_b     = constraint_settings.frame_in_b,
+        .limits         = constraint_settings.limits,
+        .drives         = constraint_settings.drives
+    };
 
     // Settle both bodies to their joint pose at rest so the freshly added constraint
     // starts from coincident frames with zero relative velocity - no corrective
@@ -428,6 +441,7 @@ void Node_joint::destroy_constraint()
     m_constraint.reset();
     m_rigid_body_a = nullptr;
     m_rigid_body_b = nullptr;
+    m_constraint_state = Node_joint_constraint_state{};
 }
 
 }

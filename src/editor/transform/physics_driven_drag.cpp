@@ -12,6 +12,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/physics_config.hpp"
 #include "erhe_physics/icollision_shape.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -119,6 +120,22 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
                     .max_force                  = c_max_force_in_body_weights * rigid_body->get_mass() * c_standard_gravity,
                     .solver_velocity_iterations = c_solver_velocity_iterations,
                     .solver_position_iterations = c_solver_position_iterations
+                },
+                Physics_drag_monitor_info{
+                    .monitor            = &scene_root->get_physics_drag_monitor(),
+                    .tool_name          = "transform tool",
+                    .node               = node.get(),
+                    .values_before_tool = Physics_drag_body_values{
+                        .linear_damping  = rigid_body->get_linear_damping(),
+                        .angular_damping = rigid_body->get_angular_damping(),
+                        .friction        = rigid_body->get_friction(),
+                        .gravity_factor  = rigid_body->get_gravity_factor()
+                    },
+                    .tool_details = fmt::format(
+                        "drag kind {}, spring pivot at center of mass {}, drag point teleported to the gizmo pose each drive",
+                        (kind == Transform_drag_kind::translate) ? "translate" : "rotate",
+                        driven_node.center_of_mass_in_node
+                    )
                 }
             );
             log_physics->trace("Transform drag pulls jointed body through physics: {}", node->describe());

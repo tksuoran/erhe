@@ -1,5 +1,7 @@
 #pragma once
 
+#include "physics/physics_drag_monitor.hpp"
+
 #include <glm/glm.hpp>
 
 #include <limits>
@@ -37,6 +39,9 @@ public:
 // Shared by the Physics tool (right-drag) and the Transform tool (gizmo drag
 // of a jointed dynamic body).
 //
+// attach() announces the drag to the scene's Physics_drag_monitor named by
+// the monitor info (editor.physics_drag diagnostics); detach() withdraws it.
+//
 // The pivot follows erhe::physics::Point_to_point_constraint_settings.
 //
 // The owner detaches before the world or the dragged body goes away: on scene
@@ -60,7 +65,8 @@ public:
         erhe::physics::IRigid_body&             body,
         glm::vec3                               pivot_in_body,
         glm::vec3                               drag_point_in_world,
-        const Physics_drag_constraint_settings& settings
+        const Physics_drag_constraint_settings& settings,
+        const Physics_drag_monitor_info&        monitor_info
     ) -> bool;
 
     void move_drag_point(glm::vec3 position_in_world, Drag_point_motion motion);
@@ -72,12 +78,17 @@ public:
     [[nodiscard]] auto is_attached         () const -> bool;
     [[nodiscard]] auto get_body            () const -> erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_drag_point_body () const -> erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_pivot_in_body   () const -> glm::vec3;
+    [[nodiscard]] auto get_settings        () const -> const Physics_drag_constraint_settings&;
 
 private:
     erhe::physics::IWorld*                      m_world{nullptr};
     erhe::physics::IRigid_body*                 m_body {nullptr};
     std::unique_ptr<erhe::physics::IConstraint> m_constraint;
     std::shared_ptr<erhe::physics::IRigid_body> m_drag_point_body;
+    glm::vec3                                   m_pivot_in_body{0.0f, 0.0f, 0.0f};
+    Physics_drag_constraint_settings            m_settings{};
+    Physics_drag_monitor*                       m_monitor{nullptr};
 };
 
 }

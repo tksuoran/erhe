@@ -19,13 +19,16 @@ auto Physics_drag_constraint::attach(
     erhe::physics::IRigid_body&             body,
     const glm::vec3                         pivot_in_body,
     const glm::vec3                         drag_point_in_world,
-    const Physics_drag_constraint_settings& settings
+    const Physics_drag_constraint_settings& settings,
+    const Physics_drag_monitor_info&        monitor_info
 ) -> bool
 {
     detach();
 
-    m_world = &world;
-    m_body  = &body;
+    m_world         = &world;
+    m_body          = &body;
+    m_pivot_in_body = pivot_in_body;
+    m_settings      = settings;
 
     m_drag_point_body = world.create_rigid_body_shared(
         erhe::physics::IRigid_body_create_info{
@@ -60,6 +63,11 @@ auto Physics_drag_constraint::attach(
         }
     );
     world.add_constraint(m_constraint.get());
+
+    m_monitor = monitor_info.monitor;
+    if (m_monitor != nullptr) {
+        m_monitor->begin(*this, world, monitor_info);
+    }
     return true;
 }
 
@@ -80,6 +88,11 @@ void Physics_drag_constraint::move_drag_point(const glm::vec3 position_in_world,
 
 void Physics_drag_constraint::detach()
 {
+    // The monitor reads the release velocity, so it hears first.
+    if (m_monitor != nullptr) {
+        m_monitor->end(*this);
+        m_monitor = nullptr;
+    }
     // The constraint goes first: Box3D destroys the joint with the constraint
     // object, and the joint must not outlive the drag point body.
     if (m_constraint) {
@@ -114,6 +127,16 @@ auto Physics_drag_constraint::get_body() const -> erhe::physics::IRigid_body*
 auto Physics_drag_constraint::get_drag_point_body() const -> erhe::physics::IRigid_body*
 {
     return m_drag_point_body.get();
+}
+
+auto Physics_drag_constraint::get_pivot_in_body() const -> glm::vec3
+{
+    return m_pivot_in_body;
+}
+
+auto Physics_drag_constraint::get_settings() const -> const Physics_drag_constraint_settings&
+{
+    return m_settings;
 }
 
 }

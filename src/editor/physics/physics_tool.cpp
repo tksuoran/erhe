@@ -277,6 +277,7 @@ auto Physics_tool::acquire_target() -> bool
     rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
     rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
 
+    const std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
     m_drag_constraint.attach(
         *m_physics_world,
         *rigid_body,
@@ -285,6 +286,26 @@ auto Physics_tool::acquire_target() -> bool
         Physics_drag_constraint_settings{
             .frequency = m_frequency,
             .damping   = m_damping
+        },
+        Physics_drag_monitor_info{
+            .monitor            = scene_root ? &scene_root->get_physics_drag_monitor() : nullptr,
+            .tool_name          = "physics tool",
+            .node               = target_node,
+            .values_before_tool = Physics_drag_body_values{
+                .linear_damping  = m_original_linear_damping,
+                .angular_damping = m_original_angular_damping,
+                .friction        = m_original_friction,
+                .gravity_factor  = m_original_gravity
+            },
+            .tool_details = fmt::format(
+                "mode {}, depth {:.3f}, grab in node {}, velocities zeroed at grab, override damping {} ({:.3f}, {:.3f}), override friction {} ({:.3f}), override gravity {} ({:.3f}), extra per-frame velocity damping {} (linear {:.3f}, angular {:.3f}), drag point moved as kinematic each on_drag",
+                (m_mode == Physics_tool_mode::Drag) ? "drag" : ((m_mode == Physics_tool_mode::Push) ? "push" : "pull"),
+                m_depth, m_grab_position_in_node,
+                m_override_damping_enable, m_override_linear_damping, m_override_angular_damping,
+                m_override_friction_enable, m_override_friction_value,
+                m_override_gravity_enable, m_override_gravity_value,
+                m_extra_damping_enable, m_extra_linear_damping, m_extra_angular_damping
+            )
         }
     );
 

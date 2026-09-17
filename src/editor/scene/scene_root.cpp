@@ -1933,6 +1933,12 @@ void Scene_root::update_physics_simulation_fixed_step(const double dt, const Phy
     }
     apply_wind_forces(static_cast<float>(dt), physics);
     m_physics_world->update_fixed_step(dt);
+    m_physics_drag_monitor.on_fixed_step(dt);
+}
+
+auto Scene_root::get_physics_drag_monitor() -> Physics_drag_monitor&
+{
+    return m_physics_drag_monitor;
 }
 
 void Scene_root::apply_wind_forces(const float dt, const Physics_config& physics)
@@ -2026,6 +2032,10 @@ void Scene_root::after_physics_simulation_steps()
             }
         }
     }
+
+    // Logs only while an interactive drag is active; the node transforms now
+    // reflect this frame's body poses.
+    m_physics_drag_monitor.after_physics_simulation_steps();
 }
 
 auto Scene_root::layers() -> Scene_layers&

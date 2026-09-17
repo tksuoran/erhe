@@ -18,6 +18,8 @@ class Jolt_constraint : public IConstraint
 {
 public:
     [[nodiscard]] virtual auto get_jolt_constraint() const -> JPH::Constraint* = 0;
+
+    [[nodiscard]] auto get_diagnostics() const -> Constraint_diagnostics override;
 };
 
 class Jolt_point_to_point_constraint : public Jolt_constraint

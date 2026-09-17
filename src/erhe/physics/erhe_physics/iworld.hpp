@@ -46,6 +46,8 @@ public:
     [[nodiscard]] virtual auto get_rigid_body_count() const -> std::size_t               = 0;
     [[nodiscard]] virtual auto get_constraint_count() const -> std::size_t               = 0;
     [[nodiscard]] virtual auto describe            () const -> std::vector<std::string>  = 0;
+    // One line naming the backend and its per-step solver parameters, for logging.
+    [[nodiscard]] virtual auto describe_stepping   () const -> std::string               = 0;
     virtual void update_fixed_step      (double dt)                                      = 0;
     // A body at rest enters the world asleep, so loading a scene does not set
     // it in motion; a body that already holds a non-zero linear or angular

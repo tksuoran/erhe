@@ -277,6 +277,11 @@ auto Box3d_world::get_constraint_count() const -> std::size_t
     return m_constraints.size();
 }
 
+auto Box3d_world::describe_stepping() const -> std::string
+{
+    return fmt::format("Box3D: sub-steps per update {}, joint constraintHertz requested 1e6 (clamped by Box3D to a quarter of the sub-step rate)", world_sub_step_count);
+}
+
 auto Box3d_world::describe() const -> std::vector<std::string>
 {
     const b3Counters counters = b3World_GetCounters(m_world);

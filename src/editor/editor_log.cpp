@@ -27,6 +27,7 @@ std::shared_ptr<spdlog::logger> log_operations;
 std::shared_ptr<spdlog::logger> log_parsers;
 std::shared_ptr<spdlog::logger> log_physics;
 std::shared_ptr<spdlog::logger> log_physics_frame;
+std::shared_ptr<spdlog::logger> log_physics_drag;
 std::shared_ptr<spdlog::logger> log_pointer;
 std::shared_ptr<spdlog::logger> log_post_processing;
 std::shared_ptr<spdlog::logger> log_programs;
@@ -77,6 +78,7 @@ void initialize_logging()
     log_parsers                    = make_logger      ("editor.parsers"                   );
     log_physics                    = make_logger      ("editor.physics"                   );
     log_physics_frame              = make_frame_logger("editor.physics_frame"             );
+    log_physics_drag               = make_logger      ("editor.physics_drag"              );
     log_pointer                    = make_logger      ("editor.pointer"                   );
     log_post_processing            = make_frame_logger("editor.post_processing"           );
     log_programs                   = make_logger      ("editor.programs"                  );

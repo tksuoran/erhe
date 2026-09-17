@@ -20,6 +20,33 @@ Box3d_constraint::~Box3d_constraint() noexcept
     }
 }
 
+auto Box3d_constraint::get_diagnostics() const -> Constraint_diagnostics
+{
+    Constraint_diagnostics result{};
+    if (!m_is_valid || !b3Joint_IsValid(m_joint)) {
+        return result;
+    }
+    switch (b3Joint_GetType(m_joint)) {
+        case b3_parallelJoint:  result.kind = "box3d parallel";  break;
+        case b3_distanceJoint:  result.kind = "box3d distance";  break;
+        case b3_filterJoint:    result.kind = "box3d filter";    break;
+        case b3_motorJoint:     result.kind = "box3d motor";     break;
+        case b3_prismaticJoint: result.kind = "box3d prismatic"; break;
+        case b3_revoluteJoint:  result.kind = "box3d revolute";  break;
+        case b3_sphericalJoint: result.kind = "box3d spherical"; break;
+        case b3_weldJoint:      result.kind = "box3d weld";      break;
+        case b3_wheelJoint:     result.kind = "box3d wheel";     break;
+        default:                result.kind = "box3d ?";         break;
+    }
+    const b3Vec3 force  = b3Joint_GetConstraintForce (m_joint);
+    const b3Vec3 torque = b3Joint_GetConstraintTorque(m_joint);
+    result.has_load     = true;
+    result.load_unit    = "force N / torque N m";
+    result.linear_load  = glm::vec3{force.x,  force.y,  force.z};
+    result.angular_load = glm::vec3{torque.x, torque.y, torque.z};
+    return result;
+}
+
 namespace {
 
 // Box3D rejects a non-finite drive force (box3d/types.h), while erhe uses
