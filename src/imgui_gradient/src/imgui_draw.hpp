@@ -12,7 +12,7 @@ inline void draw_border(ImRect border_rect)
 {
     static constexpr float rounding{1.f};
     static constexpr float thickness{2.f};
-    ImGui::GetWindowDrawList()->AddRect(border_rect.GetTL(), border_rect.GetBR(), internal::border_color(), rounding, ImDrawFlags_None, thickness);
+    ImGui::GetWindowDrawList()->AddRect(border_rect.GetTL(), border_rect.GetBR(), internal::border_color(), rounding, thickness, ImDrawFlags_None);
 }
 
 void draw_gradient(

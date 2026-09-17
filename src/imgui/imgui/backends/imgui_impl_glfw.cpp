@@ -32,6 +32,9 @@
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
 //  2026-XX-XX: Platform: Added support for multiple windows via the ImGuiPlatformIO interface.
+//  2026-09-15: [Docking] Fixed applying mouse cursor shapes to secondary viewports (broken in 1.92.6, 2025-12-10).
+//  2026-04-21: Added a Win32-specific implementation of ImGui_ImplGlfw_GetContentScaleXXXX functions for legacy GLFW 3.2.
+//  2026-03-25: Mouse cursor is properly restored if changed by user app/code while using glfwSetInputMode(..., GLFW_CURSOR_DISABLED) or ImGuiConfigFlags_NoMouseCursorChange. Amend change from 2025-12-10.
 //  2026-02-10: Try to set IMGUI_IMPL_GLFW_DISABLE_X11 / IMGUI_IMPL_GLFW_DISABLE_WAYLAND automatically if corresponding headers are not accessible. (#9225)
 //  2026-01-25: [Docking] Improve workarounds for cases where GLFW is unable to provide any reliable monitor info. Preserve existing monitor list when none of the new one is valid. (#9195, #7902, #5683)
 //  2026-01-18: [Docking] Dynamically load X11 functions to avoid -lx11 linking requirement introduced on 2025-09-10.
@@ -254,7 +257,7 @@ struct ImGui_ImplGlfw_Data
     bool                    IsWayland;
     bool                    InstalledCallbacks;
     bool                    CallbacksChainForAllWindows;
-    char                    BackendPlatformName[32];
+    char                    BackendPlatformName[40];
 #ifdef EMSCRIPTEN_USE_EMBEDDED_GLFW3
     const char*             CanvasSelector;
 #endif
@@ -721,7 +724,13 @@ static bool ImGui_ImplGlfw_Init(GLFWwindow* window, bool install_callbacks, Glfw
 
     // Setup backend capabilities flags
     ImGui_ImplGlfw_Data* bd = IM_NEW(ImGui_ImplGlfw_Data)();
-    snprintf(bd->BackendPlatformName, sizeof(bd->BackendPlatformName), "imgui_impl_glfw (%d)", GLFW_VERSION_COMBINED);
+    bd->Context = ImGui::GetCurrentContext();
+    bd->Window = window;
+    bd->Time = 0.0;
+    bd->IsWayland = ImGui_ImplGlfw_IsWayland();
+    ImGui_ImplGlfw_ContextMap_Add(window, bd->Context);
+
+    snprintf(bd->BackendPlatformName, sizeof(bd->BackendPlatformName), "imgui_impl_glfw (%d)%s", GLFW_VERSION_COMBINED, bd->IsWayland ? " (Wayland)" : "");
     io.BackendPlatformUserData = (void*)bd;
     io.BackendPlatformName = bd->BackendPlatformName;
 #if GLFW_HAS_CREATECURSOR
@@ -742,12 +751,6 @@ static bool ImGui_ImplGlfw_Init(GLFWwindow* window, bool install_callbacks, Glfw
 #if GLFW_HAS_MOUSE_PASSTHROUGH || GLFW_HAS_WINDOW_HOVERED
     io.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport; // We can call io.AddMouseViewportEvent() with correct data (optional)
 #endif
-
-    bd->Context = ImGui::GetCurrentContext();
-    bd->Window = window;
-    bd->Time = 0.0;
-    bd->IsWayland = ImGui_ImplGlfw_IsWayland();
-    ImGui_ImplGlfw_ContextMap_Add(window, bd->Context);
 
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
 #if GLFW_VERSION_COMBINED < 3300
@@ -993,10 +996,22 @@ static void ImGui_ImplGlfw_UpdateMouseCursor()
     ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplGlfw_Data* bd = ImGui_ImplGlfw_GetBackendData();
     if ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) || glfwGetInputMode(bd->Window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED)
+    {
+        bd->LastMouseCursor = nullptr; // Invalidate so that if user changes underlying cursor we will update it next time we can.
         return;
+    }
 
     ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+
+#if GLFW_HAS_CREATECURSOR
+    GLFWcursor* set_mouse_cursor = bd->MouseCursors[imgui_cursor] ? bd->MouseCursors[imgui_cursor] : bd->MouseCursors[ImGuiMouseCursor_Arrow];
+    if (bd->LastMouseCursor == set_mouse_cursor)
+        set_mouse_cursor = NULL;
+    else
+        bd->LastMouseCursor = set_mouse_cursor;
+#endif
+
     for (int n = 0; n < platform_io.Viewports.Size; n++)
     {
         GLFWwindow* window = (GLFWwindow*)platform_io.Viewports[n]->PlatformHandle;
@@ -1014,12 +1029,8 @@ static void ImGui_ImplGlfw_UpdateMouseCursor()
             // Show OS mouse cursor
             // FIXME-PLATFORM: Unfocused windows seems to fail changing the mouse cursor with GLFW 3.2, but 3.3 works here.
 #if GLFW_HAS_CREATECURSOR
-            GLFWcursor* cursor = bd->MouseCursors[imgui_cursor] ? bd->MouseCursors[imgui_cursor] : bd->MouseCursors[ImGuiMouseCursor_Arrow];
-            if (bd->LastMouseCursor != cursor)
-            {
-                glfwSetCursor(window, cursor);
-                bd->LastMouseCursor = cursor;
-            }
+            if (set_mouse_cursor)
+                glfwSetCursor(window, set_mouse_cursor);
 #endif
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
@@ -1122,6 +1133,16 @@ static void ImGui_ImplGlfw_UpdateMonitors()
     }
 }
 
+// For GFLW 3.2 + Windows: include a simplified non-monitor aware version of ImGui_ImplWin32_GetDpiScaleForMonitor().
+// This is merely a band-aid to make using GLFW 3.2 a little bit nicer, but prefer to use GLFW 3.3+ or the full correct functions from the Win32 backend.
+#if !GLFW_HAS_PER_MONITOR_DPI && defined(_WIN32) && !defined(NOGDI)
+static float   ImGui_ImplWin32_GetLegacyDpiScale()   { const HDC dc = ::GetDC(nullptr); UINT xdpi = ::GetDeviceCaps(dc, LOGPIXELSX); ::ReleaseDC(nullptr, dc); return (float)xdpi / 96.0f; }
+static void    glfwGetWindowContentScale(GLFWwindow*, float* x_scale, float* y_scale)   { *x_scale = *y_scale = ImGui_ImplWin32_GetLegacyDpiScale(); }
+static void    glfwGetMonitorContentScale(GLFWmonitor*, float* x_scale, float* y_scale) { *x_scale = *y_scale = ImGui_ImplWin32_GetLegacyDpiScale(); }
+#undef GLFW_HAS_PER_MONITOR_DPI
+#define GLFW_HAS_PER_MONITOR_DPI 1
+#endif
+
 // - On Windows the process needs to be marked DPI-aware!! SDL2 doesn't do it by default. You can call ::SetProcessDPIAware() or call ImGui_ImplWin32_EnableDpiAwareness() from Win32 backend.
 // - Apple platforms use FramebufferScale so we always return 1.0f.
 // - Some accessibility applications are declaring virtual monitors with a DPI of 0.0f, see #7902. We preserve this value for caller to handle.
@@ -1191,7 +1212,7 @@ void ImGui_ImplGlfw_NewFrame()
     // (Accept glfwGetTime() not returning a monotonically increasing value. Seems to happens on disconnecting peripherals and probably on VMs and Emscripten, see #6491, #6189, #6114, #3644)
     double current_time = glfwGetTime();
     if (current_time <= bd->Time)
-        current_time = bd->Time + 0.00001f;
+        current_time = bd->Time + 0.00001;
     io.DeltaTime = bd->Time > 0.0 ? (float)(current_time - bd->Time) : (float)(1.0f / 60.0f);
     bd->Time = current_time;
 
@@ -1407,6 +1428,7 @@ static void ImGui_ImplGlfw_CreateWindow(ImGuiViewport* viewport)
         glfwMakeContextCurrent(vd->Window);
         glfwSwapInterval(0);
     }
+    bd->LastMouseCursor = nullptr; // Invalidate so that cursor is set again
 }
 
 static void ImGui_ImplGlfw_DestroyWindow(ImGuiViewport* viewport)

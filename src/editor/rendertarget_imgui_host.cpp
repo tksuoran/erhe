@@ -500,8 +500,8 @@ void Rendertarget_imgui_host::end_imgui_frame()
             ImVec2{m_view->get_width() - 0.5f, m_view->get_height() - 0.5f},
             IM_COL32(0, 255, 0, 255),
             0.0f,
-            0,
-            1.0f
+            1.0f,
+            ImDrawFlags_None
         );
     }
 

@@ -196,7 +196,7 @@ void Graph_plotter::plot(const Graph<ImVec2>& graph)
             ImVec2 sample = samples.at(i);
             path_line_to(draw_list, sample.x, sample.y * graph.y_scale);
         }
-        draw_list->PathStroke(graph.path_color, ImDrawFlags_None, graph.path_thickness);
+        draw_list->PathStroke(graph.path_color, graph.path_thickness, ImDrawFlags_None);
     }
     if (graph.draw_keys) {
         for (size_t i = 0, end = samples.size(); i < end; ++i) {
@@ -207,8 +207,8 @@ void Graph_plotter::plot(const Graph<ImVec2>& graph)
                 p + ImVec2(4.0f, 4.0f),
                 hover_sample.has_value() && (hover_sample.value() == i) ? graph.hover_color : graph.key_color,
                 0.0f,
-                ImDrawFlags_None,
-                2.0f
+                2.0f,
+                ImDrawFlags_None
             );
         }
     }
@@ -303,8 +303,8 @@ void Graph_plotter::plot(const Graph<std::array<ImVec2, 2>>& graph)
                     p + ImVec2(4.0f, 4.0f),
                     graph.key_color,
                     0.0f,
-                    ImDrawFlags_None,
-                    2.0f
+                    2.0f,
+                    ImDrawFlags_None
                 );
             }
         }
@@ -319,8 +319,8 @@ void Graph_plotter::plot(const Graph<std::array<ImVec2, 2>>& graph)
             p + ImVec2(4.0f, 4.0f),
             graph.hover_color,
             0.0f,
-            ImDrawFlags_None,
-            2.0f
+            2.0f,
+            ImDrawFlags_None
         );
         if (ImGui::BeginTooltip()) {
             std::string tooltip = fmt::format(
@@ -346,8 +346,8 @@ void Graph_plotter::sample_text(float x, float y, const char* text, ImU32 col)
         p + ImVec2(4.0f, 4.0f),
         col,
         0.0f,
-        ImDrawFlags_None,
-        2.0f
+        2.0f,
+        ImDrawFlags_None
     );
 
     ImVec2 q = ImVec2{p.x + 8.0f, p.y};

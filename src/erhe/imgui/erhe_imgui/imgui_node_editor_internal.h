@@ -236,7 +236,7 @@ struct Pin final: Object
     ImU32   m_BorderColor;
     float   m_BorderWidth;
     float   m_Rounding;
-    int     m_Corners;
+    ImDrawFlags m_DrawFlags; // m_Corners
     ImVec2  m_Dir;
     float   m_Strength;
     float   m_Radius;
@@ -257,7 +257,7 @@ struct Pin final: Object
         , m_BorderColor(IM_COL32_BLACK)
         , m_BorderWidth(0)
         , m_Rounding(0)
-        , m_Corners(0)
+        , m_DrawFlags(ImDrawFlags_None)
         , m_Dir(0, 0)
         , m_Strength(0)
         , m_Radius(0)

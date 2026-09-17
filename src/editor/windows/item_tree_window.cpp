@@ -642,8 +642,8 @@ void drag_and_drop_rectangle_preview(const ImRect rect)
             rect.Max + ImVec2{0.0f, 3.5f},
             ImGui::GetColorU32(ImGuiCol_DragDropTarget),
             0.0f,
-            0,
-            2.0f
+            2.0f,
+            ImDrawFlags_None
         );
     }
 }
@@ -1207,8 +1207,8 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
             rect.Max + ImVec2{0.0f, 2.0f},
             ImGui::GetColorU32(ImVec4{0.0f, 0.5f, 1.0f, 1.0f}),
             0.0f,
-            0,
-            1.0f
+            1.0f,
+            ImDrawFlags_None
         );
     }
 

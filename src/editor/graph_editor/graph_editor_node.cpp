@@ -436,7 +436,7 @@ void Graph_editor_node::show_pins(
         }
         draw_list.PushClipRect(clip_min, clip_max, false);
         draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
-        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
+        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, 2.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
         draw_list.PopClipRect();
     }
 }

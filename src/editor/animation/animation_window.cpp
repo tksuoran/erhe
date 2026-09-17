@@ -1586,7 +1586,7 @@ void Animation_window::curve_canvas()
                         break;
                     }
                 }
-                draw_list->PathStroke(color, ImDrawFlags_None, 1.25f);
+                draw_list->PathStroke(color, 1.25f, ImDrawFlags_None);
             }
         }
     }

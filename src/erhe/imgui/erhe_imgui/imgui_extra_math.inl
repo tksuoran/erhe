@@ -19,32 +19,6 @@
 
 
 //------------------------------------------------------------------------------
-# if IMGUI_VERSION_NUM < 19002
-inline bool operator==(const ImVec2& lhs, const ImVec2& rhs)
-{
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-inline bool operator!=(const ImVec2& lhs, const ImVec2& rhs)
-{
-    return lhs.x != rhs.x || lhs.y != rhs.y;
-}
-# endif
-
-inline ImVec2 operator*(const float lhs, const ImVec2& rhs)
-{
-    return ImVec2(lhs * rhs.x, lhs * rhs.y);
-}
-
-# if IMGUI_VERSION_NUM < 18955
-inline ImVec2 operator-(const ImVec2& lhs)
-{
-    return ImVec2(-lhs.x, -lhs.y);
-}
-# endif
-
-
-//------------------------------------------------------------------------------
 inline float ImLength(float v)
 {
     return v;

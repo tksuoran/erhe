@@ -330,10 +330,7 @@ auto Imgui_host::on_mouse_move_event(const erhe::window::Input_event& input_even
 {
     SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_mouse_move_event(x = {}, y = {}) {}", input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y, get_name());
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMousePosEventWithRelative(
-        input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y,
-        input_event.u.mouse_move_event.dx, input_event.u.mouse_move_event.dy
-    );
+    io.AddMousePosEvent(input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y);
     return want_capture_mouse();
 }
 

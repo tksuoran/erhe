@@ -216,7 +216,7 @@ struct Style
     ImVec2  PivotAlignment;
     ImVec2  PivotSize;
     ImVec2  PivotScale;
-    float   PinCorners;
+    ImDrawFlags PinDrawFlags; // PinCorners;
     float   PinRadius;
     float   PinArrowSize;
     float   PinArrowWidth;
@@ -247,11 +247,7 @@ struct Style
         PivotAlignment           = ImVec2(0.5f, 0.5f);
         PivotSize                = ImVec2(0.0f, 0.0f);
         PivotScale               = ImVec2(1, 1);
-#if IMGUI_VERSION_NUM > 18101
-        PinCorners               = ImDrawFlags_RoundCornersAll;
-#else
-        PinCorners               = ImDrawCornerFlags_All;
-#endif
+        PinDrawFlags             = ImDrawFlags_RoundCornersAll;
         PinRadius                = 0.0f;
         PinArrowSize             = 0.0f;
         PinArrowWidth            = 0.0f;

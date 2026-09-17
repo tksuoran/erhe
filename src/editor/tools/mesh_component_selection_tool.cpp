@@ -1593,7 +1593,7 @@ void Mesh_component_selection_tool::draw_gesture_overlay(const Viewport_scene_vi
         const ImVec2 p0{m_box_anchor_window.x,  m_box_anchor_window.y};
         const ImVec2 p1{m_box_current_window.x, m_box_current_window.y};
         draw_list->AddRectFilled(p0, p1, fill_color);
-        draw_list->AddRect      (p0, p1, line_color, 0.0f, ImDrawFlags_None, 1.5f);
+        draw_list->AddRect      (p0, p1, line_color, 0.0f, 1.5f, ImDrawFlags_None);
     }
 
     // Brush circle, shown in Paint mode. While painting, draw at the brush

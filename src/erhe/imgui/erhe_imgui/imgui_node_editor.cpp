@@ -90,12 +90,6 @@ static const float c_SelectionFadeOutDuration   = 0.15f; // seconds
 static const auto  c_MaxMoveOverEdgeSpeed       = 10.0f;
 static const auto  c_MaxMoveOverEdgeDistance    = 300.0f;
 
-#if IMGUI_VERSION_NUM > 18101
-static const auto  c_AllRoundCornersFlags = ImDrawFlags_RoundCornersAll;
-#else
-static const auto  c_AllRoundCornersFlags = 15;
-#endif
-
 
 //------------------------------------------------------------------------------
 # if defined(_DEBUG) && defined(_WIN32)
@@ -504,7 +498,7 @@ static void ImDrawList_AddBezierWithArrows(ImDrawList* drawList, const ImCubicBe
 
         ImDrawList_PathBezierOffset(drawList, half_thickness, curve.P3, curve.P2, curve.P1, curve.P0);
 
-        drawList->PathStroke(color, true, strokeThickness);
+        drawList->PathStroke(color, strokeThickness, true);
     }
 }
 
@@ -523,12 +517,18 @@ void ed::Pin::Draw(ImDrawList* drawList, DrawFlags flags)
         drawList->ChannelsSetCurrent(m_Node->m_Channel + c_NodePinChannel);
 
         drawList->AddRectFilled(Editor->DrawPos(m_Bounds.Min), Editor->DrawPos(m_Bounds.Max),
-            m_Color, Editor->DrawLen(m_Rounding), m_Corners);
+            m_Color, Editor->DrawLen(m_Rounding), m_DrawFlags);
 
         if (m_BorderWidth > 0.0f)
         {
-            drawList->AddRect(Editor->DrawPos(m_Bounds.Min), Editor->DrawPos(m_Bounds.Max),
-                m_BorderColor, Editor->DrawLen(m_Rounding), m_Corners, Editor->DrawLen(m_BorderWidth));
+            drawList->AddRect(
+                Editor->DrawPos(m_Bounds.Min),
+                Editor->DrawPos(m_Bounds.Max),
+                m_BorderColor,
+                Editor->DrawLen(m_Rounding),
+                Editor->DrawLen(m_BorderWidth),
+                m_DrawFlags
+            );
         }
 
         if (!Editor->IsSelected(m_Node))
@@ -643,7 +643,11 @@ void ed::Node::Draw(ImDrawList* drawList, DrawFlags flags)
                 drawList->AddRect(
                     Editor->DrawPos(m_GroupBounds.Min),
                     Editor->DrawPos(m_GroupBounds.Max),
-                    m_GroupBorderColor, Editor->DrawLen(m_GroupRounding), c_AllRoundCornersFlags, Editor->DrawLen(m_GroupBorderWidth));
+                    m_GroupBorderColor,
+                    Editor->DrawLen(m_GroupRounding),
+                    Editor->DrawLen(m_GroupBorderWidth),
+                    ImDrawFlags_RoundCornersAll 
+                );
             }
         }
 
@@ -695,8 +699,14 @@ void ed::Node::DrawBorder(ImDrawList* drawList, ImU32 color, float thickness, fl
     {
         const ImVec2 extraOffset = ImVec2(offset, offset);
 
-        drawList->AddRect(Editor->DrawPos(m_Bounds.Min - extraOffset), Editor->DrawPos(m_Bounds.Max + extraOffset),
-            color, Editor->DrawLen(ImMax(0.0f, m_Rounding + offset)), c_AllRoundCornersFlags, Editor->DrawLen(thickness));
+        drawList->AddRect(
+            Editor->DrawPos(m_Bounds.Min - extraOffset),
+            Editor->DrawPos(m_Bounds.Max + extraOffset),
+            color,
+            Editor->DrawLen(ImMax(0.0f, m_Rounding + offset)),
+            Editor->DrawLen(thickness),
+            ImDrawFlags_RoundCornersAll // c_AllRoundCornersFlags,
+        );
     }
 }
 
@@ -6050,7 +6060,7 @@ void ed::NodeBuilder::BeginPin(PinId pinId, PinKind kind)
     m_CurrentPin->m_BorderColor = Editor->GetColor(StyleColor_PinRectBorder);
     m_CurrentPin->m_BorderWidth = editorStyle.PinBorderWidth;
     m_CurrentPin->m_Rounding    = editorStyle.PinRounding;
-    m_CurrentPin->m_Corners     = static_cast<int>(editorStyle.PinCorners);
+    m_CurrentPin->m_DrawFlags   = editorStyle.PinDrawFlags;
     m_CurrentPin->m_Radius      = editorStyle.PinRadius;
     m_CurrentPin->m_ArrowSize   = editorStyle.PinArrowSize;
     m_CurrentPin->m_ArrowWidth  = editorStyle.PinArrowWidth;
@@ -6434,7 +6444,6 @@ float* ed::Style::GetVarFloatAddr(StyleVar idx)
         case StyleVar_FlowMarkerDistance:       return &FlowMarkerDistance;
         case StyleVar_FlowSpeed:                return &FlowSpeed;
         case StyleVar_FlowDuration:             return &FlowDuration;
-        case StyleVar_PinCorners:               return &PinCorners;
         case StyleVar_PinRadius:                return &PinRadius;
         case StyleVar_PinArrowSize:             return &PinArrowSize;
         case StyleVar_PinArrowWidth:            return &PinArrowWidth;

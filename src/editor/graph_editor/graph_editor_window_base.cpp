@@ -618,7 +618,7 @@ void Graph_editor_window_base::draw_canvas_drop_ghost(
     ImDrawList*  draw_list = ImGui::GetWindowDrawList();
     draw_list->PushClipRect(rect_min, rect_max, true);
     draw_list->AddRectFilled(ghost_min, ghost_max, IM_COL32(128, 128, 128, 48), rounding);
-    draw_list->AddRect      (ghost_min, ghost_max, IM_COL32(204, 204, 204, 200), rounding, ImDrawFlags_RoundCornersAll, 2.0f * zoom);
+    draw_list->AddRect      (ghost_min, ghost_max, IM_COL32(204, 204, 204, 200), rounding, 2.0f * zoom, ImDrawFlags_RoundCornersAll);
     draw_list->AddText(
         ImVec2{ghost_min.x + (8.0f * zoom), ghost_min.y + (8.0f * zoom)},
         IM_COL32(230, 230, 230, 220),

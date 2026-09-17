@@ -282,7 +282,7 @@ void Shader_graph_node::show_pins(Node_context& context, etl::vector<erhe::graph
         context.node_editor.EndPin();
 
         context.draw_list->AddRectFilled(min, max, 0xff444444, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
-        context.draw_list->AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
+        context.draw_list->AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, 2.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
     }
 }
 

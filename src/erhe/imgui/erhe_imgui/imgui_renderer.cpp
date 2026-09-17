@@ -678,6 +678,8 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     // for scrolling (at least from headset).
     io.ConfigInputTrickleEventQueue = false;
 
+    io.ConfigDragValueLadder = true;
+
     auto& style = imgui_context->Style;
     style.WindowMenuButtonPosition = ImGuiDir_None;
 
@@ -1244,7 +1246,7 @@ void Imgui_renderer::render_draw_data(
 
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
-    for (int n = 0; n < draw_data->CmdListsCount; n++) {
+    for (int n = 0; n < draw_data->CmdLists.Size; n++) {
         erhe::graphics::Scoped_debug_group cmd_list_scope{render_encoder.get_command_buffer(), "CmdList"};
 
         // log_frame->trace("CmdList {}", n);
@@ -1270,7 +1272,7 @@ void Imgui_renderer::render_draw_data(
                 for (cmd_i = cmd_batch_start; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
                     const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
                     if (pcmd->UserCallback != nullptr) {
-                        if (pcmd->UserCallback == ImDrawCallback_ResetRenderState) {
+                        if (pcmd->UserCallback == ImGui::GetPlatformIO().DrawCallback_ResetRenderState) {
                             log_imgui->debug("ImDrawCallback_ResetRenderState - ignored");
                         } else {
                             pcmd->UserCallback(cmd_list, pcmd);
@@ -1373,7 +1375,7 @@ void Imgui_renderer::render_draw_data(
             for (int cmd_i = cmd_batch_start; cmd_i < cmd_batch_end; cmd_i++) {
                 const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
                 if (pcmd->UserCallback != nullptr) {
-                    if (pcmd->UserCallback == ImDrawCallback_ResetRenderState) {
+                    if (pcmd->UserCallback == ImGui::GetPlatformIO().DrawCallback_ResetRenderState) {
                         log_imgui->info("ImDrawCallback_ResetRenderState - skipped");
                     } else {
                         pcmd->UserCallback(cmd_list, pcmd);

@@ -839,7 +839,7 @@ void Lightmap_texture_window::imgui()
             const glm::vec2 origin{layout.get_slot_origin(layout_tile.slot)};
             const ImVec2 rect_min = screen_from_uv(origin / page_size);
             const ImVec2 rect_max = screen_from_uv((origin + glm::vec2{tile_size}) / page_size);
-            draw_list->AddRect(rect_min, rect_max, active ? active_color : resident_color, 0.0f, 0, active ? 2.0f : 1.0f);
+            draw_list->AddRect(rect_min, rect_max, active ? active_color : resident_color, 0.0f, active ? 2.0f : 1.0f, ImDrawFlags_None);
         }
     }
     // Broken (overlapping) triangles: always-on sanity check, filled red
