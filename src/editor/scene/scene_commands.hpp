@@ -27,8 +27,10 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::physics {
+    class Collision_filter;
     class IRigid_body_create_info;
     class Physics_joint_settings;
+    class Physics_material;
 }
 namespace erhe::primitive {
     class Material;
@@ -51,6 +53,8 @@ class App_context;
 class App_message_bus;
 class Draw_mode;
 class Frame_controller;
+class Graph_mesh;
+class Graph_texture;
 class Grid;
 class Headset_view;
 class Mesh_rendertarget_view;
@@ -63,6 +67,7 @@ class Scene_commands;
 class Scene_root;
 class Selection_tool;
 class Scene_views;
+class Style;
 
 class Create_new_scene_command : public erhe::commands::Command
 {
@@ -273,11 +278,17 @@ public:
     // queues Create_scene_message and the actual creation runs from the
     // message bus pump.
     auto create_new_scene       () -> std::shared_ptr<Scene_root>;
-    auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
-    // Any prim may parent any other prim (doc/usd-compatibility-plan.md C5),
-    // so the parent is taken as the Hierarchy it is: an Xform is created
-    // under a Scope as readily as under another Xform.
-    auto create_new_xform  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+
+    // Prim creation. Any prim may parent any other prim
+    // (doc/usd-compatibility-plan.md C5), so every creator below takes the
+    // parent as the Hierarchy it is: a Camera is created under a Scope or a
+    // Material as readily as under an Xform. Each queues one undoable insert
+    // of the new prim as the last child of `parent`; without a parent the
+    // prim lands under the active scene's root node.
+    auto create_new_camera      (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
+    auto create_new_xform       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+    // An empty Mesh prim (no primitives).
+    auto create_new_mesh        (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Mesh>;
     // A Scope prim: children and no transform, the prim resources are
     // conventionally gathered under (C5). Undoable, like every other creation
     // here; inserted on the next editor frame.
@@ -289,9 +300,28 @@ public:
     // selected, otherwise clicked_node's subtree alone. One undoable compound
     // operation; returns the number of tip nodes created.
     auto add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
-    auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
-    auto create_new_layout      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Layout>;
-    auto create_new_rendertarget(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
+    auto create_new_light       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
+    // An Xform carrying a Layout attachment.
+    auto create_new_layout      (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Layout>;
+    // An Xform holding a Rendertarget_mesh showing a viewport of the selected
+    // camera; returns empty when no camera is selected.
+    auto create_new_rendertarget(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
+
+    // Resource prim creation (doc/usd-compatibility-plan.md U4): each queues
+    // one undoable insert of a new resource as the last child of `parent`,
+    // any prim; without a parent the resource lands in its kind scope of the
+    // active scene's content library (make_library_insert_operation). The
+    // content library indexes the resource wherever it sits.
+    auto create_new_material        (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::primitive::Material>;
+    auto create_new_physics_material(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Physics_material>;
+    auto create_new_collision_filter(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Collision_filter>;
+    auto create_new_joint_settings  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Physics_joint_settings>;
+    // An empty style named uniquely in the scene's library (doc/style-library.md R1).
+    auto create_new_style           (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Style>;
+    // A texture graph asset; the Texture Graph window is pointed at it (#252).
+    auto create_new_graph_texture   (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Graph_texture>;
+    // A geometry graph asset; the Geometry Graph window is pointed at it (#252).
+    auto create_new_graph_mesh      (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Graph_mesh>;
 
     // Attaches a new Node_physics to the node (undoable). With no node, uses
     // the last selected node; with no selection, creates a new empty node
@@ -323,10 +353,7 @@ public:
     // node's item host). See scene/attachment_types.{hpp,cpp} for the user
     // catalog that drives them; Rigid Body / Joint reuse create_new_rigid_body
     // / create_new_joint above.
-    auto attach_new_camera          (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Camera>;
-    auto attach_new_light           (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Light>;
-    auto attach_new_empty_mesh      (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Mesh>;
-    auto attach_new_layout          (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>;
+    auto attach_new_layout         (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>;
     auto attach_new_grid            (erhe::scene::Node& node) -> std::shared_ptr<Grid>;
     auto attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>;
     auto attach_new_draw_mode       (erhe::scene::Node& node) -> std::shared_ptr<Draw_mode>;
@@ -338,6 +365,10 @@ public:
     auto get_scene_root         (erhe::Hierarchy* parent) const -> Scene_root*;
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
 
+    // The Hierarchy a prim created under `parent` in `scene_root` is inserted
+    // under: `parent` itself, or the scene root node without one.
+    [[nodiscard]] auto get_insert_parent(Scene_root& scene_root, erhe::Hierarchy* parent) const -> std::shared_ptr<erhe::Hierarchy>;
+
     [[nodiscard]] auto get_add_cameras_command        () -> Add_cameras_command&;
     [[nodiscard]] auto get_add_room_command           () -> Add_room_command&;
     [[nodiscard]] auto get_add_lights_command         () -> Add_lights_command&;
@@ -348,6 +379,13 @@ public:
     [[nodiscard]] auto get_add_toruses_command        () -> Add_toruses_command&;
 
 private:
+    // The scene a resource created under `parent` belongs to: the scene
+    // hosting `parent`, else the active scene.
+    [[nodiscard]] auto get_resource_scene_root(erhe::Hierarchy* parent) const -> Scene_root*;
+    // Queues the undoable insert of `item` under `parent`, or into its kind
+    // scope of `scene_root`'s content library without a parent.
+    void queue_resource_insert(Scene_root& scene_root, erhe::Hierarchy* parent, const std::shared_ptr<erhe::Hierarchy>& item);
+
     App_context& m_context;
 
     erhe::message_bus::Subscription<Create_scene_message> m_create_scene_subscription;

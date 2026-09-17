@@ -2467,13 +2467,38 @@ auto Mcp_server::action_add_node_attachment(const json& args) -> std::string
     if (sr == nullptr) {
         return make_error_content("Scene not found: " + scene_name);
     }
-    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
-    if (!node) {
-        return make_error_content("Node not found (give node_id or node_name)");
-    }
     const std::string type_key = args.value("type", "");
     if (type_key.empty()) {
         return make_error_content("Missing 'type' (attachment catalog key)");
+    }
+
+    // A child prim kind (Mesh, Camera, Light) goes under any prim
+    // (doc/usd-compatibility-plan.md C5).
+    const Child_prim_type_info* const child_prim_info = find_child_prim_type(type_key);
+    if (child_prim_info != nullptr) {
+        const std::shared_ptr<erhe::Hierarchy> parent = find_prim_in_scene(*sr, args, "node_id", "node_name");
+        if (!parent) {
+            return make_error_content("Prim not found (give node_id or node_name)");
+        }
+        // Structure protection (doc/usd-compatibility-plan.md X2).
+        const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+        if (child_refusal.has_value()) {
+            log_mcp->info("add_node_attachment refused: {}", child_refusal.value());
+            return make_error_content(child_refusal.value());
+        }
+        child_prim_info->make(*m_context.scene_commands, *parent);
+        return make_json_content({
+            {"added",   true},
+            {"queued",  true}, // the insert operation executes on the next editor frame
+            {"node",    parent->get_name()},
+            {"node_id", parent->get_id()},
+            {"type",    type_key}
+        }).dump();
+    }
+
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
     }
     const Attachment_type_info* info = find_attachment_type(type_key);
     if (info == nullptr) {

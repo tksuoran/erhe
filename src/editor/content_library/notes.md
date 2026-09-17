@@ -111,7 +111,7 @@ and its Add Property list offers the classes of the prims below it first
 `Material.base_color` and the other `Material` values, and a material below it
 without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
-The editor creates folders ("Create Scope", `create_library_folder`), moves
+The editor creates folders (the Hierarchy "Create" > Scope on any prim, `create_library_folder`), moves
 resources between them and under any other prim (the Hierarchy move drop,
 `move_library_item`; `Item_parent_change_operation`) and persists where each
 resource sits through `ERHE_scene` `library_folders`, whose `path` names the
@@ -129,7 +129,7 @@ with the generic rows.
 An item names its style through the `Item_base::style_property` row
 (`Item_base::style_applies` decides which styles it can take); the
 default metals share the "Brushed metal" style `add_default_materials`
-creates here. "Create Style" on the Styles scope and the MCP
+creates here. The Hierarchy "Create" > Style (under the clicked prim) and the MCP
 `create_style` make an empty style. `make_style_from_values`
 (`operations/style_set_operation.hpp`) turns a bag of values into a style
 item plus its assignment for "Paste Properties as Style" and the MCP

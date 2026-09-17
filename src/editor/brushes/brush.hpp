@@ -12,6 +12,9 @@
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/build_info.hpp"
 
+namespace erhe {
+    class Hierarchy;
+}
 namespace erhe::geometry {
     class Geometry;
 }
@@ -139,6 +142,8 @@ private:
 
 // Place a brush in a scene with undo support. Usable from both
 // interactive UI (Brush_tool) and programmatic paths (MCP, Scene_builder).
+// The instance node is inserted under `parent`, any prim (the scene root node
+// when null), at world transform `world_from_node`.
 auto place_brush_in_scene(
     App_context&                                      context,
     Brush&                                            brush,
@@ -147,7 +152,7 @@ auto place_brush_in_scene(
     const std::shared_ptr<erhe::primitive::Material>& material,
     double                                            scale           = 1.0,
     erhe::physics::Motion_mode                        motion_mode     = erhe::physics::Motion_mode::e_dynamic,
-    std::shared_ptr<erhe::scene::Node>                parent          = {},
+    std::shared_ptr<erhe::Hierarchy>                  parent          = {},
     std::size_t                                       index_in_parent = 0,
     std::optional<float>                              mass_override   = {}
 ) -> std::shared_ptr<erhe::scene::Node>;

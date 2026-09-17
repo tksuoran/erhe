@@ -531,6 +531,72 @@ auto Scene_root::make_browser_window(
             );
         }
     );
+    // "Create": every creatable kind, on every prim row and on the Scene
+    // header row (which creates under the scene root node). Any prim parents
+    // any prim (doc/usd-compatibility-plan.md C5), so each entry inserts the
+    // new item, undoably, as the last child of the clicked prim - a Camera
+    // under a Material as readily as a Material under an Xform.
+    m_node_tree_window->add_item_context_menu_callback(
+        [this, &context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&     deferred_operations,
+            bool&                                   close
+        ) {
+            std::shared_ptr<erhe::Hierarchy> parent{};
+            if (item.get() == get_scene_item().get()) {
+                parent = get_scene().get_root_node();
+            } else if (std::dynamic_pointer_cast<erhe::Typed>(item)) {
+                parent = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+            }
+            if (!parent) {
+                return;
+            }
+            // Structure protection (doc/usd-compatibility-plan.md X2):
+            // nothing is created under a reference instance carrier or
+            // inside one; the whole menu is greyed with the reason.
+            const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+            if (child_refusal.has_value()) {
+                ImGui::BeginDisabled();
+            }
+            if (ImGui::BeginMenu("Create")) {
+                using Create_function = void (*)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
+                const auto entry = [&context, &parent, &deferred_operations, &close](const char* const label, const Create_function create) {
+                    if (ImGui::MenuItem(label)) {
+                        deferred_operations.push_back(
+                            [&context, parent, create]() {
+                                create(*context.scene_commands, *parent);
+                            }
+                        );
+                        close = true;
+                    }
+                };
+                entry("Xform", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_xform(&p)); });
+                // A Scope: children and nothing else (C5).
+                entry("Scope", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_scope(&p)); });
+                for (const Child_prim_type_info& type_info : get_child_prim_types()) {
+                    entry(std::string{type_info.display_name}.c_str(), type_info.make);
+                }
+                entry("Rendertarget", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_rendertarget(&p)); });
+                // An Xform carrying a Layout attachment.
+                entry("Layout", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_layout(&p)); });
+                ImGui::Separator();
+                entry("Material",               [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_material        (&p)); });
+                entry("Physics Material",       [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_physics_material(&p)); });
+                entry("Collision Filter",       [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_collision_filter(&p)); });
+                entry("Physics Joint Settings", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_joint_settings  (&p)); });
+                entry("Style",                  [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_style           (&p)); });
+                entry("Graph Texture",          [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_texture   (&p)); });
+                entry("Graph Mesh",             [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_mesh      (&p)); });
+                ImGui::EndMenu();
+            }
+            if (child_refusal.has_value()) {
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("%s", child_refusal.value().c_str());
+                }
+            }
+        }
+    );
     m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
@@ -540,76 +606,6 @@ auto Scene_root::make_browser_window(
             const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (!node) {
                 return;
-            }
-            // "Create": every prim kind the editor creates, each landing as a
-            // child of the clicked prim (any prim parents any prim,
-            // doc/usd-compatibility-plan.md C5). The catalog's child-prim
-            // entries (Mesh, Camera, Light) sit beside the kinds that only
-            // Scene_commands builds (Xform, Scope, Rendertarget, Layout).
-            // Structure protection (doc/usd-compatibility-plan.md X2):
-            // nothing is created under a reference instance carrier or
-            // inside one; the whole menu is greyed with the reason.
-            const std::optional<std::string> child_refusal = instance_child_refusal(*node);
-            if (child_refusal.has_value()) {
-                ImGui::BeginDisabled();
-            }
-            if (ImGui::BeginMenu("Create")) {
-                if (ImGui::MenuItem("Xform")) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            context.scene_commands->create_new_xform(node.get());
-                        }
-                    );
-                    close = true;
-                }
-                // A Scope: children and nothing else (C5); the entry the
-                // content library's "Create Folder" became.
-                if (ImGui::MenuItem("Scope")) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            context.scene_commands->create_new_scope(node.get());
-                        }
-                    );
-                    close = true;
-                }
-                for (const Attachment_type_info& type_info : get_attachment_types()) {
-                    if (type_info.kind != Attachment_kind::child_prim) {
-                        continue;
-                    }
-                    const bool can_add = type_info.can_add(*node);
-                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
-                        deferred_operations.push_back(
-                            [&context, node, make = type_info.make]() {
-                                make(*context.scene_commands, *node);
-                            }
-                        );
-                        close = true;
-                    }
-                }
-                if (ImGui::MenuItem("Rendertarget")) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            context.scene_commands->create_new_rendertarget(node.get());
-                        }
-                    );
-                    close = true;
-                }
-                // An Xform carrying a Layout attachment.
-                if (ImGui::MenuItem("Layout")) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            context.scene_commands->create_new_layout(node.get());
-                        }
-                    );
-                    close = true;
-                }
-                ImGui::EndMenu();
-            }
-            if (child_refusal.has_value()) {
-                ImGui::EndDisabled();
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip("%s", child_refusal.value().c_str());
-                }
             }
             // Rigging: offered only when the clicked subtree contains a bone
             // (early-exit walk; runs only while the popup is open).
@@ -635,9 +631,6 @@ auto Scene_root::make_browser_window(
             // the catalog make.
             if (ImGui::BeginMenu("Add Attachment")) {
                 for (const Attachment_type_info& type_info : get_attachment_types()) {
-                    if (type_info.kind != Attachment_kind::api_schema) {
-                        continue;
-                    }
                     const bool can_add = type_info.can_add(*node);
                     if (type_info.key == "joint") {
                         if (ImGui::MenuItem("Joint", nullptr, false, can_add)) {
@@ -832,9 +825,9 @@ auto Scene_root::make_browser_window(
         }
     );
     // Content-library context menu (migrated from the removed Content Library
-    // window, #241 follow-up): the resource verbs on a kind `Scope`, on a
-    // folder scope below one, and on a resource prim
-    // (doc/usd-compatibility-plan.md U4).
+    // window, #241 follow-up): the resource verbs on a resource prim this
+    // scene's library lists, wherever the prim sits in the tree
+    // (doc/usd-compatibility-plan.md U4). Creation is the "Create" menu above.
     m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
@@ -845,153 +838,7 @@ auto Scene_root::make_browser_window(
             if (!library) {
                 return;
             }
-            const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(item);
-            const uint64_t scope_kind = scope ? library->find_scope_kind(*scope) : 0;
             App_context* const context_ptr = &context;
-            // A scope below a kind scope is a content-library folder
-            // (doc/content-library-folders.md D2).
-            if (scope && (scope_kind != 0)) {
-                if (ImGui::MenuItem("Create Scope")) {
-                    deferred_operations.push_back(
-                        [context_ptr, scope]() {
-                            std::shared_ptr<erhe::Scope> new_scope = std::make_shared<erhe::Scope>("New Scope");
-                            new_scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_scope,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                        }
-                    );
-                    close = true;
-                }
-            }
-            // Creating a resource places the prim under the scope the menu was
-            // opened on, so a resource created on a folder lands in it.
-            if (scope && (scope_kind == erhe::Item_type::material)) {
-                if (ImGui::MenuItem("Create Material")) {
-                    deferred_operations.push_back(
-                        [this, context_ptr, scope]() {
-                            const std::shared_ptr<erhe::primitive::Material> new_material =
-                                context_ptr->asset_manager->create<erhe::primitive::Material>(
-                                    *this,
-                                    erhe::primitive::Material_create_info{
-                                        .name = "New Material",
-                                        .values = {
-                                            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
-                                            .roughness  = glm::vec2{0.5f, 0.5f},
-                                            .metallic   = 1.0f
-                                        }
-                                    }
-                                );
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_material,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                        }
-                    );
-                    close = true;
-                }
-            }
-            // doc/property-system.md section 4.12.
-            if (scope && (scope_kind == erhe::Item_type::physics_material)) {
-                if (ImGui::MenuItem("Create Physics Material")) {
-                    deferred_operations.push_back(
-                        [context_ptr, scope]() {
-                            auto new_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_material,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                        }
-                    );
-                    close = true;
-                }
-            }
-            // doc/style-library.md R1: an empty style.
-            if (scope && (scope_kind == erhe::Item_type::style)) {
-                if (ImGui::MenuItem("Create Style")) {
-                    deferred_operations.push_back(
-                        [this, context_ptr, scope]() {
-                            auto new_style = std::make_shared<Style>(make_unique_style_name(*get_content_library(), "New Style"));
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_style,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                        }
-                    );
-                    close = true;
-                }
-            }
-            if (scope && (scope_kind == erhe::Item_type::graph_texture)) {
-                if (ImGui::MenuItem("Create Graph Texture")) {
-                    deferred_operations.push_back(
-                        [context_ptr, scope]() {
-                            auto new_graph_texture = std::make_shared<Graph_texture>("Graph Texture");
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_graph_texture,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                            // Issue #252: point the Texture Graph window at the
-                            // new asset explicitly (no longer via the global
-                            // selection).
-                            if (context_ptr->texture_graph_window != nullptr) {
-                                context_ptr->texture_graph_window->set_target(new_graph_texture);
-                            }
-                        }
-                    );
-                    close = true;
-                }
-            }
-            if (scope && (scope_kind == erhe::Item_type::graph_mesh)) {
-                if (ImGui::MenuItem("Create Graph Mesh")) {
-                    deferred_operations.push_back(
-                        [context_ptr, scope]() {
-                            auto new_graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
-                            auto op = std::make_shared<Item_insert_remove_operation>(
-                                Item_insert_remove_operation::Parameters{
-                                    .context = *context_ptr,
-                                    .item    = new_graph_mesh,
-                                    .parent  = scope,
-                                    .mode    = Item_insert_remove_operation::Mode::insert
-                                }
-                            );
-                            context_ptr->operation_stack->queue(op);
-                            // Issue #252: point the Geometry Graph window at the
-                            // new asset explicitly (no longer via the global
-                            // selection).
-                            if (context_ptr->geometry_graph_window != nullptr) {
-                                context_ptr->geometry_graph_window->set_target(new_graph_mesh);
-                            }
-                        }
-                    );
-                    close = true;
-                }
-            }
 
             if (!library->has_item(*item)) {
                 return; // not a resource this library lists

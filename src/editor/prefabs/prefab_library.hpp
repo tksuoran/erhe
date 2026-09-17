@@ -17,6 +17,7 @@
 #include <vector>
 
 namespace erhe {
+    class Hierarchy;
     class Item_base;
 }
 namespace erhe::primitive {
@@ -262,15 +263,15 @@ private:
 // instance root node carrying a Prefab_instance attachment, register the
 // prefab's shared resources in the scene's content library, and queue the
 // whole insertion as one undoable Compound_operation (mirrors
-// place_brush_in_scene). Returns the instance root node. When parent is
-// null the scene's root node is used; index_in_parent selects the child
+// place_brush_in_scene). Returns the instance root node. The parent is any
+// prim; when parent is null the scene's root node is used; index_in_parent selects the child
 // slot under the parent (clamped to the child count).
 auto instantiate_prefab(
     App_context&                              context,
     const std::shared_ptr<Prefab>&            prefab,
     Scene_root&                               scene_root,
     const glm::mat4&                          world_from_node,
-    const std::shared_ptr<erhe::scene::Node>& parent = {},
+    const std::shared_ptr<erhe::Hierarchy>&   parent = {},
     std::size_t                               index_in_parent = 0
 ) -> std::shared_ptr<erhe::scene::Node>;
 

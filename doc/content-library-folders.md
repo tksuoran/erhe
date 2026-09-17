@@ -16,8 +16,8 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   places it under its kind scope when the library does not list it yet,
   `remove` takes it out of the tree, and the queries answer from the
   library's index.
-- R2 Editing. The Scene Hierarchy offers "Create Scope" on a kind scope and
-  on a folder inside one; a folder is renamed from the Properties window name
+- R2 Editing. The Scene Hierarchy's "Create" menu (`src/editor/windows/notes.md`
+  "Scene Hierarchy drag and drop") makes a scope under any prim; a folder is renamed from the Properties window name
   row, deleted with the tree's "Delete", and resources and folders are moved
   by dragging them in the tree (D3). Every one of these is one undoable
   operation.
@@ -58,12 +58,10 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   "Sibling-unique names") applies to resource prims like to every other prim:
   two materials of one scope cannot share a name, and the second gets
   `<base>_<n>`.
-- D2 Folder creation. "Create Scope" on a kind scope or a folder below one
-  queues an `Item_insert_remove_operation` inserting an `erhe::Scope` named
-  "New Scope" under the scope the menu was opened on. The Create menu's
-  `Scope` entry (`Scene_commands::create_new_scope`) makes a scene-structure
-  scope under the selected node instead, which carries `Item_flags::content`
-  and so is written as a glTF node; a library folder carries none. The same
+- D2 Folder creation. The Hierarchy "Create" > Scope entry
+  (`Scene_commands::create_new_scope`) queues an `Item_insert_remove_operation`
+  inserting an `erhe::Scope` under the prim the menu was opened on, a kind
+  scope and a folder below one included. The same
   insert operation in remove mode is what "Delete" runs through
   `Selection::delete_items`, which collects the folder's subtree deepest
   first, and what "Duplicate" runs through
@@ -174,5 +172,5 @@ Headless, over `scripts/mcp_call.py` on a fresh editor:
    back as local (the material's is local too, baked by the glTF material
    export).
 
-Interactive: "Create Scope" from the context menu, rename in Properties, drag
+Interactive: "Create" > Scope from the context menu, rename in Properties, drag
 a material onto the folder, Ctrl+Z after each.

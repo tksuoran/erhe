@@ -654,16 +654,33 @@ void drag_and_drop_gradient_preview(
     }
 }
 
+// The world transform of a new child prim with an identity local transform
+// under `parent`: the world transform of the nearest Xformable at or above
+// `parent` (a prim without a transform, such as a Scope or a Material, passes
+// its ancestor's transform through), identity when there is none.
+[[nodiscard]] auto world_from_new_child(const erhe::Hierarchy& parent) -> glm::mat4
+{
+    std::shared_ptr<const erhe::Hierarchy> prim = std::static_pointer_cast<const erhe::Hierarchy>(parent.shared_from_this());
+    while (prim) {
+        const std::shared_ptr<const erhe::scene::Node> node = std::dynamic_pointer_cast<const erhe::scene::Node>(prim);
+        if (node) {
+            return node->world_from_node();
+        }
+        prim = prim->get_parent().lock();
+    }
+    return glm::mat4{1.0f};
+}
+
 // glTF asset dropped from the Asset browser onto the scene hierarchy:
 // parse the file once through the prefab library (cached app-wide) and
-// insert an instance clone under the chosen parent, with an identity
+// insert an instance clone under the chosen parent prim, with an identity
 // local transform, as one undoable operation (mirrors the viewport drop).
 void instantiate_gltf_prefab(
-    App_context&                              context,
-    Asset_file_gltf&                          gltf,
-    Scene_root&                               scene_root,
-    const std::shared_ptr<erhe::scene::Node>& parent,
-    const std::size_t                         index_in_parent
+    App_context&                            context,
+    Asset_file_gltf&                        gltf,
+    Scene_root&                             scene_root,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const std::size_t                       index_in_parent
 )
 {
     if (!parent) {
@@ -690,7 +707,7 @@ void instantiate_gltf_prefab(
             if (!target || !parent->get_item_host()) {
                 return; // scene closed, or the drop parent left the scene
             }
-            instantiate_prefab(context, prefab, *target, parent->world_from_node(), parent, index_in_parent);
+            instantiate_prefab(context, prefab, *target, world_from_new_child(*parent), parent, index_in_parent);
         }
     );
 }
@@ -850,19 +867,19 @@ auto Item_tree::material_assign_drop_target(
 
 auto Item_tree::brush_drop_target(
     const Item_tree_drop_row&                         row,
-    const std::shared_ptr<erhe::scene::Node>&         node,
+    const std::shared_ptr<erhe::Hierarchy>&           prim,
     const std::shared_ptr<Brush>&                     brush,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const char* const                                 payload_type
 ) -> std::optional<bool>
 {
-    Scene_root* const scene_root = find_scene_root_for_item(m_context, *node);
+    Scene_root* const scene_root = find_scene_root_for_item(m_context, *prim);
     if (scene_root == nullptr) {
         return std::nullopt;
     }
     const auto insert_brush_instance = [this, &brush, &material, scene_root](
-        const std::shared_ptr<erhe::scene::Node>& parent,
-        const std::size_t                         index_in_parent
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const std::size_t                       index_in_parent
     ) {
         if (!parent) {
             return;
@@ -879,7 +896,7 @@ auto Item_tree::brush_drop_target(
             m_context,
             *brush,
             *scene_root,
-            parent->world_from_node(), // identity local transform under the chosen parent
+            world_from_new_child(*parent), // identity local transform under the chosen parent
             brush_material,
             1.0,
             erhe::physics::Motion_mode::e_dynamic,
@@ -887,15 +904,24 @@ auto Item_tree::brush_drop_target(
             index_in_parent
         );
     };
+    // The brush instance joins the tree beside the row (its parent) or under
+    // it (any prim parents any prim, doc/usd-compatibility-plan.md C5). A
+    // reference instance protects its structure (X2): a zone is offered only
+    // where the parent it inserts under accepts children.
+    const std::shared_ptr<erhe::Hierarchy> prim_parent = prim->get_parent().lock();
     return three_zone_drop_target(
         row,
         payload_type,
-        Drop_zones{},
-        [&node, &insert_brush_instance](const Drop_zone zone) {
+        Drop_zones{
+            .before = prim_parent && !refuses_instance_child(*prim_parent),
+            .into   = !refuses_instance_child(*prim),
+            .after  = prim_parent && !refuses_instance_child(*prim_parent)
+        },
+        [&prim, &prim_parent, &insert_brush_instance](const Drop_zone zone) {
             switch (zone) {
-                case Drop_zone::before: insert_brush_instance(node->get_parent_node(), node->get_index_in_parent()); break;
-                case Drop_zone::into:   insert_brush_instance(node, std::numeric_limits<std::size_t>::max()); break;
-                case Drop_zone::after:  insert_brush_instance(node->get_parent_node(), node->get_index_in_parent() + 1); break;
+                case Drop_zone::before: insert_brush_instance(prim_parent, prim->get_index_in_parent()); break;
+                case Drop_zone::into:   insert_brush_instance(prim, std::numeric_limits<std::size_t>::max()); break;
+                case Drop_zone::after:  insert_brush_instance(prim_parent, prim->get_index_in_parent() + 1); break;
             }
         }
     );
@@ -980,9 +1006,10 @@ auto Item_tree::action_drop_target(
         );
     }
 
-    // Brush onto a scene node: place a brush instance before / under / after it.
-    if (brush && node) {
-        const std::optional<bool> placement = brush_drop_target(row, node, brush, {}, payload_type);
+    // Brush onto a prim: place a brush instance before / under / after it.
+    const std::shared_ptr<erhe::Hierarchy> prim = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    if (brush && prim) {
+        const std::optional<bool> placement = brush_drop_target(row, prim, brush, {}, payload_type);
         if (placement.has_value()) {
             return placement;
         }
@@ -1103,10 +1130,12 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         return move_drop_target(row, item, payload_prim);
     }
 
-    // The payloads that are not tree rows act on a scene node regardless of
-    // modifier: an inventory slot and a glTF asset.
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (!node) {
+    // The payloads that are not tree rows act on the row regardless of
+    // modifier: an inventory slot and a glTF asset. A brush or a prefab
+    // instance joins the tree beside or under any prim; a material assignment
+    // needs a node holding a mesh.
+    const std::shared_ptr<erhe::Hierarchy> prim = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    if (!prim) {
         return false;
     }
 
@@ -1122,18 +1151,19 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             ? std::dynamic_pointer_cast<erhe::primitive::Material>(slot_payload.material->shared_from_this())
             : std::shared_ptr<erhe::primitive::Material>{};
         if (slot_brush) {
-            return brush_drop_target(row, node, slot_brush, slot_material, c_inventory_slot_payload_type).value_or(false);
+            return brush_drop_target(row, prim, slot_brush, slot_material, c_inventory_slot_payload_type).value_or(false);
         }
-        if (slot_material) {
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (slot_material && node) {
             return material_assign_drop_target(row, node, slot_material, c_inventory_slot_payload_type).value_or(false);
         }
         return false;
     }
 
     if (gltf_asset) {
-        // glTF asset dropped onto a scene node: instantiate as a prefab, as
-        // sibling before / child of / sibling after the drop target.
-        Scene_root* const scene_root = find_scene_root_for_item(m_context, *node);
+        // glTF asset dropped onto a prim: instantiate as a prefab, as sibling
+        // before / child of / sibling after the drop target.
+        Scene_root* const scene_root = find_scene_root_for_item(m_context, *prim);
         if (scene_root == nullptr) {
             return false;
         }
@@ -1142,22 +1172,22 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         // carrier or inside one, so the child zone is not offered there, and
         // the sibling zones are not offered when the prim's own parent
         // refuses children.
-        const std::shared_ptr<erhe::scene::Node> node_parent = node->get_parent_node();
-        const bool refuse_child_of_node   = refuses_instance_child(*node);
-        const bool refuse_child_of_parent = node_parent && refuses_instance_child(*node_parent);
+        const std::shared_ptr<erhe::Hierarchy> prim_parent = prim->get_parent().lock();
+        const bool refuse_child_of_prim   = refuses_instance_child(*prim);
+        const bool refuse_child_of_parent = !prim_parent || refuses_instance_child(*prim_parent);
         return three_zone_drop_target(
             row,
             Asset_file_gltf::static_type_name.data(),
             Drop_zones{
                 .before = !refuse_child_of_parent,
-                .into   = !refuse_child_of_node,
+                .into   = !refuse_child_of_prim,
                 .after  = !refuse_child_of_parent
             },
-            [this, &gltf_asset, scene_root, &node, &node_parent](const Drop_zone zone) {
+            [this, &gltf_asset, scene_root, &prim, &prim_parent](const Drop_zone zone) {
                 switch (zone) {
-                    case Drop_zone::before: instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node_parent, node->get_index_in_parent()); break;
-                    case Drop_zone::into:   instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node, std::numeric_limits<std::size_t>::max()); break;
-                    case Drop_zone::after:  instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node_parent, node->get_index_in_parent() + 1); break;
+                    case Drop_zone::before: instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, prim_parent, prim->get_index_in_parent()); break;
+                    case Drop_zone::into:   instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, prim, std::numeric_limits<std::size_t>::max()); break;
+                    case Drop_zone::after:  instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, prim_parent, prim->get_index_in_parent() + 1); break;
                 }
             }
         );

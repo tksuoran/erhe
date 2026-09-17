@@ -17,8 +17,9 @@ layer) and D30 (secondary owner types), the library reference is
   removing them is the D12 row machinery (Add Property, which offers every
   class's value properties grouped by class with a filter; Reset to
   default, Remove Property, undo), with the same qualified names a folder
-  of that category uses (`Material.roughness`). "Create Style" on the
-  Styles folder and the MCP `create_style` make an empty style.
+  of that category uses (`Material.roughness`). The Scene Hierarchy's
+  "Create" > Style (under the clicked prim) and the MCP `create_style` make
+  an empty style.
 - R2 Live edit. A change of a style's value reaches every item using the
   style at that moment: each user without a local value of its own for
   that property is notified with the old and new effective value, and the
@@ -150,6 +151,6 @@ Headless, over `scripts/mcp_call.py` on a fresh editor:
 
 Interactive: select the style in the Scene Hierarchy's Styles folder,
 edit a value and watch the metals change; drag the style onto a folder;
-Paste Properties as Style from a material; Create Style on the Styles
-folder, Add Property on it (Light.*, Camera.*, Material.* all offered)
+Paste Properties as Style from a material; "Create" > Style on any prim,
+Add Property on it (Light.*, Camera.*, Material.* all offered)
 and on an empty node; Ctrl+Z after each.

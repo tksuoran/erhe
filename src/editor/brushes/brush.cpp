@@ -433,7 +433,7 @@ auto place_brush_in_scene(
     const std::shared_ptr<erhe::primitive::Material>& material,
     double                                            scale,
     erhe::physics::Motion_mode                        motion_mode,
-    std::shared_ptr<erhe::scene::Node>                parent,
+    std::shared_ptr<erhe::Hierarchy>                  parent,
     std::size_t                                       index_in_parent,
     std::optional<float>                              mass_override
 ) -> std::shared_ptr<erhe::scene::Node>

@@ -1779,7 +1779,7 @@ count diagnostics.
 
 `Physics_material` (`erhe::physics`, the KHR_physics_rigid_bodies material
 item; the content library's Physics Materials category holds them, with
-"Create Physics Material" on the folder, the Operations window and the
+the Scene Hierarchy's "Create" > Physics Material on any prim, the Operations window and the
 MCP `create_physics_material` making new ones and the "Default" item
 `add_default_physics_materials` adds to every scene) describes how a kind
 of matter behaves and registers its nine fields as entry-stored,

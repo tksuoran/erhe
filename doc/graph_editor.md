@@ -86,9 +86,9 @@ Common to both the geometry and texture graph windows:
   `Editor_windows` manager (Issue #252). The primary window persists its layout;
   extra instances get a unique title and no ini label.
 - **Content-library assets.** A graph lives only as a selectable, serializable
-  content-library asset. Create one with the folder's right-click
-  "Create Graph Mesh" / "Create Graph Texture" (which also selects + targets it),
-  or over MCP.
+  content-library asset. Create one with the Scene Hierarchy's right-click
+  "Create" > Graph Mesh / Graph Texture on any prim (which also targets the
+  graph window at it), or over MCP.
 
 Geometry-graph-specific:
 

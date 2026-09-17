@@ -6,6 +6,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
@@ -20,14 +21,12 @@ namespace {
 
 using erhe::scene::Node;
 
+void make_camera(Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_camera(&parent); }
+void make_light (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_light (&parent); }
+void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_mesh  (&parent); }
+
 // Single-instance gates: refuse a second attachment of the same kind (issue
 // #249 decision: at most one Node_physics / Layout / ... per node).
-// A Mesh, Camera or Light is a prim, not an attachment, and a parent holds
-// any number of prim children (doc/usd-compatibility-plan.md C5), so these
-// three never refuse.
-auto camera_gate          (const Node&     ) -> bool { return true; }
-auto light_gate           (const Node&     ) -> bool { return true; }
-auto mesh_gate            (const Node&     ) -> bool { return true; }
 auto rigid_body_gate      (const Node& node) -> bool { return !erhe::scene::get_attachment<Node_physics           >(&node); }
 auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal
 auto layout_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Layout    >(&node); }
@@ -35,9 +34,6 @@ auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_
 auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
 auto draw_mode_gate       (const Node& node) -> bool { return !erhe::scene::get_attachment<Draw_mode               >(&node); }
 
-void make_camera          (Scene_commands& sc, Node& node) { sc.attach_new_camera          (node); }
-void make_light           (Scene_commands& sc, Node& node) { sc.attach_new_light           (node); }
-void make_mesh            (Scene_commands& sc, Node& node) { sc.attach_new_empty_mesh      (node); }
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
 void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layout           (node); }
@@ -47,20 +43,37 @@ void make_draw_mode       (Scene_commands& sc, Node& node) { sc.attach_new_draw_
 
 } // anonymous namespace
 
+auto get_child_prim_types() -> const std::vector<Child_prim_type_info>&
+{
+    static const std::vector<Child_prim_type_info> catalog = {
+        {"mesh",   "Mesh",   make_mesh  },
+        {"camera", "Camera", make_camera},
+        {"light",  "Light",  make_light }
+    };
+    return catalog;
+}
+
 auto get_attachment_types() -> const std::vector<Attachment_type_info>&
 {
     static const std::vector<Attachment_type_info> catalog = {
-        {"camera",           "Camera",           Attachment_kind::child_prim, camera_gate,           make_camera          },
-        {"light",            "Light",            Attachment_kind::child_prim, light_gate,            make_light           },
-        {"mesh",             "Mesh",             Attachment_kind::child_prim, mesh_gate,             make_mesh            },
-        {"rigid_body",       "Rigid Body",       Attachment_kind::api_schema, rigid_body_gate,       make_rigid_body      },
-        {"joint",            "Joint",            Attachment_kind::api_schema, joint_gate,            make_joint           },
-        {"layout",           "Layout",           Attachment_kind::api_schema, layout_gate,           make_layout          },
-        {"grid",             "Grid",             Attachment_kind::api_schema, grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", Attachment_kind::api_schema, frame_controller_gate, make_frame_controller},
-        {"draw_mode",        "Draw Mode",        Attachment_kind::api_schema, draw_mode_gate,        make_draw_mode       }
+        {"rigid_body",       "Rigid Body",       rigid_body_gate,       make_rigid_body      },
+        {"joint",            "Joint",            joint_gate,            make_joint           },
+        {"layout",           "Layout",           layout_gate,           make_layout          },
+        {"grid",             "Grid",             grid_gate,             make_grid            },
+        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller},
+        {"draw_mode",        "Draw Mode",        draw_mode_gate,        make_draw_mode       }
     };
     return catalog;
+}
+
+auto find_child_prim_type(std::string_view key) -> const Child_prim_type_info*
+{
+    for (const Child_prim_type_info& info : get_child_prim_types()) {
+        if (info.key == key) {
+            return &info;
+        }
+    }
+    return nullptr;
 }
 
 auto find_attachment_type(std::string_view key) -> const Attachment_type_info*

@@ -11,13 +11,17 @@
 #include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "content_library/material_library.hpp"
+#include "content_library/style.hpp"
 #include "editor_log.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "grid/grid.hpp"
 #include "scene/frame_controller.hpp"
 #include "windows/item_tree_window.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/node_attach_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -27,11 +31,14 @@
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/draw_mode.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "texture_graph/graph_texture.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 #include "tools/bone_visualization.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/viewport_window.hpp"
@@ -43,9 +50,11 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
@@ -625,7 +634,15 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     return scene_root;
 }
 
-auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Camera>
+auto Scene_commands::get_insert_parent(Scene_root& scene_root, erhe::Hierarchy* parent) const -> std::shared_ptr<erhe::Hierarchy>
+{
+    if (parent != nullptr) {
+        return std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this());
+    }
+    return std::static_pointer_cast<erhe::Hierarchy>(scene_root.get_hosted_scene()->get_root_node());
+}
+
+auto Scene_commands::create_new_camera(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Camera>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -641,9 +658,7 @@ auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
                 .item    = new_camera,
-                .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                    : scene_root->get_hosted_scene()->get_root_node(),
+                .parent  = get_insert_parent(*scene_root, parent),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -670,15 +685,40 @@ auto Scene_commands::create_new_xform(erhe::Hierarchy* parent) -> std::shared_pt
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
                 .item    = new_xform,
-                .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this())
-                    : std::static_pointer_cast<erhe::Hierarchy>(scene_root->get_hosted_scene()->get_root_node()),
+                .parent  = get_insert_parent(*scene_root, parent),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );
 
     return new_xform;
+}
+
+auto Scene_commands::create_new_mesh(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Mesh>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+
+    // An empty mesh (no primitives) renders nothing until the user adds
+    // geometry. A Mesh is a prim (doc/usd-compatibility-plan.md C5), so it
+    // enters the scene as a child of `parent`, carrying its own transform.
+    auto new_mesh = std::make_shared<erhe::scene::Mesh>("new mesh");
+    new_mesh->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_mesh->layer_id = scene_root->layers().content()->id;
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_mesh,
+                .parent  = get_insert_parent(*scene_root, parent),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
+    return new_mesh;
 }
 
 auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::Scope>
@@ -695,9 +735,7 @@ auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_pt
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
                 .item    = new_scope,
-                .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this())
-                    : std::static_pointer_cast<erhe::Hierarchy>(scene_root->get_hosted_scene()->get_root_node()),
+                .parent  = get_insert_parent(*scene_root, parent),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -836,7 +874,7 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
     return created_count;
 }
 
-auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Light>
+auto Scene_commands::create_new_light(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Light>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -853,9 +891,7 @@ auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
                 .item    = new_light,
-                .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                    : scene_root->get_hosted_scene()->get_root_node(),
+                .parent  = get_insert_parent(*scene_root, parent),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -864,7 +900,7 @@ auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_
     return new_light;
 }
 
-auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Layout>
+auto Scene_commands::create_new_layout(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Layout>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -883,9 +919,7 @@ auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared
                         Item_insert_remove_operation::Parameters{
                             .context = m_context,
                             .item    = new_node,
-                            .parent  = (parent != nullptr)
-                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_hosted_scene()->get_root_node(),
+                            .parent  = get_insert_parent(*scene_root, parent),
                             .mode    = Item_insert_remove_operation::Mode::insert
                         }
                     ),
@@ -896,6 +930,141 @@ auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared
     );
 
     return new_layout;
+}
+
+auto Scene_commands::get_resource_scene_root(erhe::Hierarchy* parent) const -> Scene_root*
+{
+    if (parent != nullptr) {
+        return find_scene_root_for_item(m_context, *parent);
+    }
+    return m_context.selection->get_active_scene_root().get();
+}
+
+void Scene_commands::queue_resource_insert(
+    Scene_root&                             scene_root,
+    erhe::Hierarchy* const                  parent,
+    const std::shared_ptr<erhe::Hierarchy>& item
+)
+{
+    if (parent == nullptr) {
+        m_context.operation_stack->queue(
+            make_library_insert_operation(m_context, scene_root.get_content_library(), item)
+        );
+        return;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = item,
+                .parent  = std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this()),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+}
+
+auto Scene_commands::create_new_material(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::primitive::Material>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if ((scene_root == nullptr) || (m_context.asset_manager == nullptr)) {
+        return {};
+    }
+    const std::shared_ptr<erhe::primitive::Material> new_material = m_context.asset_manager->create<erhe::primitive::Material>(
+        *scene_root,
+        erhe::primitive::Material_create_info{
+            .name = "New Material",
+            .values = {
+                .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+                .roughness  = glm::vec2{0.5f, 0.5f},
+                .metallic   = 1.0f
+            }
+        }
+    );
+    queue_resource_insert(*scene_root, parent, new_material);
+    return new_material;
+}
+
+auto Scene_commands::create_new_physics_material(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::physics::Physics_material>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    // doc/property-system.md section 4.12.
+    const std::shared_ptr<erhe::physics::Physics_material> new_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
+    queue_resource_insert(*scene_root, parent, new_material);
+    return new_material;
+}
+
+auto Scene_commands::create_new_collision_filter(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::physics::Collision_filter>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<erhe::physics::Collision_filter> new_filter = std::make_shared<erhe::physics::Collision_filter>("New Collision Filter");
+    queue_resource_insert(*scene_root, parent, new_filter);
+    return new_filter;
+}
+
+auto Scene_commands::create_new_joint_settings(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::physics::Physics_joint_settings>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> new_settings = std::make_shared<erhe::physics::Physics_joint_settings>("New Joint Settings");
+    queue_resource_insert(*scene_root, parent, new_settings);
+    return new_settings;
+}
+
+auto Scene_commands::create_new_style(erhe::Hierarchy* parent) -> std::shared_ptr<Style>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<Content_library>& library = scene_root->get_content_library();
+    if (!library) {
+        return {};
+    }
+    // doc/style-library.md R1: an empty style.
+    const std::shared_ptr<Style> new_style = std::make_shared<Style>(make_unique_style_name(*library, "New Style"));
+    queue_resource_insert(*scene_root, parent, new_style);
+    return new_style;
+}
+
+auto Scene_commands::create_new_graph_texture(erhe::Hierarchy* parent) -> std::shared_ptr<Graph_texture>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<Graph_texture> new_graph_texture = std::make_shared<Graph_texture>("Graph Texture");
+    queue_resource_insert(*scene_root, parent, new_graph_texture);
+    // Issue #252: point the Texture Graph window at the new asset explicitly
+    // (not via the global selection).
+    if (m_context.texture_graph_window != nullptr) {
+        m_context.texture_graph_window->set_target(new_graph_texture);
+    }
+    return new_graph_texture;
+}
+
+auto Scene_commands::create_new_graph_mesh(erhe::Hierarchy* parent) -> std::shared_ptr<Graph_mesh>
+{
+    Scene_root* const scene_root = get_resource_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<Graph_mesh> new_graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
+    queue_resource_insert(*scene_root, parent, new_graph_mesh);
+    // Issue #252: point the Geometry Graph window at the new asset explicitly
+    // (not via the global selection).
+    if (m_context.geometry_graph_window != nullptr) {
+        m_context.geometry_graph_window->set_target(new_graph_mesh);
+    }
+    return new_graph_mesh;
 }
 
 auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
@@ -1040,75 +1209,6 @@ auto Scene_commands::create_new_joint(
     return node_joint;
 }
 
-auto Scene_commands::attach_new_camera(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Camera>
-{
-    // A Camera is a prim (doc/usd-compatibility-plan.md C5), so it enters the
-    // scene as a child of the node; a parent holds any number of them.
-    auto camera = std::make_shared<erhe::scene::Camera>("new camera");
-    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = camera,
-                .parent  = node.shared_node_from_this(),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-    return camera;
-}
-
-auto Scene_commands::attach_new_light(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Light>
-{
-    Scene_root* scene_root = get_scene_root(&node);
-    if (scene_root == nullptr) {
-        return {};
-    }
-    // A Light is a prim (doc/usd-compatibility-plan.md C5), so it enters the
-    // scene as a child of the node; a parent holds any number of them.
-    auto light = std::make_shared<erhe::scene::Light>("new light");
-    light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    light->layer_id = scene_root->layers().light()->id;
-    m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = light,
-                .parent  = node.shared_node_from_this(),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-    return light;
-}
-
-auto Scene_commands::attach_new_empty_mesh(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Mesh>
-{
-    // An empty mesh (no primitives) renders nothing until the user adds
-    // geometry, but it needs the visible flag so anything added later is not
-    // stuck invisible (same reasoning as create_new_xform). A Mesh is a
-    // prim (doc/usd-compatibility-plan.md C5), so it enters the scene as a
-    // child of the node; a parent holds any number of them.
-    auto mesh = std::make_shared<erhe::scene::Mesh>("new mesh");
-    mesh->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    Scene_root* scene_root = get_scene_root(&node);
-    if (scene_root != nullptr) {
-        mesh->layer_id = scene_root->layers().content()->id;
-    }
-    m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = mesh,
-                .parent  = node.shared_node_from_this(),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-    return mesh;
-}
-
 auto Scene_commands::attach_new_layout(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>
 {
     if (erhe::scene::get_attachment<erhe::scene::Layout>(&node)) {
@@ -1169,7 +1269,7 @@ void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_a
     );
 }
 
-auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::shared_ptr<Rendertarget_mesh>
+auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::shared_ptr<Rendertarget_mesh>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -1212,11 +1312,6 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     // Node specifies transform for rendertarget in 3D scene
     auto node = std::make_shared<erhe::scene::Xform>("rendertarget node");
-    //node->set_parent_from_node(
-    //    erhe::math::mat4_rotate_xz_180
-    //);
-    node->set_parent(scene_root->get_scene().get_root_node());
-
     const glm::vec3 eye_position   {0.0f, 0.0f, 0.0f};
     const glm::vec3 up_direction   {0.0f, 1.0f, 0.0f};
     const glm::vec3 target_position{0.0f, 0.0f, 1.0f};
@@ -1260,9 +1355,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
                 .item    = node,
-                .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                    : scene_root->get_hosted_scene()->get_root_node(),
+                .parent  = get_insert_parent(*scene_root, parent),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )

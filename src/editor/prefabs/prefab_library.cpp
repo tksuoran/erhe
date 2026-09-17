@@ -781,7 +781,7 @@ auto instantiate_prefab(
     const std::shared_ptr<Prefab>&            prefab,
     Scene_root&                               scene_root,
     const glm::mat4&                          world_from_node,
-    const std::shared_ptr<erhe::scene::Node>& parent,
+    const std::shared_ptr<erhe::Hierarchy>&   parent,
     const std::size_t                         index_in_parent
 ) -> std::shared_ptr<erhe::scene::Node>
 {
@@ -818,7 +818,7 @@ auto instantiate_prefab(
     // nothing (doc/usd-compatibility-plan.md U4).
     std::vector<std::shared_ptr<Operation>> operations;
 
-    std::shared_ptr<erhe::scene::Node> insert_parent = parent;
+    std::shared_ptr<erhe::Hierarchy> insert_parent = parent;
     if (!insert_parent) {
         insert_parent = scene_root.get_hosted_scene()->get_root_node();
     }

@@ -222,7 +222,7 @@ private:
     ) -> std::optional<bool>;
     [[nodiscard]] auto brush_drop_target(
         const Item_tree_drop_row&                         row,
-        const std::shared_ptr<erhe::scene::Node>&         node,
+        const std::shared_ptr<erhe::Hierarchy>&           prim,
         const std::shared_ptr<Brush>&                     brush,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const char*                                       payload_type
