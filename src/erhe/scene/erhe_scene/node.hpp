@@ -237,6 +237,19 @@ public:
     static const erhe::property::Property<glm::vec3> world_translation_property;
     static const erhe::property::Property<glm::quat> world_rotation_property;
     static const erhe::property::Property<glm::vec3> world_scale_property;
+    // Per-component transform channel locks (doc/ik-settings-requirements.md
+    // section 2): bridged over the Item_flags::lock_translation_* /
+    // lock_rotation_* / lock_scale_* bits, which the Transform tool, the
+    // numeric transform fields and IK read.
+    static const erhe::property::Property<bool> lock_translation_x_property;
+    static const erhe::property::Property<bool> lock_translation_y_property;
+    static const erhe::property::Property<bool> lock_translation_z_property;
+    static const erhe::property::Property<bool> lock_rotation_x_property;
+    static const erhe::property::Property<bool> lock_rotation_y_property;
+    static const erhe::property::Property<bool> lock_rotation_z_property;
+    static const erhe::property::Property<bool> lock_scale_x_property;
+    static const erhe::property::Property<bool> lock_scale_y_property;
+    static const erhe::property::Property<bool> lock_scale_z_property;
 
     // Optional developer sanity check: when enabled, every transform write to
     // a node carrying Item_flags::no_transform_update logs a warning with the

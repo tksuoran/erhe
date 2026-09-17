@@ -1363,6 +1363,15 @@ transform's skew component stays internal. `world_from_node` stays a
 derived cache; the world components are exposed as computed properties
 (D26), not stored ones.
 
+`Node` also registers the nine per-component transform channel locks
+(`lock_translation_x` .. `lock_scale_z`, doc/ik-settings-requirements.md
+section 2) as bridged booleans over the `Item_flags::lock_*` bits, through
+`Item_base::register_flag_bit_property` with `Node::property_owner_type()`
+as the owner, so they list only for nodes, in the "Channel Locks" group.
+The flag bits stay the storage: the Transform tool, numeric editing and IK
+read them, and glTF carries them in `ERHE_node.flags` (the bridged
+properties are skipped by the local-properties writer).
+
 An `erhe::scene::Animation_channel` names the property it drives - a target
 `erhe::Item_base` and a `Dependency_property` of it - so a clip animates any
 registered property whose type a sampler can carry, and the three transform

@@ -697,6 +697,18 @@ public:
     static const erhe::property::Property<bool> transform_world_normative_property;
     static const erhe::property::Property<bool> show_in_developer_ui_property;
     static const erhe::property::Property<bool> ik_lock_property;
+    // Registers a persistent Item_flags bit as a bridged boolean property
+    // (D18) of owner_type (Item_base::property_owner_type() or a descendant,
+    // e.g. the Node channel locks): get is the bit test, set is
+    // set_flag_bits. Serialized (the bit itself is the glTF field, so the
+    // local-properties writer skips it as bridged).
+    [[nodiscard]] static auto register_flag_bit_property(
+        std::string_view                   name,
+        erhe::property::Owner_type         owner_type,
+        uint64_t                           bit,
+        const erhe::property::Property_ui& ui,
+        uint32_t                           extra_flags = erhe::property::Property_flags::none
+    ) -> erhe::property::Property<bool>;
     [[nodiscard]] static auto tags_to_string  (const std::set<std::string>& tags) -> std::string;
     static void               tags_from_string(std::string_view text, std::set<std::string>& out_tags);
     // True when `object` can use `source` as its style: the source's

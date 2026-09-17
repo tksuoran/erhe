@@ -142,12 +142,14 @@ window and persist with the scene.
 - Not in scope: enforcing locks against animation playback, physics
   write-back, or direct programmatic `set_*` calls. Locks are an
   interactive-editing guard, like Blender's, not a hard invariant.
-- UI: the existing "Locks" row in the Properties window's generic
-  item-details block (`properties.cpp`, `add_entry("Locks", ...)`,
-  shown for any item passing `show_item_details`) grows per-component
-  toggles (a 3x3 grid of small checkboxes under Location / Rotation /
-  Scale), in addition to the developer-mode flag list which picks the new
-  bits up automatically from `c_bit_labels`.
+- UI: the nine bits are registered bridged boolean properties of `Node`
+  (`Node::lock_translation_x_property` .. `lock_scale_z_property`,
+  `src/erhe/scene/erhe_scene/node.cpp`, over
+  `Item_base::register_flag_bit_property`), so the Properties window draws
+  them on its registered path as a "Channel Locks" group ("Translation X"
+  .. "Scale Z") for nodes, undoable through `Property_set_operation` and
+  reachable from MCP `set_item_property`; the developer-mode flag list
+  still picks the bits up from `c_bit_labels`.
 
 ### 3. Solver interface
 
@@ -424,7 +426,7 @@ formulation adapted to swing/twist limits:
    later slices goes elsewhere (chain/effector), not this per-joint blob.
 2. **Limit frame default**: bind pose when available, else current local
    rotation at attachment creation (section 1), re-capturable from Properties.
-3. **Channel locks**: 9 new `Item_flags` bits (bits 38-46), chosen for
+3. **Channel locks**: 9 new `Item_flags` bits (bits 42-50), chosen for
    zero-cost persistence through `ERHE_node.flags` and any-item
    applicability; 17 bits remain free.
 4. **Stiffness**: field serialized but inert in this slice (section 1); solver
@@ -446,12 +448,14 @@ Implemented as specified. Key locations:
   `capture_ik_rest_rotation`, `scene_commands.cpp`); registered in the
   attachment catalog (`attachment_types.cpp`, bone-gated).
 - Channel locks - `Item_flags::lock_translation_x` .. `lock_scale_z`
-  (bits 38-46, `item.hpp`, with `lock_*_mask` composites), persisted via
+  (bits 42-50, `item.hpp`, with `lock_*_mask` composites), persisted via
   `gltf_item_flags.cpp`; enforced by `enforce_channel_locks`
   (`transform_tool.cpp`, declared in `transform_tool.hpp`) at every
   Transform tool delta path, the `apply_*_edit` commit paths, and the MCP
-  direct set-transform action; per-component toggles in the Properties
-  "Channel Locks" row (undoable via `Item_set_flag_bits_operation`);
+  direct set-transform action; per-component toggles are the registered
+  `Node` properties `lock_translation_x` .. `lock_scale_z` (bridged flag
+  bits, Properties group "Channel Locks", undoable via
+  `Property_set_operation`);
   locked widgets greyed out in the Transform window (local single-node
   mode; rotation relies on commit-side masking).
 - Solver - `src/editor/transform/ik_solver.{hpp,cpp}`: `Ik_chain` /

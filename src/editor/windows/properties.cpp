@@ -15,7 +15,6 @@
 #include "items.hpp"
 #include "operations/ik_settings_change_operation.hpp"
 #include <algorithm>
-#include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -1236,48 +1235,6 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         item->get_name()
     );
     push_group(group_label.c_str(), flags, m_indent);
-    // Per-component transform channel locks (doc/ik-settings-requirements.md
-    // section 2): respected by the Transform tool, the numeric transform fields,
-    // and IK. Undoable per toggle (Item_set_flag_bits_operation).
-    if (show_item_details(item.get()) && node) {
-        add_entry("Channel Locks", [this, item]() {
-            class Channel {
-            public:
-                const char* label;
-                uint64_t    bits[3];
-            };
-            static constexpr Channel channels[] = {
-                { "T", { erhe::Item_flags::lock_translation_x, erhe::Item_flags::lock_translation_y, erhe::Item_flags::lock_translation_z } },
-                { "R", { erhe::Item_flags::lock_rotation_x,    erhe::Item_flags::lock_rotation_y,    erhe::Item_flags::lock_rotation_z    } },
-                { "S", { erhe::Item_flags::lock_scale_x,       erhe::Item_flags::lock_scale_y,       erhe::Item_flags::lock_scale_z       } },
-            };
-            static constexpr const char* axis_names[] = { "X", "Y", "Z" };
-            for (const Channel& channel : channels) {
-                ImGui::TextUnformatted(channel.label);
-                for (int axis = 0; axis < 3; ++axis) {
-                    ImGui::SameLine();
-                    const uint64_t bit   = channel.bits[axis];
-                    bool           value = (item->get_flag_bits() & bit) != 0;
-                    const std::string checkbox_label = fmt::format("{}##channel_lock_{}_{}", axis_names[axis], channel.label, axis);
-                    if (ImGui::Checkbox(checkbox_label.c_str(), &value)) {
-                        m_context.operation_stack->queue(
-                            std::make_shared<Item_set_flag_bits_operation>(
-                                std::vector<std::shared_ptr<erhe::Item_base>>{item},
-                                bit,
-                                value,
-                                "channel lock"
-                            )
-                        );
-                    }
-                }
-                if (channel.label != channels[2].label) {
-                    ImGui::SameLine();
-                    ImGui::Dummy(ImVec2{6.0f, 0.0f});
-                }
-            }
-        }, "Per-component locks of the local translation / rotation / scale, respected by the Transform tool, numeric editing, and IK");
-    }
-
     if (show_item_details(item.get()) && m_context.developer_mode) {
         add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
         item_flags(item);

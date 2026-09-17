@@ -179,6 +179,31 @@ const Property<glm::vec3> Xformable::world_scale_property = Property<glm::vec3>:
     }
 );
 
+// Transform channel locks: bridged flag bits, listed for nodes only.
+namespace {
+
+constexpr std::string_view c_channel_lock_tooltip{"Respected by the Transform tool, numeric editing and IK"};
+
+[[nodiscard]] auto register_channel_lock_property(const std::string_view name, const uint64_t bit, const std::string_view label) -> Property<bool>
+{
+    return erhe::Item_base::register_flag_bit_property(
+        name, Xformable::property_owner_type(), bit,
+        Property_ui{.group = "Channel Locks", .tooltip = c_channel_lock_tooltip, .label = label}
+    );
+}
+
+} // anonymous namespace
+
+const Property<bool> Xformable::lock_translation_x_property = register_channel_lock_property("lock_translation_x", erhe::Item_flags::lock_translation_x, "Translation X");
+const Property<bool> Xformable::lock_translation_y_property = register_channel_lock_property("lock_translation_y", erhe::Item_flags::lock_translation_y, "Translation Y");
+const Property<bool> Xformable::lock_translation_z_property = register_channel_lock_property("lock_translation_z", erhe::Item_flags::lock_translation_z, "Translation Z");
+const Property<bool> Xformable::lock_rotation_x_property    = register_channel_lock_property("lock_rotation_x",    erhe::Item_flags::lock_rotation_x,    "Rotation X");
+const Property<bool> Xformable::lock_rotation_y_property    = register_channel_lock_property("lock_rotation_y",    erhe::Item_flags::lock_rotation_y,    "Rotation Y");
+const Property<bool> Xformable::lock_rotation_z_property    = register_channel_lock_property("lock_rotation_z",    erhe::Item_flags::lock_rotation_z,    "Rotation Z");
+const Property<bool> Xformable::lock_scale_x_property       = register_channel_lock_property("lock_scale_x",       erhe::Item_flags::lock_scale_x,       "Scale X");
+const Property<bool> Xformable::lock_scale_y_property       = register_channel_lock_property("lock_scale_y",       erhe::Item_flags::lock_scale_y,       "Scale Y");
+const Property<bool> Xformable::lock_scale_z_property       = register_channel_lock_property("lock_scale_z",       erhe::Item_flags::lock_scale_z,       "Scale Z");
+
 uint64_t Node_transforms::s_global_update_serial = 0;
 
 auto Node_transforms::get_current_serial() -> uint64_t

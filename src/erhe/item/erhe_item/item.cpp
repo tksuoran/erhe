@@ -285,9 +285,35 @@ void Item_base::tags_from_string(const std::string_view text, std::set<std::stri
     }
 }
 
+auto Item_base::register_flag_bit_property(
+    const std::string_view                   name,
+    const erhe::property::Owner_type         owner_type,
+    const uint64_t                           bit,
+    const erhe::property::Property_ui&       ui,
+    const uint32_t                           extra_flags
+) -> erhe::property::Property<bool>
+{
+    return erhe::property::Property<bool>::register_property(
+        name, owner_type,
+        erhe::property::Property_metadata{
+            .default_value = false,
+            .flags         = erhe::property::Property_flags::serialize | extra_flags,
+            .ui            = ui,
+            .bridge        = erhe::property::Property_bridge{
+                .get = [bit](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+                    return erhe::utility::test_bit_set(static_cast<const Item_base&>(object).get_flag_bits(), bit);
+                },
+                .set = [bit](erhe::property::Dependency_object& object, const erhe::property::Property_value& value) {
+                    static_cast<Item_base&>(object).set_flag_bits(bit, std::get<bool>(value));
+                }
+            }
+        }
+    );
+}
+
 namespace {
 
-// A persistent flag bit as a bridged boolean: get is the bit test, set is
+// A persistent flag bit of Item_base as a bridged boolean: set runs
 // Item_base::set_flag_bits (which runs handle_flag_bits_update and, for
 // lock_edit, the seal).
 [[nodiscard]] auto register_flag_property(
@@ -300,21 +326,10 @@ namespace {
     const uint32_t         extra_flags = erhe::property::Property_flags::none
 ) -> erhe::property::Property<bool>
 {
-    return erhe::property::Property<bool>::register_property(
-        name, Item_base::property_owner_type(),
-        erhe::property::Property_metadata{
-            .default_value = false,
-            .flags         = erhe::property::Property_flags::serialize | extra_flags,
-            .ui            = erhe::property::Property_ui{.group = group, .tooltip = tooltip, .developer_only = developer_only, .label = label},
-            .bridge        = erhe::property::Property_bridge{
-                .get = [bit](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
-                    return erhe::utility::test_bit_set(static_cast<const Item_base&>(object).get_flag_bits(), bit);
-                },
-                .set = [bit](erhe::property::Dependency_object& object, const erhe::property::Property_value& value) {
-                    static_cast<Item_base&>(object).set_flag_bits(bit, std::get<bool>(value));
-                }
-            }
-        }
+    return Item_base::register_flag_bit_property(
+        name, Item_base::property_owner_type(), bit,
+        erhe::property::Property_ui{.group = group, .tooltip = tooltip, .developer_only = developer_only, .label = label},
+        extra_flags
     );
 }
 

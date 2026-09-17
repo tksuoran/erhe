@@ -94,6 +94,7 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 |---|---|---|
 | translation, rotation, scale | bridge | over `Trs_transform`, no matrix round trip |
 | world_translation, world_rotation, world_scale | computed | |
+| lock_translation_x/y/z, lock_rotation_x/y/z, lock_scale_x/y/z | bridge | flag bits (`Item_flags::lock_*`) over `Item_base::register_flag_bit_property`, "Channel Locks" group; nodes only |
 
 ### Mesh and Mesh_primitive (`src/erhe/scene/erhe_scene/mesh.cpp`, sections 4.9, D29)
 
