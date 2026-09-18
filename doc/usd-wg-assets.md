@@ -1,5 +1,7 @@
 # USD Assets Working Group survey
 
+Stability: mostly stable
+
 Every entry asset of the ASWF USD Assets Working Group repository
 (github.com/usd-wg/assets) opened in a headless erhe editor, with what
 the editor made of it. This is the checklist of USD support the editor

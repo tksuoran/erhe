@@ -1,5 +1,7 @@
 # Operation_stack re-entrancy fix -- plan
 
+Stability: stable
+
 Status: IMPLEMENTED 2026-07-10 (commits A/B/C as laid out under
 "Implementation order"; commit C's MCP tool is `open_scene`, and D3 was
 implemented as `make_import_gltf_operation()` returning the described

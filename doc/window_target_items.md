@@ -1,5 +1,7 @@
 # Issue #252 - Independent target item for editor/properties windows
 
+Stability: mostly stable
+
 https://github.com/tksuoran/erhe/issues/252
 
 Status: IMPLEMENTED (branch `crease`)

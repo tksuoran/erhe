@@ -1,5 +1,7 @@
 # Subdivision crease edges (issue #244) - implementation plan
 
+Stability: stable
+
 Status: IMPLEMENTED 2026-07-04 (all six phases). The plan below is kept as
 the design record; see "As built (2026-07-04)" at the end for deviations and
 verification results.

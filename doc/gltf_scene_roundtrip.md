@@ -1,5 +1,7 @@
 # glTF-everything scene persistence plan (drop .erhescene)
 
+Stability: mostly stable
+
 Goal: a saved erhe scene is a single `.glb` file that round-trips ALL editor
 state through glTF 2.1 + extensions. The `.erhescene` directory bundle
 (scene.json + data.glb + *.geogram + imgui.ini) is removed.
@@ -379,7 +381,7 @@ variants are that plan's step X4.
   - Asset browser `.erhescene` directory handling,
   - legacy extras writers (`erhe_flags`, material extras) once the
     `ERHE_node` / `ERHE_material` transition period ends.
-- Update `src/editor/scene/notes.md`, `src/erhe/gltf/notes.md`, AGENTS.md
+- Update `doc/editor_scene.md`, `doc/erhe_gltf.md`, AGENTS.md
   references, memory-bank.
 
 ## Phase 6 - Verification

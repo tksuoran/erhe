@@ -1,5 +1,7 @@
 # Active item plan: one explicit reference item in the selection
 
+Stability: stable
+
 Status: LANDED (phases 1-4) and verified interactively by the user
 (2026-09-15). Modeled on Blender's active object
 (`scene_layout/object/selecting.rst`; the semantics below were read off

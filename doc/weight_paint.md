@@ -1,5 +1,7 @@
 # Weight painting plan (Blender-style, simplified)
 
+Stability: experimental
+
 Status (2026-08-22): phases 1 and 2 are implemented. Shader:
 `Shader_debug::joint_weight_ramp` (34) in shader_key.hpp +
 standard.vert/.frag. Editor: `tools/weight_display.{hpp,cpp}` (active
@@ -422,7 +424,7 @@ A new `Weight_paint_tool` in `src/editor/tools/`, structurally a copy of
    on stroke end (wireframe/edge-line streams). First without stroke
    bookkeeping (accumulate behavior), then add snapshot/alpha_max.
 5. Undo operation.
-6. Polish: force-debug-mode-while-painting, docs/notes.md updates.
+6. Polish: force-debug-mode-while-painting, doc/ updates.
 
 ## Risks / open questions
 

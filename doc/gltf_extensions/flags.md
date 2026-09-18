@@ -1,5 +1,7 @@
 # Persistent Item flag names
 
+Stability: mostly stable
+
 Several `ERHE_*` extensions carry erhe `Item_flags` as a JSON array of
 names (`"flags"`, `"mesh_flags"`). Names, never raw bit values: bit
 positions are not stable across erhe versions. Writers emit only names

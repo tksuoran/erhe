@@ -1,5 +1,7 @@
 # Metal Graphics Backend
 
+Stability: mostly stable
+
 > This Metal backend was substantially created by Claude (Anthropic),
 > with architectural guidance and review from Timo Suoranta.
 

@@ -1,5 +1,7 @@
 # Frame Pacer — Input Inventory and Sourcing
 
+Stability: stable
+
 This document is deliverable 3 of the planning phase defined in [frame_pacing.md](requirements.md): an inventory of every input the algorithm ([frame_pacing_algorithm.md](algorithm.md)) needs, and where each is sourced from, per capability tier. File/line references are to the erhe tree as of 2026-07-21 and name the integration sites the implementation phase will touch.
 
 ## 1. Capability tiers (sourcing view)

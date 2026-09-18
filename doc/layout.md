@@ -1,5 +1,7 @@
 # Layout Nodes
 
+Stability: stable
+
 Status as of 2026-06-05. Stack, Grid, and Flow are implemented, built, reviewed,
 and committed on `main`. Scene serialization landed as a follow-up (see "Follow-up
 work landed" below); the remaining deferred items are Dock layout, the
@@ -103,7 +105,7 @@ cell + span); a child without one uses default values.
 - `src/erhe/scene/erhe_scene/layout_item.hpp` / `layout_item.cpp` - `Layout_item`,
   `Layout_alignment`.
 - `src/erhe/scene/CMakeLists.txt` - new files registered.
-- `src/erhe/scene/notes.md` - library docs updated.
+- `doc/erhe_scene.md` - library docs updated.
 - `src/erhe/item/erhe_item/item.hpp` - item-type registration (`index_layout` = 36,
   `index_layout_item` = 37, `count` = 38, bits, and `c_bit_labels`).
 - `src/editor/scene/scene_commands.hpp` / `.cpp` - `Create_new_layout_command` +

@@ -1,5 +1,7 @@
 # Android Support for erhe editor
 
+Stability: experimental
+
 ## Context
 
 The goal is to bring the erhe editor to Android (arm64-v8a, API 21+, NDK r28).

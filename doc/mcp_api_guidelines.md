@@ -1,5 +1,7 @@
 # MCP API guidelines
 
+Stability: stable
+
 Guidelines for the editor's built-in MCP server (`src/editor/mcp/`).
 
 ## Do not depend on state the API does not directly control

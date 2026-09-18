@@ -1603,7 +1603,7 @@ REMEDY = [
      "(Prefab_library::get_or_load, X1)"),
     (re.compile(r"variant set .* opinion"),
      "carry variant opinions beyond material bindings; X4 reads bindings only "
-     "(src/erhe/usd/notes.md, Variant sets)"),
+     "(doc/erhe_usd.md, Variant sets)"),
     (re.compile(r"no UsdPreviewSurface shader|MaterialX|Not a NodeGraph|unshaded material"),
      "convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2)"),
     (re.compile(r"Primvar `\*` has no authored value"),
@@ -1688,11 +1688,11 @@ REMEDY = [
      "sample a DomeLight's inputs:texture:file; the dome's constant color reaches the scene as ambient "
      "light, but erhe has no environment map, so a textured sky contributes one flat color"),
     (re.compile(r"normal map's bias and scale are (ignored|still not applied)"),
-     "apply a UsdUVTexture's inputs:bias and inputs:scale to the sampled normal (src/erhe/usd/notes.md, "
+     "apply a UsdUVTexture's inputs:bias and inputs:scale to the sampled normal (doc/erhe_usd.md, "
      "\"Not yet imported\"); without them a 0..1 normal map is never mapped back to -1..1"),
     (re.compile(r"UsdTransform2d is (not applied|applied wrongly)"),
      "read the UsdTransform2d node between a primvar reader and a texture and fold its translate, rotate "
-     "and scale into the sampled coordinates (src/erhe/usd/notes.md names it as not imported)"),
+     "and scale into the sampled coordinates (doc/erhe_usd.md names it as not imported)"),
     (re.compile(r"texture coordinates are mirrored|st primvar is sampled mirrored"),
      "carry the st primvar's orientation through the import: USD's texture origin is bottom-left, and the "
      "mesh conversion must not mirror it (src/erhe/usd/erhe_usd/usd_import.cpp, the texcoord read)"),

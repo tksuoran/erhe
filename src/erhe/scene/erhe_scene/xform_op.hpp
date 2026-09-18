@@ -77,7 +77,7 @@ public:
     // the write-back need no notion of time; the samples are the authored
     // record a save writes back, and the playable projection of them is an
     // erhe::scene::Animation channel the importer builds
-    // (src/erhe/usd/notes.md, "Time samples").
+    // (doc/erhe_usd.md, "Time samples").
     std::vector<Xform_op_sample> samples{};
 
     // The op's contribution as a glm column-vector matrix, inversion applied.

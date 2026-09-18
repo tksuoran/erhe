@@ -1,5 +1,7 @@
 # LightWave-style keyframing / timeline plan (issue #243 follow-up)
 
+Status: proposed
+
 Goal: extend the Animation window (curve editor + Animation_player, added for
 issue #243) with a LightWave-Layout-like keyframing workflow: a scrubbable
 timeline strip with key markers, autokey, manual key creation for selected

@@ -1,5 +1,7 @@
 # Frame Pacer — Capability Tier Matrix
 
+Stability: experimental
+
 This document is deliverable 5 of the planning phase defined in [frame_pacing.md](requirements.md): which presentation-timing capabilities are used on Windows and (later) Android, what pacer behavior each tier enables — including the off mode of FR6 — and the achievable pacing quality per presentation path (windowed vs. fullscreen). Sourcing details per input are in [frame_pacing_inputs.md](inputs.md); per-scenario behavior in [frame_pacing_behavior.md](behavior.md).
 
 ## 1. Capability inventory

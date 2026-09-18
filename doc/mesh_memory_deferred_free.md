@@ -1,5 +1,7 @@
 # Mesh memory: frame-safe frees and uploads (plan + results)
 
+Stability: stable
+
 Status: IMPLEMENTED 2026-08-16 (change 1 below; change 2 not done). Motivation:
 transient glitches during bistro load (objects out of place / broken geometry).
 

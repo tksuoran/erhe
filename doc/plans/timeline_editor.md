@@ -1,5 +1,7 @@
 # Animation Timeline / Curve Graph Editor (issue #243)
 
+Status: proposed
+
 Plan for implementing an animation timeline (dope sheet) and curve (graph)
 editor in the erhe editor, compatible with animations imported from glTF
 assets. Modeled on Blender's Graph Editor / Dope Sheet

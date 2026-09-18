@@ -1,5 +1,7 @@
 # GPU ray tracing plan (issue #233)
 
+Stability: experimental
+
 Goal: add basic GPU ray tracing capability to the erhe graphics backend. The
 API must be implementable on Vulkan and Metal. Initial milestone: render
 primary rays with minimal N.V shading into a texture, visible in the editor.

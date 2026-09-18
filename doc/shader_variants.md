@@ -1,5 +1,7 @@
 # Shader variants for editor rendering
 
+Stability: stable
+
 The editor's lit material drawing goes through one uber-shader,
 `res/shaders/standard.{vert,frag}`, that is compiled into per-call
 variants on demand. The variant key, the cache, and the GLSL contract

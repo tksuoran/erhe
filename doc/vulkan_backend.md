@@ -1,5 +1,7 @@
 # Vulkan Graphics Backend
 
+Stability: stable
+
 > This Vulkan backend was substantially created by Claude (Anthropic),
 > with architectural guidance and review from Timo Suoranta.
 
@@ -19,7 +21,7 @@ is hidden behind the shared pimpl-based public API (`device.hpp`, `buffer.hpp`,
 Vulkan-specific; the backend is selected at configure time.
 
 This document describes the current design. For the API surface shared across
-all backends, see `src/erhe/graphics/notes.md`; for the Metal backend see
+all backends, see `doc/erhe_graphics.md`; for the Metal backend see
 `doc/metal_backend.md`.
 
 ### Build configuration

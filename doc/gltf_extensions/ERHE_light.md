@@ -1,5 +1,7 @@
 # ERHE_light
 
+Stability: mostly stable
+
 ## Scope
 
 **Node** extension, on the node carrying a `KHR_lights_punctual` light

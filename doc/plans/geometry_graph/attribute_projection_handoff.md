@@ -1,5 +1,7 @@
 # Implementation handoff: project_attribute geometry-graph node
 
+Status: proposed
+
 Fresh-context handoff, written 2026-08-10. The DESIGN is final and lives in
 `doc/plans/geometry_graph/attribute_projection.md` - read it first, in full. This
 file adds only what a fresh session needs to implement it: repo state, file

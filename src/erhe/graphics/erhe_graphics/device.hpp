@@ -426,7 +426,7 @@ public:
     // Device-frame lifecycle. A frame is bracketed by wait_frame() at the
     // top and end_frame() at the bottom, with one or more cb submits in
     // between. All cbs are obtained from get_command_buffer() and
-    // committed via submit_command_buffers(). See notes.md
+    // committed via submit_command_buffers(). See doc/erhe_graphics.md
     // ("Frame lifecycle") for the full sequence.
     //
     //   wait_frame  -- pace the ring on the device's timeline semaphore,

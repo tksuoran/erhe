@@ -1,5 +1,7 @@
 # Lighting-driven seams: per-facet first bake, measured seam placement
 
+Status: in progress
+
 Status: phase 1 IMPLEMENTED + verified 2026-08-02 (per-facet unwrap mode,
 Atlas_parameterizer::per_facet, exposed as "Per-facet" in the Lightmap
 window combo and parameterizer="per_facet" over MCP; end-to-end MCP bake

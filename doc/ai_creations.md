@@ -1,5 +1,7 @@
 # AI creations: MCP-driven scene building in the erhe editor
 
+Stability: mostly stable
+
 ![Fish](images/creations/18_fish.png)
 
 *One weekend experiment to see what kind of content Claude Fable 5 can do with erhe editor*

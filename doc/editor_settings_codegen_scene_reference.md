@@ -1,5 +1,7 @@
 # Editor settings, codegen, and scene serialization reference
 
+Stability: stable
+
 Reference map for three subsystems that are easy to lose track of: the editor
 settings model, the `erhe_codegen` struct generator, and scene save/load. Written
 while scoping issue #239 (per-scene setting overrides). ASCII only.
@@ -85,7 +87,7 @@ new views fall back to struct defaults.
 ## 2. erhe_codegen (C++ struct generator)
 
 `src/erhe/codegen/` - Python generator producing C++ structs with versioned JSON
-(simdjson) serialize/deserialize + reflection. Docs: `src/erhe/codegen/notes.md`.
+(simdjson) serialize/deserialize + reflection. Docs: `doc/erhe_codegen.md`.
 
 ### Definition API (in a `<name>.py` file)
 

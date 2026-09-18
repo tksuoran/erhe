@@ -1,5 +1,7 @@
 # Debug_renderer multiview port
 
+Stability: stable
+
 > **Note (2026-05-19, settled): the pipeline-create-info split has landed.**
 > The data flow described below is correct; the pipeline plumbing differs
 > from the original port as follows:

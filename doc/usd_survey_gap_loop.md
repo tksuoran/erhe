@@ -1,5 +1,7 @@
 # USD survey gap loop
 
+Stability: stable
+
 How the usd-wg survey (`scripts/usd_wg_asset_survey.py`, results in
 `doc/usd-wg-assets.md`) is driven to zero gaps one entry at a time, with
 the coding delegated so that no single context fills up. Roles, brief
@@ -48,7 +50,7 @@ outcomes the entry is. Each outcome ends in a commit.
    and erhe does another. Fix the cause in `src/erhe/usd`, the editor or
    the renderer, add or extend a gtest under `src/erhe/usd/test/` (fixture
    under `test/data/`), rebuild `erhe_usd_tests` and the headless editor,
-   run the tests, and update the owning `notes.md`.
+   run the tests, and update the owning document under `doc/`.
 2. A survey defect: the comparison itself is wrong (the pxr leg measured
    something erhe does not frame, a conversion bug, a truncated example).
    Fix the script, run its bookkeeping self-check

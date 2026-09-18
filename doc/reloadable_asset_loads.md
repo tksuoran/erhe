@@ -1,5 +1,7 @@
 # Reloadable asset loads: drop on undo, re-read on redo
 
+Stability: mostly stable
+
 ## Context
 
 Loading a large glTF, undoing it, then loading something else keeps the first scene's

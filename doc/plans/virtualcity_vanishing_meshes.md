@@ -1,5 +1,7 @@
 # VirtualCity.glb: overlapping meshes vanish on first viewport hover
 
+Status: proposed
+
 Open, unexplained. Recorded 2026-08-27 during the meshoptimizer phase 7 sweep,
 but NOT caused by it: it reproduces with `optimize_meshes=false`, so it
 predates all of that work.

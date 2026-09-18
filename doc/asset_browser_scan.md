@@ -1,5 +1,7 @@
 # Asset browser: two-phase scan
 
+Stability: stable
+
 The asset browser (`src/editor/asset_browser/asset_browser.{hpp,cpp}`)
 fills its tree in two phases. Phase 1 is the directory walk: it lists what
 files exist and classifies them by extension. Phase 2 is the content peek:

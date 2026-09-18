@@ -1,5 +1,7 @@
 # Graph Mesh asset + Geometry Graph Mesh node attachment (Phase B)
 
+Stability: mostly stable
+
 Make a geometry node graph a first-class, selectable, serializable **asset**
 (`Graph_mesh`) in a scene's Content library, and give scene `Node`s a
 **"Geometry Graph Mesh"** `Node_attachment` that sources its mesh from such an

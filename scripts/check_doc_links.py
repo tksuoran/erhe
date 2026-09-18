@@ -39,7 +39,7 @@ SKIP_DIR_PREFIXES = ("build_",)
 
 DOC_PATH_RE = re.compile(r"\bdoc/[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:md|json)\b")
 MD_LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
-NOTES_RE = re.compile(r"(?<![A-Za-z0-9_])(?:[A-Za-z0-9_./-]*/)?notes\.md\b")
+NOTES_RE = re.compile(r"(?<![A-Za-z0-9_-])(?:[A-Za-z0-9_./-]*/)?notes\.md\b")
 
 STABILITY_RE = re.compile(r"^Stability: (stable|mostly stable|experimental)\s*$")
 STATUS_RE = re.compile(r"^Status: (proposed|in progress|blocked)\s*$")

@@ -1,5 +1,7 @@
 # meshoptimizer integration
 
+Stability: stable
+
 Live document for the mesh-optimization subsystem built on
 [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) (vanilla
 upstream, pinned via CPM): requirements, design, verification, future

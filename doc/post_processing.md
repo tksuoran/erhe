@@ -1,5 +1,7 @@
 # Post-Processing Pipeline
 
+Stability: mostly stable
+
 > This document was mostly written by Claude and may contain inaccuracies.
 
 The post-processing system implements pyramidal bloom with progressive

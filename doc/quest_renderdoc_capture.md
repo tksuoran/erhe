@@ -1,5 +1,7 @@
 # RenderDoc frame capture on Quest
 
+Stability: mostly stable
+
 Status: **working end to end and verified on a Quest 3.** Launch, capture,
 download and thumbnail extraction are driven by
 [`scripts/quest_renderdoc.py`](../scripts/quest_renderdoc.py); the erhe-side

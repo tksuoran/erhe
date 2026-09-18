@@ -1,5 +1,7 @@
 # Property inventory
 
+Stability: stable
+
 The status of every editor-visible item field with respect to the
 property system (`erhe::property`, design record `doc/property_system.md`):
 which fields are registered properties, how each is stored, and which
@@ -11,7 +13,7 @@ Update this document in the same commit as any registration added,
 removed or changed in storage kind, and whenever a hand-written row is
 migrated or added. The same commit updates the owner's subsection in
 `doc/property_system.md` (4.1 to 4.14) when the design changed, and
-`src/erhe/property/notes.md` when a library mechanism changed; the design
+`doc/erhe_property.md` when a library mechanism changed; the design
 record's "Document roles" paragraph states the split.
 
 ## Storage kinds
@@ -72,7 +74,7 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | Property | Storage | Notes |
 |---|---|---|
 | visible | entry | flag mirror |
-| purpose | entry | USD purpose enumeration, `inherits`; its default layer is per-object (D31), derived from the editor-only flag bits (`src/erhe/item/notes.md` "Purpose") |
+| purpose | entry | USD purpose enumeration, `inherits`; its default layer is per-object (D31), derived from the editor-only flag bits (`doc/erhe_item.md` "Purpose") |
 | style | bridge | object reference to the item's style source (doc/style_library.md D3), style items only |
 | name | bridge | over `get_name` / `set_name` |
 | tags | bridge | the tag set as one comma-separated string (`tags_to_string` / `tags_from_string`) |

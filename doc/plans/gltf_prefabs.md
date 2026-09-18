@@ -1,5 +1,7 @@
 # glTF scene prefabs in erhe -- plan
 
+Status: in progress
+
 Status: phases 0-5 implemented and verified 2026-07-10 (commits 2199f0ef,
 b9264190, bad5895d, 4225b7d3, b4a1de9c + the phase 5 commit). Phase 6 items
 1 and 2 implemented 2026-07-11 as the "sealed instances" editing model (see
@@ -53,7 +55,7 @@ back.
 The overrides an instance holds are persisted with the scene that holds the
 instance, not with the template: `ERHE_node.overrides` on the carrier node in
 a glTF file (`doc/gltf_extensions/ERHE_node.md`) and `over` prims below the
-referencing prim in a USD file (`src/erhe/usd/notes.md`). They survive a
+referencing prim in a USD file (`doc/erhe_usd.md`). They survive a
 template reload: `refresh_instance_subtrees` reads them off the clones before
 it drops them and `attach_prefab_instance` puts them back on the fresh ones,
 before the seal, so a sealed glTF instance receives them too.
@@ -216,7 +218,7 @@ Three new pieces, layered so each phase is independently useful:
 
 - [x] Pin erhe to the fork (`CMakeLists.txt` -> `tksuoran/fastgltf` @
   `234ffe08...`). Already done.
-- Update `src/erhe/gltf/notes.md`: the "fastgltf_khr_physics.patch applied by
+- Update `doc/erhe_gltf.md`: the "fastgltf_khr_physics.patch applied by
   CPM" note is stale (fork replaces the patch); document the fork and the
   glTF 2.1 subset it carries.
 - Build all configurations that CI covers; run an existing glTF import
@@ -243,7 +245,7 @@ Library-only changes in `src/erhe/gltf/`:
   carrier `Node` with its transform and record the mapping. No recursion here.
 - `Gltf_scan` gains `files` / `external_assets` name lists so the asset
   browser can badge 2.1 composite files.
-- `gltf_none.hpp` mirrors the API additions; update `notes.md`.
+- `gltf_none.hpp` mirrors the API additions; update `doc/erhe_gltf.md`.
 
 Verification: parse the fork-style `external_asset.gltf` test file in a
 scratch scene; `Gltf_data` contains the mapping; existing imports unchanged.

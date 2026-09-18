@@ -1,5 +1,7 @@
 # Style library
 
+Stability: mostly stable
+
 Styles are items of the content library's Styles category: a style is a
 named holder of property values of any item class (`Material.roughness`,
 `Light.color` and `Camera.fov_y` can share one style), selectable, edited
@@ -7,7 +9,7 @@ in the Properties window like any item, assigned to any item through the
 item's `style` property, and saved with the scene. This document is the design
 record; the layer mechanics are `doc/property_system.md` D25 (the style
 layer) and D30 (secondary owner types), the library reference is
-`src/erhe/property/notes.md`, and the folder counterpart is
+`doc/erhe_property.md`, and the folder counterpart is
 `doc/content_library_folders.md`.
 
 ## 1. Requirements

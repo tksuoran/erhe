@@ -3,7 +3,7 @@
 
 [LIB_STRUCTURE]
 src/erhe/<name>::CMakeTarget{erhe_<name>}
-EachLib→notes.md{purpose+types+API+deps}!checkFirst
+EachLib→doc/erhe_<name>.md{purpose+types+API+deps;named-after-CMake-target;editor=doc/editor.md+doc/editor_<subdir>.md}!checkFirst
 Core::gl+graphics+rendergraph+scene+scene_renderer+geometry+primitive+item+renderer+imgui+physics+window+commands+log+verify
 Editor::src/editor{main.cpp→run_editor()}+rendergraph/+tools/+operations/+windows/+scene/+res/
 

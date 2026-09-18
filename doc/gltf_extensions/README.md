@@ -1,5 +1,7 @@
 # erhe glTF vendor extensions (`ERHE_*`)
 
+Stability: mostly stable
+
 erhe persists full editor scenes as single glTF files (process and parts:
 [`../scene_serialization.md`](../scene_serialization.md); design history:
 [`../gltf-scene-roundtrip-plan.md`](../gltf_scene_roundtrip.md)).

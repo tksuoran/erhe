@@ -1,5 +1,7 @@
 # Geometry Nodes for erhe Editor
 
+Stability: mostly stable
+
 Analysis of Blender's Geometry Nodes architecture, assessment of erhe's existing
 infrastructure, and implementation plan for replicating minimal geometry nodes
 functionality in the erhe editor.

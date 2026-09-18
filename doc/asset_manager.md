@@ -1,5 +1,7 @@
 # Asset manager
 
+Stability: mostly stable
+
 This document describes the asset system as implemented: the design, the
 runtime model, the wire format, and the implementation choices behind them.
 Code lives in `src/editor/assets/` (`asset_key`, `asset_reference`,

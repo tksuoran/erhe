@@ -1,5 +1,7 @@
 # Box3D physics backend
 
+Stability: experimental
+
 `ERHE_PHYSICS_LIBRARY=box3d` selects a third physics backend
 ([erincatto/box3d](https://github.com/erincatto/box3d)), alongside `jolt` and
 `none`. The editor builds, links and runs on it.
@@ -8,7 +10,7 @@ This document is the working record for that backend: what is done, what is
 left, and the Box3D behaviors that were expensive to discover. The reference
 material lives elsewhere and is not duplicated here:
 
-- `src/erhe/physics/notes.md` -- the library's own notes, including the
+- `doc/erhe_physics.md` -- the library's own notes, including the
   deferred/unsupported table and the backend design decisions.
 - The header comment block in
   `src/erhe/physics/erhe_physics/box3d/box3d_world.hpp` -- the authoritative

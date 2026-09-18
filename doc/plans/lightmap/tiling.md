@@ -1,5 +1,7 @@
 # Lightmap spatial tiling + world-space partition - session handoff (2026-08-05)
 
+Status: in progress
+
 ## UPDATE 2026-08-06: bake lifecycle (pause/resume, staleness = white, scene_id)
 
 Semantics settled across 13 commits (cb42cc32..4bfa56c0):

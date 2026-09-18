@@ -1,5 +1,7 @@
 # Properties window: one path for every row
 
+Stability: stable
+
 The Properties window (`src/editor/windows/properties.cpp`) draws its rows
 through two paths, and the two handle a multi-selection differently. The
 task is to make the registered-property path the only path for the

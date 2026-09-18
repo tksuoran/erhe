@@ -2,12 +2,12 @@
 
 A feature-by-feature comparison of `erhe::property` against the WPF
 property system it was ported from. Companion to `doc/property_system.md`
-(design record) and `src/erhe/property/notes.md` (library reference); this
+(design record) and `doc/erhe_property.md` (library reference); this
 document adds nothing to either, it only lines them up against WPF.
 
 Sources compared:
 
-- erhe: `doc/property_system.md`, `src/erhe/property/notes.md` and the
+- erhe: `doc/property_system.md`, `doc/erhe_property.md` and the
   headers under `src/erhe/property/erhe_property/`.
 - WPF: `https://github.com/dotnet/wpf` at commit
   `1cfc37f708f91ff4556bd25af414546c446f3a16` (2026-08-21), files under

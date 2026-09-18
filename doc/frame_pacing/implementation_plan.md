@@ -1,5 +1,7 @@
 # Frame Pacer — Implementation Plan
 
+Stability: stable
+
 Work order for implementing the frame pacer designed in the planning-phase documents ([requirements](requirements.md), [model](control_model.md), [algorithm](algorithm.md), [inputs](inputs.md), [behavior](behavior.md), [tiers](capability_tiers.md)). This document adds sequencing, PR-sized steps, dependencies, and per-step acceptance — no new design. Gap references (G1–G8) are the numbered items of [frame_pacing_inputs.md](inputs.md) §5.
 
 Principles:

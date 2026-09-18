@@ -1,5 +1,7 @@
 # Mesh Component Selection
 
+Stability: mostly stable
+
 Selection and viewport display of mesh sub-components -- faces (facets), edges,
 and vertices -- as a foundation for mesh editing. This document describes the
 implemented feature and the editing / GPU-selection work that is intentionally

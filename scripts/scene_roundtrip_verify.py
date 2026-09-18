@@ -1943,7 +1943,7 @@ def usd_library_folder_leg(S):
         check(S, f"'{wanted}' reloads as a Scope in its place",
               any(path.endswith(wanted) for path in scope_paths), str(scope_paths))
     # The stage spells an identifier, so the reloaded names are the sanitized
-    # ones (src/erhe/usd/notes.md, sanitize_usd_identifier).
+    # ones (doc/erhe_usd.md, sanitize_usd_identifier).
     check(S, "the material reloads inside its folder",
           any(path.endswith("E4d_Metals/E4d_Folder_Material") for path in material_paths), str(material_paths))
 
@@ -2028,7 +2028,7 @@ def usd_physics_leg(S):
 
     # A resource is a prim, so its name is a USD identifier: a name a save can
     # write as it stands is what a reload gives the item back
-    # (src/erhe/usd/notes.md, sanitize_usd_identifier).
+    # (doc/erhe_usd.md, sanitize_usd_identifier).
     material = mutate("create_physics_material", {
         "scene_name": scene_name, "name": "Roundtrip_ice",
         "static_friction": 0.05, "dynamic_friction": 0.04, "restitution": 0.1,

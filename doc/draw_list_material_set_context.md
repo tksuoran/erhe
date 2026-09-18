@@ -1,5 +1,7 @@
 # Draw list material set - planning context
 
+Stability: stable
+
 Background for `doc/draw_list_material_set.md`: where the work stands, how
 much of the plan has been reviewed, and why the work exists at all. The plan
 itself is self-contained for implementing; this is what to read before picking

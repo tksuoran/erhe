@@ -1,5 +1,5 @@
 // The UsdPhysics half of the USD reader (doc/usd_compatibility.md, "Physics",
-// and src/erhe/usd/notes.md, "Physics"): the bodies, colliders, physics
+// and doc/erhe_usd.md, "Physics"): the bodies, colliders, physics
 // materials, collision groups, joints and the physics scene of a stage, read
 // into the format-neutral `erhe::scene::Physics_description` the glTF reader
 // fills too, plus the USD-side record that says where each of those sits on
@@ -1187,7 +1187,7 @@ private:
             // A drive's spring constants are per USD unit of the axis, which
             // for an angular axis is a degree, and erhe applies them per
             // radian: the numbers travel as they are
-            // (src/erhe/usd/notes.md, "Physics").
+            // (doc/erhe_usd.md, "Physics").
             if (read_float(props, prefix + "stiffness", value)) { drive.stiffness = value; }
             if (read_float(props, prefix + "damping",   value)) { drive.damping   = value; }
             joint.drives.push_back(drive);

@@ -1,5 +1,7 @@
 # Selection improvements plan: per-scene selection
 
+Stability: stable
+
 Status: IMPLEMENTED (phases 1-5, 2026-07-13; commits 572141cc, 8f1ceb9b,
 a2b85321, 165a73a4, 458dcda1). Headless-verified via the MCP smoke flows
 described per phase; interactive verification (window tints, per-viewport

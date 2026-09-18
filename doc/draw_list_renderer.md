@@ -1,5 +1,7 @@
 # Draw list renderer — requirements
 
+Stability: stable
+
 Status: IMPLEMENTED 2026-08-15 (phases 1–6, see
 `doc/draw_list_renderer_results.md` for measurements, deviations and
 follow-ups). Requirement text below is as approved before implementation.

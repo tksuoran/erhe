@@ -1,5 +1,7 @@
 # Plan: stop main-thread frame work from blocking on async glTF geometry / BVH builds
 
+Stability: stable
+
 ## Symptom
 
 Loading `res/editor/assets/ABeautifulGame/glTF-Binary/ABeautifulGame.glb` (Metal, Debug):

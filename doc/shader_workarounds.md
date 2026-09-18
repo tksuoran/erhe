@@ -1,5 +1,7 @@
 # Shader workarounds and capability defines
 
+Stability: stable
+
 ## Policy
 
 Shaders must NOT branch on the graphics API (Vulkan / Metal / OpenGL). We do not

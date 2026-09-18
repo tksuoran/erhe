@@ -1,5 +1,7 @@
 # MSVC / Visual Studio solution build issues: stale objects and ODR chimeras
 
+Stability: experimental
+
 Status: analysis only -- prevention measures listed at the end are NOT yet
 implemented. Written 2026-07-12 after the 2026-07-11 incident below.
 

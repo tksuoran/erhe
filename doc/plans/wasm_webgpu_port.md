@@ -1,5 +1,7 @@
 # WebAssembly + WebGPU port of the erhe editor — incremental plan
 
+Status: proposed
+
 Status: plan only (2026-08-11). No wasm/WebGPU work exists in the repo yet.
 
 ## Ground truth this plan is based on
@@ -11,7 +13,7 @@ Status: plan only (2026-08-11). No wasm/WebGPU work exists in the repo yet.
   null ~2.8k.
 - `null/` is the minimal skeleton to fork; **`metal/` is the closest functional
   analogue to WebGPU** (explicit encoders, up-front pipelines, no geometry shaders).
-  `doc/metal_backend.md` is the backend-authoring recipe; `src/erhe/graphics/notes.md`
+  `doc/metal_backend.md` is the backend-authoring recipe; `doc/erhe_graphics.md`
   documents the frame lifecycle / bind-group / texture-heap design.
 - Shaders are GLSL assembled at runtime; Vulkan path already does GLSL → glslang →
   SPIR-V with a disk cache (`spirv_cache.cpp`); Metal adds SPIRV-Cross → MSL.
@@ -269,7 +271,7 @@ erhe::geometry/log/math) is the validation vehicle for either route.
 ## Reading list before starting
 
 1. `doc/metal_backend.md` — backend-authoring recipe.
-2. `src/erhe/graphics/notes.md` — frame lifecycle, bind groups, texture heap paths.
+2. `doc/erhe_graphics.md` — frame lifecycle, bind groups, texture heap paths.
 3. `src/erhe/graphics/erhe_graphics/null/` — the skeleton to fork.
 4. `CMakeLists.txt:90-134` — platform + forced-option blocks to extend.
 5. `doc/android.md`, `doc/quest.md` — precedent for a constrained-platform port.

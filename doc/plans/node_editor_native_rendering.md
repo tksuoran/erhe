@@ -1,5 +1,7 @@
 # Issue #251: Native-resolution ax::NodeEditor rendering - plan
 
+Status: in progress
+
 Status: Phases 0-5 done (crease d4dd4c7b..8b55d5a7). Phase 6 rendering bugs from
 initial user testing (node width/widgets/pins/background not zoom-correct) found
 and fixed (53ae6eb5, ab69475e, 46cd4341, 8d32ff6e); see the notes doc Phase 6

@@ -1,5 +1,7 @@
 # erhe scene serialization
 
+Stability: stable
+
 Reference for how the editor persists scenes: the file format, the save and
 open pipelines, every part that participates, and what is (and is not)
 persisted. Design history and rationale live in
@@ -330,7 +332,7 @@ scene opened from a `.usd` / `.usda` / `.usdc` / `.usdz` file is USD-backed
 instead: `Scene_root::get_source_format()` reports `usd`, and Save Scene
 (the menu command, the Asset Browser's "Load scene", MCP `save_scene`)
 writes a `.usda` layer back through `erhe::usd` (`save_scene_usd`,
-`src/erhe/usd/notes.md`). A scene never converts between the two formats -
+`doc/erhe_usd.md`). A scene never converts between the two formats -
 neither direction is offered anywhere
 ([`usd-compatibility-plan.md`](usd_compatibility_design.md) G3).
 

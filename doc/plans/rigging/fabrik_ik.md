@@ -1,5 +1,7 @@
 # FABRIK Inverse Kinematics — Initial Requirements
 
+Status: proposed
+
 Status: draft, awaiting review.
 This document is Phase 1 of the rigging roadmap in `rigging-tools-plan.md`.
 

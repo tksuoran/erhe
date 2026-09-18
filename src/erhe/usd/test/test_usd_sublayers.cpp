@@ -221,7 +221,7 @@ TEST(Sublayers_asset_paths, a_parent_relative_sublayer_resolves)
 
 // A USD-backed scene is edited as the one composed stage it became, so a save
 // writes the composed content into one layer and authors no `subLayers`
-// (src/erhe/usd/notes.md).
+// (doc/erhe_usd.md).
 TEST_F(Sublayers_import, a_save_writes_one_layer_and_is_a_fixed_point)
 {
     const std::filesystem::path         first_path = temporary_path("sublayers.usda");

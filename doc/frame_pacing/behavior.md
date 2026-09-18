@@ -1,5 +1,7 @@
 # Frame Pacer — Behavior Specification per Scenario
 
+Stability: stable
+
 This document is deliverable 4 of the planning phase defined in [frame_pacing.md](requirements.md): the normative, observable behavior of the frame pacer in each required scenario. Mechanisms are specified in [frame_pacing_algorithm.md](algorithm.md); the control-theoretic grounding is [frame_pacing_control_model.md](control_model.md). Numeric bounds use the default tunables (60 Hz examples, `T` = 16.67 ms); "measured" values are from the verification simulation (`scripts/frame_pacing_sim.py`, claims C1–C9).
 
 Each scenario gives: the trigger, the required behavior (*shall*-statements — these are the acceptance contract for the implementation), quantitative bounds, and the **record signature**: what the scenario looks like in the frame-record data, so profiling tools and humans can recognize it.

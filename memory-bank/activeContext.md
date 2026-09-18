@@ -63,7 +63,7 @@
   D7::MCP-create_library_folder+move_library_item{folder_path,undoable}+find_item_in_scene-visits-library-nodes
   trap-fixed::add/remove-scanned-direct-children-only→duplicate-node-per-item-after-folder-move{find_entry-subtree;get_all-caches-cleared-up-to-root}
   verify✓headless{scratchpad-recipe:create→move-Copper→set-visible-false→inherited→undo/redo→save/open→local+inherited→close-clean;undo_reference_clearing_smoke_test-45/45}|?user-interactive{Create-Folder,rename,drag-drop,Ctrl+Z}
-@property-system::erhe::property{doc/property_system.md=design-record;doc/property_inventory.md=per-field-status;src/erhe/property/notes.md=library-reference}
+@property-system::erhe::property{doc/property_system.md=design-record;doc/property_inventory.md=per-field-status;doc/erhe_property.md=library-reference}
   >2026-09-04::Add/Remove-Property-UI{940aeccbb..3a2318199}✓|?user-interactive
 
 @node-physics-entry-store::✓2026-09-04{a5233529c+901dab96a}

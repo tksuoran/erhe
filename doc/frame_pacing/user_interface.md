@@ -1,5 +1,7 @@
 # Frame Pacer — Verification UI and Simulated Workload (requirements)
 
+Stability: mostly stable
+
 Requirements for an editor ImGui window that lets a human visually verify
 frame pacer behavior on real hardware, and for an adjustable simulated
 workload used to drive the pacer through its scenarios. This document

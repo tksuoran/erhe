@@ -1,5 +1,7 @@
 # Compact attribute encodings for the optimized mesh variant
 
+Stability: mostly stable
+
 **Status: implemented and verified.** All six steps are in, the optimized
 vertex is 36 bytes as planned, the unit tests pass, and the A/B image set
 in `logs/attr_encoding_ab/` has been **inspected and accepted by the user**

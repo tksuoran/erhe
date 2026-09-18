@@ -1,5 +1,7 @@
 # Graph editor
 
+Stability: mostly stable
+
 erhe's **graph editor** is a node-based editing surface built on the
 `erhe::graph` DAG framework and the `erhe::imgui` node-editor canvas (an
 `ax::NodeEditor` fork). Two feature graphs use it today, sharing one editor-level
@@ -120,7 +122,7 @@ The low-level DAG lives in `src/erhe/graph/` (`erhe::graph`): `Graph` (owns
 `would_create_cycle` / `register_node`), `Node` (typed input/output `Pin`s, a
 unique graph id), `Pin` (a connection point with a *key* and a slot index), and
 `Link` (a directed source-pin -> sink-pin connection). It is payload-agnostic and
-also underpins the render graph. See `src/erhe/graph/notes.md`.
+also underpins the render graph. See `doc/erhe_graph.md`.
 
 The editor undo system (`src/editor/operations/`) - `Operation` and
 `Operation_stack` - is likewise payload-agnostic and used unchanged.

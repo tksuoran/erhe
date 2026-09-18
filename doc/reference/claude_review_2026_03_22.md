@@ -50,7 +50,7 @@ The following issues from the original review have been addressed:
 
 - **File**: `src/editor/app_context.hpp`
 - **Severity**: info
-- **Description**: All pointers are nullptr until `fill_app_context()`. Component constructors must not access them (documented in editor notes.md).
+- **Description**: All pointers are nullptr until `fill_app_context()`. Component constructors must not access them (documented in doc/editor.md).
 
 ### 9. First-frame time spike
 

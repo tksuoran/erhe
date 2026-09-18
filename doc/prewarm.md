@@ -1,5 +1,7 @@
 # Init-time GPU prewarm
 
+Stability: stable
+
 > **Status: API surface in place, bodies currently stubbed.** The
 > entry points described below exist (`prewarm_all`,
 > `Forward_renderer::prewarm_standard_variants`,

@@ -1,5 +1,7 @@
 # Content Library Ownership Plan
 
+Stability: stable
+
 Status: IMPLEMENTED (2026-07-13), with one refinement found during
 implementation - see "Implementation refinement: owning vs. reference
 entries" below. The rest of this document is the reviewed proposal, kept
@@ -404,7 +406,7 @@ Then:
 
 ### Phase 6: docs and notes
 
-- Update `src/editor/content_library/notes.md`, `doc/scene_serialization.md`
+- Update `doc/editor_content_library.md`, `doc/scene_serialization.md`
   (ownership section), and the memory bank once implemented.
 
 ## 7. Open questions (for design review)

@@ -39,7 +39,7 @@ public:
     // registration and does not reach these.
     //
     // The editor's `Scene_root` implements them by keeping the scene's
-    // content-library index up to date (src/editor/content_library/notes.md).
+    // content-library index up to date (doc/editor_content_library.md).
     virtual void register_prim  (const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
     virtual void unregister_prim(const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
 

@@ -1,5 +1,7 @@
 # Material-aware ray traced rendering plan (issue #233, follow-up)
 
+Stability: mostly stable
+
 Builds on the primary-ray milestone (doc/raytrace.md, commits 2cfbdadc +
 ac0db2f5 on branch `raytrace`). Goal: the ray query compute shader shades hits
 with real material data (base color, textures, smooth normals) and supports

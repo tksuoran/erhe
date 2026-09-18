@@ -1,5 +1,7 @@
 # Clearing editor references to content removed by an undo
 
+Stability: mostly stable
+
 ## Context
 
 Undoing a glTF import takes the imported content back out of the editor, but nothing
@@ -631,7 +633,7 @@ reference.
 `make_library_insert_operation()` (`operations/library_attach_operation.hpp`)
 is the one way a resource insert is built, and it composes the scope's
 placement as a `Kind_scope_operation` step before the insert in the same
-compound. See `src/editor/content_library/notes.md` ("A kind scope belongs to
+compound. See `doc/editor_content_library.md` ("A kind scope belongs to
 the operation that needed it") for the rule, including why the scope's undo is
 conditional on the scope being childless at that moment.
 

@@ -1,5 +1,7 @@
 # TODO
 
+Status: proposed
+
 ## Positive crash signal for harness-run apps
 
 When Claude Code runs an erhe executable (editor, example, rendering_test)

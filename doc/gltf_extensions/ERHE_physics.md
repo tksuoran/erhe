@@ -1,5 +1,7 @@
 # ERHE_physics
 
+Stability: mostly stable
+
 ## Scope
 
 **Node** extension, on a node carrying a `KHR_physics_rigid_bodies` body

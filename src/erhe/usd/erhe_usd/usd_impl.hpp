@@ -175,7 +175,7 @@ public:
 
 // One `UsdPreviewSurface` input a `UsdPrimvarReader` feeds, as load_stage
 // read it off the composed layer before it built the stage
-// (src/erhe/usd/notes.md, "UsdPreviewSurface fallbacks and channel outputs").
+// (doc/erhe_usd.md, "UsdPreviewSurface fallbacks and channel outputs").
 // Tydra resolves a shading input to a `UsdUVTexture` or fails the whole
 // material over it, so load_stage takes the connection out of the layer copy
 // the stage is built from - the way it takes the erhe texture-graph wiring
@@ -272,7 +272,7 @@ public:
 
 // Fill `data.physics` and `data.physics_prims` from the `UsdPhysics` content
 // of the stage (doc/usd_compatibility.md, "Physics", and
-// src/erhe/usd/notes.md, "Physics"). Every issue the read reports is
+// doc/erhe_usd.md, "Physics"). Every issue the read reports is
 // appended to `warnings` as one line, for the caller to put into
 // `Usd_load_result::warning`.
 void read_usd_physics(
@@ -282,7 +282,7 @@ void read_usd_physics(
 );
 
 // The sampled-transform vocabulary the reader and the writer share
-// (src/erhe/usd/notes.md, "Time samples"). The reader (usd_import.cpp) owns
+// (doc/erhe_usd.md, "Time samples"). The reader (usd_import.cpp) owns
 // the definitions; the writer reads them to reconcile an edited clip's keys
 // with the samples the file authored.
 

@@ -1,5 +1,7 @@
 # Handoff: AI creation tools / geometry graph — continuing work
 
+Status: in progress
+
 Written 2026-08-11 at the end of a long session; read this FIRST in a
 fresh context, then the canonical sources it points at. Everything from
 today is committed on `main`, ALL UNPUSHED (the user pushes).

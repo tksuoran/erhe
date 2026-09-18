@@ -1,10 +1,12 @@
 # Content library folders
 
+Stability: stable
+
 Folders inside a content library's kind scopes (`Brushes`, `Materials`,
 `Animations`, ...) group resources, are selectable, show in the Properties
 window like any item, and carry property values that the resources below them
 inherit. This document is the design record; the library reference is
-`src/editor/content_library/notes.md`, the property mechanics are
+`doc/editor_content_library.md`, the property mechanics are
 `doc/property_system.md` (D8 inheritance, D12 Add / Remove Property) and the
 wire format is `doc/gltf_extensions/ERHE_scene.md`.
 
@@ -16,7 +18,7 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   places it under its kind scope when the library does not list it yet,
   `remove` takes it out of the tree, and the queries answer from the
   library's index.
-- R2 Editing. The Scene Hierarchy's "Create" menu (`src/editor/windows/notes.md`
+- R2 Editing. The Scene Hierarchy's "Create" menu (`doc/editor_windows.md`
   "Scene Hierarchy drag and drop") makes a scope under any prim; a folder is renamed from the Properties window name
   row, deleted with the tree's "Delete", and resources and folders are moved
   by dragging them in the tree (D3). Every one of these is one undoable
@@ -54,7 +56,7 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   `Hierarchy::set_parent` captures the snapshot before the attach and applies
   it after, so a resource attached under a folder with a local value is
   notified of the change.
-- D1b Resource names. Sibling-unique naming (`src/erhe/item/notes.md`
+- D1b Resource names. Sibling-unique naming (`doc/erhe_item.md`
   "Sibling-unique names") applies to resource prims like to every other prim:
   two materials of one scope cannot share a name, and the second gets
   `<base>_<n>`.
@@ -76,7 +78,7 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   other prim - before, into or after any prim row, a material under an `Xform`
   (C5) included; the drop rules, the Alt actions (such as forking a brush with
   a dropped material) and the zones are stated once in
-  `src/editor/windows/notes.md` "Scene Hierarchy drag and drop". A move within
+  `doc/editor_windows.md` "Scene Hierarchy drag and drop". A move within
   a scene keeps the prim's item host, so the host is not told and the library
   index is untouched - a move is not a removal; a move to another scene
   re-registers the prim with that scene's library through

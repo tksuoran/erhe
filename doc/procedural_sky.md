@@ -1,5 +1,7 @@
 # Procedural sky (Hillaire atmosphere)
 
+Stability: mostly stable
+
 Status: implemented and building (Vulkan, OpenGL, headless all link clean); shaders
 pass an offline `glslc` syntax check. The atmosphere is wired on **Vulkan, OpenGL, and
 Metal** (OpenGL requires GL 4.3+ for compute / storage-image load-store; Metal requires

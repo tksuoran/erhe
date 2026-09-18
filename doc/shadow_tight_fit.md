@@ -1,5 +1,7 @@
 # Shadow fit optimization plan
 
+Stability: mostly stable
+
 Plan for optimizing the tight shadow frustum fit pipeline
 (`Light::tight_directional_light_projection_transforms()` and its inputs),
 derived from the 2026-06-10 pipeline review; refreshed 2026-07-29 after

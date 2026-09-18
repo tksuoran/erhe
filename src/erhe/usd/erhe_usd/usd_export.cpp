@@ -285,7 +285,7 @@ void visit_xform_op_value(const erhe::scene::Xform_op& op, const erhe::scene::Xf
 // `float3` op. erhe keeps every value in double precision, so a `half` op
 // round-trips through the nearest half - the same value it was read from.
 // The op's value and, when it carries any, its time samples
-// (src/erhe/usd/notes.md, "Time samples"). A sampled op is written with both:
+// (doc/erhe_usd.md, "Time samples"). A sampled op is written with both:
 // the samples are what a viewer plays, and the value is the pose at the
 // stage's start time, which is what a reader that evaluates nothing sees.
 void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& op)
@@ -525,7 +525,7 @@ public:
 // first skin registered for a skeleton is the one the bind pose comes from.
 // The three transform channels of `Usd_save_arguments::animations` that drive
 // one node: what the writer reconciles a sampled `xformOp` stack with
-// (src/erhe/usd/notes.md, "Time samples").
+// (doc/erhe_usd.md, "Time samples").
 class Node_transform_channels final
 {
 public:
@@ -536,7 +536,7 @@ public:
 
 // The channels of `Usd_save_arguments::animations` that drive one item's
 // non-xformOp attributes: the closed list of attributes a save carries
-// beyond the transform (src/erhe/usd/notes.md, "Time samples").
+// beyond the transform (doc/erhe_usd.md, "Time samples").
 class Item_attribute_channels final
 {
 public:
@@ -910,7 +910,7 @@ public:
 
         // The transform channels an edited clip holds, before any prim is
         // written: a sampled stack is reconciled with them
-        // (src/erhe/usd/notes.md, "Time samples").
+        // (doc/erhe_usd.md, "Time samples").
         collect_transform_channels();
         collect_attribute_channels();
 
@@ -1111,7 +1111,7 @@ private:
     std::map<const erhe::scene::Node*, Node_transform_channels> m_transform_channels;
 
     // The channels driving a non-xformOp attribute, by the item each drives
-    // (src/erhe/usd/notes.md, "Time samples").
+    // (doc/erhe_usd.md, "Time samples").
     std::map<const erhe::Item_base*, Item_attribute_channels>    m_attribute_channels;
     std::set<const erhe::scene::Node*>                          m_write_back_refusals;
     bool                                                        m_warned_interpolation{false};
@@ -1234,7 +1234,7 @@ private:
             typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
         }
         // A clip driving `visible` writes the token samples beside that
-        // value (src/erhe/usd/notes.md, "Time samples").
+        // value (doc/erhe_usd.md, "Time samples").
         write_sampled_attribute<lightusd::Visibility>(
             typed_prim.visibility, get_attribute_channels(item).visible, 1,
             [](const glm::vec4& value) -> lightusd::Visibility {
@@ -1517,7 +1517,7 @@ private:
         // The slot's UV transform, back in USD's `st` space. An erhe
         // identity maps onto the USD identity, so a slot at its defaults
         // reads the primvar reader directly and no UsdTransform2d prim is
-        // written (src/erhe/usd/notes.md, "Texture coordinates").
+        // written (doc/erhe_usd.md, "Texture coordinates").
         const Erhe_uv_transform erhe_transform{
             .rotation = slot_state.rotation,
             .scale    = slot_state.scale,
@@ -1643,7 +1643,7 @@ private:
     // A texture slot with a local value whose image the caller could not
     // resolve to a file: a generated texture has no bytes on disk, so the
     // slot stays out of the shading network (commit 1, see
-    // src/erhe/usd/notes.md).
+    // doc/erhe_usd.md).
     void warn_about_unresolved_textures(const erhe::primitive::Material& material)
     {
         using Slot_property = erhe::property::Property<erhe::property::Object_reference>;
@@ -1764,7 +1764,7 @@ private:
     // authored where it differs from its OpenPBR fallback - except
     // `base_color` and `specular_roughness`, whose fallbacks are not erhe
     // defaults, so they are authored whatever the value is (the mirror of the
-    // import rule, `src/erhe/usd/notes.md`, "OpenPBR networks").
+    // import rule, `doc/erhe_usd.md`, "OpenPBR networks").
     void write_open_pbr_shader(
         lightusd::Prim&                  material_prim,
         const std::string&               material_path,
@@ -1982,7 +1982,7 @@ private:
             surface.occlusion.set_value(material.get_value(Material::occlusion_texture_strength_property));
         }
         // The keys of a clip driving the material, beside those values
-        // (src/erhe/usd/notes.md, "Time samples"). erhe's roughness is
+        // (doc/erhe_usd.md, "Time samples"). erhe's roughness is
         // anisotropic and UsdPreviewSurface has one, so a keyed roughness
         // writes the x component of each key, the way the plain value does.
         // A cubic clip writes a `Ts` spline as a property of the shader node
@@ -3921,7 +3921,7 @@ private:
 
     // ------------------------------------------------------------------
     // Reconciling an edited clip with the authored ops
-    // (src/erhe/usd/notes.md, "Time samples")
+    // (doc/erhe_usd.md, "Time samples")
     // ------------------------------------------------------------------
 
     // Index the transform channels of the animations the caller handed over
@@ -3929,7 +3929,7 @@ private:
     // offset is left out: its keys are not the sampler's own, and the
     // write-back reads keys rather than resampling.
     // Index the channels driving the attributes a save carries beyond the
-    // transform, by the item each drives (src/erhe/usd/notes.md, "Time
+    // transform, by the item each drives (doc/erhe_usd.md, "Time
     // samples"). A channel reading its sampler at a value offset is left out
     // for the reason collect_transform_channels() gives, and a channel
     // driving any other property is named in one warning per animation: USD
@@ -4015,7 +4015,7 @@ private:
     }
 
     // One schema attribute written with the samples of the channel driving it
-    // (src/erhe/usd/notes.md, "Time samples"): one sample per key, at
+    // (doc/erhe_usd.md, "Time samples"): one sample per key, at
     // `key time * timeCodesPerSecond`, beside the default the caller already
     // wrote. No authored sample record is kept for these attributes, so the
     // keys are always what a save writes.
@@ -4062,7 +4062,7 @@ private:
     }
 
     // Whether a channel's sampler is one erhe writes as a `Ts` spline rather
-    // than as time samples (src/erhe/usd/notes.md, "Time samples").
+    // than as time samples (doc/erhe_usd.md, "Time samples").
     [[nodiscard]] static auto is_spline_sampler(const erhe::scene::Animation_sampler* sampler) -> bool
     {
         return (sampler != nullptr) &&
@@ -4070,7 +4070,7 @@ private:
     }
 
     // One scalar schema attribute written as a `Ts` spline of its own property
-    // (src/erhe/usd/notes.md, "Time samples"): a hermite spline of one knot
+    // (doc/erhe_usd.md, "Time samples"): a hermite spline of one knot
     // per key, at `key time * timeCodesPerSecond`, whose tangent slopes are
     // the key's tangents divided by that same rate - erhe keys value units per
     // second, USD value units per time code. The default beside it is the
@@ -4629,7 +4629,7 @@ private:
 
     // The stack a sampled prim is written with: the authored one when the
     // animation's keys are still the projection of its samples, and one
-    // carrying the keys when they are not (src/erhe/usd/notes.md, "Time
+    // carrying the keys when they are not (doc/erhe_usd.md, "Time
     // samples"). False when the authored stack is what gets written; an edit
     // the ops cannot hold is named in one warning per prim.
     [[nodiscard]] auto reconcile_sampled_stack(
@@ -4695,7 +4695,7 @@ private:
         // layer (D5), so the pose a playing animation put the prim in never
         // reaches here. A time-sampled stack is written whatever that matrix
         // says: the samples are the authority over the stack's composition
-        // (src/erhe/usd/notes.md, "Time samples").
+        // (doc/erhe_usd.md, "Time samples").
         if ((stack != nullptr) && (stack->has_time_samples() || is_near(glm::mat4{stack->compose()}, matrix))) {
             write_xform_op_stack(xform_ops, *stack);
             return;
@@ -5417,7 +5417,7 @@ private:
                 out.has_normals = out.has_normals || normal.has_value();
 
                 // Back to USD's bottom-left `st` origin
-                // (src/erhe/usd/notes.md, "Texture coordinates").
+                // (doc/erhe_usd.md, "Texture coordinates").
                 const std::optional<GEO::vec2f> texcoord = attributes.corner_texcoord_0.try_get(corner);
                 const glm::vec2 st = texcoord.has_value()
                     ? flip_texcoord_v(glm::vec2{texcoord.value().x, texcoord.value().y})
@@ -5950,7 +5950,7 @@ private:
             usd_light.shadowEnable.set_value(light.get_value(Light::cast_shadow_property));
         }
         // The keys of a clip driving the light, beside those values
-        // (src/erhe/usd/notes.md, "Time samples"). erhe has no exposure on a
+        // (doc/erhe_usd.md, "Time samples"). erhe has no exposure on a
         // light, so the whole quantity is the intensity and `inputs:exposure`
         // stays at its zero fallback - which is what the importer folds back
         // in.

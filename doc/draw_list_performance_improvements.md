@@ -1,5 +1,7 @@
 # Draw list performance improvements: cached primitive records
 
+Stability: mostly stable
+
 Companion to `doc/draw_list_renderer.md` /
 `doc/draw_list_renderer_results.md`. Written 2026-08-15.
 

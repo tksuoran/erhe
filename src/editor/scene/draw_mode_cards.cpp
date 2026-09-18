@@ -69,7 +69,7 @@ public:
 // (UsdImagingDrawModeAdapter::_GetUVsForQuad and
 // _GenerateTextureCoordinates) in USD's `st` space, converted to erhe's
 // texture coordinates by the one involution `v' = 1 - v`
-// (src/erhe/usd/notes.md, "Texture coordinates"). A face showing its own
+// (doc/erhe_usd.md, "Texture coordinates"). A face showing its own
 // image takes the unflipped quad, except Z-, whose image the adapter maps
 // with both s and t flipped. (The adapter's other flips are for a face
 // borrowing the opposite face's image; erhe draws such a face flat in the

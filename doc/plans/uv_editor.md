@@ -1,5 +1,7 @@
 # UV Editor (issue #250)
 
+Status: proposed
+
 Plan for implementing a UV editor in the erhe editor, modeled on Blender's
 UV editor (https://docs.blender.org/manual/en/latest/editors/uv/index.html).
 A Blender clone is available at `D:\blender` for reference (see

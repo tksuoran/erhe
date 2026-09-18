@@ -1,5 +1,7 @@
 # ERHE_asset_reference
 
+Stability: mostly stable
+
 ## Scope
 
 **Top-level object** extension, initially emitted on **materials** only.

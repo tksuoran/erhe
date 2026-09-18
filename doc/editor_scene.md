@@ -1,0 +1,101 @@
+# scene/
+
+Stability: mostly stable
+
+## Purpose
+
+Manages 3D scene data for the editor: scene roots (the top-level scene container), scene views (camera + viewport rendering), viewport management, scene commands (create camera/light/rendertarget), physics-scene coupling, raytrace integration, and scene serialization.
+
+## Key Types
+
+- **`Scene_root`** -- Owns an `erhe::scene::Scene`, a physics world (`erhe::physics::IWorld`), a raytrace scene, mesh layers (`Scene_layers`), and a `Content_library`. Implements `erhe::scene::Scene_host`. Registers/unregisters nodes, cameras, meshes, lights, and skins. Manages `Node_physics` instances and rendertarget meshes. Keeps the scene's shape-to-meshes index: for every `erhe::primitive::Primitive` a registered mesh names, the meshes that name it, maintained at the three change sites (`register_mesh`, `unregister_mesh` and `on_mesh_primitives_changed`, which re-indexes only when the mesh's primitive list actually differs) under its own mutex, since two of them run on worker threads during an async load. `collect_meshes_sharing_primitives()` is the query, clearing and filling a caller-owned buffer; the deferred raytrace commit uses it to refresh the sharers of a swapped shape (`operations/async_raytrace_kickoff_operation.cpp`). Multiple `Scene_root` instances can coexist (managed by `App_scenes`). Constructor takes only `App_message_bus*`, `Content_library`, name, and `enable_physics`; UI for the content library is provided separately by `Content_library_window` (in `content_library/`).
+
+- **`Scene_layers`** -- Defines mesh layers (content, brush, tool, controller, rendertarget) and a light layer. Each layer has an ID used for filtering during rendering.
+
+- **`Scene_view`** -- Abstract base for anything that provides a camera view into a scene. Holds a weak reference to `Scene_root`, viewport configuration, control ray state (for pointing/picking), and hover entries (per-slot raytrace hit results). Subclasses: `Viewport_scene_view`, `Headset_view`.
+
+  `update_hover_with_raytrace()` is the only per-frame site that commits the
+  scene's raytrace top level acceleration structure (`IScene::commit()`); the
+  MCP `raycast` and `pick_at` tools commit on demand, at the moment their
+  caller asks for a trace. It hovers only while the editor is settled: it asks
+  `App_context::is_scene_load_in_flight()` first, and while that is true it
+  clears every hover slot and returns without committing or tracing. A load
+  attaches, detaches and rebuilds raytrace instances continuously, so a hover
+  that traced through it would rebuild the acceleration structure on nearly
+  every frame and never reuse it, and a hover entry it produced would name a
+  mesh and a primitive index the load is still swapping underneath. Both
+  subclasses inherit the rule, the XR view included. The gate is logged to
+  `editor.controller_ray` once at each edge, never per frame.
+
+- **`Viewport_scene_view`** -- Concrete `Scene_view` that is also a `Texture_rendergraph_node`. Renders scene content into a texture consumed by downstream rendergraph nodes (post-processing or direct display). Handles 2D pointer position, hover detection (via raytrace or ID renderer), and shader variant selection.
+
+- **`Scene_views`** (`viewport_scene_views.hpp`) -- Manages the collection of `Viewport_scene_view` instances. Tracks which view is hovered, creates new viewport views, and responds to graphics settings changes.
+
+- **`Scene_commands`** -- Provides commands to create cameras, empty nodes, lights, and rendertargets. Hosts the corresponding `Command` objects.
+
+- **`Scene_builder`** -- Constructs an initial scene with cameras, lights, and brush meshes (platonic solids, spheres, tori, etc.). Used during startup to populate the default scene.
+
+- **`Hover_entry`** -- Per-slot raytrace/pick result storing the hovered mesh, geometry, position, normal, UV, triangle index, and facet. Entries from an analytic source carry no mesh; `analytic_provider` names their provider and `get_name()` returns its name.
+- **`Analytic_hover_provider`** (`analytic_hover_provider.hpp`) -- Third hover source next to raytrace and ID render, for tools hit tested analytically (the transform gizmo). Providers are registered in `App_context::analytic_hover_providers` after part construction. `Scene_view::update_hover_with_analytic_tools()` runs last in each hover update and merges every provider's entry into `tool_slot` by ray-t. `Scene_view::reset_hover_slots()` clears slots only (the sources refill them in the same update); `reset_hover()` also calls every provider's `clear_analytic_hover()` and is used where a view stops picking.
+
+- **`Frame_controller`** -- Camera controller with 6DOF input axes (translate XYZ, rotate XYZ). Used by `Fly_camera_tool`.
+
+- **`Node_physics`** -- `Node_attachment` wrapping a Jolt rigid body. Synchronizes physics transforms with scene node transforms. A convex hull / triangle shape keeps no reference to the geometry it was built from, so the attachment remembers it in `collision_mesh` (a bridged weak object reference, `Node_joint::connected_node`'s form): no value names the body's own mesh, and a value names a `Mesh` prim below the body, which is where both exporters then state the collider (`parsers/physics_export.cpp` makes it a physics entry of its own on that prim). `physics_import.cpp` sets it when a mesh collider of another prim folds into the body. The value records where the shape came from - setting it does not rebuild the shape - and a mesh that leaves the scene leaves the built shape standing, with the export falling back to the body's own mesh and one warning.
+
+- **`Variant_table`** (`variant_table.hpp`) -- The variant sets one scene carries (doc/usd_compatibility_design.md X4), owned by its `Scene_root` and dying with it. One `Variant_set` is the prim carrying it, the set name, its variants with their material bindings and property opinions, the selected variant, the prims each variant adds, the base values, and how many opinions the file authored that erhe has no place for (a property the reader could not express, a prim a variant adds somewhere the reader's hoist does not reach). The prim and the materials are weak references, and `Scene_root` drops a set whose prim an `items_removed` message names, so an undone import stops offering its sets. A variant's opinions are `erhe::scene::Instance_override` entries in the neutral name / text form the file reader recorded them in, so a variant nobody selected still has its opinions, which no item of the scene holds; `base_values` is what the prims held for every path and property name any variant authors, before the selected variant reached them at load. `Scene_root::select_variant()` switches a set: `Variant_select_operation` records the selection in the table and in `Scene_settings::variant_selections`, one `Property_set_operation` (or `Node_transform_operation`) writes each opinion any variant of the set authors - the chosen variant's value where it authors one, the base value where it does not, so switching never leaves the previous variant's opinion standing - one `Property_set_operation` per prim any variant of the set adds writes its `active` - the chosen variant's prims hold no local value, which is active, and every other variant's are false, which prunes each one and its subtree from the render, the pick and the simulation - and one `Mesh_material_assign_operation` per binding assigns the materials, all in one compound so a single undo reverts the switch. Every variant's prims are in the scene whichever variant is selected (`Variant::prims`, by the path each has below the carrying prim and the name the file's variant block gave it): the reader puts them there, so a switch never builds or destroys a prim. `resolve_variant_prim()` is the path-to-item lookup the opinions use, and `resolve_variant_binding()` is where a binding path becomes mesh primitives: a path that names a mesh covers the primitives the same variant does not bind by subset, and a deeper path names one primitive by its GeomSubset name. Both resolve a path the tree has no item for through the clone of every composition arc it crosses (`erhe::scene::find_instance_item`), which is how a switch reaches the prim an opinion behind an arc was applied to at load (doc/usd_compatibility_design.md C6). A `variantSet` a variant block declares is a set of the same prim, tabled beside the set carrying the block and named by it (`Variant_set_key`: prim path, set name, enclosing set name, enclosing variant name - two blocks of one set may each declare a nested set of the same name, which `full_assets/Teapot/DrawModes.usd` does), and its blocks contribute only while that block is the selected one: `Variant_table::is_live()` is that test, and a switch of a set takes the sets its old block declares off - their opinions back to their base values, every prim of theirs inactive, their own nested sets first - and brings the sets its new block declares on, each applying the selection it holds, recursively. A set whose enclosing block is not the selected one is switched by recording the selection alone, which the branch brings with it when a switch of the enclosing set lets it in; the Properties combo shows such a set indented, named by its block and disabled. A set that only starts contributing then has no base values captured yet - the reader captures them for the contributing branch alone - so `capture_variant_base_values()` captures them as the set comes on.
+
+
+- **`Draw_mode`** (`draw_mode.hpp`) -- `UsdGeomModelAPI` as a `Node_attachment`: the request that a model prim's subtree be drawn as a proxy (doc/usd_compatibility.md, "Draw modes"). Every attribute of the schema is an entry property named as the mapping table names it, under the class name `Draw_mode`, which is the name a file's opinion of one addresses it by (`erhe::scene::find_override_property_target`). None of them inherits: `Draw_mode::inherited` is USD's own deferral token, and `resolved_draw_mode()` / `resolved_card_visibility()` walk the ancestor prims for it, with the root fallbacks `default` and `full`. The attachment owns two consequences. The prim's children leave render, pick and simulation while the prim's OWN mode is a proxy mode, through `Item_base::set_prunes_children()`; the mode of a prim that defers is not asked, because such a prim is either inside a pruned subtree already or resolves to `default`, so the pruning opinion is local and one property write is the whole change site. And the proxy in the children's place, sized from `get_extent()`: the authored `extentsHint` when there is one, else the bounds of the meshes at and below the prim, measured once and dropped by `invalidate_extent()` or a move to another host. `get_description()` / `set_description()` are the `erhe::scene::Draw_mode_description` halves the importers and exporters use, with a value's authored flag being whether the attachment holds it locally (D32). A `Scene_root` keeps the attachments of its scene (`register_draw_mode`), which is where the renderer finds them. A `cards` mode owns generated quad geometry as well (`draw_mode_cards.hpp`): the attachment holds a `Mesh` child prim of the model prim with one primitive and one unlit, double-sided material per drawn face. A face that has an image is cut out along the image's alpha channel - the material is `alpha_test` with the cutoff 0.1 reading the alpha of the base color slot, which is the erhe form of the `opacity` connection and `opacityThreshold` `UsdImagingDrawModeAdapter` gives a card, so a card shows the silhouette its image carries and the scene behind it and stays in the opaque pass; a face with no image is the flat draw-mode color over its whole quad. The proxy carries `Item_flags::draw_mode_proxy`, which is what exempts it from its own parent's pruning (`Hierarchy::is_pruned_by_parent`), keeps it out of the extent measurement and redirects a viewport pick of it to the model prim, and `Item_flags::session_only`, which is what keeps every exporter from writing it; it is not listed in the item tree and its materials sit under it rather than in the content library, so nothing lists them either. Building it inserts a prim, so the change sites (a property write, an attach, `set_description()`) only enqueue the attachment with its `Scene_root` (`queue_draw_mode_proxy_rebuild`) and `App_scenes::rebuild_draw_mode_proxies()` builds it once per frame on the main thread, the way a display-color change is handled. An inactive prim owns no proxy: a prim its own opinion or an ancestor's pruning took out of render, pick and simulation is drawn by nothing, so a proxy of it would be geometry, materials and textures nobody sees - `rebuild_card_proxy()` builds none while the derived `Item_flags::active` bit is clear, and `handle_flag_bits_update()` queues the rebuild when the bit moves either way. This is what keeps the clones an instance puts below a pruning prim from each owning a set of cards. The card images are read through `erhe::graphics::Image_loader` and shared per scene by their file path (`Scene_root::find_card_texture`). A card texture value is a path the file spelled: one a `Usd_draw_mode` record carries is resolved by the reader, while one a variant block authors travels as the relative text a save writes back, so `resolve_card_texture_path()` resolves it against the source directory of the attachment supplying it - the importer sets that directory once per attachment, and a value read through the reference layer names the template's file, which is where the variant block that authored it lives. The attachment is also what a file's `prepend apiSchemas = ["GeomModelAPI"]` makes: `register_draw_mode_applied_schema()` registers the class with `erhe::scene::register_applied_schema_attachment` at startup, so an opinion named `Draw_mode.<property>` reaching a prim that holds no attachment makes one.
+
+- **`Draw_mode_renderer`** (`draw_mode_renderer.hpp`) -- The background `Tool` that submits those proxies per viewport: the 12 edges of the extent box for `bounds`, three axis lines from the prim's origin for `origin`, both in the prim's own space, in `draw_mode_color`, depth-tested the way the adapter draws them as geometry. `cards` submits no lines: its proxy is the quad geometry `Draw_mode` owns, which the ordinary content passes render. It iterates the rendered scene's registered attachments, so no pass scans the tree, and its line buffer is a persistent scratch cleared at the point of use.
+
+- **`Node_raytrace`** -- Handles raytrace instance creation/destruction for mesh nodes.
+
+## Scene persistence (erhe-authored glTF, phase 4)
+
+Scenes are saved as a **single glTF file**, no file dialog: a scene
+opened/loaded from a glTF file saves back to its own source file without
+confirmation (when that file is a loaded prefab source the prefab reloads,
+refreshing every instance - the former separate Save Prefab command was
+merged into Save Scene); a scene with no source file saves to
+`<scene name>.glb` under `res/editor/scenes` (Overwrite/Cancel modal when
+the file exists) and is then associated with that file. One `export_gltf()`
+call carries the render content plus physics data, prefab external-asset
+references, embedded texture sources, animations and the editor-domain
+`ERHE_*` extensions (`parsers/gltf.hpp save_scene_gltf`; `ERHE_scene` in
+`extensionsUsed` marks the file as erhe-authored). File > Load Scene is a
+`.glb`/`.gltf` file picker; the
+`load_scene_file` message handler opens an erhe-authored file as a full
+`Scene_root` (`open_scene_gltf`: not undoable, empty content library, saved
+editor state applied) and routes a foreign glTF to `Scene_open_operation`
+(undoable "open foreign glTF as new scene"). The Asset Browser branches its
+context menu on `Asset_file_gltf::extensions_used` the same way. Full
+reference (pipelines, parts map, limitations): `doc/scene_serialization.md`;
+design history: `doc/gltf_scene_roundtrip.md`.
+
+### Removed: legacy scene serialization (directory bundles, #241)
+
+The superseded `.erhescene` **directory bundle** format
+(`scene_serialization.{hpp,cpp}`: `scene.json` + `data.glb` +
+`mesh_<i>_p<p>.geogram` inside a `<name>.erhescene` directory) was removed in
+phase 5 of `doc/gltf_scene_roundtrip.md`, together with its
+scene.json-only codegen serial types under `definitions/` (only
+`gltf_source_reference.py` and `scene_settings.py` remain) and the Asset
+Browser's `Asset_file_scene` bundle handling. Existing bundles were migrated
+by loading and re-saving as `.glb`.
+
+## Public API / Integration Points
+
+- `Scene_root::register_to_editor_scenes()` -- registers with `App_scenes`
+- `Scene_root::make_browser_window()` -- creates an `Item_tree_window` for this scene
+- `Scene_root::before/update/after_physics_simulation_steps()` -- physics tick cycle
+- `Scene_view::set_world_from_control()` -- sets the control ray (pointer direction)
+- `Scene_view::get_hover()` / `get_nearest_hover()` -- query hover results
+- `Scene_views::create_viewport_scene_view()` -- factory for new viewport views
+- `Scene_views::hover_scene_view()` -- returns the currently hovered view
+
+## Dependencies
+
+- erhe::scene, erhe::physics, erhe::raytrace, erhe::geometry, erhe::primitive
+- erhe::rendergraph, erhe::imgui, erhe::commands
+- editor: App_context, App_message_bus, Content_library, Mesh_memory, Tools

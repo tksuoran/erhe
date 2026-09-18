@@ -1,5 +1,7 @@
 # Geometry graph: `transform_from_node` — transform sourced from a scene node
 
+Stability: mostly stable
+
 Status: IMPLEMENTED 2026-08-11 per this design (node type
 `transform_from_node`; MCP-verified: identity passthrough, drive-by-name,
 live re-evaluation on driver move, parameter round trip, clear, and a full

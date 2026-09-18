@@ -808,7 +808,7 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
         # erhe fork of lighttransport/LightUSD, carrying MSVC / Visual Studio
         # 2026 build fixes, Tydra behavior fixes, USDA parse fixes and writer
         # type conformance that upstream does not have yet (branch erhe-fixes;
-        # src/erhe/usd/notes.md names what each one is). Pinned to a tag on
+        # doc/erhe_usd.md names what each one is). Pinned to a tag on
         # that branch rather than to the branch name, so the build does not
         # move when the branch does. Drop the fork once an upstream release
         # carries the same fixes.

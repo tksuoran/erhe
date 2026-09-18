@@ -1,5 +1,7 @@
 # Init status display -- Phase II (deferred)
 
+Status: proposed
+
 ## Status
 
 Deferred. Phase I (`src/editor/init_status_display.{hpp,cpp}` plus the

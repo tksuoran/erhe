@@ -1,5 +1,7 @@
 # Issue #249: Node attachment management (plan)
 
+Stability: stable
+
 https://github.com/tksuoran/erhe/issues/249
 
 Goal: first-class UI for adding and removing `Node_attachment`s on a node.

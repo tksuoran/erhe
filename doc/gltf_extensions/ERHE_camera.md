@@ -1,5 +1,7 @@
 # ERHE_camera
 
+Stability: mostly stable
+
 ## Scope
 
 **Camera** extension. Optional (`extensionsUsed` only).

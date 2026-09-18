@@ -1,5 +1,7 @@
 # DDGI (Dynamic Diffuse Global Illumination) plan
 
+Stability: experimental
+
 ## Status
 
 COMPLETE on branch `ddgi` (2026-08-18); see the follow-ups at the end.
@@ -249,7 +251,7 @@ prewarm. First phase with a visible viewport result.
 (`Primitive_renderer::add_sphere`, colour from a periodic probe-data readback),
 a `Shader_debug` mode showing the DDGI term alone, an MCP `set_ddgi` tool
 mirroring `action_set_ray_trace` in `src/editor/mcp/mcp_server.cpp`, and
-`src/editor/renderers/notes.md` + this document updated.
+`doc/editor_renderers.md` + this document updated.
 
 ## Gotchas to carry into implementation
 

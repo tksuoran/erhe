@@ -403,7 +403,7 @@ auto Device_impl::end_frame() -> bool
     // CONTRACT: end_frame advances the frame index and drives per-frame
     // GPU-completion processing (frame_completed) for frames the GPU has
     // reported done. It does not submit, it does not present. See
-    // erhe_graphics/notes.md ("Frame lifecycle") and the Vulkan
+    // doc/erhe_graphics.md ("Frame lifecycle") and the Vulkan
     // implementation, whose end_frame()/update_frame_completion() does the
     // same, for the rationale.
     ERHE_VERIFY(

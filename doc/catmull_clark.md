@@ -1,5 +1,7 @@
 # Catmull-Clark subdivision: optimization notes
 
+Stability: mostly stable
+
 Status: the dominant (quadratic) cost was found and FIXED on 2026-07-02 (see
 "Measured findings" below). The follow-up performance pass was DONE the same
 day: the timing harness (see "Timing harness" at the end) plus items 11, 12,

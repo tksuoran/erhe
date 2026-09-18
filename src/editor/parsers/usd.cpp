@@ -122,7 +122,7 @@ namespace {
 
 // One image file the stage names, loaded into a GPU texture. USD material
 // inputs reference image files, and erhe::usd reads no texel of them (its
-// converter runs metadata-only, src/erhe/usd/notes.md), so the decode goes
+// converter runs metadata-only, doc/erhe_usd.md), so the decode goes
 // through erhe's Image_loader - the same one Texture_file_loader uses for
 // standalone image files - and the upload through a blocking-drain
 // Image_transfer, which is what the inline glTF import path does as well.
@@ -1166,7 +1166,7 @@ enum class Usd_tuple_form
 // A nested parameter value - a gradient object, a curve array - travels as its
 // JSON text as it stands: a string parameter crosses erhe::usd verbatim and
 // the USDA writer escapes whatever quotes and backslashes the text carries
-// (src/erhe/usd/notes.md, "Node graphs").
+// (doc/erhe_usd.md, "Node graphs").
 [[nodiscard]] auto usd_nested_json_text(const nlohmann::json& value) -> std::string
 {
     return value.dump();
@@ -3197,7 +3197,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         scene_root->set_usd_dome_lights(std::move(dome_records));
     }
     // The layers the file's content was composed from. A save writes the
-    // composed content into one layer (src/erhe/usd/notes.md), so the list is
+    // composed content into one layer (doc/erhe_usd.md), so the list is
     // kept for the line the save logs.
     scene_root->set_usd_sublayers(std::move(usd_data.sublayers));
     // The stage's time coordinates: what the animation channels were built
@@ -3735,7 +3735,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     }
     // A scene opened from a sublayered root layer is edited as the one
     // composed stage it became, so the save writes that content into this one
-    // layer and authors no `subLayers` (src/erhe/usd/notes.md; a sublayer
+    // layer and authors no `subLayers` (doc/erhe_usd.md; a sublayer
     // stack the editor could edit layer by layer is
     // doc/usd_compatibility_design.md section 5).
     const std::vector<std::string>& sublayers = scene_root.get_usd_sublayers();
@@ -3788,7 +3788,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
             const std::filesystem::path*   source  = (texture != nullptr) ? texture->get_source_path() : nullptr;
             if ((source == nullptr) || source->empty()) {
                 // A generated texture has no bytes on disk, so USD has no
-                // asset path to name (src/erhe/usd/notes.md).
+                // asset path to name (doc/erhe_usd.md).
                 log_parsers->warn(
                     "save_scene_usd '{}': material '{}' slot '{}' has no source image file - the slot is not written",
                     erhe::file::to_string(path), material->get_name(), slot.name

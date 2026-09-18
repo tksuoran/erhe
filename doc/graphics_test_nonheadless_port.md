@@ -1,5 +1,7 @@
 # Running erhe_graphics_gpu_tests on non-headless OpenGL / Metal
 
+Stability: stable
+
 ## Status
 
 - The `erhe_graphics_gpu_tests` target builds and runs on non-headless OpenGL

@@ -1,5 +1,7 @@
 # erhe::graphics GPU test coverage
 
+Stability: stable
+
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
 target builds and runs on headless Vulkan / lavapipe (41/41) and on non-headless
 OpenGL (40 passed + 1 capability skip, no failures); Metal builds but still needs

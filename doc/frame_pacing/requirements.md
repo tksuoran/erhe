@@ -1,5 +1,7 @@
 # Frame Pacer — Requirements
 
+Stability: stable
+
 Your task is to design a frame pacer for Vulkan. The interface and the algorithm shall be backend agnostic so that the pacer can be implemented on both Windows and Android; the first implementation target is desktop Windows Vulkan. This document specifies requirements for the design; implementation is out of scope for this phase.
 
 ## Scope

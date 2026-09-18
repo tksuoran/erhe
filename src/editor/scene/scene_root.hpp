@@ -104,7 +104,7 @@ enum class Scene_source_format : unsigned int {
 // (erhe::scene::Scene::ambient_light) and the prim itself is kept here so a
 // save spells it back as the `DomeLight` it was. The record is USD-only
 // state: an erhe-authored scene carries its ambient light in the scene block
-// and holds no dome (src/erhe/usd/notes.md).
+// and holds no dome (doc/erhe_usd.md).
 class Usd_dome_light_record
 {
 public:
@@ -115,7 +115,7 @@ public:
     std::string texture_file;
 };
 // The time coordinates a USD-backed scene was opened from authored
-// (src/erhe/usd/notes.md, "Time samples"). A time code becomes seconds by
+// (doc/erhe_usd.md, "Time samples"). A time code becomes seconds by
 // dividing by `time_codes_per_second`; the `*_authored` flags say which of
 // the three the file spelled, so a save writes back what the file had. The
 // record is USD-only state, held the way the dome lights are: an

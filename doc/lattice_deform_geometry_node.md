@@ -1,5 +1,7 @@
 # Lattice Deform Geometry Node — Plan
 
+Stability: mostly stable
+
 Plan for adding a lattice (free-form) deformation feature to erhe, modeled on the
 Houdini Lattice SOP (https://www.sidefx.com/docs/houdini/nodes/sop/lattice.html).
 

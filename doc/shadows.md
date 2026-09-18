@@ -1,5 +1,7 @@
 # Shadow Mapping
 
+Stability: stable
+
 All three light types now cast shadows. Directional and spot lights use 2D
 depth shadow maps (a depth `texture_2d_array`); point lights use an
 omnidirectional cube-map shadow on a separate path. This document covers the

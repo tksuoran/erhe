@@ -1,5 +1,7 @@
 # Plan: scene-level acceleration for the `bvh` raytrace backend
 
+Stability: mostly stable
+
 ## Problem
 
 `src/erhe/raytrace/erhe_raytrace/bvh/bvh_scene.cpp` has no acceleration structure.

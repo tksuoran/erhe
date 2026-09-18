@@ -1,5 +1,7 @@
 # ERHE_brushes
 
+Stability: mostly stable
+
 ## Scope
 
 **Asset-root** extension (the top-level `extensions` object). Optional

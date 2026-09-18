@@ -1,5 +1,7 @@
 # Editor command scripts
 
+Stability: stable
+
 The editor reads `config/editor/commands.json` at startup and invokes a list
 of named `erhe::commands::Command` instances once, in order, before the main
 loop begins. The same `Command` objects also back the corresponding UI

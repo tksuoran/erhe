@@ -1,5 +1,7 @@
 # Intermittent main-loop hang (render thread CPU spin)
 
+Stability: experimental
+
 ## ROOT CAUSE IDENTIFIED (2026-06-02): Geogram FMA contraction on Android/clang
 
 **The hang is Geogram's 3D Delaunay `locate_inexact()` point-location walk

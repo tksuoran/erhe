@@ -1,5 +1,7 @@
 # ERHE_geometry
 
+Stability: mostly stable
+
 ## Contributors / status
 
 erhe project. Draft vendor extension.

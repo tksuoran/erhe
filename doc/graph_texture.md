@@ -1,5 +1,7 @@
 # Graph Texture asset + Material texture-source (Phase A)
 
+Stability: mostly stable
+
 Make a texture node graph a first-class, selectable, serializable **asset**
 (`Graph_texture`) that lives in a scene's Content library, and let a `Material`
 source a texture slot from either a plain `erhe::graphics::Texture` **or** a

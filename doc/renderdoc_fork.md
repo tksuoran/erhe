@@ -1,5 +1,7 @@
 # Debugging erhe with the RenderDoc fork MCP server
 
+Stability: mostly stable
+
 This documents a **tested, end-to-end GPU debugging workflow** for the erhe
 editor on Windows/Vulkan that combines three live tools driven from Claude Code:
 

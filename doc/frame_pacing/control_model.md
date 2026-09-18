@@ -1,5 +1,7 @@
 # Frame Pacer — Control-Theory Model
 
+Stability: stable
+
 This document is deliverable 1 of the planning phase defined in [frame_pacing.md](requirements.md): a model of the frame pacing problem in the framework of control theory. It defines the plant, signals, disturbances, and controller structure, states the stability and convergence properties the algorithm design must have, and lists the claims that must be verified in simulation before the plan can be approved. The algorithm design itself (deliverable 2) builds on this model but is a separate document.
 
 ## 1. System overview

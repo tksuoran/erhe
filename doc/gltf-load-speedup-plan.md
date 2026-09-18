@@ -1,5 +1,7 @@
 # glTF load/import speedup plan
 
+Stability: stable
+
 **Superseded in part.** This plan made the *blocking* load faster by deferring
 work to background tasks. Loading is now also *asynchronous* - the read, scan,
 parse and `Buffer_mesh` build no longer run on the main thread at all - see

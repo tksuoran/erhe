@@ -1,5 +1,7 @@
 # Metal headless configuration
 
+Stability: experimental
+
 The Metal backend runs without a window (`ERHE_WINDOW_LIBRARY=none`) the
 same way the Vulkan backend does: an emulated swapchain of offscreen
 textures stands in for the `CAMetalLayer` drawables, the full render

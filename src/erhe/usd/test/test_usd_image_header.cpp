@@ -1,5 +1,5 @@
 // The image header probe behind the UsdPreviewSurface `sourceColorSpace =
-// auto` rule (src/erhe/usd/notes.md, Materials): sRGB when the image is
+// auto` rule (doc/erhe_usd.md, Materials): sRGB when the image is
 // 8-bit with 3 or 4 components, data otherwise, read off the file header
 // with no decode.
 

@@ -1,5 +1,7 @@
 # Editor Architecture Improvements
 
+Status: proposed
+
 Prioritized list of improvements identified from a review of `src/editor/` (~311 files, ~57K lines).
 
 ## Suggestioin from Claude under review

@@ -39,7 +39,7 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
     // Render proxies (lightmap piece meshes) are never raytrace-pickable:
     // mask 0 = unhittable, so rays pass through to the proxy_hidden source
     // mesh they stand in for (same pattern as bone proxies outside bone
-    // mode; see tools/notes.md).
+    // mode; see doc/editor_tools.md).
     if ((flags & Item_flags::render_proxy) != 0) {
         return 0;
     }

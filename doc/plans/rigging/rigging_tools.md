@@ -1,5 +1,7 @@
 # Rigging Tools — Master Plan
 
+Status: proposed
+
 Status: draft, awaiting review.
 Companion document: `fabrik-ik-requirements.md` (detailed requirements for Phase 1).
 

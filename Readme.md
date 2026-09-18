@@ -134,7 +134,7 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 
 ## Libraries
 
-erhe is organized as a set of independent libraries under `src/erhe/`. Each has a `notes.md` with details on purpose, API, and design.
+erhe is organized as a set of independent libraries under `src/erhe/`. Each has a `doc/erhe_<name>.md` document with details on purpose, API, and design; `doc/README.md` indexes them.
 
 | Library | Description |
 | :--- | :--- |

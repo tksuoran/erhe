@@ -1,5 +1,7 @@
 # Property system (WPF dependency-property port)
 
+Stability: stable
+
 Status: implemented. The library (`erhe::property`), the `Item_base`
 integration, the editor operation / generic rows / MCP tools / startup
 command, the `Material`, `Node`, `Light` and `Camera` migrations, observer
@@ -13,7 +15,7 @@ holds the remaining work.
 Document roles. This document is the design record: goal, requirements,
 the design decisions with their WPF mapping and rationale, the item
 migrations, the editor / MCP / glTF integration, future work and the
-verification workflow. `src/erhe/property/notes.md` is the library
+verification workflow. `doc/erhe_property.md` is the library
 reference: the current types and semantics of `erhe::property` as one
 type-by-type summary, kept in sync with the code and free of rationale.
 `doc/property_inventory.md` is the status table: every registered
@@ -1384,7 +1386,7 @@ stops - puts every target back on it.
 `Xformable::authored_parent_from_node_transform()` is what the USD and glTF
 writers read, and `Xformable::clear_animated_local_transform()` restores the
 three components together. The rules the write paths follow are
-`src/erhe/scene/notes.md` "Animation playback".
+`doc/erhe_scene.md` "Animation playback".
 
 R14 holds by construction: an animated component write only stores, so a
 playing node still updates its world transform and notifies once per frame,

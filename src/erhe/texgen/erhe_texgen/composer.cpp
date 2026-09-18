@@ -154,7 +154,7 @@ namespace {
 // the SPIR-V cache de-duplicates unchanged sources, and this keeps the codegen
 // pure string logic (no std140 array-uniform layout, no per-frame upload path).
 // The uniform-array live-update path (value edits that skip recompile) is a
-// future optimization; see erhe_texgen notes.md.
+// future optimization; see doc/erhe_texgen.md.
 //
 // GLSL ported from Material Maker's MMGradient.get_shader / MMCurve.get_shader
 // (types/gradient.gd, types/curve.gd, MIT license), with pv()/pc()/p_*_x baked

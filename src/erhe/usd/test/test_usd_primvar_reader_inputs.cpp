@@ -2,7 +2,7 @@
 // `displayColor` / `displayOpacity` is the mesh's vertex colors, every other
 // primvar is a warning and the input keeps its own value, and the rest of the
 // material converts either way (doc/usd_compatibility.md, "Materials";
-// src/erhe/usd/notes.md, "UsdPreviewSurface fallbacks and channel outputs").
+// doc/erhe_usd.md, "UsdPreviewSurface fallbacks and channel outputs").
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"

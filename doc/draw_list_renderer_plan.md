@@ -1,5 +1,7 @@
 # Draw list renderer — implementation plan
 
+Stability: stable
+
 Companion to `doc/draw_list_renderer.md` (the "req doc"; requirement
 IDs below refer to it). Status: DONE 2026-08-15 — all six phases landed
 (results: `doc/draw_list_renderer_results.md`). Written 2026-08-15 after the

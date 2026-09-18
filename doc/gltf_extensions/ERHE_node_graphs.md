@@ -1,5 +1,7 @@
 # ERHE_node_graphs
 
+Stability: mostly stable
+
 ## Scope
 
 **Asset-root** extension (the top-level `extensions` object). Optional

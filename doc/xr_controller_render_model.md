@@ -1,5 +1,7 @@
 # XR controller render models (replacing the torus placeholder)
 
+Stability: mostly stable
+
 Research notes, 2026-08-13. Goal: show the real controller model in OpenXR
 sessions instead of the torus placeholder created in
 `src/editor/xr/controller_visualization.cpp`. Torus remains the fallback.

@@ -1,5 +1,7 @@
 # OpenXR multiview rendering on Quest 3 (Vulkan)
 
+Stability: stable
+
 How erhe drives single-pass stereo rendering through Vulkan multiview
 when running OpenXR on Quest 3.
 

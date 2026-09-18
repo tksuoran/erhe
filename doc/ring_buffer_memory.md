@@ -1,5 +1,7 @@
 # Ring buffer memory plan: bounding growth during scene loads
 
+Stability: mostly stable
+
 Status: IMPLEMENTED 2026-08-16 (compile pending user verify). What was
 built deviates from the phase-2 sketch below in one deliberate way:
 

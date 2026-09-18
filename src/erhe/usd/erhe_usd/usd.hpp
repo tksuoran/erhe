@@ -129,7 +129,7 @@ constexpr std::string_view c_geometry_graph_node_id_prefix {"erhe:geometry:"};
 // USD's `st` primvar has its origin at the bottom-left of the image; erhe's
 // texture coordinates follow glTF, whose origin is the top-left. The two
 // spaces differ by `v' = 1 - v` alone, so one involution converts either way
-// (src/erhe/usd/notes.md, "Texture coordinates").
+// (doc/erhe_usd.md, "Texture coordinates").
 [[nodiscard]] auto flip_texcoord_v(const glm::vec2& uv) -> glm::vec2;
 
 // A `UsdTransform2d` shader: `st_out = R(rotation) * (st_in * scale) +
@@ -157,7 +157,7 @@ public:
 // The two transforms across the `v` flip, so that sampling composes to the
 // same texel: the erhe transform applies to the flipped texcoord the importer
 // stores, the USD one to the `st` the file authors. The formula is stated
-// once in src/erhe/usd/notes.md, "Texture coordinates".
+// once in doc/erhe_usd.md, "Texture coordinates".
 [[nodiscard]] auto to_erhe_uv_transform  (const Usd_uv_transform_2d& usd)  -> Erhe_uv_transform;
 [[nodiscard]] auto to_usd_uv_transform_2d(const Erhe_uv_transform&   erhe) -> Usd_uv_transform_2d;
 
@@ -676,7 +676,7 @@ public:
 // One `DomeLight` prim the file authors. erhe has no environment map, so a
 // dome is imported as the scene's ambient light
 // (`color * intensity * 2^exposure`, see Usd_data::ambient_light) and the
-// prim is recorded here so a save spells it back (src/erhe/usd/notes.md).
+// prim is recorded here so a save spells it back (doc/erhe_usd.md).
 class Usd_dome_light final
 {
 public:
@@ -881,7 +881,7 @@ public:
     // spells them (strongest first). Their content is part of the composed
     // stage this load converted, so the list is what a caller needs to say
     // where the content came from - a save writes the composed content into
-    // one layer (src/erhe/usd/notes.md).
+    // one layer (doc/erhe_usd.md).
     std::vector<std::string> sublayers;
 
     // The `DomeLight` prims the file authors, in the order the conversion
@@ -894,7 +894,7 @@ public:
     // The animation the file's time-sampled `xformOp:*` attributes become:
     // one Animation named after the file, holding one channel per sampled op
     // of every prim whose stack the channels can express
-    // (src/erhe/usd/notes.md, "Time samples"). Empty when the file samples no
+    // (doc/erhe_usd.md, "Time samples"). Empty when the file samples no
     // transform. It is a library item like the animations of a glTF file, and
     // the caller attaches it to the content library the same way.
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;

@@ -1,5 +1,7 @@
 # Draft GitHub issue for BrunoLevy/geogram: concurrent use of geogram algorithms from multiple application threads
 
+Stability: mostly stable
+
 Status: DRAFT, not yet filed. Prepared 2026-07-12 from a live hang observed in
 the erhe editor (Debug build, geogram at the erhe fork pin, base upstream
 around `de1b4e61`). Sibling context: https://github.com/BrunoLevy/geogram/issues/367

@@ -441,7 +441,7 @@ template <typename T>
 }
 
 // The non-xformOp attributes erhe carries as animation channels
-// (src/erhe/usd/notes.md, "Time samples"): every one of them is an attribute
+// (doc/erhe_usd.md, "Time samples"): every one of them is an attribute
 // the static conversion already reads one erhe property from, so the samples
 // and the pose the import gives the scene say the same thing.
 constexpr std::array<std::string_view, 7> c_sampled_attribute_names{
@@ -455,7 +455,7 @@ constexpr std::array<std::string_view, 7> c_sampled_attribute_names{
 };
 
 // The attributes of c_sampled_attribute_names a `Ts` spline is carried on
-// (src/erhe/usd/notes.md, "Time samples"): a spline is a scalar value source
+// (doc/erhe_usd.md, "Time samples"): a spline is a scalar value source
 // in USD, so the color-valued and token-valued attributes of the table cannot
 // author one.
 constexpr std::array<std::string_view, 4> c_spline_attribute_names{
@@ -852,7 +852,7 @@ public:
         // Everything the stage evaluates is evaluated at one time code, so
         // that the transform Tydra composes for a prim and the authored
         // xformOp stack the M8 reader reads say the same thing
-        // (src/erhe/usd/notes.md, "Time samples"). A stage that samples
+        // (doc/erhe_usd.md, "Time samples"). A stage that samples
         // nothing keeps USD's default time code, which is the only value an
         // attribute without samples has.
         env.timecode = m_has_time_samples
@@ -1063,12 +1063,12 @@ private:
 
 
     // The file's time-sampled xformOps as one Animation
-    // (src/erhe/usd/notes.md, "Time samples"). One channel per sampled op of
+    // (doc/erhe_usd.md, "Time samples"). One channel per sampled op of
     // every prim whose stack the channels can express; a stack they cannot is
     // named in one warning and keeps the transform the import gave it, which
     // is its pose at the evaluation time code.
     // The file's one animation, made when the first channel of it is
-    // (src/erhe/usd/notes.md, "Time samples"): a file's sampled `xformOp`s
+    // (doc/erhe_usd.md, "Time samples"): a file's sampled `xformOp`s
     // and its `SkelAnimation` joint channels are channels of the same
     // animation, so playing it poses the whole file.
     void ensure_animation(std::shared_ptr<erhe::scene::Animation>& animation)
@@ -1264,7 +1264,7 @@ private:
     }
 
     // One `Ts` spline of one prim as a channel of the file's animation
-    // (src/erhe/usd/notes.md, "Time samples"). A spline is a scalar value
+    // (doc/erhe_usd.md, "Time samples"). A spline is a scalar value
     // source in USD, so only the scalar attributes of the table carry one;
     // its knots become the sampler's keys, keyed in seconds the way the time
     // samples are, and its tangent slopes - value units per time code -
@@ -1457,7 +1457,7 @@ private:
     }
 
     // One time-sampled attribute of one prim as a channel of the file's
-    // animation (src/erhe/usd/notes.md, "Time samples"). The samples are read
+    // animation (doc/erhe_usd.md, "Time samples"). The samples are read
     // raw off the composed layer's prim spec - LightUSD evaluates an
     // attribute that carries both a default and samples at its default,
     // whatever time code it is asked for - and are keyed in seconds, the
@@ -1531,7 +1531,7 @@ private:
         // USD interpolates the time samples of a floating-point attribute
         // linearly and authors no per-attribute interpolation; a value with
         // nothing between two keys - `visibility` - holds the previous key
-        // whatever the sampler says (src/erhe/scene/notes.md, "Animation
+        // whatever the sampler says (doc/erhe_scene.md, "Animation
         // playback").
         erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
         sampler.set(std::move(timestamps), std::move(values));
@@ -1621,7 +1621,7 @@ private:
     }
 
     // One warning per prim naming each attribute that authors a `Ts` spline
-    // erhe does not carry (src/erhe/usd/notes.md, "Time samples"): the
+    // erhe does not carry (doc/erhe_usd.md, "Time samples"): the
     // attribute keeps whatever `default` or `timeSamples` it also authors, and
     // the spline itself is read by nothing.
     void warn_about_uncarried_splines(const lightusd::PrimSpec& spec, const std::string& parent_path)
@@ -2344,7 +2344,7 @@ private:
                 // render scene composed: LightUSD evaluates an op that carries
                 // both a `default` and time samples at its default, while USD
                 // says the samples win at any time code the samples reach
-                // (src/erhe/usd/notes.md, "Time samples").
+                // (doc/erhe_usd.md, "Time samples").
                 if (
                     (composed_transform == Composed_transform::unevaluated) ||
                     stack.has_time_samples() ||
@@ -3157,7 +3157,7 @@ private:
         material.set_slot_sampler(slot, sampler_state);
         // The slot transform applies to the flipped texcoord the importer
         // stores, so a UsdTransform2d is converted through the flip
-        // (src/erhe/usd/notes.md, "Texture coordinates"). The USD identity
+        // (doc/erhe_usd.md, "Texture coordinates"). The USD identity
         // maps onto the erhe identity, so a texture without one keeps the
         // slot's defaults.
         if (uv_texture.has_transform2d) {
@@ -3757,7 +3757,7 @@ private:
             std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(create_info);
             material->set_source_path(m_arguments.path);
             // A resource prim is shown in the UI and is not scene content
-            // (src/editor/content_library/notes.md), which is what keeps the
+            // (doc/editor_content_library.md), which is what keeps the
             // glTF node writer from writing it as a node.
             material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             m_material_by_path[usd_material.abs_path] = material_index;
@@ -4013,7 +4013,7 @@ private:
                 attribute_element_index(texcoord, usd_vertex, usd_facet, usd_corner)
             );
             // USD's `st` origin is the image's bottom-left corner, erhe's the
-            // top-left one (src/erhe/usd/notes.md, "Texture coordinates").
+            // top-left one (doc/erhe_usd.md, "Texture coordinates").
             const glm::vec2 flipped = flip_texcoord_v(glm::vec2{uv.x, uv.y});
             attributes.corner_texcoord(slot).set(corner, GEO::vec2f{flipped.x, flipped.y});
         }
@@ -5358,7 +5358,7 @@ private:
     //
     // Time-sampled arrays, `velocities` and per-instance primvars are not
     // read: the arrays are sampled at the default time
-    // (src/erhe/usd/notes.md, PointInstancer).
+    // (doc/erhe_usd.md, PointInstancer).
     void convert_point_instancer(const Tydra_node& usd_node, const std::shared_ptr<erhe::scene::Node>& node)
     {
         const lightusd::Prim*               prim      = find_prim(usd_node.abs_path);

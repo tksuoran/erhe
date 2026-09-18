@@ -1,5 +1,7 @@
 # Mesh_memory
 
+Stability: stable
+
 `erhe::scene_renderer::Mesh_memory` owns the GPU vertex and index storage that
 backs every `erhe::primitive::Buffer_mesh` in the editor. Pools grow lazily as
 allocations come in; nothing is reserved up front.

@@ -1,5 +1,7 @@
 # Fix plan: SDF Mesh graph product is not pickable (missing raytrace)
 
+Stability: stable
+
 RESOLVED 2026-08-12, commit 3b6dd9af. Root cause was none of H1-H4 and not
 SDF-specific: Mesh::update_rt_primitives() rebuilt Raytrace_primitive
 instances at the identity transform and uncommitted; only a node MOVE

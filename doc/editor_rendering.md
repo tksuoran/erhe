@@ -1,5 +1,7 @@
 # Editor Rendering
 
+Stability: stable
+
 > This document was mostly written by Claude and may contain inaccuracies.
 
 Lit material drawing goes through `standard.{vert,frag}` as an

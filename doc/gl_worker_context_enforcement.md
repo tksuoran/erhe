@@ -1,5 +1,7 @@
 # Enforcing the GL worker-context blocking invariant
 
+Stability: mostly stable
+
 Status: **implemented** (2026-09-01). A, B, D and E are all in the tree; see
 "Implementation" at the end for where each lives, the decisions taken on the
 "Before landing" items, and the runtime verification. The body below is kept

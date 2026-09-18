@@ -1,5 +1,7 @@
 # Asynchronous asset loading
 
+Stability: mostly stable
+
 How a glTF file gets from disk into a scene without blocking the main loop.
 Code lives in `src/editor/assets/` (`asset_load_task`, `asset_load_tick_context`,
 `gltf_load_task`, `asset_manager`), with supporting changes in

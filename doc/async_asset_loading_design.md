@@ -1,5 +1,7 @@
 # Asynchronous asset loading plan
 
+Stability: mostly stable
+
 Goal: a glTF load never blocks the main loop. Loading becomes a task owned by
 `Asset_manager`, advanced a bounded amount every frame, so the editor keeps
 ticking, stays interactive and keeps presenting frames while a scene streams

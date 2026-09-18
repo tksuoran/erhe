@@ -1,5 +1,7 @@
 # Texture graphs in a USD file (USD plan E4c)
 
+Status: proposed
+
 The plan step `doc/usd_compatibility_design.md` E4c: an erhe texture graph
 (`doc/texture_graph.md`) rides a USD file as the `UsdShade` network
 it is, so a USD-backed scene keeps its graphs across a save and a
@@ -154,7 +156,7 @@ material slots, and leave the graph dirty for the next frame's
 
 ## 3. Phases
 
-Phase 1 holds (`src/erhe/usd/notes.md`, "Node graphs") and so does
+Phase 1 holds (`doc/erhe_usd.md`, "Node graphs") and so does
 phase 2. Two facts phase 1 settled that section 2 did not foresee: the
 parameter travels as a (USD type, USD literal text) pair chosen by the
 editor, since the editor's nodes serialize parameters as JSON rather than
@@ -176,7 +178,7 @@ quoted literal, so a nested value travels as its JSON text as it stands and
    save and open paths, MCP `get_scene_node_graphs` reporting nodes and
    links for the round-trip script, the `usd_snapshot` `node_graphs`
    block and a `usd_round_trip_leg` over the fixture, docs
-   (`src/erhe/usd/notes.md`, `doc/usd_compatibility.md` rows,
+   (`doc/erhe_usd.md`, `doc/usd_compatibility.md` rows,
    `doc/scene_serialization.md`).
 
 Verification of the step: the round-trip leg green, and a headless

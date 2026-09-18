@@ -1,5 +1,7 @@
 # Issue #251 - implementation notes / inventory (Phase 0)
 
+Stability: experimental
+
 Companion to `doc/plans/node_editor_native_rendering.md`. Captures the Phase 0
 inventory so later sessions do not re-derive it. All line numbers are approximate
 (as of branch `crease`, 2026-07-04) and drift as edits land - use them as a

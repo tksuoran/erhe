@@ -1,5 +1,7 @@
 # Agent orchestration harness
 
+Stability: stable
+
 How a multi-step plan (the USD compatibility plan, a migration series, a
 sweep) is worked when one session orchestrates and delegates the coding.
 The point is to keep the orchestrator's context small: it holds the plan,
@@ -60,7 +62,7 @@ review to close.
    skill). The agent runs all of it and reports outcomes verbatim from
    the tool output.
 4. Housekeeping the step needs: re-run `scripts\configure_ninja_win_clang.bat`
-   after adding a source file; update the owning `notes.md` or `doc/`
+   after adding a source file; update the owning document under `doc/`
    record; the memory bank is the orchestrator's job.
 5. The report format (next section) and the rule that the agent commits
    nothing.

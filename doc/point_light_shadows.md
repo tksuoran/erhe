@@ -1,5 +1,7 @@
 # Cube-map point-light shadows
 
+Stability: stable
+
 Status: **FIXED** (2026-06-22). The texture-coordinate bug was a per-face
 **vertical (t-axis) flip**: the caster stored every cube face vertically
 mirrored relative to what `samplerCubeArray` reads back, so point shadows were

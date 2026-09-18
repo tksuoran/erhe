@@ -1,5 +1,7 @@
 # `ERHE_*_properties` glTF extensions - implementation plan
 
+Status: in progress
+
 Status: INCOMPLETE DRAFT. Steps 0 and 1 are implemented (they are what
 `doc/usd_compatibility_design.md` M4 needed); steps 2 to 5 - the
 `ERHE_*_properties` extensions themselves - are not, and the plan is not
@@ -173,7 +175,7 @@ round trip is exact; elision drops a default-white color).
   light-temperature gotcha in 4.8 with the new exporter behavior (external
   readers lose the tint); note default-elision + the legacy caveat and the
   `native_gltf` flag.
-- `src/erhe/gltf/notes.md`: add the `ERHE_*_properties` extensions to the
+- `doc/erhe_gltf.md`: add the `ERHE_*_properties` extensions to the
   extension list (:64), note the dropped members and the legacy read path.
 
 ### 5. Verification (once, at the end)

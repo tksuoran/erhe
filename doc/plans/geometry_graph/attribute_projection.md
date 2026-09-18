@@ -1,5 +1,7 @@
 # Geometry graph: attribute projection node (design research)
 
+Status: proposed
+
 Research 2026-08-10, motivated by creation 18 (fish): a geometry-graph node
 that projects a selected attribute from a SOURCE mesh onto a TARGET mesh -
 output is the target with that one attribute channel replaced by projected

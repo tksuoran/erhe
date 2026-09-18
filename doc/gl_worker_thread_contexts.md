@@ -1,5 +1,7 @@
 # OpenGL worker-thread GL contexts
 
+Stability: stable
+
 Live document for the GL worker-context subsystem: requirements, design,
 verification, future work, traps. The subsystem is implemented and in use:
 glTF scenes load on the OpenGL build, the log confirms "Created 4 GL worker

@@ -1,5 +1,7 @@
 # Lightmap texture viewer - implementation plan
 
+Stability: stable
+
 Status: IMPLEMENTED 2026-08-02 (all phases including the phase-4 viewport
 hover sync) as src/editor/windows/lightmap_texture_window.{hpp,cpp}
 ("Lightmap Texture", developer windows menu). Colors per user direction:

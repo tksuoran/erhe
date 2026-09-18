@@ -1,5 +1,7 @@
 # ERHE_node
 
+Stability: mostly stable
+
 ## Scope
 
 **Node** extension. Optional (`extensionsUsed` only).

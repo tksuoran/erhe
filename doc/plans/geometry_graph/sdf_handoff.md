@@ -1,11 +1,13 @@
 # Handoff: SDF / OpenVDB work - session 2026-08-12
 
+Status: in progress
+
 Read this first when continuing SDF work. Companion docs:
 - doc/plans/geometry_graph/openvdb_sdf.md - the phased plan; Phases 1-3 DONE, the
   Phase 3 section records the as-implemented design.
 - doc/sdf-mesh-picking-fix-plan.md - resolved picking bug + the
   raycast-vs-closest_point isolation technique.
-- src/erhe/voxel/notes.md - erhe_voxel library notes (purpose, API,
+- doc/erhe_voxel.md - erhe_voxel library notes (purpose, API,
   implementation gotchas).
 
 ## State: everything below is DONE, verified, committed on main (unpushed)

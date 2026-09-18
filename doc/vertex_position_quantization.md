@@ -1,5 +1,7 @@
 # Vertex position quantization
 
+Stability: experimental
+
 Status: all phases (1-7) implemented and verified; quantization survives ray
 tracing, and is confirmed working on Quest 3 (see Implementation notes at the
 end -- the phase 5 fallback decision is SUPERSEDED)

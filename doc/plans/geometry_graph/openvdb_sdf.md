@@ -1,5 +1,7 @@
 # OpenVDB integration plan
 
+Status: in progress
+
 Goal: SDF (signed distance field) support in erhe geometry-graph nodes -- SDF
 primitives, voxel booleans/offsets/smoothing, mesh<->SDF conversion -- built on
 OpenVDB, introduced incrementally behind a CMake option.

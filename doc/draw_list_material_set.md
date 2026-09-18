@@ -1,5 +1,7 @@
 # Draw list material set (material buffer + texture heap owned by Material_set)
 
+Stability: stable
+
 Planning context - the reported bug and its root cause, the second motivation,
 and the review and citation state - lives in
 `doc/draw_list_material_set_context.md`, **which also owns the status of this

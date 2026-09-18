@@ -1,5 +1,7 @@
 # Lightmap baking plan
 
+Stability: experimental
+
 Status: IN PROGRESS on branch lightmap-baking (started 2026-08-01).
 
 ## Status (2026-08-01)

@@ -1,5 +1,7 @@
 # Procedural Texture Graph for erhe Editor (issue #199)
 
+Stability: mostly stable
+
 Analysis of Material Maker's architecture, assessment of erhe's existing
 infrastructure (geometry graph, runtime shader compilation, render-to-texture),
 and a phased implementation plan for a procedural texture node graph in the

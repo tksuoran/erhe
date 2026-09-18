@@ -1,5 +1,7 @@
 # ERHE_scene
 
+Stability: mostly stable
+
 ## Scope
 
 **Scene** extension. Optional (`extensionsUsed` only).

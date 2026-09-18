@@ -1,5 +1,7 @@
 # ERHE_material
 
+Stability: mostly stable
+
 ## Scope
 
 **Material** extension. Optional (`extensionsUsed` only).

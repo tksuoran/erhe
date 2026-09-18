@@ -1,5 +1,7 @@
 # Meta Quest 3 Support for erhe editor
 
+Stability: mostly stable
+
 ## Context
 
 erhe already targets Android via the pipeline described in
