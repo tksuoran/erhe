@@ -3,7 +3,7 @@
 
 Opens every entry asset of a local clone of github.com/usd-wg/assets in a
 headless erhe editor, records what the editor made of it, and writes
-doc/usd-wg-assets.md plus logs/usd_wg_survey/summary.json.
+doc/agents/usd_wg_assets.md plus logs/usd_wg_survey/summary.json.
 
 Run it from the repo root, with the clone's root passed as --root or in the
 ERHE_USD_WG_ASSETS environment variable:
@@ -48,7 +48,7 @@ Verdicts
 `works`, `works, gap: <name>`, `fails: <cause>`, `crash`. The script assigns
 a provisional verdict from the counts, the log and the screenshot; the doc
 says which rows a human then corrected by eye. Those by-eye verdicts live in
-doc/usd-wg-assets-eye.json, which every run and every --from-summary reads and
+doc/agents/usd_wg_assets_eye.json, which every run and every --from-summary reads and
 only --eye-note writes:
 
     py -3 scripts/usd_wg_asset_survey.py --eye-note <entry path> "<what the
@@ -66,7 +66,7 @@ are repeatable, so `--only test_assets --exclude full_assets` or
 
 Expected results (--expected)
 -----------------------------
-doc/usd-wg-assets-expected.json is hand-edited and committed. Each item
+doc/agents/usd_wg_assets_expected.json is hand-edited and committed. Each item
 names an entry path, the `diagnostics` it reports by design (regular
 expressions matched against the normalized message and the example line),
 the `gaps` the counts and the frame raise by design (regular expressions
@@ -1329,7 +1329,7 @@ def gather_gaps(records: list) -> list:
 
     def add(key: str, level: str, asset: str, example: str) -> None:
         # A cause the entry's expected results name (the `gaps` patterns of
-        # doc/usd-wg-assets-expected.json) is by design, not a gap.
+        # doc/agents/usd_wg_assets_expected.json) is by design, not a gap.
         if any(pattern.search(key) for pattern in expected_gap_patterns):
             return
         slot = causes.setdefault(key, {"cause": key, "level": level, "assets": set(), "example": example})
@@ -1392,7 +1392,7 @@ def gather_gaps(records: list) -> list:
 # Expected results: issues an entry is known to report by design
 # --------------------------------------------------------------------------
 
-DEFAULT_EXPECTED = pathlib.Path("doc/usd-wg-assets-expected.json")
+DEFAULT_EXPECTED = pathlib.Path("doc/agents/usd_wg_assets_expected.json")
 
 
 def load_expected_results(path: pathlib.Path) -> dict:
@@ -1474,7 +1474,7 @@ def apply_expected_results_to_summary(summary: dict, expected: dict) -> int:
 # By-eye verdicts and summary merging
 # --------------------------------------------------------------------------
 
-DEFAULT_EYE = pathlib.Path("doc/usd-wg-assets-eye.json")
+DEFAULT_EYE = pathlib.Path("doc/agents/usd_wg_assets_eye.json")
 
 
 def load_eye_notes(path: pathlib.Path) -> dict:
@@ -1749,10 +1749,10 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("A run restricted to some entries (`--only`, `--exclude`, `--limit`) surveys those and")
     out.append("keeps every other entry's record, so the document always states the whole")
     out.append("survey; each record carries the date it was surveyed on. The by-eye")
-    out.append("verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which")
+    out.append("verdicts of the next section come from `doc/agents/usd_wg_assets_eye.json`, which")
     out.append("a run reads and never writes; `--eye-note <entry> \"<what the capture")
     out.append("shows>\" [--eye-gap \"<cause>\"]` is how one is recorded. The expected")
-    out.append("results of the section after it come from `doc/usd-wg-assets-expected.json`,")
+    out.append("results of the section after it come from `doc/agents/usd_wg_assets_expected.json`,")
     out.append("hand-edited: the diagnostics an entry reports by design (and, where stated,")
     out.append("its by-eye appearance gap) do not count against its verdict.")
     out.append("Screenshot paths are under `logs/`, which is gitignored: the column is a")
@@ -1845,7 +1845,7 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
         out.append("## Expected results")
         out.append("")
         out.append("These entries report issues by design; the issues named in")
-        out.append("`doc/usd-wg-assets-expected.json` are excluded from their verdict and from")
+        out.append("`doc/agents/usd_wg_assets_expected.json` are excluded from their verdict and from")
         out.append("the Gaps section. The count is how many logged lines the expectation took.")
         out.append("")
         out.append("| Entry file | Expected | Why |")
@@ -1976,7 +1976,7 @@ def sort_last(entries: list, fragments: list) -> list:
 
 
 DEFAULT_SHOTS = pathlib.Path("logs/usd_wg_survey")
-DEFAULT_DOC = pathlib.Path("doc/usd-wg-assets.md")
+DEFAULT_DOC = pathlib.Path("doc/agents/usd_wg_assets.md")
 DEFAULT_TEST_DB = DEFAULT_SHOTS / "test_database.json"
 
 

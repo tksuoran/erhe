@@ -42,4 +42,4 @@ cannot reach:
   from the ImGui render path, so the warning is verified interactively.
 
 Each needs an explicit-argument MCP hook of the kind `acquire_asset` and
-`debug_set_item_tree_hover` already are (doc/mcp_api_guidelines.md).
+`debug_set_item_tree_hover` already are (doc/agents/mcp_api_guidelines.md).

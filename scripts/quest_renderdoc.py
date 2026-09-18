@@ -160,7 +160,7 @@ def preflight(require_device_package: bool = True) -> str:
     # WrappedVulkan::vkBindImageMemory during xrCreateSwapchain, because Meta's XR
     # runtime creates swapchain images the layer never saw created. RenderDoc's
     # launcher injects differently and does not hit this, so these settings must
-    # be clear. See doc/quest_renderdoc_capture.md.
+    # be clear. See doc/agents/quest_renderdoc_capture.md.
     leftovers = [k for k in GPU_DEBUG_SETTINGS if adb("shell", "settings", "get", "global", k) not in ("null", "")]
     if leftovers:
         problems.append(
@@ -274,7 +274,7 @@ def cmd_capture(args: argparse.Namespace) -> int:
         sys.exit(
             "Capture failed - no new .rdc appeared on the device.\n"
             "If the app died during capture, suspect device memory: the editor, the RenderDoc\n"
-            "capture layer and the .rdc must all fit at once (see doc/quest_renderdoc_capture.md)."
+            "capture layer and the .rdc must all fit at once (see doc/agents/quest_renderdoc_capture.md)."
         )
 
     # Whether renderdoccmd managed its own copy or not, pull by the name that is

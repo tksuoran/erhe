@@ -23,10 +23,10 @@ docstring states which files of a folder count as entry assets.
 A run restricted to some entries (`--only`, `--exclude`, `--limit`) surveys those and
 keeps every other entry's record, so the document always states the whole
 survey; each record carries the date it was surveyed on. The by-eye
-verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which
+verdicts of the next section come from `doc/agents/usd_wg_assets_eye.json`, which
 a run reads and never writes; `--eye-note <entry> "<what the capture
 shows>" [--eye-gap "<cause>"]` is how one is recorded. The expected
-results of the section after it come from `doc/usd-wg-assets-expected.json`,
+results of the section after it come from `doc/agents/usd_wg_assets_expected.json`,
 hand-edited: the diagnostics an entry reports by design (and, where stated,
 its by-eye appearance gap) do not count against its verdict.
 Screenshot paths are under `logs/`, which is gitignored: the column is a
@@ -109,7 +109,7 @@ log and the empty-viewport test decided.
 ## Expected results
 
 These entries report issues by design; the issues named in
-`doc/usd-wg-assets-expected.json` are excluded from their verdict and from
+`doc/agents/usd_wg_assets_expected.json` are excluded from their verdict and from
 the Gaps section. The count is how many logged lines the expectation took.
 
 | Entry file | Expected | Why |

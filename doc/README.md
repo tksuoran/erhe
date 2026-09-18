@@ -17,8 +17,13 @@ below and is part of every documentation change.
 - `doc/editor/` holds the editor: `editor.md` for the application, one
   document per source subdirectory (`tools.md`, `windows.md`, ...) and one
   per editor feature (`selection.md`, `lightmap_baking.md`, ...).
-- `doc/<subject>.md` at the top level is a cross-cutting workflow: building,
-  platforms, debugging and agent tooling, surveys.
+- `doc/agents/` holds documentation written primarily for AI coding agents:
+  the orchestration harness, MCP tool guidelines, RenderDoc and survey
+  run-books, the catalog of agent-built creations, MCP server setup guides.
+  A document a human developer needs as often as an agent does stays with
+  its subject.
+- `doc/<subject>.md` at the top level is a cross-cutting workflow: building
+  and platforms.
 - A landed design record stays a current document; its numbered section
   labels (`D5`, `R3`, `C7`) are cited from source comments and stay stable
   across edits.
@@ -200,19 +205,24 @@ Every document states its standing in its first ten lines:
 - [editor/window_target_items.md](editor/window_target_items.md) (mostly stable): Editor windows with independent target items
 - [editor/windows.md](editor/windows.md) (stable): ImGui window implementations for the editor UI, including viewport display, property inspection, settings, and configuration
 
-### Workflows, platforms and tooling
+### Building and platforms
 
-- [agent_orchestration_harness.md](agent_orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
-- [ai_creations.md](ai_creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
 - [android.md](android.md) (experimental): Android (mobile flavor) port of the editor: build, packaging, verification ladder
 - [building.md](building.md) (stable): Build instructions, platform requirements, CMake options, build scripts
-- [mcp_api_guidelines.md](mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
 - [msvc_build_issues.md](msvc_build_issues.md) (experimental): MSVC stale-object / ODR incident: diagnosis recipe and prevention options
 - [quest.md](quest.md) (mostly stable): Building, installing and running the Quest 3 flavor
-- [quest_renderdoc_capture.md](quest_renderdoc_capture.md) (mostly stable): RenderDoc Meta Fork capture workflow on Quest
-- [renderdoc_fork.md](renderdoc_fork.md) (mostly stable): Desktop GPU-debugging workflow with the RenderDoc fork MCP server
-- [usd-wg-assets.md](usd-wg-assets.md) (mostly stable): Script-generated survey of the ASWF USD-WG sample assets
-- [usd_survey_gap_loop.md](usd_survey_gap_loop.md) (stable): How the USD-WG asset survey is driven to zero gaps
+
+### Agents (`agents/`)
+
+- [agents/creations.md](agents/creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
+- [agents/lsai_usage_playbook.md](agents/lsai_usage_playbook.md) (mostly stable): LSAI usage playbook (erhe, C++)
+- [agents/mcp_api_guidelines.md](agents/mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
+- [agents/orchestration_harness.md](agents/orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
+- [agents/quest_renderdoc_capture.md](agents/quest_renderdoc_capture.md) (mostly stable): RenderDoc Meta Fork capture workflow on Quest
+- [agents/renderdoc_fork.md](agents/renderdoc_fork.md) (mostly stable): Desktop GPU-debugging workflow with the RenderDoc fork MCP server
+- [agents/semantic_cpp_mcp_setup_xmp4_lsai.md](agents/semantic_cpp_mcp_setup_xmp4_lsai.md) (mostly stable): Semantic C++ code intelligence for Claude Code: xmp4 + LSAI
+- [agents/usd_survey_gap_loop.md](agents/usd_survey_gap_loop.md) (stable): How the USD-WG asset survey is driven to zero gaps
+- [agents/usd_wg_assets.md](agents/usd_wg_assets.md) (mostly stable): Script-generated survey of the ASWF USD-WG sample assets
 
 ### Frame pacing (`frame_pacing/`)
 
@@ -307,9 +317,7 @@ Every document states its standing in its first ten lines:
 - [reference/glslang_bug_report_debugglobalvariable.md](reference/glslang_bug_report_debugglobalvariable.md): glslang DebugGlobalVariable SPIR-V bug report
 - [reference/gltf_2_1_item_flags_comment.md](reference/gltf_2_1_item_flags_comment.md): glTF 2.1 per-node flags survey and issue comment
 - [reference/gltf_sample_renderer_comparison.md](reference/gltf_sample_renderer_comparison.md): erhe vs Khronos glTF-Sample-Renderer feature comparison
-- [reference/lsai_usage_playbook.md](reference/lsai_usage_playbook.md): LSAI MCP server usage playbook
 - [reference/nova3d_comparison.md](reference/nova3d_comparison.md): Nova3D vs erhe AI creation tooling comparison
 - [reference/nvidia_present_timing_driver_report.md](reference/nvidia_present_timing_driver_report.md): NVIDIA VK_EXT_present_timing driver issue report
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
-- [reference/semantic_cpp_mcp_setup_xmp4_lsai.md](reference/semantic_cpp_mcp_setup_xmp4_lsai.md): LSAI + xmp4 MCP server setup

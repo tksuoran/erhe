@@ -1,5 +1,7 @@
 # Semantic C++ code intelligence for Claude Code: xmp4 + LSAI
 
+Stability: mostly stable
+
 Purpose: give an AI coding agent (Claude Code, Cursor, ...) real *semantic*
 navigation of a C++ project. The Visual Studio MCP server is Roslyn-based and
 has no semantic model for C++ (it only understands C#/VB/.NET), so on a C++

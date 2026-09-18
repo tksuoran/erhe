@@ -1,8 +1,10 @@
 # LSAI usage playbook (erhe, C++)
 
+Stability: mostly stable
+
 How to use the LSAI MCP server correctly for semantic C++ navigation on this
 repo. Written from **measured behavior** on 2026-06-21 (LSAI v1.0.187, workspace
-`erhe-c-1`), not from assumption. Companion to `doc/reference/semantic_cpp_mcp_setup_xmp4_lsai.md`
+`erhe-c-1`), not from assumption. Companion to `doc/agents/semantic_cpp_mcp_setup_xmp4_lsai.md`
 (which covers install/setup). This file is about *how to query*.
 
 ## TL;DR rule

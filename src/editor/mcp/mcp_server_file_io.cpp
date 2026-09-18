@@ -847,7 +847,7 @@ auto Mcp_server::query_prefabs(const json& args) -> std::string
 // to find and click the Developer menu item while wearing the headset.
 //
 // Requires RenderDoc to be attached, which on Quest means the app was launched
-// from RenderDoc Meta Fork with injection - see doc/quest_renderdoc_capture.md.
+// from RenderDoc Meta Fork with injection - see doc/agents/quest_renderdoc_capture.md.
 auto Mcp_server::action_request_renderdoc_capture(const json& args) -> std::string
 {
     static_cast<void>(args);

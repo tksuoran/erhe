@@ -408,7 +408,7 @@ def main():
     print("Next steps:")
     print("  - Restart Claude Code so it spawns the stdio proxy (tools register at session start).")
     print("  - The proxy launches qrenderdoc on demand and leaves it running on exit.")
-    print("  - See doc/renderdoc_fork.md for the capture/inspection workflow.")
+    print("  - See doc/agents/renderdoc_fork.md for the capture/inspection workflow.")
 
 
 if __name__ == "__main__":

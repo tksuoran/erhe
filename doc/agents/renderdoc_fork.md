@@ -96,7 +96,7 @@ location; substitute your own. The setup script writes both for you.
 > behind:
 >
 > ```sh
-> git add doc/renderdoc_fork.md scripts/renderdoc_tools.json src/erhe/window/...
+> git add doc/agents/renderdoc_fork.md scripts/renderdoc_tools.json src/erhe/window/...
 > git status --short          # confirm config/editor/erhe_graphics.json is still ' M'
 > ```
 >
@@ -338,7 +338,7 @@ ran-but-wrote-black.
 ## Worked example: the black atmosphere sky
 
 The procedural-sky atmosphere mode (`Sky_config::mode == 1`, see
-[`doc/erhe/procedural_sky.md`](erhe/procedural_sky.md)) rendered only the clear colour. The
+[`doc/erhe/procedural_sky.md`](../erhe/procedural_sky.md)) rendered only the clear colour. The
 then-current handoff's leading
 hypothesis was "the storage-image compute LUT writes aren't landing (LUTs are all
 zero)". This loop **disproved** that and found the real cause in minutes.

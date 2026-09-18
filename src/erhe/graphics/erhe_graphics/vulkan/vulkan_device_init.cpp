@@ -363,7 +363,7 @@ Device_impl::Device_impl(
     // be enabled. renderdoc_capture_support covers the case where capture was
     // configured up front, but it does not cover a RenderDoc that attached
     // itself: on Android the capture layer is injected by the RenderDoc host
-    // (see doc/quest_renderdoc_capture.md) while renderdoc_capture_support stays
+    // (see doc/agents/quest_renderdoc_capture.md) while renderdoc_capture_support stays
     // off, precisely so that validation remains available on runs where
     // RenderDoc is absent. Detecting the layer in the loader's own enumeration
     // is what makes the two mutually exclusive however capture was arranged -

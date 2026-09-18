@@ -2,7 +2,7 @@
 
 Stability: mostly stable
 
-![Fish](images/creations/18_fish.png)
+![Fish](../images/creations/18_fish.png)
 
 *One weekend experiment to see what kind of content Claude Fable 5 can do with erhe editor*
 
@@ -245,7 +245,7 @@ creations up beyond single showcase scenes.
 
 ### 21 - Newton's Cradle
 
-![Newton's Cradle](images/creations/21_newtons_cradle.png)
+![Newton's Cradle](../images/creations/21_newtons_cradle.png)
 
 A large chrome Newton's cradle on a walnut desk beside a stack of books,
 and it works: each of the five steel balls is a dynamic sphere body on
@@ -262,7 +262,7 @@ nearly touching (`--jolt` / `--box3d` pick the gap; the skill's
 
 ### 20 - Frog
 
-![Frog](images/creations/20_frog.png)
+![Frog](../images/creations/20_frog.png)
 
 A green frog sitting on a lily pad in a dark pond, the second creature
 built as ONE editable geometry graph and the first to pose a full limb
@@ -295,7 +295,7 @@ drivers and ride along.
 
 ### 19 - Dolphin
 
-![Dolphin](images/creations/19_dolphin.png)
+![Dolphin](../images/creations/19_dolphin.png)
 
 A leaping bottlenose dolphin, and the first creature built as ONE
 editable geometry graph: six coarse box cages (trunk, rostrum, dorsal
@@ -313,7 +313,7 @@ evaluation-aware automatic graph layout.
 
 ### 18 - Fish
 
-![Fish](images/creations/18_fish.png)
+![Fish](../images/creations/18_fish.png)
 
 A smooth fish sculpted procedurally: the body is a geometry graph (box
 cage with interior subdivisions -> Catmull-Clark -> bezier lattice FFD
@@ -326,7 +326,7 @@ both a colorized, fbm-mottled albedo and per-scale `normal_map` relief
 
 ### 17 - Rockfall
 
-![Rockfall](images/creations/17_rockfall.jpg)
+![Rockfall](../images/creations/17_rockfall.jpg)
 
 Physics-settled rock piles: convex-hull rocks from jittered
 fibonacci-sphere point clouds, power-law sizes on pooled brushes, a
@@ -338,7 +338,7 @@ shape).
 
 ### 16 - Sail Ships
 
-![Sail Ships](images/creations/16_sail_ships.jpg)
+![Sail Ships](../images/creations/16_sail_ships.jpg)
 
 A fleet on open water: hulls are authored `convex_hull` silhouettes
 carved with batched CSG (deck wells, gunports, transom windows, the
@@ -348,7 +348,7 @@ surface stations.
 
 ### 15 - Tree Garden
 
-![Tree Garden](images/creations/15_tree_garden.jpg)
+![Tree Garden](../images/creations/15_tree_garden.jpg)
 
 28 Finnish tree species at their real heights via the shared
 `lsystem_trees.py` module (tropism, phyllotaxis, pipe-model radii,
@@ -358,7 +358,7 @@ two-level wind sway. Also the performance testbed that motivated
 
 ### 14 - Spider Sentinel
 
-![Spider Sentinel](images/creations/14_spider_sentinel.jpg)
+![Spider Sentinel](../images/creations/14_spider_sentinel.jpg)
 
 A 50-part ragdoll spider that STANDS under full gravity on motorized
 leg joints - rest-pose six-dof drives sized from static hold torques -
@@ -366,7 +366,7 @@ and staggers and recovers from an `apply_physics_force` shove.
 
 ### 13 - Windswept Glade
 
-![Windswept Glade](images/creations/13_windswept_glade.jpg)
+![Windswept Glade](../images/creations/13_windswept_glade.jpg)
 
 The forest glade rebuilt with living foliage: one-spine physics LOD per
 plant (114 sway spines), rest-pose motor joints, per-body wind
@@ -374,7 +374,7 @@ receptivity and the scene wind system (gusts, turbulence, wavelength).
 
 ### 12 - UAP Hangar
 
-![UAP Hangar](images/creations/12_uap_hangar.jpg)
+![UAP Hangar](../images/creations/12_uap_hangar.jpg)
 
 A dim hangar with five classic UAP silhouettes hovering in their own
 light pools - TR-3B triangle, domed saucer, tic-tac, and friends - an
@@ -383,7 +383,7 @@ raster transparency).
 
 ### 11 - Monster Portal Island
 
-![Monster Portal Island](images/creations/11_monster_portal_island.jpg)
+![Monster Portal Island](../images/creations/11_monster_portal_island.jpg)
 
 A tropical island with L-system palms and coral, a glowing portal ring,
 and primitive-built critters mid-invasion - a composition and accent
@@ -392,7 +392,7 @@ island pink).
 
 ### 10 - Forest Glade
 
-![Forest Glade](images/creations/10_forest_glade.jpg)
+![Forest Glade](../images/creations/10_forest_glade.jpg)
 
 Two-species L-system trees, L-system bipinnate ferns and flowers, and a
 fallen log - the creation that established the mandatory scene-graph
@@ -401,7 +401,7 @@ hierarchy rules (the L-system bracket stack IS the node parent stack;
 
 ### 9 - Sandbox Afternoon
 
-![Sandbox Afternoon](images/creations/09_sandbox_afternoon.jpg)
+![Sandbox Afternoon](../images/creations/09_sandbox_afternoon.jpg)
 
 A backyard sandbox scene grown around the first L-system oak - the
 proof that string-rewrite vegetation plus a 3D turtle works over the
@@ -409,7 +409,7 @@ MCP shape tools.
 
 ### 8 - The Glass Audience
 
-![The Glass Audience](images/creations/08_glass_audience.jpg)
+![The Glass Audience](../images/creations/08_glass_audience.jpg)
 
 Two thrones facing each other through a clear glass wall, one seating a
 primitive-built skeleton under a swinging pendulum lamp - the
@@ -418,7 +418,7 @@ early physics-pendulum rig.
 
 ### 7 - Ragdoll Rumble
 
-![Ragdoll Rumble](images/creations/07_ragdoll_rumble.jpg)
+![Ragdoll Rumble](../images/creations/07_ragdoll_rumble.jpg)
 
 A golden protocol-droid homage vs a wrecking ball: every body part a
 dynamic rigid body laced with ball/hinge/weld joints - the first full
@@ -426,21 +426,21 @@ physics-joint creation, frozen at the moment of impact aftermath.
 
 ### 6 - Robot Roll Call
 
-![Robot Roll Call](images/creations/06_robot_roll_call.jpg)
+![Robot Roll Call](../images/creations/06_robot_roll_call.jpg)
 
 Three homage robots on lit showroom pedestals, each built entirely from
 parametric shapes so the silhouette carries the character.
 
 ### 5 - The Spiral Reef
 
-![The Spiral Reef](images/creations/05_spiral_reef.jpg)
+![The Spiral Reef](../images/creations/05_spiral_reef.jpg)
 
 A double golden-angle helix of organic forms rising from a shallow sea,
 sculpted after placement with direct MCP geometry operations.
 
 ### 4 - Megalith Henge at Dusk
 
-![Megalith Henge](images/creations/04_megalith_henge.jpg)
+![Megalith Henge](../images/creations/04_megalith_henge.jpg)
 
 A weathered trilithon circle - the brush-reuse creation: monolith and
 capstone authored once with `create_shape add_brush`, erected with
@@ -448,7 +448,7 @@ capstone authored once with `create_shape add_brush`, erected with
 
 ### 3 - The Texture Atelier
 
-![The Texture Atelier](images/creations/03_texture_atelier.jpg)
+![The Texture Atelier](../images/creations/03_texture_atelier.jpg)
 
 A gallery of spheres on plinths, each surfaced live by a different
 procedural texture graph (marble, lava, bricks with a normal map,
@@ -456,7 +456,7 @@ voronoi stained glass, woven fabric, kaleidoscope).
 
 ### 2 - Crystal Garden at Night
 
-![Crystal Garden](images/creations/02_crystal_garden.jpg)
+![Crystal Garden](../images/creations/02_crystal_garden.jpg)
 
 Emissive crystal clusters on a dark reflective ground, each cluster a
 geometry node graph: points scattered over a hidden dome, instanced
@@ -464,7 +464,7 @@ with sharpened cones, realized into one mesh.
 
 ### 1 - Cathedral of Conway
 
-![Cathedral of Conway](images/creations/01_conway_cathedral.jpg)
+![Cathedral of Conway](../images/creations/01_conway_cathedral.jpg)
 
 The first creation, a circular colonnade of pedestals, each carrying a
 geometry-node sculpture built from a different Conway operator chain

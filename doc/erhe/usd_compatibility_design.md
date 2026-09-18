@@ -45,7 +45,7 @@ Constraints every step respects:
   (`erhe-headless-verify`), with the same self-review-per-step discipline
   as the property migrations (`doc/erhe/property_system.md` section 4.18),
   worked through the roles and review gates of
-  `doc/agent_orchestration_harness.md`.
+  `doc/agents/orchestration_harness.md`.
 - C3 A model change is expressed in erhe vocabulary and documented in the
   owning subsystem's record; the mapping gains or updates the row that
   connects it to USD. This document never restates a mapping row.
@@ -606,15 +606,15 @@ now owns its behavior; `git log` on that record has the history.
   Assets Working Group repository (`<usd-wg-assets>`, a local clone of
   github.com/usd-wg/assets: `full_assets/*`, `test_assets/*` and
   `intent-vfx/scenes/*`) is opened in a headless editor by
-  `scripts/usd_wg_asset_survey.py`, which regenerates `doc/usd-wg-assets.md`:
+  `scripts/usd_wg_asset_survey.py`, which regenerates `doc/agents/usd_wg_assets.md`:
   per entry whether it loads, the prim, mesh, material and light counts
   against the composed stage (measured with pxr when an OpenUSD build is
   at hand), a Storm render of erhe's own view compared by normalized cross
   correlation, the bounds against pxr's, the diagnostics the load logs, a
   screenshot and a verdict. Diagnostics an entry reports by design are
-  listed in `doc/usd-wg-assets-expected.json` and do not count against it;
-  by-eye verdicts live in `doc/usd-wg-assets-eye.json`. The gap loop of
-  `doc/usd_survey_gap_loop.md` walks the entries, fixes a gap or records
+  listed in `doc/agents/usd_wg_assets_expected.json` and do not count against it;
+  by-eye verdicts live in `doc/agents/usd_wg_assets_eye.json`. The gap loop of
+  `doc/agents/usd_survey_gap_loop.md` walks the entries, fixes a gap or records
   why it is by design, and runs clean on every scope: of the 146 entries,
   138 work, 7 work with a named gap and 1 fails, and every non-working
   entry is the MaterialX item of `doc/plans/usd_compatibility.md`. The

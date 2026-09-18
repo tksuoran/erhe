@@ -1171,7 +1171,7 @@ auto Mcp_server::action_project_texcoords(const json& args) -> std::string
         return make_error_content("Operations not available");
     }
     erhe::geometry::operation::Project_texcoords_parameters parameters{};
-    // Explicit-state rule (doc/mcp_api_guidelines.md): fixed defaults here,
+    // Explicit-state rule (doc/agents/mcp_api_guidelines.md): fixed defaults here,
     // never state read from any window.
     const std::string projection = args.value("projection", "planar");
     if      (projection == "planar")      parameters.projection = erhe::geometry::operation::Texcoord_projection::planar;
@@ -1221,7 +1221,7 @@ auto Mcp_server::action_catmull_clark(const json& args) -> std::string
     if (m_context.operations == nullptr) {
         return make_error_content("Operations not available");
     }
-    // Explicit-state rule (doc/mcp_api_guidelines.md): the argument default is
+    // Explicit-state rule (doc/agents/mcp_api_guidelines.md): the argument default is
     // fixed here, never read from the Operations window's Generate UVs checkbox.
     const bool generate_texcoords = args.value("generate_texcoords", true);
     const std::string target_error = run_geometry_op_with_target(args, [&]() {

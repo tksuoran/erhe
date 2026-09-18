@@ -226,7 +226,7 @@ belongs to the operation that needed it").
 ## Observing it
 
 Three MCP tools exist for this (all with explicit arguments, per
-doc/mcp_api_guidelines.md):
+doc/agents/mcp_api_guidelines.md):
 
 - `get_editor_references` (query, no arguments) - every cached content
   reference the subscribers above hold, each as `{name, uid, type}` or null.

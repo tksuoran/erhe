@@ -1930,7 +1930,7 @@ unknown-tool reply.
 
 ## Survey of the USD Assets Working Group repository
 
-`doc/usd-wg-assets.md` records what this library and the editor make of every
+`doc/agents/usd_wg_assets.md` records what this library and the editor make of every
 entry asset of github.com/usd-wg/assets - the load result, the counts, the
 warnings and errors, a capture framed through the MCP `frame_scene` tool, the
 renders the repository ships beside the asset, and a verdict per asset, with

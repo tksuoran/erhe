@@ -3,9 +3,9 @@
 Stability: stable
 
 How the usd-wg survey (`scripts/usd_wg_asset_survey.py`, results in
-`doc/usd-wg-assets.md`) is driven to zero gaps one entry at a time, with
+`doc/agents/usd_wg_assets.md`) is driven to zero gaps one entry at a time, with
 the coding delegated so that no single context fills up. Roles, brief
-shape and review are those of `doc/agent_orchestration_harness.md`; this
+shape and review are those of `doc/agents/orchestration_harness.md`; this
 document states only what the gap loop adds: the command, the triage
 rules, the worker's stopping rule and the hand-over between workers.
 
@@ -30,9 +30,9 @@ The state the loop keeps between runs, all committed except the first:
 
 - `logs/usd_wg_survey/test_database.json`: per entry `pass` / `gap` /
   `fail`, verdict and run time (gitignored; `--clear-test-db` empties it).
-- `doc/usd-wg-assets-expected.json`: the issues an entry reports by
+- `doc/agents/usd_wg_assets_expected.json`: the issues an entry reports by
   design (`diagnostics`, `gaps`, `appearance` patterns with a `reason`).
-- `doc/usd-wg-assets-eye.json`: the by-eye verdicts.
+- `doc/agents/usd_wg_assets_eye.json`: the by-eye verdicts.
 - `doc/erhe/usd_compatibility_design.md` section 6: the gaps deferred as future
   work.
 
@@ -58,7 +58,7 @@ outcomes the entry is. Each outcome ends in a commit.
    prove the fix on the entry's record from `summary.json`.
 3. By design: the asset authors the issue on purpose, its README says so,
    and Storm renders what erhe renders. Add an item to
-   `doc/usd-wg-assets-expected.json` naming the exact diagnostic or gap
+   `doc/agents/usd_wg_assets_expected.json` naming the exact diagnostic or gap
    pattern and quoting the README statement and the Storm match in
    `reason`. An expectation is evidence-backed or it is not written.
 4. Scoped future work: the gap is one the plan's section 6 already lists
@@ -132,7 +132,7 @@ worker is running, what the last report said, what the queue says. It:
 
 When `test_assets` runs clean, the scope widens to `full_assets`
 (`--only full_assets`, same command otherwise) and then to `intent-vfx`,
-and the full run without `--stop-on-gap` regenerates `doc/usd-wg-assets.md`
+and the full run without `--stop-on-gap` regenerates `doc/agents/usd_wg_assets.md`
 once every identified gap is closed (`feedback-survey-rerun-policy`).
 
 ## The brief
@@ -140,8 +140,8 @@ once every identified gap is closed (`feedback-survey-rerun-policy`).
 Copy this into the worker's prompt, filling the two paths.
 
 ```
-Work the usd-wg survey gap loop described in doc/usd_survey_gap_loop.md.
-Read that document first, then doc/agent_orchestration_harness.md
+Work the usd-wg survey gap loop described in doc/agents/usd_survey_gap_loop.md.
+Read that document first, then doc/agents/orchestration_harness.md
 ("Coder report format"). Paths on this machine: usd-wg assets clone
 <usd-wg-assets>, OpenUSD tools <usd_root> (memory-bank/local/context.md).
 

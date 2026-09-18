@@ -138,7 +138,7 @@ Two traps follow from that:
 Put an asymmetric occluder near the light when judging a face by eye: a
 symmetric scene hides exactly the mirror and rotation errors this path can
 produce. To read the stored faces directly, capture with the RenderDoc fork
-([`renderdoc_fork.md`](../renderdoc_fork.md)) and `save_texture` the layer as DDS -
+([`renderdoc_fork.md`](../agents/renderdoc_fork.md)) and `save_texture` the layer as DDS -
 PNG and EXR clamp the float distances and the `1e30` clear saturates them.
 
 ## Reference

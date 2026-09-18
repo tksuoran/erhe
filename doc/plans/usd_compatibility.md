@@ -34,7 +34,7 @@ than restating an item.
    a file that does.
 
 The items have no ordering constraint among them; each is taken through the
-harness of `doc/agent_orchestration_harness.md`, one commit at a time (the
+harness of `doc/agents/orchestration_harness.md`, one commit at a time (the
 design record's C2).
 
 ## Work items
