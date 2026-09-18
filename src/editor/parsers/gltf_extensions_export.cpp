@@ -181,10 +181,22 @@ public:
     std::string              graph_mesh_name;
 };
 
+// One node's ERHE_rig payload, held until the glTF node indices exist: the
+// pole target is written as the pole node's index
+// (doc/plans/rigging/pole_target.md R23).
+class Rig_record
+{
+public:
+    const erhe::scene::Node* node{nullptr};
+    const erhe::scene::Node* pole_target{nullptr};
+    nlohmann::json           ik;
+};
+
 class Asset_payload_data
 {
 public:
     std::vector<Brush_record>                                 brushes;
+    std::vector<Rig_record>                                   rigs;
     nlohmann::json                                            graph_textures = nlohmann::json::array();
     nlohmann::json                                            graph_meshes   = nlohmann::json::array();
     std::vector<Material_binding_record>                      material_bindings;
@@ -507,24 +519,37 @@ void add_gltf_editor_state(
         // rest_rotation as glTF-order quaternion [x, y, z, w]. The explicit
         // fields are the effective values; "properties" is the local set
         // (doc/erhe/property_system.md section 4.19).
-        // doc/plans/rigging/ik_settings.md section 6.
+        // doc/plans/rigging/ik_settings.md section 6,
+        // doc/plans/rigging/pole_target.md section 6.
         const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(node.get());
         if (ik_settings) {
             const Ik_settings_data& ik = ik_settings->get_data();
-            nlohmann::json rig_json{
-                {"ik", nlohmann::json{
-                    {"name",          ik_settings->get_name()},
-                    {"lock",          nlohmann::json::array({ik.lock[0],  ik.lock[1],  ik.lock[2]})},
-                    {"limit",         nlohmann::json::array({ik.limit[0], ik.limit[1], ik.limit[2]})},
-                    {"min",           json_vec3(ik.limit_min)},
-                    {"max",           json_vec3(ik.limit_max)},
-                    {"stiffness",     json_vec3(ik.stiffness)},
-                    {"rest_rotation", json_vec4(glm::vec4{ik.rest_rotation.x, ik.rest_rotation.y, ik.rest_rotation.z, ik.rest_rotation.w})},
-                    {"flags",         json_flags(*ik_settings)},
-                    {"properties",    json_properties(*ik_settings)},
-                }}
+            nlohmann::json ik_json{
+                {"name",          ik_settings->get_name()},
+                {"lock",          nlohmann::json::array({ik.lock[0],  ik.lock[1],  ik.lock[2]})},
+                {"limit",         nlohmann::json::array({ik.limit[0], ik.limit[1], ik.limit[2]})},
+                {"min",           json_vec3(ik.limit_min)},
+                {"max",           json_vec3(ik.limit_max)},
+                {"stiffness",     json_vec3(ik.stiffness)},
+                {"rest_rotation", json_vec4(glm::vec4{ik.rest_rotation.x, ik.rest_rotation.y, ik.rest_rotation.z, ik.rest_rotation.w})},
+                {"flags",         json_flags(*ik_settings)},
+                {"properties",    json_properties(*ik_settings)},
             };
-            append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_rig\":{}", rig_json.dump()));
+            // The swivel offset in radians, written only when it is not 0
+            // (doc/plans/rigging/pole_target.md R23).
+            if (ik.pole_angle != 0.0f) {
+                ik_json["pole_angle"] = ik.pole_angle;
+            }
+            // The payload is completed by the node_extensions_builder below:
+            // "pole_target" is the pole node's glTF index, which only exists
+            // once the export has numbered the nodes.
+            data->rigs.push_back(
+                Rig_record{
+                    .node        = node.get(),
+                    .pole_target = ik_settings->get_pole_target().get(),
+                    .ik          = std::move(ik_json)
+                }
+            );
             used_rig = true;
         }
 
@@ -873,6 +898,35 @@ void add_gltf_editor_state(
         add_graph_output_materials(data->graph_meshes,   "Graph Mesh");
         add_graph_output_materials(data->graph_textures, "Graph Texture");
     }
+
+    // ERHE_rig (doc/plans/rigging/pole_target.md R23): written here, where the
+    // pole target can be named the glTF-idiomatic way - the pole node's index,
+    // the form KHR_physics_rigid_bodies uses for a joint's connectedNode. A
+    // pole outside the exported asset is named by no index, so the file says
+    // the attachment has no pole rather than naming something it does not
+    // hold.
+    arguments.node_extensions_builder =
+        [data](const erhe::gltf::Gltf_export_index_lookup& lookup) -> std::vector<std::pair<const erhe::scene::Node*, std::string>>
+        {
+            std::vector<std::pair<const erhe::scene::Node*, std::string>> result;
+            for (const Rig_record& record : data->rigs) {
+                nlohmann::json ik = record.ik;
+                if (record.pole_target != nullptr) {
+                    const auto pole_it = lookup.node_indices.find(record.pole_target);
+                    if (pole_it != lookup.node_indices.end()) {
+                        ik["pole_target"] = pole_it->second;
+                    } else {
+                        log_parsers->warn(
+                            "glTF editor state: IK settings on '{}' name a pole node that was not exported - the pole is dropped",
+                            (record.node != nullptr) ? record.node->get_name() : std::string{"<null>"}
+                        );
+                    }
+                }
+                const nlohmann::json rig_json{{"ik", ik}};
+                result.emplace_back(record.node, fmt::format("\"ERHE_rig\":{}", rig_json.dump()));
+            }
+            return result;
+        };
 
     // Asset-root payloads are resolved against glTF indices inside
     // export_gltf() (nodes / materials / extra meshes are only numbered

@@ -14,10 +14,12 @@
                 "name":          {"type": "string"},
                 "lock":          {"$ref": "#/$defs/bool3"},
                 "limit":         {"$ref": "#/$defs/bool3"},
-                "min":           {"type": "array", "items": {"type": "number", "minimum": -3.14159266, "maximum": 0.0}, "minItems": 3, "maxItems": 3},
-                "max":           {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 3.14159266}, "minItems": 3, "maxItems": 3},
+                "min":           {"type": "array", "items": {"type": "number", "minimum": -3.1415928, "maximum": 0.0}, "minItems": 3, "maxItems": 3},
+                "max":           {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 3.1415928}, "minItems": 3, "maxItems": 3},
                 "stiffness":     {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 0.99}, "minItems": 3, "maxItems": 3},
                 "rest_rotation": {"$ref": "#/$defs/quat"},
+                "pole_target":   {"type": "integer", "minimum": 0},
+                "pole_angle":    {"type": "number"},
                 "flags":         {"type": "array", "items": {"type": "string"}},
                 "properties":    {"type": "object", "additionalProperties": {"type": "string"}}
             }

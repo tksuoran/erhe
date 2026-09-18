@@ -53,6 +53,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "parsers/physics_export.hpp"
 #include "parsers/physics_import.hpp"
 #include "scene/draw_mode.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -2618,6 +2619,23 @@ void collect_usd_draw_modes(
     );
 }
 
+// The nodes of the tree carrying an Ik_settings attachment
+// (doc/plans/rigging/pole_target.md R26). USD has no form for rig data, so the
+// save names the count and writes none of it.
+[[nodiscard]] auto count_ik_settings(erhe::scene::Node& root_node) -> std::size_t
+{
+    std::size_t count = 0;
+    root_node.for_each<erhe::scene::Xformable>(
+        [&count](erhe::scene::Xformable& prim) -> bool {
+            if (erhe::scene::get_attachment<Ik_settings>(&prim)) {
+                ++count;
+            }
+            return true;
+        }
+    );
+    return count;
+}
+
 // The physics world's gravity as the file's `PhysicsScene` prim states it.
 // USD's own fallbacks stand for what the prim leaves unauthored: the negative
 // up axis, and earth gravity.
@@ -3824,6 +3842,18 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     // one `GeomModelAPI` per prim carrying the attachment, complete before
     // the plan below, which turns each item into a path.
     collect_usd_draw_modes(*root_node.get(), save_arguments.draw_modes);
+
+    // IK settings (doc/plans/rigging/pole_target.md R26): USD has no form for
+    // rig data, so the attachments - locks, limits, stiffness, rest
+    // orientation, pole target and pole angle - are not written. A USD form is
+    // Phase 4 work (doc/plans/rigging/rigging_tools.md).
+    const std::size_t ik_settings_count = count_ik_settings(*root_node.get());
+    if (ik_settings_count > 0) {
+        log_parsers->warn(
+            "save_scene_usd '{}': {} node(s) carry IK settings, which USD has no form for - the IK settings are not written",
+            erhe::file::to_string(path), ik_settings_count
+        );
+    }
 
     // The editor's scene state, in the JSON shape the glTF ERHE_scene block
     // carries, as one `customLayerData` string. What it says about a prim it

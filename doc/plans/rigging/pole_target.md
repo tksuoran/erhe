@@ -1,6 +1,9 @@
 # Pole Target and Swivel Control - Phase 2 Requirements
 
-Status: proposed
+Status: in progress
+
+Implemented (see Implementation status at the end); awaiting live-editor
+testing.
 
 This document specifies the pole target slice of Phase 2 of the rigging
 roadmap in `rigging_tools.md`. It builds on `fabrik_ik.md` (Phase 1,
@@ -17,8 +20,9 @@ Terms used throughout:
 - **Intermediate joint**: a chain joint that is neither the root nor the
   effector, i.e. indices `1 .. n-1`.
 - **Unpoled solve**: the solve of `fabrik_ik.md` / `ik_settings.md` with no
-  pole step, which is what the solver performs whenever the pole is not
-  admissible (R8) or has no effect (R10, R11 steps 1, 3 and 4).
+  pole step, which is what the solver performs whenever no admissible pole
+  governs the drag (R5) or the pole has no effect (R10, R11 steps 1, 3
+  and 4).
 
 ## Motivation
 
@@ -76,11 +80,15 @@ silently discarded and the Properties row always shows what was authored.
 **R5.** Chains stay discovered per drag (`fabrik_ik.md` section 1); a pole
 does not create, extend or terminate a chain. The pole that governs one drag
 is found by scanning the chain from the effector toward the root - indices
-`n, n-1, ... 0` - and taking the first joint that carries an `Ik_settings`
-attachment whose `pole_target` resolves to an admissible pole (R8). The scan
-reads every chain joint's attachment whatever the joint's flags, so a pole
-authored on the effector (the Blender-equivalent place, where the IK
-constraint itself lives) wins over a pole authored higher up.
+`n, n-1, ... 0` - and taking the first admissible pole (R8) an `Ik_settings`
+attachment on a scanned joint names. The scan reads every chain joint's
+attachment whatever the joint's flags, so a pole authored on the effector
+(the Blender-equivalent place, where the IK constraint itself lives) wins
+over a pole authored higher up. The scan continues past a joint that carries
+no attachment, whose attachment names no pole, whose `pole_target` no longer
+resolves, or whose pole is not admissible, so a pole authored nearer the root
+governs the drag in each of those cases. The solve is unpoled when the scan
+reaches the root having found no admissible pole.
 
 **R6.** `pole_angle` is the effective value of the same attachment R5
 selected. Angles of other attachments on the chain take no part; there is no
@@ -90,11 +98,13 @@ summing.
 joint of the chain is swivelled by the single rotation of R11 step 7,
 whatever the chain length.
 
-**R8.** A resolved `pole_target` is **admissible** when all of the following
-hold, evaluated once per drag in `Ik_drag::begin`:
+**R8.** A `pole_target` **resolves** when its weak reference locks to a live
+`erhe::scene::Node`; one that does not - expired, or never authored - counts
+as not authored, so the scan of R5 passes it by in silence. A resolved
+`pole_target` is **admissible** when all of the following hold, evaluated
+once per drag in `Ik_drag::begin`:
 
-- the weak reference locks to a live `erhe::scene::Node`;
-- that node's `get_item_host()` equals the effector's `get_item_host()`. A
+- the node's `get_item_host()` equals the effector's `get_item_host()`. A
   same-host test is what the AGENTS.md rule "Scene-hosted references in
   editor parts" asks for here: the chain being dragged is by construction
   hosted by a live registered scene, so a pole sharing that host is live
@@ -105,9 +115,12 @@ hold, evaluated once per drag in `Ik_drag::begin`:
 - the node is not itself one of the chain's joints (a joint cannot swivel
   about a direction it defines).
 
-A non-admissible pole yields an unpoled solve for the whole drag and one
-warning naming the effector, the pole and the failing condition, logged once
-at `Ik_drag::begin` (never per solver update).
+When the scan of R5 reaches the root having found no admissible pole while at
+least one joint named a non-admissible one, the whole drag is solved unpoled
+and one warning names the effector, the first rejected pole in scan order and
+its failing condition, logged once at `Ik_drag::begin` (never per solver
+update). A scan that finds an admissible pole is silent, whatever it rejected
+on the way.
 
 **R9.** A pole node that is a **descendant** of a chain joint is admissible.
 Its world position is captured once at `Ik_drag::begin` (R12), so the chain
@@ -277,33 +290,42 @@ into `config/editor/mcp_tools.json` beside the other scene actions.
 two optional keys, written by `gltf_extensions_export.cpp` next to the
 existing explicit fields, which carry effective values:
 
-- `"pole_target"`: string, the pole node's `get_reference_path()`. Written
-  only when the attachment holds a pole; absent means no pole.
+- `"pole_target"`: integer, the pole node's **glTF node index** - the form
+  `KHR_physics_rigid_bodies` uses for a joint's `connectedNode`, so the pole
+  is named by position in the file's own node table and no name, path or
+  import wrapper takes part. Written only when the attachment holds a pole
+  that the export numbered; absent means no pole. A node index exists only
+  once the export has numbered the nodes, so the payload is written from
+  `Gltf_export_arguments::node_extensions_builder`, the per-node counterpart
+  of `asset_extensions_builder`, which runs with the
+  `Gltf_export_index_lookup`. A pole outside the exported asset is named by
+  no index: the file then says the attachment has no pole, with a warning at
+  save time, rather than naming something the file does not hold.
 - `"pole_angle"`: number, radians. Written only when it is not `0`; absent
   means `0`.
 
 The `properties` map keeps its existing meaning - the attachment's complete
-local set - and picks both names up automatically when they hold local
-values, `pole_target` as the same reference-path text.
+local set - and picks `pole_angle` up automatically when it holds a local
+value. `pole_target` is bridged (R1), so the map never carries it and the
+key above is its only carrier.
 
 **R24.** Import (`gltf_extensions_import.cpp`, `import_rigs`):
 
 - `pole_angle` is read when the value is a finite number; a non-finite or
   non-numeric value is ignored with a warning naming the node.
-- A non-empty `pole_target` string is recorded as an
-  `erhe::gltf::Unresolved_object_property{ik_settings, "pole_target", text}`.
-  `import_rigs` gains an out-parameter for those entries and
-  `import_gltf_editor_state` hands them to `import_unresolved_object_properties`,
-  so they are resolved in the existing late slot - after every operation that
-  creates the items they may name - by the existing
-  `Item_object_property_by_name_operation`, which resolves the text through
-  `find_item_in_scene_by_reference` (a path when the text contains `/`, else
-  a name), sets the local value undoably, and warns when the scene holds no
-  such item.
+- `pole_target` is read as an index into `Gltf_data::nodes`, the parse's own
+  node table, and `set_pole_target` is called with that node right where the
+  attachment is built. The index is a position in the file, so it lands on
+  the imported copy of the pole whatever the import wraps the file's nodes
+  in and whatever the scene already holds under that name; the pole needs no
+  resolution pass after the nodes enter the scene. A value that is not an
+  unsigned number, is out of range, or names a node the parse did not build
+  leaves the attachment without a pole, with a warning naming the node.
 
 **R25.** `doc/gltf_extensions/schema/ERHE_rig.schema.json` gains
-`"pole_target": {"type": "string"}` and `"pole_angle": {"type": "number"}`
-under `ik`. Neither is required; `required` stays `["ik"]`.
+`"pole_target": {"type": "integer", "minimum": 0}` and
+`"pole_angle": {"type": "number"}` under `ik`. Neither is required;
+`required` stays `["ik"]`.
 `doc/gltf_extensions/ERHE_rig.md` gains both rows in its field list and both
 keys in its JSON example.
 
@@ -352,7 +374,14 @@ model.
 
 Headless recipe, on the `build_vs2026_vulkan_headless` editor with
 `ERHE_AI_DRIVER=1`, driven with `py -3 scripts/mcp_call.py` (ids reshuffle per
-launch, so re-query them):
+launch, so re-query them). `scripts/ik_pole_verify.py` runs criteria 1 to 9
+and 12 against such an editor and prints one PASS / FAIL line each.
+
+Every measured `ik_drag` is undone before the next one runs: a drag solves
+from the pose the chain is in when it begins (`fabrik_ik.md` section 5), and
+the undo restores each joint's drag-start `parent_from_node`, so each
+criterion below measures a drag from the same pose as the one it compares
+against.
 
 1. `create_scene`, then `import_gltf` of
    `res/editor/assets/RiggedFigure/RiggedFigure.glb` - the tracked skinned
@@ -386,11 +415,15 @@ launch, so re-query them):
 8. Each of steps 2, 4, 6 and 7 is exactly one undo step: `get_undo_redo_stack`
    grows by one entry per call, and each `ik_drag` adds exactly one more
    (R18, R19, R22).
-9. `save_scene` and re-open: `get_item_properties` on the attachment reports
-   the same `pole_target` reference path and the same `pole_angle`; a save of
-   the re-opened scene writes the same `ik` object (R23, R24). A file whose
-   `ERHE_rig.ik` names a pole the scene does not hold loads with a warning and
-   an empty `pole_target`, and every other field intact.
+9. With the pole parented below another node, so that it is not a top-level
+   name: `save_scene` and re-open. `get_item_properties` on the attachment
+   reports a `pole_target` resolving to the re-opened pole at the same
+   reference path and the same `pole_angle`; a save of the re-opened scene
+   writes the same `ik` object (R23, R24). The same file imported into
+   another scene with `import_gltf`, which places the file's nodes under an
+   import root, binds the pole to the **imported copy** of the pole node. A
+   file whose `ERHE_rig.ik` carries a `pole_target` the file has no node for
+   loads with a warning and no pole, and every other field intact.
 10. `editor_ik_solver_tests` passes, including every case of R16, and the
     pre-existing cases of `ik_settings.md` still pass unchanged.
 11. A chain with neither constraints nor a pole produces the same solved
@@ -418,3 +451,39 @@ criteria 1 through 8, plus `Mcp_test` and the editor build.
 `ERHE_rig` spec page and schema, and this document's status. Verification: acceptance criteria 9 and 12,
 `scripts/scene_roundtrip_verify.py` at its current baseline, and
 `py -3 scripts/check_doc_links.py` reporting 0 problems.
+
+## Implementation status
+
+Implemented as specified. Key locations:
+
+- Solver step - `ik_apply_pole` in `src/editor/transform/ik_solver.{hpp,cpp}`,
+  beside `fabrik_solve`; `Ik_chain::has_pole` / `pole_position` /
+  `pole_angle` carry it, and `Fabrik_solver::solve` applies it on the
+  unconstrained path once after `fabrik_solve` and on the constrained path
+  between the forward and backward passes of every iteration. Unit tests:
+  `src/editor/transform/test/test_ik_solver.cpp` (`editor_ik_solver_tests`
+  target, `ERHE_BUILD_TESTS=ON` trees).
+- Attachment fields - `Ik_settings::pole_target_property` (bridged over the
+  weak `m_pole_target`) and `Ik_settings::pole_angle_property`, with
+  `Ik_settings_data::pole_angle` the mirror
+  (`src/editor/scene/node_ik_settings.{hpp,cpp}`); both draw as generic
+  registered-property rows in Properties group "IK".
+- Drag integration - `Ik_drag::discover_pole` (`ik_drag.cpp`) performs the
+  scan of R5 and the admissibility tests of R8 once per drag and captures
+  the pole's world position there.
+- MCP - the `ik_drag` tool (`mcp_server_scene_action.cpp`, schema in
+  `config/editor/mcp_tools.json`), which also lists `ik_settings` in the
+  `add_node_attachment` type enum.
+- Serialization - the `ik` object's `pole_target` and `pole_angle` keys
+  (spec `doc/gltf_extensions/ERHE_rig.md`, schema
+  `doc/gltf_extensions/schema/ERHE_rig.schema.json`); written in
+  `gltf_extensions_export.cpp` from the `node_extensions_builder` this slice
+  adds to `erhe::gltf` (`gltf_fastgltf.{hpp,cpp}`), read in
+  `gltf_extensions_import.cpp` (`import_rigs`) through the parse's node
+  table. `save_scene_usd` (`parsers/usd.cpp`) logs the
+  count of nodes carrying IK settings, which USD has no form for.
+- Acceptance verification - `scripts/ik_pole_verify.py`, criteria 1 to 9
+  and 12.
+
+Outstanding: interactive (windowed) verification of the Properties pole
+target picker and of a live gizmo drag with a pole.

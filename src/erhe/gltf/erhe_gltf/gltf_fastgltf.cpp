@@ -7237,22 +7237,36 @@ auto Gltf_exporter::export_gltf() -> std::string
         for (const auto& [index, extension_members] : m_asset_reference_material_extensions) {
             merge_extension_members(export_extras_context.material_extensions[index], extension_members);
         }
-        // Asset-root extension payloads built against the now-known glTF
-        // indices (doc/editor/gltf_scene_roundtrip.md phase 3: ERHE_brushes,
-        // ERHE_node_graphs, ERHE_collections).
-        if (m_arguments.asset_extensions_builder) {
+        // Asset-root and per-node extension payloads built against the
+        // now-known glTF indices (doc/editor/gltf_scene_roundtrip.md phase 3:
+        // ERHE_brushes, ERHE_node_graphs, ERHE_collections; ERHE_rig, whose
+        // pole target is a node index).
+        if (m_arguments.asset_extensions_builder || m_arguments.node_extensions_builder) {
             Gltf_export_index_lookup index_lookup{};
             index_lookup.node_indices       = m_erhe_node_to_gltf_node_index;
             index_lookup.material_indices   = m_exported_materials;
             index_lookup.mesh_indices       = m_erhe_mesh_to_gltf_mesh_index;
             index_lookup.extra_mesh_indices = m_extra_mesh_indices;
-            const std::vector<std::pair<std::string, std::string>> asset_entries = m_arguments.asset_extensions_builder(index_lookup);
-            for (const auto& [extension_name, extension_json] : asset_entries) {
-                merge_extension_members(
-                    export_extras_context.asset_extensions,
-                    fmt::format("\"{}\":{}", extension_name, extension_json)
-                );
-                declare_extension_used(extension_name);
+            if (m_arguments.asset_extensions_builder) {
+                const std::vector<std::pair<std::string, std::string>> asset_entries = m_arguments.asset_extensions_builder(index_lookup);
+                for (const auto& [extension_name, extension_json] : asset_entries) {
+                    merge_extension_members(
+                        export_extras_context.asset_extensions,
+                        fmt::format("\"{}\":{}", extension_name, extension_json)
+                    );
+                    declare_extension_used(extension_name);
+                }
+            }
+            if (m_arguments.node_extensions_builder) {
+                const std::vector<std::pair<const erhe::scene::Node*, std::string>> node_entries = m_arguments.node_extensions_builder(index_lookup);
+                for (const auto& [node, extension_members] : node_entries) {
+                    const auto it = m_erhe_node_to_gltf_node_index.find(node);
+                    if (it == m_erhe_node_to_gltf_node_index.end()) {
+                        log_gltf->warn("glTF export: extension payload for node '{}' outside the exported asset - skipped", (node != nullptr) ? node->get_name() : std::string{"<null>"});
+                        continue;
+                    }
+                    merge_extension_members(export_extras_context.node_extensions[it->second], extension_members);
+                }
             }
         }
         if (!m_geometry_primitive_extensions.empty()) {

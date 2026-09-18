@@ -36,6 +36,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <cmath>
 #include <mutex>
 
 #include <geogram/mesh/mesh.h>
@@ -357,6 +358,29 @@ void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
         ik_settings->set_limit_min(glm::clamp(to_vec3(ij.value("min",       nlohmann::json{}), defaults.limit_min), glm::vec3{-glm::pi<float>()}, glm::vec3{0.0f}));
         ik_settings->set_limit_max(glm::clamp(to_vec3(ij.value("max",       nlohmann::json{}), defaults.limit_max), glm::vec3{0.0f},             glm::vec3{glm::pi<float>()}));
         ik_settings->set_stiffness(glm::clamp(to_vec3(ij.value("stiffness", nlohmann::json{}), defaults.stiffness), glm::vec3{0.0f},             glm::vec3{0.99f}));
+        // The pole (doc/plans/rigging/pole_target.md R24). The angle is read
+        // when it is a finite number; the pole node is a glTF node index into
+        // the parse's own node table, the form KHR_physics_rigid_bodies uses
+        // for a joint's connectedNode, so it survives renames and lands on the
+        // imported copy whatever the import wraps the file's nodes in.
+        const auto pole_angle_it = ij.find("pole_angle");
+        if (pole_angle_it != ij.end()) {
+            if (pole_angle_it->is_number() && std::isfinite(pole_angle_it->get<float>())) {
+                ik_settings->set_pole_angle(pole_angle_it->get<float>());
+            } else {
+                log_parsers->warn("ERHE_rig: node '{}' 'pole_angle' is not a finite number - the value is ignored", node->get_name());
+            }
+        }
+        const auto pole_target_it = ij.find("pole_target");
+        if (pole_target_it != ij.end()) {
+            const bool is_index = pole_target_it->is_number_unsigned();
+            const std::size_t pole_index = is_index ? pole_target_it->get<std::size_t>() : 0;
+            if (is_index && (pole_index < gltf_data.nodes.size()) && gltf_data.nodes[pole_index]) {
+                ik_settings->set_pole_target(gltf_data.nodes[pole_index]);
+            } else {
+                log_parsers->warn("ERHE_rig: node '{}' 'pole_target' is not a node index of this file - no pole is set", node->get_name());
+            }
+        }
         const auto rest_it = ij.find("rest_rotation");
         if (
             (rest_it != ij.end()) && rest_it->is_array() && (rest_it->size() >= 4) &&

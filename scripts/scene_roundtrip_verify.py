@@ -188,7 +188,7 @@ def read_glb_json(path):
 KNOWN_KEYWORDS = {
     "$schema", "$id", "$defs", "$ref", "title", "description",
     "type", "properties", "required", "enum", "items",
-    "minItems", "maxItems", "minimum", "anyOf",
+    "minItems", "maxItems", "minimum", "maximum", "anyOf",
     "additionalProperties", "default",
 }
 
@@ -231,9 +231,11 @@ def schema_validate(instance, schema, root_schema, path, errors):
     if "enum" in schema and instance not in schema["enum"]:
         errors.append(f"{path}: value {instance!r} not in enum {schema['enum']}")
 
-    if "minimum" in schema and isinstance(instance, (int, float)) and not isinstance(instance, bool):
-        if instance < schema["minimum"]:
+    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
+        if ("minimum" in schema) and (instance < schema["minimum"]):
             errors.append(f"{path}: value {instance} < minimum {schema['minimum']}")
+        if ("maximum" in schema) and (instance > schema["maximum"]):
+            errors.append(f"{path}: value {instance} > maximum {schema['maximum']}")
 
     if isinstance(instance, dict):
         for key in schema.get("required", []):
@@ -500,6 +502,10 @@ NODE_PHYSICS_FIELDS = ["motion_mode", "friction", "restitution", "mass", "gravit
 # joint_settings is intentionally NOT compared: a settings-less (free
 # six-dof) joint materializes a Physics_joint_settings item on reload.
 NODE_JOINT_FIELDS = ["connected_node", "enable_collision"]
+# The Ik_settings fields ERHE_rig carries outside the "properties" map
+# (doc/plans/rigging/pole_target.md R23); read through get_item_properties,
+# which get_node_details does not repeat.
+IK_SETTINGS_PROPERTIES = ["pole_target", "pole_angle"]
 
 
 def norm_attachment_details(details):
@@ -517,6 +523,10 @@ def norm_attachment_details(details):
                 record.pop("mass", None)
         elif a_type == "Node_joint":
             record = {k: attachment.get(k) for k in NODE_JOINT_FIELDS}
+        elif a_type == "Ik_settings":
+            entries = call("get_item_properties", {"item_id": attachment.get("id")}).get("properties", [])
+            values = {entry.get("name"): entry.get("value") for entry in entries}
+            record = {name: values.get(name) for name in IK_SETTINGS_PROPERTIES}
         elif a_type == "Mesh":
             record = {"name": attachment.get("name")}
         else:
@@ -720,6 +730,8 @@ R6_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference.glb")
 R6_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference_resave.glb")
 DECCER_GLB = "res/editor/assets/SM_Deccer_Cubes_Textured.glb"
 RIGGED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
+# The bone of RIGGED_GLB that carries the Ik_settings attachment (ERHE_rig).
+IK_BONE = "arm_joint_L_3"
 
 E2E_STATE = {}
 
@@ -964,6 +976,26 @@ def section_build_scene():
             "P6 Mesh Material":   "P6 Bound Box",
         }
 
+    def block_rig():
+        # ERHE_rig: an Ik_settings attachment on an imported bone, carrying a
+        # pole target and a pole angle (doc/plans/rigging/pole_target.md R23).
+        mutate("create_node", {"scene_name": scene, "name": "P6 IK Pole", "position": [0.0, 1.0, 2.0]})
+        check(S, "IK pole node created", wait_for_scene_node(scene, "P6 IK Pole"))
+        attached = mutate("add_node_attachment", {"scene_name": scene, "node_name": IK_BONE, "type": "ik_settings"})
+        check(S, "add ik_settings attachment", bool(attached) and attached.get("added"), str(attached))
+        details = call("get_node_details", {"scene_name": scene, "node_name": IK_BONE})
+        attachment_id = None
+        for attachment in details.get("attachments", []):
+            if attachment.get("type") == "Ik_settings":
+                attachment_id = attachment.get("id")
+        check(S, "ik_settings attachment found", attachment_id is not None, str(details.get("attachments")))
+        if attachment_id is None:
+            return
+        poled = mutate("set_item_property", {"item_id": attachment_id, "property": "pole_target", "value": "P6 IK Pole"})
+        check(S, "set pole_target on the bone", bool(poled), str(poled))
+        angled = mutate("set_item_property", {"item_id": attachment_id, "property": "pole_angle", "value": 0.5})
+        check(S, "set pole_angle on the bone", bool(angled), str(angled))
+
     guarded(S, "shapes block", block_shapes)
     guarded(S, "imports block", block_imports)
     guarded(S, "physics block", block_physics)
@@ -971,6 +1003,7 @@ def section_build_scene():
     guarded(S, "layout block", block_layout)
     guarded(S, "tags/locks block", block_tags_locks)
     guarded(S, "animation block", block_animation)
+    guarded(S, "rig block", block_rig)
     guarded(S, "graph texture block", block_graph_texture)
     guarded(S, "material block", block_material)
     guarded(S, "graph mesh block", block_graph_mesh)
@@ -1145,7 +1178,7 @@ def section_reload_and_diff():
         check(S, "playback stopped before the snapshot", bool(stopped) and not stopped.get("playing", False), str(stopped))
 
     exported_materials = {m.get("name") for m in doc.get("materials", [])}
-    detail_nodes = ["P6 Sphere", "P6 Torus", "P6 GM Node", "P6 Light"]
+    detail_nodes = ["P6 Sphere", "P6 Torus", "P6 GM Node", "P6 Light", IK_BONE]
     original = snapshot_scene(scene, exported_materials, detail_nodes)
 
     queued = mutate("load_scene", {"path": str(E2E_GLB)})

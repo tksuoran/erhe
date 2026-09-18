@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
-"""Acceptance criteria 1-8 of doc/plans/rigging/pole_target.md, driven over MCP.
+"""Acceptance criteria 1-9 and 12 of doc/plans/rigging/pole_target.md, over MCP.
 
 Runs against an ALREADY RUNNING editor (headless is enough; see AGENTS.md
 "In-editor MCP server"). It creates its own scene, imports the tracked
 RiggedFigure fixture, authors an Ik_settings attachment and a pole node,
 and drives the `ik_drag` tool, computing the chain's bend direction (R11
 step 3) and the swivel angles itself from the reported joint positions.
+Criteria 9 and 12 save and re-open scenes through a scratch directory of the
+OS temp area, so nothing is written into the repository.
 
     py -3 scripts/ik_pole_verify.py [--port N] [--effector arm_joint_L_3]
 
 One PASS/FAIL line per criterion with the measured number; exit code 1 when
-any criterion fails. The scene is closed again at the end.
+any criterion fails. Every scene it opened is closed again at the end.
 """
 
 import argparse
+import json
 import math
+import os
+import shutil
+import struct
 import sys
+import tempfile
 import time
 
 from erhe_mcp import DEFAULT_PORT, McpClient, check_true, report, wait_for_server
 
 GLTF_PATH = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
+# A minimal tracked USD layer, opened as a USD-backed scene so that criterion
+# 12's save takes the USD writer (save_scene follows the scene's own format).
+USD_PATH  = "src/erhe/usd/test/data/cube.usda"
+LOG_PATH  = "logs/log.txt"
 
 # Doc tolerances (acceptance criteria 3-7).
 ANGLE_TOLERANCE_DEG = 2.0
@@ -138,6 +149,119 @@ def undo_depth(client):
     return len(client.call("get_undo_redo_stack")["undo"])
 
 
+def log_size():
+    try:
+        return os.path.getsize(LOG_PATH)
+    except OSError:
+        return 0
+
+
+def log_since(offset):
+    """The editor's log text written after `offset` (AGENTS.md "Runtime logs")."""
+    try:
+        with open(LOG_PATH, "rb") as handle:
+            handle.seek(offset)
+            return handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+GLB_MAGIC      = 0x46546C67
+GLB_CHUNK_JSON = 0x4E4F534A
+
+
+def read_glb_chunks(glb_path):
+    """The GLB header version plus its chunks as (chunk_type, bytes) pairs."""
+    with open(glb_path, "rb") as handle:
+        data = handle.read()
+    magic, version, _total = struct.unpack_from("<III", data, 0)
+    if magic != GLB_MAGIC:
+        raise RuntimeError(f"{glb_path} is not a GLB file")
+    chunks = []
+    offset = 12
+    while offset + 8 <= len(data):
+        chunk_length, chunk_type = struct.unpack_from("<II", data, offset)
+        chunks.append((chunk_type, data[offset + 8:offset + 8 + chunk_length]))
+        offset += 8 + chunk_length
+    return version, chunks
+
+
+def read_glb_json(glb_path):
+    _version, chunks = read_glb_chunks(glb_path)
+    for chunk_type, payload in chunks:
+        if chunk_type == GLB_CHUNK_JSON:
+            return json.loads(payload.decode("utf-8"))
+    raise RuntimeError(f"{glb_path} has no JSON chunk")
+
+
+def write_glb_with_json(source_path, destination_path, document):
+    """`source_path` with its JSON chunk replaced by `document`."""
+    version, chunks = read_glb_chunks(source_path)
+    payload = json.dumps(document).encode("utf-8")
+    payload += b" " * ((4 - (len(payload) % 4)) % 4)
+    body = b""
+    for chunk_type, chunk_payload in chunks:
+        chunk = payload if (chunk_type == GLB_CHUNK_JSON) else chunk_payload
+        body += struct.pack("<II", len(chunk), chunk_type) + chunk
+    with open(destination_path, "wb") as handle:
+        handle.write(struct.pack("<III", GLB_MAGIC, version, 12 + len(body)) + body)
+
+
+def rig_ik_object(glb_path, node_name):
+    """The ERHE_rig `ik` object a saved .glb holds for one node."""
+    for node in read_glb_json(glb_path).get("nodes", []):
+        if node.get("name") == node_name:
+            return node.get("extensions", {}).get("ERHE_rig", {}).get("ik")
+    return None
+
+
+def scene_formats(client):
+    return {scene["name"]: scene.get("source_format") for scene in client.call("list_scenes")["scenes"]}
+
+
+def load_scene_file(client, path, timeout_s=180.0):
+    """File > Load Scene plus the wait for the scene it queues.
+
+    The erhe-authored-scene path, not `open_scene`: it opens the file as the
+    scene it was saved from, with its top-level prims in place, so every item
+    keeps the reference path it was saved with (`open_scene` imports the file
+    under an import-root wrapper instead, which criterion 9e exercises).
+    """
+    before = set(scene_formats(client))
+    client.call("load_scene", {"path": path})
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        advance(client, 4)
+        new = [name for name in scene_formats(client) if name not in before]
+        if new:
+            wait_idle(client)
+            return new[0]
+    raise RuntimeError(f"load_scene produced no scene for {path}")
+
+
+def ik_attachment_id(client, scene, node_name):
+    details = client.call("get_node_details", {"scene_name": scene, "node_name": node_name})
+    for attachment in details.get("attachments", []):
+        if attachment.get("type", "") == "Ik_settings":
+            return attachment["id"]
+    return None
+
+
+def pole_state(client, attachment_id):
+    """The attachment's pole fields as get_item_properties reports them."""
+    by_name = {
+        entry.get("name"): entry
+        for entry in client.call("get_item_properties", {"item_id": attachment_id})["properties"]
+    }
+    target = by_name.get("pole_target", {})
+    angle  = by_name.get("pole_angle", {})
+    return {
+        "pole_target":  target.get("value"),
+        "reference_id": target.get("reference_id"),
+        "pole_angle":   angle.get("value"),
+    }
+
+
 def make_scene(client):
     before = {scene["name"] for scene in client.call("list_scenes")["scenes"]}
     client.call("create_scene")
@@ -194,11 +318,7 @@ def main():
     depth = undo_depth(client)
     client.call("add_node_attachment", {"scene_name": scene, "node_name": args.effector, "type": "ik_settings"})
     advance(client, 6)
-    details = client.call("get_node_details", {"scene_name": scene, "node_name": args.effector})
-    attachment_id = None
-    for attachment in details["attachments"]:
-        if attachment.get("type", "") == "Ik_settings":
-            attachment_id = attachment["id"]
+    attachment_id = ik_attachment_id(client, scene, args.effector)
     undo_delta_attach = undo_depth(client) - depth
     check_true("2 add_node_attachment ik_settings", attachment_id is not None, f"attachment_id={attachment_id}")
     if attachment_id is None:
@@ -319,7 +439,126 @@ def main():
         ", ".join(f"{name}={delta}" for name, delta in deltas.items()),
     )
 
-    close_scene(client, scene)
+    # --- criterion 9: the pole survives a save and a re-open (R23, R24) ---
+    scratch = tempfile.mkdtemp(prefix="erhe_ik_pole_")
+    opened = []
+    try:
+        # The pole is parented below another node first, so the saved pole is
+        # not a top-level name and the file has to say which node it means.
+        # The holder sits at the origin, so the pole keeps its world position.
+        client.call("create_node", {"scene_name": scene, "name": "rig_holder", "position": [0.0, 0.0, 0.0]})
+        advance(client, 6)
+        client.call("reparent_item", {"scene_name": scene, "item_name": "ik_pole", "parent_name": "rig_holder"})
+        advance(client, 6)
+        client.call("set_item_property", {"item_id": attachment_id, "property": "pole_target", "reference_id": pole_id})
+        advance(client, 6)
+        before_state = pole_state(client, attachment_id)
+
+        first_path = os.path.join(scratch, "ik_pole_first.glb")
+        client.call("save_scene", {"scene_name": scene, "path": first_path})
+        wait_idle(client)
+
+        reopened = load_scene_file(client, first_path)
+        opened.append(reopened)
+        reopened_attachment = ik_attachment_id(client, reopened, args.effector)
+        after_state = pole_state(client, reopened_attachment) if reopened_attachment is not None else {}
+        check_true(
+            "9a pole_target and pole_angle survive save and re-open",
+            (after_state.get("pole_target") == before_state["pole_target"])
+            and (after_state.get("pole_angle") == before_state["pole_angle"])
+            and (after_state.get("reference_id") is not None),
+            f"before={before_state} after={after_state}",
+        )
+
+        second_path = os.path.join(scratch, "ik_pole_second.glb")
+        client.call("save_scene", {"scene_name": reopened, "path": second_path})
+        wait_idle(client)
+        first_ik  = rig_ik_object(first_path, args.effector)
+        second_ik = rig_ik_object(second_path, args.effector)
+        check_true(
+            "9b a save of the re-opened scene writes the same ik object",
+            (first_ik is not None) and (first_ik == second_ik),
+            f"first={first_ik} second={second_ik}",
+        )
+
+        # A file whose pole_target is not a node index of the file: the same
+        # save with that one JSON-chunk value pushed out of range.
+        dangling_path = os.path.join(scratch, "ik_pole_dangling.glb")
+        document = read_glb_json(first_path)
+        replaced = 0
+        for node in document.get("nodes", []):
+            ik = node.get("extensions", {}).get("ERHE_rig", {}).get("ik")
+            if (ik is not None) and ("pole_target" in ik):
+                ik["pole_target"] = len(document.get("nodes", [])) + 1000
+                replaced += 1
+        check_true(
+            "9c the saved file names its pole by node index",
+            (replaced == 1) and isinstance(first_ik.get("pole_target"), int),
+            f"pole_target keys rewritten={replaced}, saved pole_target={first_ik.get('pole_target')!r}",
+        )
+        write_glb_with_json(first_path, dangling_path, document)
+
+        log_offset = log_size()
+        dangling = load_scene_file(client, dangling_path)
+        opened.append(dangling)
+        log_text = log_since(log_offset)
+        dangling_attachment = ik_attachment_id(client, dangling, args.effector)
+        dangling_state = pole_state(client, dangling_attachment) if dangling_attachment is not None else {}
+        warned = "'pole_target' is not a node index of this file" in log_text
+        check_true(
+            "9d an out-of-range pole_target warns, leaves no pole and keeps every other field",
+            warned
+            and (dangling_state.get("reference_id") is None)
+            and (dangling_state.get("pole_angle") == before_state["pole_angle"]),
+            f"state={dangling_state} warned={warned}",
+        )
+
+        # The same file IMPORTED into another scene: import_gltf places the
+        # file's nodes under an import root, so a name or a path written by
+        # the save would miss - the node index lands on the imported copy.
+        before = set(scene_formats(client))
+        client.call("create_scene")
+        advance(client, 6)
+        importing = [name for name in scene_formats(client) if name not in before][0]
+        opened.append(importing)
+        client.call("import_gltf", {"scene_name": importing, "path": first_path})
+        wait_idle(client)
+        imported_attachment = ik_attachment_id(client, importing, args.effector)
+        imported_state = pole_state(client, imported_attachment) if imported_attachment is not None else {}
+        imported_pole_id = client.call("get_node_details", {"scene_name": importing, "node_name": "ik_pole"})["id"]
+        check_true(
+            "9e an imported file binds the pole to the imported copy",
+            (imported_state.get("reference_id") == imported_pole_id)
+            and (imported_state.get("pole_angle") == before_state["pole_angle"]),
+            f"pole reference_id={imported_state.get('reference_id')} imported pole id={imported_pole_id} "
+            f"path={imported_state.get('pole_target')!r}",
+        )
+
+        # --- criterion 12: a USD save names the IK settings it drops (R26) ---
+        usd_scene = load_scene_file(client, USD_PATH)
+        opened.append(usd_scene)
+        if scene_formats(client).get(usd_scene) != "usd":
+            print(f"  [SKIP] 12 USD save warning ({USD_PATH} did not open as a USD scene; USD support not built?)")
+        else:
+            client.call("import_gltf", {"scene_name": usd_scene, "path": GLTF_PATH})
+            wait_idle(client)
+            client.call("add_node_attachment", {"scene_name": usd_scene, "node_name": args.effector, "type": "ik_settings"})
+            advance(client, 6)
+            usd_path = os.path.join(scratch, "ik_pole_usd.usda")
+            log_offset = log_size()
+            saved = client.call("save_scene", {"scene_name": usd_scene, "path": usd_path})
+            wait_idle(client)
+            log_text = log_since(log_offset)
+            check_true(
+                "12 USD save completes and warns that IK settings are not written",
+                bool(saved.get("saved")) and os.path.isfile(usd_path) and ("carry IK settings" in log_text),
+                f"saved={saved.get('saved')} file={os.path.isfile(usd_path)} warned={'carry IK settings' in log_text}",
+            )
+    finally:
+        for name in reversed(opened):
+            close_scene(client, name)
+        close_scene(client, scene)
+        shutil.rmtree(scratch, ignore_errors=True)
     return report()
 
 

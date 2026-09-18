@@ -191,7 +191,7 @@ Implementation status section for commits and code locations):
 Builds directly on Phase 1's solver and drag UX.
 
 - **Pole target / swivel control**: designate a pole node to control chain
-  bend direction (elbow/knee). Requirements: `pole_target.md`.
+  bend direction (elbow/knee). Implemented; requirements: `pole_target.md`.
 - **Per-bone IK settings**: DOF locks per axis and joint rotation limits
   (min/max per axis), stored per node (new small POD on bone nodes or a node
   attachment), edited in Properties. Solver enforces them via constrained

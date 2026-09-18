@@ -543,6 +543,13 @@ public:
     // root, e.g. ("ERHE_brushes", "{\"brushes\":[...]}"). Each returned
     // name is declared in extensionsUsed automatically.
     std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder{};
+    // Called in the same place as asset_extensions_builder, for per-node
+    // payloads that name a glTF index (an ERHE_rig pole target naming another
+    // node): returns (node, extension members) pairs, in the "member" form
+    // extension_payloads uses, merged into that node's payload. A node
+    // outside the export is skipped with a warning. The caller lists the
+    // extension names in extensions_used, as it does for extension_payloads.
+    std::function<std::vector<std::pair<const erhe::scene::Node*, std::string>>(const Gltf_export_index_lookup&)> node_extensions_builder{};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
