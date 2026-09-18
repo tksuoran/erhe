@@ -291,5 +291,6 @@ verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-
 
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
 ✓pole-target-slice{484bac408+67aafe503+c59ba15b3+08a7a73e0;ik_pole_verify.py-all-pass;solver-tests-22;roundtrip-418/421}
-?effector-orientation-option{coder-running}->chain-visualization->deferred-Phase-1-questions
-?user-interactive-deferred{ik_settings-slice;pole-picker;live-drag}
+✓effector-orientation{ebf606ff2;verify-5/5}+chain-visualization{edaf10d98;solver-tests-26;visual-check-interactive-only}
+?left::stiffness+Phase-1-feel-questions{need-user-hands-on}->Phase-3
+?user-interactive-deferred{ik_settings-slice;pole-picker+angle-rows;live-drag-with-pole;Move-tool-Effector-Orientation-combo;chain/root/pole-visualization-during-drag}
