@@ -288,8 +288,8 @@ void Composition_pass::render(const Render_context& context)
             const std::shared_ptr<erhe::scene::Node> debug_target_joint =
                 context.app_context.app_rendering->debug_target_joint.lock();
 
-            // Draw-list path (doc/draw_list_renderer.md, plan
-            // phase 3/5): route to the scene's persistent draw lists when the
+            // Draw-list path (doc/draw_list_renderer.md section 9.4):
+            // route to the scene's persistent draw lists when the
             // gate is on and this pass is fully expressible with them -
             // polygon fill, no shader debug, no shader / blend overrides, no
             // forced shader bits, and a plain

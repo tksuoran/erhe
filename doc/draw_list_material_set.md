@@ -2,17 +2,17 @@
 
 Stability: stable
 
-Planning context - the reported bug and its root cause, the second motivation,
-and the review and citation state - lives in
-`doc/draw_list_material_set_context.md`, **which also owns the status of this
-work**: what has landed, what has been verified and what has not. This document
-states the requirements, the design and the phase steps, and keeps them in the
-imperative even where they are done; it is not the place to look for progress.
+`Material_set` owns one slot space: the membership that says which materials
+are members and at which slot, and the GPU objects - a material buffer and a
+texture heap - written from it. A slot is a property of the set that issued it,
+never of the material, which is what lets two scenes, two render paths and a
+thumbnail preview render in one frame without disturbing each other.
 
-**All of it is implemented.** Section 1 here states the requirements and is the
-entry point; section 2 designs against them, and every later section refers back
-by label rather than restating. References to "section 1" that name the context
-doc mean that document's motivation section.
+Section 1 states the requirements and is the entry point; section 2 designs
+against them; section 3 gives the order the pieces depend on each other in;
+section 4 the verification; section 5 the standing risks; and section 6 the
+root cause the whole design answers. Every section refers back by label rather
+than restating, and the `R`, `D` and `V` labels are cited from source comments.
 
 ## 1. Requirements
 
@@ -25,7 +25,7 @@ introduces `Material_set` and everything else that follows from them.
 whatever else rendered in the same frame, and whatever order the assignments
 happened in. This is the reported defect: today a material dragged onto a second
 mesh leaves that mesh nearly unchanged, and reversing the order moves the
-failure to the other mesh (context doc, section 1).
+failure to the other mesh (section 6).
 
 **R2 - A cached material reference stays valid while its record can be drawn.**
 *Draw-list renderer only.* Its primitive records are written once and consumed
@@ -87,8 +87,8 @@ performs no material upload, no texture-heap rebuild and no descriptor-set
 allocation.
 
 **R11 - Per-frame material cost scales with materials and with changes, not with
-passes.** *Draw-list renderer only.* Today the whole material buffer and texture
-heap are rebuilt once per pass (context doc, section 1.2).
+passes.** *Draw-list renderer only.* A renderer-owned buffer instead rebuilds
+the whole material buffer and texture heap once per pass (section 6).
 
 **R12 - Material capacity follows scene content.** *Draw-list renderer only.* A
 scene renders correctly however many distinct materials it uses, rather than
@@ -116,10 +116,8 @@ from, so heap contents and record contents stay in step.
 GPU**, and the reported defect has an automated regression test that inspects
 what a cached record resolved to rather than what the material says.
 
-Explicitly out of scope: material *assignment* is still not undoable (dragging a
-material onto a mesh pushes no `Operation`, so undo reverts the previous
-material-data edit instead). That is a separate defect with a separate fix
-(`Mesh_material_assign_operation`).
+Material *assignment* is undoable separately, through
+`Mesh_material_assign_operation`; nothing in this document depends on that.
 
 ## 2. Design
 
@@ -132,8 +130,8 @@ backs the texture references written into one, belongs to exactly one
 `Material_set`, and nothing else creates, writes or resets either. This covers
 material state only: the heaps owned by `Imgui_renderer`, `Text_renderer`,
 `Texel_renderer`, `Post_processing` and hextiles' `Tile_renderer` hold no
-material textures, are reached through no material slot, and are untouched by
-this plan.
+material textures, are reached through no material slot, and are outside this
+rule.
 
 The relation runs the other way for materials: a `Material` may be a member of
 any number of sets at once, and its slot, its buffer record and its heap entry
@@ -156,7 +154,7 @@ through two paths, and each gets its own `Material_set`:
 | --- | --- | --- |
 | Owned by | `Scene_root` | `Draw_list_scene` |
 | Exists for | every scene root | only roots that render through draw lists |
-| Feeds | `Forward_renderer::render` / `draw_primitives`, `Shadow_renderer`'s bucket path, and from phase 5 `Ddgi_renderer` / `Ray_trace_renderer` | `Draw_list_renderer::render` and the shadow draw-list path |
+| Feeds | `Forward_renderer::render` / `draw_primitives`, `Shadow_renderer`'s bucket path, `Ddgi_renderer` and `Ray_trace_renderer` | `Draw_list_renderer::render` and the shadow draw-list path |
 | Records naming its slots | written by `Primitive_buffer::update` *during* the pass and consumed by that same pass | cached in `Draw_list::primitive_records`, consumed on later frames |
 | Slot stability | holds trivially; records die with the pass | **required** - R2 |
 | Membership sources | content library + object references counted by `Scene_root`'s mesh hooks (D1c) | content library + draw-list object references (D1a) |
@@ -367,7 +365,7 @@ bucket path, where the miss policy is `Primitive_buffer`'s (D1c, D5).
 three platform branches, identical definitions; erhe has no debug-only assert
 macro). That is intended here rather than worked around: a lookup miss means R4
 was violated, and silently rendering the wrong material is precisely the class
-of bug this plan exists to eliminate.
+of bug this design exists to eliminate.
 
 The verify is the guard for the one lookup path that still runs mid-pass:
 `write_object_gpu_slots` is called from the joint half of `sync_gpu_slots()`
@@ -420,7 +418,7 @@ materials are referenced in the forward set before any pass can name them
 (R3). This is also what makes the **preview roots** correct without a draw list
 (D0) - `Material_preview::render_preview` assigns a different material to its
 already-registered sphere on every call (`material_preview.cpp:233`), which the
-content library alone does not cover (context doc, section 1), but
+content library alone does not cover (section 6), but
 `on_mesh_material_changed` does.
 
 It stays bounded, too (R14): the hook applies a **diff** of the mesh's material
@@ -648,12 +646,11 @@ sites (`editor.cpp:3018`, `scene_open_operation.cpp:44`, `gltf.cpp:1477`,
 `scene_preview.cpp:59`, `scene_commands.cpp:521`), every `Draw_list_scene`, and
 the three library-only owners below.
 
-**`Draw_list_scene` is created exactly where it is today** (D0). Its
-constructor takes four positional arguments
-(`draw_list_scene.hpp:113-118`) and this plan adds a `Material_set_create_info`;
-collapse them into a `Draw_list_scene_create_info` in the same header and let
-`Draw_list_scene_dependencies` (`scene/draw_list_scene_dependencies.hpp`) fill
-it.
+**`Draw_list_scene` is created exactly where it always was** (D0). Its
+constructor arguments, the `Material_set_create_info` among them, are collected
+into a `Draw_list_scene_create_info` in the same header, which
+`Draw_list_scene_dependencies` (`scene/draw_list_scene_dependencies.hpp`)
+fills.
 
 **Direct `Material_set` owners** - the BRDF slice window, the example
 application and the shared empty set construct a `Material_set` and nothing
@@ -695,7 +692,7 @@ takes its mesh layers from the same `scene_root` it resolves the material
 library from (`composition_pass.cpp:143-144`, `:225`), and the draw-list path
 passes that same root's `Draw_list_scene` (`composition_pass.cpp:289,332`).
 That pairing is the justification; library completeness is not, since the
-library omits materials a mesh uses (context doc, section 1), which is why
+library omits materials a mesh uses (section 6), which is why
 membership is refcounted (D1).
 
 ### D5 - Renderers bind a set they are handed
@@ -748,46 +745,32 @@ look slots up. Which set it gets follows the path its caller already chose:
 | `Draw_list_renderer::render` | draw list | the draw-list set of the `Draw_list_scene` in its parameters, passed by `Composition_pass`'s draw-list branch (`composition_pass.cpp:289,332`); an `ERHE_VERIFY` pins `material_source == &draw_list_scene.get_material_set()` so the two always agree |
 | `Forward_renderer::render` / `draw_primitives` | bucket | the root's **forward** set, from `Composition_pass`'s bucket branch (`composition_pass.cpp:354,365`; `:324` is the draw-list branch) and every other bucket caller; the shared empty set when null (D8) |
 | `Shadow_renderer::render` | both | whichever matches the path that light takes, filled by `Shadow_render_node` (`shadow_render_node.cpp:601`) |
-| `Ddgi_renderer`, `Ray_trace_renderer` | compute | the root's forward set, **from phase 5**; until then they keep their own material buffers and library-order indices, self-consistent because each writes and reads its records within one pass |
+| `Ddgi_renderer`, `Ray_trace_renderer` | compute | the root's forward set (phase 5) |
 | `Id_renderer` | bucket | none, and it binds none: its shader reads only the id, and it is not a `Base_render_parameters` caller at all - it owns its `Primitive_buffer` and drives its own encoder (`id_renderer.cpp:76,394-398`). Its only material contact is the null `const Material_set*` it hands `Primitive_buffer`, which then writes a constant slot 0 (D1c) |
 
 A frame over one root therefore binds *both* of that root's sets, in different
 passes (D0); every comparison of slots stays within one set.
 
-**This plan reverses half of R8a, deliberately.**
-`doc/draw_list_renderer.md` R8a currently reads:
-"`Draw_list_scene` owns NO GPU buffers or texture heap. The per-pass Camera /
-Light / Material / Joint / texture-heap update + bind sequence remains the
-responsibility of the owning renderer (`Forward_renderer` for color,
-`Shadow_renderer` for shadow), and `draw()` is invoked *inside* that sequence."
-After this plan, `Draw_list_scene` *does* own GPU state - a `Material_set`, and
-through it the material buffer and the texture heap. The camera, light and
-joint buffers stay with the renderer, so R8a holds for those. This is not an
-oversight to be reconciled later: R8a's own closing sentence is the bug this
-plan exists to fix - "material and joint GPU slots (`material_buffer_index`,
-`joint_buffer_index`) are assigned per `Material_buffer::update` /
-`Joint_buffer::update` call and therefore cannot be baked into entries - an
-entry stores a stable reference to the material / skin and the slot is read at
-upload time". Slots that are assigned per renderer call are exactly why "slot
-7" means different materials in different passes (context doc, section 1).
-Phase 4 must therefore also amend R8a in `draw_list_renderer_requirements.md` -
-its material and texture-heap clauses, and its naming of the colour path's
-owning renderer, which the prerequisite commit changes - together with the
-four comments that cite it - `primitive_buffer.hpp:161`,
-`draw_list_scene.cpp:598`, `draw_list_scene.hpp:58`, and the one on the
-draw-list entry point (`forward_renderer.hpp:173` today, moved into
-`draw_list_renderer.hpp` by the prerequisite commit) - rather than leaving a
-requirements document that contradicts the code.
+**Material GPU state is the one exception to R8a.** R8a in
+`doc/draw_list_renderer.md` keeps the per-pass Camera / Light / Joint update
+and bind sequence with the owning renderer; the material half is exactly the
+state that cannot live there, because a slot assigned per renderer call is why
+"slot 7" means different materials in different passes (section 6). So
+`Draw_list_scene` owns a `Material_set`, and through it the material buffer and
+the texture heap, while the camera, light and joint buffers stay with the
+renderer. Joint slots keep the R8a treatment - a stable skin reference in the
+entry and the slot read at upload time - because they genuinely are assigned
+per `Joint_buffer::update` call.
 
-**The scope of this decoupling.** It removes the *material* reason for any
-renderer to name a draw-list type: after phase 4 the bucket path's parameters,
-buffers and bind sequence are expressed in material types alone, and
-`Forward_renderer` names no draw-list type at all. The two paths keep sharing
-their per-pass prologue through `Scene_pass_resources` (`c6ab99db4`), which is
-where D2's and D5's edits land, and each renderer reaches it by reference (the
-prerequisite commit, section 3).
+**The scope of this decoupling.** No renderer has a *material* reason to name a
+draw-list type: the bucket path's parameters, buffers and bind sequence are
+expressed in material types alone, and `Forward_renderer` names no draw-list
+type at all. The two paths share their per-pass prologue through
+`Scene_pass_resources`, which is where D2's and D5's edits land, and each
+renderer reaches it by reference (the prerequisite, section 3).
 
-Everything that fills the old field must change with it (phase 4):
+Every filler of the `materials` parameter it replaces changes with it
+(phase 4):
 `composition_pass.cpp:201,324,365`, `shadow_render_node.cpp:601`,
 `brdf_slice.cpp:116`, `depth_visualization_window.cpp:149`, `example.cpp:439`.
 
@@ -959,7 +942,7 @@ new to say and every other frame rebinds the copy that is already current.
 
 **Both kinds of set use it**, though only the draw-list set is required to
 (R10, R11). The forward set gets the same treatment because it removes the
-per-pass rewrite the context doc's section 1.2 measures, and because one
+per-pass rewrite section 6 describes, and because one
 mechanism for both sets is simpler than two; the bucket path's own obligations
 end at R7 and R8.
 
@@ -1155,7 +1138,7 @@ exist.
 Two things stand between that and "it just works", and both are part of this
 plan rather than follow-ups.
 
-**The accessor hole (R4's second half) - closed, `fbaaa33a4`.** `set_primitive_material`
+**The accessor hole (R4's second half).** `set_primitive_material`
 and `set_primitive_lightmap_uv_scale_offset` are the only writers of a
 `Mesh_primitive` field and of the vector's structure, so the comments at
 `erhe_scene/mesh.hpp:111-116` are enforced rather than advisory. Every call site
@@ -1191,19 +1174,20 @@ slot.
 
 ## 3. Implementation
 
-One commit per phase: edit, build the primary tree, self-review the diff,
-commit. Test suites and the multi-backend sweep run once, at the end (phase 7).
+The phases below are the order in which the pieces depend on one another, and
+their labels are cited from source comments. Phases 2 and 3 build the
+device-agnostic foundations and give them owners while no consumer reads a
+slot; phase 4 switches the index space, which has to happen atomically; phases
+5 and 6 finish the conversion and delete what it replaces.
 
-**Prerequisite commit - `Draw_list_renderer`** (landed, `c497f339e`). The draw-list draw entry point
-becomes its own renderer before phase 1: `Draw_list_render_parameters` and the
-body of today's `Forward_renderer` draw-list entry point move to a new
-`Draw_list_renderer` in `erhe_scene_renderer`, its one caller
-(`composition_pass.cpp:313`) is re-pointed at it, and `forward_renderer.hpp`
-drops `draw_list.hpp`. The shared per-pass prologue stays in
-`Scene_pass_resources`, which `c6ab99db4` already extracted and which holds no
-per-frame state of its own (`begin_pass` returns a `Pass_state`), so it is owned
-once and both renderers take a reference. This commit carries no material
-content, and the plan is written against `Draw_list_renderer` throughout.
+**Prerequisite - `Draw_list_renderer`.** The draw-list draw entry point is its
+own renderer: `Draw_list_render_parameters` and the body of the entry point
+live in `Draw_list_renderer` in `erhe_scene_renderer`, `Composition_pass` calls
+it directly, and `forward_renderer.hpp` names no draw-list header. The shared
+per-pass prologue stays in `Scene_pass_resources`, which holds no per-frame
+state of its own (`begin_pass` returns a `Pass_state`), so it is owned once and
+both renderers take a reference. That split carries no material content, and
+everything below is stated against `Draw_list_renderer`.
 
 **The index space must switch atomically.** A cached draw-list record's
 `material_index`, a primitive record written during a pass, and the material
@@ -1227,7 +1211,7 @@ and the record bytes sit behind `Draw_list_scene`'s private
   `material_index`, and a per-entry `material_index` field in
   `query_draw_lists`.
 
-V3 is written and shown **red** here, before any behaviour change.
+V3 rests on both, and nothing else in the MCP surface reaches a cached record.
 
 **Phase 2 - Device-agnostic foundations, no callers.**
 
@@ -1256,7 +1240,7 @@ Nothing in the tree uses any of it yet. `Material_buffer` is untouched and keeps
 writing `material->material_buffer_index` - every existing reader still depends
 on it until phase 6. Ships with the V1 and V6 tests.
 
-Two things the implementation settled that the design did not say:
+Two properties of the storage layer that the rest rests on:
 
 - **`Buffer::begin_write(offset, count)` is not usable for a multi-copy write.**
   On the persistently mapped path it ignores its offset and returns the
@@ -1278,8 +1262,8 @@ Two things the implementation settled that the design did not say:
 - `Material_set::enqueue_* / flush_pending()` (D1, R13).
 - **`Scene_root` gains the forward set** (D4): a plain member from the
   constructor (D3), and the four mesh hooks that reference and release
-  materials (D1c). This half of the plan lives entirely in `Scene_root`, and it
-  is what makes the preview roots correct through their forward set alone.
+  materials (D1c). This half lives entirely in `Scene_root`, and it is what
+  makes the preview roots correct through their forward set alone.
 - **`Draw_list_scene` gains the draw-list set**, declared before `m_objects`;
   `Draw_list_scene_create_info` (D3) carries the `Material_set_create_info`. The
   set of `Draw_list_scene` owners stays exactly as it is (D0).
@@ -1296,10 +1280,10 @@ Two things the implementation settled that the design did not say:
 No consumer reads either set's slots yet, so the frame is unchanged. Ships with
 V2.
 
-Three things the implementation settled that the design did not say:
+Three properties of the owners that this phase establishes:
 
-- **The content hash and the record writer are generated from one list**, which
-  is what D10's open question asked for. `Material_record_inputs`
+- **The content hash and the record writer are generated from one list.**
+  `Material_record_inputs`
   (`material_buffer.hpp`) is every value one record is written from, resolved:
   the POD fields, and per texture slot the resolved `const Texture*`, the
   `const Sampler*` and the packed rotation / scale / offset.
@@ -1308,7 +1292,7 @@ Three things the implementation settled that the design did not say:
   cannot drift, because a field that is not in the struct reaches neither.
 - **The shared fallback pair and the empty set are owned by
   `Material_set_factory` (`editor/renderers/material_set_factory.{hpp,cpp}`),
-  not by `App_rendering`** as D3 says. `App_rendering` is built inside the
+  not by `App_rendering`,** which is what D3 names. `App_rendering` is built inside the
   construction taskflow, and so are the scene roots and both previews, each of
   which needs a GPU-backed set from its own constructor; an owner built inside
   that graph is visible to some of them and not others depending on
@@ -1380,39 +1364,32 @@ empty set; `Material_buffer::write_records()` is the span writer the sets use.
   `Material_watch`,
   `m_material_watches` and the material half of `sync_gpu_slots()` deleted, with
   `check_material_changes()` re-pointed at the set (D7).
-- **Amend R8a in `doc/draw_list_renderer.md`**, as D5 sets out,
-  along with the four code comments citing it: `primitive_buffer.hpp:161`,
-  `draw_list_scene.cpp:598`, `draw_list_scene.hpp:58`, and the draw-list entry
-  point's (`forward_renderer.hpp:173` today, in `draw_list_renderer.hpp` by
-  then).
-- The R4 cheap path (D11), **as its own commit after the phase 4 commit**:
-  the full re-register is already correct, so the optimization lands on its own
-  and leaves the atomic switch standing by itself. **Landed**, comparing the
-  whole key plus the entry's baked variant rather than the three named fields:
-  the classification has to be recomputed either way, so the exact test costs
-  no more than the predicate and cannot mis-predict.
+- R8a in `doc/draw_list_renderer.md` and the code comments citing it state the
+  material exception D5 sets out, so no requirement contradicts the code.
+- The R4 cheap path (D11), **after the switch and separate from it**: the full
+  re-register is correct on its own, so the optimization does not have to share
+  the atomic change. It compares the whole key plus the entry's baked variant
+  rather than the three named fields: the classification has to be recomputed
+  either way, so the exact test costs no more than the predicate and cannot
+  mis-predict.
 
-V3 turns green here.
-
-Two things the implementation settled that the design did not say:
+Two properties of the switch that this phase establishes:
 
 - **`Scene_pass_resources` and `Shadow_renderer` take the shared empty set by
   reference at construction**, because `material_source == nullptr` has to
   resolve to *something* and neither owns one. `Editor` hands them
   `Material_set_factory::get_empty_material_set()`; the example, which has no
   pass without materials of its own, hands them its own set.
-- **V3's second assertion had to change with the index space.** It compared a
-  cached record's `material_index` against `Material::material_buffer_index`,
-  which after this phase nothing in the raster path writes. `get_draw_lists`
-  gained a per-entry `material_set_slot` - the material's slot in that scene's
-  **draw-list** set - and the test compares against that. The comparison is
-  the same claim, now stated in the slot space the records actually name.
+- **V3 asserts in the slot space the records name.** Nothing in the raster path
+  writes `Material::material_buffer_index` once the switch is through, so
+  `get_draw_lists` carries a per-entry `material_set_slot` - the material's slot
+  in that scene's **draw-list** set - and the test compares a cached record's
+  `material_index` against that.
 
 **Phase 5 - Compute path.** `Ddgi_renderer`, `Ray_trace_renderer` and
-`Scene_tlas` move to the root's **forward** set (D5).
-Until this lands these three keep their own material buffers and library-order
-indices, which is self-consistent: they write their TLAS instance records and
-read them back within the same pass.
+`Scene_tlas` take the root's **forward** set (D5). They come last because each
+writes its TLAS instance records and reads them back within one pass, so their
+own library-order indices stay self-consistent until the switch reaches them.
 
 **Phase 6 - Delete the field.** Remove `material_buffer_index` and
 `preview_slot` from `Material`, and the legacy ring-based
@@ -1422,9 +1399,8 @@ base. The compiler enumerates the last readers: the trace line at
 the slot from the mesh's scene root's forward set). After this commit the reported
 bug is unrepresentable.
 
-**Phase 7 - Verification.** Section 4. What has and has not been run is
-recorded in `doc/draw_list_material_set_context.md`; the automated half is
-green and the interactive half needs a person at the keyboard.
+**Phase 7 - Verification.** Section 4. V1, V2, V3 and V6 are automated; V4 and
+V5 need a person at the keyboard.
 
 ## 4. Verification
 
@@ -1450,7 +1426,7 @@ all three need adding.
    change membership: `get_slot()` on an unknown material
    returns nullopt and leaves the set unchanged (no slot count growth).
 7. `add_ref_assigns_slot_for_material_not_in_library` - the
-   assign-to-registered-mesh path from the context doc's section 1.
+   assign-to-registered-mesh path of section 6.
 8. `referenced_material_survives_library_sync` - add_ref, then `sync_library`
    without it: slot held.
 9. `slot_freed_only_when_both_sources_are_gone` - drop the library reference,
@@ -1588,8 +1564,9 @@ endpoint `127.0.0.1:3743` (`mcp_server.hpp:75`, `ERHE_MCP_PORT`, matching
    holds a different slot in each (D0).
 6. Repeat with the assignment order reversed.
 
-Red from phase 1, green at phase 4. Run with `ERHE_MCP_TEST_TIMEOUT_S=1` to keep
-the suite near four minutes.
+Run with `ERHE_MCP_TEST_TIMEOUT_S=1` to keep the suite near four minutes. The
+editor rewrites `config/editor/editor_settings.json` as it runs; revert that
+file before committing.
 
 ### V4 - Targeted manual checks
 
@@ -1697,12 +1674,12 @@ condition to cover it is future work rather than a gap in what V6 states.
   frame of every material edit now depends on the content hash covering exactly
   the bytes the record writer reads. A field added to `Material_data` and
   written to the record but not added to the hash produces a material that
-  silently never updates - the exact bug in the context doc's section 1, with a
+  silently never updates - the exact bug of section 6, with a
   new cause. Keep the hash function and the record writer adjacent in
   `material_buffer.cpp`, and add a comment on each saying the other changes with
   it. V4.2 exists to catch a miss; it is a manual check, which is the weakest
-  link in this plan.
-- **Two sets per main root is the newest and least reviewed decision.** The
+  link in this verification.
+- **Two sets per main root.** The
   memory cost is a straight doubling on roots that render through draw lists -
   two copy buffers and two texture heaps each (phase 3 sizing, V5). The
   correctness cost is that every invalidation must reach *both*: a material edit
@@ -1749,10 +1726,10 @@ condition to cover it is future work rather than a gap in what V6 states.
   capped by `max_per_stage_descriptor_samplers`, and the record writer
   `ERHE_VERIFY`s that `allocate()` did not fail (`material_buffer.cpp:160`) - an
   overflow aborts. Note a per-set membership list is a slight *superset* of
-  today's per-pass content, not a subset: today the forward pass's heap holds
-  exactly the content-library materials, while a set holds library + object
-  references, and the context doc's section 1 establishes the library does not
-  contain every material a mesh uses. The excess is small (materials assigned to
+  what a per-pass heap holds, not a subset: a per-pass forward heap holds
+  exactly the content-library materials, while a set holds library plus object
+  references, and section 6 establishes that the library does not contain every
+  material a mesh uses. The excess is small (materials assigned to
   meshes but never registered in the library), but it is in the wrong direction
   on the one path that aborts on overflow, so V5 runs it explicitly.
 - **The D10 hash pass runs every frame for every set.** O(members), on every
@@ -1772,3 +1749,81 @@ condition to cover it is future work rather than a gap in what V6 states.
   *conservative* (reports "not completed" too long) costs nothing but a deferred
   update, while one that is *optimistic* corrupts an in-flight frame. Write them
   conservative, and V6.4 pins the behaviour.
+
+## 6. Root cause: why the design is shaped this way
+
+Three standing rules, each with the defect that motivates it. Everything the
+sections above design exists to keep these true.
+
+### 6.1 A slot belongs to the set that issued it, never to the material
+
+The reported defect: with material *Gold* selected in the material panel and
+its base colour edited to red, dragging Gold onto a cube turns the cube red,
+but dragging that same Gold onto an icosahedron then leaves the icosahedron
+nearly unchanged. Dragging in the opposite order moves the failure to the other
+mesh.
+
+The mechanism was a single mutable slot field on the shared `Material` object,
+rewritten by whichever material update ran most recently. Five call sites wrote
+it - two in the forward renderer, one in the shadow renderer, one in the DDGI
+renderer and one in the ray tracer - and the material lists reaching them
+differ within one frame: viewport passes pass the scene root's whole content
+library, shadow passes pass the same list assembled separately, the material
+preview passes its own library holding exactly one material, the BRDF slice
+window passes an ad-hoc one-element list, and two passes pass an empty list.
+The editor renders thumbnails and imgui windows - both of which render the
+material preview - before the draw-list flush, so a cached draw-list record was
+written from an index the preview had just set to zero.
+
+Two properties of that failure are worth keeping, because they generalize:
+
+- **Order dependence is the signature of a shared mutable slot.** The failure
+  was not total, because the draw-list path repaired records by *edge
+  detection*: the first mesh to receive a material was repaired on the next
+  draw, which left the watch holding the corrected slot, so a second mesh
+  registered later wrote its record from the same clobbered index, no
+  difference was detected, and that record kept the wrong slot indefinitely.
+- **Records written and consumed inside one pass hid the problem.** Every other
+  reader of the field ran inside the pass, after that pass's own material
+  update, so only the draw list's *cached* records were stale. The shared
+  mutable field motivates the *scope* of the design (R6); the cached record
+  motivates its *urgency* (R2).
+
+Hence D0 and D1: one object owns the slot space, a `Material` may be a member
+of any number of sets, and each set's slots are invisible to every other.
+
+### 6.2 The content library does not define membership
+
+The library is populated at *mesh registration* only, so assigning a material
+to an already-registered mesh never reaches it. The material preview does
+exactly that on every thumbnail: it assigns a different material to its
+already-registered sphere. So "the set contains exactly the library's
+materials" is not a safe definition of membership, which is why membership is
+refcounted from two sources (D1) and why the assignment hook feeds it directly
+(R3, R4, D11).
+
+### 6.3 Materials are near-static, so their GPU state is persistent
+
+Rebuilding the whole material buffer and the whole texture heap once per pass -
+which is what a renderer-owned buffer forces - costs, for a scene with a few
+hundred materials, a few hundred kilobytes of ring-buffer writes, a few hundred
+`Texture_heap::allocate()` linear searches and one fresh descriptor set per
+pass, every frame, to reproduce bytes that are almost always identical to the
+previous frame's. Once slots are stable (D1, D9) the buffer contents are a pure
+function of the set's membership and of each member's `Material_data`, and both
+change rarely; so the buffer is written when it is invalidated and rebound
+otherwise (R10, R11, D10).
+
+### 6.4 Trap
+
+`erhe::graphics::Texture` **is itself a `Texture_reference`** that returns
+itself, so a plain texture needs no wrapper; `Texture_reference` is abstract and
+cannot be constructed directly. This comes up wherever a fallback or dummy
+texture is handed to a material record (D3).
+
+## Future work
+
+- [plans/draw_list_renderer.md](plans/draw_list_renderer.md): distinct types
+  for the two sets, the buffer duplication `Scene_pass_resources` unblocked,
+  and the verification still owed (V5, the OpenGL sampler-array path, V6 on the
+  null backend).

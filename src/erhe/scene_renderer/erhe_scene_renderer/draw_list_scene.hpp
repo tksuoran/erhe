@@ -122,10 +122,10 @@ public:
 
 // Persistent, incrementally maintained rendering-side representation of a
 // scene: registered objects classified into draw lists once, reused every
-// frame (doc/draw_list_renderer.md, doc/draw_list_renderer_plan.md).
+// frame (doc/draw_list_renderer.md).
 // One instance per Scene_root, owned like m_physics_world / m_raytrace_scene.
 //
-// Threading (plan section 0.3): register / unregister / set flags / rebuild /
+// Threading (doc/draw_list_renderer.md section 9.3): register / unregister /
 // flush_pending / draw are main-thread only. Scene-side hooks that may run on
 // worker threads use the enqueue_* API; flush_pending() applies the queue.
 //

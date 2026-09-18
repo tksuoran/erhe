@@ -56,7 +56,7 @@ public:
     void update_node_transforms              ();
     // Main thread, once per frame before any scene renders: applies queued
     // draw list changes of every registered scene root
-    // (doc/draw_list_renderer_plan.md, threading contract).
+    // (doc/draw_list_renderer.md, threading contract).
     void flush_draw_lists                    ();
     // Main thread, once per frame before flush_draw_lists(): kicks off the
     // rebuild of the primitives of every mesh whose Gprim.display_color
@@ -64,7 +64,8 @@ public:
     // renderers read (Buffer_mesh::has_vertex_colors). Change-driven - a frame
     // in which nothing was written walks the registered roots and finds empty
     // queues. The builds themselves run on executor workers and swap in
-    // through Scene_commit_queue (doc/frame-time-after-usd-import-plan.md R5).
+    // through Scene_commit_queue (doc/async_asset_loading.md, "Display-color
+    // rebuild").
     void rebuild_display_colors              ();
     // Main thread, once per frame beside rebuild_display_colors(): builds the
     // card proxy of every draw-mode attachment whose values, extent or
