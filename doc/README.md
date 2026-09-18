@@ -93,7 +93,7 @@ Every document states its standing in its first ten lines:
 - [erhe_scene.md](erhe_scene.md) (mostly stable): A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), node attachments (physics, layout, grid, ...), animations, and scene management
 - [erhe_scene_renderer.md](erhe_scene_renderer.md) (stable): Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU
 - [erhe_smoke.md](erhe_smoke.md) (stable): A standalone smoke test executable that stress-tests the `erhe::item` hierarchy system
-- [erhe_texgen.md](erhe_texgen.md) (experimental): Procedural texture shader-code composition core (Phase 1 of `doc/texture_graph.md`, issue #199)
+- [erhe_texgen.md](erhe_texgen.md) (experimental): Procedural texture shader-code composition core: the codegen layer under the editor's texture graph (`doc/texture_graph.md`)
 - [erhe_time.md](erhe_time.md) (stable): Time-related utilities providing high-precision sleep, scoped timers for profiling initialization and frame phases, and timestamp string formatting
 - [erhe_ui.md](erhe_ui.md) (stable): Font rasterization and text layout utilities
 - [erhe_usd.md](erhe_usd.md) (mostly stable): `erhe::usd` is the only erhe library that includes LightUSD headers
@@ -112,7 +112,7 @@ Every document states its standing in its first ten lines:
 - [editor_create.md](editor_create.md) (stable): Provides the Create tool and shape generator classes for interactively creating new mesh primitives in the scene
 - [editor_graphics.md](editor_graphics.md) (stable): Editor-level graphics utilities: icon management, thumbnail generation, and gradient textures
 - [editor_operations.md](editor_operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
-- [editor_parsers.md](editor_parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/gltf_scene_roundtrip.md phase 4)
+- [editor_parsers.md](editor_parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/gltf_scene_roundtrip.md)
 - [editor_physics.md](editor_physics.md) (stable): Physics-related tools, UI, and collision shape generation for the editor
 - [editor_renderers.md](editor_renderers.md) (stable): Low-level rendering infrastructure for the editor: shader programs, GPU memory management, ID-based picking, render pass composition, and viewport configuration
 - [editor_rendergraph.md](editor_rendergraph.md) (stable): Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow mapping, scene rendering, and post-processing
@@ -123,7 +123,6 @@ Every document states its standing in its first ten lines:
 
 ### Subsystems, features and workflows
 
-- [251-node-editor-native-rendering-notes.md](251-node-editor-native-rendering-notes.md) (experimental): Node editor native-resolution rendering migration log (to be folded into graph_editor.md)
 - [active_item.md](active_item.md) (stable): The one explicit active item in Selection: rules, message, undo, MCP
 - [agent_orchestration_harness.md](agent_orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
 - [ai_creations.md](ai_creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
@@ -142,28 +141,22 @@ Every document states its standing in its first ten lines:
 - [ddgi.md](ddgi.md) (experimental): Dynamic diffuse global illumination: probe volume, tracing, atlases, sampling
 - [debug_renderer_multiview.md](debug_renderer_multiview.md) (stable): Multiview port of Debug_renderer: view UBO, pipelines, bucket internals
 - [draw_list_material_set.md](draw_list_material_set.md) (stable): Material_set: material buffer and texture heap owned per draw-list set (D-labels cited from code)
-- [draw_list_material_set_context.md](draw_list_material_set_context.md) (stable): Root-cause narrative behind the material-set design (to be folded into draw_list_material_set.md)
 - [draw_list_performance_improvements.md](draw_list_performance_improvements.md) (mostly stable): Caching of primitive records in the draw-list renderer, with measured results
 - [draw_list_renderer.md](draw_list_renderer.md) (stable): Persistent Draw_list_scene renderer: requirements, scope, components
-- [draw_list_renderer_plan.md](draw_list_renderer_plan.md) (stable): Six-phase rollout record of the draw-list renderer (to be folded into draw_list_renderer.md)
-- [draw_list_renderer_results.md](draw_list_renderer_results.md) (stable): Measured results of the draw-list renderer rollout (to be folded into draw_list_renderer.md)
 - [editor_rendering.md](editor_rendering.md) (stable): Editor rendergraph, composer passes, forward renderer, stencil protocol, tool rendering
 - [editor_settings_codegen_scene_reference.md](editor_settings_codegen_scene_reference.md) (stable): Map of editor settings, the codegen struct generator and scene save/load
-- [frame-time-after-usd-import-plan.md](frame-time-after-usd-import-plan.md) (stable): Post-USD-import frame time regression: causes and the change-driven fixes (R-labels cited from code)
-- [geogram.md](geogram.md) (mostly stable): Geogram thread-safety contract, serialization lock and degenerate convex-hull guard
+- [geogram.md](geogram.md) (mostly stable): Geogram contract: FMA build rule, serialization lock, degenerate-hull guard, diagnosis tooling
 - [geometry_graph_mesh.md](geometry_graph_mesh.md) (mostly stable): Geometry node graph as a first-class Graph_mesh asset
 - [geometry_graph_transform_from_node.md](geometry_graph_transform_from_node.md) (mostly stable): transform_from_node geometry-graph node driven by a scene node
 - [geometry_nodes.md](geometry_nodes.md) (mostly stable): Geometry Nodes status and Blender architecture analysis
 - [gl_worker_context_enforcement.md](gl_worker_context_enforcement.md) (mostly stable): Enforcing the GL worker-context blocking invariant against taskflow deadlocks
 - [gl_worker_thread_contexts.md](gl_worker_thread_contexts.md) (stable): OpenGL worker-thread contexts: publication fencing, per-context containers, traps
-- [gltf-load-speedup-plan.md](gltf-load-speedup-plan.md) (stable): glTF load deferral and parallelism speedups (partly superseded by async loading)
 - [gltf_scene_roundtrip.md](gltf_scene_roundtrip.md) (mostly stable): glTF-only scene persistence: build record and open items
 - [graph_editor.md](graph_editor.md) (mostly stable): Shared graph-editor layer; geometry and texture graph editors; legacy shader graph
 - [graph_texture.md](graph_texture.md) (mostly stable): Texture node graph as a first-class Graph_texture asset
 - [graphics_test_coverage.md](graphics_test_coverage.md) (stable): GPU test coverage matrix for erhe::graphics
 - [graphics_test_nonheadless_port.md](graphics_test_nonheadless_port.md) (stable): Running erhe_graphics_gpu_tests on non-headless OpenGL and Metal
 - [import_undo_reference_clearing.md](import_undo_reference_clearing.md) (mostly stable): Clearing stale editor references after an undo removes imported content
-- [intermittent_main_loop_hang.md](intermittent_main_loop_hang.md) (experimental): Investigation log of the Quest main-loop hang traced to Geogram concurrency
 - [khr_physics_rigid_bodies_support.md](khr_physics_rigid_bodies_support.md) (mostly stable): KHR_physics_rigid_bodies and KHR_implicit_shapes glTF support and limitations
 - [lattice_deform_geometry_node.md](lattice_deform_geometry_node.md) (mostly stable): Lattice free-form deformation geometry-graph node
 - [layout.md](layout.md) (stable): Layout nodes (Stack / Grid / Flow) design and behavior
@@ -180,7 +173,6 @@ Every document states its standing in its first ten lines:
 - [msvc_build_issues.md](msvc_build_issues.md) (experimental): MSVC stale-object / ODR incident: diagnosis recipe and prevention options
 - [multiview.md](multiview.md) (stable): Single-pass stereo (Vulkan multiview) for OpenXR on Quest 3
 - [node_attachment_editing.md](node_attachment_editing.md) (stable): Adding and removing Node_attachments on a node from the UI and MCP
-- [operation-stack-reentrancy-plan.md](operation-stack-reentrancy-plan.md) (stable): Operation_stack main-thread-only contract (to be folded into editor_operations.md)
 - [point_light_shadows.md](point_light_shadows.md) (stable): Cube-map point-light shadows and the resolved face-flip defect
 - [post_processing.md](post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
 - [prewarm.md](prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
@@ -197,7 +189,6 @@ Every document states its standing in its first ten lines:
 - [renderdoc_fork.md](renderdoc_fork.md) (mostly stable): Desktop GPU-debugging workflow with the RenderDoc fork MCP server
 - [ring_buffer_memory.md](ring_buffer_memory.md) (mostly stable): Bounded ring-buffer memory for scene loads
 - [scene_serialization.md](scene_serialization.md) (stable): erhe glTF scene save / open pipeline and what is persisted
-- [sdf-mesh-picking-fix-plan.md](sdf-mesh-picking-fix-plan.md) (stable): Resolved SDF-graph mesh picking defect (to be deleted after folding the standing rule)
 - [selection.md](selection.md) (stable): Per-scene selection and active scene
 - [shader_variants.md](shader_variants.md) (stable): standard.{vert,frag} uber-shader variant system
 - [shader_workarounds.md](shader_workarounds.md) (stable): Driver-capability shader defines and workaround policy
@@ -209,6 +200,7 @@ Every document states its standing in its first ten lines:
 - [usd-wg-assets.md](usd-wg-assets.md) (mostly stable): Script-generated survey of the ASWF USD-WG sample assets
 - [usd_compatibility.md](usd_compatibility.md) (stable): erhe <-> OpenUSD concept and naming mapping tables
 - [usd_compatibility_design.md](usd_compatibility_design.md) (mostly stable): USD compatibility design record and current state (C/U/M/X labels cited from code)
+- [usd_node_graphs.md](usd_node_graphs.md) (mostly stable): Texture and geometry node graphs as UsdShade NodeGraph / Shader prims
 - [usd_survey_gap_loop.md](usd_survey_gap_loop.md) (stable): How the USD-WG asset survey is driven to zero gaps
 - [vertex_position_quantization.md](vertex_position_quantization.md) (experimental): Quantized vertex positions across backends
 - [vulkan_backend.md](vulkan_backend.md) (stable): Vulkan graphics backend: device, frame lifecycle, binding model, sync, swapchain
@@ -246,35 +238,65 @@ Every document states its standing in its first ten lines:
 
 ### Plans (`plans/`)
 
+- [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (proposed): Keyframing and timeline for the Animation window
-- [plans/doc_restructure.md](plans/doc_restructure.md) (in progress): Content sweep worklist for this documentation layout
+- [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
+- [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
+- [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
+- [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
+- [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
+- [plans/crash_signal.md](plans/crash_signal.md) (proposed): Positive crash signal for harness-run apps
+- [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
+- [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
+- [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements
+- [plans/frame_pacing.md](plans/frame_pacing.md) (proposed): Frame pacing: outstanding work
 - [plans/geometry_graph/attribute_projection.md](plans/geometry_graph/attribute_projection.md) (proposed): project_attribute geometry-graph node: design research
-- [plans/geometry_graph/attribute_projection_handoff.md](plans/geometry_graph/attribute_projection_handoff.md) (proposed): project_attribute node: implementation handoff
 - [plans/geometry_graph/creation_tools.md](plans/geometry_graph/creation_tools.md) (in progress): AI creation tools and geometry-graph follow-ups
+- [plans/geometry_graph/geometry_nodes.md](plans/geometry_graph/geometry_nodes.md) (proposed): Geometry nodes: field system and further node types
 - [plans/geometry_graph/openvdb_sdf.md](plans/geometry_graph/openvdb_sdf.md) (in progress): OpenVDB SDF support in the geometry graph (phase 3 onward)
-- [plans/geometry_graph/sdf_handoff.md](plans/geometry_graph/sdf_handoff.md) (in progress): SDF / OpenVDB geometry-graph work handoff
+- [plans/gl_worker_contexts.md](plans/gl_worker_contexts.md) (proposed): GL worker contexts: outstanding work
+- [plans/gltf.md](plans/gltf.md) (in progress): glTF: outstanding work
 - [plans/gltf_prefabs.md](plans/gltf_prefabs.md) (in progress): glTF scene prefabs: remaining phases
 - [plans/gltf_properties_extension.md](plans/gltf_properties_extension.md) (in progress): ERHE_*_properties glTF extensions (steps 2-5)
+- [plans/graph_editor.md](plans/graph_editor.md) (proposed): Graph editor: remaining shared-layer work
+- [plans/graphics_tests.md](plans/graphics_tests.md) (proposed): Graphics tests: outstanding work
+- [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
+- [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
+- [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
+- [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
+- [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
+- [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
+- [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
+- [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
+- [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
+- [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)
+- [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
+- [plans/spirv_cache.md](plans/spirv_cache.md) (proposed): SPIR-V cache robustness
+- [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog
+- [plans/texture_memory.md](plans/texture_memory.md) (proposed): Per-scene texture memory cost
 - [plans/timeline_editor.md](plans/timeline_editor.md) (proposed): Animation timeline and curve editor
-- [plans/todo.md](plans/todo.md) (proposed): Unsorted future-work items awaiting a home
-- [plans/usd_texture_graphs.md](plans/usd_texture_graphs.md) (proposed): Texture and geometry graphs as native UsdShade prims
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) (proposed): USD compatibility: remaining work
 - [plans/uv_editor.md](plans/uv_editor.md) (proposed): UV editor modeled on Blender's
 - [plans/virtualcity_vanishing_meshes.md](plans/virtualcity_vanishing_meshes.md) (proposed): Open defect: overlapping meshes vanish on first hover
+- [plans/vulkan_backend.md](plans/vulkan_backend.md) (proposed): Vulkan backend: known issues
 - [plans/wasm_webgpu_port.md](plans/wasm_webgpu_port.md) (proposed): WebAssembly + WebGPU port of the editor
+- [plans/weight_paint.md](plans/weight_paint.md) (proposed): Weight painting: outstanding work
+- [plans/xr.md](plans/xr.md) (proposed): XR: outstanding work
 
 ### Reference (`reference/`)
 
-- [reference/claude_review_2026_03_22.md](reference/claude_review_2026_03_22.md): Dated ad hoc code review of the editor
 - [reference/esoterica_rendering.md](reference/esoterica_rendering.md): Esoterica vs erhe rendering comparison
 - [reference/forge_erhe.md](reference/forge_erhe.md): SDL3 GPU concepts mapped to erhe's graphics API
 - [reference/geogram_atlas_packing_feature_request.md](reference/geogram_atlas_packing_feature_request.md): Feature request to Geogram / xatlas maintainers
+- [reference/geogram_thread_safety_issue.md](reference/geogram_thread_safety_issue.md): Unfiled Geogram thread-safety issue draft
 - [reference/gl_spec_section_5.md](reference/gl_spec_section_5.md): Transcribed OpenGL spec chapter 5 (shared objects, multiple contexts)
 - [reference/glslang_bug_report_debugglobalvariable.md](reference/glslang_bug_report_debugglobalvariable.md): glslang DebugGlobalVariable SPIR-V bug report
 - [reference/gltf_2_1_item_flags_comment.md](reference/gltf_2_1_item_flags_comment.md): glTF 2.1 per-node flags survey and issue comment

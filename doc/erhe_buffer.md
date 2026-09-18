@@ -31,11 +31,11 @@ The allocation hierarchy:
 
 ```
 Free_list_allocator (reusable, lives in erhe::buffer)
-  ├── Used by Cpu_buffer (CPU-side, raytrace data)
-  └── Used by Graphics_buffer_sink (GPU vertex/index buffers)
+  |-- Used by Cpu_buffer (CPU-side, raytrace data)
+  `-- Used by Graphics_buffer_sink (GPU vertex/index buffers)
 
 Buffer_allocation (RAII handle, references a Buffer_allocation_owner)
-  └── Held by Buffer_mesh (freed when mesh is destroyed)
+  `-- Held by Buffer_mesh (freed when mesh is destroyed)
 ```
 
 ## Important: Member Declaration Order

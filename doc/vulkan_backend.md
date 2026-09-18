@@ -157,7 +157,7 @@ use (above), widens the apparent dependency surface, and can let a shader that
 accidentally relies on a capability run on hardware where it happens to be
 available while failing `vkCreateShaderModule` elsewhere. The intended direction
 is to enable only strictly-required features and fail explicitly when one is
-missing. See `doc/plans/todo_vulkan.md`.
+missing. See `doc/plans/vulkan_backend.md`, "Enable only the device features the backend uses".
 
 ### Device_info
 

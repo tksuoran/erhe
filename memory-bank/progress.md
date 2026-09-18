@@ -109,7 +109,7 @@
 ✓RoughnessTest-2026-09-08{b50b91033:PREMISE-WRONG:usdz-subdir-paths-already-resolved{Tydra-fs-probe-warning=noise,filtered};REAL-BUG:shared-metallic_roughness-slot-multiplied-BOTH-inputs-by-texture→Texture_channel::none=4{texture_channel_value()-in-erhe_texture.glsl/standard.frag/erhe_ray_hit.glsl→1.0};importer-names-none-for-untextured-partner;writer-skips;highlight-gap=framing;usd214→216;validation-run-clean{warnings-only}}
   S1-ROUND-2-DONE-2026-09-08{13-code-commits;usd-tests-173→216;survey-doc=subset-merges,full-run-NOT-re-run-this-session}
 !scope::©User-2026-09-08:FUTURE-WORK{not-S1}=16-bit-PNG+CMYK-JPEG-decode{wuffs-decode-failure-undiagnosed;.hdr-via-stb_image-in-cpm-cache}+load-perf{collect_meshes_sharing_primitives-O(N)-scan-per-commit→O(N^2);hover-linear-trace-while-TLAS-cannot-settle;finalize_imported_meshes-serial-BVH-on-tick-thread;rebuild_all-churn}+grid-depth-disagreement{lines-cross-opaque-objects}+animation-edit-write-back{keyed-edit-changes-channels-not-samples}
-✓stopped-2026-09-08{plan-S1-empty+section-6-future-work;queue-rewritten};NEXT-SESSION:full-survey-run-ONCE→E4c{doc/plans/usd_texture_graphs.md}→E4b→E4d→E2
+✓stopped-2026-09-08{plan-S1-empty+section-6-future-work;queue-rewritten};NEXT-SESSION:full-survey-run-ONCE→E4c{doc/usd_node_graphs.md}→E4b→E4d→E2
 ?S1-remaining{doubleSided→Gprim-property{brief-drafted;McUsd-cards};usdz-subdir-texture-paths{RoughnessTest:0/roughness.png-unresolved};image-formats{16-bit/CMYK-blank=undiagnosed-decode-failure;.hdr-via-stb_image-in-cpm-cache};animation-time-sample;16/32-bit+CMYK+.hdr-images;McUsd-alpha+cards;RoughnessTest-specular;load-perf-4000-prims;MaterialX;null-material-fallback}→E4c
   traps::save_usda-writes-/Materials-from-index{would-duplicate-kind-scope};Xformable::node_sanity_check-static_casts-Item_host->Scene_host{palette-prims-must-not-reach};kind-scopes+resource-prims-carry-no-content-flag{glTF-node-export-skips}
 
@@ -215,7 +215,7 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-3{fbd21f60c:Ts-splines-on-intensity/roughness/metallic/opacity<->CUBICSPLINE;hermite-write-back;attribute_splines.usda;usd-tests-351->358;headless+usdchecker-verified}
   plan-section-2-statement+section-6-entry-dropped;prompt_queue.txt-deleted|?user-interactive
 
-[TASK::frame-time-after-usd-import]{doc/frame-time-after-usd-import-plan.md;via-harness;started-2026-09-14}
+[TASK::frame-time-after-usd-import]{via-harness;started-2026-09-14}
 !cause::tracy-D:\erhe.tracy{post-DrawModes-import-tick-128-150ms:update_material_sets-104-124ms{Material_set::update-hashed-every-material-every-frame-x3-sets;Material::get_values=26-layered-property-reads}+check_material_changes-12-15ms{Shader_key-derive-per-material-per-frame};import-tick-30.5s{load_usd_prefab_template-35x-16s+rebuild_display_colors-13s-main-thread};Asset_browser-ctor-8.1s-walks-res/editor/assets}
 ✓step-1{350943536:Material::get_change_serial+data-private-get_data()+Texture_reference_user{Graph_texture-notifies-on-rebake};all-direct-data-writers-moved-to-setters}
 ✓step-2{005dd0756:Material_slot::recorded_serial-optional;update()-gates-on-serial;check_material_changes-re-derives-only-on-serial-move;get_content_hash-gone;MEASURED:tick-6.1ms-median,update_material_sets-0.47ms,check_material_changes-0.04ms}
@@ -283,3 +283,8 @@ verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-
 ✓cradle-hinge-unlimited{6bfd7ca5e:removes-the-last-flake=undragged-ball-hitting-a-hard-limit-on-Jolt}
 !measured::hold<=0.23mm-Jolt/0.05mm-Box3D,after-release<=0.37/0.13;reported-drag-704mm->0.01mm;far-ball-peak-unchanged-0.408/0.406
 ?left::doc/ai_creations.md-entry-21+doc-image-are-in{8974faec7};unjointed-drag-fly-off+Box3D-0Hz-rigid-path-unfixed
+
+[TASK::doc-restructure]{DONE-2026-09-18}
+✓checker+moves+notes-migration+headers+index{5-commits}
+✓content-sweep{9-group-commits;~190-docs;18-docs-folded/deleted;~45-plans-created}
+?changelog=prompt_queue.txt-item-1{erhe::*-API-only}
