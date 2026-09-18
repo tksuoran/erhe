@@ -57,6 +57,241 @@ constexpr float c_pi = pi<float>();
     return 2.0f * std::asin(std::clamp(s, -1.0f, 1.0f));
 }
 
+// A straight four-segment chain along +Y: root at origin, joints at +1 .. +4.
+[[nodiscard]] auto make_straight_five_joint_chain() -> editor::Ik_chain
+{
+    editor::Ik_chain chain;
+    chain.positions = {
+        vec3{0.0f, 0.0f, 0.0f},
+        vec3{0.0f, 1.0f, 0.0f},
+        vec3{0.0f, 2.0f, 0.0f},
+        vec3{0.0f, 3.0f, 0.0f},
+        vec3{0.0f, 4.0f, 0.0f}
+    };
+    chain.lengths = { 1.0f, 1.0f, 1.0f, 1.0f };
+    chain.local_rotations.assign(5, quat{1.0f, 0.0f, 0.0f, 0.0f});
+    chain.child_dir_local.assign(4, vec3{0.0f, 1.0f, 0.0f});
+    chain.constraints.resize(5);
+    return chain;
+}
+
+// Component of v - root orthogonal to the unit axis a (R11 step 2).
+[[nodiscard]] auto perpendicular_offset(const vec3 v, const vec3 root, const vec3 a) -> vec3
+{
+    const vec3 offset = v - root;
+    return offset - (a * dot(offset, a));
+}
+
+// Unit root-to-effector axis of a solved chain (R11 step 1).
+[[nodiscard]] auto chain_axis(const editor::Ik_chain& chain) -> vec3
+{
+    return normalize(chain.positions.back() - chain.positions.front());
+}
+
+// Unit mean bend direction of a solved chain (R11 step 3).
+[[nodiscard]] auto chain_bend_direction(const editor::Ik_chain& chain) -> vec3
+{
+    const vec3 root = chain.positions.front();
+    const vec3 a    = chain_axis(chain);
+    vec3 bend{0.0f};
+    for (std::size_t i = 1; i + 1 < chain.positions.size(); ++i) {
+        bend += perpendicular_offset(chain.positions[i], root, a);
+    }
+    return normalize(bend);
+}
+
+// Signed angle about the unit axis a taking direction from to direction to.
+[[nodiscard]] auto signed_angle_about(const vec3 a, const vec3 from, const vec3 to) -> float
+{
+    return std::atan2(dot(cross(from, to), a), dot(from, to));
+}
+
+TEST(Ik_solver, pole_aims_bend_at_either_side)
+{
+    const vec3 target{1.0f, 1.0f, 0.0f};
+    for (const float pole_z : { 5.0f, -5.0f }) {
+        editor::Ik_chain chain = make_straight_chain();
+        chain.target        = target;
+        chain.has_pole      = true;
+        chain.pole_position = vec3{0.0f, 1.0f, pole_z};
+
+        editor::Fabrik_solver solver;
+        solver.solve(chain);
+
+        const vec3 root = chain.positions.front();
+        const vec3 a    = chain_axis(chain);
+        const vec3 b    = chain_bend_direction(chain);
+        const vec3 d    = normalize(perpendicular_offset(chain.pole_position, root, a));
+        EXPECT_NEAR(dot(b, d), 1.0f, 1.0e-3f) << "pole_z " << pole_z;
+
+        EXPECT_LT(distance(chain.positions[2], target), 1.0e-2f) << "pole_z " << pole_z;
+        EXPECT_NEAR(distance(chain.positions[0], chain.positions[1]), 1.0f, 1.0e-4f);
+        EXPECT_NEAR(distance(chain.positions[1], chain.positions[2]), 1.0f, 1.0e-4f);
+        EXPECT_EQ(chain.positions[0], (vec3{0.0f, 0.0f, 0.0f})); // root fixed
+    }
+}
+
+TEST(Ik_solver, pole_angle_swivels_by_that_angle_with_sign)
+{
+    for (const float pole_angle : { 0.5f * c_pi, -0.5f * c_pi }) {
+        editor::Ik_chain chain = make_straight_chain();
+        chain.target        = vec3{1.0f, 1.0f, 0.0f};
+        chain.has_pole      = true;
+        chain.pole_position = vec3{0.0f, 1.0f, 5.0f};
+        chain.pole_angle    = pole_angle;
+
+        editor::Fabrik_solver solver;
+        solver.solve(chain);
+
+        const vec3 a = chain_axis(chain);
+        const vec3 b = chain_bend_direction(chain);
+        const vec3 d = normalize(perpendicular_offset(chain.pole_position, chain.positions.front(), a));
+        // R11 step 5: the bend is aimed at d turned by pole_angle about a.
+        EXPECT_NEAR(signed_angle_about(a, d, b), pole_angle, 1.0e-3f) << "pole_angle " << pole_angle;
+    }
+}
+
+TEST(Ik_solver, pole_on_long_chain_rotates_rigidly)
+{
+    editor::Ik_chain chain = make_straight_five_joint_chain();
+    chain.target = vec3{1.5f, 1.5f, 0.3f};
+
+    editor::Fabrik_solver solver;
+    solver.solve(chain);
+    const std::vector<vec3> before_pole = chain.positions;
+
+    chain.pole_position = vec3{0.0f, 1.0f, 7.0f};
+    editor::ik_apply_pole(chain.positions, chain.pole_position, 0.0f);
+
+    const vec3 a = chain_axis(chain);
+    const vec3 b = chain_bend_direction(chain);
+    const vec3 d = normalize(perpendicular_offset(chain.pole_position, chain.positions.front(), a));
+    EXPECT_NEAR(dot(b, d), 1.0f, 1.0e-3f);
+
+    // Rigid rotation: every pairwise distance is the pre-pole one.
+    for (std::size_t i = 0; i < before_pole.size(); ++i) {
+        for (std::size_t j = i + 1; j < before_pole.size(); ++j) {
+            EXPECT_NEAR(
+                distance(chain.positions[i], chain.positions[j]),
+                distance(before_pole[i], before_pole[j]),
+                1.0e-5f
+            ) << "joints " << i << " " << j;
+        }
+    }
+    EXPECT_EQ(chain.positions.front(), before_pole.front());
+    EXPECT_EQ(chain.positions.back(),  before_pole.back());
+}
+
+TEST(Ik_solver, pole_degenerate_cases_leave_positions_untouched)
+{
+    // Folded onto the root: the swivel line does not exist (R11 step 1).
+    {
+        std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 0.0f, 0.0f}, vec3{0.0f, 0.0f, 0.0f} };
+        const std::vector<vec3> before = positions;
+        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+        EXPECT_EQ(positions, before);
+    }
+    // Straight chain: no bend to aim (R11 step 3).
+    {
+        std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
+        const std::vector<vec3> before = positions;
+        editor::ik_apply_pole(positions, vec3{5.0f, 0.0f, 0.0f}, 0.3f);
+        EXPECT_EQ(positions, before);
+    }
+    // Pole on the root-to-effector line: it names no direction (R11 step 4).
+    {
+        std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
+        const std::vector<vec3> before = positions;
+        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+        EXPECT_EQ(positions, before);
+    }
+    // All of them finite.
+    std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
+    editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+    for (const vec3& p : positions) {
+        EXPECT_TRUE(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+    }
+}
+
+TEST(Ik_solver, limits_win_over_pole)
+{
+    // The pole pulls the elbow toward +X, which for a chain along +Y is a
+    // swing about Z; the tight Z limit therefore fights the pole (R14).
+    const float max_bend = 0.05f;
+    const auto make_poled_chain = [](const float z_min, const float z_max) -> editor::Ik_chain {
+        editor::Ik_chain chain = make_straight_chain();
+        chain.constraints[1].enabled    = true;
+        chain.constraints[1].twist_axis = 1;
+        chain.constraints[1].limit[2]   = true;
+        chain.constraints[1].limit_min  = vec3{-c_pi, -c_pi, z_min};
+        chain.constraints[1].limit_max  = vec3{c_pi, c_pi, z_max};
+        chain.target        = vec3{0.0f, 1.0f, 0.6f};
+        chain.has_pole      = true;
+        chain.pole_position = vec3{5.0f, 1.0f, 0.0f};
+        return chain;
+    };
+
+    editor::Ik_chain limited = make_poled_chain(-max_bend, max_bend);
+    editor::Ik_chain loose   = make_poled_chain(-c_pi, c_pi);
+
+    editor::Fabrik_solver solver;
+    solver.solve(limited);
+    solver.solve(loose);
+
+    const float z_angle = swing_angle_about(quat{1.0f, 0.0f, 0.0f, 0.0f}, limited.local_rotations[1], 2, 1);
+    EXPECT_LE(std::abs(z_angle), max_bend + 1.0e-3f);
+    EXPECT_GT(distance(limited.positions[1], loose.positions[1]), 1.0e-2f);
+    for (const vec3& p : limited.positions) {
+        EXPECT_TRUE(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+    }
+}
+
+TEST(Ik_solver, two_joint_chain_ignores_pole)
+{
+    editor::Ik_chain without;
+    without.positions       = { vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f, 1.0f, 0.0f} };
+    without.lengths         = { 1.0f };
+    without.local_rotations = { quat{1.0f, 0.0f, 0.0f, 0.0f}, quat{1.0f, 0.0f, 0.0f, 0.0f} };
+    without.child_dir_local = { vec3{0.0f, 1.0f, 0.0f} };
+    without.constraints.resize(2);
+    without.target = vec3{0.5f, 0.5f, 0.2f};
+
+    editor::Ik_chain with = without;
+    with.has_pole      = true;
+    with.pole_position = vec3{0.0f, 0.0f, 5.0f};
+    with.pole_angle    = 0.7f;
+
+    editor::Fabrik_solver solver;
+    solver.solve(without);
+    solver.solve(with);
+
+    EXPECT_EQ(with.positions, without.positions);
+}
+
+TEST(Ik_solver, poled_unreachable_target_keeps_straight_layout)
+{
+    editor::Ik_chain without = make_straight_chain();
+    without.target = vec3{10.0f, 0.0f, 0.0f};
+
+    editor::Ik_chain with = without;
+    with.has_pole      = true;
+    with.pole_position = vec3{0.0f, 0.0f, 5.0f};
+    with.pole_angle    = 0.4f;
+
+    editor::Fabrik_solver solver;
+    solver.solve(without);
+    solver.solve(with);
+
+    EXPECT_EQ(with.positions, without.positions); // R11 step 3: no bend to aim
+    for (const vec3& p : with.positions) {
+        EXPECT_TRUE(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+    }
+    // Straight layout toward the unreachable target.
+    EXPECT_NEAR(dot(
+        normalize(with.positions[1] - with.positions[0]),
+        normalize(with.positions[2] - with.positions[1])), 1.0f, 1.0e-4f);
+}
+
 TEST(Ik_solver, unconstrained_matches_phase1_fabrik)
 {
     editor::Ik_chain chain = make_straight_chain();
@@ -69,6 +304,7 @@ TEST(Ik_solver, unconstrained_matches_phase1_fabrik)
     solver.solve(chain);
 
     ASSERT_FALSE(chain.has_constraints());
+    ASSERT_FALSE(chain.has_pole); // the routing of Ik_drag::apply on a pole-free chain
     for (std::size_t i = 0; i < reference.size(); ++i) {
         EXPECT_EQ(chain.positions[i], reference[i]) << "joint " << i;
     }

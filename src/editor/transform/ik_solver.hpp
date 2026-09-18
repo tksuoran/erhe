@@ -31,6 +31,21 @@ void fabrik_solve(
 
 [[nodiscard]] auto ik_safe_direction(glm::vec3 v, glm::vec3 fallback) -> glm::vec3;
 
+// Pole reprojection (doc/plans/rigging/pole_target.md R11) on world-space
+// joint positions: rotates the intermediate joints rigidly about the line
+// from the root positions[0] to the effector positions[n] until the chain's
+// mean bend direction - the sum of the intermediate joints' perpendicular
+// offsets from that line - aims at pole_position, turned by pole_angle
+// (radians, right-handed about the root-to-effector direction). Neither the
+// root nor the effector moves and no segment length changes, so a converged
+// solution maps to another converged solution. Returns the positions
+// unchanged when the swivel is undefined: fewer than three joints (no
+// intermediate joint), a chain folded onto its root, a straight chain (or
+// one whose intermediate offsets cancel), or a pole on the root-to-effector
+// line. The three guarded lengths are the only divisions, so the result is
+// always finite. Allocation-free: it is called per solver iteration.
+void ik_apply_pole(std::vector<glm::vec3>& positions, glm::vec3 pole_position, float pole_angle);
+
 // Minimal rotation taking direction a to direction b (both non-unit, world
 // space). Identity when either is degenerate. In the antiparallel case the
 // shortest-arc axis is undefined; the axis of reference_orientation's basis
@@ -72,6 +87,12 @@ public:
     std::vector<Ik_joint_constraint> constraints;
     glm::quat                        root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3                        target{0.0f};
+    // Pole target (doc/plans/rigging/pole_target.md R12). When has_pole is
+    // false the solve is the unpoled one. pole_position is world space, the
+    // same space as positions and target; pole_angle is in radians.
+    bool                             has_pole{false};
+    glm::vec3                        pole_position{0.0f};
+    float                            pole_angle{0.0f};
     float                            tolerance{1.0e-4f};
     int                              max_iterations{16};
 
@@ -91,6 +112,11 @@ public:
 // pass unconstrained and enforces constraints in the backward pass with
 // parent frames propagated root to tip; the solved pose is returned in both
 // positions and local_rotations, already satisfying the constraints.
+// A pole (Ik_chain::has_pole) is applied once on the final positions of the
+// unconstrained path and inside every iteration of the constrained path,
+// between the forward and the backward pass, so the constraint-clamping
+// backward pass always runs last and limits and locks win over the pole
+// (doc/plans/rigging/pole_target.md R13, R14).
 class Fabrik_solver final : public Ik_solver
 {
 public:

@@ -60,7 +60,6 @@ private:
     glm::quat                               m_root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                                    m_has_constraints{false};
     glm::quat                               m_effector_world_rotation_before{1.0f, 0.0f, 0.0f, 0.0f};
-    std::vector<glm::vec3>                  m_scratch_positions;
     Ik_chain                                m_chain;
     Fabrik_solver                           m_solver;
 };

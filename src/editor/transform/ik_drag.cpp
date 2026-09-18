@@ -195,21 +195,32 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
         m_joints[i]->set_parent_from_node(m_parent_from_joint_before[i]);
     }
 
+    // Both paths solve through the Ik_solver interface, so the pole step has
+    // one place to act (doc/plans/rigging/pole_target.md R15). A chain with
+    // neither constraints nor a pole reaches the untouched Phase 1
+    // fabrik_solve inside Fabrik_solver::solve, with the same arguments, so
+    // it still produces Phase 1 results bit for bit.
+    m_chain.positions       = m_initial_positions;
+    m_chain.lengths         = m_lengths;
+    m_chain.local_rotations = m_local_rotations_before;
+    m_chain.child_dir_local = m_child_dir_local;
+    m_chain.constraints     = m_constraints;
+    m_chain.root_parent_world_rotation = m_root_parent_world_rotation;
+    m_chain.target          = target_position_in_world;
+    m_chain.tolerance       = c_solve_tolerance;
+    m_chain.max_iterations  = c_max_iterations;
+    // No pole is discovered yet; Ik_drag::begin fills these in the attachment
+    // slice (R12).
+    m_chain.has_pole        = false;
+    m_chain.pole_position   = vec3{0.0f};
+    m_chain.pole_angle      = 0.0f;
+    m_solver.solve(m_chain);
+
     if (m_has_constraints) {
         // Constrained path: the solver returns constraint-satisfying local
         // rotations; write them back directly (translations and scales stay
         // at drag-start values - bone lengths never change).
-        m_chain.positions       = m_initial_positions;
-        m_chain.lengths         = m_lengths;
-        m_chain.local_rotations = m_local_rotations_before;
-        m_chain.child_dir_local = m_child_dir_local;
-        m_chain.constraints     = m_constraints;
-        m_chain.root_parent_world_rotation = m_root_parent_world_rotation;
-        m_chain.target          = target_position_in_world;
-        m_chain.tolerance       = c_solve_tolerance;
-        m_chain.max_iterations  = c_max_iterations;
-        m_solver.solve(m_chain);
-
+        //
         // Cache refreshes are explicit (see the unconstrained path below):
         // root-to-tip order keeps each parent's world transform fresh
         // before the child reads it.
@@ -220,10 +231,9 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
             m_joints[i]->update_world_from_node();
         }
     } else {
-        // Unconstrained: bit-for-bit the Phase 1 path.
-        m_scratch_positions = m_initial_positions;
-        fabrik_solve(m_scratch_positions, m_lengths, target_position_in_world, c_solve_tolerance, c_max_iterations);
-
+        // Unconstrained: the solved positions drive a rotation-only
+        // write-back (local_rotations were left untouched by the solver).
+        //
         // Rotation-only write-back, sequentially root to effector: each
         // joint's child direction is re-read under the already-updated
         // ancestors before computing that joint's world-space shortest-arc
@@ -248,7 +258,7 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
             const erhe::scene::Trs_transform& world_from_joint = joint.world_from_node_transform();
             const quat rotation_delta = ik_shortest_arc(
                 child_position - joint_position,
-                m_scratch_positions[i + 1] - joint_position,
+                m_chain.positions[i + 1] - joint_position,
                 world_from_joint.get_rotation()
             );
             joint.set_world_from_node(erhe::scene::rotate(world_from_joint, rotation_delta));
@@ -275,7 +285,6 @@ void Ik_drag::reset()
     m_constraints.clear();
     m_root_parent_world_rotation = quat{1.0f, 0.0f, 0.0f, 0.0f};
     m_has_constraints = false;
-    m_scratch_positions.clear();
     m_effector_world_rotation_before = quat{1.0f, 0.0f, 0.0f, 0.0f};
 }
 

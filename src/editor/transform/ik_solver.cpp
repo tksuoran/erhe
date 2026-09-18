@@ -231,6 +231,59 @@ auto ik_shortest_arc(const vec3 a_in, const vec3 b_in, const quat& reference_ori
     return angleAxis(std::acos(std::clamp(cos_angle, -1.0f, 1.0f)), axis);
 }
 
+void ik_apply_pole(std::vector<glm::vec3>& positions, const glm::vec3 pole_position, const float pole_angle)
+{
+    const std::size_t joint_count = positions.size();
+    if (joint_count < 3) {
+        return; // no intermediate joint: the pole has no effect (R10)
+    }
+    const std::size_t last = joint_count - 1;
+
+    // Relative epsilon, so every guard below is scale independent.
+    float total_length = 0.0f;
+    for (std::size_t i = 0; i + 1 < joint_count; ++i) {
+        total_length += distance(positions[i], positions[i + 1]);
+    }
+    const float eps = std::max(1.0e-4f * total_length, c_epsilon);
+
+    const vec3  root     = positions[0];
+    const vec3  axis_raw = positions[last] - root;
+    const float axis_len = length(axis_raw);
+    if (axis_len < eps) {
+        return; // folded onto the root: the swivel line does not exist
+    }
+    const vec3 a = axis_raw / axis_len;
+
+    // Mean bend direction: the sum of the intermediate joints' perpendicular
+    // offsets from the root-to-effector line, equally weighted.
+    vec3 bend_raw{0.0f};
+    for (std::size_t i = 1; i < last; ++i) {
+        const vec3 offset = positions[i] - root;
+        bend_raw += offset - (a * dot(offset, a));
+    }
+    if (length(bend_raw) < eps) {
+        return; // straight chain (or cancelling offsets): no bend to aim
+    }
+    const vec3 b = normalize(bend_raw);
+
+    const vec3 pole_offset = pole_position - root;
+    const vec3 pole_raw    = pole_offset - (a * dot(pole_offset, a));
+    if (length(pole_raw) < eps) {
+        return; // the pole lies on the axis and names no direction
+    }
+    const vec3 d = normalize(pole_raw);
+
+    // Right-handed rotation of the wanted direction about the axis, so a
+    // positive pole_angle turns the bend counter-clockwise seen from the
+    // effector looking back at the root.
+    const vec3  d_target = angleAxis(pole_angle, a) * d;
+    const float theta    = std::atan2(dot(cross(b, d_target), a), dot(b, d_target));
+    const quat  q        = angleAxis(theta, a);
+    for (std::size_t i = 1; i < last; ++i) {
+        positions[i] = root + (q * (positions[i] - root));
+    }
+}
+
 void fabrik_solve(
     std::vector<glm::vec3>&   positions,
     const std::vector<float>& segment_lengths,
@@ -304,6 +357,12 @@ void Fabrik_solver::solve(Ik_chain& chain)
         // Bit-for-bit the Phase 1 path: positions only, local_rotations
         // untouched (the caller keeps its positional write-back).
         fabrik_solve(chain.positions, chain.lengths, chain.target, chain.tolerance, chain.max_iterations);
+        // One pole application on the final positions is exact: a rigid
+        // rotation about the root-to-effector line maps a converged solution
+        // to another converged solution (R13).
+        if (chain.has_pole) {
+            ik_apply_pole(chain.positions, chain.pole_position, chain.pole_angle);
+        }
         return;
     }
 
@@ -335,6 +394,14 @@ void Fabrik_solver::solve(Ik_chain& chain)
         for (std::size_t i = joint_count - 1; i > 0; --i) {
             const vec3 direction = ik_safe_direction(chain.positions[i - 1] - chain.positions[i], vec3{0.0f, 1.0f, 0.0f});
             chain.positions[i - 1] = chain.positions[i] + direction * chain.lengths[i - 1];
+        }
+
+        // Aim the bend at the pole on the forward pass's positions, so the
+        // constraint-clamping backward pass still runs last and produces the
+        // returned positions and local_rotations together - limits and locks
+        // win over the pole (R13, R14).
+        if (chain.has_pole) {
+            ik_apply_pole(chain.positions, chain.pole_position, chain.pole_angle);
         }
 
         // Backward-reaching with constraint enforcement and root-to-tip
