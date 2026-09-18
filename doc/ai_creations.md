@@ -12,9 +12,10 @@ scripting surface - from self-contained Python scripts in
 `scripts/creations/`. Each script launches the editor, builds one scene
 end to end (geometry, materials, procedural textures, lighting, physics),
 frames the camera, screenshots itself for iteration, and saves the scene
-as glTF. Twenty creations exist, from a Conway-automaton cathedral to
-a live geometry-graph frog; `git log -- scripts/creations` carries the
-per-creation history, and video recordings are collected in the
+as glTF. They range from a Conway-automaton cathedral to a live
+geometry-graph frog and a working Newton's cradle; `git log --
+scripts/creations` carries the per-creation history, and video
+recordings are collected in the
 [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N).
 
 This document maps the creation features to the editor features they are
@@ -68,10 +69,10 @@ editor subsystems                  scene graph, brushes, geometry,
 | `set_scene_settings` (sky, grid, clear color, physics/wind overrides; `merge: true` deep merge) | Versioned per-scene `Scene_settings` (codegen serialization; unversioned sub-objects are rejected loudly - a missing `_version` would silently drop newer fields) |
 | Undo safety everywhere | Every mutating tool goes through the editor's `Operation_stack`, so an AI-built scene is fully undoable in the UI |
 
-**Strict tool arguments** (2026-08-09): `create_shape`, `place_brush`
-and `place_brush_instances` reject unrecognized argument keys against
-per-shape allowlists instead of silently applying defaults (a silently
-ignored capsule `radius=` once cost a whole build); batch placements are
+**Strict tool arguments**: `create_shape`, `place_brush` and
+`place_brush_instances` reject an unrecognized argument key against a
+per-shape allowlist instead of silently applying the default; a silently
+ignored capsule `radius=` once cost a whole build. A batch placement is
 validated before any placement applies.
 
 ### Geometry processing
@@ -240,9 +241,9 @@ artifact. WorldClaw's structure-first decomposition (global layout
 specification before local content) is a natural fit for scaling
 creations up beyond single showcase scenes.
 
-## Creations timeline
+## The creations
 
-### 21 - Newton's Cradle (2026-09-17)
+### 21 - Newton's Cradle
 
 ![Newton's Cradle](images/creations/21_newtons_cradle.png)
 
@@ -259,7 +260,7 @@ contacts together and swings the whole row off unless the balls hang
 nearly touching (`--jolt` / `--box3d` pick the gap; the skill's
 `physics_rigs.md` has the numbers).
 
-### 20 - Frog (2026-08-11)
+### 20 - Frog
 
 ![Frog](images/creations/20_frog.png)
 
@@ -292,7 +293,7 @@ re-evaluates - the frog's pose is editable without opening the node
 graph; the eye decorations (iris, pupil) are parented under the eye
 drivers and ride along.
 
-### 19 - Dolphin (2026-08-11)
+### 19 - Dolphin
 
 ![Dolphin](images/creations/19_dolphin.png)
 
@@ -310,7 +311,7 @@ and added three editor features along the way: the quaternion
 Transform mode, the `smooth_normals` operation/node, and the
 evaluation-aware automatic graph layout.
 
-### 18 - Fish (2026-08-10)
+### 18 - Fish
 
 ![Fish](images/creations/18_fish.png)
 
@@ -323,7 +324,7 @@ texture graphs on one material - a quincunx scale-scallop field driving
 both a colorized, fbm-mottled albedo and per-scale `normal_map` relief
 - the first creation to use texture graphs.
 
-### 17 - Rockfall (2026-08-09)
+### 17 - Rockfall
 
 ![Rockfall](images/creations/17_rockfall.jpg)
 
@@ -335,7 +336,7 @@ poses. Post-settle chamfer batches, smooth sunken-sphere dunes, capsule
 cacti and swept-blade agave rosettes (the first use of the `sweep`
 shape).
 
-### 16 - Sail Ships (2026-08-09)
+### 16 - Sail Ships
 
 ![Sail Ships](images/creations/16_sail_ships.jpg)
 
@@ -345,7 +346,7 @@ Amerigo Vespucci's concave clipper stem), sails are FFD-billowed boxes,
 and the hull stripes are lattice-bent strips fitted to raycast-probed
 surface stations.
 
-### 15 - Tree Garden (2026-08-09)
+### 15 - Tree Garden
 
 ![Tree Garden](images/creations/15_tree_garden.jpg)
 
@@ -355,7 +356,7 @@ curved branch chains with forks and twigs), each with beam-scaled
 two-level wind sway. Also the performance testbed that motivated
 `merge_static_subtree` (11057 -> 372 nodes, ~31 -> ~4 ms).
 
-### 14 - Spider Sentinel (2026-08-08)
+### 14 - Spider Sentinel
 
 ![Spider Sentinel](images/creations/14_spider_sentinel.jpg)
 
@@ -363,7 +364,7 @@ A 50-part ragdoll spider that STANDS under full gravity on motorized
 leg joints - rest-pose six-dof drives sized from static hold torques -
 and staggers and recovers from an `apply_physics_force` shove.
 
-### 13 - Windswept Glade (2026-08-08)
+### 13 - Windswept Glade
 
 ![Windswept Glade](images/creations/13_windswept_glade.jpg)
 
@@ -371,7 +372,7 @@ The forest glade rebuilt with living foliage: one-spine physics LOD per
 plant (114 sway spines), rest-pose motor joints, per-body wind
 receptivity and the scene wind system (gusts, turbulence, wavelength).
 
-### 12 - UAP Hangar (2026-08-08)
+### 12 - UAP Hangar
 
 ![UAP Hangar](images/creations/12_uap_hangar.jpg)
 
@@ -380,7 +381,7 @@ light pools - TR-3B triangle, domed saucer, tic-tac, and friends - an
 indoor-lighting study (no sky, accent point lights, emissive shells,
 raster transparency).
 
-### 11 - Monster Portal Island (2026-08-07)
+### 11 - Monster Portal Island
 
 ![Monster Portal Island](images/creations/11_monster_portal_island.jpg)
 
@@ -389,7 +390,7 @@ and primitive-built critters mid-invasion - a composition and accent
 lighting exercise (a 320-intensity portal light once turned the whole
 island pink).
 
-### 10 - Forest Glade (2026-08-07)
+### 10 - Forest Glade
 
 ![Forest Glade](images/creations/10_forest_glade.jpg)
 
@@ -398,7 +399,7 @@ fallen log - the creation that established the mandatory scene-graph
 hierarchy rules (the L-system bracket stack IS the node parent stack;
 742 nodes, 37 roots, depth 7).
 
-### 9 - Sandbox Afternoon (2026-08-07)
+### 9 - Sandbox Afternoon
 
 ![Sandbox Afternoon](images/creations/09_sandbox_afternoon.jpg)
 
@@ -406,7 +407,7 @@ A backyard sandbox scene grown around the first L-system oak - the
 proof that string-rewrite vegetation plus a 3D turtle works over the
 MCP shape tools.
 
-### 8 - The Glass Audience (2026-08-07)
+### 8 - The Glass Audience
 
 ![The Glass Audience](images/creations/08_glass_audience.jpg)
 
@@ -415,7 +416,7 @@ primitive-built skeleton under a swinging pendulum lamp - the
 transparency showcase (`blending_mode: "alpha_blend"` + opacity) and an
 early physics-pendulum rig.
 
-### 7 - Ragdoll Rumble (2026-08-07)
+### 7 - Ragdoll Rumble
 
 ![Ragdoll Rumble](images/creations/07_ragdoll_rumble.jpg)
 
@@ -423,21 +424,21 @@ A golden protocol-droid homage vs a wrecking ball: every body part a
 dynamic rigid body laced with ball/hinge/weld joints - the first full
 physics-joint creation, frozen at the moment of impact aftermath.
 
-### 6 - Robot Roll Call (2026-08-07)
+### 6 - Robot Roll Call
 
 ![Robot Roll Call](images/creations/06_robot_roll_call.jpg)
 
 Three homage robots on lit showroom pedestals, each built entirely from
 parametric shapes so the silhouette carries the character.
 
-### 5 - The Spiral Reef (2026-08-07)
+### 5 - The Spiral Reef
 
 ![The Spiral Reef](images/creations/05_spiral_reef.jpg)
 
 A double golden-angle helix of organic forms rising from a shallow sea,
 sculpted after placement with direct MCP geometry operations.
 
-### 4 - Megalith Henge at Dusk (2026-08-07)
+### 4 - Megalith Henge at Dusk
 
 ![Megalith Henge](images/creations/04_megalith_henge.jpg)
 
@@ -445,7 +446,7 @@ A weathered trilithon circle - the brush-reuse creation: monolith and
 capstone authored once with `create_shape add_brush`, erected with
 `place_brush`, surfaced with a procedural stone texture graph.
 
-### 3 - The Texture Atelier (2026-08-07)
+### 3 - The Texture Atelier
 
 ![The Texture Atelier](images/creations/03_texture_atelier.jpg)
 
@@ -453,7 +454,7 @@ A gallery of spheres on plinths, each surfaced live by a different
 procedural texture graph (marble, lava, bricks with a normal map,
 voronoi stained glass, woven fabric, kaleidoscope).
 
-### 2 - Crystal Garden at Night (2026-08-07)
+### 2 - Crystal Garden at Night
 
 ![Crystal Garden](images/creations/02_crystal_garden.jpg)
 
@@ -461,11 +462,11 @@ Emissive crystal clusters on a dark reflective ground, each cluster a
 geometry node graph: points scattered over a hidden dome, instanced
 with sharpened cones, realized into one mesh.
 
-### 1 - Cathedral of Conway (2026-08-07)
+### 1 - Cathedral of Conway
 
 ![Cathedral of Conway](images/creations/01_conway_cathedral.jpg)
 
-The first creation: a circular colonnade of pedestals, each carrying a
+The first creation, a circular colonnade of pedestals, each carrying a
 geometry-node sculpture built from a different Conway operator chain
 (gyro, kis, chamfer, truncate, meta...) around a central gyro-sphere.
 
@@ -477,8 +478,8 @@ geometry-node sculpture built from a different Conway operator chain
 - `AGENTS.md` "In-editor MCP server" + repo-root `mcp_server_usage.md` -
   server transport, ports, auth, headless vs windowed, Quest forwarding.
 - `config/editor/mcp_tools.json` - the full tool schema, loaded at
-  runtime (184 built-in tools as of 2026-08-12; the editor commands are
-  added on top at runtime by `mcp_server_tool_list.cpp`). Editing a
+  runtime; the editor commands are added on top at runtime by
+  `mcp_server_tool_list.cpp`. Editing a
   description here needs only an editor restart, not a rebuild;
   `scripts/mcp_call.py --list` against a running editor prints the live
   list.

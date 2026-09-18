@@ -3,9 +3,7 @@
 Stability: mostly stable
 
 Selection and viewport display of mesh sub-components -- faces (facets), edges,
-and vertices -- as a foundation for mesh editing. This document describes the
-implemented feature and the editing / GPU-selection work that is intentionally
-left for later.
+and vertices -- as a foundation for mesh editing.
 
 ## 1. Overview and scope
 
@@ -27,9 +25,9 @@ Implemented scope:
   camera-facing quads, plus a highlight of the component under the pointer.
 - Desktop viewport only (see section 6).
 
-Out of scope, documented in section 7: editing the selection (transforming
-vertices, setting vertex attribute values), multi-mesh and skinned-mesh
-selection, and GPU compute-shader-based selection.
+Editing the selection, multi-mesh and skinned-mesh selection, and
+compute-shader selection over the GPU vertex and index buffers are
+`doc/plans/mesh_component_selection.md`.
 
 ## 2. Mode selector and command coexistence
 
@@ -107,12 +105,12 @@ local space (`Node::transform_point_from_world_to_local`), then:
 
 ## 5. Rendering
 
-All overlays are drawn with `erhe::renderer::Primitive_renderer`. The renderer
-was line-only; filled faces required adding triangle primitives:
+All overlays are drawn with `erhe::renderer::Primitive_renderer`, which draws
+lines, points and triangles:
 
-- `Primitive_renderer::add_triangle()` / `add_triangles()` reuse the existing
-  line vertex layout (position + color; the line-width slot is unused), so no
-  new shader or vertex format was needed. `line_simple.vert` only transforms
+- `Primitive_renderer::add_triangle()` / `add_triangles()` reuse the line
+  vertex layout (position + color; the line-width slot is unused), so filled
+  faces need no shader or vertex format of their own. `line_simple.vert` only transforms
   position and passes color through, and `line_simple.frag` outputs
   premultiplied alpha, so a color alpha below 1 gives a translucent fill
   through the existing premultiplied-over visible blend state
@@ -182,45 +180,12 @@ Lifting the desktop-only restriction would require a multiview variant of the
 `line_simple` shader (and feeding per-eye view data on the direct path), the
 same way the wide-line compute path already has a multiview graphics stage.
 
-## 7. Future work (out of scope)
+## 7. Region and brush face selection on the GPU
 
-### 7.1 Transform selected vertices
-
-Move / rotate / scale the selected vertices (and the implied vertices of
-selected edges / faces). This needs: a transform pivot derived from the
-selection, integration with the existing transform tools / `Operation_stack`
-for undo, writing transformed positions back into the `Geometry`, and
-re-uploading / rebuilding the affected `Primitive` GPU buffers. The component
-selection must survive the edit (the geometry-identity invalidation in section
-3 would have to be relaxed to an index remap for in-place edits).
-
-### 7.2 Set vertex attribute values
-
-Edit per-vertex / per-corner attributes (color, UV, custom) on the selection,
-extending the per-corner editing that `Paint_tool` already performs for vertex
-colors. Needs a small attribute-editing UI and the same write-back / re-upload
-path as 7.1.
-
-### 7.3 Multiple meshes
-
-Allow component selection to span several meshes at once. The data model would
-become a map keyed by (mesh, primitive index) instead of a single active mesh,
-and rendering would iterate the map.
-
-### 7.4 Skinned meshes
-
-Support component selection on skinned (deforming) meshes. CPU raytrace picking
-uses bind-pose geometry, which does not match the deformed pose, so this needs
-GPU-side picking (an ID render of components in the deformed pose) and rendering
-of the overlays in the deformed pose (skinning the overlay positions).
-
-### 7.5 GPU compute-shader selection
-
-**Box / paint face selection: implemented (GPU compute gather).** Region (box)
-and paint-brush face selection no longer read every scanned pixel back to the
-CPU and dedup there. When the device supports compute shaders and shader storage
-buffers (Vulkan, Metal, OpenGL >= 4.3), `Id_renderer::submit_scan_compute()`
-runs two compute passes over the blitted id-buffer scan region:
+Region (box) and paint-brush face selection gather their result on the GPU.
+When the device supports compute shaders and shader storage buffers (Vulkan,
+Metal, OpenGL >= 4.3), `Id_renderer::submit_scan_compute()` runs two compute
+passes over the blitted id-buffer scan region:
 
 1. `res/shaders/id_scan_gather.comp` -- one thread per pixel: decodes each
    pixel's packed id (`id = (r << 16) | (g << 8) | b`), applies the optional
@@ -236,13 +201,9 @@ snapshot. The interface blocks (`id_scan_input` / `id_scan_bitmask` /
 `id_scan_output` / `id_scan_params`) are declared in C++ (`ensure_scan_compute()`)
 and injected by `build_shader_stages`. The bitmask is sized dynamically to the
 live max id and the output to the total facet count (both from the id-range
-snapshot). On devices without compute the original per-pixel CPU readback +
-dedup path is kept as a fallback (every supported GL device has compute now
-that OpenGL 4.5 is the hard minimum).
-
-Still future work: compute-shader selection over the GPU vertex / index buffers
-themselves (vertex / edge marking, lasso), and component ID-buffer picking on
-skinned meshes in the deformed pose (pairs with 7.4).
+snapshot). A device without compute falls back to a per-pixel CPU readback
+that dedups on the CPU; every supported GL device has compute, since OpenGL
+4.5 is the hard minimum.
 
 ## 8. Testing notes
 
@@ -262,3 +223,9 @@ skinned meshes in the deformed pose (pairs with 7.4).
 - Confirm existing line debug rendering (grid, fly-camera, physics) is
   unchanged, and that the headset / XR viewport still renders (the tool is
   inactive there).
+
+## 9. Future work
+
+- [plans/mesh_component_selection.md](plans/mesh_component_selection.md) -
+  editing the selection, multiple meshes, skinned meshes, and compute
+  selection over the vertex and index buffers.

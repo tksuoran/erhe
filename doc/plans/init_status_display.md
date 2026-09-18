@@ -2,19 +2,15 @@
 
 Status: proposed
 
-## Status
+This plan extends `doc/editor.md` (the init status display,
+`src/editor/init_status_display.{hpp,cpp}` plus the `init_message` lambda
+wired into `Programs::load_programs`) and `doc/gl_worker_thread_contexts.md`
+with a status display that any worker thread may publish to.
 
-Deferred. Phase I (`src/editor/init_status_display.{hpp,cpp}` plus the
-`init_message` lambda wired into `Programs::load_programs`) is what
-ships today. Phase I assumes the editor's init is single-threaded --
-which it is: the `ERHE_SERIAL_INIT` / `ERHE_PARALLEL_INIT` toggle was
-retired and init is serial by construction -- so no synchronization is
-required between the worker(s) that publish status text and the main
-thread that draws it.
-
-This document captures the shape of the work that becomes necessary
-if init ever goes parallel (on the GL worker-context API of
-`doc/gl_worker_thread_contexts.md`).
+The editor's init is serial by construction, so the shipping display needs no
+synchronization between the worker that publishes status text and the main
+thread that draws it. This document captures the shape of the work that
+becomes necessary if init ever goes parallel.
 
 ## Goal
 

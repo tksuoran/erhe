@@ -2,15 +2,16 @@
 
 Status: proposed
 
+This plan extends `doc/editor.md` (the `animation/` part: `Animation_window`,
+`Animation_player`, keyframe edit helpers) and `doc/erhe_scene.md`
+("Animation playback") with a full dope sheet and curve editor.
+
 Plan for implementing an animation timeline (dope sheet) and curve (graph)
 editor in the erhe editor, compatible with animations imported from glTF
 assets. Modeled on Blender's Graph Editor / Dope Sheet
 (https://docs.blender.org/manual/en/latest/editors/graph_editor/introduction.html).
 A Blender clone is available at `D:\blender` for reference (see
 "Blender reference material" below).
-
-Status: PLANNED, not implemented. This document is the design + phase plan to
-be executed later.
 
 ## Table of Contents
 
@@ -52,7 +53,7 @@ animation blending/layering/NLA, IK/constraints, driver expressions.
 
 ## Existing erhe infrastructure
 
-A surprising amount already exists. Inventory (verified 2026-07-04):
+A surprising amount already exists. Inventory:
 
 ### Data model: `erhe::scene::Animation`
 

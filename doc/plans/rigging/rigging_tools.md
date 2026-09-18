@@ -1,15 +1,17 @@
-# Rigging Tools — Master Plan
+# Rigging Tools - Master Plan
 
 Status: proposed
 
-Status: draft, awaiting review.
-Companion document: `fabrik-ik-requirements.md` (detailed requirements for Phase 1).
+This plan extends `doc/editor_tools.md` (the tools the editor has for posing
+and selecting bones) and `doc/erhe_scene.md` (skins, joints and animation)
+with a rigging tool set. Companion document: `fabrik_ik.md` (detailed
+requirements for phase 1).
 
 ## Purpose
 
 Define the long-term roadmap for rigging tools in erhe editor, informed by a
 survey of Blender's rigging system (constraint types, armature/pose tools,
-skinning, drivers, Rigify — surveyed from the Blender source checkout, main
+skinning, drivers, Rigify - surveyed from the Blender source checkout, main
 branch, Aug 2026). The former "non-goals" of the FABRIK requirements document
 are placed here as later phases.
 
@@ -22,7 +24,7 @@ Existing building blocks the plan leans on:
   visualization (`src/editor/tools/bone_visualization.*`); GPU skinning via
   `Joint_buffer`.
 - **Animation**: glTF animation playback (`erhe::scene::Animation`, samplers /
-  channels, STEP / LINEAR / CUBICSPLINE) — playback only, no authoring.
+  channels, STEP / LINEAR / CUBICSPLINE) - playback only, no authoring.
 - **Editing infrastructure**: Transform tool with subtools and multi-node undo
   (`Node_transform_operation`, compound operations), message bus, selection,
   mesh component selection, vertex Paint tool, Lattice tool, Properties window
@@ -35,7 +37,7 @@ skeleton authoring, keyframing, drivers.
 ## Survey summary: what Blender has
 
 This is the reference feature map the phases below draw from. Not everything
-here is planned for erhe; the "erhe phase" column says where (— = not planned,
+here is planned for erhe; the "erhe phase" column says where (- = not planned,
 future = beyond this plan's horizon).
 
 ### Constraint types (Blender's UI grouping)
@@ -47,22 +49,22 @@ future = beyond this plan's horizon).
 | Tracking | Track To | Legacy aim with explicit up axis | 4 |
 | Tracking | Locked Track | Aim by rotating about one locked axis | 4 |
 | Tracking | Stretch To | Aim +Y at target and stretch to reach, volume squash | 6 |
-| Tracking | Clamp To | Pin location onto a curve | — |
+| Tracking | Clamp To | Pin location onto a curve | - |
 | Tracking | Spline IK | Fit a bone chain along a curve (direct geometric fit) | 6 |
 | Transform | Copy Location / Rotation / Scale / Transforms | Copy target channels, per-axis, mix modes | 4 |
 | Transform | Limit Location / Rotation / Scale | Clamp own channels to ranges | 4 |
 | Transform | Limit Distance | Clamp inside/outside/on a sphere around target | 4 |
 | Transform | Maintain Volume | Compensate one axis's scale on the other two | 6 |
 | Transform | Transformation | Map a range of a target channel onto a range of an own channel | 7 |
-| Transform | Transform Cache | Matrix from Alembic/USD cache | — |
+| Transform | Transform Cache | Matrix from Alembic/USD cache | - |
 | Relationship | Child Of | Parenting via constraint with bakeable inverse | 4 |
 | Relationship | Armature | Weighted multi-bone parenting blend | 6 |
 | Relationship | Floor | Keep owner above a plane at target | 4 |
-| Relationship | Follow Path | Move along a curve | — (curves first) |
+| Relationship | Follow Path | Move along a curve | - (curves first) |
 | Relationship | Action | Drive a pose from an action by a target channel | 7 |
-| Relationship | Pivot | Alternate rotation pivot | — |
-| Relationship | Shrinkwrap | Snap onto target mesh surface | — |
-| Motion Tracking | Camera/Object Solver, Follow Track | Movie-clip tracking | — |
+| Relationship | Pivot | Alternate rotation pivot | - |
+| Relationship | Shrinkwrap | Snap onto target mesh surface | - |
+| Motion Tracking | Camera/Object Solver, Follow Track | Movie-clip tracking | - |
 
 Common constraint infrastructure (Blender): ordered per-owner constraint
 stack evaluated head-to-tail, each constraint seeing the previous result;
@@ -80,7 +82,7 @@ for Phase 4.
 | Bone data | Transform channel locks (loc/rot/scale per component) | 2 |
 | Bone data | Inherit rotation (hinge) / inherit scale modes, connected bones | 3 |
 | Bone data | Custom bone shapes, bone colors | 3 (partial) |
-| Bone data | Bone collections (grouping, visibility, selectability) | — (erhe item tree/tags may suffice) |
+| Bone data | Bone collections (grouping, visibility, selectability) | - (erhe item tree/tags may suffice) |
 | Bone data | B-Bones (bendy bones, curved segments) | future |
 | Bone data | Envelopes (capsule geometry for binding weights; falloff skinning) | 5 (binding), 6 (falloff) |
 | Armature editing | Add/extrude/subdivide/fill/duplicate/delete bones, connect vs offset parenting | 3 |
@@ -98,7 +100,7 @@ for Phase 4.
 | Posing | Bone motion paths | future |
 | Animation glue | Keyframing / animation authoring | 7 (prerequisite work) |
 | Animation glue | Drivers (property driven by transform channel / property, expression) | 7 |
-| Automation | Rigify-style meta-rig → generated rig with IK/FK switching | future |
+| Automation | Rigify-style meta-rig -> generated rig with IK/FK switching | future |
 | Retargeting | BVH import, pose transfer | future |
 
 Notable Blender facts that shaped this plan:
@@ -112,30 +114,30 @@ Notable Blender facts that shaped this plan:
 - **Blender ships two IK solvers** (legacy SDLS-damped Jacobian, and iTaSC).
   FABRIK is simpler than either and fine for interactive posing; if joint
   limits (Phase 2) prove unstable under constrained FABRIK, a damped-least-
-  squares Jacobian solver is the known-good fallback — the plan keeps the
+  squares Jacobian solver is the known-good fallback - the plan keeps the
   solver behind an interface so this is swappable.
-- **Spline IK is not an iterative solver** — it is a direct tip-to-root
+- **Spline IK is not an iterative solver** - it is a direct tip-to-root
   geometric fit of bones onto a curve. Cheap to implement once erhe has
   curves; scheduled with the deformation phase.
 - **Automatic weights** are a cotangent-Laplacian "bone heat" solve with
-  visibility ray casts — a well-understood algorithm, but it needs a sparse
+  visibility ray casts - a well-understood algorithm, but it needs a sparse
   solver; scheduled late in the skinning phase.
 
 ## Cross-cutting concerns (all phases)
 
 - **Serialization**: erhe scenes are saved as erhe-authored glTF files with
   `ERHE_*` extensions. Rig data beyond skins (constraints, IK settings,
-  per-bone limits) has no core glTF home. Decide once — extension (e.g.
-  `ERHE_constraints`) vs `extras` — by the first phase that adds non-flag rig
+  per-bone limits) has no core glTF home. Decide once - extension (e.g.
+  `ERHE_constraints`) vs `extras` - by the first phase that adds non-flag rig
   data, which is Phase 2 (per-bone IK limits/locks), not Phase 4. Item flags
   serialize by name through an explicit persistent-flag allowlist
   (`erhe_gltf/gltf_item_flags.cpp`); `ik_lock` needs one new table entry
   there (plus the flag bit, `c_bit_labels` entry, and `count` bump in
   `item.hpp`), and nothing beyond that.
-- **Evaluation order**: today node transforms flow parent→child only. From
+- **Evaluation order**: today node transforms flow parent->child only. From
   Phase 4 on, constraints introduce cross-hierarchy dependencies (owner
   depends on target) and whole-chain solves (IK), so scene update needs an
-  explicit evaluation pass with dependency ordering and cycle detection —
+  explicit evaluation pass with dependency ordering and cycle detection -
   the single largest architectural change in this plan.
 - **Undo**: every interactive tool records one operation per gesture through
   the existing operation machinery; every new data type (constraint, weights)
@@ -155,15 +157,15 @@ skinning), then deformation quality, then animation-system integration.
 Phases 3 and 5 are independent of each other and can be reordered or
 interleaved; phase boundaries are release points, not waterfalls.
 
-### Phase 1 — Interactive FABRIK IK on translate drag
+### Phase 1 - Interactive FABRIK IK on translate drag
 
-Scope: exactly `fabrik-ik-requirements.md`. Dragged bone = effector; chain up
+Scope: exactly `fabrik_ik.md`. Dragged bone = effector; chain up
 to first `Item_flags::ik_lock` bone; unconstrained FABRIK; rotations-only
 write-back; one undo op per gesture; Transform tool toggle.
 
 Deliverable: pose an imported glTF character by dragging bones.
 
-### Phase 2 — IK quality of life
+### Phase 2 - IK quality of life
 
 Builds directly on Phase 1's solver and drag UX.
 
@@ -190,7 +192,7 @@ Builds directly on Phase 1's solver and drag UX.
 Deliverable: believable limb posing with controlled elbows/knees and locked
 joints.
 
-### Phase 3 — Skeleton editing and posing basics
+### Phase 3 - Skeleton editing and posing basics
 
 Authoring skeletons in-editor rather than only importing them, plus the
 non-IK posing verbs. Mostly editor UX over existing Node machinery.
@@ -209,9 +211,9 @@ non-IK posing verbs. Mostly editor UX over existing Node machinery.
   (respecting Phase 2 locks); copy pose / paste pose / paste flipped
   (clipboard already exists in editor tools).
 - **Rest pose model**: define what "rest pose" means for erhe skeletons
-  (currently implicit in inverse bind matrices) — prerequisite for "clear to
+  (currently implicit in inverse bind matrices) - prerequisite for "clear to
   rest" and later "apply pose as rest".
-- **Bone head/tail model**: erhe joints are glTF nodes — a position, no
+- **Bone head/tail model**: erhe joints are glTF nodes - a position, no
   tail. Extrude-from-tip, connected parenting, and roll all presuppose a
   head/tail bone; decide how tail is represented (inferred from the single
   child, stored length + direction, or proxy-only) before the editing verbs.
@@ -222,14 +224,14 @@ non-IK posing verbs. Mostly editor UX over existing Node machinery.
   Phase 6's rest-pose tooling; posing a bound skeleton is of course fine.
 - **Bone display**: custom bone display shapes and per-bone colors on the
   existing bone proxy system (nice-to-have within this phase).
-- **Skin binding stub**: plumbing for Phase 5 — create a `Skin` from a bone
+- **Skin binding stub**: plumbing for Phase 5 - create a `Skin` from a bone
   selection with derived inverse binds and trivial rigid weights (each vertex
   fully weighted to its nearest bone), so an authored skeleton can be
   smoke-tested against a mesh before real weighting exists.
 
 Deliverable: build a simple skeleton from scratch in the editor and pose it.
 
-### Phase 4 — Constraint system foundation
+### Phase 4 - Constraint system foundation
 
 The architectural core: a persistent, ordered constraint stack evaluated in
 the scene update. Modeled on Blender's proven shape (see survey).
@@ -243,7 +245,7 @@ the scene update. Modeled on Blender's proven shape (see survey).
   (constraint targets before owners), detects cycles (disable + report), and
   runs whole-chain IK solves as units. This subsumes Phase 1's drag-time
   solve: an interactive drag becomes a temporary IK constraint, exactly like
-  Blender's Auto-IK — one code path for interactive and persistent IK.
+  Blender's Auto-IK - one code path for interactive and persistent IK.
 - **Initial constraint set** (chosen for rigging value / simplicity ratio):
   - Copy Location / Copy Rotation / Copy Scale / Copy Transforms (per-axis,
     basic mix modes)
@@ -260,10 +262,10 @@ the scene update. Modeled on Blender's proven shape (see survey).
   cross-cutting) to cover constraint data.
 - **Undo**: add/remove/reorder/edit constraint operations.
 
-Deliverable: persistent rigs — an IK leg with a floor constraint and a
+Deliverable: persistent rigs - an IK leg with a floor constraint and a
 tracked look-at survive save/load.
 
-### Phase 5 — Skinning: weights authoring
+### Phase 5 - Skinning: weights authoring
 
 Make erhe able to bind meshes to skeletons, not just import bindings.
 Builds on the existing Paint tool and mesh component infrastructure.
@@ -274,7 +276,7 @@ Builds on the existing Paint tool and mesh component infrastructure.
   opt-out flag.
 - **Bind operations**: bind mesh to skeleton with (a) empty groups, (b)
   distance/envelope-based automatic weights, (c) bone-heat automatic weights
-  (cotangent Laplacian + visibility ray casts + sparse solve — the expensive
+  (cotangent Laplacian + visibility ray casts + sparse solve - the expensive
   item, last).
 - **Weight painting**: extend/parallel the vertex Paint tool: draw / add /
   subtract / blur / smear brushes, weight value + strength, active-bone
@@ -288,21 +290,21 @@ Builds on the existing Paint tool and mesh component infrastructure.
   (mesh component selection already exists).
 
 Deliverable: model a mesh, build a skeleton (Phase 3), bind and paint
-weights, pose with IK — full character workflow inside erhe.
+weights, pose with IK - full character workflow inside erhe.
 
-### Phase 6 — Deformation quality and advanced chain tools
+### Phase 6 - Deformation quality and advanced chain tools
 
 - **Dual-quaternion skinning** option (fixes candy-wrapper twisting) in the
   GPU skinning path.
 - **Stretch To constraint** and **stretchy IK** (optional per-chain stretch
   with volume compensation), **Maintain Volume**.
 - **Spline IK**: fit a bone chain along a curve (direct geometric fit,
-  tip→root, as Blender does). Depends on erhe growing an editable curve
-  primitive — that dependency, not the solver, is the real cost; if curves
+  tip->root, as Blender does). Depends on erhe growing an editable curve
+  primitive - that dependency, not the solver, is the real cost; if curves
   are far off, substitute a "chain through node path" variant.
 - **Armature constraint** (weighted multi-bone parenting) for advanced
   mechanisms.
-- **Apply pose as rest pose** (rewrites inverse bind matrices + rest data —
+- **Apply pose as rest pose** (rewrites inverse bind matrices + rest data -
   needs Phase 3's rest pose model and Phase 5's weights to stay valid) and
   **visual transform apply** (bake the constraint-evaluated result into the
   node's own transform). This also unlocks structural editing of bound
@@ -313,20 +315,20 @@ weights, pose with IK — full character workflow inside erhe.
 Deliverable: production-quality deformation: twisting limbs without collapse,
 stretchy cartoon rigs, tails/spines on curves.
 
-### Phase 7 — Rig logic: drivers and animation integration
+### Phase 7 - Rig logic: drivers and animation integration
 
 The glue that turns posable skeletons into *rigs*, and IK into something
 that can be recorded.
 
-- **Keyframing prerequisite**: animation authoring — create/edit keyframes on
+- **Keyframing prerequisite**: animation authoring - create/edit keyframes on
   node TRS channels (erhe animation is playback-only today; this is its own
-  plan, likely `animation-keyframing-plan.md` — this phase depends on it, and
+  plan, likely `animation-keyframing-plan.md` - this phase depends on it, and
   on recording IK-solved poses as FK keys ("bake pose")).
 - **Drivers**: a property driven by another property or by a transform
   channel of another node (Blender's most-used rigging glue after
-  constraints). erhe's geometry-graph node system is a candidate substrate —
+  constraints). erhe's geometry-graph node system is a candidate substrate -
   drivers as a small dataflow graph evaluated in the constraint pass.
-- **Transformation constraint** (range→range channel mapping) — with drivers,
+- **Transformation constraint** (range->range channel mapping) - with drivers,
   covers most "gadget" rigs (foot roll, finger curl sliders).
 - **Action constraint** equivalent (pose driven by a channel through an
   animation clip) if erhe animation authoring reaches named clips.
@@ -346,7 +348,7 @@ switching, and IK poses bakeable to keyframes.
 
 Collected from the survey; explicitly not scheduled:
 
-- Pose slide tools (push/relax/breakdown), pose propagate, pose library —
+- Pose slide tools (push/relax/breakdown), pose propagate, pose library -
   all keyframe-centric; revisit once Phase 7 keyframing matures.
 - Bone motion paths visualization.
 - B-Bones / bendy bones (curved bone segments with eased handles).
@@ -358,13 +360,13 @@ Collected from the survey; explicitly not scheduled:
 - Sculpted corrective shape authoring (editing morph target geometry
   in-editor; Phase 7 only drives existing targets).
 
-## Suggested implementation order — summary
+## Suggested implementation order - summary
 
 | Phase | Title | Depends on | Rough size |
 |---|---|---|---|
-| 1 | FABRIK IK on drag | — | S-M |
+| 1 | FABRIK IK on drag | - | S-M |
 | 2 | IK quality of life (pole, limits, locks) | 1; serialization decision | M |
-| 3 | Skeleton editing + posing basics | — (1 for testing) | M-L |
+| 3 | Skeleton editing + posing basics | - (1 for testing) | M-L |
 | 4 | Constraint system foundation | 1-2 (solver), scene update rework | L |
 | 5 | Skinning: weights authoring | 3 (for full value) | L |
 | 6 | Deformation quality (DQ skinning, Spline IK, stretch) | 3 (rest pose model), 4, 5 | M-L |

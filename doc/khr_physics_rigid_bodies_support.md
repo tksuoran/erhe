@@ -1,113 +1,155 @@
-# KHR_physics_rigid_bodies support - status and continuation notes
+# KHR_physics_rigid_bodies support
 
 Stability: mostly stable
 
-Goal: full support for the glTF extensions KHR_physics_rigid_bodies and KHR_implicit_shapes
-(spec: https://github.com/eoineoineoin/glTF_Physics/tree/master/extensions/2.0/Khronos/KHR_physics_rigid_bodies): simulate via the
-Jolt wrapper, expose and edit in the editor UI, persist in editor scene serialization, and
-round-trip through glTF import/export.
+erhe supports the glTF extensions `KHR_physics_rigid_bodies` and
+`KHR_implicit_shapes`
+(spec: https://github.com/eoineoineoin/glTF_Physics/tree/master/extensions/2.0/Khronos/KHR_physics_rigid_bodies)
+on both the import and the export side: the described bodies simulate through
+the Jolt wrapper, are exposed and edited in the editor UI, persist in erhe's
+scene serialization, and round-trip through glTF.
 
-Confirmed scope decisions: glTF import AND export; full joints (per-axis limits + drives via
-Jolt SixDOFConstraint); physics materials / collision filters / joint settings as shared
-content-library assets; triangle-mesh colliders via Jolt MeshShape (static/kinematic only).
+The support is full-featured: joints carry per-axis limits and drives (via Jolt
+`SixDOFConstraint`); physics materials, collision filters and joint settings are
+shared content-library assets; triangle-mesh colliders use Jolt `MeshShape` and
+are therefore static or kinematic only.
 
-## Status (2026-06-12)
+## What carries the data
 
-| Phase | Commit | Content | State |
-|---|---|---|---|
-| 1 | `6c7c479d` | erhe::physics: tapered cylinder / mesh / scaled / COM-offset shapes; create-info velocities, gravity factor, is_sensor; mass==0 = infinite-mass convention | done |
-| 2 | `fecd9665` | Shared `Physics_material` / `Collision_filter` / `Physics_joint_settings` items (Item_type bits 38-40); Jolt contact-listener friction/restitution combine (spec precedence); data-driven collision filters (GroupFilter, 64-system bitsets, pair exclusion); trigger enter/exit events on IWorld | done |
-| 3 | `45e406d2` | Generic six-DOF constraint: `Six_dof_constraint_settings` (frames in body node space; axes 0..2 translation, 3..5 rotation) -> JPH::SixDOFConstraint with limits, translation soft limits, position/velocity motors | done |
-| 4 | `cd5bc619`, `13a1fdcb` | Editor: content-library folders (physics_materials, collision_filters, physics_joints); Node_physics accessors (material, filter, trigger, gravity factor, initial velocities, COM offset); new `Node_joint` attachment with Scene_root constraint retry; scene JSON serialization (Scene_file v3, Node_physics_data v2, Collision_shape_data v3 + new defs); properties UI for all of it | done |
-| 5 | `6fa07a4a` | glTF import: extension bits enabled, `erhe_scene/physics_description.hpp` plain-data carrier, `parse_physics()`, editor mapping `parsers/gltf_physics_import.*` (body roots, compound folding, implicit-shape table, hull/mesh colliders, triggers, joints) | done |
-| 5.5 | - | fastgltf spec-compliance fixes, carried in the fork `tksuoran/fastgltf` branch `khr_physics_rigid_bodies` (pinned by commit in the root `CMakeLists.txt` `CPMAddPackage`; CPM `PATCHES` is banned repo-wide, see AGENTS.md): mesh-keyed collider geometry (current spec) for parse + write, spec inertia key names, missing member initializers (convexHull, combine modes, drive maxForce/targets), exporter JSON fixes (extension name, booleans, malformed motion arrays, missing rigid-body close brace, collisionFilters trailing commas, omit infinite maxForce). Editor side: mesh-keyed import via `build_shape_from_mesh()` (builds Geometry from Triangle_soup on demand) | done |
-| 6 | - | glTF export: `parsers/gltf_physics_export.*` `build_gltf_physics_data()` (shape introspection, wrapper unwrap, shared item dedup, synthesized child colliders) + `Gltf_exporter` physics pass + extensionsUsed | done |
-| 7 | - | Polish: trigger events surfaced in the Physics window (bounded per-scene log on Scene_root fed by the IWorld trigger callbacks; count also in MCP list_scenes), joint warnings identify settings + node (were empty Node_joint names), doc/erhe_physics.md updates. Cone creation tool parity remains optional/not done | done |
-| 8 | - | In-editor creation (no import needed): Scene_commands::create_new_rigid_body / create_new_joint (undoable Node_attach_operation; commands scene.create_new_rigid_body / scene.create_new_joint, Create menu); item-tree context menu "Attach > Rigid Body / Joint" (joint auto-connects to another selected node); Create menu entries for Physics Material / Collision Filter / Joint Settings content-library items (operations_window); Node_physics::set_collision_shape; shared reapply/rebuild helpers in scene/physics_edits.{hpp,cpp}; MCP tools: get_physics_items, create/edit_physics_body, create/edit_physics_joint, create/edit_physics_material, create/edit_collision_filter, create/edit_physics_joint_settings, plus physics details in get_node_details | done |
+- `erhe::physics` provides the shapes the extensions need: tapered cylinder,
+  mesh, scaled and centre-of-mass-offset shapes, with create-info velocities, a
+  gravity factor and `is_sensor`. A mass of 0 means infinite mass.
+- `Physics_material`, `Collision_filter` and `Physics_joint_settings` are
+  shared items. The Jolt contact listener combines friction and restitution in
+  the precedence the spec states; collision filters are data-driven
+  (`GroupFilter`, 64-system bitsets, pair exclusion); `IWorld` reports trigger
+  enter and exit events.
+- `Six_dof_constraint_settings` is the generic six-DOF constraint (frames in
+  body node space; axes 0..2 translation, 3..5 rotation), mapped to
+  `JPH::SixDOFConstraint` with limits, translation soft limits and
+  position / velocity motors.
+- The editor holds physics materials, collision filters and joint settings in
+  content-library folders, exposes every `Node_physics` accessor (material,
+  filter, trigger, gravity factor, initial velocities, centre-of-mass offset)
+  and carries a `Node_joint` attachment with a `Scene_root` constraint retry.
+- `erhe::scene::Physics_description`
+  (`erhe_scene/physics_description.hpp`) is the plain-data carrier both formats
+  read and write; `parse_physics()` fills it from glTF and
+  `parsers/gltf_physics_import.*` maps it onto the editor's items (body roots,
+  compound folding, implicit-shape table, hull and mesh colliders, triggers,
+  joints).
 
-Verification done: hinge constraint harness (Phase 3); scene save/load round-trip incl. v2
-backward compat (Phase 4); real sample assets from
-https://github.com/eoineoineoin/glTF_Physics import and simulate (JointTypes: 11 live
-constraints; Materials_Friction; Filtering) (Phase 5). Phase 6 verified over the editor MCP
-tools (export_gltf / import_gltf with explicit paths): default scene exports valid JSON with
-both extensions declared (checked with a JSON parser); .glb round-trip re-imports 7 bodies
-from 13 glTF rigid-body nodes (synthesized compound children fold back); official samples
-ShapeTypes / Triggers / JointTypes import with mesh-keyed colliders (10 bodies + 2 triggers;
-3 triggers; 10 joint settings + 11 joints) and re-export with materials, filters, joints,
-drives, triggers and implicit-shape dedup intact.
+## Authoring without an import
 
-## Former blocker for Phase 6: export hang (FIXED, verified)
+`Scene_commands::create_new_rigid_body` and `create_new_joint` are undoable
+(`Node_attach_operation`) and reachable from the `scene.create_new_rigid_body`
+and `scene.create_new_joint` commands, the Create menu, and the item-tree
+context menu ("Attach > Rigid Body / Joint"; a joint auto-connects to another
+selected node). The Create menu also creates Physics Material, Collision Filter
+and Joint Settings content-library items. `scene/physics_edits.{hpp,cpp}` holds
+the shared reapply / rebuild helpers. The MCP tools are `get_physics_items`,
+`create_physics_body` / `edit_physics_body`, `create_physics_joint` /
+`edit_physics_joint`, `create_physics_material` / `edit_physics_material`,
+`create_collision_filter` / `edit_collision_filter`,
+`create_physics_joint_settings` / `edit_physics_joint_settings`, plus the
+physics fields of `get_node_details`.
 
-`File > Save Scene` of the default scene used to hang (assert inside
-`Free_list_allocator::free` at scope exit of `Gltf_exporter::process_geometry`, surfacing as
-a hang). Fixed by 699cee0b (Buffer_mesh declaration-order use-after-free). Verified
-2026-06-12 by driving the editor over its MCP server: `save_scene` of the default scene
-writes the scene .json + companion .glb + geogram meshes instantly, `export_gltf` produces a
-valid .glb, and `import_gltf` loads it back (16 -> 33 nodes). The MCP tools `save_scene` /
-`export_gltf` / `import_gltf` (path arguments, no file dialog) were added for this and remain
-available for Phase 6 round-trip verification.
+## Export design
 
-## Design (as implemented)
+- `build_gltf_physics_data(scene) -> erhe::scene::Physics_description`
+  (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`) walks `Node_physics` and
+  `Node_joint` attachments. Collision shape introspection dedups implicit shapes
+  into the top-level array; convex hull and mesh shapes become mesh-keyed
+  `geometry.mesh` references (the current spec). Compound shape children,
+  non-Y shape axes and wrapper scales that differ from the node world scale
+  become `Physics_description::synthesized_colliders`: extra glTF child nodes
+  the exporter creates, with scale `wrapper_scale / parent_world_scale`. An
+  offset-centre-of-mass wrapper unwraps into `motion.centerOfMass`; velocities
+  rotate from world into node space; shared materials, filters and joint
+  settings dedup by item pointer into the top-level arrays.
+- `Gltf_exporter` (`src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`) takes an
+  optional `const erhe::scene::Physics_description*`. `process_node` records an
+  erhe-node to glTF-node-index map, and `process_physics()` runs before
+  `combine_buffers` (mesh-keyed geometry may export meshes on demand) to fill
+  `asset.shapes`, `physicsMaterials`, `collisionFilters`, `physicsJoints`, the
+  per-node `node.physicsRigidBody`, and the synthesized collider child nodes
+  (a compound trigger becomes a node-list trigger over its synthesized
+  children). Both extension names go into `extensionsUsed`, not
+  `extensionsRequired`.
+- The call sites are `operations_window.cpp` (File > Export), the MCP
+  `export_gltf` tool and scene save (`save_scene_gltf` in `parsers/gltf.cpp`).
+  The scene file itself is the canonical physics store
+  (`doc/scene_serialization.md`; the erhe-specific remainder rides in the
+  `ERHE_physics` node extension).
+- Import folds synthesized children back: a dynamic body through the
+  motion-root compound fold, a static synthesized child as an individual static
+  body, which is physically equivalent.
 
-- Editor-side `build_gltf_physics_data(scene) -> erhe::scene::Physics_description`
-  (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`): walks Node_physics / Node_joint
-  attachments; collision shape introspection -> implicit shapes deduped into the top-level
-  array; convex hull / mesh shapes -> mesh-keyed `geometry.mesh` references (current spec);
-  compound shape children, non-Y shape axes and wrapper scales differing from the node world
-  scale -> `Physics_description::synthesized_colliders` (extra glTF child nodes created by the
-  exporter, scale = wrapper_scale / parent_world_scale); OCOM wrapper unwraps into
-  `motion.centerOfMass`; velocities rotate world -> node space; shared materials / filters /
-  joint settings dedup by item pointer into top-level arrays.
-- `Gltf_exporter` (src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp) takes an optional
-  `const erhe::scene::Physics_description*`: process_node records an erhe-node -> gltf-node-index map, then
-  process_physics() (before combine_buffers, since mesh-keyed geometry may export meshes on
-  demand) fills `asset.shapes` / `physicsMaterials` / `collisionFilters` / `physicsJoints`,
-  per-node `node.physicsRigidBody`, synthesized collider child nodes (compound triggers
-  become node-list triggers over their synthesized children), and pushes both extension
-  names into `extensionsUsed` (not extensionsRequired).
-- Call sites: `operations_window.cpp` File > Export, the MCP `export_gltf` tool, and
-  scene save (`save_scene_gltf` in `parsers/gltf.cpp`) all pass built data - since the
-  glTF scene roundtrip work the scene file itself is the canonical physics store
-  (`doc/scene_serialization.md`; the erhe-specific remainder rides in the `ERHE_physics`
-  node extension).
-- Import folds synthesized children back: dynamic bodies via the motion-root compound fold;
-  static synthesized children become individual static bodies (physically equivalent).
+## Verifying
 
-## Known limitations (documented behavior)
+- The sample assets at https://github.com/eoineoineoin/glTF_Physics import and
+  simulate: `JointTypes` (11 live constraints), `Materials_Friction`,
+  `Filtering`, `ShapeTypes` and `Triggers`. `ShapeTypes` imports 10 bodies plus
+  2 triggers, `Triggers` 3 triggers, `JointTypes` 10 joint settings plus 11
+  joints, all with mesh-keyed colliders, and each re-exports with materials,
+  filters, joints, drives, triggers and implicit-shape dedup intact.
+- The round-trip is driven over the editor's MCP server with explicit paths
+  (`export_gltf`, `import_gltf`, `save_scene`), so no file dialog is involved.
+  The default scene exports valid JSON declaring both extensions, and a `.glb`
+  round-trip re-imports 7 bodies from 13 glTF rigid-body nodes (the synthesized
+  compound children fold back).
+
+## Known limitations
 
 - fastgltf is pinned to the fork `tksuoran/fastgltf` (branch
-  `khr_physics_rigid_bodies`, on top of upstream a31be25) which carries the
-  spec-compliance fixes; see the Phase 5.5 table row and the `CPMAddPackage`
-  comment in the root `CMakeLists.txt`. Drop the fork and move back to
-  spnda/fastgltf when upstream catches up with the spec.
-- The fastgltf physics material / filter / joint types carry no name fields: the names (and a
-  physics material's erhe-only property values) ride `ERHE_scene` `physics_materials` /
-  `collision_filter_names` in erhe-authored files; for foreign files the importer synthesizes
+  `khr_physics_rigid_bodies`), which carries the spec-compliance fixes erhe
+  needs: mesh-keyed collider geometry for both parse and write, the spec
+  inertia key names, the missing member initializers (`convexHull`, combine
+  modes, drive `maxForce` and targets) and the exporter JSON fixes (extension
+  name, booleans, motion arrays, the rigid-body close brace, `collisionFilters`
+  commas, omitting an infinite `maxForce`). The root `CMakeLists.txt`
+  `CPMAddPackage` comment states when the fork can be dropped for
+  spnda/fastgltf. CPM `PATCHES` is banned repo-wide (AGENTS.md), so the fork is
+  how the fixes travel.
+- The fastgltf physics material, filter and joint types carry no name field.
+  Names, and a physics material's erhe-only property values, ride the
+  `ERHE_scene` `physics_materials` / `collision_filter_names` entries in
+  erhe-authored files; for a foreign file the importer synthesizes
   "Physics material N" style names.
-- Plane shapes: not representable in fastgltf (Shape variant lacks plane; not added by the
-  fork either).
-- Export: compound children with convex hull / mesh shapes are skipped with a warning (the
-  baked compound carries no source mesh reference). A direct hull / mesh shape references the
-  mesh it was built from (`Node_physics::collision_mesh`, no value = the body's own mesh);
-  when that mesh is a node below the body, the collider is exported on that node and the body
-  keeps the motion, which is the `KHR_physics_rigid_bodies` rule that a collider belongs to
-  its nearest ancestor body.
-- Export: world-attached joints (no connected node) are skipped with a warning; multiple
-  Node_joints on one node export only the first (glTF carries one joint per node).
-- Export: inertia overrides are not exported (Node_physics does not expose them; matches the
-  scene .json, which also drops them); mass is exported for dynamic bodies only.
-- Export: kinematic non-physical vs physical is collapsed to isKinematic=true (re-import
-  yields kinematic physical).
-- The text (.gltf) export variant writes no buffer URI, so it cannot be re-imported
-  (pre-existing exporter property; use .glb for round-trips, .gltf for JSON inspection).
-- Friction: dynamic friction only for now (no velocity-threshold static/dynamic selection).
-- Acceleration-mode drives are approximated as force mode (warn once).
-- Multi-axis joint limits are applied per axis (box approximation of radial limits; warn).
-- Angular soft limits: Jolt SixDOF springs are translation-only; angular stiffness falls back
-  to a hard limit with a warning.
-- Collision systems: at most 64 interned system strings per world (uint64 bitsets).
-- Compound bodies are baked at import/creation; editing a child node transform does not
-  rebuild the compound.
-- A sleeping body resting inside a sensor fires a trigger exit (and enter again on wake) -
-  standard Jolt sensor behavior.
-- Joint settings edits require pressing "Rebuild Joint" on the using Node_joint(s).
+- Plane shapes are not representable in fastgltf (its `Shape` variant has no
+  plane, and the fork does not add one).
+- Export skips a compound child that carries a convex hull or mesh shape, with
+  a warning: the baked compound holds no source mesh reference. A direct hull
+  or mesh shape references the mesh it was built from
+  (`Node_physics::collision_mesh`; no value means the body's own mesh). When
+  that mesh is a node below the body, the collider is exported on that node and
+  the body keeps the motion, which is the `KHR_physics_rigid_bodies` rule that
+  a collider belongs to its nearest ancestor body.
+- Export skips a world-attached joint (one with no connected node) with a
+  warning, and exports only the first of several `Node_joint`s on one node,
+  because glTF carries one joint per node.
+- Export writes no inertia overrides (`Node_physics` does not expose them), and
+  writes mass for dynamic bodies only.
+- Export collapses kinematic non-physical and kinematic physical to
+  `isKinematic = true`, so a re-import yields a kinematic physical body.
+- The text (`.gltf`) export variant writes no buffer URI and therefore cannot
+  be re-imported; use `.glb` for a round-trip and `.gltf` for JSON inspection.
+- Friction is dynamic friction: there is no velocity-threshold selection
+  between static and dynamic friction.
+- Acceleration-mode drives are approximated as force mode, warned once.
+- Multi-axis joint limits are applied per axis, a box approximation of radial
+  limits, warned.
+- Angular soft limits fall back to a hard limit with a warning, because Jolt
+  `SixDOF` springs are translation-only.
+- A world interns at most 64 collision system strings (uint64 bitsets).
+- A compound body is baked at import or at creation; editing a child node
+  transform does not rebuild the compound.
+- A sleeping body resting inside a sensor fires a trigger exit, and an enter
+  again on wake. This is standard Jolt sensor behavior.
+- A joint settings edit takes effect when "Rebuild Joint" is pressed on each
+  using `Node_joint`.
+
+## Future work
+
+- [plans/physics.md](plans/physics.md) - cone creation tool parity and the
+  remaining physics editing gaps.

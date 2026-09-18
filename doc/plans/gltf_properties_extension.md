@@ -2,14 +2,15 @@
 
 Status: in progress
 
-Status: INCOMPLETE DRAFT. Steps 0 and 1 are implemented (they are what
-`doc/usd_compatibility_design.md` M4 needed); steps 2 to 5 - the
-`ERHE_*_properties` extensions themselves - are not, and the plan is not
-ready to implement them: it needs more work before any of them is started
-(the open points are in the sections that raise them; a reader must expect
-gaps). The design record's future-work item for property serialization
-(`doc/property_system.md` section 6) points here and carries no content of
-its own; every decision recorded so far lives in this document.
+This plan extends `doc/property_system.md` (section 6 points here and carries
+no content of its own) and `doc/scene_serialization.md`, by giving the
+property system its own glTF wire form.
+
+Steps 0 and 1 are implemented (they are what `doc/usd_compatibility_design.md`
+M4 needed); steps 2 to 5 - the `ERHE_*_properties` extensions themselves - are
+not, and the plan is not ready to implement them: it needs more work before
+any of them is started, so a reader must expect gaps in the sections that
+raise the open points.
 
 ## Context
 
@@ -17,7 +18,7 @@ Replace the `properties` / `mesh_properties` members scattered across the
 exporter's `ERHE_node`, `ERHE_light` and `ERHE_camera` extensions, extend
 property serialization to materials, and serialize expressions (D22
 formulas), which are session state today. Decisions made with the user
-during planning (2026-09-02):
+during planning:
 
 - **One extension per item type**: `ERHE_node_properties`,
   `ERHE_mesh_properties`, `ERHE_light_properties` (all three on the glTF
@@ -115,8 +116,6 @@ step 2 still need:
   value entries).
 
 ### 2. Exporter - `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`
-
-Line refs as of a39af8059.
 
 - `record_node_extensions` (:5727): drop `"properties"` /
   `"mesh_properties"` from `ERHE_node` and `"properties"` from the

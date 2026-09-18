@@ -2,13 +2,13 @@
 
 Status: proposed
 
+This plan extends `doc/mesh_component_selection.md` (face / edge / vertex
+selection) and `doc/editor_windows.md` with a UV editing window.
+
 Plan for implementing a UV editor in the erhe editor, modeled on Blender's
 UV editor (https://docs.blender.org/manual/en/latest/editors/uv/index.html).
 A Blender clone is available at `D:\blender` for reference (see
 "Blender reference material" below).
-
-Status: PLANNED, not implemented. This document is the design + phase plan to
-be executed later.
 
 ## Table of Contents
 
@@ -54,7 +54,7 @@ meshes, multi-object UV editing.
 
 ## Existing erhe infrastructure
 
-Inventory (verified 2026-07-04). A large part of the backend already exists;
+Inventory. A large part of the backend already exists;
 the missing piece is almost entirely the 2D editor front-end.
 
 ### UV data model (`erhe::geometry`)

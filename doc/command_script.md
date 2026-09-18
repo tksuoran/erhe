@@ -258,33 +258,27 @@ If the new command takes per-invocation args:
    `command->try_call()`. Keep the bare-string path working by
    default-constructing the args struct when no `args` block is given.
 
-## Limitations and future work
+## Limitations
 
 - **`scene.add_cameras` undoes the cameras but not the viewport.** The
-  desktop default `Viewport_scene_view` + `Viewport_window` are
-  rendergraph / imgui plumbing tied to "Camera A"; they are not scene
-  nodes and don't fit `Item_insert_remove_operation`. Today they are
-  created as a non-undoable side effect of `scene.add_cameras` after
-  the camera-node compound op is queued. Undoing the command removes
-  the camera nodes; the orphaned viewport stays. Re-running the command
-  would create a second viewport on top of the first. If the user
-  workflow ever calls for re-running it, the viewport plumbing should
-  move to its own one-shot setup hook (or a dedicated non-undoable
-  command) so it is not duplicated.
-- **`Scene_builder::add_cubes` is not undoable** but is also dead-coded
-  (the only call site is `#if 0` in `operations_window.cpp`). Convert
-  it together with the button revival, or delete it.
+  desktop default `Viewport_scene_view` plus `Viewport_window` are
+  rendergraph and imgui plumbing tied to "Camera A"; they are not scene
+  nodes and do not fit `Item_insert_remove_operation`, so they are
+  created as a non-undoable side effect of `scene.add_cameras` after the
+  camera-node compound op is queued. Undoing the command removes the
+  camera nodes and leaves the viewport, and re-running the command would
+  create a second viewport on top of the first. Run it once per session.
+- **`Scene_builder::add_cubes` is not undoable**, and its only call site
+  is behind an `#if 0` in `operations_window.cpp`. Reviving the button
+  means converting the builder to an operation first.
 - **`Scene_builder::animate_lights` mutates transforms every frame** and
-  is intentionally not undoable -- per-frame transform animation does
-  not belong on the undo stack.
-- **No manual re-run trigger.** The script fires exactly once at
-  startup. If iterating on a script becomes a workflow, a Developer-menu
-  "Run startup script" button on `Commands_window` would let users
-  replay it without restarting the editor.
-- **No script files separate from the config.** Multiple named scripts
-  (e.g. one per saved scene preset) would require either multiple
-  `commands_*.json` files chosen at runtime or a top-level map of named
-  command lists in a single JSON. Not implemented.
-- **`commands.json` defaults are global, not per-scene.** Loading a
-  saved scene does not re-run the script; the script is purely an
-  initial-scene authoring tool.
+  is intentionally not undoable: per-frame transform animation does not
+  belong on the undo stack.
+- **The script fires exactly once at startup**, and `commands.json` is
+  global rather than per scene. Loading a saved scene does not re-run
+  it; the script is an initial-scene authoring tool.
+
+## Future work
+
+- [plans/command_script.md](plans/command_script.md) - re-running a script
+  and holding several named scripts.

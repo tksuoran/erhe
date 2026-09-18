@@ -17,7 +17,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/async_asset_loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
 - `Gltf_device_options` -- The two device-derived values the parse needs: the transcode format preference for KTX2/Basis images, and max sampler anisotropy.
 - `Gltf_image_residency` (`Gltf_data::image_residency`) -- The GPU half of image loading, split out of the parse. Holds the decoded pixels, the `Sampler_create_info`s and the material texture/sampler bindings the parse recorded. `create_samplers()` + `process_next_image()` / `process_next_image_into_frame()` create the objects and record the uploads; `bind_material_textures()` fills the material slots; `drain()` does all of it synchronously and flushes. After `parse_gltf` returns, `Gltf_data::images` and `::samplers` are EMPTY until residency runs.
-- `Image_transfer` -- GPU texture uploads, in one of two modes. `blocking_drain` (the original): a private fixed-size (64 MiB) staging ring and its own transfer command buffer; when the ring fills, `flush()` submits + fence-waits + reclaims, so loads make progress with bounded staging memory even when no frames are rendered. Required by callers with no frame loop (`src/example`, `src/rendering_test`, the OpenXR controller model loader). `frame_recording`: `upload_into_frame()` stages from the device ring and records copies into the caller's frame command buffer, returning `budget_exhausted` instead of blocking; the private ring is not allocated at all. Destructor flushes.
+- `Image_transfer` -- GPU texture uploads, in one of two modes. `blocking_drain` (the original): a private fixed-size (64 MiB) staging ring and its own transfer command buffer; when the ring fills, `flush()` submits + fence-waits + reclaims, so loads make progress with bounded staging memory even when no frames are rendered. Required by callers with no frame loop (`src/example` and the OpenXR controller model loader). `frame_recording`: `upload_into_frame()` stages from the device ring and records copies into the caller's frame command buffer, returning `budget_exhausted` instead of blocking; the private ring is not allocated at all. Destructor flushes.
 
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
@@ -37,7 +37,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
 - `parse_gltf` creates NO GPU objects at all -- not textures, not samplers. Keep it that way: it is what makes the editor's asynchronous loading safe (doc/async_asset_loading.md), and nothing will catch a regression automatically.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
-- `Image_transfer` no longer records into the caller's frame command buffer: uploads go through its own transfer command buffer, submitted (and fence-waited) whenever the staging ring fills and at destruction. Images larger than the staging ring use a dedicated one-shot staging buffer.
+- In `blocking_drain` mode `Image_transfer` records into its own transfer command buffer, submitted and fence-waited whenever the staging ring fills and at destruction. An image larger than the staging ring uses a dedicated one-shot staging buffer.
 - fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which
   carries the KHR_physics_rigid_bodies spec-compliance fixes (mesh-keyed collider
   geometry, spec inertia key names, exporter JSON fixes) plus a subset of the glTF 2.1
@@ -95,8 +95,12 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,
   physics payloads, ...) are injected by the editor through the generic extension
   passthrough (captured/emitted as raw JSON per object). This is the single scene
-  persistence format (`doc/gltf_scene_roundtrip.md`; the editor's legacy
-  `.erhescene` bundle format was removed in phase 5). Legacy reads remain for files
+  persistence format (`doc/gltf_scene_roundtrip.md`). Legacy reads remain for files
   written before the extensions existed: node `extras.erhe_flags` and the material
   extras carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are parsed but no
   longer written.
+
+## Future work
+
+- [plans/gltf.md](plans/gltf.md) - open items of the glTF persistence design.
+- [plans/gltf_prefabs.md](plans/gltf_prefabs.md) - the remaining prefab phases.

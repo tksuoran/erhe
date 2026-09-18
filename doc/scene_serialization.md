@@ -5,7 +5,7 @@ Stability: stable
 Reference for how the editor persists scenes: the file format, the save and
 open pipelines, every part that participates, and what is (and is not)
 persisted. Design history and rationale live in
-[`gltf-scene-roundtrip-plan.md`](gltf_scene_roundtrip.md); the wire
+[`gltf_scene_roundtrip.md`](gltf_scene_roundtrip.md); the wire
 format of each vendor extension is specified in
 [`gltf_extensions/`](gltf_extensions/README.md).
 
@@ -26,9 +26,7 @@ extensions are optional (`extensionsUsed` only, never `extensionsRequired`),
 so any stock glTF viewer can open a saved scene and see the render content.
 
 There is no sidecar: no scene JSON, no per-scene imgui ini, no companion
-geometry files. The legacy `.erhescene` directory-bundle format was removed
-in phase 5 of the roundtrip plan (existing bundles were migrated by loading
-and re-saving as `.glb`).
+geometry files.
 
 ## File anatomy
 
@@ -43,7 +41,7 @@ JSON, erhe state attaches at three levels:
 
 A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
 that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
-(`usd-compatibility-plan.md` C5): the glTF node's name, transform, children
+(`doc/usd_compatibility_design.md` C5): the glTF node's name, transform, children
 and remaining attachments are the prim's, and the writer inverts it - such a
 prim is written as one glTF node with `mesh` / `camera` / the light
 extension set, and a `Mesh`, `Camera` or `Light` child of another prim as a
@@ -118,7 +116,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    attachments and maps those nodes to glTF 2.1 `externalAssets` references
    (URIs relativized against the save directory); the instanced subtree is
    NOT flattened into the file. See
-   [`gltf-prefabs-plan.md`](plans/gltf_prefabs.md).
+   [`plans/gltf_prefabs.md`](plans/gltf_prefabs.md).
 4. **Image sources** - `make_gltf_image_source_provider()` snapshots the
    content library's retained encoded source images (PNG/JPEG bytes kept
    from import time) so textures re-embed byte-identical; a fallback re-reads
@@ -134,7 +132,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      cannot express), `ERHE_layout` (Layout / Layout_item attachments),
      node bindings for graph meshes;
    - scene level: `ERHE_scene` - ambient light, `enable_physics`, and the
-     per-scene `Scene_settings` overrides (issue #239), serialized through
+     per-scene `Scene_settings` overrides, serialized through
      the codegen struct (`scene/definitions/scene_settings.py`). One field
      of it is scene content rather than a setting override:
      `variant_selections`, which variant each variant set of the scene has
@@ -181,8 +179,8 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
 7. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
    `erhe::file::write_file()` writes it.
 
-Save entry points (there is ONE save shape - full editor state; the former
-Save Prefab command / MCP `save_prefab` tool were merged into Save Scene):
+Save entry points. There is ONE save shape: full editor state. Saving a
+prefab source is Save Scene on the scene opened from that source.
 
 - **File > Save Scene** (`operations_window.cpp` `Operations::save_scene`):
   a scene opened/loaded from a glTF file (`Scene_root::get_source_path`)
@@ -301,8 +299,8 @@ keep their state on import.
 - A static rigid body's mass is not persisted (KHR_physics_rigid_bodies has
   no `motion` object for static bodies); the value is meaningless for
   statics and is shape-derived on reload.
-- Window layout / imgui state is not part of the scene (per-scene imgui ini
-  support was removed in phase 4).
+- Window layout / imgui state is not part of the scene; only the global
+  editor layout is persisted, and it is not per scene.
 - Undo/redo history, selection, and other transient session state are not
   saved.
 - **A file carries the cameras it authored plus the ones the user created.**
@@ -315,10 +313,10 @@ keep their state on import.
   camera-less file stays camera-less and its top-level prim stays its root.
 - Corner normals of geometry-normative meshes live only in `ERHE_geometry`;
   foreign viewers render such meshes flat-shaded.
-- **Prefab templates ignore editor-domain payloads.** Since the Save Scene /
-  Save Prefab merge, saving over a prefab source writes the full editor
-  state (the file becomes erhe-authored: `ERHE_scene` in `extensionsUsed`);
-  instantiating it as a prefab parses only the render/physics content -
+- **Prefab templates ignore editor-domain payloads.** Saving over a prefab
+  source writes the full editor state (the file becomes erhe-authored:
+  `ERHE_scene` in `extensionsUsed`), but instantiating it as a prefab parses
+  only the render and physics content -
   `ERHE_*` payloads (layouts, tags, brushes, node graphs) do not transfer
   into instances. In particular, a mesh controlled by a
   `Geometry_graph_mesh` attachment is excluded from the save (re-derived
@@ -334,7 +332,7 @@ instead: `Scene_root::get_source_format()` reports `usd`, and Save Scene
 writes a `.usda` layer back through `erhe::usd` (`save_scene_usd`,
 `doc/erhe_usd.md`). A scene never converts between the two formats -
 neither direction is offered anywhere
-([`usd-compatibility-plan.md`](usd_compatibility_design.md) G3).
+([`usd_compatibility_design.md`](usd_compatibility_design.md) G3).
 
 Opening a USD file as a scene (`open_scene_usd`) builds a fresh `Scene_root`
 with its own empty content library, puts the file's top-level prims directly
@@ -359,7 +357,7 @@ as string entries of the root layer's `customLayerData`:
 
 | key | value |
 |---|---|
-| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md) section 4) |
+| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd_node_graphs.md`](usd_node_graphs.md) section 4) |
 | `erhe:version` | the writer's revision, `"1"` |
 
 An opened file that has no `erhe:scene` entry keeps the editor defaults, so a
@@ -381,10 +379,10 @@ arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 
 Every content-library kind is a prim of the layer where it sits: a style is
-a `class` prim ([`usd-compatibility-plan.md`](usd_compatibility_design.md)
+a `class` prim ([`usd_compatibility_design.md`](usd_compatibility_design.md)
 X3), a brush a `Brush` prim holding its geometry as a child `Mesh`, a node
 graph of either kind a marked `NodeGraph` prim holding one `Shader` per node
-([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md)), and a folder
+([`usd_node_graphs.md`](usd_node_graphs.md)), and a folder
 the `Scope` it is (E4). The physics of the scene is the `UsdPhysics` prims
 and API schemas of the mapping ([`usd_compatibility.md`](usd_compatibility.md),
 "Physics"): a body is its prim's `PhysicsRigidBodyAPI`, a physics material,
@@ -400,7 +398,7 @@ graph's `NodeGraph` prim and needs no image.
 ## Verifying round-trips
 
 **`scripts/scene_roundtrip_verify.py`** is the standing verification
-harness (phase 6 of the roundtrip plan): against a fresh headless editor
+harness (`doc/gltf_scene_roundtrip.md` phase 6): against a fresh headless editor
 session it builds a scene exercising every `ERHE_*` extension (shapes,
 imported textured + skinned/animated assets, physics bodies + joint, brush
 placement, graph mesh + graph texture bindings, layouts, tags, authored
@@ -418,7 +416,8 @@ The graph asset round-trips are additionally covered by
 directly; run each suite in its own fresh editor session). Ad-hoc checks:
 save -> load -> compare via the in-editor MCP (`get_scene_nodes`,
 `get_scene_materials`, `get_physics_items`, `get_scene_brushes`, ...) and
-`capture_screenshot`. Design history: `gltf-scene-roundtrip-plan.md`.
+`capture_screenshot`. The design behind the format is
+`doc/gltf_scene_roundtrip.md`.
 
 `scripts/scene_roundtrip_verify.py` also carries the **USD leg**
 (`usd-roundtrip`), which mirrors the glTF sections on USD content and shares
@@ -438,3 +437,9 @@ wrapper of the OpenUSD binary distribution's `scripts/` folder is what to
 name on Windows), and prints SKIP otherwise;
 the whole section skips when the editor was built with
 `ERHE_USD_LIBRARY=none`.
+
+## Future work
+
+- [plans/gltf.md](plans/gltf.md) - open items of the persistence design,
+  including the state listed under "What is not persisted".
+- [plans/gltf_prefabs.md](plans/gltf_prefabs.md) - the remaining prefab phases.

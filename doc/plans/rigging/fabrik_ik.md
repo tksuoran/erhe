@@ -1,9 +1,11 @@
-# FABRIK Inverse Kinematics — Initial Requirements
+# FABRIK Inverse Kinematics - Initial Requirements
 
 Status: proposed
 
-Status: draft, awaiting review.
-This document is Phase 1 of the rigging roadmap in `rigging-tools-plan.md`.
+This plan extends `doc/editor_tools.md` (bone selection and display proxies)
+and `doc/erhe_scene.md` (skins and node transforms) with interactive inverse
+kinematics posing. It is phase 1 of the rigging roadmap in
+`rigging_tools.md`.
 
 ## Motivation
 
@@ -17,8 +19,8 @@ chain follow naturally.
 ## Goal
 
 When the user drags a bone node with the Transform tool's translate handles,
-the dragged bone acts as an IK end effector. The chain of its ancestor bones —
-up to, but not past, the first bone marked as IK-locked — is solved with FABRIK
+the dragged bone acts as an IK end effector. The chain of its ancestor bones -
+up to, but not past, the first bone marked as IK-locked - is solved with FABRIK
 (Forward And Backward Reaching Inverse Kinematics) so that the effector reaches
 the drag position, or the closest reachable point when the target is out of
 reach, without changing any bone lengths.
@@ -56,32 +58,32 @@ reach, without changing any bone lengths.
   chain discovery stops at (and includes, as the fixed root) the first
   IK-locked ancestor.
 - The flag is per-instance, authored by the user, serialized with the scene
-  by name — which requires registering it in the persistent-flag table in
+  by name - which requires registering it in the persistent-flag table in
   `erhe_gltf/gltf_item_flags.cpp` (flag persistence is an explicit allowlist,
   not automatic), in addition to the `Item_flags` bit, `c_bit_labels` entry,
-  and `count` bump in `item.hpp` — and editable from the item Properties
+  and `count` bump in `item.hpp` - and editable from the item Properties
   window flag list like existing flags.
 - The flag has no effect on non-bone nodes in the first version.
 
-### 3. Solver — FABRIK
+### 3. Solver - FABRIK
 
 - Algorithm: standard FABRIK (Aristidou & Lasenby 2011), operating on joint
   world positions:
   1. Record segment lengths from the current pose (rest lengths are whatever
-     the pose is when the drag starts — bind pose is not consulted).
+     the pose is when the drag starts - bind pose is not consulted).
   2. If the target's distance from the chain root exceeds the total chain
      length, the chain straightens toward the target (the unreachable case
      yields the closest reachable point directly).
   3. Otherwise iterate a forward-reaching pass (effector snapped to the
      target, positions pulled toward it preserving lengths, working toward
      the root) and a backward-reaching pass (root snapped back to its fixed
-     position, working toward the tip) — the paper's terminology — until the
+     position, working toward the tip) - the paper's terminology - until the
      effector is within tolerance of the target or the iteration limit is
      reached.
 - Bone lengths are exactly preserved (within floating point) in the resulting
   pose.
 - Degenerate segments: a zero-length (or near-epsilon) segment between
-  coincident joints — common for helper/leaf bones in imported rigs — must
+  coincident joints - common for helper/leaf bones in imported rigs - must
   not produce NaNs; such segments are skipped (their joint rides on its
   neighbor) and their bones keep their local transform.
 - Scale: the solve assumes chains without non-uniform scale. World joint
@@ -89,7 +91,7 @@ reach, without changing any bone lengths.
   node carries non-uniform scale, the rotation-only write-back cannot exactly
   preserve world segment lengths and the result is best-effort (no attempt to
   counter-scale in v1).
-- Termination parameters (initial defaults, tunable constants — no UI needed
+- Termination parameters (initial defaults, tunable constants - no UI needed
   yet): tolerance ~1e-4 m, max ~16 iterations.
 - No joint constraints (angle limits, hinge axes), no pole vector / swivel
   control, and a single chain with a single effector only. These are explicit
@@ -113,8 +115,8 @@ reach, without changing any bone lengths.
   - Antiparallel degenerate case: when the old and new child directions are
     (near-)opposite, the shortest-arc axis is undefined; pick the rotation
     axis most orthogonal to the segment from the joint's current basis so the
-    180° flip is deterministic (roll preservation is forfeited in this case).
-  - Joint translations relative to their parents are unchanged — only
+    180 deg flip is deterministic (roll preservation is forfeited in this case).
+  - Joint translations relative to their parents are unchanged - only
     rotations change (this is what "bone lengths do not change" means at the
     transform level).
   - The effector bone keeps its own orientation from the start of the drag
@@ -128,19 +130,19 @@ reach, without changing any bone lengths.
 
 - Trigger: the translate drag (`Move_tool` axis/plane handles) when the
   resolved transform target is a bone node with at least one bone parent, as
-  defined in §1. Rotation and scale handles are unaffected and keep their
+  defined in section 1. Rotation and scale handles are unaffected and keep their
   current FK behavior.
 - During the drag, each gizmo update solves the chain against the current gizmo
   translation target and applies the resulting transforms immediately, so the
   chain follows the cursor live at interactive rates (the chains in question
-  are short — a handful of joints — so per-update solving is expected to be
+  are short - a handful of joints - so per-update solving is expected to be
   cheap).
 - The solve is re-run from the drag-start pose each update (target changes are
   absolute, not incremental), so dragging back to the start position restores
   the starting pose.
 - When the target is out of reach, the gizmo follows the drag target (the
   cursor's constrained position, as today), while the effector bone rests at
-  the closest reachable point — the gizmo and the bone separate visibly
+  the closest reachable point - the gizmo and the bone separate visibly
   rather than the gizmo sticking to the clamped effector.
 - Mode control: IK-on-drag is the new default behavior for bones with a valid
   chain. A Transform tool setting (checkbox in the tool's settings, similar to
@@ -162,7 +164,7 @@ reach, without changing any bone lengths.
 ### 7. Visual feedback
 
 - Minimum for the first version: the existing bone visualization (bone
-  proxies) simply follows the solved pose — no new rendering is strictly
+  proxies) simply follows the solved pose - no new rendering is strictly
   required.
 - Desirable (small, may ship with v1 if cheap): highlight the bones
   participating in the active chain during the drag, and mark the chain root
@@ -172,23 +174,23 @@ reach, without changing any bone lengths.
   and edit lock state; a distinct item tree icon or badge for locked bones is
   a follow-up, not required.
 
-## Out of scope for Phase 1 — scheduled in later phases
+## Out of scope for Phase 1 - scheduled in later phases
 
 These are not v1 requirements, but they are planned; see
-`rigging-tools-plan.md` for the phase definitions.
+`rigging_tools.md` for the phase definitions.
 
-- Joint constraints (rotation limits, DOF locks, hinge/ball types) — Phase 2.
-- Pole vectors / swivel angle control for elbow-knee direction — Phase 2.
+- Joint constraints (rotation limits, DOF locks, hinge/ball types) - Phase 2.
+- Pole vectors / swivel angle control for elbow-knee direction - Phase 2.
 - Persistent IK setups (stored IK constraints/handles as scene items; chains
-  here are discovered per-drag) — Phase 4 (constraint system).
-- Animation keyframing of IK results (v1 works only on the live pose) —
+  here are discovered per-drag) - Phase 4 (constraint system).
+- Animation keyframing of IK results (v1 works only on the live pose) -
   Phase 7 (drivers + animation integration).
-- Multiple effectors, sub-bases, closed loops (full FABRIK generality) —
+- Multiple effectors, sub-bases, closed loops (full FABRIK generality) -
   future/research.
 - IK on non-bone node chains (may fall out naturally later, but not required
-  and not exposed in v1) — unscheduled.
+  and not exposed in v1) - unscheduled.
 - XR controller drag path (desktop viewport drag first; XR should not break,
-  it just keeps FK behavior if not trivially supported) — unscheduled.
+  it just keeps FK behavior if not trivially supported) - unscheduled.
 
 ## Acceptance criteria
 
@@ -211,7 +213,7 @@ These are not v1 requirements, but they are planned; see
 
 ## Open questions for review
 
-1. Flag name: `ik_lock` vs `ik_root` vs `ik_pin` — "lock" chosen here since it
+1. Flag name: `ik_lock` vs `ik_root` vs `ik_pin` - "lock" chosen here since it
    masks the bone from IK, but naming is open.
 2. Should the effector keep its world orientation during the drag (current
    proposal), or align with the last segment?
@@ -221,5 +223,5 @@ These are not v1 requirements, but they are planned; see
    should the solve be incremental from the previous frame's pose (converges
    with hysteresis, feels "springier")?
 5. When the dragged bone has bone children (mid-chain drag, e.g. dragging an
-   elbow), v1 still treats it as the effector and its subtree follows rigidly —
+   elbow), v1 still treats it as the effector and its subtree follows rigidly -
    confirm that is acceptable.

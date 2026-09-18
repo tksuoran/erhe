@@ -2,6 +2,9 @@
 
 Status: proposed
 
+This plan extends `doc/editor.md` (the `animation/` part) and
+`doc/erhe_scene.md` ("Animation playback") with keyframe authoring.
+
 Goal: extend the Animation window (curve editor + Animation_player, added for
 issue #243) with a LightWave-Layout-like keyframing workflow: a scrubbable
 timeline strip with key markers, autokey, manual key creation for selected

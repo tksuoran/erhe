@@ -96,14 +96,14 @@ a specific engine.
   has no velocity state, so `Box3d_rigid_body` holds the velocity of a body outside the world and
   applies it on entry. The null backend never simulates and has no activation state: its
   `is_active()` is always false.
-- The `IMotion_state` header appears to be an empty/placeholder file.
+- `erhe_physics/imotion_state.hpp` is an empty placeholder file; nothing includes it.
 - Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). The suite
   builds for the simulating backends (`jolt`, `box3d`). Every build runs the
   backend-neutral tests, which step a real `IWorld` through the interface (body
   activation, trial-placement overlap queries). A `box3d` build adds the Box3D-specific
   tests: pure logic (hull builder, shape descriptors, collision filter table, six-DOF
   classifier) and the activation / sensor events `Box3d_world` synthesizes.
-- KHR_physics_rigid_bodies support status, design and known limitations are tracked in
+- KHR_physics_rigid_bodies support, its design and its known limitations are described in
   `doc/khr_physics_rigid_bodies_support.md`. Jolt-imposed limits: triangle mesh shapes are
   static/kinematic only; sensors must be non-static to detect static bodies (callers create
   static triggers as kinematic non-physical); six-DOF angular soft limits fall back to hard
@@ -116,10 +116,10 @@ Selected with `ERHE_PHYSICS_LIBRARY=box3d`; sources in `box3d/`. The authoritati
 deferred/unsupported list is the header comment block in `box3d_world.hpp` -- reproduced
 here, and to be kept in sync with it.
 
-`doc/box3d_physics.md` carries the working record for this backend: per-phase status,
-the verification work still outstanding, and the Box3D behaviors that were expensive to
-discover (hull edge budgets, the baked shape transform, the joint def cookie, filter
-change detection, the event model). Read it before doing anything non-trivial here.
+`doc/box3d_physics.md` describes this backend: how it is built and verified, and the
+Box3D behaviors the mapping has to respect (hull edge budgets, the baked shape transform,
+the joint def cookie, filter change detection, the event model). Read it before doing
+anything non-trivial here.
 
 | Feature                              | Status                    | Why |
 | ------------------------------------ | ------------------------- | --- |
