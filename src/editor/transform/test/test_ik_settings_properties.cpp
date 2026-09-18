@@ -95,3 +95,63 @@ TEST(Ik_settings_properties, clone_copies_mirror_and_store)
     EXPECT_EQ(clone->get_value_source(Ik_settings::lock_x_property), Value_source::local);
     EXPECT_EQ(clone->get_value_source(Ik_settings::limit_min_property), Value_source::default_value);
 }
+
+// doc/plans/rigging/pole_target.md R1-R4: the pole node bridged over a weak
+// member, the angle in the entry store and in the mirror.
+TEST(Ik_settings_properties, pole_defaults_and_setters)
+{
+    auto ik_settings = std::make_shared<Ik_settings>("ik");
+    EXPECT_EQ(ik_settings->get_data().pole_angle, 0.0f);
+    EXPECT_EQ(ik_settings->get_pole_target(), nullptr);
+    EXPECT_EQ(ik_settings->get_value_source(Ik_settings::pole_angle_property), Value_source::default_value);
+    EXPECT_TRUE (Ik_settings::pole_angle_property.get().get_metadata(Ik_settings::property_owner_type()).inherits);
+    EXPECT_FALSE(Ik_settings::pole_target_property.get().get_metadata(Ik_settings::property_owner_type()).inherits);
+
+    // The angle is periodic, so it is NOT coerced into the drag range (R17).
+    ik_settings->set_pole_angle(4.0f);
+    EXPECT_EQ(ik_settings->get_data().pole_angle, 4.0f);
+    EXPECT_EQ(ik_settings->get_value(Ik_settings::pole_angle_property), 4.0f);
+    ik_settings->clear_value(Ik_settings::pole_angle_property);
+    EXPECT_EQ(ik_settings->get_data().pole_angle, 0.0f);
+
+    auto pole = std::make_shared<Xform>("pole");
+    ik_settings->set_pole_target(pole);
+    EXPECT_EQ(ik_settings->get_pole_target(), pole);
+    // The bridge reads and writes that same weak member.
+    EXPECT_EQ(ik_settings->get_value(Ik_settings::pole_target_property).object.get(), pole.get());
+    ik_settings->set_value(Ik_settings::pole_target_property, Object_reference{});
+    EXPECT_EQ(ik_settings->get_pole_target(), nullptr);
+}
+
+// R2: the reference is weak, so it neither owns the pole nor survives it, and
+// a clone keeps naming the same node.
+TEST(Ik_settings_properties, pole_reference_is_weak_and_clones)
+{
+    auto ik_settings = std::make_shared<Ik_settings>("ik");
+    auto pole = std::make_shared<Xform>("pole");
+    ik_settings->set_pole_target(pole);
+
+    const auto clone = std::static_pointer_cast<Ik_settings>(ik_settings->clone());
+    ASSERT_TRUE(clone);
+    EXPECT_EQ(clone->get_pole_target(), pole);
+
+    const std::weak_ptr<Xform> watch = pole;
+    pole.reset();
+    EXPECT_TRUE(watch.expired()); // neither attachment kept the node alive
+    EXPECT_EQ(ik_settings->get_pole_target(), nullptr);
+    EXPECT_EQ(clone->get_pole_target(), nullptr);
+}
+
+// R1: validate is the node traits' own, so a non-Node item is refused with the
+// property's error rather than stored.
+TEST(Ik_settings_properties, pole_target_refuses_a_non_node_item)
+{
+    auto ik_settings = std::make_shared<Ik_settings>("ik");
+    auto not_a_node  = std::make_shared<Ik_settings>("also not a node");
+    const bool accepted = ik_settings->set_value(
+        Ik_settings::pole_target_property.get(),
+        Object_reference{not_a_node}
+    );
+    EXPECT_FALSE(accepted);
+    EXPECT_EQ(ik_settings->get_pole_target(), nullptr);
+}

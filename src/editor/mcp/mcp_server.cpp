@@ -573,6 +573,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "drag_selection",                 &Mcp_server::action_drag_selection                },
         { "physics_drag",                   &Mcp_server::action_physics_drag                  },
         { "set_node_transform",             &Mcp_server::action_set_node_transform            },
+        { "ik_drag",                        &Mcp_server::action_ik_drag                       },
         { "place_brush",                    &Mcp_server::action_place_brush                   },
         { "place_brush_instances",          &Mcp_server::action_place_brush_instances         },
         { "create_shape",                   &Mcp_server::action_create_shape                  },

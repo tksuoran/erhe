@@ -196,6 +196,8 @@ change touches the settings store from on_property_changed.
 | limit_min, limit_max | entry | inherits; radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
 | stiffness | entry | inherits; developer-only (inert); coerced to [0, 0.99] |
 | rest_rotation | entry | not inherited (a per-bone pose); captured at attach, "Set rest from current pose" writes it |
+| pole_target | bridged (D18) | weak `std::weak_ptr<erhe::scene::Node>` member, not inherited; any node is accepted and admissibility is decided per drag |
+| pole_angle | entry | inherits; radians shown in degrees, not coerced (the angle is periodic) |
 
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 

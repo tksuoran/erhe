@@ -28,8 +28,10 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <map>
 #include <optional>
@@ -1677,6 +1679,92 @@ TEST_F(Mcp_test, undo_of_open_scene_clears_the_animation_target)
     EXPECT_TRUE(after["animation_player"].is_null())
         << "animation player still points into the unregistered scene: "
         << after["animation_player"].dump();
+}
+
+// doc/plans/rigging/pole_target.md R22: one ik_drag call is one complete IK
+// gesture - a discovered chain, one solve against an absolute world target,
+// and exactly one undo entry - driven entirely by its own arguments.
+TEST_F(Mcp_test, ik_drag_solves_a_bone_chain_and_records_one_undo_entry)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Position = std::array<float, 3>;
+    auto joint_positions = [](const json& payload) -> std::vector<Position> {
+        std::vector<Position> positions;
+        for (const json& joint : payload.at("joints")) {
+            const json& p = joint.at("position");
+            positions.push_back(Position{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()});
+        }
+        return positions;
+    };
+    auto distance = [](const Position& a, const Position& b) -> float {
+        const float dx = a[0] - b[0];
+        const float dy = a[1] - b[1];
+        const float dz = a[2] - b[2];
+        return std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+
+    // Solve toward the effector's own start position first: the chain does not
+    // move, so this reports the drag-start geometry.
+    Mcp_client::Tool_result details = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+    );
+    ASSERT_FALSE(details.is_error) << details.text;
+    const json& world = details.payload.at("world_transform").at("translation");
+    const Position start{world[0].get<float>(), world[1].get<float>(), world[2].get<float>()};
+
+    Mcp_client::Tool_result rest = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", {start[0], start[1], start[2]}}}
+    );
+    ASSERT_FALSE(rest.is_error) << rest.text;
+    const std::vector<Position> rest_positions = joint_positions(rest.payload);
+    ASSERT_GE(rest_positions.size(), std::size_t{2}) << "a chain is at least root + effector";
+    EXPECT_TRUE(rest.payload.at("pole").is_null()) << "no pole is authored yet";
+
+    // A reachable target: one tenth of the chain's reach, sideways.
+    float reach = 0.0f;
+    for (std::size_t i = 0; i + 1 < rest_positions.size(); ++i) {
+        reach += distance(rest_positions[i], rest_positions[i + 1]);
+    }
+    ASSERT_GT(reach, 0.0f);
+    const Position target{start[0] + (0.1f * reach), start[1], start[2]};
+
+    advance_frames(client, 4);
+    const std::size_t undo_before = undo_depth();
+
+    Mcp_client::Tool_result solved = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", {target[0], target[1], target[2]}}}
+    );
+    ASSERT_FALSE(solved.is_error) << solved.text;
+    EXPECT_TRUE(solved.payload.at("recorded").get<bool>()) << "the solve moved joints, so it must be recorded";
+    const std::vector<Position> solved_positions = joint_positions(solved.payload);
+    ASSERT_EQ(solved_positions.size(), rest_positions.size());
+
+    // Bone lengths are preserved and the effector reached the target.
+    for (std::size_t i = 0; i + 1 < solved_positions.size(); ++i) {
+        EXPECT_NEAR(
+            distance(solved_positions[i], solved_positions[i + 1]),
+            distance(rest_positions[i],   rest_positions[i + 1]),
+            1.0e-3f
+        ) << "segment " << i << " changed length";
+    }
+    EXPECT_NEAR(distance(solved_positions.back(), target), 0.0f, 1.0e-2f);
+    EXPECT_NEAR(distance(solved_positions.front(), rest_positions.front()), 0.0f, 1.0e-5f) << "the chain root is fixed";
+
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "one ik_drag records exactly one undo entry";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
 }
 
 // The producer side, independent of whether any subscriber happened to hold

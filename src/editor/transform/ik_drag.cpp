@@ -1,5 +1,8 @@
 #include "transform/ik_drag.hpp"
 
+#include "editor_log.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "scene/node_ik_settings.hpp"
 
 #include "erhe_item/item.hpp"
@@ -144,10 +147,12 @@ auto Ik_drag::begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool
 
     m_joints = std::move(joints);
     m_parent_from_joint_before.reserve(m_joints.size());
+    m_xform_op_stack_before.reserve(m_joints.size());
     m_initial_positions.reserve(m_joints.size());
     m_local_rotations_before.reserve(m_joints.size());
     for (const std::shared_ptr<erhe::scene::Node>& joint : m_joints) {
         m_parent_from_joint_before.push_back(joint->parent_from_node_transform());
+        m_xform_op_stack_before.push_back(joint->copy_xform_op_stack());
         m_initial_positions.push_back(vec3{joint->position_in_world()});
         m_local_rotations_before.push_back(m_parent_from_joint_before.back().get_rotation());
     }
@@ -180,7 +185,98 @@ auto Ik_drag::begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool
     }
 
     m_effector_world_rotation_before = m_joints.back()->world_from_node_transform().get_rotation();
+    discover_pole();
     return true;
+}
+
+void Ik_drag::discover_pole()
+{
+    // R10: a two-joint chain has no intermediate joint, so a pole could not
+    // act on it. That is a legitimate short chain, so it is left unpoled
+    // without a warning and without reading any attachment.
+    if (m_joints.size() < 3) {
+        return;
+    }
+
+    const erhe::scene::Node&  effector           = *m_joints.back();
+    const erhe::Item_host*    effector_host      = effector.get_item_host();
+    const erhe::scene::Node*  rejected_pole      = nullptr;
+    const char*               rejected_reason    = nullptr;
+
+    // R5: scan effector toward the root and take the first attachment whose
+    // pole_target resolves to an admissible pole, so a pole authored on the
+    // effector - where Blender's IK constraint itself lives - wins.
+    for (std::size_t i = m_joints.size(); i-- > 0;) {
+        const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(m_joints[i].get());
+        if (!ik_settings) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> pole = ik_settings->get_pole_target();
+        if (!pole) {
+            continue; // nothing authored here (or the reference died): keep scanning
+        }
+
+        // R8: admissibility, evaluated once per drag.
+        const char* reason = nullptr;
+        if (pole->get_item_host() != effector_host) {
+            reason = "it is hosted by another scene";
+        } else if (!pole->get_value(erhe::Item_base::active_property) || !pole->is_active()) {
+            reason = "it is not active";
+        } else {
+            for (const std::shared_ptr<erhe::scene::Node>& joint : m_joints) {
+                if (joint.get() == pole.get()) {
+                    reason = "it is itself a joint of the dragged chain";
+                    break;
+                }
+            }
+        }
+        if (reason != nullptr) {
+            if (rejected_reason == nullptr) {
+                rejected_pole   = pole.get();
+                rejected_reason = reason;
+            }
+            continue;
+        }
+
+        m_has_pole      = true;
+        m_pole_node     = pole;
+        m_pole_position = vec3{pole->position_in_world()}; // R9: captured once, at drag start
+        m_pole_angle    = ik_settings->get_data().pole_angle; // R6: the same attachment's effective angle
+        return;
+    }
+
+    // R8: one warning per drag, never per solver update.
+    if (rejected_reason != nullptr) {
+        log_trs_tool->warn(
+            "IK drag on '{}': pole target '{}' is ignored because {}; solving without a pole",
+            effector.get_name(), rejected_pole->get_name(), rejected_reason
+        );
+    }
+}
+
+auto Ik_drag::make_transform_operation() const -> std::shared_ptr<Operation>
+{
+    Compound_operation::Parameters parameters;
+    for (std::size_t i = 0; i < m_joints.size(); ++i) {
+        const erhe::scene::Trs_transform parent_from_joint_after = m_joints[i]->parent_from_node_transform();
+        if (parent_from_joint_after == m_parent_from_joint_before[i]) {
+            continue;
+        }
+        parameters.operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = m_joints[i],
+                    .parent_from_node_before = m_parent_from_joint_before[i],
+                    .parent_from_node_after  = parent_from_joint_after,
+                    .xform_op_stack_before   = m_xform_op_stack_before[i]
+                }
+            )
+        );
+    }
+    if (parameters.operations.empty()) {
+        return {};
+    }
+    return std::make_shared<Compound_operation>(std::move(parameters));
 }
 
 void Ik_drag::apply(const glm::vec3 target_position_in_world)
@@ -209,11 +305,10 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
     m_chain.target          = target_position_in_world;
     m_chain.tolerance       = c_solve_tolerance;
     m_chain.max_iterations  = c_max_iterations;
-    // No pole is discovered yet; Ik_drag::begin fills these in the attachment
-    // slice (R12).
-    m_chain.has_pole        = false;
-    m_chain.pole_position   = vec3{0.0f};
-    m_chain.pole_angle      = 0.0f;
+    // The pole was discovered once, by begin() (R12).
+    m_chain.has_pole        = m_has_pole;
+    m_chain.pole_position   = m_pole_position;
+    m_chain.pole_angle      = m_pole_angle;
     m_solver.solve(m_chain);
 
     if (m_has_constraints) {
@@ -278,6 +373,7 @@ void Ik_drag::reset()
 {
     m_joints.clear();
     m_parent_from_joint_before.clear();
+    m_xform_op_stack_before.clear();
     m_initial_positions.clear();
     m_lengths.clear();
     m_local_rotations_before.clear();
@@ -286,6 +382,10 @@ void Ik_drag::reset()
     m_root_parent_world_rotation = quat{1.0f, 0.0f, 0.0f, 0.0f};
     m_has_constraints = false;
     m_effector_world_rotation_before = quat{1.0f, 0.0f, 0.0f, 0.0f};
+    m_has_pole      = false;
+    m_pole_position = vec3{0.0f};
+    m_pole_angle    = 0.0f;
+    m_pole_node.reset();
 }
 
 }

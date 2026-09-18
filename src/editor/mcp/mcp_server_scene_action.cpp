@@ -47,6 +47,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
+#include "transform/ik_drag.hpp"
 #include "transform/transform_tool.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -1755,6 +1756,85 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
         {"local_transform", trs_to_json(node->parent_from_node_transform())},
         {"world_transform", trs_to_json(node->world_from_node_transform())}
     }).dump();
+}
+
+auto Mcp_server::action_ik_drag(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<erhe::scene::Node> effector = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!effector) {
+        json r = make_text_content("Node not found (a node created this frame attaches on the next frame - retry)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (!args.contains("target") || !args.at("target").is_array() || (args.at("target").size() != 3)) {
+        json r = make_text_content("target must be an array of 3 numbers (world coordinates)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    glm::vec3 target{0.0f};
+    for (std::size_t i = 0; i < 3; ++i) {
+        const json& component = args.at("target")[i];
+        if (!component.is_number()) {
+            json r = make_text_content("target must be an array of 3 numbers (world coordinates)");
+            r["isError"] = true;
+            return r.dump();
+        }
+        target[static_cast<glm::length_t>(i)] = component.get<float>();
+    }
+
+    // One complete gesture: discovery, one solve against an absolute world
+    // target, and one compound operation covering the joints it moved
+    // (doc/plans/rigging/pole_target.md R22). Nothing here reads UI state -
+    // no selection, no gizmo, no Transform tool setting.
+    Ik_drag drag;
+    if (!drag.begin(effector)) {
+        json r = make_text_content(
+            "No IK chain for '" + effector->get_name() +
+            "': the effector must be a bone (or a node parented under one) that is not ik_lock, with at least one bone ancestor"
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+    drag.apply(target);
+
+    json joints = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& joint : drag.get_joints()) {
+        const glm::vec3 position = glm::vec3{joint->position_in_world()};
+        joints.push_back(
+            json{
+                {"id",       joint->get_id()},
+                {"name",     joint->get_name()},
+                {"position", {position.x, position.y, position.z}}
+            }
+        );
+    }
+
+    const std::shared_ptr<Operation> operation = drag.make_transform_operation();
+    if (operation) {
+        m_context.operation_stack->queue(operation);
+    }
+
+    const std::shared_ptr<erhe::scene::Node> pole = drag.get_pole_node();
+    json result{
+        {"effector_id",   effector->get_id()},
+        {"effector_name", effector->get_name()},
+        {"target",        {target.x, target.y, target.z}},
+        {"joints",        joints},
+        {"pole",          nullptr},
+        {"pole_angle",    drag.has_pole() ? drag.get_pole_angle() : 0.0f},
+        {"recorded",      operation ? true : false}
+    };
+    if (pole) {
+        result["pole"] = pole->get_reference_path();
+    }
+    return make_json_content(result).dump();
 }
 
 // Strict argument checking for the shape/placement tools: an unrecognized

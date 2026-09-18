@@ -1238,6 +1238,40 @@
     "name": "set_node_transform"
   },
   {
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. Per-bone Ik_settings attachments supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled).",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Effector node ID (the dragged end of the chain)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Effector node name (alternative to node_id)",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "target": {
+          "description": "World-space target position [x, y, z] for the effector",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name",
+        "target"
+      ],
+      "type": "object"
+    },
+    "name": "ik_drag"
+  },
+  {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {
@@ -1504,7 +1538,7 @@
     "name": "advance_time"
   },
   {
-    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, layout, grid, frame_controller and draw_mode apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). Verify with get_node_details / get_scene_nodes.",
+    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, layout, grid, frame_controller, draw_mode and ik_settings apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). ik_settings additionally applies only to a bone node. Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1530,7 +1564,8 @@
             "layout",
             "grid",
             "frame_controller",
-            "draw_mode"
+            "draw_mode",
+            "ik_settings"
           ],
           "type": "string"
         }

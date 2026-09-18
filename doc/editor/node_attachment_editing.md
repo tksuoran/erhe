@@ -20,9 +20,10 @@ node and a parent takes any number of them.
 
 `Attachment_type_info` lists the user-addable attachment kinds - the applied
 API schemas of a prim: `rigid_body`, `joint`, `layout`, `grid`,
-`frame_controller`, `draw_mode`. Each carries a key, a label, a stateless
-`can_add(const Node&)` gate (a node holds at most one `Layout`, at most one
-`Grid`, and so on; `joint` is the one kind a node may hold several of) and a
+`frame_controller`, `draw_mode`, `ik_settings`. Each carries a key, a label, a
+stateless `can_add(const Node&)` gate (a node holds at most one `Layout`, at
+most one `Grid`, and so on; `joint` is the one kind a node may hold several
+of, and `ik_settings` additionally requires a bone node) and a
 `make(Scene_commands&, Node&)` that queues the undoable operation.
 `find_child_prim_type()` / `find_attachment_type()` resolve a key.
 
@@ -43,7 +44,8 @@ hook, and an undo puts it back.
 
 The additive half is `Scene_commands::attach_new_layout()` /
 `attach_new_grid()` / `attach_new_frame_controller()` /
-`attach_new_draw_mode()`, each a bare `Node_attach_operation` on the existing
+`attach_new_draw_mode()` / `attach_new_ik_settings()`, each a bare
+`Node_attach_operation` on the existing
 node, plus `create_new_rigid_body()` / `create_new_joint()`, which the rigid
 body and joint entries reuse.
 
@@ -72,6 +74,8 @@ is one.
 
 **MCP.** `add_node_attachment { node_id, type }` accepts a key of either
 catalog and goes through the same `Scene_commands` path, so it is undoable.
+Its schema in `config/editor/mcp_tools.json` advertises the same key list the
+catalog holds, so a schema-validating client can reach every kind.
 `remove_node_attachment { node_id, attachment_id | type }` queues the remove
 helper; `type` is the attachment type name `get_node_details` reports (e.g.
 `Node_physics`), while `attachment_id` - also in `get_node_details` - removes

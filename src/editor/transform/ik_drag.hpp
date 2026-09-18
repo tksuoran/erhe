@@ -3,11 +3,13 @@
 #include "transform/ik_solver.hpp"
 
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform_op.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::scene {
@@ -15,6 +17,8 @@ namespace erhe::scene {
 }
 
 namespace editor {
+
+class Operation;
 
 // Interactive IK state for one translate drag of a bone (see
 // doc/plans/rigging/fabrik_ik.md and doc/plans/rigging/ik_settings.md).
@@ -49,9 +53,32 @@ public:
     // Joints in root..effector order (valid while active).
     [[nodiscard]] auto get_joints() const -> const std::vector<std::shared_ptr<erhe::scene::Node>>& { return m_joints; }
 
+    // The pole governing this drag, discovered once by begin()
+    // (doc/plans/rigging/pole_target.md R5-R10). get_pole_node() is null and
+    // get_pole_angle() is 0 when the solve is unpoled.
+    [[nodiscard]] auto has_pole     () const -> bool { return m_has_pole; }
+    [[nodiscard]] auto get_pole_node() const -> std::shared_ptr<erhe::scene::Node> { return m_pole_node.lock(); }
+    [[nodiscard]] auto get_pole_angle() const -> float { return m_pole_angle; }
+
+    // One Compound_operation of Node_transform_operation covering the joints
+    // whose parent_from_node changed since begin(), so a complete gesture is
+    // one undo step (R19, R22). Null when no joint moved. The interactive
+    // Transform tool records its gesture through
+    // Transform_tool::record_transform_operation() instead: that path owns the
+    // autokey and physics-spring state a one-shot scripted gesture has none of,
+    // and it covers the chain because try_translate_ik() appends the chain's
+    // joints to the tool's transform entries.
+    [[nodiscard]] auto make_transform_operation() const -> std::shared_ptr<Operation>;
+
 private:
+    // Fills the pole members from the chain's Ik_settings attachments. Called
+    // by begin() while every joint still sits at its drag-start transform, so
+    // the pole's world position is a drag-start capture (R9, R12).
+    void discover_pole();
+
     std::vector<std::shared_ptr<erhe::scene::Node>> m_joints; // root .. effector
     std::vector<erhe::scene::Trs_transform> m_parent_from_joint_before;
+    std::vector<std::optional<erhe::scene::Xform_op_stack>> m_xform_op_stack_before;
     std::vector<glm::vec3>                  m_initial_positions;
     std::vector<float>                      m_lengths;
     std::vector<glm::quat>                  m_local_rotations_before;
@@ -60,6 +87,10 @@ private:
     glm::quat                               m_root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                                    m_has_constraints{false};
     glm::quat                               m_effector_world_rotation_before{1.0f, 0.0f, 0.0f, 0.0f};
+    bool                                    m_has_pole{false};
+    glm::vec3                               m_pole_position{0.0f};
+    float                                   m_pole_angle{0.0f};
+    std::weak_ptr<erhe::scene::Node>        m_pole_node; // weak: a drag never keeps a scene node alive
     Ik_chain                                m_chain;
     Fabrik_solver                           m_solver;
 };

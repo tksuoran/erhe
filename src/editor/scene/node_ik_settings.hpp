@@ -8,7 +8,10 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <memory>
 #include <string_view>
+
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 
@@ -28,6 +31,12 @@ public:
     glm::vec3           limit_min{-glm::pi<float>(), -glm::pi<float>(), -glm::pi<float>()};
     glm::vec3           limit_max{ glm::pi<float>(),  glm::pi<float>(),  glm::pi<float>()};
     glm::vec3           stiffness{0.0f, 0.0f, 0.0f};
+
+    // Pole swivel offset about the chain's root-to-effector line, radians
+    // (doc/plans/rigging/pole_target.md R3). The pole node itself is not
+    // mirrored here - this record is plain values, and the reference is read
+    // through Ik_settings::get_pole_target().
+    float               pole_angle{0.0f};
 
     // Reference orientation defining the zero of the limits: the limited
     // quantity is inverse(rest_rotation) * parent_from_node_rotation.
@@ -81,6 +90,11 @@ public:
     static const erhe::property::Property<glm::vec3> limit_max_property;
     static const erhe::property::Property<glm::vec3> stiffness_property;
     static const erhe::property::Property<glm::quat> rest_rotation_property;
+    // Pole target (doc/plans/rigging/pole_target.md R1): a node-typed object
+    // reference (D28) bridged (D18) over the weak member below, so a pole is
+    // never a strong node-to-node reference, plus the swivel offset angle.
+    static const erhe::property::Property<erhe::property::Object_reference> pole_target_property;
+    static const erhe::property::Property<float>    pole_angle_property;
 
     [[nodiscard]] static auto lock_property (int axis) -> const erhe::property::Property<bool>&;
     [[nodiscard]] static auto limit_property(int axis) -> const erhe::property::Property<bool>&;
@@ -97,10 +111,18 @@ public:
     void set_stiffness    (const glm::vec3& value);
     void set_rest_rotation(const glm::quat& value);
 
+    // Any node is accepted, including this attachment's own node and nodes of
+    // other scenes; admissibility is decided once per drag by Ik_drag::begin
+    // (doc/plans/rigging/pole_target.md R4, R8).
+    [[nodiscard]] auto get_pole_target() const -> std::shared_ptr<erhe::scene::Node>;
+    void set_pole_target(const std::shared_ptr<erhe::scene::Node>& node);
+    void set_pole_angle (float value);
+
 private:
     void refresh_mirror();
 
-    Ik_settings_data m_data;
+    Ik_settings_data                 m_data;
+    std::weak_ptr<erhe::scene::Node> m_pole_target;
 };
 
 } // namespace editor

@@ -2060,10 +2060,21 @@ properties, owner type `Ik_settings::property_owner_type()`, UI group
 (bool), `limit_min` and `limit_max` (vec3 radians, `angle_degrees`
 presentation, coerced per component to [-pi, 0] and [0, pi]), `stiffness`
 (vec3, coerced to [0, 0.99], `developer_only` because the solver does not
-read it yet) and `rest_rotation` (quat). Every field inherits (D30), so a
+read it yet), `rest_rotation` (quat) and `pole_angle` (float radians,
+`angle_degrees` presentation over a -180 to +180 drag range and no
+coercion, because the swivel angle is periodic). `pole_target`
+(`Object_reference`, `reference_item_types = erhe::Item_type::xformable`)
+is the one bridged field (D18), over a
+`std::weak_ptr<erhe::scene::Node>` member exactly as
+`Node_joint::connected_node` is: a pole is a reference, never an ownership
+edge, so it can name any node - a node of a closed scene simply stops
+locking, and `Ik_drag::begin` decides admissibility once per drag
+(`doc/plans/rigging/pole_target.md` R8). `set_pole_target` calls
+`invalidate_dependents` because it writes the bridged storage outside
+`set_value` (D22). Every field inherits (D30), so a
 node or a style holds `Ik_settings.limit_x` for the attachments below it,
-except `rest_rotation`: the reference orientation of one bone has no
-meaning shared down a chain. The D30 rule does not look at `inherits`, so
+except `rest_rotation` and `pole_target`: the reference orientation of one
+bone and the pole of one chain have no meaning shared down a chain. The D30 rule does not look at `inherits`, so
 a holder still offers and stores `Ik_settings.rest_rotation`; the value
 stays on the holder and no attachment reads it (covered by the property
 test). The defaults are the `Ik_settings_data` initializers.
@@ -2071,10 +2082,15 @@ test). The defaults are the `Ik_settings_data` initializers.
 `Ik_settings::on_property_changed`; readers (the IK drag's
 `resolve_constraint`, the `ERHE_rig` export) take `get_data()`, and
 writers go through `set_lock(axis)`, `set_limit(axis)`, `set_limit_min`,
-`set_limit_max`, `set_stiffness` and `set_rest_rotation`, which write
+`set_limit_max`, `set_stiffness`, `set_rest_rotation` and
+`set_pole_angle`, which write
 local values (`Scene_commands::attach_new_ik_settings` captures the rest
-rotation through the setter before the attach). The clone constructor
-copies the mirror; the entries copy through D10. The generic section
+rotation through the setter before the attach). The pole node is not in
+the mirror - that record is plain values - so `Ik_drag::discover_pole`
+reads it through `get_pole_target()` while `pole_angle` comes from
+`get_data()`. The clone constructor copies the mirror and the weak pole
+reference, so a cloned or prefab-instantiated bone keeps naming the same
+pole node; the entries copy through D10. The generic section
 draws every row; the whole-struct `Ik_settings_change_operation` and the
 hand-written rows with their drag latch are gone, and
 `Properties::ik_settings_actions` keeps only "Set rest from current
