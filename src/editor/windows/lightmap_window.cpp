@@ -866,7 +866,7 @@ void Lightmap_window::imgui()
         }
     }
 
-    // Unwrap method knobs (doc/geogram_atlas_packing_feature_request.md):
+    // Unwrap method knobs (doc/reference/geogram_atlas_packing_feature_request.md):
     // exposed so unwrap defects (overlapping / folded UV triangles, see the
     // Lightmap Texture window's overlap check) can be iterated on live.
     {
@@ -880,7 +880,7 @@ void Lightmap_window::imgui()
             ImGui::SetTooltip(
                 "Chart parameterizer for the world-space piece unwraps. ABF++ is the Geogram\n"
                 "default. Per-facet: every facet is its own chart (no Geogram; zero overlaps by\n"
-                "construction, no shared texels - doc/lightmap_seam_driven_unwrap_plan.md)."
+                "construction, no shared texels - doc/plans/lightmap/seam_driven_unwrap.md)."
             );
         }
         ImGui::SetNextItemWidth(140.0f);

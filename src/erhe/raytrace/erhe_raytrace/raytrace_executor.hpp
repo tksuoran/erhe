@@ -11,7 +11,7 @@ namespace erhe::raytrace {
 //
 // A spawn FUNCTION rather than a tf::Executor: the application's spawner
 // routes through its guarded spawn wrapper (proposal A of
-// doc/gl-worker-context-enforcement.md), so this library's spawn is covered
+// doc/gl_worker_context_enforcement.md), so this library's spawn is covered
 // by the GL worker-context guard without a graphics dependency here, and no
 // raw executor exists below the application to bypass it.
 using Task_spawner = std::function<void(std::function<void()>)>;

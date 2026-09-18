@@ -99,6 +99,6 @@ Primitive_raytrace generally); keep it on the graph-mesh apply path if H2/H4
 ## Step 4 -- close out
 
 - Commit(s) per split convention (fix separate from any drive-by cleanup),
-  update doc/openvdb-integration-plan.md Phase 3 notes + memory with the
+  update doc/plans/geometry_graph/openvdb_sdf.md Phase 3 notes + memory with the
   root cause, and note the lesson if it generalizes (e.g. "volumeToMesh
   output needs X before raytrace").

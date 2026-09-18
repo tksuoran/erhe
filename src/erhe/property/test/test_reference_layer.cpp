@@ -1,4 +1,4 @@
-// Reference layer (D33 in doc/property-system.md): coerced > local >
+// Reference layer (D33 in doc/property_system.md): coerced > local >
 // style > reference > inherited > default. The reference layer of an
 // object is what its counterpart supplies itself (local, expression,
 // computed, style or, recursively, reference); a value the counterpart

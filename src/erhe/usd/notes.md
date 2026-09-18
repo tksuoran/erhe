@@ -112,7 +112,7 @@ translation units.
   from a '<type>' prim" and keeps the defaults.
 - Every prim the conversion gives a transform to keeps the xformOp stack it
   was authored with, next to the transform Tydra composed for it
-  (`doc/usd-compatibility-plan.md` M8, `src/erhe/scene/notes.md` "Authored
+  (`doc/usd_compatibility_design.md` M8, `src/erhe/scene/notes.md` "Authored
   xformOp stacks"). Tydra reports the composed `local_matrix` only, so the
   ops come off the raw prim's `lightusd::Xformable::xformOps` - the composed
   prim the authored-opinion reader below already looks up. Each op keeps its
@@ -153,7 +153,7 @@ translation units.
   level). A `Stage_metrics::referenced` load applies no correction, so the
   prims of a reference or payload target keep their authored stacks.
 - The erhe class of a prim is the class its `typeName` names
-  (`doc/usd-compatibility-plan.md` C5, the object-model table of
+  (`doc/usd_compatibility_design.md` C5, the object-model table of
   `doc/usd_compatibility.md`): a `Mesh` prim becomes an
   `erhe::scene::Mesh`, a `Camera` prim an `erhe::scene::Camera` and a UsdLux
   prim an `erhe::scene::Light`, each carrying its own transform; `Xform`
@@ -166,7 +166,7 @@ translation units.
   and a transform authored on such a prim is dropped with one warning
   naming the prim.
 - A `Material` prim becomes the erhe material prim, parented where the
-  stage puts it (`doc/usd-compatibility-plan.md` U4): a stage keeping its
+  stage puts it (`doc/usd_compatibility_design.md` U4): a stage keeping its
   materials in `/Looks` gives erhe a `Scope` named `Looks` holding them, and
   the prim name is the material's name, so two materials of one name in two
   scopes stay apart by their place. A `material:binding` names a path, so
@@ -213,7 +213,7 @@ translation units.
 - Values are read at the stage's default time code, and the `UsdPhysics`
   prims and API schemas become the file's physics description ("Physics"
   below).
-- A local value is an authored value (`doc/property-system.md` D32). Tydra
+- A local value is an authored value (`doc/property_system.md` D32). Tydra
   reports a schema fallback the same way it reports an authored opinion, so
   the conversion asks the composed prim instead: LightUSD's typed attribute
   wrappers answer `authored()`, and Tydra's `GetPropertyNames` collects the
@@ -293,7 +293,7 @@ future change to either end has to stay true.
 ### UsdPreviewSurface fallbacks and channel outputs
 
 An unauthored UsdPreviewSurface input is the schema fallback, not an erhe
-default (`doc/usd-compatibility-plan.md` I2). Of the inputs erhe carries only
+default (`doc/usd_compatibility_design.md` I2). Of the inputs erhe carries only
 `diffuseColor` differs: USD's fallback is the 0.18 grey usdview shows against
 erhe's white `base_color` (`roughness` 0.5, `metallic` 0, `opacity` 1, `ior`
 1.5, `emissiveColor` black all agree). So `c_usd_diffuse_color_fallback` is
@@ -520,7 +520,7 @@ same function - sees that one composed stage.
 - A save writes ONE layer holding the composed content and authors no
   `subLayers`. erhe edits the flattened stage, so it has no layer to write an
   edit back to; a sublayer stack the editor could edit layer by layer is
-  future work (doc/usd-compatibility-plan.md section 5). The save logs one
+  future work (doc/usd_compatibility_design.md section 5). The save logs one
   line naming the sublayers the file it was opened from had
   (`editor::save_scene_usd`, from `Scene_root::get_usd_sublayers()`).
 
@@ -529,7 +529,7 @@ same function - sees that one composed stage.
 LightUSD composes nothing on load: `LoadUSDFromFile` reads the root layer and
 leaves every `references` / `payload` arc in the prim's metadata (its
 `do_composition` option is declared but not implemented). That is what the
-importer wants (doc/usd-compatibility-plan.md X1): a prim that authors arcs
+importer wants (doc/usd_compatibility_design.md X1): a prim that authors arcs
 arrives as it was authored, and the arcs it names are reported in
 `Usd_data::references` as `Usd_prim_references` - the erhe prim the arcs were
 authored on, its stage path, and one `Usd_reference` per arc. The caller
@@ -599,7 +599,7 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   referenced layer is part of that target, and the target's own instantiation
   is what reproduces it.
 - An `over` prim the referencing layer authors below a referencing prim is
-  the sparse override of one instance item (doc/usd-compatibility-plan.md X2),
+  the sparse override of one instance item (doc/usd_compatibility_design.md X2),
   reported in `Usd_prim_references::overrides` as an
   `erhe::scene::Instance_override`: the item's path below the carrier, its
   values as name / D16 text pairs, its authored xformOp stack, and the
@@ -629,10 +629,10 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
 
 A `class` prim defines no scene content: it holds the opinions its `inherits`
 arcs hand to the prims that name it, which is what an erhe style holds
-(`doc/style-library.md` D25). Tydra's render-scene conversion reports a class
+(`doc/style_library.md` D25). Tydra's render-scene conversion reports a class
 prim as a transform node all the same, so the reader takes the class prims off
 the composed layer's own prim specs and the conversion skips the class prims
-themselves (doc/usd-compatibility-plan.md X3).
+themselves (doc/usd_compatibility_design.md X3).
 
 A class prim's `def` descendants are prototypes: prims the class holds
 abstract, which a reference names and clones. Each is converted as an ordinary
@@ -669,7 +669,7 @@ the caller makes the Style items, applies the values with
 ### Point instancers
 
 A `PointInstancer` prim is expanded into prims
-(doc/usd-compatibility-plan.md S1). The prim itself is an
+(doc/usd_compatibility_design.md S1). The prim itself is an
 `erhe::scene::Point_instancer` - a boundable prim, which is what USD's
 `UsdGeomPointInstancer` is - carrying its own transform, and below it:
 
@@ -737,7 +737,7 @@ per instance over one shared set of GPU primitives.
 ### Brush prims
 
 A brush is editor state a USD file carries as a prim of its own type
-(doc/usd-compatibility-plan.md E4a): `def Brush "<name>"` where the brush sits
+(doc/usd_compatibility_design.md E4a): `def Brush "<name>"` where the brush sits
 in the tree, holding `erhe:Brush:density` and `erhe:Brush:normal_style` custom
 attributes, a `material:binding` to the material a placed instance gets, and
 its geometry as a child `def Mesh "geometry"` written with
@@ -761,7 +761,7 @@ the editor Brush at the path the prim has.
 
 A node graph is a `NodeGraph` prim carrying the custom attribute
 `erhe:graph:format`, which is the marker that says the network is erhe's
-(doc/usd-texture-graphs-plan.md). A `NodeGraph` without it is a foreign
+(doc/plans/usd_texture_graphs.md). A `NodeGraph` without it is a foreign
 shading network and is left to the material conversion. The marker's token
 says which kind of graph it is: `erhe_texture_graph` for a texture graph and
 `erhe_geometry_graph` for a geometry graph, spelled the way the glTF
@@ -843,7 +843,7 @@ variant contributes nothing to the composed prim: the `variantSet` blocks are
 read off the composed layer's own prim specs the same walk takes the class
 prims from - so a set any layer of the stack authors is in the table - and the
 reader is what applies the selection
-(doc/usd-compatibility-plan.md X4). Material bindings, property opinions and
+(doc/usd_compatibility_design.md X4). Material bindings, property opinions and
 the prims a variant adds are all carried.
 
 The prims come across at load: `load_stage` copies the `def` children of every
@@ -960,7 +960,7 @@ tree is dropped when the base values are captured, and counted the same way.
 
 An opinion or a binding whose path a composition arc still owes is the
 exception. erhe composes no arc: the caller instantiates each one after the
-load returns (doc/usd-compatibility-plan.md C6), so a path this tree cannot
+load returns (doc/usd_compatibility_design.md C6), so a path this tree cannot
 reach is not a path that names nothing. Such an entry is moved onto the
 variant's `pending_overrides` / `pending_bindings` instead of being applied,
 dropped or counted, and the caller applies it once the arcs are in the tree,
@@ -1060,7 +1060,7 @@ own transform plays no part; erhe's `Joint_buffer` poses it as `sum_j w_j *
 world_from_joint_j * inverse_bind_j * p`, the glTF rule. The two agree when
 every joint is a prim whose world transform is `skelLocalToWorld *
 jointSkelSpace_j` and the mesh's inverse bind matrix for joint `j` is
-`inverse(bind_j) * geomBindTransform` (doc/usd-compatibility-plan.md K1), so
+`inverse(bind_j) * geomBindTransform` (doc/usd_compatibility_design.md K1), so
 the conversion builds exactly that.
 
 - A `Skeleton` prim is a transformable prim of the tree carrying the authored
@@ -1175,7 +1175,7 @@ code. The samples are what the file authored, so:
   caller carries from the load, so a file keeps its own.
 - The transform the writer writes for a prim is the one the prim authored -
   `Xformable::authored_parent_from_node_transform()`, the base under the
-  animated layer (`doc/property-system.md` D5) - so a save made while an
+  animated layer (`doc/property_system.md` D5) - so a save made while an
   animation plays writes the same stage a save made when it is stopped does.
   A sampled stack is written whatever that transform says: the samples are the
   authority over the stack's composition.
@@ -1229,7 +1229,7 @@ is not - an edit a pivot pair cannot pivot into, a rotation a single-axis
 names it.
 
 An edit and playback are independent: playback holds its pose in the animated
-layer (`doc/property-system.md` D5) while the keys hold the edit, so a save
+layer (`doc/property_system.md` D5) while the keys hold the edit, so a save
 made while a clip plays writes the same samples a save made after stopping
 does.
 
@@ -1512,8 +1512,8 @@ over the tree with no file work in it.
   written. Every `Scope` of the tree is written where it sits whatever it
   holds - a content-library folder, a kind scope and an authored `Scope` are
   one kind of prim - so an empty folder is a prim of the layer and the folder
-  tree survives a save (doc/usd-compatibility-plan.md E4d,
-  doc/content-library-folders.md). A skin and an animation are library
+  tree survives a save (doc/usd_compatibility_design.md E4d,
+  doc/content_library_folders.md). A skin and an animation are library
   resources carried by what they drive - the `Skeleton` prim's arrays and the
   skinned mesh's primvars (K1), and the sampled `xformOp`s of the prims an
   animation drives - so the item itself is not written wherever it sits. The
@@ -1570,7 +1570,7 @@ over the tree with no file work in it.
   lists it under the `Gprim` owner, so it never also travels as an
   `erhe:Gprim:double_sided` custom attribute - except on an `over` prim, which
   is typeless and carries no schema attribute at all.
-- Prim `active` metadata (`doc/usd-compatibility-plan.md` X2). The item's
+- Prim `active` metadata (`doc/usd_compatibility_design.md` X2). The item's
   `active` property is USD's prim `active` metadatum: written through
   `PrimMeta::set_active` when the value is local, so a prim erhe never
   deactivated carries no `active` line, and read back through
@@ -1600,7 +1600,7 @@ over the tree with no file work in it.
   custom-attribute pass asks it whether to spell a value `erhe:Owner:name`
   instead. `get_usd_authored_as` is that question as a public answer, for the
   Properties window's composition-provenance line
-  (`doc/usd-compatibility-plan.md` X5); `Native_property_form` says which of
+  (`doc/usd_compatibility_design.md` X5); `Native_property_form` says which of
   the two forms the prim being written offers.
 - Name sanitizing. `sanitize_usd_identifier` replaces every character outside
   `[A-Za-z0-9_]` with `_` and prefixes `_` to a name starting with a digit.
@@ -1608,7 +1608,7 @@ over the tree with no file work in it.
   then applies erhe's own sibling-unique suffix rule (M2, `<base>_<n>` from
   1). The prim name is the item name: an item whose name needed sanitizing
   comes back under the sanitized spelling.
-- Styles and inherits arcs (doc/usd-compatibility-plan.md X3). A style item is
+- Styles and inherits arcs (doc/usd_compatibility_design.md X3). A style item is
   written as a typeless `class` prim where it sits in the tree, and every prim
   that has a style names that class prim in one explicit `inherits` list op -
   the same way a mesh binds a material, by the path the prim actually got. The
@@ -1622,7 +1622,7 @@ over the tree with no file work in it.
   bridged and so never becomes an `erhe:Item_base:style` attribute; the arc is
   the only thing written. A style whose item is not a prim of the written tree
   - a style of another scene - is one warning and no arc.
-- Brushes (doc/usd-compatibility-plan.md E4a). A brush item is written as the
+- Brushes (doc/usd_compatibility_design.md E4a). A brush item is written as the
   `Brush`-typed prim of the "Brush prims" section above, where it sits in the
   tree. The writer recognizes a brush by the class token `erhe::Typed` fixes
   for it (`"Brush"`), for the reason it recognizes a style that way, and takes
@@ -1650,7 +1650,7 @@ over the tree with no file work in it.
   holding its payload arcs, each in the order the caller gave. The prims below
   it are not written - the arcs' targets supply them - so the file keeps the
   instance structure instead of the flattened subtree
-  (doc/usd-compatibility-plan.md X1). An arc's `asset_path` is
+  (doc/usd_compatibility_design.md X1). An arc's `asset_path` is
   `Usd_save_reference::source_path` relative to the file being written, and
   empty when the two are the same file (compared after `weakly_canonical`),
   which is USD's spelling of an internal reference; its `prim_path` is empty
@@ -1669,7 +1669,7 @@ over the tree with no file work in it.
   below a `Material` prim, which an `over` of that material does not have.
   The X2 reader reads that form back into the item's local layer.
 - What a carrier does write of the instance below it is the overrides its
-  items hold (doc/usd-compatibility-plan.md X2), collected through
+  items hold (doc/usd_compatibility_design.md X2), collected through
   `erhe::scene::collect_instance_override_items`, which owns the rule for what
   an override is. The clone of an arc's target prim is the carrier prim itself
   - X1 gives the instance one level more than USD's own composition - so its
@@ -2163,7 +2163,7 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 - No asynchronous load path: `load_usd` runs on the calling thread and the
   editor's import and scene open are synchronous, where a glTF import goes
   through the asset manager's `Asset_load_request` and the droppable-payload
-  `Import_gltf_operation` (doc/reloadable-asset-loads.md). The conversion
+  `Import_gltf_operation` (doc/reloadable_asset_loads.md). The conversion
   itself creates no GPU object, so it is ready to move onto a worker when the
   asset manager learns a second format.
 - Of the editor state `ERHE_scene` and the asset-root extensions hold in

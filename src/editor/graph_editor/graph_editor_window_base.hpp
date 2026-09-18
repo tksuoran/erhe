@@ -31,7 +31,7 @@ class Graph_editor_node;
 // (controls_imgui) and the payload-blind node palette (the searchable,
 // categorized node-creation list). The canvas / link / target machinery still
 // lives in the concrete windows; growing this base further is deferred Phase C
-// work (see doc/graph-editor-shared-plan.md, C7 remainder).
+// work (see doc/graph_editor.md, C7 remainder).
 class Graph_editor_window_base : public erhe::imgui::Imgui_window
 {
 public:

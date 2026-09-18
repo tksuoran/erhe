@@ -12,7 +12,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers; plus `erhe::scene::Physics_description physics` and `unresolved_object_properties` (object-reference local values of the ERHE_* `properties` maps whose name did not resolve during the parse; the editor resolves them by name once its import operations ran).
 - `erhe::scene::Physics_description` (`erhe_scene/physics_description.hpp`, see `src/erhe/scene/notes.md`) -- Plain-data carrier for the physics extensions, filled 1:1 from KHR_implicit_shapes + KHR_physics_rigid_bodies on import and written back from it on export. Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
-- `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/async-asset-loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
+- `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/async_asset_loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
 - `Gltf_device_options` -- The two device-derived values the parse needs: the transcode format preference for KTX2/Basis images, and max sampler anisotropy.
 - `Gltf_image_residency` (`Gltf_data::image_residency`) -- The GPU half of image loading, split out of the parse. Holds the decoded pixels, the `Sampler_create_info`s and the material texture/sampler bindings the parse recorded. `create_samplers()` + `process_next_image()` / `process_next_image_into_frame()` create the objects and record the uploads; `bind_material_textures()` fills the material slots; `drain()` does all of it synchronously and flushes. After `parse_gltf` returns, `Gltf_data::images` and `::samplers` are EMPTY until residency runs.
 - `Image_transfer` -- GPU texture uploads, in one of two modes. `blocking_drain` (the original): a private fixed-size (64 MiB) staging ring and its own transfer command buffer; when the ring fills, `flush()` submits + fence-waits + reclaims, so loads make progress with bounded staging memory even when no frames are rendered. Required by callers with no frame loop (`src/example`, `src/rendering_test`, the OpenXR controller model loader). `frame_recording`: `upload_into_frame()` stages from the device ring and records copies into the caller's frame command buffer, returning `budget_exhausted` instead of blocking; the private ring is not allocated at all. Destructor flushes.
@@ -33,7 +33,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 
 ## Notes
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
-- `parse_gltf` creates NO GPU objects at all -- not textures, not samplers. Keep it that way: it is what makes the editor's asynchronous loading safe (doc/async-asset-loading.md), and nothing will catch a regression automatically.
+- `parse_gltf` creates NO GPU objects at all -- not textures, not samplers. Keep it that way: it is what makes the editor's asynchronous loading safe (doc/async_asset_loading.md), and nothing will catch a regression automatically.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
 - `Image_transfer` no longer records into the caller's frame command buffer: uploads go through its own transfer command buffer, submitted (and fence-waited) whenever the staging ring fills and at destruction. Images larger than the staging ring use a dedicated one-shot staging buffer.
 - fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which
@@ -46,7 +46,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   `node_external_assets` surface what the file references, with file URIs resolved
   against the glTF directory. Neither fastgltf nor erhe::gltf recursively parses
   referenced assets or detects cross-file cycles -- the editor's prefab layer does
-  (see `doc/gltf-prefabs-plan.md`).
+  (see `doc/plans/gltf_prefabs.md`).
 - glTF 2.1 unique IDs (KhronosGroup/glTF#2597, pre-ratification; parsed/written by
   the fastgltf fork): import carries each top-level object's `uid` onto the created
   erhe item (`Item_base::set_gltf_uid`); `scan_gltf` reports them in the
@@ -66,12 +66,12 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   `erhe::property::clear_default_valued_local_properties` over every parsed
   node, mesh, light, camera and material, so a field the file left at its
   default reports `Value_source::default_value`
-  (`doc/property-system.md` D32). The pass runs BEFORE the `ERHE_*`
+  (`doc/property_system.md` D32). The pass runs BEFORE the `ERHE_*`
   extension pass, whose `properties` maps are the item's authored local
   set and must not be elided. `Property_flags::native_gltf` marks the
   registrations this file format carries natively, for the property
-  serializer of `doc/gltf-properties-extension-plan.md`.
-- `KHR_materials_variants` is read and written (doc/usd-compatibility-plan.md
+  serializer of `doc/plans/gltf_properties_extension.md`.
+- `KHR_materials_variants` is read and written (doc/usd_compatibility_design.md
   X4). `parse_material_variants()` resolves the asset's flat list into
   `Gltf_data::material_variants`: per variant name, one binding per (Mesh
   prim, erhe primitive index, material) a mapping names. The bindings are on
@@ -93,7 +93,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,
   physics payloads, ...) are injected by the editor through the generic extension
   passthrough (captured/emitted as raw JSON per object). This is the single scene
-  persistence format (`doc/gltf-scene-roundtrip-plan.md`; the editor's legacy
+  persistence format (`doc/gltf_scene_roundtrip.md`; the editor's legacy
   `.erhescene` bundle format was removed in phase 5). Legacy reads remain for files
   written before the extensions existed: node `extras.erhe_flags` and the material
   extras carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are parsed but no

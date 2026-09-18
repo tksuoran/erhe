@@ -72,7 +72,7 @@ public:
     // This breaks the "enqueued implies uploaded by end of frame" invariant
     // by design, which is why it exists on its own queue: a consumer of a
     // budget-drained queue MUST gate on get_watermark() before drawing from
-    // the bytes it enqueued (doc/async-asset-loading-plan.md 2.5).
+    // the bytes it enqueued (doc/async_asset_loading_design.md 2.5).
     auto flush_budgeted(Command_buffer& command_buffer, std::size_t max_byte_count) -> std::size_t;
 
     auto enqueue(const Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data) -> Ticket;

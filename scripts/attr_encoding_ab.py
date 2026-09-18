@@ -3,7 +3,7 @@
     python scripts/attr_encoding_ab.py
 
 Produces, in logs/attr_encoding_ab/, the images the user looks at to accept or
-reject doc/meshoptimizer-attribute-encodings-plan.md. Rendering identity is NOT
+reject doc/meshoptimizer_attribute_encodings.md. Rendering identity is NOT
 the criterion here: every encoding in that plan is lossy by design, so the
 expected result is a small non-zero difference. The acceptance test is visual.
 
@@ -17,7 +17,7 @@ What it captures (each one a full editor launch; ~1 minute each):
     on_qon    optimize_meshes = true,  quantize = true     attributes + positions
 
 quantize_vertex_positions only ever affects the OPTIMIZED variant (requirement 8
-of doc/meshoptimizer-integration.md: the base variant is always float3), which
+of doc/meshoptimizer_integration.md: the base variant is always float3), which
 is what makes the on_qoff / on_qon split meaningful and why there is only one
 `off` side. The comparisons written out are:
 

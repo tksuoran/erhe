@@ -1,4 +1,4 @@
-// Phase 2 tests for erhe::voxel::Grid (doc/openvdb-integration-plan.md):
+// Phase 2 tests for erhe::voxel::Grid (doc/plans/geometry_graph/openvdb_sdf.md):
 // SDF primitives, mesh round-trip against erhe::geometry::Geometry,
 // CSG identities, offset/smooth behavior.
 

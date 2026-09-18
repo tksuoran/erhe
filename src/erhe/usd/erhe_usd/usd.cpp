@@ -401,7 +401,7 @@ void fill_stage_metas_from_sublayers(
 }
 
 // Copy the `def` children of every variant block of `spec` into `spec` itself
-// (doc/usd-compatibility-plan.md X4). Every variant's prims end up in the
+// (doc/usd_compatibility_design.md X4). Every variant's prims end up in the
 // tree, whichever variant is selected: the selected variant's are left as
 // they are, and the rest are marked `active = false`, which prunes them from
 // the render, the pick and the simulation the way USD's own `active` does
@@ -545,7 +545,7 @@ void collect_variant_set_specs(
 
 // The entries of `variant_selections` the layer's prims answer for, with one
 // warning for each entry that is dropped
-// (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// (doc/usd_compatibility_design.md section 6, "Variant selection through a
 // composition arc"). This is the one validation of a carried selection: the
 // hoist and the reader both take the result, so neither warns again.
 [[nodiscard]] auto validate_variant_selections(

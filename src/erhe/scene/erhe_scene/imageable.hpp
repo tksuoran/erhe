@@ -7,7 +7,7 @@
 
 namespace erhe::scene {
 
-// An imageable prim (doc/usd-compatibility-plan.md C5, USD
+// An imageable prim (doc/usd_compatibility_design.md C5, USD
 // `UsdGeomImageable`): the level of the prim class hierarchy that renders,
 // and so the level `visible` and `purpose` belong to. Both are registered on
 // `Item_base` today and stay there until a step moves them here.

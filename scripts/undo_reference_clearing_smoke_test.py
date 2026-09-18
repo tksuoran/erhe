@@ -5,7 +5,7 @@ Drives the in-editor MCP server against a RUNNING editor (this script does
 not launch one - start the editor first, or use scripts/run_mcp_tests.ps1
 for the C++ suite).
 
-Covers doc/import-undo-reference-clearing.md: undoing a glTF import, or
+Covers doc/import_undo_reference_clearing.md: undoing a glTF import, or
 undoing "open glTF as a scene", must make every editor part drop the
 cached shared_ptr it holds to the removed content - otherwise the window
 keeps showing dead content and the asset can never be unloaded

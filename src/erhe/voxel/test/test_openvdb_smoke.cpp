@@ -1,4 +1,4 @@
-// Phase 1 smoke test for the OpenVDB dependency (doc/openvdb-integration-plan.md):
+// Phase 1 smoke test for the OpenVDB dependency (doc/plans/geometry_graph/openvdb_sdf.md):
 // proves that the exact OpenVDB core tools the SDF geometry-node work needs
 // (level set construction, CSG, volumeToMesh) compile, link and run in the
 // erhe build. The erhe_voxel wrapper library arrives in Phase 2.

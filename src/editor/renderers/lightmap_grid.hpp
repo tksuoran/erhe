@@ -9,7 +9,7 @@
 namespace editor {
 
 // Quadtree grid tile addressing for the lightmap world-space partition
-// (doc/lightmap_baking_plan.md): the world XZ plane is covered by a uniform
+// (doc/lightmap_baking.md): the world XZ plane is covered by a uniform
 // grid of user-sized cells (lightmap.cell_size_m, quadtree level 0),
 // anchored at multiples of the cell size from the world origin - tile
 // boundaries never move when content does. A cell at level L has side

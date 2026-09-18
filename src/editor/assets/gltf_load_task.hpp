@@ -23,7 +23,7 @@ class App_context;
 class Scene_root;
 
 // Asynchronous open of an erhe-authored glTF scene
-// (doc/async-asset-loading-plan.md step 6). The phases, and which thread each
+// (doc/async_asset_loading_design.md step 6). The phases, and which thread each
 // one runs on:
 //
 //   scan      WORKER  editor::scan_gltf, to decide erhe-authored scene vs

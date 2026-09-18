@@ -24,7 +24,7 @@ namespace erhe::graphics {
 namespace erhe::primitive {
 
 // How a slot's texture is sampled: plain data, the values of the slot's
-// sampler properties (section 4.1 of doc/property-system.md). The renderer
+// sampler properties (section 4.1 of doc/property_system.md). The renderer
 // resolves a GPU sampler from it (Material_sampler_cache); the defaults are
 // those of erhe::graphics::Sampler_create_info, so a slot at its defaults
 // samples as it did with no explicit sampler.
@@ -94,7 +94,7 @@ public:
 
 // The material state whose storage is this struct: the texture slots.
 // Every slot field is a mirror of a registered property of the Material
-// (doc/property-system.md section 4.1): the texture_reference (D28), the
+// (doc/property_system.md section 4.1): the texture_reference (D28), the
 // texgen_mode, rotation, offset and scale, and the sampler state. Write
 // them through the Material properties or set_data on a live material.
 class Material_data
@@ -199,7 +199,7 @@ public:
     // `UsdShadeMaterial`'s (doc/usd_compatibility.md, "Materials").
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Material"; }
 
-    // Registered properties (erhe::property, doc/property-system.md
+    // Registered properties (erhe::property, doc/property_system.md
     // section 4.1). The typed accessors below read and write these on the
     // item's property store.
     static const erhe::property::Property<glm::vec3>              base_color_property;
@@ -382,7 +382,7 @@ public:
     // Whole-set snapshot in and out of the property store. set_values()
     // writes the fields that differ from the property's default as local
     // values in one change batch and clears the local value of the rest
-    // (doc/property-system.md D32: a local value is an authored value).
+    // (doc/property_system.md D32: a local value is an authored value).
     [[nodiscard]] auto get_values() const -> Material_values;
     void               set_values(const Material_values& values);
 
@@ -398,7 +398,7 @@ public:
     // change serial below.
     //
     // No GPU slot here. A material's slot is a property of the Material_set
-    // that issued it (doc/draw_list_material_set_plan.md D0), not of the
+    // that issued it (doc/draw_list_material_set.md D0), not of the
     // material: the same Material is normally at a different slot in every set
     // it belongs to, and a single mutable field here is what made "slot 7"
     // mean different materials in different passes.

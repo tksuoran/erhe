@@ -1,4 +1,4 @@
-// A Material with a style (D25 in doc/property-system.md): the style
+// A Material with a style (D25 in doc/property_system.md): the style
 // supplies shared traits, a local value wins, get_values bakes the
 // effective values, operator== sees the style.
 

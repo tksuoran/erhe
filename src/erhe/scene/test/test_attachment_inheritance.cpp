@@ -1,6 +1,6 @@
 // A prim inherits visible / shadow_cast / lightmapped from its parent prim
-// (D23 in doc/property-system.md), and a node's attachments inherit from
-// their node. A Mesh is a child prim (doc/usd-compatibility-plan.md C5), so
+// (D23 in doc/property_system.md), and a node's attachments inherit from
+// their node. A Mesh is a child prim (doc/usd_compatibility_design.md C5), so
 // its inheritance parent is the prim it is parented to.
 
 #include "erhe_scene/mesh.hpp"

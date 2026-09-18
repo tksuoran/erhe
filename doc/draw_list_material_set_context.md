@@ -1,6 +1,6 @@
 # Draw list material set - planning context
 
-Background for `doc/draw_list_material_set_plan.md`: where the work stands, how
+Background for `doc/draw_list_material_set.md`: where the work stands, how
 much of the plan has been reviewed, and why the work exists at all. The plan
 itself is self-contained for implementing; this is what to read before picking
 it up.
@@ -87,7 +87,7 @@ it.
 
 Settled, and recorded here so they are not re-opened: D10's content hash (now
 generated from one list with the writer, above); the R8a amendment (done, in
-`doc/draw_list_renderer_requirements.md`); whether phase 4 could be split (it
+`doc/draw_list_renderer.md`); whether phase 4 could be split (it
 was - the prerequisite split, the switch, and the D11 cheap path are three
 commits).
 

@@ -133,7 +133,7 @@ void Composition_pass::render(const Render_context& context)
             ),
             .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
             // The active item of the selection pulses in its own color
-            // (doc/active-item-plan.md D5), on the same phase.
+            // (doc/active_item.md D5), on the same phase.
             .constant_color_active = glm::mix(
                 outline.active_highlight_low,
                 outline.active_highlight_high,
@@ -163,7 +163,7 @@ void Composition_pass::render(const Render_context& context)
 
     // Slot spaces, not lists: each branch below binds the set its own path
     // resolves records through, and the two are independent
-    // (doc/draw_list_material_set_plan.md D0). Both are already updated for
+    // (doc/draw_list_material_set.md D0). Both are already updated for
     // this frame by App_scenes::update_material_sets().
 
     using namespace erhe::primitive;
@@ -206,7 +206,7 @@ void Composition_pass::render(const Render_context& context)
                     .light_projections = nullptr,
                     .skins             = {},
                     // No materials of its own: null selects the shared empty
-                    // set (doc/draw_list_material_set_plan.md D8).
+                    // set (doc/draw_list_material_set.md D8).
                     .material_source   = nullptr,
                     .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
                     .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
@@ -288,7 +288,7 @@ void Composition_pass::render(const Render_context& context)
             const std::shared_ptr<erhe::scene::Node> debug_target_joint =
                 context.app_context.app_rendering->debug_target_joint.lock();
 
-            // Draw-list path (doc/draw_list_renderer_requirements.md, plan
+            // Draw-list path (doc/draw_list_renderer.md, plan
             // phase 3/5): route to the scene's persistent draw lists when the
             // gate is on and this pass is fully expressible with them -
             // polygon fill, no shader debug, no shader / blend overrides, no

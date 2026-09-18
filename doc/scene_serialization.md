@@ -3,7 +3,7 @@
 Reference for how the editor persists scenes: the file format, the save and
 open pipelines, every part that participates, and what is (and is not)
 persisted. Design history and rationale live in
-[`gltf-scene-roundtrip-plan.md`](gltf-scene-roundtrip-plan.md); the wire
+[`gltf-scene-roundtrip-plan.md`](gltf_scene_roundtrip.md); the wire
 format of each vendor extension is specified in
 [`gltf_extensions/`](gltf_extensions/README.md).
 
@@ -58,7 +58,7 @@ A scene's content-library resources - materials, textures, brushes, styles,
 physics materials, collision filters, joint settings, animations, skins and
 node graphs - are prims of the same tree, under the kind `Scope`s the library
 keeps below the scene root or under any other prim
-(`doc/usd-compatibility-plan.md` C5, U4). Those scopes and the resource prims
+(`doc/usd_compatibility_design.md` C5, U4). Those scopes and the resource prims
 carry no `Item_flags::content`, and the node writer emits a transform-less
 prim only when it carries that flag, so they are never written as nodes: a
 resource rides its own flat glTF list (materials, images, animations, skins)
@@ -116,7 +116,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    attachments and maps those nodes to glTF 2.1 `externalAssets` references
    (URIs relativized against the save directory); the instanced subtree is
    NOT flattened into the file. See
-   [`gltf-prefabs-plan.md`](gltf-prefabs-plan.md).
+   [`gltf-prefabs-plan.md`](plans/gltf_prefabs.md).
 4. **Image sources** - `make_gltf_image_source_provider()` snapshots the
    content library's retained encoded source images (PNG/JPEG bytes kept
    from import time) so textures re-embed byte-identical; a fallback re-reads
@@ -138,7 +138,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      `variant_selections`, which variant each variant set of the scene has
      selected (`{prim_path, set_name, enclosing_set_name,
      enclosing_variant_name, variant_name}` per switched set,
-     doc/usd-compatibility-plan.md X4); a set without an entry keeps the
+     doc/usd_compatibility_design.md X4); a set without an entry keeps the
      selection the file it came from authored. The two enclosing fields (v2
      of the codegen struct) name the variant block a set is declared inside,
      both empty for a set the prim declares itself - which is what a file
@@ -332,7 +332,7 @@ instead: `Scene_root::get_source_format()` reports `usd`, and Save Scene
 writes a `.usda` layer back through `erhe::usd` (`save_scene_usd`,
 `src/erhe/usd/notes.md`). A scene never converts between the two formats -
 neither direction is offered anywhere
-([`usd-compatibility-plan.md`](usd-compatibility-plan.md) G3).
+([`usd-compatibility-plan.md`](usd_compatibility_design.md) G3).
 
 Opening a USD file as a scene (`open_scene_usd`) builds a fresh `Scene_root`
 with its own empty content library, puts the file's top-level prims directly
@@ -357,7 +357,7 @@ as string entries of the root layer's `customLayerData`:
 
 | key | value |
 |---|---|
-| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md) section 4) |
+| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md) section 4) |
 | `erhe:version` | the writer's revision, `"1"` |
 
 An opened file that has no `erhe:scene` entry keeps the editor defaults, so a
@@ -379,10 +379,10 @@ arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 
 Every content-library kind is a prim of the layer where it sits: a style is
-a `class` prim ([`usd-compatibility-plan.md`](usd-compatibility-plan.md)
+a `class` prim ([`usd-compatibility-plan.md`](usd_compatibility_design.md)
 X3), a brush a `Brush` prim holding its geometry as a child `Mesh`, a node
 graph of either kind a marked `NodeGraph` prim holding one `Shader` per node
-([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)), and a folder
+([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md)), and a folder
 the `Scope` it is (E4). The physics of the scene is the `UsdPhysics` prims
 and API schemas of the mapping ([`usd_compatibility.md`](usd_compatibility.md),
 "Physics"): a body is its prim's `PhysicsRigidBodyAPI`, a physics material,

@@ -161,7 +161,7 @@ jobs:
           path: test-results/${{ matrix.build_dir }}.xml
           if-no-files-found: ignore
 
-  # Grep-level rule (proposal D of doc/gl-worker-context-enforcement.md):
+  # Grep-level rule (proposal D of doc/gl_worker_context_enforcement.md):
   # task scheduling in src/editor and src/erhe must go through the erhe::task
   # spawn wrappers, which assert that the calling thread holds no worker GL
   # context. Without this the spawn-site guard decays from construction into

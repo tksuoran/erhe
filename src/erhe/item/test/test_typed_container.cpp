@@ -1,4 +1,4 @@
-// A prim with no parent of its own (doc/usd-compatibility-plan.md U4: a
+// A prim with no parent of its own (doc/usd_compatibility_design.md U4: a
 // content-library resource that has the Typed base but no place in the tree
 // yet) inherits from, and shares the namespace of, the container that holds
 // it - the rule Item_base states and Hierarchy keeps when it has no parent.

@@ -3,7 +3,7 @@
 **Superseded in part.** This plan made the *blocking* load faster by deferring
 work to background tasks. Loading is now also *asynchronous* - the read, scan,
 parse and `Buffer_mesh` build no longer run on the main thread at all - see
-[`async-asset-loading.md`](async-asset-loading.md). The deferral options this
+[`async-asset-loading.md`](async_asset_loading.md). The deferral options this
 plan added (`deferred_raytrace`, `deferred_edge_lines`, `parallel_gltf_parse`)
 are unchanged and still apply; `finalize_imported_meshes` still runs on the
 main thread, but only its scene-side half, because the buffer-mesh build moved
@@ -313,7 +313,7 @@ is shape-level, and a sharer's draw list records / raytrace instances would
 otherwise keep referencing the proxy buffer mesh (freed and reused) / proxy
 raytrace until its own task committed - visible as displaced / garbage
 instanced objects during a large load with `use_draw_lists` on. See
-doc/mesh-memory-deferred-free-plan.md.
+doc/mesh_memory_deferred_free.md.
 
 A commit that swaps NOTHING refreshes its own mesh alone. A shape is
 committed once however many meshes share it (the swaps run first and

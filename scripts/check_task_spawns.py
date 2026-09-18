@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proposal D of doc/gl-worker-context-enforcement.md: task SCHEDULING must
+"""Proposal D of doc/gl_worker_context_enforcement.md: task SCHEDULING must
 go through the erhe::task spawn wrappers, which assert that the calling
 thread holds no worker GL context. This is a grep-level rule; without it the
 spawn-site guard (proposal A) decays from construction into documentation.
@@ -70,7 +70,7 @@ def main() -> int:
                         violations.append(f"{relative}:{line_number}: {line.strip()}")
     if violations:
         print("Task scheduling outside the erhe::task spawn wrappers (proposal A of")
-        print("doc/gl-worker-context-enforcement.md). Use erhe::task::spawn /")
+        print("doc/gl_worker_context_enforcement.md). Use erhe::task::spawn /")
         print("spawn_dependent / run / emplace instead:")
         for violation in violations:
             print(f"  {violation}")

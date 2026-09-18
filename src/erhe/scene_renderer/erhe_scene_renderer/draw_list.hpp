@@ -14,7 +14,7 @@ namespace erhe::graphics {
 
 namespace erhe::scene_renderer {
 
-// Shadow caster sub-variant (doc/draw_list_renderer_requirements.md R4a):
+// Shadow caster sub-variant (doc/draw_list_renderer.md R4a):
 // which forced VARIANT bits the shadow pass draws with. Selected by the
 // caller per shadow pass, exactly as Shadow_renderer chooses today.
 enum class Shadow_sub_variant : uint8_t
@@ -52,7 +52,7 @@ public:
 
 // A group of entries that share one Draw_list_key and can therefore be
 // drawn with one pipeline, one buffer bind and one multi-draw
-// (doc/draw_list_renderer_requirements.md R13/R14). Owned by
+// (doc/draw_list_renderer.md R13/R14). Owned by
 // Draw_list_scene; entries are appended on registration and swap-removed on
 // unregistration (Draw_list_scene patches the moved entry's owner record).
 //

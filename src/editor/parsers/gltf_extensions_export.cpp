@@ -224,7 +224,7 @@ void add_material_asset_references(
     // The candidates are every material the written file can name: the
     // resources this scene lists, plus the materials its meshes bind. A
     // material another container defines need not be listed - the mesh
-    // binding is what puts it in the file (doc/usd-compatibility-plan.md U4).
+    // binding is what puts it in the file (doc/usd_compatibility_design.md U4).
     std::vector<std::shared_ptr<erhe::primitive::Material>> candidates =
         content_library->get_all<erhe::primitive::Material>();
     const auto consider_material = [&candidates](const std::shared_ptr<erhe::primitive::Material>& material) {
@@ -400,7 +400,7 @@ void add_gltf_editor_state(
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
 
-    // KHR_materials_variants (doc/usd-compatibility-plan.md X4): the scene's
+    // KHR_materials_variants (doc/usd_compatibility_design.md X4): the scene's
     // variant set goes back into the file it came from, and its selection
     // into the ERHE_scene settings below.
     const Variant_set* const exported_variant_set = find_exported_variant_set(scene_root, export_path);
@@ -557,7 +557,7 @@ void add_gltf_editor_state(
                 log_parsers->error("add_gltf_editor_state: Scene_settings serialization did not parse - settings not exported");
             }
         }
-        // styles (doc/style-library.md D4): every style item with its local
+        // styles (doc/style_library.md D4): every style item with its local
         // values and the style it uses itself, before the folders that may
         // name them.
         if (content_library) {
@@ -610,7 +610,7 @@ void add_gltf_editor_state(
                 scene_json["collision_filter_names"] = std::move(names);
             }
         }
-        // library_folders (doc/content-library-folders.md D5): the tree
+        // library_folders (doc/content_library_folders.md D5): the tree
         // position of every resource that does not sit directly under its
         // kind scope, plus every folder scope (empty ones included). `path`
         // is the prim's path from the scene root (Hierarchy::get_path()), so

@@ -42,7 +42,7 @@ public:
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Overrides Item_base: a flip of the derived Item_flags::active bit
-    // (doc/usd-compatibility-plan.md X2) takes the rigid body out of the
+    // (doc/usd_compatibility_design.md X2) takes the rigid body out of the
     // physics world and puts it back. Change-driven: the bit is written
     // once per change by Item_base::rederive_active_flag_bits().
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
@@ -52,7 +52,7 @@ public:
     // change - local, style, inherited.
     void on_property_changed(const erhe::property::Property_changed_args& args) override;
 
-    // Registered properties (erhe::property, doc/property-system.md
+    // Registered properties (erhe::property, doc/property_system.md
     // section 4.10), entry-stored and inheriting: a node above or a style
     // holds Node_physics.* for the bodies below it. The create info and
     // the intended motion mode are MIRRORS of the effective values, kept

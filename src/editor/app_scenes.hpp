@@ -72,7 +72,7 @@ public:
     // Change-driven for the same reason and in the same shape.
     void rebuild_draw_mode_proxies           ();
     // Step 2 of the per-frame material schedule
-    // (doc/draw_list_material_set_plan.md D6), for every registered root:
+    // (doc/draw_list_material_set.md D6), for every registered root:
     // reconcile each set against the root's content library, apply the
     // forward set's enqueued object references, then update both sets. Runs
     // AFTER flush_draw_lists(), which is where draw-list records are written

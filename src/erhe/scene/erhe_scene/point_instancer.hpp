@@ -7,7 +7,7 @@
 
 namespace erhe::scene {
 
-// A `PointInstancer` prim (doc/usd-compatibility-plan.md S1, USD
+// A `PointInstancer` prim (doc/usd_compatibility_design.md S1, USD
 // `UsdGeomPointInstancer`): a boundable prim whose children are the
 // prototypes it instances and one prim per instance.
 //

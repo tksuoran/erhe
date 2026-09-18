@@ -101,7 +101,7 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
         // out of range.
         return hit.normal;
     }
-    // Non-blocking, see doc/primitive-shape-lock-split-plan.md.
+    // Non-blocking, see doc/primitive_shape_locking.md.
     const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (!geometry) {
         return hit.normal;

@@ -1,4 +1,4 @@
-// Default elision (doc/property-system.md D32): a local value is an
+// Default elision (doc/property_system.md D32): a local value is an
 // authored value, so an importer's field-by-field fill is followed by
 // clear_default_valued_local_properties, which takes back every local
 // value that merely repeats the object's own default layer (D31).

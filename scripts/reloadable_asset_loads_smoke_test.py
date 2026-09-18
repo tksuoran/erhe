@@ -4,7 +4,7 @@
 Drives the in-editor MCP server against a RUNNING editor (start one first;
 this script does not launch it).
 
-Covers doc/reloadable-asset-loads.md: a recorded glTF import owns everything
+Covers doc/reloadable_asset_loads.md: a recorded glTF import owns everything
 it created, so undoing a large import used to free nothing until the entry
 itself was destroyed. Now the import drops its payload on undo - when that is
 lossless - and re-reads the file on redo.

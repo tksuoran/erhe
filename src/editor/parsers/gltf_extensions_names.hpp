@@ -1,7 +1,7 @@
 #pragma once
 
 // Stable serialized names for enums carried by the editor-domain ERHE_*
-// glTF extensions (doc/gltf-scene-roundtrip-plan.md phase 3). Names, never
+// glTF extensions (doc/gltf_scene_roundtrip.md phase 3). Names, never
 // raw enum values: numeric values are not stable across erhe versions.
 // Shared by parsers/gltf_extensions_export.cpp and
 // parsers/gltf_extensions_import.cpp; the *_from_name() parsers fall back

@@ -17,7 +17,7 @@ namespace editor {
 namespace {
 
 // Announces the subtree that is leaving the scene, so editor parts drop their
-// cached references to it (doc/import-undo-reference-clearing.md). Scene nodes
+// cached references to it (doc/import_undo_reference_clearing.md). Scene nodes
 // have no editor-level detach hook, so the removing operation reports them.
 //
 // Must be called with the subtree in its final shape - immediately around the
@@ -205,7 +205,7 @@ void collect_subtree_references(const std::shared_ptr<erhe::Hierarchy>& hierarch
         return;
     }
     // The retained prims themselves: a content-library resource is a prim
-    // (doc/usd-compatibility-plan.md U4), so a removed material kept for undo
+    // (doc/usd_compatibility_design.md U4), so a removed material kept for undo
     // must make its container's unload refuse the same way a mesh's material
     // does.
     out_items.insert(hierarchy.get());

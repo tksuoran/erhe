@@ -54,7 +54,7 @@ constexpr float c_default_density          = 1.0f;
 // material density. A backend may snapshot the values per body at
 // set_physics_material(); the holder of the reference (the editor's
 // Node_physics) observes the material's properties and pushes it to the
-// body again on a change (doc/property-system.md section 4.12).
+// body again on a change (doc/property_system.md section 4.12).
 class Physics_material : public erhe::Item<erhe::Item_base, erhe::Typed, Physics_material>
 {
 public:
@@ -73,7 +73,7 @@ public:
     // typeName (doc/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Physics_material"; }
 
-    // Registered properties (erhe::property, doc/property-system.md
+    // Registered properties (erhe::property, doc/property_system.md
     // section 4.12): entry-stored, the spec defaults as property defaults.
     static const erhe::property::Property<float>        static_friction_property;
     static const erhe::property::Property<float>        dynamic_friction_property;

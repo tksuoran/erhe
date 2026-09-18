@@ -1,6 +1,6 @@
 // Multithreaded worker-context tests: buffers prepared on worker threads
 // under Scoped_worker_context and consumed on the main thread. See
-// doc/gl-worker-thread-contexts.md and doc/gl-worker-context-tests-plan.md.
+// doc/gl_worker_thread_contexts.md and doc/graphics_test_coverage.md.
 //
 // Backend-neutral by design: on Vulkan / Metal the scope is a no-op and
 // these tests validate plain multithreaded buffer creation; on OpenGL they

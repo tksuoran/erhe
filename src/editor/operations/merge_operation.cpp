@@ -29,7 +29,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     // selection only (one host, so the reference frame is composed within one
     // world space and no node is detached from another scene into this one),
     // in target-first order - the first mesh-carrying node is the survivor,
-    // which is the active mesh when there is one (doc/active-item-plan.md D6).
+    // which is the active mesh when there is one (doc/active_item.md D6).
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_parameters.items;
     if (selected_items.size() < 2) {
         return;

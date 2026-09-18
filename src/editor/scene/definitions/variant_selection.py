@@ -1,14 +1,14 @@
 from erhe_codegen import *
 
 # One variant selection of a scene (Scene_settings::variant_selections,
-# doc/usd-compatibility-plan.md X4). `prim_path` is the M1 path of the prim
+# doc/usd_compatibility_design.md X4). `prim_path` is the M1 path of the prim
 # carrying the variant set, `set_name` the set's name and `variant_name` the
 # variant chosen for it. A set without an entry keeps the selection the file
 # it came from authored; an entry is written by Scene_root::select_variant
 # and is what a saved scene carries the selection in.
 #
 # A variant block is free to declare a variant set of its own, which is a set
-# of the same prim (doc/usd-compatibility-plan.md section 6, "Variant opinions
+# of the same prim (doc/usd_compatibility_design.md section 6, "Variant opinions
 # a variant set does not carry"), so the set name alone does not name a set:
 # two blocks of one set may each declare a nested set of the same name.
 # `enclosing_set_name` / `enclosing_variant_name` are the block the set is

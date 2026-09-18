@@ -1,5 +1,5 @@
 // The scene-owned content-library kinds are typed prims
-// (doc/usd-compatibility-plan.md U4): each reports the token its class fixes
+// (doc/usd_compatibility_design.md U4): each reports the token its class fixes
 // and each composes a path once it is parented, though nothing places them
 // in a tree yet.
 

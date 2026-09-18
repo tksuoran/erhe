@@ -65,7 +65,7 @@ public:
 };
 
 // The overrides one item inside a prefab instance holds
-// (doc/usd-compatibility-plan.md X2). `relative_path` is the M1 path of the
+// (doc/usd_compatibility_design.md X2). `relative_path` is the M1 path of the
 // item below the arc's target clone, so an empty path is the target clone
 // itself; the values are the item's own overrides and `transform` is its
 // local transform, carried only when it differs from the counterpart's.
@@ -85,7 +85,7 @@ public:
     // one.
     std::string                          material_path;
     // The authored xformOp stack of the transform, when the item carries one
-    // (doc/usd-compatibility-plan.md M8). An item without one is described by
+    // (doc/usd_compatibility_design.md M8). An item without one is described by
     // `transform` alone.
     std::optional<Xform_op_stack>        xform_op_stack;
 };
@@ -103,8 +103,8 @@ public:
     std::vector<Instance_override_material> materials;
 };
 
-// What an override of an instance item is (doc/usd-compatibility-plan.md X2,
-// doc/property-system.md D33), stated once:
+// What an override of an instance item is (doc/usd_compatibility_design.md X2,
+// doc/property_system.md D33), stated once:
 //
 // - a local value of a serializable, non-bridged, non-computed property
 //   without an expression: it shadows what the reference layer supplies;
@@ -133,7 +133,7 @@ public:
 // names the source of the values in a warning - the instance, the class prim -
 // and a value naming no property, or one that does not parse, costs one
 // warning each. This is what both a sparse instance override and an imported
-// USD `class` prim's opinions (doc/usd-compatibility-plan.md X3) are made of.
+// USD `class` prim's opinions (doc/usd_compatibility_design.md X3) are made of.
 void apply_property_values(
     erhe::Item_base&                            item,
     const std::vector<Instance_override_value>& values,
@@ -207,7 +207,7 @@ void register_applied_schema_attachment(
 void apply_instance_overrides(erhe::Hierarchy& carrier, const std::vector<Instance_override>& overrides);
 
 // The item `relative_path` names below a carrier - a prim a composition arc
-// was applied to (doc/usd-compatibility-plan.md C6). erhe keeps the arc's
+// was applied to (doc/usd_compatibility_design.md C6). erhe keeps the arc's
 // target clone as one level of its own while USD composes the target's
 // content directly under the referencing prim, so the path is resolved one
 // segment at a time and the clone of every carrier the path crosses is

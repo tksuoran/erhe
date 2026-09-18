@@ -22,7 +22,7 @@
 namespace erhe::usd {
 
 // How an OpenPBR network travels in a USD file
-// (doc/usd-compatibility-plan.md E2). A `Material` prim offers it beside its
+// (doc/usd_compatibility_design.md E2). A `Material` prim offers it beside its
 // `UsdPreviewSurface` through `outputs:mtlx:surface`, and it is a `Shader`
 // child whose `info:id` is one of the surface-node spellings Tydra converts
 // into `RenderMaterial::openPBRShader`. The reader and the writer both spell
@@ -32,7 +32,7 @@ constexpr std::string_view c_open_pbr_info_id           {"ND_open_pbr_surface_su
 constexpr std::string_view c_open_pbr_standard_info_id  {"ND_standard_surface_surfaceshader"};
 constexpr std::string_view c_open_pbr_schema_info_id    {"OpenPBRSurface"};
 
-// How a brush travels in a USD file (doc/usd-compatibility-plan.md E4a). USD
+// How a brush travels in a USD file (doc/usd_compatibility_design.md E4a). USD
 // has no schema for a brush, so the prim's `typeName` is the erhe class token
 // - the same token the writer gives every `Typed` prim - its geometry is a
 // child `Mesh` prim of a fixed name, and the two fields no erhe property
@@ -46,7 +46,7 @@ constexpr std::string_view c_brush_normal_style_attribute   {"erhe:Brush:normal_
 constexpr std::string_view c_brush_density_value_name       {"Brush.density"};
 constexpr std::string_view c_brush_normal_style_value_name  {"Brush.normal_style"};
 
-// How a node graph travels in a USD file (doc/usd-texture-graphs-plan.md 2.1
+// How a node graph travels in a USD file (doc/plans/usd_texture_graphs.md 2.1
 // and section 4). The graph is a `NodeGraph` prim carrying the marker
 // attribute that says it is erhe's - a `NodeGraph` without it is a foreign
 // shading network (R5) - each node is a `Shader` child whose `info:id` is the
@@ -64,7 +64,7 @@ constexpr std::string_view c_node_graph_output_prefix      {"outputs:"};
 constexpr std::string_view c_node_graph_shader_prim_type_name{"Shader"};
 constexpr std::string_view c_node_graph_info_id_attribute  {"info:id"};
 
-// The USD schema token of a point instancer (doc/usd-compatibility-plan.md
+// The USD schema token of a point instancer (doc/usd_compatibility_design.md
 // S1). The reader dispatches on it and the writer spells it, so both name it
 // from here; the erhe class is erhe::scene::Point_instancer.
 // How a draw mode travels in a USD file (doc/usd_compatibility.md, "Draw
@@ -102,7 +102,7 @@ constexpr std::string_view c_draw_mode_owner_name{"Draw_mode"};
 
 constexpr std::string_view c_point_instancer_prim_type_name {"PointInstancer"};
 
-// The USD schema token of a skeleton (doc/usd-compatibility-plan.md K1). A
+// The USD schema token of a skeleton (doc/usd_compatibility_design.md K1). A
 // `Skeleton` prim is a transformable prim of the erhe tree carrying this
 // token, holding one `Xform` prim per joint; the reader dispatches on the
 // token and the writer spells it, so both name it from here.
@@ -149,7 +149,7 @@ constexpr std::string_view c_node_joint_settings_relationship       {"erhe:Node_
 
 // One prim a variant block authors as a `def` child and the loader hoisted
 // out of it, into the tree below the prim carrying the set
-// (doc/usd-compatibility-plan.md X4). USD builds such a prim when its variant
+// (doc/usd_compatibility_design.md X4). USD builds such a prim when its variant
 // is selected and takes it
 // away again on a switch; erhe keeps every variant's prims in the tree and
 // flips `active`, so a switch is a property write like every other one.

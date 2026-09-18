@@ -59,7 +59,7 @@ namespace {
 // prim itself for the empty path, the item the path names below it where the
 // tree holds one, and otherwise the item the path names through the clone of
 // every composition arc it crosses. erhe composes no arc - the editor
-// instantiates each one after a load returns (doc/usd-compatibility-plan.md
+// instantiates each one after a load returns (doc/usd_compatibility_design.md
 // C6) - so a variant that authors an opinion or a binding for a prim an arc
 // supplies names it through the arc's target clone, and a switch of the set
 // reaches the same prim the load did (erhe::scene::find_instance_item, which

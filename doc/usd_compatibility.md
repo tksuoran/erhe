@@ -7,7 +7,7 @@ independent scene format. This document is the erhe <-> OpenUSD
 corresponds to, so that a USD importer / exporter / composition step is a
 table lookup, not a redesign. The steps that make erhe more USD-compatible,
 and the order to take them in, are the subject of
-`doc/usd-compatibility-plan.md`; this document holds the mapping only.
+`doc/usd_compatibility_design.md`; this document holds the mapping only.
 
 erhe's glTF extensions keep erhe / glTF-context naming, not USD vocabulary
 (a `faceVarying` primvar term would be confusing inside a Khronos file);
@@ -15,7 +15,7 @@ the translation between the two vocabularies lives here.
 
 References: OpenUSD `pxr/usd/<domain>/schema.usda` in an OpenUSD checkout
 (`<OpenUSD>`) is the normative attribute list per schema; LightUSD
-(`<LightUSD>`, its `doc/api-status.md`) is the in-editor USD library, built
+(`<LightUSD>`, its own `api-status.md` under its doc directory) is the in-editor USD library, built
 when `ERHE_USD_LIBRARY=lightusd` and reached through `erhe::usd`
 (`src/erhe/usd/notes.md`). Per-machine clone locations are recorded in
 `memory-bank/local/`.
@@ -53,17 +53,17 @@ file's own values for the caller's log and UI.
 ## Object model
 
 USD has one typed prim per object; erhe is moving to the same shape
-(`doc/usd-compatibility-plan.md` C5) and still carries some object kinds as
+(`doc/usd_compatibility_design.md` C5) and still carries some object kinds as
 node attachments. The mapping an exporter applies and an importer inverts:
 
 | erhe | USD | notes |
 |---|---|---|
 | `Xform` (transform + children) | `Xform` (`UsdGeomXformable`) | an `Xformable` holds the xformOp stack it was authored with (`erhe::scene::Xform_op_stack`) next to the single T\*R\*S the stack composes to, so an imported stack - op types, suffixes, `!invert!` flags, authored value precisions and `!resetXformStack!` - is written back as authored; an edit lands in the op the stack designates (`src/erhe/scene/notes.md`, authored xformOp stacks). A prim erhe created carries no stack and writes one `xformOp:transform`. glTF carries the composed T\*R\*S alone |
-| `Scope` (children only, no transform) | `Scope` | a transform composes through it to the nearest transformable ancestor. A content-library folder is one, and so is each kind's scope (`/Materials`, `/Brushes`, ...); every `Scope` a USD file authors round-trips as itself, the scope holding a stage's `Material` prims included. Every `Scope` of the tree is written where it sits, whatever it holds, so an empty folder and an empty kind scope are prims of the saved layer and the folder tree survives the save (`doc/usd-compatibility-plan.md` E4d). A kind scope is recognized on reload by its name, in the identifier spelling the stage carries |
+| `Scope` (children only, no transform) | `Scope` | a transform composes through it to the nearest transformable ancestor. A content-library folder is one, and so is each kind's scope (`/Materials`, `/Brushes`, ...); every `Scope` a USD file authors round-trips as itself, the scope holding a stage's `Material` prims included. Every `Scope` of the tree is written where it sits, whatever it holds, so an empty folder and an empty kind scope are prims of the saved layer and the folder tree survives the save (`doc/usd_compatibility_design.md` E4d). A kind scope is recognized on reload by its name, in the identifier spelling the stage carries |
 | `Typed` (`typeName` token, children) | every other `typeName`, and a typeless `def` | the class a prim gets when erhe has none for its `typeName` (`Points`, `SkelRoot`): its name, its place in the tree and its children round-trip, its schema attributes do not. A transform authored on such a prim is dropped with one warning |
 | `Mesh` prim (`erhe::scene::Mesh`, an `Xformable`) | `Mesh` prim, and the primitive schemas `Cube`, `Sphere`, `Cone`, `Cylinder`, `Capsule`, `Cylinder_1`, `Capsule_1` | one to one: the erhe mesh carries its own transform, name and children, and a parent holds any number of `Mesh` children. A primitive schema imports as the mesh its schema attributes describe, tessellated by the erhe generator of that shape and with the `axis` baked into the geometry (`src/erhe/usd/notes.md`, "Import"); the item is a `Mesh`, so a save writes `def Mesh` with points and the `Cube` spelling is not kept |
 | `Point_instancer` prim (`erhe::scene::Point_instancer`, a `Boundable`) | `PointInstancer` prim (`UsdGeomPointInstancer`) | the instancer is expanded into prims: each prototype stays where the file put it and is held abstract (no `Item_flags::content`), and each instance is a child `Xform` holding an internal reference to its prototype. The instance prims ARE `positions` / `orientations` / `scales` / `protoIndices`, all four recomputed on save - the first three from their transforms, the fourth from the prototype each one references - and `rel prototypes` is the abstract children in tree order (`src/erhe/usd/notes.md`, "Point instancers"). erhe draws one prim per instance - there is no GPU instancing |
-| `erhe::primitive::Material` (a `Typed` prim) | `Material` prim (`UsdShadeMaterial`) with its `UsdPreviewSurface` / `UsdUVTexture` shader network as child prims | a material is a prim of the erhe tree wherever the user puts it, and both formats carry that: the writer writes the `Material` prim where the material sits and the reader parents it where the stage puts it, so a stage keeping its materials in `/Looks` reads and writes back as a `Scope` named `Looks` holding them. A `material:binding` is resolved by the prim's path, so two materials of one name in two scopes stay apart. The reader creates a `Materials` kind scope only for a material the file gave no place; the shader network below a `Material` prim is namespace, so a prim parented to an erhe material is not written. The other resource kinds are `doc/usd-compatibility-plan.md` step E4 |
+| `erhe::primitive::Material` (a `Typed` prim) | `Material` prim (`UsdShadeMaterial`) with its `UsdPreviewSurface` / `UsdUVTexture` shader network as child prims | a material is a prim of the erhe tree wherever the user puts it, and both formats carry that: the writer writes the `Material` prim where the material sits and the reader parents it where the stage puts it, so a stage keeping its materials in `/Looks` reads and writes back as a `Scope` named `Looks` holding them. A `material:binding` is resolved by the prim's path, so two materials of one name in two scopes stay apart. The reader creates a `Materials` kind scope only for a material the file gave no place; the shader network below a `Material` prim is namespace, so a prim parented to an erhe material is not written. The other resource kinds are `doc/usd_compatibility_design.md` step E4 |
 | `Xform` with several applied-API-schema attachments (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`) | `Xform` with those schemas applied to it | what USD applies to a prim as an API schema is what erhe attaches to a node |
 | `Mesh` prim + `Mesh_primitive` list | `Mesh` prim + `GeomSubset` per primitive (`familyName = materialBind`) | one material per subset via `MaterialBindingAPI` |
 | `Light` prim (`erhe::scene::Light`, an `Xformable`) | `UsdLux` prim, see "Lights" | one to one: the erhe light carries its own transform, name and children; `light_type` picks the UsdLux schema |
@@ -81,7 +81,7 @@ node attachments. The mapping an exporter applies and an importer inverts:
 
 ## Property system
 
-erhe's property system (`doc/property-system.md`) is the part of erhe
+erhe's property system (`doc/property_system.md`) is the part of erhe
 that is closest to USD's value-resolution model; the mapping is the basis
 for import (USD opinions -> erhe layers) and export (erhe layers -> USD
 opinions).
@@ -93,7 +93,7 @@ opinions).
 | default (`Value_source::default`) | schema fallback | never written, where the two fallbacks agree. Where they differ the importer writes the USD fallback as a local value so that the composed result is USD's: `diffuseColor` falls back to 0.18 against erhe's white `base_color`, which is the only surface input erhe carries that differs (see "Materials"). `visible` / `purpose` keep the value the item derives |
 | `inherits` flag + closest-ancestor read (R8, D8) | primvar namespace inheritance; `visibility` and `purpose` inheritance | USD inherits only primvars and a few tokens; erhe inherits any flagged property |
 | reference layer (D33): the value an instance item's template counterpart supplies itself | the referenced prim's own opinions under a `references` / `payload` arc, weaker than the referencing layer's | a local value on the instance item is the `over` opinion; the counterpart's inherited values are not carried, the instance's own tree inherits (composition table below) |
-| style layer (D25) and `Style` items (`doc/style-library.md`) | `class` prim + `inherits` arc | a class prim is a `Style` item at the place the class prim has, its opinions the style's local values; the item's local values are stronger, as in LIVRPS. Every value of a class prim travels as an `erhe:Owner:name` custom attribute, a class prim having no schema, while `visibility`, `purpose` and `active` keep their native forms. USD composes every `inherits` target, an erhe style has one source (M7): the first target that names a class prim becomes the item's style, and a second target, a target that is not a class and a target that names no prim are each one warning. A `def` descendant of a class prim is a prototype: a prim of the tree held abstract, imported under the `Style` item with `Item_flags::content` clear, and written back as the `def` it is; a reference that names it clones it as content |
+| style layer (D25) and `Style` items (`doc/style_library.md`) | `class` prim + `inherits` arc | a class prim is a `Style` item at the place the class prim has, its opinions the style's local values; the item's local values are stronger, as in LIVRPS. Every value of a class prim travels as an `erhe:Owner:name` custom attribute, a class prim having no schema, while `visibility`, `purpose` and `active` keep their native forms. USD composes every `inherits` target, an erhe style has one source (M7): the first target that names a class prim becomes the item's style, and a second target, a target that is not a class and a target that names no prim are each one warning. A `def` descendant of a class prim is a prototype: a prim of the tree held abstract, imported under the `Style` item with `Item_flags::content` clear, and written back as the `def` it is; a reference that names it clones it as content |
 | folder-held category values (D30, `Material.roughness` on a Materials folder) | opinions on an ancestor `Scope`, read through primvar-style inheritance | no standard USD mechanism inherits material inputs; carry as custom attributes on the scope |
 | node-held attachment values (D30, `Light.color` on an empty node) | same as folder-held values | |
 | attached property (R7, `Layout.align_y` on a child node) | applied API schema attribute (`layout:alignY`) | |
@@ -192,9 +192,9 @@ inputs the network carries beyond the rows above:
 
 ## Texture node graphs
 
-An erhe texture graph (`editor::Graph_texture`, `doc/texture-graph-plan.md`)
+An erhe texture graph (`editor::Graph_texture`, `doc/texture_graph.md`)
 rides a USD file as the `UsdShade` network it is
-([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)); the design
+([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md)); the design
 document owns the rules, this table owns the mapping rows.
 
 | erhe | USD | notes |
@@ -211,7 +211,7 @@ document owns the rules, this table owns the mapping rows.
 
 An erhe geometry graph (`editor::Graph_mesh`) rides a USD file as the prim
 form a texture graph takes
-([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md) section 4); the
+([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md) section 4); the
 design document owns the rules, this table owns the mapping rows. Every row
 of "Texture node graphs" holds unchanged except the four below.
 
@@ -330,8 +330,8 @@ mechanism composes as, and what has no erhe counterpart yet.
 | erhe | USD composition | notes |
 |---|---|---|
 | a scene file | a root layer | one scene = one layer stack of one layer |
-| prefab instance (`doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | any layer + prim path target, internal references, one carrier attachment per arc, read and written; a glTF instance seals its subtree, a USD-backed one does not. The carrier is transformable: a typeless or `Scope` prim that authors an arc is read as an `Xform` (USD gives a typeless referencing prim the composed target's type) and written back as `def Xform`; a carrier of a type that carries no transform keeps its type and its arcs are dropped with one warning. The arc's TARGET is any prim: an `Xformable`, a `Scope`, the `Typed` prim a typeless `def` or an unrecognized `typeName` becomes, a root-level `over` with `def` descendants, or a prototype under a `class` prim. A target that carries no transform composes what reaches it through to its children. A `.mtlx` target is a MaterialX document rather than a USD layer: the arc is not instantiated and the reason is named once |
-| values a template supplies to an instance | the referenced prims' opinions, weaker than the referencing layer | the reference layer between style and inherited (`doc/property-system.md` D33), read live from the template counterpart |
+| prefab instance (`doc/plans/gltf_prefabs.md`) | `references` arc (`R` in LIVRPS) | any layer + prim path target, internal references, one carrier attachment per arc, read and written; a glTF instance seals its subtree, a USD-backed one does not. The carrier is transformable: a typeless or `Scope` prim that authors an arc is read as an `Xform` (USD gives a typeless referencing prim the composed target's type) and written back as `def Xform`; a carrier of a type that carries no transform keeps its type and its arcs are dropped with one warning. The arc's TARGET is any prim: an `Xformable`, a `Scope`, the `Typed` prim a typeless `def` or an unrecognized `typeName` becomes, a root-level `over` with `def` descendants, or a prototype under a `class` prim. A target that carries no transform composes what reaches it through to its children. A `.mtlx` target is a MaterialX document rather than a USD layer: the arc is not instantiated and the reason is named once |
+| values a template supplies to an instance | the referenced prims' opinions, weaker than the referencing layer | the reference layer between style and inherited (`doc/property_system.md` D33), read live from the template counterpart |
 | a local value inside an instance | an `over` prim with sparse local opinions (`L`) | what an override is is stated once, in `src/erhe/scene/erhe_scene/instance_override.hpp`; an `over` is typeless and so carries every value as an `erhe:Owner:name` custom attribute, a schema-named one (a `Material`'s `roughness`) included - `visibility`, `purpose`, `active` and `primvars:displayColor` excepted, which a typeless prim carries in their native forms; an item's path below the arc's target clone is the `over`'s path below the carrier prim, and the target clone itself is the carrier prim (one level more than USD composes, so a value both author is the carrier's and a transform the target clone overrides is not writable). glTF carries the same list on the carrier node as `ERHE_node.overrides` |
 | a material bound inside an instance | a `material:binding` relationship on an `over`, with `MaterialBindingAPI` applied | read and written as the third kind of override (X2). The relationship names the material by an absolute stage path, which can name a prim another arc of the same file supplies (a body asset takes its geometry from one arc and its materials from another), so every carrier's overrides are applied once every arc of the file is instantiated. A binding on one group of facets is the `over` of the group's GeomSubset prim, which erhe resolves to one primitive of the mesh; glTF carries the path as `ERHE_node.overrides[].material` |
 | `Style` items | `class` prims + `inherits` (`I`) | read and written as the arc form it is; the style chain (M7) is a class prim inheriting a class prim |
@@ -340,7 +340,7 @@ mechanism composes as, and what has no erhe counterpart yet.
 | none | `specializes` (`S`) | |
 | a scene's whole content | a root layer's `subLayers` (`L`) | composed at load, strongest first: the root layer's opinions beat every sublayer, an earlier `subLayers` entry beats a later one, a prim absent from the stronger layers is added whole, and stage metadata the root leaves unauthored comes from the strongest sublayer that authors it. A save writes ONE layer holding the composed content and authors no `subLayers` - erhe edits the flattened stage and has no layer to write an edit back to (`src/erhe/usd/notes.md`, "Sublayers"); a stack the editor could edit layer by layer is future work |
 | none | session layer | an undo stack is not a layer |
-| `Value_source` | opinion provenance | erhe resolves every arc itself, so the erhe value source IS the composition provenance; the table below restates each source as the USD origin the Properties window and MCP report (`doc/usd-compatibility-plan.md` X5) |
+| `Value_source` | opinion provenance | erhe resolves every arc itself, so the erhe value source IS the composition provenance; the table below restates each source as the USD origin the Properties window and MCP report (`doc/usd_compatibility_design.md` X5) |
 
 ### Where a value comes from
 

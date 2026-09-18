@@ -21,7 +21,7 @@ enum class Atlas_parameterizer {
     // triangles by construction; nothing shares texels, so no shared-texel
     // artifact (cone tips, pole fans) can exist. Skips Geogram entirely;
     // the packer choice is ignored (erhe's own density-aware packing).
-    // First pass of doc/lightmap_seam_driven_unwrap_plan.md; gutter-
+    // First pass of doc/plans/lightmap/seam_driven_unwrap.md; gutter-
     // dominated for tiny facets, so atlas area is larger than clustered
     // unwraps.
     per_facet
@@ -46,7 +46,7 @@ enum class Atlas_packer {
 // chart_pack_texel_density (texels per mesh-local unit; 0 = disabled): when
 // positive, Geogram's own chart packing is bypassed (its gutters are sized at
 // an internal resolution the caller cannot know - see
-// doc/geogram_atlas_packing_feature_request.md) and the charts are packed
+// doc/reference/geogram_atlas_packing_feature_request.md) and the charts are packed
 // here instead, with at least chart_gutter_texels of empty space between any
 // two charts at the resolution the caller will rasterize this unwrap at
 // (side = sqrt(surface area) * density, the lightmap baker's region formula).

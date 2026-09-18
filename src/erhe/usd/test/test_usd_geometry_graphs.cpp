@@ -1,5 +1,5 @@
 // Geometry node graphs as marked `NodeGraph` prims
-// (doc/usd-texture-graphs-plan.md section 4). A geometry graph is the prim
+// (doc/plans/usd_texture_graphs.md section 4). A geometry graph is the prim
 // form a texture graph takes, with its nodes' `info:id` under the
 // `erhe:geometry:` prefix its `erhe:graph:format` token names and its
 // evaluated geometry as the child `def Mesh "result"` a brush's geometry is

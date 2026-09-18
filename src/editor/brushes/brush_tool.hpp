@@ -100,7 +100,7 @@ public:
     // Active brush (set from hotbar slot)
     void set_active_brush  (const std::shared_ptr<Brush>& brush);
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_active_brush       () const -> std::shared_ptr<Brush>;
     [[nodiscard]] auto get_drag_and_drop_brush() const -> const std::shared_ptr<Brush>&;
     void clear_active_brush();

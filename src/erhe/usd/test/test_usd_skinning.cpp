@@ -1,4 +1,4 @@
-// UsdSkel skinning (doc/usd-compatibility-plan.md K1): a `Skeleton` prim is a
+// UsdSkel skinning (doc/usd_compatibility_design.md K1): a `Skeleton` prim is a
 // transformable prim holding one `Xform` prim per joint, a `Mesh` with the
 // `SkelBindingAPI` names a Skin whose inverse bind matrices are
 // `inverse(bind_j) * geomBindTransform`, the skin primvars land on the
@@ -350,7 +350,7 @@ TEST_F(Usd_skel_animation, an_unauthored_geom_bind_transform_is_the_identity)
     expect_matrix_near(skin->skin_data.inverse_bind_matrices[1], expected_tip,    "inverse bind matrix 1");
 }
 
-// The export half (doc/usd-compatibility-plan.md K1): the `Skeleton` prim is
+// The export half (doc/usd_compatibility_design.md K1): the `Skeleton` prim is
 // written back from the joint prims and the skin, the skinned mesh carries
 // the `SkelBindingAPI`, and reading either file back gives the same skin.
 

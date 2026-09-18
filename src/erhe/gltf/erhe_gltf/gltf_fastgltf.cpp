@@ -432,7 +432,7 @@ using erhe::geometry::get_mesh_info;
 }
 
 // Sniff the media type of an encoded image stream from its magic bytes
-// (Gltf_image_source retention; doc/gltf-scene-roundtrip-plan.md phase 0).
+// (Gltf_image_source retention; doc/gltf_scene_roundtrip.md phase 0).
 // Returns an empty string when unrecognized.
 [[nodiscard]] auto sniff_image_mime_type(const std::vector<std::byte>& bytes) -> std::string
 {
@@ -489,11 +489,11 @@ using erhe::geometry::get_mesh_info;
 // {"erhe_flags": ["<name>", ...]}. Neither glTF 2.0 core nor the glTF 2.1
 // proposals (KhronosGroup/glTF#2585 and related) define per-node
 // editor/authoring flags such as "exclude from external-asset
-// instantiation" (see doc/gltf_2_1_item_flags_comment.md), so
+// instantiation" (see doc/reference/gltf_2_1_item_flags_comment.md), so
 // erhe-specific bits ride in extras by name; unknown names are ignored on
 // import so the list can grow without breaking older builds.
 // LEGACY READ PATH: new files carry flags in the ERHE_node extension
-// (doc/gltf-scene-roundtrip-plan.md phase 3); the extras form is still
+// (doc/gltf_scene_roundtrip.md phase 3); the extras form is still
 // parsed for files written before the migration.
 class Serialized_item_flag
 {
@@ -566,10 +566,10 @@ public:
 // visible / shadow_cast / lightmapped are read from its flags list.
 //
 // Several halves reach one item - a Mesh prim is both the node and the mesh
-// of an ERHE_node payload (doc/usd-compatibility-plan.md C5) - so the local
+// of an ERHE_node payload (doc/usd_compatibility_design.md C5) - so the local
 // values of every half are restored before the flags of any half are
 // applied: lock_edit is a seal, and a sealed item refuses every value write
-// that is not writable_when_sealed (doc/property-system.md). The flags
+// that is not writable_when_sealed (doc/property_system.md). The flags
 // applied here are the non-derived ones, so no restored value is overwritten.
 void apply_persistent_flags_and_properties(
     erhe::Item_base&                               item,
@@ -636,7 +636,7 @@ void clear_local_properties_not_listed(erhe::Item_base& item, const simdjson::do
 // The ERHE_node "overrides" array of a carrier node
 // (doc/gltf_extensions/ERHE_node.md): the sparse overrides one prefab
 // instance holds, recorded for the caller that attaches the instance
-// content (doc/usd-compatibility-plan.md X2). An entry without a "path" is
+// content (doc/usd_compatibility_design.md X2). An entry without a "path" is
 // not addressable and is dropped.
 void read_instance_overrides(
     const simdjson::dom::object&                 extension_object,
@@ -1190,7 +1190,7 @@ public:
         m_data_out.images.resize(m_asset->images.size());
         m_data_out.image_sources.resize(m_asset->images.size());
         // Parallel to images: the decoded payloads whose textures a later
-        // residency step creates (doc/async-asset-loading-plan.md step 3).
+        // residency step creates (doc/async_asset_loading_design.md step 3).
         m_data_out.image_residency.decoded_images.resize(m_asset->images.size());
         const Clock::time_point image_start_time = Clock::now();
         // Decode every material-referenced image (in parallel when enabled)
@@ -2580,7 +2580,7 @@ private:
     }
 
     // Rebuilds a full Geometry from a primitive carrying ERHE_geometry
-    // (doc/gltf-scene-roundtrip-plan.md phase 2): POSITION accessor +
+    // (doc/gltf_scene_roundtrip.md phase 2): POSITION accessor +
     // ring accessors + raw attribute-store buffer views. Returns null on
     // any inconsistency; the caller falls back to the Triangle_soup path.
     [[nodiscard]] auto parse_erhe_geometry_primitive(
@@ -2804,7 +2804,7 @@ private:
     }
 
     // The asset's KHR_materials_variants list, resolved to the objects this
-    // parse created (doc/usd-compatibility-plan.md X4). The bindings are per
+    // parse created (doc/usd_compatibility_design.md X4). The bindings are per
     // instantiated Mesh prim, so a glTF mesh two nodes instantiate yields a
     // binding for each - the caller's table names them by their own paths.
     void parse_material_variants()
@@ -3044,7 +3044,7 @@ private:
     }
 
     // A glTF node whose ERHE_node extension names a `prim_class` is a prim of
-    // a class that carries no transform (doc/usd-compatibility-plan.md C5):
+    // a class that carries no transform (doc/usd_compatibility_design.md C5):
     // a `Scope`, or the `Typed` prim a `typeName` without an erhe class
     // becomes. Its name, its place in the tree and its children are what the
     // glTF node carries; the writer gives it the identity transform and this
@@ -3115,7 +3115,7 @@ private:
                 : std::vector<erhe::scene::Trs_transform>{};
 
         // A glTF node that carries a mesh, a camera or a light IS that prim
-        // (doc/usd-compatibility-plan.md C5): the glTF node's name,
+        // (doc/usd_compatibility_design.md C5): the glTF node's name,
         // transform, children and remaining attachments are the prim's. A
         // node carrying two of the three is the prim of the first in the
         // order mesh > camera > light, and the others become its child prims
@@ -3493,7 +3493,7 @@ private:
 // --- Gltf_image_residency: the GPU half of image loading -------------------
 //
 // Split out of the parse so that parse_gltf creates no GPU objects
-// (doc/async-asset-loading-plan.md step 3). Everything below must run on a
+// (doc/async_asset_loading_design.md step 3). Everything below must run on a
 // thread that owns image_transfer and may touch the device; everything the
 // parser does may not.
 
@@ -4118,8 +4118,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
     }
 
-    // A local value is an authored value (doc/property-system.md D32,
-    // doc/usd-compatibility-plan.md M4). Everything above filled the parsed
+    // A local value is an authored value (doc/property_system.md D32,
+    // doc/usd_compatibility_design.md M4). Everything above filled the parsed
     // items field by field from the core glTF fields and the legacy extras,
     // so every one of those fields is a local value now; this pass takes
     // back the ones that merely repeat the item's default.
@@ -4143,7 +4143,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     // Apply library-domain ERHE_* extensions to the parsed objects:
     // ERHE_node / ERHE_light on nodes, ERHE_camera on cameras and
-    // ERHE_material on materials (doc/gltf-scene-roundtrip-plan.md
+    // ERHE_material on materials (doc/gltf_scene_roundtrip.md
     // phase 3). Runs after the legacy extras replay so the extensions win
     // when both are present. Editor-domain extensions stay raw in
     // Gltf_data for the editor layer.
@@ -4368,7 +4368,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         // EFFECTIVE value, so a value its style supplies still imports as
         // local; only an ERHE_material that carries the material's
         // complete local set can fix that
-        // (doc/gltf-properties-extension-plan.md).
+        // (doc/plans/gltf_properties_extension.md).
         {
             ERHE_PROFILE_SCOPE("elide default local material values");
             for (const std::shared_ptr<erhe::primitive::Material>& material : result.materials) {
@@ -4921,7 +4921,7 @@ private:
         return out;
     }
 
-    // Geometry-normative primitive export (doc/gltf-scene-roundtrip-plan.md
+    // Geometry-normative primitive export (doc/gltf_scene_roundtrip.md
     // phase 2): POSITION over geogram vertices (glTF vertex i == geogram
     // vertex i), facet-fan TRIANGLES for stock viewers, and the
     // ERHE_geometry extension carrying polygon rings (accessors) plus the
@@ -5218,7 +5218,7 @@ private:
     }
 
     // ERHE_material extension per emitted glTF material
-    // (doc/gltf-scene-roundtrip-plan.md phase 3): the erhe-specific
+    // (doc/gltf_scene_roundtrip.md phase 3): the erhe-specific
     // Material property fields that have no standard glTF representation.
     // Migrates the legacy material extras writer (same conditional field
     // set); the extras remain parsed for older files.
@@ -5319,7 +5319,7 @@ private:
             separator = ",";
         }
         if (emit_style) {
-            // The style item's name (doc/style-library.md D4); quotes and
+            // The style item's name (doc/style_library.md D4); quotes and
             // backslashes escaped, the only characters a JSON string needs.
             std::string escaped;
             for (const char c : material.get_style()->get_reference_path()) {
@@ -5470,7 +5470,7 @@ private:
     // into the extensions write callback context in export_gltf().
     std::map<std::pair<std::size_t, std::size_t>, std::string> m_geometry_primitive_extensions;
 
-    // Extra unreferenced meshes (doc/gltf-scene-roundtrip-plan.md phase 3):
+    // Extra unreferenced meshes (doc/gltf_scene_roundtrip.md phase 3):
     // one glTF mesh with one geometry-normative primitive each, exported
     // through the ERHE_geometry path. Used for brush geometry; the caller's
     // asset_extensions_builder resolves the resulting mesh indices via
@@ -5506,7 +5506,7 @@ private:
         }
     }
 
-    // KHR_materials_variants (doc/usd-compatibility-plan.md X4): the asset's
+    // KHR_materials_variants (doc/usd_compatibility_design.md X4): the asset's
     // variant names and, per variant, the material each mapped primitive
     // binds. The primitive's own "material" is left alone - it is what a
     // loader binds while no variant is selected. Runs after the mesh passes
@@ -5577,7 +5577,7 @@ private:
         // Core glTF cameras are only an interchange approximation of erhe's
         // Projection (yfov/aspect + xmag/ymag cannot express asymmetric
         // frusta or the per-type fov fields); the ERHE_camera extension
-        // (doc/gltf-scene-roundtrip-plan.md phase 3) carries full fidelity.
+        // (doc/gltf_scene_roundtrip.md phase 3) carries full fidelity.
         // glTF requires perspective znear > 0.
         fastgltf::Camera gltf_camera{};
         const float z_near_raw = std::min(erhe_projection->z_far, erhe_projection->z_near);
@@ -5676,7 +5676,7 @@ private:
     }
 
     // ERHE_camera extension per emitted glTF camera
-    // (doc/gltf-scene-roundtrip-plan.md phase 3): the FULL
+    // (doc/gltf_scene_roundtrip.md phase 3): the FULL
     // erhe::scene::Projection (core glTF cameras carry only yfov/aspect +
     // xmag/ymag and cannot express erhe's projection types or asymmetric
     // frusta), plus exposure, shadow_range and the camera Item flags.
@@ -5780,7 +5780,7 @@ private:
         return accessor_index;
     }
 
-    // --- Images / samplers / textures (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+    // --- Images / samplers / textures (doc/gltf_scene_roundtrip.md phase 0) ---
 
     // Deduplicated image export: the retained encoded source stream
     // (Gltf_image_source) is embedded verbatim as a buffer view, so the
@@ -5953,7 +5953,7 @@ private:
         return true;
     }
 
-    // --- Animations (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+    // --- Animations (doc/gltf_scene_roundtrip.md phase 0) ---
     // Animation_sampler storage is already glTF-native (timestamps + flat
     // output floats, CUBICSPLINE interleaved [in_tangent, value, out_tangent],
     // quaternions in glTF [x,y,z,w] order), so export is a near-passthrough.
@@ -6077,7 +6077,7 @@ private:
 
     std::unordered_map<const erhe::scene::Animation*, std::size_t> m_exported_animations;
 
-    // --- Skins (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+    // --- Skins (doc/gltf_scene_roundtrip.md phase 0) ---
     // Recorded during the node pass (a skin's joint nodes may come later in
     // traversal order), emitted after it when every node index is known.
     // Skin_data::skeleton round-trips when it is set and its node is inside the
@@ -6205,7 +6205,7 @@ private:
     }
 
     // ERHE_node (+ ERHE_light for light-carrying nodes) extension members
-    // per emitted glTF node (doc/gltf-scene-roundtrip-plan.md phase 3):
+    // per emitted glTF node (doc/gltf_scene_roundtrip.md phase 3):
     // persistent Item flags by name, the mesh attachment's Item flags (core
     // meshes have no erhe payload of their own, and erhe Mesh attachments
     // are per node), and the light attachment's erhe-only state (per-light
@@ -6227,7 +6227,7 @@ private:
             item_local_properties_to_json(erhe_node)
         );
         // The prim class of a prim that carries no transform
-        // (doc/usd-compatibility-plan.md C5): a node without the field is an
+        // (doc/usd_compatibility_design.md C5): a node without the field is an
         // Xform, the class every glTF node has had. A `Typed` also names the
         // USD `typeName` token it carries.
         if (!erhe::is<erhe::scene::Node>(&erhe_node)) {
@@ -6238,7 +6238,7 @@ private:
             }
         }
         if (erhe_node.get_style()) {
-            // The style item's name (doc/style-library.md D4); quotes and
+            // The style item's name (doc/style_library.md D4); quotes and
             // backslashes escaped, the only characters a JSON string needs.
             std::string escaped;
             for (const char c : erhe_node.get_style()->get_reference_path()) {
@@ -6348,7 +6348,7 @@ private:
                 continue;
             }
             {
-                // A Mesh is a prim (doc/usd-compatibility-plan.md C5), so the
+                // A Mesh is a prim (doc/usd_compatibility_design.md C5), so the
                 // exclusion hook applies here: an excluded mesh is a baked
                 // artifact its owner rebuilds on load, and writing it as a
                 // transform-only node would resurrect it as an empty prim
@@ -6380,7 +6380,7 @@ private:
     // One prim of a class that carries no transform as one glTF node: the
     // ERHE_node `prim_class` names the class, the glTF node carries the
     // identity transform, and the transform that reached the prim passes
-    // through to its children (doc/usd-compatibility-plan.md C5).
+    // through to its children (doc/usd_compatibility_design.md C5).
     auto process_prim_node(const erhe::Typed& erhe_prim, const erhe::scene::Trs_transform& pre_transform) -> std::size_t
     {
         fastgltf::Node gltf_node{};
@@ -6412,7 +6412,7 @@ private:
             // The instance content is not written - the referenced file
             // supplies it - but the overrides the user made inside the
             // instance are the referencing file's own
-            // (doc/usd-compatibility-plan.md X2).
+            // (doc/usd_compatibility_design.md X2).
             const std::string overrides = instance_overrides_to_json(erhe_node);
             const std::string override_members = overrides.empty()
                 ? std::string{}
@@ -6421,7 +6421,7 @@ private:
             return gltf_external_node_index;
         }
 
-        // Exclusion hook (doc/gltf-scene-roundtrip-plan.md phase 3): an
+        // Exclusion hook (doc/gltf_scene_roundtrip.md phase 3): an
         // excluded mesh is a baked artifact rebuilt on load (graph-mesh
         // controlled) - the node exports without it (no glTF mesh, no
         // mesh_flags, no skin).
@@ -7238,7 +7238,7 @@ auto Gltf_exporter::export_gltf() -> std::string
             merge_extension_members(export_extras_context.material_extensions[index], extension_members);
         }
         // Asset-root extension payloads built against the now-known glTF
-        // indices (doc/gltf-scene-roundtrip-plan.md phase 3: ERHE_brushes,
+        // indices (doc/gltf_scene_roundtrip.md phase 3: ERHE_brushes,
         // ERHE_node_graphs, ERHE_collections).
         if (m_arguments.asset_extensions_builder) {
             Gltf_export_index_lookup index_lookup{};
@@ -7341,7 +7341,7 @@ auto Gltf_exporter::export_gltf() -> std::string
     );
     // No extras write callback: the legacy erhe_flags node extras and the
     // material extras migrated to the ERHE_node / ERHE_material extensions
-    // (doc/gltf-scene-roundtrip-plan.md phase 3); the extras remain parsed
+    // (doc/gltf_scene_roundtrip.md phase 3); the extras remain parsed
     // for files written before the migration.
 
     if (m_arguments.binary)

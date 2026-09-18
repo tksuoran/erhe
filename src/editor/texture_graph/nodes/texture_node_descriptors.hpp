@@ -10,7 +10,7 @@ namespace erhe::texgen {
 
 namespace editor {
 
-// MVP texture node descriptors (Phase 3 Step 2 of doc/texture-graph-plan.md).
+// MVP texture node descriptors (Phase 3 Step 2 of doc/texture_graph.md).
 //
 // Each descriptor is an immutable erhe::texgen::Node_descriptor whose GLSL is
 // ported from Material Maker (https://github.com/RodZill4/material-maker, MIT

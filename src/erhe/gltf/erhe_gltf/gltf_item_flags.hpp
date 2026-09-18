@@ -25,7 +25,7 @@ public:
 };
 
 // The persistent (authored) Item flags serialized by NAME in ERHE_*
-// extensions (doc/gltf-scene-roundtrip-plan.md phase 3). Names, never raw
+// extensions (doc/gltf_scene_roundtrip.md phase 3). Names, never raw
 // bit values: bit positions are not stable across erhe versions; unknown
 // names are ignored on load so the set can grow. Transient presentation
 // state (selected, hovered_*, negative_determinant, affects_shadow) and the
@@ -46,7 +46,7 @@ public:
 // left untouched.
 void apply_persistent_item_flags(erhe::Item_base& item, uint64_t listed_bits);
 
-// Local property values (doc/property-system.md D23 / D14): the
+// Local property values (doc/property_system.md D23 / D14): the
 // "properties" object next to "flags" holds every local value of the item's
 // registered properties that is stored (not bridged, not an expression)
 // and flagged serialize, as name -> D16 text, e.g. {"visible":"false"}.
@@ -55,7 +55,7 @@ void apply_persistent_item_flags(erhe::Item_base& item, uint64_t listed_bits);
 [[nodiscard]] auto item_local_properties_to_json(const erhe::Item_base& item) -> std::string;
 
 // The sparse overrides the prefab instance under `carrier` holds
-// (doc/usd-compatibility-plan.md X2, doc/gltf_extensions/ERHE_node.md), as
+// (doc/usd_compatibility_design.md X2, doc/gltf_extensions/ERHE_node.md), as
 // the ERHE_node "overrides" array: one object per item that holds any, with
 // its M1 path below the arc's target clone, its local values in the same
 // name -> D16 text form "properties" uses, and its local transform as 16

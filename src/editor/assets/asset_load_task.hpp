@@ -10,7 +10,7 @@ namespace editor {
 
 class Asset_load_tick_context;
 
-// Where a load is (doc/async-asset-loading-plan.md 2.1). The first four are
+// Where a load is (doc/async_asset_loading_design.md 2.1). The first four are
 // live states; the last three are SETTLED - a settled load never changes
 // state again, which is what wait_for_idle and the dependent-task machinery
 // key on.

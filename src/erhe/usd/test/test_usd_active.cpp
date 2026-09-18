@@ -1,4 +1,4 @@
-// The `active` prim metadatum (doc/usd-compatibility-plan.md X2): an
+// The `active` prim metadatum (doc/usd_compatibility_design.md X2): an
 // authored `active = false` lands on the item's `active` property as a
 // local value, takes the item and its subtree out through the derived
 // Item_flags::active bit, and is written back out as prim metadata.

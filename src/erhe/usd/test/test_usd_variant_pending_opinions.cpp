@@ -1,5 +1,5 @@
 // What a variant authors for a prim a composition arc supplies
-// (doc/usd-compatibility-plan.md C6, section 6 "Variant opinions a variant set
+// (doc/usd_compatibility_design.md C6, section 6 "Variant opinions a variant set
 // does not carry"). erhe composes no arc: the caller instantiates each one
 // after the load returns, so a variant path the reader cannot reach is not a
 // path that names nothing. The reader hands such an opinion or binding over as

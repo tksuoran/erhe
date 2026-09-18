@@ -117,7 +117,7 @@ Headset_view_resources::Headset_view_resources(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    // A Camera is a prim (doc/usd-compatibility-plan.md C5): the per-view
+    // A Camera is a prim (doc/usd_compatibility_design.md C5): the per-view
     // pose is set on the camera itself.
     m_camera->set_parent(headset_view.get_root_node());
 

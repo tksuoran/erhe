@@ -312,7 +312,7 @@ void append_usd_content_library_operations(
             .item_type  = "material",
         };
         // A material the file placed is already a prim of the loaded tree
-        // (doc/usd-compatibility-plan.md U4), and the tree enters the scene
+        // (doc/usd_compatibility_design.md U4), and the tree enters the scene
         // as a whole: the material needs the library's bookkeeping, not an
         // insert of its own. Only a material the file gave no place is
         // attached, which is what creates the `Materials` kind scope.
@@ -325,7 +325,7 @@ void append_usd_content_library_operations(
         );
     }
     // The skins the file's skinned meshes bind, attached the way a glTF
-    // file's skins are (doc/usd-compatibility-plan.md K1). A skin is a
+    // file's skins are (doc/usd_compatibility_design.md K1). A skin is a
     // library resource with no place in the prim tree, so it always gets an
     // attach of its own; the skinned meshes already name it, and
     // Scene_root::register_mesh registers it with the scene when the tree
@@ -428,7 +428,7 @@ void append_usd_content_library_operations(
 
 // Give every prim of one subtree the content flag back. A resource prim of
 // the same subtree - a material, a texture - is not in `prims` and keeps the
-// flags it had (doc/usd-compatibility-plan.md U4).
+// flags it had (doc/usd_compatibility_design.md U4).
 void enable_prim_content(
     const std::shared_ptr<erhe::Hierarchy>& item,
     const std::set<const erhe::Item_base*>& prims
@@ -488,7 +488,7 @@ void enable_prim_content(
 }
 
 // The prim one path names when a `class` prim holds it
-// (doc/usd-compatibility-plan.md X3). A prototype is converted where the class
+// (doc/usd_compatibility_design.md X3). A prototype is converted where the class
 // prim's holder is, so it is not below the tree's root at the path it has on
 // the stage until the caller has moved it under the Style item the class prim
 // becomes - which the prefab template load does not do. Null when no class
@@ -515,7 +515,7 @@ void enable_prim_content(
 }
 
 // True when `prim_path` is a prototype of one of the file's point instancers
-// (doc/usd-compatibility-plan.md S1), or a prim below one. A prototype is
+// (doc/usd_compatibility_design.md S1), or a prim below one. A prototype is
 // held abstract where it sits, so the prim a reference names is content-less
 // until the reference clones it.
 [[nodiscard]] auto is_point_instancer_prototype_path(
@@ -688,7 +688,7 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
 }
 
 // Instantiate every composition arc the file's prims author
-// (doc/usd-compatibility-plan.md X1): one Prefab_instance attachment per arc,
+// (doc/usd_compatibility_design.md X1): one Prefab_instance attachment per arc,
 // in the order the arcs resolved to, each with a clone of the template the arc
 // names below the carrier prim. `prim_path_prefix` limits this to one subtree,
 // which is what a template load wants. Cloned meshes are pointed at
@@ -731,7 +731,7 @@ void resolve_usd_references(
         const std::shared_ptr<erhe::scene::Node> carrier = std::dynamic_pointer_cast<erhe::scene::Node>(entry.item);
         if (!carrier) {
             // A typeless or `Scope` carrier is imported as an `Xform`
-            // (doc/usd-compatibility-plan.md S1), so what is left here is a
+            // (doc/usd_compatibility_design.md S1), so what is left here is a
             // prim of a type that carries no transform and cannot hold a
             // prefab instance.
             const std::shared_ptr<erhe::Typed> typed = std::dynamic_pointer_cast<erhe::Typed>(entry.item);
@@ -804,7 +804,7 @@ void resolve_usd_references(
             }
         }
         // The overrides the referencing layer authored over the arcs
-        // (doc/usd-compatibility-plan.md X2): an entry names the item at its
+        // (doc/usd_compatibility_design.md X2): an entry names the item at its
         // relative path below the first arc that has one. A USD instance is
         // not sealed, so this needs no help from the attach.
         if (!entry.overrides.empty()) {
@@ -825,10 +825,10 @@ void resolve_usd_references(
     return (separator == std::string::npos) ? std::string{} : stage_path.substr(0, separator);
 }
 
-// One `class` prim as the Style item it is (doc/usd-compatibility-plan.md X3),
+// One `class` prim as the Style item it is (doc/usd_compatibility_design.md X3),
 // at the place the class prim has, with the classes it holds as Style items
 // below it. A class prim's opinions are the style's local values, which is
-// what a style is (doc/style-library.md D25).
+// what a style is (doc/style_library.md D25).
 void create_usd_style(
     const erhe::usd::Usd_class_prim&                                                  class_prim,
     const std::shared_ptr<erhe::Hierarchy>&                                           parent,
@@ -914,7 +914,7 @@ void assign_usd_style(
 }
 
 // Every `class` prim of the file as a Style item, and every `inherits` arc as
-// a style assignment (doc/usd-compatibility-plan.md X3). The styles are
+// a style assignment (doc/usd_compatibility_design.md X3). The styles are
 // created before the chains are set, so a class inheriting a class the file
 // spells later resolves. This runs before the import's insert operation is
 // built, so an undo of the import takes the styles out with the tree.
@@ -992,7 +992,7 @@ void resolve_usd_classes(
 }
 
 // The `Brush` prims the file authored, as the Brush items they are
-// (doc/usd-compatibility-plan.md E4a): the geometry the reader took from the
+// (doc/usd_compatibility_design.md E4a): the geometry the reader took from the
 // prim's `Mesh` child, the density and normal style it authored, and the
 // material its `material:binding` names, at the place the prim has. A brush
 // whose holding prim is in the loaded tree is parented there and rides that
@@ -1081,7 +1081,7 @@ void resolve_usd_brushes(
 }
 
 // --------------------------------------------------------------------------
-// Texture node graphs (doc/usd-texture-graphs-plan.md)
+// Texture node graphs (doc/plans/usd_texture_graphs.md)
 // --------------------------------------------------------------------------
 
 // The material slots a USD file carries an image or a node graph for, in the
@@ -1103,7 +1103,7 @@ constexpr Usd_save_slot c_usd_save_slots[] = {
 };
 
 // The USD value type of a texture graph pin, from the pin key each
-// erhe::texgen::Value_type has (doc/usd-texture-graphs-plan.md 2.1).
+// erhe::texgen::Value_type has (doc/plans/usd_texture_graphs.md 2.1).
 [[nodiscard]] auto usd_texture_pin_type(const std::size_t pin_key, const std::string& owner) -> std::string
 {
     switch (pin_key) {
@@ -1191,7 +1191,7 @@ enum class Usd_tuple_form
 }
 
 // One node parameter of the editor's JSON as the (USD type, USD literal text)
-// pair the record carries (doc/usd-texture-graphs-plan.md 2.2).
+// pair the record carries (doc/plans/usd_texture_graphs.md 2.2).
 void append_usd_node_graph_parameter(
     const std::string&                                name,
     const nlohmann::json&                             value,
@@ -1343,7 +1343,7 @@ void insert_usd_node_graph_parameter(
 }
 
 // One node graph record as the graph asset it is
-// (doc/usd-texture-graphs-plan.md 2.5, and section 4 for a geometry graph):
+// (doc/plans/usd_texture_graphs.md 2.5, and section 4 for a geometry graph):
 // the nodes through the factory in the record's order, each parameter back
 // from its USD text, and the links by node and pin name. A node the factory
 // does not make, and a link naming a node or a pin the rebuilt graph has not
@@ -1448,7 +1448,7 @@ void rebuild_usd_graph_asset(
 
 // The geometry a geometry graph's `result` child carried, as the graph's
 // baked products: what a `Graph_mesh` rebuilt from a record with no node has
-// to show (doc/usd-texture-graphs-plan.md section 4). The products are the
+// to show (doc/plans/usd_texture_graphs.md section 4). The products are the
 // ones an evaluation publishes - the geometry and a renderable primitive
 // built from it - so a bound prim materializes the file's result the way it
 // materializes a bake.
@@ -1525,7 +1525,7 @@ public:
 };
 
 // The `NodeGraph` prims the file marked, as the graph assets they are
-// (doc/usd-texture-graphs-plan.md 2.5 and section 4): a `Graph_texture` for a
+// (doc/plans/usd_texture_graphs.md 2.5 and section 4): a `Graph_texture` for a
 // texture graph and a `Graph_mesh` for a geometry graph, with the material
 // slots the file feeds from a texture graph and the scene prims the scene
 // block binds to a geometry graph. A graph whose holding prim is in the
@@ -1575,7 +1575,7 @@ void resolve_usd_node_graphs(
             );
             // A graph the file carried no node for keeps the geometry its
             // `result` child holds: that child is then the only statement of
-            // what the graph makes (doc/usd-texture-graphs-plan.md section
+            // what the graph makes (doc/plans/usd_texture_graphs.md section
             // 4). A graph that has nodes re-evaluates instead, and its own
             // bake is what its bound prims get.
             if (record.nodes.empty() && record.geometry) {
@@ -1686,7 +1686,7 @@ void resolve_usd_node_graphs(
 }
 
 // One graph asset as the writer's record
-// (doc/usd-texture-graphs-plan.md 2.5): the nodes in the graph's own order,
+// (doc/plans/usd_texture_graphs.md 2.5): the nodes in the graph's own order,
 // each with its parameters as (USD type, text) pairs and its pins with the
 // links into them, and the graph's interface output taken from the `output`
 // sink node's linked input - the value a material slot names (R2). The two
@@ -1810,7 +1810,7 @@ template <typename AssetT, typename NodeT, typename PinTypeFn>
 // a texture graph are recorded alongside, so the writer connects them to the
 // graph instead of writing a `UsdUVTexture`; a geometry graph hands over its
 // evaluated geometry, which the writer writes as the graph's `result` child
-// (doc/usd-texture-graphs-plan.md section 4).
+// (doc/plans/usd_texture_graphs.md section 4).
 void collect_usd_node_graphs(
     const Content_library&                                         content_library,
     const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials,
@@ -1973,7 +1973,7 @@ void collect_usd_node_graphs(
 }
 
 // The scene's variant selections as the scene block carries them
-// (doc/usd-compatibility-plan.md X4): the same entries the settings hold,
+// (doc/usd_compatibility_design.md X4): the same entries the settings hold,
 // with each prim path rewritten to the path the write plans for that prim, so
 // a selection resolves against the reloaded scene's own paths. A selection
 // whose prim the file does not carry keeps the path it had.
@@ -2071,7 +2071,7 @@ void apply_planned_paths_to_variant_selections(
 }
 
 // The opinions and bindings a variant authors for a prim a composition arc
-// supplies (doc/usd-compatibility-plan.md C6). erhe::usd cannot reach such a
+// supplies (doc/usd_compatibility_design.md C6). erhe::usd cannot reach such a
 // prim: the arcs of a file are instantiated here, after the load returns, so
 // the reader hands those entries over as pending and this is what applies
 // them. The path is resolved the way an instance override's is - one segment
@@ -2174,7 +2174,7 @@ void apply_pending_variant_opinions(
 }
 
 // The variant sets the file authored, as the scene's own table
-// (doc/usd-compatibility-plan.md X4): the carrying prim and the bound
+// (doc/usd_compatibility_design.md X4): the carrying prim and the bound
 // materials are the items the import made, so a later switch assigns them
 // without re-reading the file. The selected variant is already applied by the
 // reader; the table is what lets the user pick another one.
@@ -2209,7 +2209,7 @@ void fill_variant_table(
                     }
                 );
             }
-            // The arcs the block authors (doc/usd-compatibility-plan.md
+            // The arcs the block authors (doc/usd_compatibility_design.md
             // C6): the carrying prim holds them as prefab instances,
             // and the table is what remembers the block they belong to.
             for (const erhe::usd::Usd_reference& usd_reference : usd_variant.references) {
@@ -2880,7 +2880,7 @@ auto make_import_usd_operation(
 
     // What a variant authors for a prim one of those arcs supplies: the
     // reader left those entries pending because the arcs were not in the tree
-    // when it ran (doc/usd-compatibility-plan.md C6).
+    // when it ran (doc/usd_compatibility_design.md C6).
     apply_pending_variant_opinions(usd_data, root_node);
     set_usd_draw_mode_source_directory(*root_node.get(), path);
 
@@ -2892,7 +2892,7 @@ auto make_import_usd_operation(
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
     // The file's own folder tree is the library's: a `Scope` named for a kind
-    // is that kind's scope (doc/usd-compatibility-plan.md E4d). The library is
+    // is that kind's scope (doc/usd_compatibility_design.md E4d). The library is
     // told before the attach operations below are built, because each of them
     // resolves the scope its resource goes into as it is constructed, and the
     // loaded tree enters the scene only with the insert at the end.
@@ -2982,7 +2982,7 @@ auto load_usd_prefab_template(
             // through the carrier prim the instance hangs from.
             .stage_metrics = erhe::usd::Stage_metrics::referenced,
             // The arc's selection is measured from the prim the arc targets
-            // (doc/usd-compatibility-plan.md section 6, "Variant selection
+            // (doc/usd_compatibility_design.md section 6, "Variant selection
             // through a composition arc"). An arc that names no prim path
             // targets the file's default prim: the root is left empty and
             // load_stage resolves it from the layer's own `defaultPrim`.
@@ -3054,7 +3054,7 @@ auto load_usd_prefab_template(
     usd_template.consumed_variant_sets = std::move(consumed_variant_sets);
 
     // What a variant of this file authors for a prim one of those arcs
-    // supplies (doc/usd-compatibility-plan.md C6). A template carries no
+    // supplies (doc/usd_compatibility_design.md C6). A template carries no
     // variant table, but the opinions are the template's own content: an
     // instance of it reads them through the reference layer (X2).
     apply_pending_variant_opinions(usd_data, container_node);
@@ -3067,7 +3067,7 @@ auto load_usd_prefab_template(
         return usd_template;
     }
 
-    // Any prim is a reference target (doc/usd-compatibility-plan.md S1): the
+    // Any prim is a reference target (doc/usd_compatibility_design.md S1): the
     // target may be an `Xformable`, a `Scope`, the `Typed` prim a typeless
     // `def` or an unrecognized `typeName` becomes, or a prototype a `class`
     // prim holds (X3).
@@ -3269,7 +3269,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 
     // What a variant authors for a prim one of those arcs supplies: the
     // reader left those entries pending because the arcs were not in the tree
-    // when it ran (doc/usd-compatibility-plan.md C6).
+    // when it ran (doc/usd_compatibility_design.md C6).
     apply_pending_variant_opinions(usd_data, container_node);
     set_usd_draw_mode_source_directory(*container_node.get(), path);
 
@@ -3278,7 +3278,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     fill_variant_table(usd_data, path, container_node, scene_root->get_variant_table());
 
     // The file's own folder tree is the library's: a `Scope` named for a kind
-    // is that kind's scope (doc/usd-compatibility-plan.md E4d). The library is
+    // is that kind's scope (doc/usd_compatibility_design.md E4d). The library is
     // told before the attach operations below are built, because each of them
     // resolves the scope its resource goes into as it is constructed.
     content_library->adopt_kind_scopes(*container_node.get());
@@ -3347,7 +3347,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 
 namespace {
 
-// One instance of a point instancer (doc/usd-compatibility-plan.md S1): a
+// One instance of a point instancer (doc/usd_compatibility_design.md S1): a
 // content child prim of the instancer carrying a Prefab_instance attachment.
 // That is what the load makes of an instance - a content prim holding an
 // internal reference to its prototype. The content flag is what separates it
@@ -3379,7 +3379,7 @@ void collect_usd_references(
 );
 
 // The prototypes one instancer holds, in the order a save writes
-// `rel prototypes` in (doc/usd-compatibility-plan.md S1): a child prim that
+// `rel prototypes` in (doc/usd_compatibility_design.md S1): a child prim that
 // carries no content is a prototype and the walk stops there, and a content
 // child that is not an instance is walked for the prototypes below it (the
 // `Prototypes` scope such a file usually puts them in). This is the rule the
@@ -3455,7 +3455,7 @@ void collect_point_instancer_prototypes(
     return best_index;
 }
 
-// One point instancer as the writer's record (doc/usd-compatibility-plan.md
+// One point instancer as the writer's record (doc/usd_compatibility_design.md
 // S1): its instance children in tree order, each with the prototype it
 // references. Nothing of the instancer is carried by the item itself - the
 // arrays a save writes are all read back off these prims - so an instance
@@ -3497,12 +3497,12 @@ void collect_usd_point_instancers(
 
 // The composition arcs the scene carries, one entry per carrier prim: a node
 // with Prefab_instance attachments is a referencing prim, and each attachment
-// is one arc, in the order the attachments hold (doc/usd-compatibility-plan.md
+// is one arc, in the order the attachments hold (doc/usd_compatibility_design.md
 // X1). The writer needs no prefab library - the attachment already names the
 // target file, the target prim and the arc form.
 // Whether one arc of `item` is an arc a variant block of one of its sets
 // authored: those are written inside the block, not on the prim
-// (doc/usd-compatibility-plan.md C6).
+// (doc/usd_compatibility_design.md C6).
 [[nodiscard]] auto is_variant_authored_arc(
     const std::vector<erhe::usd::Usd_save_variant_set>& variant_sets,
     const erhe::Item_base&                              item,
@@ -3536,7 +3536,7 @@ void collect_usd_references(
 )
 {
     // A point instancer's instance children are its expansion, not carriers
-    // of their own (doc/usd-compatibility-plan.md S1): the instancer writes
+    // of their own (doc/usd_compatibility_design.md S1): the instancer writes
     // them as its instance arrays, so their internal references are not
     // written and nothing below them is walked.
     const std::shared_ptr<erhe::scene::Point_instancer> point_instancer =
@@ -3578,7 +3578,7 @@ void collect_usd_references(
     }
 }
 
-// The scene's brushes as the writer's records (doc/usd-compatibility-plan.md
+// The scene's brushes as the writer's records (doc/usd_compatibility_design.md
 // E4a): the writer needs what a brush holds, since erhe::usd names no editor
 // type. Where the prim goes is the tree's business, not this list's - a brush
 // prim of the tree the list does not name is written without its geometry.
@@ -3737,7 +3737,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     // composed stage it became, so the save writes that content into this one
     // layer and authors no `subLayers` (src/erhe/usd/notes.md; a sublayer
     // stack the editor could edit layer by layer is
-    // doc/usd-compatibility-plan.md section 5).
+    // doc/usd_compatibility_design.md section 5).
     const std::vector<std::string>& sublayers = scene_root.get_usd_sublayers();
     if (!sublayers.empty()) {
         std::string sublayer_list;
@@ -3757,7 +3757,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     if (content_library) {
         save_arguments.materials = content_library->get_all<erhe::primitive::Material>();
         // The joint channels of these are written as the `SkelAnimation` of
-        // the skeleton they drive (doc/usd-compatibility-plan.md K1); every
+        // the skeleton they drive (doc/usd_compatibility_design.md K1); every
         // other channel travels as the sampled xformOps of its prim.
         save_arguments.animations = content_library->get_all<erhe::scene::Animation>();
         collect_usd_brushes(*content_library.get(), path, save_arguments.brushes);
@@ -3779,7 +3779,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
                 continue;
             }
             // A slot fed by a texture graph is written as a connection to the
-            // graph's NodeGraph prim (doc/usd-texture-graphs-plan.md R2), not
+            // graph's NodeGraph prim (doc/plans/usd_texture_graphs.md R2), not
             // as an image.
             if (is_graph_texture_slot(sampler)) {
                 continue;

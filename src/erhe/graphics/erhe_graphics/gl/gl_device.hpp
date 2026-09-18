@@ -279,7 +279,7 @@ private:
     std::vector<int>        m_free_worker_context_slots;
     // Holder of each pool slot (index = slot - 1), for the acquire
     // watchdog's report; guarded by m_worker_context_pool_mutex. Proposal E
-    // of doc/gl-worker-context-enforcement.md: a wedged pool looks BUSY
+    // of doc/gl_worker_context_enforcement.md: a wedged pool looks BUSY
     // (parked parents spin in _corun_until), so without a report naming the
     // holders nothing points at the context pool at all.
     class Worker_context_slot_holder

@@ -50,7 +50,7 @@ constexpr std::string_view c_combine_tooltip = "Contact pair precedence: average
 
 const erhe::property::Enum_info c_combine_mode_enum_info{"Combine_mode", c_combine_mode_entries};
 
-// Every value inherits (doc/property-system.md D30): a Physics Materials
+// Every value inherits (doc/property_system.md D30): a Physics Materials
 // folder or a style holds them for the materials below it.
 const Property<float> Physics_material::static_friction_property = Property<float>::register_property(
     "static_friction", c_owner,

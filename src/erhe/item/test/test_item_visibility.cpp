@@ -1,4 +1,4 @@
-// Inherited flags (D23 in doc/property-system.md): visible,
+// Inherited flags (D23 in doc/property_system.md): visible,
 // shadow_cast and lightmapped are inherits-flagged properties whose
 // effective value is mirrored into Item_flags::derived.
 

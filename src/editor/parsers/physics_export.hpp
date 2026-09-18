@@ -38,7 +38,7 @@ public:
 // When content_library is given, library physics materials / collision
 // filters / joint settings that no body or joint references are appended to
 // the top-level arrays so editor-authored assets survive save / load
-// (parity with scene.json v3+; doc/gltf-scene-roundtrip-plan.md phase 0).
+// (parity with scene.json v3+; doc/gltf_scene_roundtrip.md phase 0).
 // When items is given it receives the library item behind each entry.
 [[nodiscard]] auto build_physics_description(
     const erhe::scene::Scene&  scene,

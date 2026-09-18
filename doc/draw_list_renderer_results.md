@@ -1,6 +1,6 @@
 # Draw list renderer — results and follow-ups
 
-Companion to `doc/draw_list_renderer_requirements.md` and
+Companion to `doc/draw_list_renderer.md` and
 `doc/draw_list_renderer_plan.md`. Written 2026-08-15 after phases 1–6.
 
 ## What landed

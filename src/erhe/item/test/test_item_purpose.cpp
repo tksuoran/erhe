@@ -1,6 +1,6 @@
-// USD purpose vocabulary (doc/usd-compatibility-plan.md M3): purpose is an
+// USD purpose vocabulary (doc/usd_compatibility_design.md M3): purpose is an
 // inherited enumeration whose default layer is derived from the editor-only
-// flag bits (doc/property-system.md D31).
+// flag bits (doc/property_system.md D31).
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"

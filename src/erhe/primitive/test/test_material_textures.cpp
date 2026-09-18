@@ -1,5 +1,5 @@
 // Material texture slots as member-backed object properties
-// (doc/property-system.md D28): the slot member is the value, the
+// (doc/property_system.md D28): the slot member is the value, the
 // property notifies, the traits reject a pointee that is not a
 // Texture_reference.
 
@@ -74,7 +74,7 @@ TEST(Material_textures, property_is_the_value_and_the_member_mirrors_it)
 namespace {
 
 // A holder of Material properties above a material (a content-library
-// folder, doc/property-system.md D30): the material is its inheritance child.
+// folder, doc/property_system.md D30): the material is its inheritance child.
 class Folder : public erhe::property::Dependency_object
 {
 public:

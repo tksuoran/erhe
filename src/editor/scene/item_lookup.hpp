@@ -20,7 +20,7 @@ class Scene_root;
 [[nodiscard]] auto find_item_in_scene_by_id  (Scene_root& scene_root, std::size_t id)        -> std::shared_ptr<erhe::Item_base>;
 [[nodiscard]] auto find_item_in_scene_by_name(Scene_root& scene_root, std::string_view name) -> std::shared_ptr<erhe::Item_base>;
 
-// The item a stored reference text names (doc/usd-compatibility-plan.md M1):
+// The item a stored reference text names (doc/usd_compatibility_design.md M1):
 // a text holding '/' is a path (erhe::Hierarchy::get_path()) and is looked
 // up first from the scene's root node and then from the content library
 // root, where it is the ERHE_scene library_folders folder path; a library
@@ -42,7 +42,7 @@ class Scene_root;
 // have.
 [[nodiscard]] auto resolve_reference_by_name(App_context& context, const erhe::Item_base& from, std::string_view name_or_path) -> std::shared_ptr<erhe::Item_base>;
 
-// Object reference candidates (doc/property-system.md D28): the items of
+// Object reference candidates (doc/property_system.md D28): the items of
 // the target's scene whose type bit is in item_types and that are shown in
 // the UI (developer-only items in developer mode) - the content library
 // items, and the scene's nodes and node attachments (a node-typed

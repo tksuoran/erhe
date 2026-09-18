@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Frame pacing algorithm reference model and verification simulation.
 
-Supports deliverable 2 of doc/frame_pacing.md: implements the algorithm
-specified in doc/frame_pacing_algorithm.md and verifies claims C1..C8 from
-doc/frame_pacing_control_model.md against a deterministic simulated plant
+Supports deliverable 2 of doc/frame_pacing/requirements.md: implements the algorithm
+specified in doc/frame_pacing/algorithm.md and verifies claims C1..C8 from
+doc/frame_pacing/control_model.md against a deterministic simulated plant
 (virtual clock, synthetic CPU/GPU stage times, modeled presentation engine).
 No real GPU, display, or wall clock is involved; runs are reproducible.
 
@@ -508,7 +508,7 @@ class Scenario:
     inert_target: bool = False           # C15: the presentation engine IGNORES
                                          # the requested target present time
                                          # (measured driver behavior, see
-                                         # doc/frame_pacing_present_timing_driver_report.md):
+                                         # doc/reference/nvidia_present_timing_driver_report.md):
                                          # an image displays at the earliest
                                          # vsync at which it is available,
                                          # never held back for its target.
@@ -1197,7 +1197,7 @@ def c14_latest_ready_full_pacing():
 
 def c15_inert_target_holdback():
     print("C15 inert-target engine; present-request holdback mitigation")
-    # The measured driver behavior (doc/frame_pacing_present_timing_driver_report.md):
+    # The measured driver behavior (doc/reference/nvidia_present_timing_driver_report.md):
     # target present times are accepted but never honored - an image displays
     # at the earliest vsync at which it is AVAILABLE. Whenever budget slack
     # (margin + quantile-vs-typical latency gap) exceeds one refresh period,

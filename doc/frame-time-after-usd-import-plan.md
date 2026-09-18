@@ -4,7 +4,7 @@ The measured case is `res/editor/assets/usd/full_assets/Teapot/DrawModes.usd`
 (35 teapot prefab instances). A Tracy capture of the import (editor.exe,
 windowed Vulkan build, 78 s, 1154 frames) shows two problems, and the plan
 removes both, one commit per section 3 step through
-`doc/agent-orchestration-harness.md`.
+`doc/agent_orchestration_harness.md`.
 
 ## 1. Measured behavior
 

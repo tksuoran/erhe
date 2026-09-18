@@ -14,7 +14,7 @@ auto make(const std::string& name) -> std::shared_ptr<H>
     return std::make_shared<H>(name);
 }
 
-// The path form (doc/usd-compatibility-plan.md M1): names from the root,
+// The path form (doc/usd_compatibility_design.md M1): names from the root,
 // the root's own name excluded, separated by '/'.
 
 TEST(Hierarchy_path, RootPathIsEmpty)

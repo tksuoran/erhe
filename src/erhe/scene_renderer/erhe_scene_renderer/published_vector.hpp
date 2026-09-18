@@ -17,7 +17,7 @@ namespace erhe::scene_renderer {
 // main thread reads them with no lock from the render, flush and statistics
 // paths. A std::vector there is a data race on the vector's own bookkeeping -
 // and a mutex retrofit would be correct only if it enumerated every reader,
-// the kind of hand-derived list that drifts (doc/gl-worker-thread-contexts.md
+// the kind of hand-derived list that drifts (doc/gl_worker_thread_contexts.md
 // Traps: re-derive from code, never trust a written list). This container is
 // correct without that enumeration:
 //

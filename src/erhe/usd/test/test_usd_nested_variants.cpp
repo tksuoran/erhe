@@ -1,4 +1,4 @@
-// A `variantSet` a variant block itself declares (doc/usd-compatibility-plan.md
+// A `variantSet` a variant block itself declares (doc/usd_compatibility_design.md
 // section 6, "Variant opinions a variant set does not carry"). Such a set is a
 // set of the prim carrying the outer set, tabled beside it and naming the block
 // it is declared in; its selection is the strongest of the carrier's

@@ -44,7 +44,7 @@ public:
     uint32_t              shadow_bias      {1};
     uint32_t              shadow_technique {0};
     uint32_t              shadow_depth_bits{0};
-    // DDGI (doc/ddgi-plan.md phase 6): whether the probe volume is active
+    // DDGI (doc/ddgi.md phase 6): whether the probe volume is active
     // this frame. Toggling it changes the shader variant of every color
     // draw, so it belongs in the environment the cached resolutions key on.
     bool                  ddgi_enabled     {false};
@@ -113,7 +113,7 @@ public:
     // headset session is active (R19).
     std::span<const uint32_t>  multiview_view_counts{};
     // This draw list's own material slot space
-    // (doc/draw_list_material_set_plan.md D0, D3). Separate from the forward
+    // (doc/draw_list_material_set.md D0, D3). Separate from the forward
     // set of the owning Scene_root, because these records are CACHED and
     // consumed on later frames, so their slots must be stable in a way the
     // bucket path's per-pass records never need.
@@ -122,7 +122,7 @@ public:
 
 // Persistent, incrementally maintained rendering-side representation of a
 // scene: registered objects classified into draw lists once, reused every
-// frame (doc/draw_list_renderer_requirements.md, doc/draw_list_renderer_plan.md).
+// frame (doc/draw_list_renderer.md, doc/draw_list_renderer_plan.md).
 // One instance per Scene_root, owned like m_physics_world / m_raytrace_scene.
 //
 // Threading (plan section 0.3): register / unregister / set flags / rebuild /
@@ -157,7 +157,7 @@ public:
     // Unregister + register from the stored create info (R12). Returns the
     // new id (the object gets a new generation, possibly a new index).
     auto reregister_object(Draw_list_object_id id) -> Draw_list_object_id;
-    // Material reassignment (R4, doc/draw_list_material_set_plan.md D11).
+    // Material reassignment (R4, doc/draw_list_material_set.md D11).
     // Enqueued by Scene_root::on_mesh_material_changed. At flush time it takes
     // the cheap path when the object's entries still classify into exactly the
     // lists they are already in - rewriting only their slot fields - and falls
@@ -230,7 +230,7 @@ public:
     [[nodiscard]] auto get_primitive_record_stride() const -> std::size_t { return m_primitive_record_stride; }
 
     // The material GPU slot one entry's CACHED record was written with
-    // (doc/draw_list_material_set_plan.md, phase 1). This is what a draw
+    // (doc/draw_list_material_set.md, phase 1). This is what a draw
     // resolves the material through, and it is not derivable from the mesh:
     // a stale record keeps naming a slot while the Mesh_primitive already
     // names a different material. The regression test for that class of bug

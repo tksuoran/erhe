@@ -261,7 +261,7 @@ texture goes, no drawable is acquired so nothing is presented, and frame pacing
 is the device's own completion tracking. This mirrors the Vulkan backend's
 `Emulated_swapchain_impl`. Configure it with
 `scripts/configure_xcode_metal_headless.sh`; the requirements and the
-verification list live in [`metal-headless.md`](metal-headless.md).
+verification list live in [`metal-headless.md`](metal_headless.md).
 
 Screenshot capture (`Device::capture_last_frame`) differs accordingly. Windowed,
 a drawable cannot be read after presentation, so capture is armed

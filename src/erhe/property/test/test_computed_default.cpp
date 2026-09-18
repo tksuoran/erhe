@@ -1,4 +1,4 @@
-// Per-object defaults (doc/property-system.md D31): the default layer of a
+// Per-object defaults (doc/property_system.md D31): the default layer of a
 // property is Property_metadata::compute_default when it is bound, so an
 // object derives its own default from state it already holds while every
 // authored layer above it still wins.

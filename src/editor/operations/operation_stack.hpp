@@ -37,7 +37,7 @@ private:
 
 // Edit > Free undone loads: gives back the memory of undone loads that the
 // automatic (lossless-only) drop declined, at the cost of the redo entries
-// recorded after them (doc/reloadable-asset-loads.md).
+// recorded after them (doc/reloadable_asset_loads.md).
 class Free_undone_loads_command : public erhe::commands::Command
 {
 public:
@@ -148,7 +148,7 @@ public:
     // cannot reference content that did not exist yet.
     //
     // This is the explicit counterpart to the automatic drop, which only fires
-    // when nothing would have to be discarded (doc/reloadable-asset-loads.md).
+    // when nothing would have to be discarded (doc/reloadable_asset_loads.md).
     class Free_undone_loads_result
     {
     public:

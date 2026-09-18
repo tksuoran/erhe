@@ -1,4 +1,4 @@
-// Style layer (D25 in doc/property-system.md): coerced > local >
+// Style layer (D25 in doc/property_system.md): coerced > local >
 // style > inherited > default; set_style notifies the changed non-local
 // properties; a style value is inherited by descendants.
 
@@ -142,7 +142,7 @@ TEST(Style, copy_carries_style_and_sealed_rejects)
 
 TEST(Style, source_edit_reaches_users_live)
 {
-    // D25 live edit (doc/style-library.md D1): a change of the source's
+    // D25 live edit (doc/style_library.md D1): a change of the source's
     // local layer notifies every user reading the style for that property.
     std::shared_ptr<Property_style> style = std::make_shared<Property_style>("s", Property_set{});
     Test_object a;

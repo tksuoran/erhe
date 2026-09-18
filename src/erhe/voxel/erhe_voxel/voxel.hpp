@@ -13,7 +13,7 @@ namespace erhe::voxel {
 
 class Grid_impl;
 
-// PicoGK-style level-set contract (doc/openvdb-integration-plan.md):
+// PicoGK-style level-set contract (doc/plans/geometry_graph/openvdb_sdf.md):
 // uniform voxel size, axis-aligned linear transform, narrow-band signed
 // distance values clamped to +/- background, GRID_LEVEL_SET grid class.
 class Grid_create_info

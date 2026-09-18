@@ -22,7 +22,7 @@ enum class Asset_resolve_state : int {
     // `failed` because a load in flight is not a broken container: pending
     // must NOT latch, or the first touch of a not-yet-loaded container would
     // turn into a permanent failure the moment loads span frames
-    // (doc/async-asset-loading-plan.md 2.9).
+    // (doc/async_asset_loading_design.md 2.9).
     pending    = 3
 };
 

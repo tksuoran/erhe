@@ -14,7 +14,7 @@ namespace erhe::property {
 
 namespace erhe::scene {
 
-// A geometric prim (doc/usd-compatibility-plan.md C5, USD `UsdGeomGprim`):
+// A geometric prim (doc/usd_compatibility_design.md C5, USD `UsdGeomGprim`):
 // the level of the prim class hierarchy that draws geometry, and so the
 // level `doubleSided` belongs to.
 //

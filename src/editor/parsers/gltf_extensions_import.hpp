@@ -21,7 +21,7 @@ class Operation;
 class Scene_root;
 
 // Import side of the editor-domain ERHE_* glTF extensions
-// (doc/gltf-scene-roundtrip-plan.md phase 3); the export side is
+// (doc/gltf_scene_roundtrip.md phase 3); the export side is
 // parsers/gltf_extensions_export.hpp.
 
 // Parsed ERHE_physics node payload: rigid-body state the
@@ -102,7 +102,7 @@ void import_gltf_editor_state(
 );
 
 // ERHE_scene library_folders: the tree position of every resource the file
-// places somewhere other than its kind scope (doc/content-library-folders.md
+// places somewhere other than its kind scope (doc/content_library_folders.md
 // D5/D6). A saved path may name any prim of the scene tree (C5), so this runs
 // AFTER the imported nodes enter the scene - separately from
 // import_gltf_editor_state, whose operations all run before that.

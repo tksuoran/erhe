@@ -8,14 +8,14 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 
 - **`Unique_id<T>`** - Thread-safe atomic ID generator. Non-copyable, movable. Each template instantiation has an independent counter.
 - **`Item_base`** - Base class for all items. Provides ID, name, flags, tags, source path, debug label. Inherits `enable_shared_from_this` - all instances must be created via `std::make_shared`. Also derives from `erhe::property::Dependency_object` (see `src/erhe/property/notes.md`): every item carries a property store, and `get_property_owner_type()` returns `get_type()` so property metadata resolves by item type.
-- **`Item_flags`** - Bitmask constants for item state (visible, selected, hovered, opaque, etc.) with `to_string()`. `visible`, `active`, `shadow_cast` and `lightmapped` (`Item_flags::derived`) are mirrors of the `Item_base::visible_property` / `active_property` / `shadow_cast_property` / `lightmapped_property` effective values (`doc/property-system.md` D23): `set_flag_bits` rejects them (logged, dropped); write the property (`set_visible`, `show`, `hide`, `set_value`). The bit is written by the property changed callback, so an inherited change and a tree move keep it current and every `Item_filter` / `is_visible()` reader stays a bit test.
-- `active` is the odd one out: its property is NOT inherits-flagged, because USD's prim `active` metadatum is the prim's own opinion, while the pruning it causes covers the whole subtree whatever a descendant says of itself (`doc/usd-compatibility-plan.md` X2). So `Item_flags::active` is the item's own value AND its inheritance parent's bit, recomputed for the item and - only when the bit moved - for the subtree by `rederive_active_flag_bits()`. That runs from the property changed callback and from the structural moves that change the parent (`Hierarchy::set_parent`, `Node_attachment::set_node`, `set_inheritance_container`); never per frame. `defined_property` (the prim's composed USD specifier, `def` or `over`) is the item's own opinion in exactly the same way and feeds the same bit, so an undefined prim and its subtree are out the way USD's default traversal predicate leaves them out. A third opinion feeds the same bit from the parent's side: `prunes_children()` / `set_prunes_children()`, the `UsdGeomModelAPI` draw mode of a model prim (`doc/usd_compatibility.md`, "Draw modes"). A prim whose draw mode asks for a proxy keeps its own bit - it carries the proxy - and every child prim's subtree leaves through `Hierarchy::is_pruned_by_parent()`, which the derivation ANDs in. The parent's attachments are inheritance children but not hierarchy children, so they stay, which is what lets one of them be the proxy. One child prim is exempt as well: the generated geometry a `cards` draw mode supplies stands in for the subtree that left, so `Item_flags::draw_mode_proxy` on it makes `is_pruned_by_parent()` answer false. It is derived state of the item, never written into `active`, so a save persists the draw mode and not its consequence; the one change site is the draw-mode attachment reacting to its own value, and `set_prunes_children()` rederives the children alone. `is_active()` reads it, and every consumer that requires `visible` requires `active` too - rendering, ID picking, raytracing, shadow casting, lightmap baking, DDGI and the physics world (`Node_physics` enters and leaves the Jolt world on the flip).
+- **`Item_flags`** - Bitmask constants for item state (visible, selected, hovered, opaque, etc.) with `to_string()`. `visible`, `active`, `shadow_cast` and `lightmapped` (`Item_flags::derived`) are mirrors of the `Item_base::visible_property` / `active_property` / `shadow_cast_property` / `lightmapped_property` effective values (`doc/property_system.md` D23): `set_flag_bits` rejects them (logged, dropped); write the property (`set_visible`, `show`, `hide`, `set_value`). The bit is written by the property changed callback, so an inherited change and a tree move keep it current and every `Item_filter` / `is_visible()` reader stays a bit test.
+- `active` is the odd one out: its property is NOT inherits-flagged, because USD's prim `active` metadatum is the prim's own opinion, while the pruning it causes covers the whole subtree whatever a descendant says of itself (`doc/usd_compatibility_design.md` X2). So `Item_flags::active` is the item's own value AND its inheritance parent's bit, recomputed for the item and - only when the bit moved - for the subtree by `rederive_active_flag_bits()`. That runs from the property changed callback and from the structural moves that change the parent (`Hierarchy::set_parent`, `Node_attachment::set_node`, `set_inheritance_container`); never per frame. `defined_property` (the prim's composed USD specifier, `def` or `over`) is the item's own opinion in exactly the same way and feeds the same bit, so an undefined prim and its subtree are out the way USD's default traversal predicate leaves them out. A third opinion feeds the same bit from the parent's side: `prunes_children()` / `set_prunes_children()`, the `UsdGeomModelAPI` draw mode of a model prim (`doc/usd_compatibility.md`, "Draw modes"). A prim whose draw mode asks for a proxy keeps its own bit - it carries the proxy - and every child prim's subtree leaves through `Hierarchy::is_pruned_by_parent()`, which the derivation ANDs in. The parent's attachments are inheritance children but not hierarchy children, so they stay, which is what lets one of them be the proxy. One child prim is exempt as well: the generated geometry a `cards` draw mode supplies stands in for the subtree that left, so `Item_flags::draw_mode_proxy` on it makes `is_pruned_by_parent()` answer false. It is derived state of the item, never written into `active`, so a save persists the draw mode and not its consequence; the one change site is the draw-mode attachment reacting to its own value, and `set_prunes_children()` rederives the children alone. `is_active()` reads it, and every consumer that requires `visible` requires `active` too - rendering, ID picking, raytracing, shadow casting, lightmap baking, DDGI and the physics world (`Node_physics` enters and leaves the Jolt world on the flip).
 - **`Purpose`** - USD purpose token (`default_` / `render` / `proxy` / `guide`, see "Purpose") with `c_purpose_enum_info`, the enumerator table `Item_base::purpose_property` is registered with.
 - **`Item_type`** - Bitmask constants for item types (mesh, camera, light, node, etc.) used by the `is<T>()` template.
 - **`Item_filter`** - Four-criteria bitmask filter (all-set, any-set, all-clear, any-clear) with AND semantics.
 - **`Item<Base, Intermediate, Self, Kind>`** - CRTP template providing `clone()`, `get_type()`, `get_type_name()`. Three clone modes: copy constructor, custom clone constructor, not clonable.
 - **`Hierarchy`** - Parent/child tree built on `Item_base`. Supports reparenting, depth tracking, recursive traversal (`for_each`), removal (splice or recursive), and cloning with `adopt_orphan_children()`. Implements the `Dependency_object` inheritance virtuals (`get_inheritance_parent`, `for_each_inheritance_child`) so `inherits`-flagged properties flow down the tree; `set_parent` captures an inheritance snapshot before the move and applies it after, so the subtree's property-changed notifications carry the old values. `child_count_property` is a computed property (D26, owner types `node | content_library_node`) reading `get_child_count()`; `handle_add_child` / `handle_remove_child` push it to expressions.
-- **`Typed`** - A typed prim (`doc/usd-compatibility-plan.md` C5): the level of the prim class hierarchy that carries the USD `typeName` token, see "Prim classes".
+- **`Typed`** - A typed prim (`doc/usd_compatibility_design.md` C5): the level of the prim class hierarchy that carries the USD `typeName` token, see "Prim classes".
 - **`Scope`** - A `Scope` prim: children only, no transform, and every class's value properties as its secondary properties, see "Prim classes".
 - **`Item_host`** - Abstract host for items, provides a mutex for synchronized access. `Item_host_lock_guard` falls back to a static orphan mutex when no host is available. `register_prim()` / `unregister_prim()` are the hooks a host keeps its prim index with, see "Prim classes".
 
@@ -29,7 +29,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `active_property`, `is_active()`, `rederive_active_flag_bits()`, `prunes_children()` / `set_prunes_children()` - owner type 0, default true, NOT `inherits`; the subtree effect is the derived bit, see "Item_flags" above
 - `defined_property` - owner type 0, default true, NOT `inherits`; the USD specifier of the prim the item is, ANDed into the same derived bit
 - `purpose_property`, `get_purpose()`, `derive_purpose_from_flags(flag_bits)` (static, `constexpr`) - owner type 0, `inherits`, per-object default derived from the flag bits, see "Purpose"
-- `get_reference_path()` / `get_shared_reference()` - the text and `shared_from_this` an object reference (`doc/property-system.md` D28) uses to name and hold this item. `Item_base` names an item by its name; `Hierarchy` overrides it with the item's path (see "Item paths")
+- `get_reference_path()` / `get_shared_reference()` - the text and `shared_from_this` an object reference (`doc/property_system.md` D28) uses to name and hold this item. `Item_base` names an item by its name; `Hierarchy` overrides it with the item's path (see "Item paths")
 - `get_property_sub_object_count()` / `get_property_sub_object(index)` / `get_property_sub_object_label(index)` - property sub-objects (D29): Dependency_objects the item owns by value that the editor addresses as (item, index); the defaults report none (`Mesh` overrides them with its primitives)
 - `is_lock_edit()` / `set_lock_edit()` - the `lock_edit` flag is the property-store seal (`Dependency_object::seal`, D24): while set, every local property write is refused (`set_value` returns false, logged); `is_sealed()` agrees with the flag, including after a copy
 - `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`, `clear_tags()`
@@ -63,14 +63,14 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 
 ## Purpose
 
-`Purpose` is the USD purpose vocabulary (`doc/usd-compatibility-plan.md`
+`Purpose` is the USD purpose vocabulary (`doc/usd_compatibility_design.md`
 M3): `default_` for ordinary content, `render` for the high-quality member
 of a pair, `proxy` reserved for the low-cost stand-in a future proxy mesh
 provides, and `guide` for editor-only content the user works WITH rather
 than ON - a tool, a brush preview, a controller, a rendertarget panel.
 
 `Item_base::purpose_property` is an `inherits`-flagged enumeration whose
-DEFAULT layer is per-object (`doc/property-system.md` D31): it is
+DEFAULT layer is per-object (`doc/property_system.md` D31): it is
 `derive_purpose_from_flags(get_flag_bits())`, which answers `guide` when any
 of `Item_flags::purpose_guide_when_set` (`tool`, `brush`, `controller`,
 `rendertarget`) is set or `show_in_ui` is clear, and `default_` otherwise.
@@ -96,11 +96,11 @@ pass, the rendertarget overlay pass), which `purpose` cannot express.
 
 Every scene is one tree of prims and the erhe class of a prim sits in a
 class hierarchy that mirrors the USD schema hierarchy
-(`doc/usd-compatibility-plan.md` C5). A level's class has its own
+(`doc/usd_compatibility_design.md` C5). A level's class has its own
 `Item_type` bit and a concrete class's static type is the OR of its chain
 (`Scope::get_static_type()` is `typed | scope`), so `is<Typed>(scope)`
 holds by the ordinary subset test and the property owner-type chain
-(`doc/property-system.md` D27) follows the same levels. `erhe::item` holds
+(`doc/property_system.md` D27) follows the same levels. `erhe::item` holds
 the two levels that need no transform and no scene:
 
 - **`Typed`** (USD `UsdTyped`, base `Hierarchy`) carries the prim's
@@ -113,7 +113,7 @@ the two levels that need no transform and no scene:
   under one.
 
 The token is `Typed::type_name_property`, a bridged string property
-(`doc/property-system.md` D18) over `get_prim_type_name()` /
+(`doc/property_system.md` D18) over `get_prim_type_name()` /
 `set_prim_type_name()`, so it is always the prim's own local value and
 never inherits. A class that fixes its token overrides
 `Typed::get_class_type_name()` with it - `Scope` returns `"Scope"` - and
@@ -139,7 +139,7 @@ A prim with no parent of its own is not yet placed in a tree, so
 answer with what `Item_base` answers for it: the inheritance container that
 holds it. A content-library resource inherits its folder's values and shares
 its entry node's namespace through that container
-(`doc/content-library-folders.md` D1).
+(`doc/content_library_folders.md` D1).
 
 A prim's item host is the host of the prim it is parented to. `Typed` owns
 that rule: `Typed::handle_parent_update()` takes the new parent's
@@ -169,14 +169,14 @@ The levels that need a transform or a scene - `Imageable`, `Xformable`
 in `erhe::scene`, see `src/erhe/scene/notes.md` "Prim levels".
 
 `Scope::get_secondary_property_owner_type()` is the root owner type, as an
-editor `Style` item's is (`doc/property-system.md` D30), so a scope holds
+editor `Style` item's is (`doc/property_system.md` D30), so a scope holds
 any class's value properties by qualified name (`Material.roughness` on a
 materials scope) and its descendants inherit them - the content-library
 folder rule.
 
 ## Item paths
 
-An item in a hierarchy has a namespace path (`doc/usd-compatibility-plan.md`
+An item in a hierarchy has a namespace path (`doc/usd_compatibility_design.md`
 M1): the names of the item and of its ancestors below the root, outermost
 first, separated by `/`. The root's own name is not part of the path, so a
 child of the root is named by its name alone, a deeper item by
@@ -203,7 +203,7 @@ unambiguous identifier a name is not.
 ## Sibling-unique names
 
 The children of one parent hold distinct names
-(`doc/usd-compatibility-plan.md` M2), so an item path names exactly one item
+(`doc/usd_compatibility_design.md` M2), so an item path names exactly one item
 and is the identifier a USD prim path is.
 
 - `Hierarchy::make_sibling_unique_name(parent, wanted_name, exclude)` is the

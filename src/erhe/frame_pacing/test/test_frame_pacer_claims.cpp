@@ -1,7 +1,7 @@
 // Frame pacer parity suite (implementation plan step P1.2).
 //
 // C++ replication of the verification scenarios and claims C1..C9 from
-// scripts/frame_pacing_sim.py / doc/frame_pacing_control_model.md section 11.
+// scripts/frame_pacing_sim.py / doc/frame_pacing/control_model.md section 11.
 // Constants match the Python reference; RNG streams need not match - all
 // assertions are on invariants and bounds, not sample paths.
 
@@ -510,7 +510,7 @@ TEST(Frame_pacer_claims, c14_latest_ready_full_pacing)
 
 TEST(Frame_pacer_claims, c15_inert_target_holdback)
 {
-    // The measured driver behavior (doc/frame_pacing_present_timing_driver_report.md):
+    // The measured driver behavior (doc/reference/nvidia_present_timing_driver_report.md):
     // target present times are accepted but never honored - an image
     // displays at the earliest vsync at which it is AVAILABLE. The
     // mitigation delays the present REQUEST to one period before the

@@ -14,7 +14,7 @@ auto make(const std::string& name) -> std::shared_ptr<H>
     return std::make_shared<H>(name);
 }
 
-// Sibling-unique names (doc/usd-compatibility-plan.md M2): the children of one
+// Sibling-unique names (doc/usd_compatibility_design.md M2): the children of one
 // parent hold distinct names. Attaching applies the numeric suffix; renaming an
 // attached item to a name a sibling holds is refused.
 

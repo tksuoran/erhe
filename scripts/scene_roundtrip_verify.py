@@ -2,7 +2,7 @@
 """Phase 6 scene-persistence verification harness (glTF-everything round-trip).
 
 Drives the in-editor MCP server (headless Vulkan build) through the phase 6
-verification of doc/gltf-scene-roundtrip-plan.md:
+verification of doc/gltf_scene_roundtrip.md:
 
 1. Builds a comprehensive scene: shape instances (geometry-normative
    meshes), an imported textured glTF asset (triangle soup + embedded
@@ -28,7 +28,7 @@ verification of doc/gltf-scene-roundtrip-plan.md:
    (--gltf-validator or ERHE_GLTF_VALIDATOR) and a Blender headless
    import + render (--blender or ERHE_BLENDER; a Windows default install
    is probed automatically).
-6. Round-trips USD content on its own leg (doc/usd-compatibility-plan.md
+6. Round-trips USD content on its own leg (doc/usd_compatibility_design.md
    E3): the .usda files under src/erhe/usd/test/data/ open as scenes, are
    edited through MCP, saved as USDA, reloaded and diffed with the same
    helpers the glTF leg uses, saved a second time and text-compared, and
@@ -376,7 +376,7 @@ def wait_for_scene_node(scene_name, node_name, tries=100):
 
 def wait_for_mesh_child(scene_name, node_name, tries=100):
     """A Mesh is a child prim of the node it belongs to
-    (doc/usd-compatibility-plan.md C5), not an attachment of it."""
+    (doc/usd_compatibility_design.md C5), not an attachment of it."""
     for _ in range(tries):
         nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
         for node in nodes:
@@ -404,7 +404,7 @@ def round_vec(values, digits=4):
 
 def norm_quat(values, digits=4):
     """q and -q are the same rotation: canonicalize the sign before rounding.
-    A prim outside Xformable carries no transform (doc/usd-compatibility-plan.md
+    A prim outside Xformable carries no transform (doc/usd_compatibility_design.md
     C5), so get_scene_nodes reports none for it and the record stays empty."""
     q = [float(v) for v in values]
     if not q:
@@ -418,7 +418,7 @@ def norm_quat(values, digits=4):
 def norm_node(node, parent_name=None):
     return {
         "name":        node.get("name"),
-        # The prim's erhe class (doc/usd-compatibility-plan.md C5): a prim
+        # The prim's erhe class (doc/usd_compatibility_design.md C5): a prim
         # that comes back as another class is a round-trip failure.
         "type":        node.get("type"),
         "parent":      parent_name if parent_name is not None else node.get("parent"),
@@ -434,7 +434,7 @@ def norm_node(node, parent_name=None):
 
 
 # The kind scopes a scene's content library keeps its resources under
-# (doc/usd-compatibility-plan.md U4). They are prims of the scene tree, so
+# (doc/usd_compatibility_design.md U4). They are prims of the scene tree, so
 # get_scene_nodes reports them and the resources below them; the node diff
 # excludes that subtree because the library round trip is compared by the
 # dedicated materials / brushes / graph_meshes / graph_textures records, and
@@ -573,12 +573,12 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
         key=lambda m: m["name"],
     )
 
-    # A local value is an authored value (doc/property-system.md D32): a
+    # A local value is an authored value (doc/property_system.md D32): a
     # material field nothing authored reports Value_source::default_value,
     # and a round trip must not turn it into a local one. Only the default
     # set is compared: a value a material's STYLE supplies still imports as
     # local, because the native glTF fields carry the styled material's
-    # effective value (doc/gltf-properties-extension-plan.md).
+    # effective value (doc/plans/gltf_properties_extension.md).
     snap["material_default_sources"] = {}
     for material in materials:
         if material.get("name") not in material_names:
@@ -903,7 +903,7 @@ def section_build_scene():
 
     def block_resource_placement():
         # A resource is a prim of the scene tree and may sit under any prim
-        # (doc/usd-compatibility-plan.md C5); ERHE_scene library_folders
+        # (doc/usd_compatibility_design.md C5); ERHE_scene library_folders
         # carries where. Three placements, one per shape the carrier can take:
         # a folder scope under the kind scope, a scope under an Xform, and a
         # Mesh that binds the material directly.
@@ -1136,7 +1136,7 @@ def section_reload_and_diff():
         return
 
     # Targeting an animation applies it, and an applied clip holds its pose in
-    # the animated value layer (doc/property-system.md D5) over the transform
+    # the animated value layer (doc/property_system.md D5) over the transform
     # the nodes authored. A save writes that authored base, so the live
     # snapshot has to be taken on the base too: stopping the player drops the
     # layer and puts every target back on what the file holds.
@@ -1519,7 +1519,7 @@ def section_foreign_tools(gltf_validator_arg, blender_arg):
 
 
 # --------------------------------------------------------------------------
-# Section 6: USD round trip (doc/usd-compatibility-plan.md E3)
+# Section 6: USD round trip (doc/usd_compatibility_design.md E3)
 # --------------------------------------------------------------------------
 
 USD_DATA_DIR   = pathlib.Path("src/erhe/usd/test/data")
@@ -1601,7 +1601,7 @@ def usd_snapshot(scene_name):
         key=lambda t: t["name"],
     )
 
-    # The brushes the scene carries (doc/usd-compatibility-plan.md E4a): the
+    # The brushes the scene carries (doc/usd_compatibility_design.md E4a): the
     # same keys the glTF leg diffs, plus what a Brush prim authors of its own.
     brushes = call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
     snap["brushes"] = sorted(
@@ -1621,7 +1621,7 @@ def usd_snapshot(scene_name):
     )
 
     # The texture node graphs the scene carries
-    # (doc/usd-texture-graphs-plan.md): every graph asset with its nodes,
+    # (doc/plans/usd_texture_graphs.md): every graph asset with its nodes,
     # parameters and node positions, the links between them by name, and the
     # material slots fed from it. Names rather than ids, because a reload
     # reshuffles ids. The graph's own path is not diffed: a save of a scene
@@ -1677,7 +1677,7 @@ def usd_snapshot(scene_name):
         key=lambda g: g["name"],
     )
 
-    # The variant sets the scene carries (doc/usd-compatibility-plan.md X4):
+    # The variant sets the scene carries (doc/usd_compatibility_design.md X4):
     # which variant each set has selected and what each variant binds. The
     # count of opinions beyond material bindings is deliberately NOT diffed -
     # this slice does not carry them, so a saved file has none where the
@@ -1709,12 +1709,12 @@ def usd_snapshot(scene_name):
         key=lambda v: (v["prim_path"], v["set_name"]),
     )
 
-    # A local value is an authored value (doc/property-system.md D32): the
+    # A local value is an authored value (doc/property_system.md D32): the
     # names an item authors, per item, so an edit that survived the round
     # trip is visible as such and an unauthored value stays unauthored.
     # `styles` is the same walk's other half: which style each item names, and
     # what each style item holds locally, so a `class` prim and its `inherits`
-    # arc (doc/usd-compatibility-plan.md X3) are diffed like any other value.
+    # arc (doc/usd_compatibility_design.md X3) are diffed like any other value.
     snap["local_property_names"] = {}
     snap["styles"] = {}
     for item in [{"name": n["name"], "id": n["id"]} for n in nodes] + [{"name": m["name"], "id": m["id"]} for m in materials]:
@@ -1785,7 +1785,7 @@ def usd_attachment_id(scene_name, node_name, attachment_type):
 
 def usd_open_pbr_terminals(S, saved):
     """The written file offers both surface terminals for the material whose
-    values only the OpenPBR network carries (doc/usd-compatibility-plan.md
+    values only the OpenPBR network carries (doc/usd_compatibility_design.md
     E2)."""
     if saved is None or not saved.is_file():
         check(S, "open_pbr: saved file present", False, "no file")
@@ -1902,8 +1902,8 @@ def usd_instance_item_state(scene_name, carrier_name):
 
 def usd_library_folder_leg(S):
     """A content-library folder is a `Scope` of the scene tree
-    (doc/content-library-folders.md) and a USD file carries every `Scope` it is
-    given (doc/usd-compatibility-plan.md E4d): a folder holding a material and
+    (doc/content_library_folders.md) and a USD file carries every `Scope` it is
+    given (doc/usd_compatibility_design.md E4d): a folder holding a material and
     an empty folder beside it both come back at their paths, the kind scope
     they hang off is adopted by name on reload rather than doubled, and the
     save is a fixed point from the first reload."""
@@ -2074,7 +2074,7 @@ def usd_physics_leg(S):
 
 
 def usd_references_leg(S):
-    """A reference with sparse overrides (doc/usd-compatibility-plan.md X2):
+    """A reference with sparse overrides (doc/usd_compatibility_design.md X2):
     each `over` below the referencing prim reloads as the local values of one
     instance item - a value, a transform and the `active` metadatum - and a
     save writes them back, so a reopened file holds the same set."""
@@ -2116,7 +2116,7 @@ def usd_references_leg(S):
 
 def usd_resource_placement_leg(S):
     """A resource is a prim of the scene tree and may sit under any prim
-    (doc/usd-compatibility-plan.md C5, U4); in USD the tree is the file, so a
+    (doc/usd_compatibility_design.md C5, U4); in USD the tree is the file, so a
     material comes back where it was written. looks.usda already keeps its
     materials in a Scope below an Xform, and moving one into a Scope below
     that Scope adds the folder-scope shape; both must reload at the same
@@ -2193,7 +2193,7 @@ def usd_graph_mesh_state(scene_name, graph_name):
 
 
 def usd_geometry_graph_leg(S):
-    """A geometry graph in a USD file (doc/usd-texture-graphs-plan.md section
+    """A geometry graph in a USD file (doc/plans/usd_texture_graphs.md section
     4): a `Graph_mesh` is the marked `NodeGraph` prim a texture graph is, with
     its nodes' `info:id` under `erhe:geometry:` and its evaluated geometry as
     the child `Mesh "result"`, and the prim it is bound to gets its binding
@@ -2347,33 +2347,33 @@ def section_usd_round_trip(usdchecker_arg):
 
     # styles.usda holds a Scope of `class` prims, one class inheriting another,
     # and a material, a mesh and an Xform naming them through `inherits`
-    # (doc/usd-compatibility-plan.md X3): the classes must come back as Style
+    # (doc/usd_compatibility_design.md X3): the classes must come back as Style
     # items where they sat, with their chain and their assignments.
     usd_round_trip_leg(S, "styles.usda", "styles", edits=[], extra_keys=["styles"])
     # variants.usda holds two material-binding variant sets, one of them
     # selecting a variant the composed stage would not show
-    # (doc/usd-compatibility-plan.md X4): the table, the selection and the
+    # (doc/usd_compatibility_design.md X4): the table, the selection and the
     # bound materials must come back as they went out.
     usd_round_trip_leg(S, "variants.usda", "variants", edits=[], extra_keys=["variants"])
     # brushes.usda holds a Brushes scope with two Brush prims, one binding a
     # material and one not, each with its geometry as a child Mesh prim
-    # (doc/usd-compatibility-plan.md E4a): the brushes must come back with
+    # (doc/usd_compatibility_design.md E4a): the brushes must come back with
     # their counts, density, normal style and material, and their geometry
     # must not appear as a mesh of the scene.
     usd_round_trip_leg(S, "brushes.usda", "brushes", edits=[], extra_keys=["brushes"])
     # skinning.usda holds a SkelRoot with a Skeleton and one skinned Mesh
-    # (doc/usd-compatibility-plan.md K1). The skeleton comes back as the
+    # (doc/usd_compatibility_design.md K1). The skeleton comes back as the
     # Skeleton prim it was, its joints as the same prims below it - a joint is
     # written as an entry of `joints`, so the reload must not find a second
     # set of them - and the mesh keeps its binding.
     skinning_saved = usd_round_trip_leg(S, "skinning.usda", "skinning", edits=[], extra_keys=[])
     # texture_graph.usda holds a marked NodeGraph the material samples in
-    # place of an image (doc/usd-texture-graphs-plan.md): the graph must come
+    # place of an image (doc/plans/usd_texture_graphs.md): the graph must come
     # back node for node, parameter for parameter and link for link, at the
     # place it had, with the material slot still fed from it.
     usd_round_trip_leg(S, "texture_graph.usda", "texture_graph", edits=[], extra_keys=["node_graphs"])
     # open_pbr.usda holds materials whose surface is an OpenPBR network
-    # (doc/usd-compatibility-plan.md E2). An anisotropic roughness and a
+    # (doc/usd_compatibility_design.md E2). An anisotropic roughness and a
     # transmission are what only that network carries, so both are edited
     # before the save: they must come back, and the saved file must offer the
     # network again beside its UsdPreviewSurface.
@@ -2388,7 +2388,7 @@ def section_usd_round_trip(usdchecker_arg):
     usd_open_pbr_terminals(S, open_pbr_saved)
     # A geometry graph is the same prim form with the evaluated geometry as a
     # child Mesh, and the prim it drives bound to it again after a reload
-    # (doc/usd-texture-graphs-plan.md section 4).
+    # (doc/plans/usd_texture_graphs.md section 4).
     usd_geometry_graph_leg(S)
     usd_resource_placement_leg(S)
     usd_library_folder_leg(S)
@@ -2410,7 +2410,7 @@ def section_usd_round_trip(usdchecker_arg):
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
-# glTF material variants (doc/usd-compatibility-plan.md X4)
+# glTF material variants (doc/usd_compatibility_design.md X4)
 # --------------------------------------------------------------------------
 
 GLTF_VARIANTS_SOURCE = pathlib.Path("src/erhe/gltf/test/data/variants.gltf")

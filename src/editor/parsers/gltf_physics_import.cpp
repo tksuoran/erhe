@@ -27,7 +27,7 @@ void import_gltf_physics(
     // KHR entries: an erhe-authored file states the item names and the
     // complete local value set of each item, so a value the KHR entry baked
     // from an inherited one inherits again after the reload
-    // (doc/gltf-scene-roundtrip-plan.md phase 3).
+    // (doc/gltf_scene_roundtrip.md phase 3).
     const Gltf_physics_item_names item_names = parse_gltf_physics_item_names(gltf_data);
     arguments.materials.reserve(item_names.physics_materials.size());
     for (const Gltf_physics_material_record& record : item_names.physics_materials) {

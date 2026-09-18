@@ -52,7 +52,7 @@ static constexpr const char* c_weight_paint_blend_strings[] = {
 };
 
 // Brush that paints the active joint's skin weights (Blender-style weight
-// paint, simplified). See doc/weight-paint-plan.md.
+// paint, simplified). See doc/weight_paint.md.
 //
 // The active joint comes from Weight_display (select a bone in bone mode).
 // A stroke locks onto the first-hit primitive; each dab tests CPU-skinned

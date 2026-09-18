@@ -69,7 +69,7 @@ public:
     bool                                    clamp_only{false};
     // Claim C15: the presentation engine IGNORES the requested target
     // present time (measured driver behavior, see
-    // doc/frame_pacing_present_timing_driver_report.md): an image displays
+    // doc/reference/nvidia_present_timing_driver_report.md): an image displays
     // at the earliest vsync at which it is available, never held back for
     // its target. (latest_ready is inert by construction.)
     bool                                    inert_target{false};
@@ -313,7 +313,7 @@ inline auto run_scenario(const Scenario& scenario, Frame_pacer& pacer) -> std::v
         gpu_end[static_cast<std::size_t>(k)] = ge;
         {
             // cpu_dur / gpu_dur are pure stage service times (waits excluded);
-            // normative, see doc/frame_pacing_inputs.md sections 3.2/3.3.
+            // normative, see doc/frame_pacing/inputs.md sections 3.2/3.3.
             Plant_event event;
             event.time     = ge;
             event.kind     = Plant_event::Kind::gpu;

@@ -135,7 +135,7 @@ public:
     [[nodiscard]] auto get_last_draw_list_entry_count() const -> std::size_t        { return m_last_draw_list_entry_count; }
     // CPU wall time spent inside render() for the most recent call, and the
     // running total / call count since the last reset (P4 measurement:
-    // doc/draw_list_renderer_requirements.md).
+    // doc/draw_list_renderer.md).
     [[nodiscard]] auto get_last_cpu_time_us  () const -> double      { return m_last_cpu_time_us; }
     [[nodiscard]] auto get_total_cpu_time_us () const -> double      { return m_total_cpu_time_us; }
     [[nodiscard]] auto get_render_call_count () const -> std::size_t { return m_render_call_count; }

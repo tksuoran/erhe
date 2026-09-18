@@ -2,10 +2,10 @@
 
 // Frame time record ring (implementation plan step P0.2).
 //
-// Holds the per-frame event timestamps required by doc/frame_pacing.md
+// Holds the per-frame event timestamps required by doc/frame_pacing/requirements.md
 // (Data requirements), ring-indexed by frame id. This is the single data
 // path shared by the frame pacer's estimators, profiling UI, and analysis
-// tools (doc/frame_pacing_inputs.md section 4).
+// tools (doc/frame_pacing/inputs.md section 4).
 //
 // All timestamps are seconds in one monotonic clock domain (QPC on
 // Windows); now() below provides that clock. Zero means "not recorded".
@@ -45,7 +45,7 @@ public:
     // stage).
     double achieved_queue_ops_time{0.0};
 
-    // Normative c_k for the pacer (doc/frame_pacing_inputs.md section 3.2):
+    // Normative c_k for the pacer (doc/frame_pacing/inputs.md section 3.2):
     // CPU slot span minus the involuntary waits recorded inside it. The
     // pacer wait is expected to precede the slot and is subtracted only for
     // the portion overlapping the slot.

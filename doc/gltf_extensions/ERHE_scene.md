@@ -19,11 +19,11 @@ plain interchange exports never do.
   field means "use the editor-global default"). Omitted entirely when no
   override is engaged.
 - `styles` (optional): the content library's style items
-  (`doc/style-library.md` D4): `name` and `properties` (the style's local
+  (`doc/style_library.md` D4): `name` and `properties` (the style's local
   values as a name to text map, the form of `ERHE_node` `properties`,
   keyed by qualified name such as `Material.roughness` or `Light.color`;
   omitted when empty), and `style` (optional), the name of the style that
-  style uses itself (`doc/property-system.md` D25 style chain; omitted
+  style uses itself (`doc/property_system.md` D25 style chain; omitted
   when it uses none). A `target` member of older files is ignored. The
   styles are loaded before anything that names a style, and a `style`
   member is assigned after every entry of the array exists, so the order
@@ -45,7 +45,7 @@ plain interchange exports never do.
   content library's collision filters keep their names across a save and
   reload. Omitted when the file has none.
 - `library_folders` (optional): where the scene's content-library resources
-  sit in the scene tree (`doc/content-library-folders.md` D5), parents before
+  sit in the scene tree (`doc/content_library_folders.md` D5), parents before
   their children. Each entry has `path` (the prim's slash-separated path from
   the scene root, `Hierarchy::get_path()`), `properties` (the prim's local
   property values as a name to text map, the form of `ERHE_node`

@@ -124,7 +124,7 @@ as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. `attachments` lists the applied-API-schema attachments alone (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/usd-compatibility-plan.md X2).
+Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. `attachments` lists the applied-API-schema attachments alone (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/usd_compatibility_design.md X2).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -161,7 +161,7 @@ Returns: `{lights: [{name, node, type, color, intensity, range}]}`
 List all materials in a scene's content library.
 
 A scene's content-library resources are prims of the scene's own tree
-(`doc/usd-compatibility-plan.md` U4), under the `Scope`s named for their kind
+(`doc/usd_compatibility_design.md` U4), under the `Scope`s named for their kind
 (`Materials`, `Textures`, `Brushes`, `Styles`, `Physics Materials`, ...), so
 `get_scene_nodes` reports them with their class as `type` and the property
 tools address them by `item_name`, `item_id` or path like any prim.
@@ -215,7 +215,7 @@ directly under it.
 
 ### get_scene_variants
 
-List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): a
+List the variant sets a scene carries (doc/usd_compatibility_design.md X4): a
 USD file's material-binding `variantSet`s become one entry each, and a glTF
 file's `KHR_materials_variants` list one entry named `materials`, carried by
 the prim the file's content sits under (the scene's root prim, whose path is
@@ -263,7 +263,7 @@ Returns: `{x, y, slots: [{slot, valid, mesh?, node?, joint?, grid?, position?, n
 ### get_selection
 
 Get currently selected items, and the active item: the one reference item of
-the selection (doc/active-item-plan.md). The active item can be an item that
+the selection (doc/active_item.md). The active item can be an item that
 is no longer selected, which is why it is reported with its own `selected`
 flag.
 
@@ -393,7 +393,7 @@ Returns: `{dynamic_physics_enabled: true/false}`
 Lists the registered properties of one item. Beside the erhe value source
 (`source`, `local`, `default`, `inherits`, `style`) each property of the item
 carries `origin`, the same value's provenance in the terms of the file the
-scene was opened from (`doc/usd-compatibility-plan.md` X5, whose table in
+scene was opened from (`doc/usd_compatibility_design.md` X5, whose table in
 `doc/usd_compatibility.md` says what each source reports):
 
 - `layer` - the file the value is authored in, or `session` for a scene that

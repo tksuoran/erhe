@@ -9,13 +9,13 @@ queued for presentation.
 
 The library implements the planning-phase design in `doc/`:
 
-- `doc/frame_pacing.md` - requirements
-- `doc/frame_pacing_control_model.md` - control-theory model, claims C1..C9
-- `doc/frame_pacing_algorithm.md` - the algorithm (normative for this code)
-- `doc/frame_pacing_inputs.md` - input definitions and engine sourcing
-- `doc/frame_pacing_behavior.md` - behavior specification per scenario
-- `doc/frame_pacing_capability_tiers.md` - capability tiers (Vulkan extensions)
-- `doc/frame_pacing_implementation_plan.md` - phased work order
+- `doc/frame_pacing/requirements.md` - requirements
+- `doc/frame_pacing/control_model.md` - control-theory model, claims C1..C9
+- `doc/frame_pacing/algorithm.md` - the algorithm (normative for this code)
+- `doc/frame_pacing/inputs.md` - input definitions and engine sourcing
+- `doc/frame_pacing/behavior.md` - behavior specification per scenario
+- `doc/frame_pacing/capability_tiers.md` - capability tiers (Vulkan extensions)
+- `doc/frame_pacing/implementation_plan.md` - phased work order
 
 `scripts/frame_pacing_sim.py` is the executable Python reference model; this
 library is its 1:1 C++ port. Keep them in sync: any algorithm change must keep
@@ -60,4 +60,4 @@ Build with `-DERHE_BUILD_TESTS=ON`; run `erhe_frame_pacing_tests`.
 ## Dependencies
 
 None (standard library only). This is deliberate: the isolation requirement
-in `doc/frame_pacing.md` (unit and smoke testable without GPU or display).
+in `doc/frame_pacing/requirements.md` (unit and smoke testable without GPU or display).

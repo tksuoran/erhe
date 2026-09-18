@@ -129,7 +129,7 @@ void Brush_preview::make_preview_scene()
         content_library->add(m_headlight_material);
     }
 
-    // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // A Camera is a prim (doc/usd_compatibility_design.md C5): it carries its
     // own transform, so the preview needs no node to hold it.
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     //m_camera->enable_flag_bits(erhe::Item_flags::content);

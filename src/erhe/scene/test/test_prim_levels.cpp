@@ -1,4 +1,4 @@
-// The prim class hierarchy of doc/usd-compatibility-plan.md C5 as erhe sees
+// The prim class hierarchy of doc/usd_compatibility_design.md C5 as erhe sees
 // it: a level's static type is the OR of its chain, so the subset test
 // answers for every level above a concrete class, and a clone of a concrete
 // prim is that concrete class.
@@ -73,7 +73,7 @@ TEST(Prim_levels, cloning_an_xform_produces_an_xform)
     EXPECT_TRUE(std::dynamic_pointer_cast<erhe::scene::Xform>(clone->get_children().front()).operator bool());
 }
 
-// A point instancer is a boundable prim (doc/usd-compatibility-plan.md S1):
+// A point instancer is a boundable prim (doc/usd_compatibility_design.md S1):
 // it carries a transform, it is written as its USD schema token, and the one
 // array it holds is the prototype each instance uses.
 TEST(Prim_levels, a_point_instancer_is_a_boundable_prim)

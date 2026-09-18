@@ -170,7 +170,7 @@ message("Fetching dependencies")
 # CPMAddPackage below on purpose: it defines the TBB::tbb target, and
 # Geogram's GEOGRAM_WITH_TBB support adopts an existing TBB::tbb target
 # (its cmake/onetbb.cmake early-returns) instead of fetching its own copy.
-# See doc/openvdb-integration-plan.md.
+# See doc/plans/geometry_graph/openvdb_sdf.md.
 set(ERHE_GEOGRAM_WITH_TBB OFF)
 if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     if (CMAKE_VERSION VERSION_LESS 3.24)
@@ -473,7 +473,7 @@ if (ERHE_SPIRV)
         #   1. Builder::createConstVariable passes the OpConstantComposite id as the
         #      Variable operand of DebugGlobalVariable. Affects every compute shader
         #      (synthesised gl_WorkGroupSize) plus any file-scope const composite
-        #      array. See doc/glslang_bug_report_debugglobalvariable.md.
+        #      array. See doc/reference/glslang_bug_report_debugglobalvariable.md.
         #   2. makeMemberDebugType emits a DebugTypeMember Column that refers to the
         #      original (pre-preprocessing) source and can exceed the embedded
         #      DebugSource line length (KhronosGroup/glslang #3862, exposed by the
@@ -782,7 +782,7 @@ CPMAddPackage(
 )
 
 # USD library. LightUSD is the in-editor USD reader/writer (see
-# doc/usd-compatibility-plan.md, step L1); erhe::usd is the only erhe library
+# doc/usd_compatibility_design.md, step L1); erhe::usd is the only erhe library
 # that includes its headers. OpenUSD stays a schema and validation reference,
 # never a build dependency. With ERHE_USD_LIBRARY=none nothing below is
 # fetched, configured, built or linked.

@@ -183,7 +183,7 @@ void Frame_pacer::set_min_vsyncs(const int min_vsyncs)
 void Frame_pacer::notify_swapchain_recreated(const double nominal_grid_phase)
 {
     // Reset presentation-side state only; keep load estimates and margin
-    // (doc/frame_pacing_behavior.md section 8). The tracked grid PERIOD is
+    // (doc/frame_pacing/behavior.md section 8). The tracked grid PERIOD is
     // retained: it is a property of the display, not of the swapchain.
     m_grid_phase          = nominal_grid_phase;
     m_has_feedback_slot   = false;
@@ -424,7 +424,7 @@ void Frame_pacer::change_cadence(const int new_vsyncs, const bool is_upshift)
     if (window.empty()) {
         // Seed the new cadence's latency estimate: carry-over is a safe
         // overestimate when downshifting; the structural sum floors it when
-        // upshifting (doc/frame_pacing_algorithm.md section 5).
+        // upshifting (doc/frame_pacing/algorithm.md section 5).
         const double p     = m_tunables.quantile_p;
         const double carry = m_latency_windows[static_cast<std::size_t>(old_vsyncs)].quantile(p, 0.0);
         const double structural =

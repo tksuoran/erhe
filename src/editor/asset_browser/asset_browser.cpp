@@ -429,7 +429,7 @@ Asset_browser::Asset_browser(
             }
             const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
             if (gltf) {
-                // Open-vs-import branch (doc/gltf-scene-roundtrip-plan.md
+                // Open-vs-import branch (doc/gltf_scene_roundtrip.md
                 // phase 4): an erhe-authored scene file (ERHE_scene in
                 // extensionsUsed) loads as a full scene; any other glTF keeps
                 // the import-as-asset flow (Load = foreign glTF as new scene).

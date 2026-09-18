@@ -1,4 +1,4 @@
-// Variant sets (doc/usd-compatibility-plan.md X4). LightUSD composes nothing,
+// Variant sets (doc/usd_compatibility_design.md X4). LightUSD composes nothing,
 // so a variant contributes no opinion to the composed prim: the reader takes
 // the `variantSet` blocks off the root layer's own prim specs, records what
 // each variant binds and what it authors as property opinions, and applies
@@ -348,7 +348,7 @@ TEST_F(Variant_import, the_selected_variant_opinions_are_applied)
 // selected: the loader hoists every variant's prims below the prim carrying
 // the set and gives them sibling-unique names, so the two `tri` meshes the
 // two variants of `shape` author are `tri` and `tri_1`
-// (doc/usd-compatibility-plan.md X4).
+// (doc/usd_compatibility_design.md X4).
 TEST_F(Variant_import, the_prims_a_variant_adds_are_in_the_tree)
 {
     const erhe::usd::Usd_variant_set* shape = find_set(result.data, "/World/Swap", "shape");

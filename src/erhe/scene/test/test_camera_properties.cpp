@@ -1,5 +1,5 @@
 // Camera projection fields as entry-stored erhe::property properties
-// (doc/property-system.md section 4.4): Camera::projection() is a mirror
+// (doc/property_system.md section 4.4): Camera::projection() is a mirror
 // of the effective values, every projection property inherits, and a
 // node holds them for the cameras below it (D30).
 

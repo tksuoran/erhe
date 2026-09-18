@@ -154,7 +154,7 @@ private:
     // Shared instance-placement path for place_brush / place_brush_instances /
     // create_shape: resolves material / position / rotation / parent / scale /
     // mass / motion_mode / pose_node from args, places the brush instance and
-    // fills result. The parent is any prim (doc/usd-compatibility-plan.md C5);
+    // fills result. The parent is any prim (doc/usd_compatibility_design.md C5);
     // parent_override (from a same-batch placement) takes precedence over
     // parent_node_id / parent_node_name; out_attach_node receives the node later
     // placements may parent under (the pose node when pose_node, else the
@@ -336,11 +336,11 @@ private:
     auto action_set_gizmo_visibility          (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
 
-    // doc/import-undo-reference-clearing.md
+    // doc/import_undo_reference_clearing.md
     auto query_editor_references              (const nlohmann::json& args) -> std::string;
     auto query_memory_usage                   (const nlohmann::json& args) -> std::string;
 
-    // doc/property-system.md D13
+    // doc/property_system.md D13
     auto query_item_properties                (const nlohmann::json& args) -> std::string;
     auto query_addable_item_properties        (const nlohmann::json& args) -> std::string;
     auto action_set_item_property             (const nlohmann::json& args) -> std::string;

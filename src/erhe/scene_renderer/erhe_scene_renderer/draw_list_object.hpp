@@ -9,7 +9,7 @@
 
 namespace erhe::scene_renderer {
 
-// Registration input (doc/draw_list_renderer_requirements.md R1/R10a).
+// Registration input (doc/draw_list_renderer.md R1/R10a).
 // Kept verbatim on the object so draw lists can be rebuilt from scratch
 // (R1a) and so re-registration after mesh / material edits (R12) needs no
 // caller-side state.

@@ -158,7 +158,7 @@ public:
         const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>*   point_cube_render_passes{nullptr};
         erhe::math::Viewport                                               point_shadow_viewport{};
 
-        // Draw-list path (doc/draw_list_renderer_requirements.md R4/R4a):
+        // Draw-list path (doc/draw_list_renderer.md R4/R4a):
         // when non-null, casters are drawn from the scene's persistent shadow
         // draw lists (restricted to draw_list_layers; an EMPTY span selects
         // every layer) instead of re-bucketing
@@ -219,7 +219,7 @@ private:
         uint32_t                                                                                 boolean_mask_force_enable,
         bool                                                                                     exclude_unlit_primitives,
         // The set the calling pass binds; the records written here are
-        // consumed by that same pass (doc/draw_list_material_set_plan.md D5).
+        // consumed by that same pass (doc/draw_list_material_set.md D5).
         const Material_set*                                                                      material_source
     );
 

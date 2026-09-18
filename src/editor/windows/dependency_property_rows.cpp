@@ -402,7 +402,7 @@ void Dependency_property_rows::add_property_row(Property_editor& editor)
             }
             // A `Scope` offers the classes of the prims below it first: a
             // Materials scope lists `Material.*` above every other class
-            // (doc/content-library-folders.md D8).
+            // (doc/content_library_folders.md D8).
             m_add_preferred_owner_types.clear();
             if (m_items->size() == 1) {
                 const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(m_items->front());
@@ -680,7 +680,7 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
         std::move(tooltip),
         c_property_row_label_color
     );
-    // The composition origin (doc/usd-compatibility-plan.md X5) is appended
+    // The composition origin (doc/usd_compatibility_design.md X5) is appended
     // to the tooltip only while the row is hovered: it walks the item's
     // ancestors and formats strings, which no frame should pay per row. The
     // item is captured by weak reference so a hovered row cannot keep the

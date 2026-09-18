@@ -10,7 +10,7 @@ the original design + debugging sections are kept for reference. The earlier
 
 Committed on branch `ls/main`:
 
-- `22c1a50` docs: add `doc/forge-erhe.md` (SDL3 GPU -> erhe graphics API mapping)
+- `22c1a50` docs: add `doc/reference/forge_erhe.md` (SDL3 GPU -> erhe graphics API mapping)
 - `a230415` editor: add cube-map point-light shadows
 
 This document records the design, the per-file changes, the debugging plan, and
@@ -404,4 +404,4 @@ face images should be consistently oriented. Then run the regression pass below.
 ## Reference
 
 - Skill: `/d/forge-gpu/.claude/skills/forge-point-light-shadows/SKILL.md`
-  (Lesson 23). API mapping: `doc/forge-erhe.md`.
+  (Lesson 23). API mapping: `doc/reference/forge_erhe.md`.

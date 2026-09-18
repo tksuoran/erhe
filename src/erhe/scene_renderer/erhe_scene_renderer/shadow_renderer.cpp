@@ -744,7 +744,7 @@ void Shadow_renderer::prewarm_pipelines(
         );
     }
 
-    // Draw-list shadow keys (doc/draw_list_renderer_requirements.md R4/R22):
+    // Draw-list shadow keys (doc/draw_list_renderer.md R4/R22):
     // the persistent shadow draw lists resolve the coarsened key
     // {USE_SKINNING?} + VARIANT_DEPTH_ONLY with an empty environment and no
     // material bits, one variant per {skinning state, position encoding}. Warm
@@ -754,7 +754,7 @@ void Shadow_renderer::prewarm_pipelines(
     // joints / weights) attributes sit at the same locations in every mesh
     // format. The position encoding is per VARIANT, not per session: the
     // content (base) formats are always float3 while the optimized formats may
-    // be snorm16 (doc/meshoptimizer-integration.md, requirements 9-10), so the
+    // be snorm16 (doc/meshoptimizer_integration.md, requirements 9-10), so the
     // optimized formats are warmed beside the content ones. When quantization
     // is off both derive the same key and the extra gets are cache hits.
     {

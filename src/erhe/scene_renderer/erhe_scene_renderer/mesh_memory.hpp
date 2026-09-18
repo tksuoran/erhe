@@ -81,7 +81,7 @@ public:
 };
 
 // Which transfer queue a build path's vertex / index bytes go through
-// (doc/async-asset-loading-plan.md 2.6).
+// (doc/async_asset_loading_design.md 2.6).
 enum class Mesh_memory_queue : unsigned int
 {
     // Full drain once per frame, in Mesh_memory::flush. "Enqueued implies
@@ -173,7 +173,7 @@ public:
     [[nodiscard]] auto get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
     // Aggregated pool byte accounting for memory reporting
-    // (doc/reloadable-asset-loads.md). `capacity` only ever grows - pool
+    // (doc/reloadable_asset_loads.md). `capacity` only ever grows - pool
     // blocks are never destroyed - so `used` is the figure that drops when
     // meshes are released. Note the release is frame-deferred: a caller
     // sampling this must advance several frames after a removal.

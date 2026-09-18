@@ -11,7 +11,7 @@
 
 namespace erhe::scene_renderer {
 
-// Which pass family a draw list serves (doc/draw_list_renderer_requirements.md, R6).
+// Which pass family a draw list serves (doc/draw_list_renderer.md, R6).
 enum class Draw_purpose : uint8_t
 {
     color  = 0, // main color fill

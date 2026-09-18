@@ -70,7 +70,7 @@ void delete_attribute_if_present(GEO::AttributesManager& manager, const char* co
 
 // Defensive repair for outlier corner UVs (observed with Geogram on coarse
 // curved meshes near points where several charts meet - see
-// doc/geogram_atlas_packing_feature_request.md): a facet whose corners are
+// doc/reference/geogram_atlas_packing_feature_request.md): a facet whose corners are
 // mutually consistent except for one wildly outlying value rasterizes as a
 // long sliver across unrelated charts and bakes garbage. For each corner
 // whose UV is far (relative to the facet's own UV extent) from the facet's
@@ -147,7 +147,7 @@ void repair_outlier_corner_uvs(GEO::Mesh& mesh)
     log_operation->warn("make_atlas: repaired {} outlier corner UVs", repaired);
 }
 
-// Per-facet unwrap (doc/lightmap_seam_driven_unwrap_plan.md phase 1): every
+// Per-facet unwrap (doc/plans/lightmap/seam_driven_unwrap.md phase 1): every
 // facet becomes its own chart, flattened isometrically in its own plane
 // (local orthonormal facet basis), so parameterization distortion is zero
 // for planar facets, triangles never overlap by construction, and nothing

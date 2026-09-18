@@ -103,7 +103,7 @@ public:
     auto get_referenced_texture() const -> const Texture* override;
 
     // Process-wide image memory accounting for memory reporting
-    // (doc/reloadable-asset-loads.md). Estimated from the create info - format
+    // (doc/reloadable_asset_loads.md). Estimated from the create info - format
     // times dimensions times levels times layers - not queried from the
     // allocator, so it is backend-neutral and approximate. Views and textures
     // wrapping an externally owned image are not counted, since they own no

@@ -26,7 +26,7 @@ namespace editor {
 // execute / undo, library mutation, scene unregistration) already runs there,
 // so this carries no mutex.
 //
-// See doc/import-undo-reference-clearing.md.
+// See doc/import_undo_reference_clearing.md.
 class Pending_item_removals
 {
 public:

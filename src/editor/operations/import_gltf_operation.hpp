@@ -26,7 +26,7 @@ class Compound_operation;
 // is decided by Operation_stack, which calls on_lossless_undo() only on the
 // top-level entry it undid and only when the redo stack holds nothing else.
 //
-// See doc/reloadable-asset-loads.md.
+// See doc/reloadable_asset_loads.md.
 class Import_gltf_operation : public Operation
 {
 public:

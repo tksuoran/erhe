@@ -126,7 +126,7 @@ public:
     std::vector<Gltf_external_asset>        external_assets;
     std::vector<std::optional<std::size_t>> node_external_assets;
     // The sparse overrides a carrier node's ERHE_node extension holds, by
-    // node index (doc/usd-compatibility-plan.md X2). The parse records them;
+    // node index (doc/usd_compatibility_design.md X2). The parse records them;
     // the caller applies them when it attaches the external asset's content.
     std::map<std::size_t, std::vector<erhe::scene::Instance_override>> node_instance_overrides;
 

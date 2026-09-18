@@ -119,7 +119,7 @@ public:
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
     // The material a placed instance gets (member-backed object property,
-    // doc/property-system.md D18 / D28; a brush keeps a material, no clear).
+    // doc/property_system.md D18 / D28; a brush keeps a material, no clear).
     static const erhe::property::Property<erhe::property::Object_reference> material_property;
     [[nodiscard]] auto get_material              () const -> const std::shared_ptr<erhe::primitive::Material>&;
     [[nodiscard]] auto get_density               () const -> float;

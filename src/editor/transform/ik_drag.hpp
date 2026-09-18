@@ -31,7 +31,7 @@ void fabrik_solve(
 );
 
 // Interactive IK state for one translate drag of a bone (see
-// doc/fabrik-ik-requirements.md). Captures the chain and its drag-start pose
+// doc/plans/rigging/fabrik_ik.md). Captures the chain and its drag-start pose
 // in begin(); each apply() re-solves from that pose against an absolute
 // world-space target and writes rotation-only changes back to the joint
 // nodes (local translations never change, so bone lengths are preserved).

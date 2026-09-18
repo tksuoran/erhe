@@ -847,7 +847,7 @@ void Headset_view::update_hover_with_id_render()
         const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
-            // Non-blocking, see doc/primitive-shape-lock-split-plan.md.
+            // Non-blocking, see doc/primitive_shape_locking.md.
             entry.geometry = shape->get_geometry_const();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
@@ -1134,7 +1134,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                                 for (const auto& mesh : mesh_layer->meshes) {
                                     if (filter(mesh->get_flag_bits())) {
                                         // The active item of the selection gets its own
-                                        // outline color (doc/active-item-plan.md D5).
+                                        // outline color (doc/active_item.md D5).
                                         content_wide_line_renderer->add_mesh(
                                             *m_context.mesh_memory,
                                             *mesh,

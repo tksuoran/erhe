@@ -19,7 +19,7 @@ namespace editor {
 
 class App_context;
 
-// Lightmap baking control window (doc/lightmap_baking_plan.md).
+// Lightmap baking control window (doc/lightmap_baking.md).
 //
 // Front door: Prepare World-Space Tiles (the partitioner). The window
 // exposes the grid density knobs (cell size, tile texture size), the

@@ -1,4 +1,4 @@
-// A Camera and a Light are transformable prims (doc/usd-compatibility-plan.md
+// A Camera and a Light are transformable prims (doc/usd_compatibility_design.md
 // C5): each is a child prim of its parent with its own transform.
 
 #include "erhe_item/scope.hpp"

@@ -70,7 +70,7 @@ public:
 
     // The preview roots are not in App_scenes::m_scene_roots, so they run
     // their own step 2 of the material schedule
-    // (doc/draw_list_material_set_plan.md D6) - sync, flush, update - at each
+    // (doc/draw_list_material_set.md D6) - sync, flush, update - at each
     // render entry point rather than in the tick. They are re-rendered
     // several times per frame with a different material each time, and the
     // flush is load-bearing: the per-thumbnail set_primitive_material()

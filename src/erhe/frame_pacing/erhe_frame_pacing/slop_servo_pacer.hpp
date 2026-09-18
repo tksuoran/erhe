@@ -3,7 +3,7 @@
 // Slop-servo fallback pacer (capability tier S, implementation plan P4.1).
 //
 // The Games-by-Mason FramePacer.zig method (see
-// doc/frame_pacing_capability_tiers.md section 2): no presentation-timing
+// doc/frame_pacing/capability_tiers.md section 2): no presentation-timing
 // extensions, no vsync grid, no cadence - sense BACKPRESSURE instead of
 // display times. Per frame, measure "slop" (time the CPU spent involuntarily
 // blocked on the GPU fence / swapchain acquire; erhe's frame records already

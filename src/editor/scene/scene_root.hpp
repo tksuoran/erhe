@@ -90,7 +90,7 @@ class Scene_root;
 // `gltf` writes the erhe-authored glTF of doc/scene_serialization.md, `usd`
 // writes a USDA layer through erhe::usd, and `none` is a scene that has no
 // file yet - it saves as glTF, the editor's default. A scene never converts
-// between the two formats (doc/usd-compatibility-plan.md G3).
+// between the two formats (doc/usd_compatibility_design.md G3).
 enum class Scene_source_format : unsigned int {
     none = 0,
     gltf = 1,
@@ -194,11 +194,11 @@ class Scene_root
 public:
     // draw_list_dependencies: non-null and valid -> this scene root owns a
     // Draw_list_scene and its content renders through persistent draw lists
-    // (doc/draw_list_renderer_requirements.md); null -> no Draw_list_scene,
+    // (doc/draw_list_renderer.md); null -> no Draw_list_scene,
     // Forward_renderer / Shadow_renderer fallback for every pass (R1b).
     //
     // material_set_create_info: what this root's FORWARD Material_set is built
-    // from (doc/draw_list_material_set_plan.md D3, D4). Every root has one,
+    // from (doc/draw_list_material_set.md D3, D4). Every root has one,
     // including roots with no draw list - it is the slot space the
     // Forward_renderer bucket path and the shadow bucket path resolve
     // materials through, and its object references come from this root's own
@@ -248,7 +248,7 @@ public:
 
     // Every `Typed` prim of this scene's tree that is not an `Xformable` (a
     // `Scope`, a resource prim): forwarded to the content library, which keeps
-    // the scene's resource index (doc/usd-compatibility-plan.md U4).
+    // the scene's resource index (doc/usd_compatibility_design.md U4).
     void register_prim    (const std::shared_ptr<erhe::Typed>&         prim)   override;
     void unregister_prim  (const std::shared_ptr<erhe::Typed>&         prim)   override;
 
@@ -456,7 +456,7 @@ public:
     [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
 
     // The variant sets this scene's prims carry
-    // (doc/usd-compatibility-plan.md X4), filled by the USD parser when the
+    // (doc/usd_compatibility_design.md X4), filled by the USD parser when the
     // scene is opened or an asset is imported and dying with this scene root.
     [[nodiscard]] auto get_variant_table()       -> Variant_table&;
     [[nodiscard]] auto get_variant_table() const -> const Variant_table&;
@@ -483,7 +483,7 @@ public:
     // what a scene being opened does once its variant table is filled. A set
     // a variant block declares is applied after the set carrying that block,
     // so the enclosing selection is standing when the inner one is applied
-    // (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant
+    // (doc/usd_compatibility_design.md section 6, "Variant opinions a variant
     // set does not carry").
     void apply_variant_selections(App_context& context);
 
@@ -516,7 +516,7 @@ private:
     // handles them instead. See Raytrace_node_mask::skinned.
     [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
 
-    // Shape-to-meshes index (doc/usd-compatibility-plan.md section 6, "Load
+    // Shape-to-meshes index (doc/usd_compatibility_design.md section 6, "Load
     // performance of a scene holding thousands of prims"). For every
     // Primitive a registered mesh of this scene names, the meshes that name
     // it; m_primitives_by_mesh is the reverse list that makes removal exact,

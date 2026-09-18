@@ -161,7 +161,7 @@ void Range_selection::end()
     final_selection.insert(final_selection.end(), selection.begin(), selection.end());
 
     // The secondary terminator is the item the user clicked last, so it is
-    // the active item of the range (doc/active-item-plan.md D3.2).
+    // the active item of the range (doc/active_item.md D3.2).
     m_selection.set_selection(final_selection, m_secondary_terminator);
     m_entries.clear();
 }
@@ -418,7 +418,7 @@ auto Selection::clear_selection(erhe::Item_host* host, const Active_item active_
     Scoped_selection_change selection_change{*this};
 
     // A closing scene must not leave its item active; every other caller
-    // (a plain click, a scoped re-selection) keeps it (doc/active-item-plan.md D2).
+    // (a plain click, a scoped re-selection) keeps it (doc/active_item.md D2).
     if (active_item == Active_item::forget_hosted) {
         const std::shared_ptr<erhe::Item_base> current_active = m_active_item.lock();
         if (current_active && is_hosted_or_defined_by(*current_active, host)) {
@@ -570,7 +570,7 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
             continue;
         }
         // A reference instance protects its structure in both formats
-        // (doc/usd-compatibility-plan.md X2): an item inside an instance is
+        // (doc/usd_compatibility_design.md X2): an item inside an instance is
         // skipped with the reason, while the carrier itself deletes its
         // whole subtree below.
         const std::optional<std::string> structure_refusal = instance_structure_refusal(*item);
@@ -582,7 +582,7 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         // A delete removes the item from the parent it hangs off, so an item
         // with no parent has nothing to be removed from. A content-library
         // resource is a prim of the scene's tree
-        // (doc/usd-compatibility-plan.md U4), so a selected material is
+        // (doc/usd_compatibility_design.md U4), so a selected material is
         // deleted here like any other prim - through the same operation, with
         // the same items_removed announcement.
         if (!hierarchy || !hierarchy->get_parent().lock()) {
@@ -783,7 +783,7 @@ auto item_set_sort_predicate(const std::shared_ptr<erhe::Item_base>& lhs, const 
 
 void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>>& selection)
 {
-    // The last listed item is the active item (doc/active-item-plan.md D3.2);
+    // The last listed item is the active item (doc/active_item.md D3.2);
     // an empty selection names none, which keeps the current active item.
     set_selection(selection, selection.empty() ? std::shared_ptr<erhe::Item_base>{} : selection.back());
 }
@@ -863,7 +863,7 @@ void Selection::set_active_item(const std::shared_ptr<erhe::Item_base>& item)
 
     // While a selection change is open, end_selection_change sends the
     // message, so subscribers observe the selection and the active item in
-    // their final state (doc/active-item-plan.md D4).
+    // their final state (doc/active_item.md D4).
     if (m_selection_change_depth == 0) {
         send_active_item_message(old_item, item);
     }
@@ -922,7 +922,7 @@ void Selection::end_selection_change()
     // Nothing actually changed: no message. Every operation that snapshots
     // and restores the selection around itself - which is every
     // Item_insert_remove_operation, and so every content-library resource
-    // insert (doc/usd-compatibility-plan.md U4) - would otherwise dispatch a
+    // insert (doc/usd_compatibility_design.md U4) - would otherwise dispatch a
     // Selection_message with two empty diff lists, and an import undo would
     // dispatch one per resource.
     if (selection_change.no_longer_selected.empty() && selection_change.newly_selected.empty()) {
@@ -949,7 +949,7 @@ void Selection::end_selection_change()
 
     // One increment per dispatch, so a test can tell a single batched prune
     // from an N-call loop that dispatches N times
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     ++m_selection_change_count;
     m_context.app_message_bus->selection.send_message(
         Selection_message{
@@ -965,7 +965,7 @@ void Selection::end_selection_change()
     m_command_target_selection.clear();
 
     // After the Selection_message, so subscribers of either message observe
-    // both in their final state (doc/active-item-plan.md D4).
+    // both in their final state (doc/active_item.md D4).
     send_active_item_message(old_active_item, new_active_item);
 }
 
@@ -982,7 +982,7 @@ void Selection::on_items_removed(const Removed_items& removed)
         }
     );
     // The active item lives beside the selection and can be outside it, so
-    // it is tested on its own (doc/active-item-plan.md D2). It is weak, but a
+    // it is tested on its own (doc/active_item.md D2). It is weak, but a
     // removed item stays alive in the undo history for redo, so the reference
     // would otherwise survive the removal.
     const std::shared_ptr<erhe::Item_base> active_item = m_active_item.lock();
@@ -1112,7 +1112,7 @@ auto Selection::on_viewport_select_bone(const bool toggle) -> bool
     const bool was_selected = is_in_selection(item);
     if (toggle) {
         if (was_selected) {
-            // Same Ctrl-click rule as the object path (doc/active-item-plan.md D3.4).
+            // Same Ctrl-click rule as the object path (doc/active_item.md D3.4).
             if (m_active_item.lock() != item) {
                 set_active_item(item);
             } else {
@@ -1267,7 +1267,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
         if (effective_was_selected) {
             // Ctrl-click on a selected item that is not the active one makes
             // it active and leaves the selection alone; on the active one it
-            // deselects, and it stays active (doc/active-item-plan.md D3.4).
+            // deselects, and it stays active (doc/active_item.md D3.4).
             if (m_active_item.lock() != item) {
                 set_active_item(item);
                 return;
@@ -1308,7 +1308,7 @@ auto Selection::add_to_selection(const std::shared_ptr<erhe::Item_base>& item) -
 
     update_last_selected(item);
 
-    // Every add makes the item active (doc/active-item-plan.md D3.1): the
+    // Every add makes the item active (doc/active_item.md D3.1): the
     // viewport and hierarchy clicks and MCP select_items all come through here.
     set_active_item(item);
 
@@ -1393,7 +1393,7 @@ void Selection::sanity_check()
     }
 
     // Exactly the active item carries Item_flags::active_item
-    // (doc/active-item-plan.md D2).
+    // (doc/active_item.md D2).
     const std::shared_ptr<erhe::Item_base> active_item = m_active_item.lock();
     if (active_item && !erhe::utility::test_bit_set(active_item->get_flag_bits(), erhe::Item_flags::active_item)) {
         log_selection->error("Active item '{}' does not carry the active_item flag", active_item->get_name());
@@ -1468,7 +1468,7 @@ void Selection_tool::viewport_toolbar()
 
 void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& item)
 {
-    // doc/active-item-plan.md D7: the per-type map is kept for exactly the
+    // doc/active_item.md D7: the per-type map is kept for exactly the
     // library palette types Material and Brush, which answer "which material /
     // brush is current" - a question the single active item stops answering
     // once the user clicks a node. The remaining readers are

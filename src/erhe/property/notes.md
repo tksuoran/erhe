@@ -13,9 +13,9 @@ This file is the library reference: the current types and semantics of
 requirements, the decisions (the D-numbers cited below) with their WPF
 mapping and rationale, the item migrations, the editor / MCP / glTF
 integration, future work and the verification workflow - is
-`doc/property-system.md`; the status table of every registered property
+`doc/property_system.md`; the status table of every registered property
 by owner with its storage kind, and of the item fields not yet migrated,
-is `doc/property-inventory.md`. A change to a mechanism here updates this
+is `doc/property_inventory.md`. A change to a mechanism here updates this
 file and the design decision; a change to a registration updates the
 inventory (and the owner's design section when the design changed).
 
@@ -29,7 +29,7 @@ inventory (and the owner's design section when the design changed).
   text `double`), `glm::mat4` (`Property_type::mat4`), `Asset_path`
   (`Property_type::asset_path`, text `asset`) and the two arrays
   (`Property_type::float_array` / `int_array`, text `float[]` / `int[]`)
-  are the USD value types (`doc/usd-compatibility-plan.md` M6): a `double`
+  are the USD value types (`doc/usd_compatibility_design.md` M6): a `double`
   behaves as `float` does everywhere; a `mat4` is a whole value - not an
   expression target or source, and its Properties row is four drag rows,
   one per column; an `Asset_path` wraps one `std::string path` (a class of
@@ -62,7 +62,7 @@ inventory (and the owner's design section when the design changed).
   scale are bridged onto its `Trs_transform`; the editor's geometry graph
   node parameters are bridged onto the node members (keyed on the node
   kind's owner type id, with `set` ending in the node's `mark_dirty`,
-  `doc/property-system.md` section 4.5).
+  `doc/property_system.md` section 4.5).
 - **`Property<T>::register_member`** - a bridged registration built by
   the library from a pointer-to-member or an accessor lambda returning a
   reference to the member, with an optional `after_set(Owner&)` hook run
@@ -147,7 +147,7 @@ inventory (and the owner's design section when the design changed).
 - **`Observer_token`** - RAII subscription to one property on one object,
   or to every property of it (`add_observer` without a property).
 - **`Expression`** (`expression.hpp`) - a compiled formula driving one
-  property (`doc/property-system.md` D22): comma-separated tinyexpr
+  property (`doc/property_system.md` D22): comma-separated tinyexpr
   expressions, one per component, with `{[object/]property[.x|.y|.z|.w]}`
   references; `set_expression` installs it as the local layer,
   `Value_source::expression` reports it, `Local_state` (value or
@@ -187,7 +187,7 @@ the value before the batch and after it.
 ## Animated layer
 
 `set_animated_value(property, value)` / `clear_animated_value(property)`
-(`doc/property-system.md` D5) hold a playback pose above the local layer
+(`doc/property_system.md` D5) hold a playback pose above the local layer
 (`Value_source::animated`). They validate, coerce, notify and propagate to
 descendants, style users and reference users the way a local write does,
 but they write no authored state: an entry carrying only an animated value
@@ -221,7 +221,7 @@ an inherits-flagged property is what descendants inherit, and it stops an
 ancestor's propagation like a local value. A copy carries the style
 pointer; a sealed object rejects `set_style`. `Property_style` is a named
 source filled from a `Property_set`; the editor's style items
-(`doc/style-library.md`) are sources of their own and are the ones a scene
+(`doc/style_library.md`) are sources of their own and are the ones a scene
 saves.
 
 ## Reference
@@ -267,7 +267,7 @@ place of `is_sealed()`. `erhe::Item_base` ties the seal to
 default) names a second owner type whose non-attached, non-bridged,
 non-computed properties - registered on that type, an ancestor or a
 descendant of it - the object may hold as local values for its
-inheritance descendants to read (`doc/property-system.md` D30).
+inheritance descendants to read (`doc/property_system.md` D30).
 `Property_registry::is_secondary_property(object, property)` is the
 predicate, `for_each_secondary_property(object, callback)` the
 enumeration (the secondary type's chain, then each descendant type's own
@@ -304,7 +304,7 @@ short so each level is a linear scan, no cache.
 
 ## Authored values and default elision
 
-A local value is an authored value (`doc/property-system.md` D32).
+A local value is an authored value (`doc/property_system.md` D32).
 `clear_default_valued_local_properties(object)` is the free function that
 enforces it for a caller that had to write every field to load one: it
 clears each stored, serializable, non-driven local value that equals the
@@ -314,7 +314,7 @@ that shadows an inherited or style layer so no effective value moves. The
 rule is format independent - the glTF and USD importers both run it -
 which is why the function lives here and not in an importer.
 `Property_flags::native_gltf` is the companion registration flag: data
-only, read by serializers, listed in `doc/property-inventory.md`.
+only, read by serializers, listed in `doc/property_inventory.md`.
 
 ## Copy semantics
 

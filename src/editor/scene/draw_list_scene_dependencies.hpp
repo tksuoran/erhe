@@ -16,7 +16,7 @@ namespace editor {
 class App_context;
 
 // What Scene_root needs to own a Draw_list_scene
-// (doc/draw_list_renderer_requirements.md R1b). Scene roots constructed
+// (doc/draw_list_renderer.md R1b). Scene roots constructed
 // without these (nullptr) get no Draw_list_scene and their passes render
 // through the Forward_renderer / Shadow_renderer fallback.
 class Draw_list_scene_dependencies
@@ -31,7 +31,7 @@ public:
     // plus the XR view count when a multiview headset session is active.
     std::vector<uint32_t>                       multiview_view_counts{};
     // What the draw list's own Material_set is built from
-    // (doc/draw_list_material_set_plan.md D3). Independent of the forward set
+    // (doc/draw_list_material_set.md D3). Independent of the forward set
     // the owning Scene_root carries: the two reconcile the same content
     // library separately and issue their own slots.
     erhe::scene_renderer::Material_set_create_info material_set_create_info{};

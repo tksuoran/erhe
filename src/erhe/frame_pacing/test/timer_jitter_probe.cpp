@@ -2,7 +2,7 @@
 //
 // Measures the wake-up error of the highest-resolution wait available on
 // this machine, to ground the frame pacer 'guard' tunable
-// (doc/frame_pacing_inputs.md section 3.4, gap G6). Standalone console
+// (doc/frame_pacing/inputs.md section 3.4, gap G6). Standalone console
 // tool, no erhe dependencies; run it on the target machine and read the
 // p99 line - that is the evidence-based 'guard' floor.
 
@@ -107,7 +107,7 @@ int main()
 
     std::printf(
         "\nRecommendation: frame pacer 'guard' should be at least the p99 of the\n"
-        "wait mode the integration uses (doc/frame_pacing_inputs.md section 3.5).\n"
+        "wait mode the integration uses (doc/frame_pacing/inputs.md section 3.5).\n"
     );
     return 0;
 }

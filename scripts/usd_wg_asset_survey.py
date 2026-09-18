@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""USD Assets Working Group survey (doc/usd-compatibility-plan.md step S1).
+"""USD Assets Working Group survey (doc/usd_compatibility_design.md step S1).
 
 Opens every entry asset of a local clone of github.com/usd-wg/assets in a
 headless erhe editor, records what the editor made of it, and writes
@@ -1732,7 +1732,7 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("(github.com/usd-wg/assets) opened in a headless erhe editor, with what")
     out.append("the editor made of it. This is the checklist of USD support the editor")
     out.append("still lacks, ordered in the Gaps section by how many assets each gap")
-    out.append("affects; `doc/usd-compatibility-plan.md` step S1 owns the survey and its")
+    out.append("affects; `doc/usd_compatibility_design.md` step S1 owns the survey and its")
     out.append("later steps take their next fix from that list.")
     out.append("")
     out.append("Re-run it from the repo root against a local clone of the repository")

@@ -20,7 +20,7 @@ public:
     [[nodiscard]] virtual auto get_host_name() const -> const char* = 0;
 
     // The hosted item a path or a name addresses, for expression
-    // references (doc/property-system.md D22) and object references (D28);
+    // references (doc/property_system.md D22) and object references (D28);
     // nullptr when the host has no such item or does no lookup. A text
     // holding '/' is a path (Hierarchy::get_path()) and a text without one
     // is a name, so both the current and the older stored form resolve.
@@ -29,7 +29,7 @@ public:
     // library, whose folder paths use the same form.
     [[nodiscard]] virtual auto find_hosted_item(std::string_view name_or_path) -> Item_base* { static_cast<void>(name_or_path); return nullptr; }
 
-    // Prim registration (doc/usd-compatibility-plan.md C5): every `Typed`
+    // Prim registration (doc/usd_compatibility_design.md C5): every `Typed`
     // prim that enters a tree this host holds reports itself here once, and
     // reports itself out again when it leaves. `Typed::handle_item_host_update`
     // is the single call site, so a prim added anywhere below a hosted prim -

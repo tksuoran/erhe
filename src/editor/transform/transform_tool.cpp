@@ -631,7 +631,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         m_transform_target_note += fmt::format(" (+{} more)", redirect_count - 1);
     }
 
-    // D6 of doc/active-item-plan.md: the representative target - the local
+    // D6 of doc/active_item.md: the representative target - the local
     // reference frame (Edit_state::m_first_node), the single-entry numeric edit
     // and the IK effector - is the active node when the active node is one of
     // the targets. Rotating that target to the front of m_target_nodes gives

@@ -10,7 +10,7 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   (materials, textures, brushes, styles, physics materials, collision
   filters, joint settings, animations, skins, geometry and texture graphs).
   It owns no resource: a resource is an `erhe::Typed` prim of the scene's
-  prim tree (`doc/usd-compatibility-plan.md` C5, U4), under the `Scope`
+  prim tree (`doc/usd_compatibility_design.md` C5, U4), under the `Scope`
   named for its kind or under any other prim the user puts it under, and
   reports the owning `Scene_root` from `erhe::Item_base::get_item_host()`.
   Each `Scene_root` has its own `Content_library` and gives it the scene root
@@ -47,7 +47,7 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   stage carries (`Graph_Textures` for `Graph Textures`), IS that kind's scope.
   `adopt_kind_scopes(subtree)` records them, and the USD load calls it before
   it builds the attach operations of the resources it read
-  (`doc/usd-compatibility-plan.md` E4d); `get_scope()` looks for one in the
+  (`doc/usd_compatibility_design.md` E4d); `get_scope()` looks for one in the
   tree, nearest the prim root first, before it creates one, and the record is
   dropped again when the prim leaves the tree.
 
@@ -100,14 +100,14 @@ and the bookkeeping must survive that.
 ## Folders
 
 A folder is an `erhe::Scope` below a kind scope
-(`doc/content-library-folders.md`). Folders are selectable, the Properties
+(`doc/content_library_folders.md`). Folders are selectable, the Properties
 window shows them as items (name row, class-chain properties, Add Property),
 and their `inherits`-flagged property values reach the resources below them by
 the ordinary tree parent - a resource prim's inheritance parent is its scope,
 so no library-specific inheritance link exists. A `Scope`'s secondary owner
 type is the root owner type, so it holds any class's values by qualified name
 and its Add Property list offers the classes of the prims below it first
-(`doc/content-library-folders.md` D8): a Materials folder offers
+(`doc/content_library_folders.md` D8): a Materials folder offers
 `Material.base_color` and the other `Material` values, and a material below it
 without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
@@ -122,7 +122,7 @@ scope needs no entry: that is where a load puts the ones no entry names.
 ## Styles
 
 The Styles scope holds `Style` items (`style.{hpp,cpp}`,
-`doc/style-library.md`): a style's secondary owner type is the root
+`doc/style_library.md`): a style's secondary owner type is the root
 owner type, so its own local values of any class are the style
 (`Material.roughness`, `Light.color`) and the Properties window edits it
 with the generic rows.

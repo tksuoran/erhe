@@ -503,7 +503,7 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
     const uint64_t changed_bits = old_flag_bits ^ new_flag_bits;
 
     // Mirror every flag change to the scene host (draw list entry flags,
-    // doc/draw_list_renderer_requirements.md R12a) before the raytrace-only
+    // doc/draw_list_renderer.md R12a) before the raytrace-only
     // visibility gate below.
     {
         const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());

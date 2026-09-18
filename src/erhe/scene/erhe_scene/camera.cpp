@@ -28,7 +28,7 @@ constexpr std::string_view c_group = "Projection";
 
 // The visible_when callbacks read the camera's projection mirror; they are
 // evaluated on Camera objects only (a holder of Camera values lists them by
-// its own value, doc/property-system.md D30).
+// its own value, doc/property_system.md D30).
 auto projection_type_of(const Dependency_object& object) -> Type
 {
     return static_cast<const Camera&>(object).projection()->projection_type;

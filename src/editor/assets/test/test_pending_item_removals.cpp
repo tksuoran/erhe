@@ -2,7 +2,7 @@
 // collects the items that left a content library or an unregistered scene, so
 // the editor can announce them once per frame instead of once per removal.
 //
-// See doc/import-undo-reference-clearing.md.
+// See doc/import_undo_reference_clearing.md.
 
 #include "assets/pending_item_removals.hpp"
 

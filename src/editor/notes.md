@@ -103,7 +103,7 @@ Editor-specific render graph nodes:
 
 ### Windows (`windows/`)
 
-`Dependency_property_rows` (`windows/dependency_property_rows.*`) draws the registered erhe::property properties of the inspected item(s) inside the Properties window: one widget per property type shaped by the property's `Property_ui` metadata, mixed-value display for multi-selection, "Reset to default", Copy / Paste Properties (the bag lives in `Clipboard`, with the name of the item it came from), Paste Properties as Style / Clear Style (the item's style layer, doc/property-system.md D25, through `Style_set_operation`), and undo through `Property_set_operation` / `Property_set_apply_operation` - one operation per completed drag. `App_context::on_item_property_changed` maps a property's consequence flags to editor actions (draw-list rebuild, asset dirtying) after every such write. A `Property_ui::logarithmic` slider draws with `ImGuiSliderFlags_Logarithmic` (light range / intensity, camera near / far, D20). A property driven by an expression (D22) shows its formula text in place of the widget (`=` label prefix, red frame and tooltip while it cannot be evaluated; commit on Enter or deactivation), and the context menu offers "Edit as expression" / "Remove expression". Migrated items whose rows come from here: `Material` (section 4.1), `Node` transform (4.2), `Light` (4.3, `light_properties` keeps only the derived flux, blackbody and zero-range rows; light-set re-resolve is the Light property callback, not the row) and `Camera` (4.4, `camera_properties` is gone). See doc/property-system.md D11-D12.
+`Dependency_property_rows` (`windows/dependency_property_rows.*`) draws the registered erhe::property properties of the inspected item(s) inside the Properties window: one widget per property type shaped by the property's `Property_ui` metadata, mixed-value display for multi-selection, "Reset to default", Copy / Paste Properties (the bag lives in `Clipboard`, with the name of the item it came from), Paste Properties as Style / Clear Style (the item's style layer, doc/property_system.md D25, through `Style_set_operation`), and undo through `Property_set_operation` / `Property_set_apply_operation` - one operation per completed drag. `App_context::on_item_property_changed` maps a property's consequence flags to editor actions (draw-list rebuild, asset dirtying) after every such write. A `Property_ui::logarithmic` slider draws with `ImGuiSliderFlags_Logarithmic` (light range / intensity, camera near / far, D20). A property driven by an expression (D22) shows its formula text in place of the widget (`=` label prefix, red frame and tooltip while it cannot be evaluated; commit on Enter or deactivation), and the context menu offers "Edit as expression" / "Remove expression". Migrated items whose rows come from here: `Material` (section 4.1), `Node` transform (4.2), `Light` (4.3, `light_properties` keeps only the derived flux, blackbody and zero-range rows; light-set re-resolve is the Light property callback, not the row) and `Camera` (4.4, `camera_properties` is gone). See doc/property_system.md D11-D12.
 
 ImGui window implementations:
 - `Viewport_window` -- hosts a `Viewport_scene_view` in an ImGui window
@@ -122,8 +122,8 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `physics/` -- `Physics_tool` (drag/push/pull), `Physics_window` (settings UI), collision shape generation
 - `create/` -- `Create` tool and shape generators (box, cone, torus, UV sphere)
 - `parsers/` -- glTF, Wavefront OBJ, Geogram, and JSON polyhedra importers
-- `assets/` -- `Asset_manager` (identity, ownership, registry: `doc/asset_manager.md`) and the asynchronous load tasks (`doc/async-asset-loading.md`)
-- `graphics/` -- `Icon_set` (icon atlas), `Thumbnails` (material/brush previews; a slot observes the item's properties and re-renders when one changes, `doc/property-system.md` D21), gradients
+- `assets/` -- `Asset_manager` (identity, ownership, registry: `doc/asset_manager.md`) and the asynchronous load tasks (`doc/async_asset_loading.md`)
+- `graphics/` -- `Icon_set` (icon atlas), `Thumbnails` (material/brush previews; a slot observes the item's properties and re-renders when one changes, `doc/property_system.md` D21), gradients
 - `transform/` -- Transform gizmo system (`Transform_tool` + `Move_tool`, `Rotate_tool`, `Scale_tool`)
 - `xr/` -- OpenXR headset view, hand tracking, controller visualization
 - `grid/` -- Grid display and snapping
@@ -159,7 +159,7 @@ Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_
 
 ### Parallel Initialization
 
-Initialization is serial. The retired `ERHE_PARALLEL_INIT` experiment (parallel Taskflow tasks with explicit dependency edges over `Gl_context_provider` worker contexts) was deleted; any future parallel init should build on the GL worker-context API of `doc/gl-worker-thread-contexts.md` instead.
+Initialization is serial. The retired `ERHE_PARALLEL_INIT` experiment (parallel Taskflow tasks with explicit dependency edges over `Gl_context_provider` worker contexts) was deleted; any future parallel init should build on the GL worker-context API of `doc/gl_worker_thread_contexts.md` instead.
 
 ### Physics Integration
 
@@ -171,7 +171,7 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 
 ### Scene Serialization
 
-Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design history `doc/gltf-scene-roundtrip-plan.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
+Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design history `doc/gltf_scene_roundtrip.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
 
 ### Asynchronous asset loading
 
@@ -185,7 +185,7 @@ open, foreign-glTF open, import-into-scene, and prefab template load
 (`assets/asset_load_task.hpp`, `assets/gltf_load_task.hpp`). Master switch
 `Load_config::async_gltf_load`, default on; with it off every path falls back
 to the original blocking code, which is kept for comparison. Full reference:
-`doc/async-asset-loading.md`, design history `doc/async-asset-loading-plan.md`.
+`doc/async_asset_loading.md`, design history `doc/async_asset_loading_design.md`.
 
 `Asset_manager::get_or_load_container()` and `Prefab_library`'s nested
 external-asset resolution are the parts that are still synchronous.
@@ -210,7 +210,7 @@ The editor embeds an MCP (Model Context Protocol) server on `127.0.0.1:3743` for
 - **Query tools**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_brushes`, `get_selection`, `get_physics_items`
 - **Action tools**: `select_items` (by ID), `place_brush` (by brush ID + position), `toggle_physics`, `lock_items`, `unlock_items`, `add_tags`, `remove_tags`
 - **Physics tools**: `create_physics_body` / `edit_physics_body` (Node_physics on a node), `create_physics_joint` / `edit_physics_joint` (Node_joint), `create_physics_material` / `edit_physics_material`, `create_collision_filter` / `edit_collision_filter`, `create_physics_joint_settings` / `edit_physics_joint_settings` (shared content-library items), `wake_physics_bodies`; `get_node_details` reports per-attachment physics state
-- **Property tools**: `get_item_properties` / `set_item_property` - the generic erhe::property view of any item (registered properties with value, source, default, enum labels, expression text and error; undoable writes of a value or an `expression` formula through `Property_set_operation`; an object property (a material texture slot, a primitive's material) is written by name or `reference_id`, and `sub_object` addresses a property sub-object such as a mesh primitive listed under `sub_objects` - doc/property-system.md D28, D29; the item reports `sealed` and `style`), `set_item_style` / `clear_item_style` (the style layer, D25, through `Style_set_operation`). See doc/property-system.md D13, D22, D25.
+- **Property tools**: `get_item_properties` / `set_item_property` - the generic erhe::property view of any item (registered properties with value, source, default, enum labels, expression text and error; undoable writes of a value or an `expression` formula through `Property_set_operation`; an object property (a material texture slot, a primitive's material) is written by name or `reference_id`, and `sub_object` addresses a property sub-object such as a mesh primitive listed under `sub_objects` - doc/property_system.md D28, D29; the item reports `sealed` and `style`), `set_item_style` / `clear_item_style` (the style layer, D25, through `Style_set_operation`). See doc/property_system.md D13, D22, D25.
 - **Editor commands**: All registered `Command` objects (undo, redo, delete, etc.)
 
 The HTTP server (cpp-httplib) runs on a background thread. All requests are queued to the main thread via `std::promise`/`std::future` for thread safety. `process_queued_requests()` is called once per frame from `Editor::tick()`. `GET /health` answers 503 until that first call and 200 from then on, so a client that waits for 200 never sends a `tools/call` the main loop cannot answer within the 5 s request timeout. The listening socket sets `SO_EXCLUSIVEADDRUSE` (Windows) / `SO_REUSEADDR` only (POSIX) so a second editor's bind on the port fails and its port scan moves on, instead of two editors sharing one port. See `mcp_server_usage.md` for full API reference with curl examples.

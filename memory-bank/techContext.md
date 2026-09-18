@@ -42,7 +42,7 @@ proof::clangd--check{noEnv:26errors→VS-env:0-errors;re-proven-2026-07-07{verif
 !policy::lsai+xmp4=opt-in-per-machine¬default{2026-07-07;whether-installed→memory-bank/local/}
 default-code-nav::Grep/Glob{erhe-naming-consistent}+VS-MCP{goto_definition/find_references-from-open-docs}+clangd--check{per-file-diagnostics}
 third-party-deps::read-.cpm_cache-sources-directly{CPM-fetches-all-dep-sources-at-configure}
-doc::doc/semantic_cpp_mcp_setup_xmp4_lsai.md+doc/lsai_usage_playbook.md{kept,machine-neutral,for-machines-that-opt-in}
+doc::doc/reference/semantic_cpp_mcp_setup_xmp4_lsai.md+doc/reference/lsai_usage_playbook.md{kept,machine-neutral,for-machines-that-opt-in}
 !MCP-loads-at-session-start→restart-to-pick-up-changes
 
 [RUNTIME]

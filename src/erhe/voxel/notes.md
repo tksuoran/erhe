@@ -4,7 +4,7 @@
 Sparse voxel signed distance fields (SDF) built on OpenVDB narrow-band level
 sets. Provides SDF primitives, booleans, offset/smooth filtering, and
 conversion to/from `erhe::geometry::Geometry`. Foundation for SDF geometry
-graph nodes (see doc/openvdb-integration-plan.md).
+graph nodes (see doc/plans/geometry_graph/openvdb_sdf.md).
 
 Only built when `ERHE_VOXEL_LIBRARY=openvdb` (CMake option, default `none`).
 

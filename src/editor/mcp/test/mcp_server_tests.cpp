@@ -461,7 +461,7 @@ TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)
     EXPECT_FALSE(history_after.payload.value("can_redo", true));
 }
 
-// The active item (doc/active-item-plan.md): the last item a select_items
+// The active item (doc/active_item.md): the last item a select_items
 // call lists becomes it, it survives the selection being cleared (reported
 // with selected: false), set_active_item names an unselected item, and
 // reset_editor_state forgets it.
@@ -1508,7 +1508,7 @@ TEST_F(Mcp_auth_test, tampered_token_rejected)
     EXPECT_EQ(tampered->status, 401) << "Wrong bearer token should be 401";
 }
 
-// ---- Undo reference clearing (doc/import-undo-reference-clearing.md) --------
+// ---- Undo reference clearing (doc/import_undo_reference_clearing.md) --------
 //
 // Undoing a glTF import takes the imported content back out of the editor;
 // every editor part that cached a reference to it must let go, or the window
@@ -1704,7 +1704,7 @@ TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)
     advance_frames(client, 4);
 }
 
-// ---- Material slot regression (doc/draw_list_material_set_plan.md V3) -------
+// ---- Material slot regression (doc/draw_list_material_set.md V3) -------
 //
 // The reported bug: assigning one material to a second mesh leaves that mesh
 // nearly unchanged, and reversing the order moves the failure to the other

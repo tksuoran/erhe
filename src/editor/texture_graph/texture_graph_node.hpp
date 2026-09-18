@@ -42,7 +42,7 @@ class Texture_renderer;
 // clean nodes keep their cached output payloads.
 //
 // Evaluation is synchronous (composition is cheap - decision 8 in
-// doc/texture-graph-plan.md), so unlike the geometry graph there is no async
+// doc/texture_graph.md), so unlike the geometry graph there is no async
 // shadow-clone machinery here.
 class Texture_graph_node : public Graph_editor_node
 {
@@ -118,7 +118,7 @@ public:
 
     virtual void evaluate(Texture_graph& graph);
 
-    // Node <-> texgen bridge (doc/texture-graph-plan.md, Phase 3 Step 2).
+    // Node <-> texgen bridge (doc/texture_graph.md, Phase 3 Step 2).
     //
     // descriptor() returns this node's immutable texgen Node_descriptor (the
     // GLSL snippet table shared by every instance of the type), or nullptr for

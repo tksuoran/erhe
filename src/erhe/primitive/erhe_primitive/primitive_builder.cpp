@@ -43,7 +43,7 @@ namespace {
 // rather than ship bytes no encoder wrote.
 //
 // Position is not here: it has its own encode branch (the AABB affine is not a
-// pure format conversion). See doc/meshoptimizer-attribute-encodings-plan.md.
+// pure format conversion). See doc/meshoptimizer_attribute_encodings.md.
 //
 // The soup path does not consult this list - Primitive_shape::make_buffer_mesh()
 // routes every non-position attribute through erhe::dataformat::convert()

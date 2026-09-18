@@ -54,6 +54,6 @@ void set_gl_context_index(int index);
 // frame-ring model (worker-mapped writes would need publication points of
 // their own); GPU timers keep a main-context query ring; and worker-side
 // rendering / readback have no publication protocol or call site yet. See
-// doc/gl-worker-thread-contexts.md, "Context identity and guards".
+// doc/gl_worker_thread_contexts.md, "Context identity and guards".
 #define ERHE_VERIFY_GL_THREAD_MAIN_CONTEXT() \
     ERHE_VERIFY(::erhe::graphics::gl_thread_is_main_context())

@@ -155,7 +155,7 @@ use (above), widens the apparent dependency surface, and can let a shader that
 accidentally relies on a capability run on hardware where it happens to be
 available while failing `vkCreateShaderModule` elsewhere. The intended direction
 is to enable only strictly-required features and fail explicitly when one is
-missing. See `doc/todo.md`.
+missing. See `doc/plans/todo.md`.
 
 ### Device_info
 

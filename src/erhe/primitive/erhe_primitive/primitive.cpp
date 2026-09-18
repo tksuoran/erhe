@@ -1008,7 +1008,7 @@ auto Primitive_render_shape::commit_geometry_buffer_mesh(std::shared_ptr<Primiti
 {
     // State lock only, and the caller must hold the item host lock: the
     // per-frame readers of get_renderable_mesh() are protected by that lock,
-    // not by this one. See doc/primitive-shape-lock-split-plan.md.
+    // not by this one. See doc/primitive_shape_locking.md.
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     if (!m_pending_buffer_mesh) {
         return false;

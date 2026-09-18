@@ -188,7 +188,7 @@ same build pass. Build twice, or the binary is stale.
 
 (UPDATED after the glTF scene roundtrip work: the `Scene_file` scene.json
 schema and `scene_serialization.{hpp,cpp}` described by earlier revisions of
-this section were removed in phase 5 of `doc/gltf-scene-roundtrip-plan.md`.)
+this section were removed in phase 5 of `doc/gltf_scene_roundtrip.md`.)
 
 - Scenes persist as a single erhe-authored glTF file (`<name>.glb`); the full
   process reference is `doc/scene_serialization.md`.

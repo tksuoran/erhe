@@ -8,7 +8,7 @@
 namespace erhe::task {
 
 // Spawn-site guard for the GL worker-context blocking invariant - proposal A
-// of doc/gl-worker-context-enforcement.md. All task SCHEDULING goes through
+// of doc/gl_worker_context_enforcement.md. All task SCHEDULING goes through
 // these wrappers, which assert that the calling thread holds no worker GL
 // context: a thread holding one of the four pool slots must never spawn
 // tasks, because parking on them while holding wedges the fixed-size pool

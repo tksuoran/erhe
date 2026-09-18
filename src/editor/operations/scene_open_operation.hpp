@@ -22,7 +22,7 @@ class Scene_open_operation : public Operation
 {
 public:
     // prepared_parse, when given, is a parse an asynchronous load already
-    // produced (doc/async-asset-loading-plan.md step 7): the operation then
+    // produced (doc/async_asset_loading_design.md step 7): the operation then
     // does no file I/O at all and stays the cheap, synchronous thing an
     // undoable operation is supposed to be. It is consumed by the FIRST
     // execute; a redo re-registers the kept Scene_root without re-importing,

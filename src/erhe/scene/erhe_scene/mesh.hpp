@@ -29,7 +29,7 @@ class Skin;
 class Mesh;
 
 // One primitive of a Mesh with its material. A property sub-object of its
-// mesh (doc/property-system.md D29): a Dependency_object with its own owner
+// mesh (doc/property_system.md D29): a Dependency_object with its own owner
 // type, whose `material` is a member-backed object property
 // (Mesh_primitive::material_property), so the generic rows, undo and MCP
 // reach it as (mesh, primitive index); Mesh::set_primitive_material stays
@@ -69,7 +69,7 @@ public:
     // Baked-lightmap atlas region of this primitive: lightmap UV =
     // channel-2 UV * xy + zw. All-zero (the default) means "no baked
     // lightmap"; the fragment shader gates on xy > 0. Written by the
-    // lightmap baker (doc/lightmap_baking_plan.md), uploaded per draw by
+    // lightmap baker (doc/lightmap_baking.md), uploaded per draw by
     // Primitive_buffer.
     glm::vec4                                   lightmap_uv_scale_offset{0.0f};
 
@@ -81,7 +81,7 @@ private:
     std::size_t m_index{0};
 };
 
-// A geometric prim (doc/usd-compatibility-plan.md C5, USD `Mesh`): an
+// A geometric prim (doc/usd_compatibility_design.md C5, USD `Mesh`): an
 // `Xformable` with its own transform, name and children, and a child prim of
 // its parent. A parent holds any number of `Mesh` children.
 class Mesh : public erhe::Item<Item_base, Gprim, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
@@ -145,7 +145,7 @@ public:
     // call while mesh optimization is off.
     void invalidate_optimized_primitive_variant(std::size_t primitive_index);
     // Live-edit bracket around one primitive's optimized variant
-    // (doc/meshoptimizer-integration.md, requirement 11). Called when the edit
+    // (doc/meshoptimizer_integration.md, requirement 11). Called when the edit
     // STARTS (drag begin, stroke begin - before its first GPU write): takes an
     // optimization hold on the Primitive and drops the live variant exactly
     // like invalidate_optimized_primitive_variant(). While the hold is active
@@ -181,12 +181,12 @@ public:
     // from the joint transforms and the primitives' per-joint rest boxes; the
     // mesh node's own transform is not applied, because skinning ignores it.
     [[nodiscard]] auto get_aabb_world        () const -> erhe::math::Aabb;
-    // Computed (doc/property-system.md D26): the corners of
+    // Computed (doc/property_system.md D26): the corners of
     // get_aabb_world(), 0 0 0 for an invalid box; pushed to expressions from
     // handle_transform_update and the primitive changes.
     static const erhe::property::Property<glm::vec3> world_bounds_min_property;
     static const erhe::property::Property<glm::vec3> world_bounds_max_property;
-    // Inherited flags (doc/property-system.md D23): the closest ancestor
+    // Inherited flags (doc/property_system.md D23): the closest ancestor
     // with a local value wins (a node above or a style holds
     // Mesh.shadow_cast for the meshes below it, D30); the effective value
     // is mirrored into Item_flags::shadow_cast / lightmapped so the

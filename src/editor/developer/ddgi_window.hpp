@@ -12,7 +12,7 @@ namespace editor {
 class App_context;
 
 // Developer window for dynamic diffuse global illumination
-// (doc/ddgi-plan.md): the enable toggle, the fitted probe grid's stats, and
+// (doc/ddgi.md): the enable toggle, the fitted probe grid's stats, and
 // previews of the probe atlases. The knobs themselves live in the editor
 // settings (Settings window, DDGI section) - this window is the diagnostic
 // view of what the renderer made of them.

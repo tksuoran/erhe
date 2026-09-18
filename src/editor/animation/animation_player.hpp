@@ -18,7 +18,7 @@ class App_message_bus;
 // Owns animation playback state for the editor: the active animation, the
 // play position and the transport state (playing / looping / speed).
 //
-// Applying writes the animated layer (doc/property-system.md D5) of the target
+// Applying writes the animated layer (doc/property_system.md D5) of the target
 // prims, never their authored transform: a transform edited while playing
 // edits the pose the animation plays over, a save writes that authored pose,
 // and stop() puts every target back on it.
@@ -43,7 +43,7 @@ public:
     void play ();
     void pause(); // keeps the pose the playhead is on
     // Pause, rewind to the start and drop the animated layer of every target
-    // (doc/property-system.md D5), so each target holds the transform it
+    // (doc/property_system.md D5), so each target holds the transform it
     // authored again.
     void stop ();
 

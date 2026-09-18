@@ -86,7 +86,7 @@ namespace {
 
 // Load `xform_ops.usda` and write it back out. The fixture is in the writer's
 // own output spelling, so every line the writer produces for a prim that
-// authored ops has to come back byte for byte (doc/usd-compatibility-plan.md
+// authored ops has to come back byte for byte (doc/usd_compatibility_design.md
 // M8).
 class Xform_op_round_trip : public testing::Test
 {

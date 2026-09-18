@@ -1,6 +1,6 @@
 // Mcp_server item property tools (get_item_properties, set_item_property,
 // get_addable_item_properties):
-// the generic erhe::property view of any item (doc/property-system.md
+// the generic erhe::property view of any item (doc/property_system.md
 // D13). Values travel as strings through erhe_property/property_string.hpp,
 // so enumerations travel as their labels.
 
@@ -44,7 +44,7 @@ using namespace mcp_server_detail;
 namespace {
 
 // Resolves args.item_id (any scene) or args.item_name - an item name or an
-// item path (doc/usd-compatibility-plan.md M1) - in args.scene_name, or in
+// item path (doc/usd_compatibility_design.md M1) - in args.scene_name, or in
 // the first scene when absent.
 auto resolve_item(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
 {
@@ -106,7 +106,7 @@ auto value_json(const erhe::property::Dependency_property& property, const erhe:
 
 // One property of `object` as get_item_properties and
 // get_addable_item_properties list it. `origin_item` is the item whose
-// composition origin the entry reports (doc/usd-compatibility-plan.md X5);
+// composition origin the entry reports (doc/usd_compatibility_design.md X5);
 // it is null for the properties of a sub-object (D29), which no file spells
 // as a prim of its own.
 auto property_json(
@@ -256,7 +256,7 @@ auto Mcp_server::query_item_properties(const json& args) -> std::string
 }
 
 // The attached properties "Add Property" offers for the item
-// (doc/property-system.md D13): every attached registration the D12
+// (doc/property_system.md D13): every attached registration the D12
 // rule does not list for it. `value` is the effective value the add would
 // make local.
 auto Mcp_server::query_addable_item_properties(const json& args) -> std::string
@@ -325,7 +325,7 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
     }
     const bool computed_writable = property->get_metadata(target->get_property_owner_type()).is_computed_writable(); // D26
 
-    // An expression (doc/property-system.md D22) instead of a value.
+    // An expression (doc/property_system.md D22) instead of a value.
     const auto expression_it = args.find("expression");
     if ((expression_it != args.end()) && !expression_it->is_null()) {
         if (computed_writable) {
@@ -507,7 +507,7 @@ auto Mcp_server::action_set_item_style(const json& args) -> std::string
 }
 
 // An empty style item under the parent prim, or in the scene's Styles
-// scope without one (doc/style-library.md R1); fill it with set_item_property by qualified name and assign it
+// scope without one (doc/style_library.md R1); fill it with set_item_property by qualified name and assign it
 // through an item's 'style' property.
 auto Mcp_server::action_create_style(const json& args) -> std::string
 {

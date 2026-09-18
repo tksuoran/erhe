@@ -7,7 +7,7 @@
 
 namespace erhe::scene {
 
-// A boundable prim (doc/usd-compatibility-plan.md C5, USD
+// A boundable prim (doc/usd_compatibility_design.md C5, USD
 // `UsdGeomBoundable`): the level of the prim class hierarchy that has an
 // extent, and so the level `extent` belongs to. It holds nothing until a
 // step moves the bounds here.

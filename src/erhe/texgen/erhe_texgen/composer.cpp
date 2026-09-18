@@ -148,7 +148,7 @@ namespace {
 // the "$param" substitution resolves to, so an output expression such as
 // colorize's "$gradient($input($uv))" becomes "o5_gradient_gradient(<input>)".
 //
-// DECISION (Phase 4, doc/texture-graph-plan.md): the control points are baked
+// DECISION (Phase 4, doc/texture_graph.md): the control points are baked
 // into the function body as GLSL constants rather than uploaded through uniform
 // arrays. Any value edit therefore recomposes the source and recompiles - but
 // the SPIR-V cache de-duplicates unchanged sources, and this keeps the codegen

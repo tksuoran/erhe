@@ -21,7 +21,7 @@ public:
     Transform clip_from_world;
 };
 
-// A camera prim (doc/usd-compatibility-plan.md C5, USD `Camera`): an
+// A camera prim (doc/usd_compatibility_design.md C5, USD `Camera`): an
 // `Xformable` with its own transform, name and children, and a child prim of
 // its parent.
 class Camera : public erhe::Item<Item_base, Xformable, Camera, erhe::Item_kind::clone_using_custom_clone_constructor>
@@ -83,7 +83,7 @@ public:
     void set_z_far         (float value) { set_value(z_far_property,          value); }
     void set_infinite_z_far(bool  value) { set_value(infinite_z_far_property, value); }
 
-    // Registered properties (erhe::property, doc/property-system.md
+    // Registered properties (erhe::property, doc/property_system.md
     // section 4.4), all in the entry store and all inherits: a camera
     // without a local value reads its node chain (D30), and a style or an
     // empty node holds them by qualified name (Camera.fov_y).

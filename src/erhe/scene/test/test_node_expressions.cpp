@@ -1,4 +1,4 @@
-// Expressions on scene items (doc/property-system.md D22): reference
+// Expressions on scene items (doc/property_system.md D22): reference
 // paths resolve through Item_base (".." = parent, a name = an item of the
 // hosting scene), and every transform writer of a node reaches its
 // dependents through Node::handle_transform_update.

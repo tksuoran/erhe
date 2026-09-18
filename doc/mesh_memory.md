@@ -66,7 +66,7 @@ sink object, not a parameter on the queue).
 ### Two transfer queues
 
 Asynchronous asset loading (see
-[`async-asset-loading.md`](async-asset-loading.md)) needs vertex/index uploads
+[`async-asset-loading.md`](async_asset_loading.md)) needs vertex/index uploads
 to be spread over frames, but almost every other caller relies on the opposite
 guarantee. Hence two queues:
 
@@ -207,8 +207,8 @@ existing bucket whose `accept()` returns true or starts a new bucket.
 | `vertex_pool_block_size_mb` | 32 | Default capacity of a freshly grown vertex pool block. |
 | `index_pool_block_size_mb` | 16 | Default capacity of a freshly grown index pool block. |
 | `edge_line_vertex_pool_block_size_mb` | 8 | Currently unused -- the edge-line vertex pool is not implemented; the config key is reserved. |
-| `quantize_vertex_positions` | true | Store the optimized mesh variant's positions as snorm16x3 normalized into the primitive AABB (the base variant always stores float3; no effect unless `optimize_meshes` is on). Ignored on a device that cannot use snorm16x3 as vertex input. See `doc/vertex-position-quantization.md`. |
-| `optimize_meshes` | true | Build an additional meshoptimizer-optimized variant of every renderable mesh. See `doc/meshoptimizer-integration.md`. |
+| `quantize_vertex_positions` | true | Store the optimized mesh variant's positions as snorm16x3 normalized into the primitive AABB (the base variant always stores float3; no effect unless `optimize_meshes` is on). Ignored on a device that cannot use snorm16x3 as vertex input. See `doc/vertex_position_quantization.md`. |
+| `optimize_meshes` | true | Build an additional meshoptimizer-optimized variant of every renderable mesh. See `doc/meshoptimizer_integration.md`. |
 | `mesh_optimize_cache` | false | Cache imported-mesh optimization results on disk. No effect unless `optimize_meshes` is on. |
 | `max_buffers_per_pool` | 64 | Hard cap. `Buffer_pool::create_new_block` aborts when exceeded. |
 
@@ -306,4 +306,4 @@ trigger.
 
 Measure before and after with the `get_memory_usage` MCP tool, which reports
 per-pool `capacity_bytes` / `used_bytes` / `block_count`
-(see doc/reloadable-asset-loads.md).
+(see doc/reloadable_asset_loads.md).

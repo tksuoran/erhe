@@ -1,4 +1,4 @@
-// Prim registration (doc/usd-compatibility-plan.md C5, U4): every `Typed`
+// Prim registration (doc/usd_compatibility_design.md C5, U4): every `Typed`
 // prim that enters a tree an `Item_host` holds reports itself to that host
 // once, and reports itself out again when it leaves - whatever depth it sits
 // at, and through prims that carry no transform of their own.
@@ -164,7 +164,7 @@ TEST(PrimRegistration, MoveBetweenHostsUnregistersThenRegisters)
 
 // A content-library resource kind: a typed prim of a class the editor's
 // Content_library indexes, placed under a kind Scope of the hosted tree
-// (doc/usd-compatibility-plan.md U4).
+// (doc/usd_compatibility_design.md U4).
 TEST(PrimRegistration, ResourceKindUnderKindScopeRegistersWithItsClass)
 {
     Recording_host host;

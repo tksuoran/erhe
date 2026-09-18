@@ -227,7 +227,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         }
     }
     // Per-entry record inspection, for one mesh at a time
-    // (doc/draw_list_material_set_plan.md, phase 1). Bounded on purpose: a
+    // (doc/draw_list_material_set.md, phase 1). Bounded on purpose: a
     // scene's every entry would be a huge payload, and the thing worth
     // reading is what ONE mesh's cached records resolved to. material_index
     // is read out of the cached record, material_id / material_name off the
@@ -304,7 +304,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         {"transform_update_count",         draw_list_scene->get_transform_update_count()},
         {"refresh_count",                  draw_list_scene->get_refresh_count()},
         {"slot_sync_count",                draw_list_scene->get_slot_sync_count()},
-        // Material persistence (doc/draw_list_material_set_plan.md R10, R11):
+        // Material persistence (doc/draw_list_material_set.md R10, R11):
         // how many copies each of this root's two material sets has written,
         // and how many record bytes. Sampling these N frames apart on a
         // steady-state viewport is the measurement the persistence design
@@ -370,7 +370,7 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
             {"material_count",      material_count},
             {"trigger_event_count", sr->get_trigger_event_count()},
             // The file the scene is bound to and the format Save Scene
-            // writes it in (doc/usd-compatibility-plan.md E1).
+            // writes it in (doc/usd_compatibility_design.md E1).
             {"source_format",       c_str(sr->get_source_format())},
             {"source_path",         sr->get_source_path().string()}
         });
@@ -392,7 +392,7 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
     const auto& scene = sr->get_scene();
     json nodes = json::array();
     // The scene TREE, not the registered node lists: any prim may parent any
-    // other prim (doc/usd-compatibility-plan.md C5) and only the transformable
+    // other prim (doc/usd_compatibility_design.md C5) and only the transformable
     // prims are registered, so a walk of the lists would leave out a Scope and
     // present the prims below it as children of a node they are not under.
     std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit =
@@ -469,7 +469,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     }
 
     const auto& scene = sr->get_scene();
-    // A prim path (doc/usd-compatibility-plan.md M1) names one prim from the
+    // A prim path (doc/usd_compatibility_design.md M1) names one prim from the
     // root node down; a text without '/' is a prim name. The lookup walks the
     // scene TREE, so a prim that is not a registered node - a Scope, and the
     // prims below it - is found too (C5).
@@ -521,7 +521,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     const glm::vec3 wk = world_trs.get_skew();
     const glm::vec4 wp = found_node->position_in_world();
 
-    // The mesh of this prim: a Mesh IS the prim (doc/usd-compatibility-plan.md
+    // The mesh of this prim: a Mesh IS the prim (doc/usd_compatibility_design.md
     // C5), so its detail is reported on the node, not among its attachments.
     const auto mesh_details = [&scene](const std::shared_ptr<erhe::scene::Mesh>& mesh) -> json {
         json mesh_json = json::object();
@@ -681,7 +681,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         }
 
         // Layout: the mirror update() reads (the effective values of the
-        // Layout properties, doc/property-system.md section 4.13).
+        // Layout properties, doc/property_system.md section 4.13).
         auto layout = std::dynamic_pointer_cast<erhe::scene::Layout>(att);
         if (layout) {
             const erhe::math::Aabb& volume = layout->get_volume();
@@ -697,7 +697,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
 
         // Prefab instance: what the carrier instantiates - the source file and,
         // for a USD composition arc, the prim of it the arc named
-        // (doc/usd-compatibility-plan.md X1) and the `variants` selection the
+        // (doc/usd_compatibility_design.md X1) and the `variants` selection the
         // arc carries into it (section 6, "Variant selection through a
         // composition arc").
         auto prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(att);
@@ -1066,7 +1066,7 @@ auto Mcp_server::query_scene_variants(const json& args) -> std::string
         }
         // A set a variant block declares is named by that block as well: two
         // blocks of one set may each declare a nested set of the same name
-        // (doc/usd-compatibility-plan.md section 6). `enclosing_selected` is
+        // (doc/usd_compatibility_design.md section 6). `enclosing_selected` is
         // whether the block is the selected one, which is when the set's
         // variants reach the scene at all.
         variant_sets.push_back(
@@ -1731,8 +1731,8 @@ namespace {
 // names below the `Brushes` kind scope when the brush is under that scope
 // (empty for one directly under it), and otherwise the holding prim's own item
 // path - the same path `ERHE_scene` `library_folders` names a resource's
-// holder by (doc/content-library-folders.md D5). A resource may sit under any
-// prim (doc/usd-compatibility-plan.md U4), which is why the second form is
+// holder by (doc/content_library_folders.md D5). A resource may sit under any
+// prim (doc/usd_compatibility_design.md U4), which is why the second form is
 // needed at all.
 [[nodiscard]] auto brush_folder_path(const Brush& brush, const erhe::Hierarchy* brushes_scope) -> std::string
 {
@@ -1792,7 +1792,7 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
 
     // Every brush the library owns, wherever its prim sits: a resource is a
     // prim of the tree and needs not be under its kind scope
-    // (doc/usd-compatibility-plan.md U4), so the index - not a walk of the
+    // (doc/usd_compatibility_design.md U4), so the index - not a walk of the
     // `Brushes` scope - is what lists them.
     const std::shared_ptr<erhe::Scope> brushes_scope = library->find_scope(erhe::Item_type::brush);
     json brushes = json::array();
@@ -1853,7 +1853,7 @@ auto Mcp_server::query_selection(const json& args) -> std::string
 
     // The active item is the reference item of the selection and can be
     // outside it, so it is reported separately with its own selected flag
-    // (doc/active-item-plan.md D8).
+    // (doc/active_item.md D8).
     const std::shared_ptr<erhe::Item_base> active_item = m_context.selection->get_active_item();
     if (active_item) {
         json entry = {
@@ -2093,7 +2093,7 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     }
     // The scene TREE, not the registered node buckets: a prim outside
     // Xformable - a Scope - is a selectable prim of the tree like any other
-    // (doc/usd-compatibility-plan.md C5) and is registered nowhere.
+    // (doc/usd_compatibility_design.md C5) and is registered nowhere.
     std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit_prim =
         [&](const std::shared_ptr<erhe::Hierarchy>& prim) {
             if (target_ids.contains(prim->get_id())) {
@@ -2155,7 +2155,7 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     return result;
 }
 
-// --- Frame pacing introspection (doc/frame_pacing_user_interface.md; the
+// --- Frame pacing introspection (doc/frame_pacing/user_interface.md; the
 // MCP twins of the Frame Pacing window, for headless verification) ---
 
 auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string

@@ -31,7 +31,7 @@ constexpr int   c_max_iterations  = 16;
 // shortest-arc axis is undefined; the axis of reference_orientation's basis
 // most orthogonal to a (projected into a's orthogonal plane) makes the 180
 // degree flip deterministic (roll preservation is forfeited there - see
-// doc/fabrik-ik-requirements.md).
+// doc/plans/rigging/fabrik_ik.md).
 [[nodiscard]] auto shortest_arc(const vec3 a_in, const vec3 b_in, const quat& reference_orientation) -> quat
 {
     const float len_a = length(a_in);

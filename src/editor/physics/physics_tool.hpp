@@ -103,7 +103,7 @@ public:
     auto on_drag      () -> bool;
 
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_last_target_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
 private:
     // Shared drag start of the right-drag and the scripted drag.

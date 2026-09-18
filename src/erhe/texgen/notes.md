@@ -2,7 +2,7 @@
 
 ## Purpose
 Procedural texture shader-code composition core (Phase 1 of
-`doc/texture-graph-plan.md`, issue #199). Ports the semantics of Material
+`doc/texture_graph.md`, issue #199). Ports the semantics of Material
 Maker's GLSL composition engine (https://github.com/RodZill4/material-maker,
 MIT license): nodes contribute GLSL snippets described by immutable data
 tables, and composing a node DAG produces one monolithic fragment-shader body

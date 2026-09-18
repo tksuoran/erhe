@@ -206,7 +206,7 @@ public:
 // an already-loaded container ADOPTS the record (resolution 3) - the
 // record becomes the scene's record and the import reuses its parse.
 // save_container() / dirty tracking arrive with R5.8.
-// What a pending-capable acquire found (doc/async-asset-loading-plan.md 2.9).
+// What a pending-capable acquire found (doc/async_asset_loading_design.md 2.9).
 // `pending` is the state that must not be confused with `failed`: the
 // container is loading, so the caller retries (Asset_reference) or suspends
 // its task (the parse-time substitution sites) instead of falling through to
@@ -237,7 +237,7 @@ public:
     Asset_manager& operator=(const Asset_manager&) = delete;
 
     // The per-frame entry point for asynchronous asset loading
-    // (doc/async-asset-loading-plan.md 2.1). Called from Editor::tick()
+    // (doc/async_asset_loading_design.md 2.1). Called from Editor::tick()
     // immediately after Scene_commit_queue::flush() - worker results land
     // first - with the frame's command buffer recording, so that a task may
     // create GPU objects and record transfers from here and only from here.
@@ -341,7 +341,7 @@ public:
     );
     void on_library_prim_detached(erhe::Item_host* owner, const std::shared_ptr<erhe::Item_base>& item);
 
-    // Removal announcement (doc/import-undo-reference-clearing.md). The
+    // Removal announcement (doc/import_undo_reference_clearing.md). The
     // library claim / release walks call these for EVERY entry type, not only
     // the manager-owned ones the two hooks above handle: the graph editor
     // windows hold Graph_mesh / Graph_texture assets, which are not

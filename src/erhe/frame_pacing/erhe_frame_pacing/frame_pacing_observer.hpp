@@ -9,7 +9,7 @@
 // actuation steps land (P2.2: the present-wait clamp via
 // get_last_decision().wait_id). The observer's purpose is to validate
 // input fidelity and pacer behavior against reality before actuation
-// (doc/frame_pacing_implementation_plan.md P2.1):
+// (doc/frame_pacing/implementation_plan.md P2.1):
 //
 // - believed misses should correlate with observed presentation slips,
 // - the throughput statistic W should track real load,

@@ -17,7 +17,7 @@ class Dependency_object;
 class Dependency_property;
 class Enum_info;
 
-// The formula text of a driven property (doc/property-system.md D22),
+// The formula text of a driven property (doc/property_system.md D22),
 // kept distinct from a string value so the local layer of a property can be
 // either.
 class Expression_text

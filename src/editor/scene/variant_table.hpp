@@ -20,7 +20,7 @@ namespace editor {
 
 // Which variant set of a scene an entry names. A variant block is free to
 // declare a variant set of its own, which is a set of the same prim
-// (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant set
+// (doc/usd_compatibility_design.md section 6, "Variant opinions a variant set
 // does not carry"), so the prim and the set name do not name a set on their
 // own: two blocks of one set may each declare a nested set of the same name -
 // `full_assets/Teapot/DrawModes.usd` declares a `shadingVariant` inside both
@@ -38,7 +38,7 @@ public:
     [[nodiscard]] auto operator==(const Variant_set_key& other) const -> bool = default;
 };
 
-// One material binding of one variant (doc/usd-compatibility-plan.md X4).
+// One material binding of one variant (doc/usd_compatibility_design.md X4).
 // `relative_path` is the M1 path of the bound prim below the prim carrying
 // the set, empty for that prim itself. The material is held weakly: a
 // material an undo takes out of the editor must not be pinned by the table
@@ -51,7 +51,7 @@ public:
 };
 
 // One prim of the scene that belongs to one variant
-// (doc/usd-compatibility-plan.md X4). Every variant's prims are in the scene
+// (doc/usd_compatibility_design.md X4). Every variant's prims are in the scene
 // whichever variant is
 // selected - a switch flips their `active`, it does not build or destroy them
 // - so `relative_path` is where the prim sits below the prim carrying the
@@ -65,7 +65,7 @@ public:
 };
 
 // One composition arc a variant block authors
-// (doc/usd-compatibility-plan.md C6). The prim carrying the set holds the selected variant's
+// (doc/usd_compatibility_design.md C6). The prim carrying the set holds the selected variant's
 // arcs as Prefab_instance attachments, and this is what tells a save that the
 // arc belongs in the block rather than on the prim.
 class Variant_reference
@@ -78,7 +78,7 @@ public:
 
 // One variant of a variant set: its name, the bindings it authors, the
 // property opinions it authors and the prims it adds
-// (doc/usd-compatibility-plan.md X4). An opinion names the prim it is for by
+// (doc/usd_compatibility_design.md X4). An opinion names the prim it is for by
 // its path below the prim carrying the set, an empty path being that prim
 // itself, and carries the value in the neutral text form the file reader
 // recorded it in - so a variant nobody selected still has its opinions, which
@@ -107,7 +107,7 @@ public:
     std::weak_ptr<erhe::Item_base> prim;
     std::string                    set_name;
     // The variant block the set is declared inside, both empty when the prim
-    // declares the set itself (doc/usd-compatibility-plan.md section 6,
+    // declares the set itself (doc/usd_compatibility_design.md section 6,
     // "Variant opinions a variant set does not carry"). A save writes such a
     // set back inside that block, which is where the file authored it.
     std::string                    enclosing_set_name;
@@ -156,7 +156,7 @@ public:
 
 // The variant sets one scene carries, owned by its Scene_root and dying with
 // it. Filled by the USD parser when a scene is opened or an asset imported
-// (doc/usd-compatibility-plan.md X4); a set whose carrying prim or whose
+// (doc/usd_compatibility_design.md X4); a set whose carrying prim or whose
 // bound materials leave the editor is dropped, so a dead set is never
 // offered.
 class Variant_table

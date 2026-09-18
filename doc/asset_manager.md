@@ -9,7 +9,7 @@ specified in
 
 The manager is also the owner of **asynchronous loading** - `Asset_load_task`,
 `Asset_manager::tick()` and `queue_load()` - which is documented separately in
-[`async-asset-loading.md`](async-asset-loading.md). This document covers asset
+[`async-asset-loading.md`](async_asset_loading.md). This document covers asset
 identity, ownership and the registry; that one covers how a file gets loaded.
 
 ## Requirement
@@ -67,7 +67,7 @@ this scene defines serializes fully on its save; one another container
 defines serializes as a stub + key. Lifetime belongs to the manager in both
 cases, and a material the scene only RENDERS - a prefab template's - is
 listed by nobody: the mesh binding gives it a material slot, and nothing
-else needs it (doc/usd-compatibility-plan.md U4).
+else needs it (doc/usd_compatibility_design.md U4).
 
 ### Why the axiom (the two-loader failure mode)
 
@@ -218,7 +218,7 @@ and container loads never recurse.
   `unresolved`. This machinery exists but does not fire yet:
   `get_or_load_container` is still synchronous, so `acquire` never actually
   returns pending. See the future work in
-  [`async-asset-loading.md`](async-asset-loading.md).
+  [`async-asset-loading.md`](async_asset_loading.md).
 - `create<T>(defining_scene, args...)` is the in-editor creation funnel:
   every site that brings a new managed asset into existence constructs it
   through the manager, naming the scene whose container record is the
@@ -469,6 +469,6 @@ Standing checks:
   `acquire_import_materials_as_references` -> `acquire` -> `get_or_load_container`,
   which builds a container record holding its own `Gltf_data` and drains its
   textures to the GPU. The record is independent of the import, so dropping the
-  import (doc/reloadable-asset-loads.md) does not release it and the memory win
+  import (doc/reloadable_asset_loads.md) does not release it and the memory win
   for that flag is roughly halved. Worth teaching the import path to reuse the
   record's parse the way the scene-open flow does through `take_adopted_parse`.

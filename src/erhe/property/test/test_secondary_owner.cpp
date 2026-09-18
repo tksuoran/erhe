@@ -1,4 +1,4 @@
-// Secondary owner type (doc/property-system.md D30): an object that names
+// Secondary owner type (doc/property_system.md D30): an object that names
 // a second owner type holds that type's non-bridged properties by qualified
 // name, and its inheritance descendants of that type read them.
 

@@ -940,7 +940,7 @@ auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
 
 auto Mcp_server::action_set_ddgi(const json& args) -> std::string
 {
-    // Dynamic diffuse global illumination (doc/ddgi-plan.md): toggle and
+    // Dynamic diffuse global illumination (doc/ddgi.md): toggle and
     // tune DDGI without the ImGui widgets, and read back what the renderer
     // made of the settings, so the headless verify loop can exercise it.
     Ddgi_renderer* renderer = m_context.ddgi_renderer;

@@ -1116,7 +1116,7 @@ auto Device_impl::query_device_extensions(
         check_device_extension(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
     }
 
-    // Frame pacing capability probes (doc/frame_pacing_capability_tiers.md,
+    // Frame pacing capability probes (doc/frame_pacing/capability_tiers.md,
     // implementation plan step P0.1). Present id/wait and present timing are
     // surface-dependent; calibrated timestamps is not.
     if (!headless) {
@@ -1511,7 +1511,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     //
     // Present-request holdback (frame pacing claim C15): the presentation
     // engine on the development machine accepts but does not honor target
-    // present times (doc/frame_pacing_present_timing_driver_report.md), so
+    // present times (doc/reference/nvidia_present_timing_driver_report.md), so
     // an image that is ready early displays a refresh period before its
     // target. Delaying the REQUEST until one period before the target makes
     // the earliest feasible vsync BE the target. The GPU work is already
@@ -1571,7 +1571,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     if (!submit_info_aggregate.swapchains_to_present.empty()) {
         // FIFO backpressure can block inside vkQueuePresentKHR; the span
         // present_request..present_return is an involuntary wait excluded
-        // from the CPU service time (doc/frame_pacing_inputs.md 3.2).
+        // from the CPU service time (doc/frame_pacing/inputs.md 3.2).
         if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
             record->present_return_time = erhe::frame_pacing::Frame_time_recorder::now();
         }
@@ -2983,7 +2983,7 @@ void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb)
     const uint32_t base = static_cast<uint32_t>(2u * (m_frame_index % s_frame_bracket_ring));
     // Bottom-of-pipe begin: fires when previously submitted work has drained,
     // i.e. when the GPU actually becomes free to start this frame (execution
-    // span, not queued span). See doc/frame_pacing_inputs.md section 3.3.
+    // span, not queued span). See doc/frame_pacing/inputs.md section 3.3.
     vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pool, base);
     m_frame_bracket_begun = true;
 }

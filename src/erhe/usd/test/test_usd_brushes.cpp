@@ -1,4 +1,4 @@
-// Brushes as `Brush`-typed prims (doc/usd-compatibility-plan.md E4a). The
+// Brushes as `Brush`-typed prims (doc/usd_compatibility_design.md E4a). The
 // reader records every `Brush` prim of the root layer with its geometry, its
 // density, its normal style and the material it binds, and stops the scene
 // conversion at it, so the brush geometry is no mesh of the scene; the writer

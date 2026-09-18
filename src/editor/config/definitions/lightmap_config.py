@@ -3,7 +3,7 @@ from erhe_codegen import *
 struct("Lightmap_config",
     version=1,
     short_desc="Lightmap",
-    long_desc="Lightmap baking settings (doc/lightmap_baking_plan.md). Texel density comes from the world-space tile grid: tile_texture_size / cell size, per tile. The boolean toggles switch individual bake/sampling features off for A/B comparison and debugging. (The legacy standalone texels_per_meter unwrap density was removed in version 11; stale keys are ignored.)",
+    long_desc="Lightmap baking settings (doc/lightmap_baking.md). Texel density comes from the world-space tile grid: tile_texture_size / cell size, per tile. The boolean toggles switch individual bake/sampling features off for A/B comparison and debugging. (The legacy standalone texels_per_meter unwrap density was removed in version 11; stale keys are ignored.)",
     developer=False,
     fields=[
         field(
@@ -32,7 +32,7 @@ struct("Lightmap_config",
             added_in=1,
             default="3",
             short_desc="UV parameterizer",
-            long_desc="Chart parameterizer for lightmap UV unwrap; matches erhe::geometry::operation::Atlas_parameterizer: 0 = projection, 1 = LSCM, 2 = spectral LSCM, 3 = ABF++ (Geogram default), 4 = per-facet (every facet its own isometric chart; no Geogram, zero overlaps, no shared texels - doc/lightmap_seam_driven_unwrap_plan.md). Exposed to iterate on unwrap defects (overlapping / folded UV triangles).",
+            long_desc="Chart parameterizer for lightmap UV unwrap; matches erhe::geometry::operation::Atlas_parameterizer: 0 = projection, 1 = LSCM, 2 = spectral LSCM, 3 = ABF++ (Geogram default), 4 = per-facet (every facet its own isometric chart; no Geogram, zero overlaps, no shared texels - doc/plans/lightmap/seam_driven_unwrap.md). Exposed to iterate on unwrap defects (overlapping / folded UV triangles).",
             visible=True,
             developer=True
         ),

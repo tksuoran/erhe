@@ -405,7 +405,7 @@ All six sites, traced from how `transform` is registered:
    `section_every_node_type()` (~line 266): insert a lattice node in the op
    chain, set a nonzero offset via `geometry_graph_set_parameter`, assert vertex
    count is preserved and the graph evaluates.
-6. **Docs** — status row in `doc/geometry-nodes-plan.md` (~line 26) and a short
+6. **Docs** — status row in `doc/geometry_nodes.md` (~line 26) and a short
    section in `doc/graph_editor.md`.
 
 Free once registered: undo/redo, JSON save/load, copy/paste, Node Properties,

@@ -67,9 +67,9 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         return r.dump();
     }
     // Save follows the scene's own format, the way File > Save Scene does
-    // (doc/usd-compatibility-plan.md E1): a USD-backed scene writes a USDA
+    // (doc/usd_compatibility_design.md E1): a USD-backed scene writes a USDA
     // layer, every other scene writes a single erhe-authored glTF file
-    // (doc/gltf-scene-roundtrip-plan.md phase 4). Without 'path' the scene
+    // (doc/gltf_scene_roundtrip.md phase 4). Without 'path' the scene
     // saves to its own source file when it was opened/loaded from one, else
     // to res/editor/scenes/<scene name> with the format's extension. An
     // explicit path is normalized to carry an extension of the scene's
@@ -172,7 +172,7 @@ auto Mcp_server::action_reset_editor_state(const json& args) -> std::string
     if (m_context.selection != nullptr) {
         m_context.selection->clear_selection();
         // The active item lives beside the selection and survives a plain
-        // clear, so it is forgotten explicitly (doc/active-item-plan.md D2).
+        // clear, so it is forgotten explicitly (doc/active_item.md D2).
         m_context.selection->set_active_item({});
     }
     if (m_context.mesh_component_selection != nullptr) {
@@ -319,7 +319,7 @@ auto Mcp_server::action_open_scene(const json& args) -> std::string
     }
     // A USD file has no undoable open path of its own: it takes the same
     // route File > Load Scene takes, which builds the USD-backed scene
-    // (doc/usd-compatibility-plan.md E1).
+    // (doc/usd_compatibility_design.md E1).
     if (editor::is_usd_file_extension(path)) {
         m_context.app_message_bus->load_scene_file.queue_message(
             Load_scene_file_message{
@@ -385,7 +385,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
     };
     if (editor_state) {
         // Full scene persistence: editor-domain ERHE_* extensions + baked
-        // graph-mesh exclusion (doc/gltf-scene-roundtrip-plan.md phase 3).
+        // graph-mesh exclusion (doc/gltf_scene_roundtrip.md phase 3).
         // The default export stays plain interchange.
         add_gltf_editor_state(export_arguments, *sr, export_path, physics_items.materials);
     }
@@ -624,7 +624,7 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     const glm::vec3 position        = get_vec3(args, "position", glm::vec3{0.0f});
     const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
 
-    // Asynchronous template load (doc/async-asset-loading-plan.md 2.12): the
+    // Asynchronous template load (doc/async_asset_loading_design.md 2.12): the
     // callback runs INLINE when the prefab is already cached, and only then
     // can this report the created node_id. A first load of a file defers, so
     // the response says so and the caller polls get_async_status.
@@ -696,7 +696,7 @@ auto Mcp_server::action_reload_prefab(const json& args) -> std::string
     }).dump();
 }
 
-// Edit one property of a prefab TEMPLATE (doc/usd-compatibility-plan.md X2):
+// Edit one property of a prefab TEMPLATE (doc/usd_compatibility_design.md X2):
 // the templates live in Prefab::holding_scene, which no scene lookup
 // reaches, and a template edit is what every instance of it reads through
 // its reference layer (D33). Deliberately not undoable - a template is a
@@ -847,7 +847,7 @@ auto Mcp_server::query_prefabs(const json& args) -> std::string
 // to find and click the Developer menu item while wearing the headset.
 //
 // Requires RenderDoc to be attached, which on Quest means the app was launched
-// from RenderDoc Meta Fork with injection - see doc/quest-renderdoc-capture.md.
+// from RenderDoc Meta Fork with injection - see doc/quest_renderdoc_capture.md.
 auto Mcp_server::action_request_renderdoc_capture(const json& args) -> std::string
 {
     static_cast<void>(args);

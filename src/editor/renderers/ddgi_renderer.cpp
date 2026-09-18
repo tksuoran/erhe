@@ -127,7 +127,7 @@ Ddgi_renderer::Ddgi_renderer(
     using namespace erhe::graphics;
 
     // Ray query gates the whole feature: the probe update has no rasterized
-    // fallback (doc/ddgi-plan.md - the probe-cubemap path is future work).
+    // fallback (doc/ddgi.md - the probe-cubemap path is future work).
     if (!graphics_device.get_info().use_ray_query) {
         log_startup->info("Ddgi_renderer: ray query not available, DDGI disabled");
         return;
@@ -926,7 +926,7 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     }
 
     // Materials: the scene root's FORWARD set, already updated for this frame
-    // by App_scenes::update_material_sets() (doc/draw_list_material_set_plan.md
+    // by App_scenes::update_material_sets() (doc/draw_list_material_set.md
     // D5, D6). This dispatch binds it and the TLAS instance records name slots
     // in it, so the two agree by construction rather than because the buffer
     // happens to have been rewritten from the same list a moment ago.

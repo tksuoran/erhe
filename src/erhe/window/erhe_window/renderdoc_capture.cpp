@@ -81,7 +81,7 @@ auto negotiate_renderdoc_api(const pRENDERDOC_GetAPI RENDERDOC_GetAPI) -> bool
 //
 // erhe never loads the layer itself: RTLD_NOLOAD attaches to the module only if
 // it is already present, which on Quest means the app was launched from the
-// RenderDoc host with injection (see doc/quest-renderdoc-capture.md). Passive
+// RenderDoc host with injection (see doc/quest_renderdoc_capture.md). Passive
 // attach is deliberate on two counts. It is free when RenderDoc is not attached,
 // so it can be attempted on every run rather than gated on a config flag baked
 // into the APK. And it cannot produce a second copy of the layer in the process,

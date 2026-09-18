@@ -80,7 +80,7 @@ struct("Editor_settings_config",
             visible=True,
             developer=False
         ),
-        # doc/draw_list_renderer_requirements.md: render eligible composition
+        # doc/draw_list_renderer.md: render eligible composition
         # passes and shadow maps from the scene's persistent draw lists
         # (Draw_list_scene) instead of re-bucketing mesh spans every pass.
         # Runtime toggle; ineligible passes always use the classic path.

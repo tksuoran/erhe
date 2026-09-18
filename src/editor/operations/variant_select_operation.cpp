@@ -135,7 +135,7 @@ void append_variant_property_operations(
     }
 }
 
-// The prims a switch turns on and off (doc/usd-compatibility-plan.md X4).
+// The prims a switch turns on and off (doc/usd_compatibility_design.md X4).
 // Every variant's prims are in
 // the scene: the chosen variant's are active - by holding no local `active`
 // value at all, which is the state the file's own selection loads in - and

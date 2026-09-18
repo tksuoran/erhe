@@ -7,7 +7,7 @@
 // discarding [0, i) - and releasing the HIGHEST index frees the most, because
 // destroying those discarded entries releases their payloads too.
 //
-// See doc/reloadable-asset-loads.md.
+// See doc/reloadable_asset_loads.md.
 
 #include "operations/operation_stack_selection.hpp"
 

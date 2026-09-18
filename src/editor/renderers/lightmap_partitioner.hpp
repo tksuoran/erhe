@@ -24,7 +24,7 @@ namespace editor {
 class App_context;
 class Scene_root;
 
-// World-space lightmap mesh partitioner (doc/lightmap_baking_plan.md).
+// World-space lightmap mesh partitioner (doc/lightmap_baking.md).
 //
 // prepare() is self-contained: it computes a geometry-only spatial split
 // estimate (Lightmap_baker::compute_tile_split_estimate - no unwrap or

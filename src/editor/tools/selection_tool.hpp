@@ -180,7 +180,7 @@ public:
     [[nodiscard]] auto get_selected_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
     // Monotonic count of Selection_message dispatches. Lets a test assert
     // that a batched prune dispatches ONCE
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_selection_change_count() const -> std::size_t;
 
     // Content removed without a scene closing (undo of a glTF import): drop
@@ -189,7 +189,7 @@ public:
     // undo history keeps a removed item alive for redo, so without this the
     // parts that re-resolve get_last_selected() every frame (Operations'
     // make-mesh material) resurrect the reference on the next frame
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     void on_items_removed(const Removed_items& removed);
     [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::Item_base>& item) const -> bool;
     [[nodiscard]] auto range_selection   () -> Range_selection&;
@@ -207,14 +207,14 @@ public:
     // with no Item_host). Other hosts' selections are left untouched.
     // Returns true when anything was removed.
     //
-    // Active_item says what happens to the active item (doc/active-item-plan.md
+    // Active_item says what happens to the active item (doc/active_item.md
     // D2): keep leaves it as it is (a plain click, an MCP select_items reset -
     // the active item survives a cleared selection), forget_hosted drops it
     // when this host hosts it, which is what a closing scene needs.
     auto clear_selection(erhe::Item_host* host, Active_item active_item = Active_item::keep) -> bool;
 
     // The active item: the one reference item of the selection
-    // (doc/active-item-plan.md D1). It may be empty, and it may be an item
+    // (doc/active_item.md D1). It may be empty, and it may be an item
     // that is not selected.
     [[nodiscard]] auto get_active_item() const -> std::shared_ptr<erhe::Item_base>;
 
@@ -247,7 +247,7 @@ public:
     template <typename T>
     [[nodiscard]] auto get_last_selected() const -> std::shared_ptr<T>;
 
-    // The one reference item of a command (doc/active-item-plan.md D6): the
+    // The one reference item of a command (doc/active_item.md D6): the
     // active item when it is of type T, or the node an active
     // erhe::scene::Node_attachment belongs to when T is Node or a base of it.
     // The active item counts as a reference only when it is non-hosted or

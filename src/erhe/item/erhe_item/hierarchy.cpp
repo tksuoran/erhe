@@ -259,7 +259,7 @@ auto Hierarchy::get_inheritance_parent() const -> const erhe::property::Dependen
     // No parent of its own: the item inherits from the container that holds
     // it, which is what Item_base answers. A content-library item is held by
     // its Content_library_node entry and inherits the folder's values through
-    // it (doc/content-library-folders.md D1).
+    // it (doc/content_library_folders.md D1).
     return Item_base::get_inheritance_parent();
 }
 
@@ -300,7 +300,7 @@ void Hierarchy::handle_add_child(const std::shared_ptr<Hierarchy>& child, std::s
     }
 #endif
 
-    // Sibling-unique names (doc/usd-compatibility-plan.md M2): every producer
+    // Sibling-unique names (doc/usd_compatibility_design.md M2): every producer
     // - node creation, paste, duplicate, glTF import, prefab instantiation -
     // reaches a parent through here, so the numeric suffix is applied once,
     // here, and no producer needs code of its own. A site that needs the name

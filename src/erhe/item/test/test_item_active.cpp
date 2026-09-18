@@ -1,4 +1,4 @@
-// The USD `active` state (doc/usd-compatibility-plan.md X2): `active` is
+// The USD `active` state (doc/usd_compatibility_design.md X2): `active` is
 // the item's own opinion (not an inherits-flagged property), and the
 // derived Item_flags::active bit carries USD's subtree pruning - an item
 // below an inactive one is inactive whatever it says of itself.

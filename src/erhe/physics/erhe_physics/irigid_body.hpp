@@ -39,7 +39,7 @@ static constexpr const char* c_motion_mode_strings[] = {
 }
 
 // The authorable motion modes (e_invalid is not one), for a registered
-// property of Motion_mode type (doc/property-system.md D2a).
+// property of Motion_mode type (doc/property_system.md D2a).
 extern const erhe::property::Enum_info c_motion_mode_enum_info;
 
 class Collision_filter;

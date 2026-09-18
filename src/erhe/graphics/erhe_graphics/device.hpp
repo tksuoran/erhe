@@ -110,7 +110,7 @@ static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
 // Image_layout is defined in enums.hpp
 
-// Frame pacing capability tier (doc/frame_pacing_capability_tiers.md,
+// Frame pacing capability tier (doc/frame_pacing/capability_tiers.md,
 // implementation plan P4.2). Resolved once at device init; see
 // Device::get_frame_pacing_tier.
 enum class Frame_pacing_tier : unsigned int {
@@ -255,7 +255,7 @@ public:
     // formats but NOT for VK_FORMAT_R16G16B16_SNORM, so the Vulkan backend
     // queries it per physical device; GL and Metal have it unconditionally.
     // A device without it must fall back to unquantized positions (or, later,
-    // to a padded snorm16x4) - see doc/vertex-position-quantization.md.
+    // to a padded snorm16x4) - see doc/vertex_position_quantization.md.
     bool use_16_vec3_snorm_vertex_buffer{true};
 
     // The device can source a vertex attribute from a 3-component 16-bit unorm
@@ -686,7 +686,7 @@ public:
     // the pacer from the TRACKED grid (deviation 12: the queried
     // refreshDuration can be grossly wrong); 0.0 = no holdback.
     void               set_present_target_time              (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds = 0.0);
-    // Resolved frame pacing tier (doc/frame_pacing_capability_tiers.md,
+    // Resolved frame pacing tier (doc/frame_pacing/capability_tiers.md,
     // implementation plan P4.2). Resolved once at device init from the
     // capability probes and the frame_pacing_tier graphics config; the
     // resolved tier owns the swapchain present mode and image count (tier W

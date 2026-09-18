@@ -42,7 +42,7 @@ public:
     virtual void register_layout  (const std::shared_ptr<Layout>& layout) = 0;
     virtual void unregister_layout(const std::shared_ptr<Layout>& layout) = 0;
 
-    // Mesh change notifications (doc/draw_list_renderer_requirements.md R0a,
+    // Mesh change notifications (doc/draw_list_renderer.md R0a,
     // R12, R12a). May be called from worker threads (mesh building is
     // parallelised on tf::Executor workers), so implementations must only
     // enqueue and apply the change later on the main thread.

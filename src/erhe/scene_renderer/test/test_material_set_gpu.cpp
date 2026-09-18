@@ -1,4 +1,4 @@
-// Material_set's GPU half (doc/draw_list_material_set_plan.md V2): the
+// Material_set's GPU half (doc/draw_list_material_set.md V2): the
 // records it writes, the slots they land at, and the persistence rule that
 // decides when a new copy is written at all.
 //

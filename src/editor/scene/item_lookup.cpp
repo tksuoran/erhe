@@ -29,7 +29,7 @@ namespace {
 
 // The prims of a subtree, and the attachments of the transformable ones.
 // The scene TREE is walked rather than the registered node buckets: any prim
-// may parent any other prim (doc/usd-compatibility-plan.md C5), and only the
+// may parent any other prim (doc/usd_compatibility_design.md C5), and only the
 // transformable prims are registered, so a Scope - and everything below one -
 // is reachable this way alone.
 template <typename Predicate>
@@ -84,7 +84,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
             }
         }
     }
-    // Styles: the targets of every item's style property (doc/style-library.md D3).
+    // Styles: the targets of every item's style property (doc/style_library.md D3).
     if (library) {
         for (const std::shared_ptr<Style>& style : library->get_all<Style>()) {
             if (style && matches(*style)) {
@@ -262,7 +262,7 @@ void collect_reference_candidates(
         if (!item || ((item->get_type() & item_types) == 0)) {
             return;
         }
-        // A style is offered only where it applies (doc/style-library.md R3)
+        // A style is offered only where it applies (doc/style_library.md R3)
         // and only when it would not form a style chain cycle - a style has a
         // style of its own, so it is never a candidate for itself or for
         // anything already on its chain (D25 style chain).

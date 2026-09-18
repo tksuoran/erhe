@@ -4,9 +4,9 @@
 //
 // Pure, engine-independent port of the verified Python reference model
 // scripts/frame_pacing_sim.py. Design documents:
-//   doc/frame_pacing_algorithm.md      - algorithm (normative)
-//   doc/frame_pacing_control_model.md  - control-theory model, claims C1..C9
-//   doc/frame_pacing_inputs.md         - input definitions (service times!)
+//   doc/frame_pacing/algorithm.md      - algorithm (normative)
+//   doc/frame_pacing/control_model.md  - control-theory model, claims C1..C9
+//   doc/frame_pacing/inputs.md         - input definitions (service times!)
 //
 // The pacer never calls the OS, Vulkan, or a clock: all times arrive as
 // arguments (seconds, one monotonic clock domain) and all decisions are
@@ -14,7 +14,7 @@
 // clock (test/ replicates the Python plant and claims C1..C9) and portable
 // across backends.
 //
-// Input fidelity contract (doc/frame_pacing_algorithm.md section 1):
+// Input fidelity contract (doc/frame_pacing/algorithm.md section 1):
 // - cpu_duration / gpu_duration are stage SERVICE times: involuntary waits
 //   (pacer wait, fence, acquire) and GPU idle bubbles excluded.
 // - on_gpu_done() should be driven by per-frame polling of the GPU frame

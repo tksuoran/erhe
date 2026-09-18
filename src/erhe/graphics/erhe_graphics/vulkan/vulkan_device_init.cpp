@@ -363,7 +363,7 @@ Device_impl::Device_impl(
     // be enabled. renderdoc_capture_support covers the case where capture was
     // configured up front, but it does not cover a RenderDoc that attached
     // itself: on Android the capture layer is injected by the RenderDoc host
-    // (see doc/quest-renderdoc-capture.md) while renderdoc_capture_support stays
+    // (see doc/quest_renderdoc_capture.md) while renderdoc_capture_support stays
     // off, precisely so that validation remains available on runs where
     // RenderDoc is absent. Detecting the layer in the loader's own enumeration
     // is what makes the two mutually exclusive however capture was arranged -
@@ -1138,7 +1138,7 @@ Device_impl::Device_impl(
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
 
     // Frame pacing capability tier resolution
-    // (doc/frame_pacing_capability_tiers.md section 2). Feature-confirmed:
+    // (doc/frame_pacing/capability_tiers.md section 2). Feature-confirmed:
     // extension presence alone is not enough.
     m_capabilities.m_present_id =
         (query_present_id_features.presentId   == VK_TRUE) ||

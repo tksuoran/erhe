@@ -113,7 +113,7 @@ void Animation_window::on_items_removed(const Removed_items& removed)
     // The edited animation was taken out of the editor - undo of the glTF
     // import that brought it in, or its defining scene leaving the registry.
     // Keeping it here would show and play content that is no longer in the
-    // editor, and pin the asset (doc/import-undo-reference-clearing.md).
+    // editor, and pin the asset (doc/import_undo_reference_clearing.md).
     if (m_animation && removed.lookup.contains(m_animation.get())) {
         set_animation({}); // also clears the player
     }

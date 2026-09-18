@@ -14,8 +14,8 @@ namespace editor {
 class Content_library;
 
 // A style item of the content library's Styles category
-// (doc/style-library.md D2): a named holder of property values of any item
-// class. Its secondary owner type (doc/property-system.md D30) is the root
+// (doc/style_library.md D2): a named holder of property values of any item
+// class. Its secondary owner type (doc/property_system.md D30) is the root
 // owner type, so the Add Property picker offers every class's value
 // properties by qualified name (`Material.roughness`, `Light.color`) and
 // the values live in this item's own store. Any item uses it through its

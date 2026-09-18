@@ -182,7 +182,7 @@ void Primitive_buffer::write_primitive(
 
     using erhe::graphics::as_span;
     // The active item of the selection draws in its own color
-    // (doc/active-item-plan.md D5); every other selected entry in
+    // (doc/active_item.md D5); every other selected entry in
     // constant_color0.
     const glm::vec4 selected_color = settings.get_selected_color(mesh->get_flag_bits());
     const auto color_span =

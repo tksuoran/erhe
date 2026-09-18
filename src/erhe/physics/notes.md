@@ -34,7 +34,7 @@ a specific engine.
   iteration counts for the constraint's whole island while it lives (Box3D ignores them)
 - `Physics_material` -- shared material item, the carrier of how a kind of matter behaves:
   static/dynamic friction, restitution, the combine modes, linear/angular damping, wind
-  receptivity and density are registered `erhe::property` properties (doc/property-system.md
+  receptivity and density are registered `erhe::property` properties (doc/property_system.md
   section 4.12), read through the typed accessors; a body without a material uses the
   `c_default_*` values; `IRigid_body::set_physics_material()` applies the damping to the body and
   re-derives a density-based mass; KHR_physics_rigid_bodies precedence in `combine()`

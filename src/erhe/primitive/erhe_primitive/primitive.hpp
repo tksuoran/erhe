@@ -79,7 +79,7 @@ public:
     explicit Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
     ~Primitive_shape() noexcept;
 
-    // Two locks, see doc/primitive-shape-lock-split-plan.md:
+    // Two locks, see doc/primitive_shape_locking.md:
     //
     // - m_build_mutex is held for the duration of the expensive idempotent
     //   builds (geometry conversion, BVH build, buffer mesh build). Its only

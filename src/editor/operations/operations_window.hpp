@@ -86,7 +86,7 @@ enum class Add_joint_avoidance : unsigned int {
     whole_world = 1  // every other body in the physics world
 };
 
-// What the active item means to an operation (doc/active-item-plan.md D6).
+// What the active item means to an operation (doc/active_item.md D6).
 // operands_only: the operation has operands and no target, so the active item
 // only orders them - an unselected active item stays out. active_is_target:
 // the operation has one target (the merge survivor, the CSG target), which is
@@ -120,7 +120,7 @@ public:
 
     void merge();
 
-    // Operations "Attach" (doc/active-item-plan.md D6, Blender Ctrl-P): parent
+    // Operations "Attach" (doc/active_item.md D6, Blender Ctrl-P): parent
     // every node of the command target selection other than the active node
     // under the active node, as one undoable Compound_operation. Nodes that are
     // ancestors of the active node are skipped (a parent cannot be reparented
@@ -232,7 +232,7 @@ public:
     void create_joint_settings();
 
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import-undo-reference-clearing.md).
+    // (doc/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_make_mesh_material() const -> const std::shared_ptr<erhe::primitive::Material>&;
 private:
     // Saves the scene as a single erhe-authored glTF file (shared by
@@ -281,7 +281,7 @@ private:
     [[nodiscard]] auto can_align() const -> bool;
 
     // Per-frame gate for the Attach button: there is an active node (the
-    // reference, doc/active-item-plan.md D6) and at least one other node in the
+    // reference, doc/active_item.md D6) and at least one other node in the
     // command target selection. Allocation-free.
     [[nodiscard]] auto can_attach_to_active() const -> bool;
 

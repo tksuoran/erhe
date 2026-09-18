@@ -142,7 +142,7 @@ public:
             // Derived from buffer_mesh->vertex_input_key, while the variant is
             // compiled against buffer_set.vertex_input_key (the *expanded* format
             // for solid wireframe). Those agree for every mode even with the
-            // per-variant encoding split (doc/meshoptimizer-integration.md,
+            // per-variant encoding split (doc/meshoptimizer_integration.md,
             // requirements 9-10): a draw resolved to the optimized variant is
             // fill-only, where the bound key IS buffer_mesh's own; every other
             // mode resolves to the original variant, whose content and expanded

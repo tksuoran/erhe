@@ -134,7 +134,7 @@ public:
     Primitive_color_source color_source   {Primitive_color_source::constant_color};
     // Constant color choice, in the order the writers test it:
     // constant_color_active for a selected entry that is also the active item
-    // (doc/active-item-plan.md D5), constant_color1 for an entry that is
+    // (doc/active_item.md D5), constant_color1 for an entry that is
     // hovered but not selected, constant_color0 otherwise. Only the selection
     // outline pass distinguishes the active item; every other pass leaves
     // constant_color_active unset and the writers substitute constant_color0,
@@ -167,7 +167,7 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     // material_source is the set this pass binds - the owning Scene_root's
-    // FORWARD set for the bucket path (doc/draw_list_material_set_plan.md D5),
+    // FORWARD set for the bucket path (doc/draw_list_material_set.md D5),
     // so a record's material_index and the buffer bound when it is drawn agree.
     // Null writes slot 0 for every primitive, which is what Id_renderer wants:
     // its shader reads only the id and it binds no material set at all.
@@ -179,7 +179,7 @@ public:
         bool                                use_id_ranges = false
     ) -> erhe::graphics::Ring_buffer_range;
 
-    // Draw-list overload (doc/draw_list_renderer_requirements.md R8/R8a; the
+    // Draw-list overload (doc/draw_list_renderer.md R8/R8a; the
     // material slot it resolves comes from the draw list's own Material_set):
     // writes one primitive record per entry in [begin, end) of draw_list that
     // passes filter (evaluated on the entry's mirrored flag bits), in entry

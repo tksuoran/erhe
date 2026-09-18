@@ -6,7 +6,7 @@ namespace tf {
 
 namespace editor {
 
-// Proposal B of doc/gl-worker-context-enforcement.md: a tf::ObserverInterface
+// Proposal B of doc/gl_worker_context_enforcement.md: a tf::ObserverInterface
 // that aborts when a task is co-run onto a thread that parked while holding a
 // worker GL context slot. Attached to the executor, so a call site that skips
 // the erhe::task spawn wrappers (proposal A) cannot bypass it; it catches the

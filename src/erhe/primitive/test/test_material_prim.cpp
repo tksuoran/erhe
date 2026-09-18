@@ -1,4 +1,4 @@
-// A Material is a typed prim (doc/usd-compatibility-plan.md U4): it carries
+// A Material is a typed prim (doc/usd_compatibility_design.md U4): it carries
 // the USD `UsdShadeMaterial` typeName token and it can be parented in a
 // prim tree, though nothing places it there yet.
 

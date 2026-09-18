@@ -129,7 +129,7 @@ std::vector<Item_tree*> g_item_trees;
 
 // The rows that take the structural move (before / into / after), as target
 // and as payload: every prim of the one object model
-// (doc/usd-compatibility-plan.md C5), whatever its kind. The Scene header row
+// (doc/usd_compatibility_design.md C5), whatever its kind. The Scene header row
 // and node attachment rows are not prims.
 [[nodiscard]] auto is_tree_prim(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
@@ -440,7 +440,7 @@ void Item_tree::reposition(
         }
     }
 
-    // A reference instance protects its structure (doc/usd-compatibility-plan.md
+    // A reference instance protects its structure (doc/usd_compatibility_design.md
     // X2): an item inside an instance is not reparented, and nothing is
     // inserted under a carrier or inside one.
     const std::optional<std::string> item_refusal = instance_structure_refusal(*item);
@@ -690,7 +690,7 @@ void instantiate_gltf_prefab(
     if ((source_path == nullptr) || (context.prefab_library == nullptr)) {
         return;
     }
-    // Asynchronous prefab load (doc/async-asset-loading-plan.md step 7): the
+    // Asynchronous prefab load (doc/async_asset_loading_design.md step 7): the
     // drop returns immediately and the instance appears once the template is
     // ready. Scene_root is enable_shared_from_this, so the callback can hold
     // it weakly and bail if the scene closed meanwhile.
@@ -905,7 +905,7 @@ auto Item_tree::brush_drop_target(
         );
     };
     // The brush instance joins the tree beside the row (its parent) or under
-    // it (any prim parents any prim, doc/usd-compatibility-plan.md C5). A
+    // it (any prim parents any prim, doc/usd_compatibility_design.md C5). A
     // reference instance protects its structure (X2): a zone is offered only
     // where the parent it inserts under accepts children.
     const std::shared_ptr<erhe::Hierarchy> prim_parent = prim->get_parent().lock();
@@ -1168,7 +1168,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             return false;
         }
         // A reference instance protects its structure
-        // (doc/usd-compatibility-plan.md X2): no prim is added under a
+        // (doc/usd_compatibility_design.md X2): no prim is added under a
         // carrier or inside one, so the child zone is not offered there, and
         // the sibling zones are not offered when the prim's own parent
         // refuses children.
@@ -1293,7 +1293,7 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
                 // Ctrl-click on a selected row that is not the active item
                 // makes it active and leaves the selection alone; on the
                 // active row it deselects, and it stays active
-                // (doc/active-item-plan.md D3.4).
+                // (doc/active_item.md D3.4).
                 if (m_context.selection->get_active_item() != item) {
                     m_context.selection->set_active_item(item);
                 } else {
@@ -1422,7 +1422,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
         if (hierarchy) {
         // The clipboard entries apply to every prim of the tree - node,
-        // scope, kind scope or resource alike (doc/usd-compatibility-plan.md
+        // scope, kind scope or resource alike (doc/usd_compatibility_design.md
         // C5). A copy is a clone, so a kind that is
         // erhe::Item_kind::not_clonable (a texture, a brush, a graph asset)
         // is not copied, cut or duplicated; a subtree clone leaves such
@@ -1430,7 +1430,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         const bool is_prim   = is_tree_prim(item);
         const bool clonable  = item->is_clonable();
         const bool can_copy  = is_prim && clonable;
-        // Structure protection (doc/usd-compatibility-plan.md X2): an item
+        // Structure protection (doc/usd_compatibility_design.md X2): an item
         // inside a reference instance is not removed, and nothing is
         // inserted under a carrier or inside one.
         const std::shared_ptr<erhe::Hierarchy> item_parent = hierarchy->get_parent().lock();
@@ -1528,7 +1528,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             }
         }
         ImGui::Separator();
-        // The M1 namespace path (doc/usd-compatibility-plan.md), the form the
+        // The M1 namespace path (doc/usd_compatibility_design.md), the form the
         // MCP tools and the ERHE_scene entries address items by; a root is
         // named by its name.
         if (ImGui::MenuItem("Copy Path")) {
@@ -1673,7 +1673,7 @@ void Item_tree::imgui_row(const Flat_row& row)
     const float  row_right = row_pos.x + ImGui::GetContentRegionAvail().x;
 
     const bool is_selected = row.item->is_selected();
-    // The active item of the selection (doc/active-item-plan.md D5) accents
+    // The active item of the selection (doc/active_item.md D5) accents
     // its row: a brighter header while it is selected, a tinted label while it
     // is not. The bit is read off the item, so no Selection lookup per row.
     const bool is_active_item = erhe::utility::test_bit_set(row.item->get_flag_bits(), erhe::Item_flags::active_item);
@@ -1745,7 +1745,7 @@ void Item_tree::imgui_row(const Flat_row& row)
         const ImGuiStyle& style     = ImGui::GetStyle();
 
         // An inactive item and everything below it is out of the scene
-        // (doc/usd-compatibility-plan.md X2): the row stays, drawn dim.
+        // (doc/usd_compatibility_design.md X2): the row stays, drawn dim.
         const bool     dimmed     = !row.item->is_active();
         const ImGuiCol text_color = dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text;
         // An unselected active item has no header to brighten, so its label
@@ -1908,7 +1908,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     // A SEALED prefab instance root (a glTF template) hides its interior:
     // the subtree is prefab content, editable only by opening the prefab's
     // own scene, so the row renders as a leaf. A USD-backed instance is not
-    // sealed (doc/usd-compatibility-plan.md X2): its interior is listed,
+    // sealed (doc/usd_compatibility_design.md X2): its interior is listed,
     // selectable and editable, and only its structure is protected.
     const std::shared_ptr<Prefab_instance> prefab_instance = node ? erhe::scene::get_attachment<Prefab_instance>(node.get()) : std::shared_ptr<Prefab_instance>{};
     const bool is_sealed_instance_root = prefab_instance && is_sealed_prefab_instance(*prefab_instance);

@@ -277,7 +277,7 @@ TEST(Reference_target_metrics, the_composing_stage_reports_the_arc)
 }
 
 // ---------------------------------------------------------------------------
-// Export (doc/usd-compatibility-plan.md X1, save side)
+// Export (doc/usd_compatibility_design.md X1, save side)
 // ---------------------------------------------------------------------------
 
 [[nodiscard]] auto reference_temporary_directory() -> std::filesystem::path
@@ -298,7 +298,7 @@ TEST(Reference_target_metrics, the_composing_stage_reports_the_arc)
 
 // A prim instantiation put under a carrier: it names its counterpart in the
 // template, the way attach_prefab_instance links a clone
-// (doc/property-system.md D33). That link is what tells instance content
+// (doc/property_system.md D33). That link is what tells instance content
 // from a prim the user parented under the carrier by hand.
 [[nodiscard]] auto make_instance_content_prim(const char* name, const std::shared_ptr<erhe::Item_base>& counterpart) -> std::shared_ptr<erhe::scene::Xform>
 {
@@ -591,7 +591,7 @@ TEST(References_export, the_fixture_round_trips_to_the_same_arcs)
 }
 
 // ---------------------------------------------------------------------------
-// Sparse overrides (doc/usd-compatibility-plan.md X2)
+// Sparse overrides (doc/usd_compatibility_design.md X2)
 // ---------------------------------------------------------------------------
 
 class Override_import : public testing::Test
@@ -653,7 +653,7 @@ TEST_F(Override_import, a_nested_over_keeps_its_path_and_carries_active)
 // A schema-named value of a resource inside the instance: `roughness` is a
 // `Material` schema attribute on a `Material` prim, and an `over` has no
 // schema, so it travels as the `erhe:Owner:name` custom attribute the reader
-// reads back (doc/usd-compatibility-plan.md X2).
+// reads back (doc/usd_compatibility_design.md X2).
 TEST_F(Override_import, an_over_on_a_material_is_read_as_an_override)
 {
     ASSERT_FALSE(result.data.references.empty());
@@ -705,7 +705,7 @@ public:
 
         clone_arm->set_value(erhe::Item_base::visible_property, false);
         // The transform an imported override arrives with: an authored
-        // xformOp stack (doc/usd-compatibility-plan.md M8), which the writer
+        // xformOp stack (doc/usd_compatibility_design.md M8), which the writer
         // is to author back as the ops it was given.
         erhe::scene::Xform_op_stack stack{};
         erhe::scene::Xform_op       translate_op{};
@@ -803,7 +803,7 @@ TEST(Override_export, written_overrides_read_back_the_same)
 }
 
 // ---------------------------------------------------------------------------
-// A material binding authored as an override (doc/usd-compatibility-plan.md
+// A material binding authored as an override (doc/usd_compatibility_design.md
 // X2): the binding of a mesh inside an instance, and the binding of one group
 // of that mesh's facets.
 // ---------------------------------------------------------------------------
@@ -1054,7 +1054,7 @@ TEST(Override_export, a_second_save_is_byte_identical)
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
-// Carriers that carry no transform of their own (doc/usd-compatibility-plan.md
+// Carriers that carry no transform of their own (doc/usd_compatibility_design.md
 // S1): a typeless `def` and a `Scope` that author arcs import as `Xform`
 // carriers, which is what holds the prefab instances the arcs become.
 // ---------------------------------------------------------------------------
@@ -1247,7 +1247,7 @@ TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a
 
 // ---------------------------------------------------------------------------
 // Internal references whose target is itself a referencing prim
-// (doc/usd-compatibility-plan.md X1): the shape the usd-wg
+// (doc/usd_compatibility_design.md X1): the shape the usd-wg
 // `OverridingReferencedInternalReferencesTest` asset has - a component file
 // keeps its subcomponents as prims of the same layer and reaches them through
 // arcs with an empty asset path, and the referencing layer authors an `over`

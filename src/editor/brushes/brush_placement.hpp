@@ -28,7 +28,7 @@ public:
     // TODO Consider if Brush_placement is clonable or not
     auto clone() const -> std::shared_ptr<erhe::Item_base> override;
 
-    // Registered properties (doc/property-system.md section 4.11), stored
+    // Registered properties (doc/property_system.md section 4.11), stored
     // in the entry store and inheriting from the node chain (D30): the
     // brush as an object reference (D28) and the facet and corner as
     // developer-only integers (-1 = NO_INDEX). The members below are a

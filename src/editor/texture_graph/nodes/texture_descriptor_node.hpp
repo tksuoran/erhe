@@ -19,7 +19,7 @@ namespace editor {
 
 // Generic texture graph node driven entirely by an erhe::texgen::Node_descriptor.
 //
-// Decision 4 in doc/texture-graph-plan.md: "Nodes are data - one generic node
+// Decision 4 in doc/texture_graph.md: "Nodes are data - one generic node
 // class". Every MVP node type (uniform color, perlin, voronoi, bricks, shape,
 // blend, colorize, transform, brightness/contrast, normal map) is an instance
 // of this class holding a reference to its immutable descriptor plus the live

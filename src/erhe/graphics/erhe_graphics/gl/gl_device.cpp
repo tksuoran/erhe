@@ -1806,7 +1806,7 @@ auto Device_impl::acquire_worker_context_slot(const std::source_location& locati
     {
         std::unique_lock<std::mutex> lock{m_worker_context_pool_mutex};
         // Acquire watchdog - proposal E of
-        // doc/gl-worker-context-enforcement.md. This wait observes the real
+        // doc/gl_worker_context_enforcement.md. This wait observes the real
         // deadlock condition the compile-time guards only approximate, and
         // a wedged pool looks BUSY from outside (parents parked in
         // Subflow::join spin in _corun_until), so without this report

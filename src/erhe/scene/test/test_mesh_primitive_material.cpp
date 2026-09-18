@@ -1,4 +1,4 @@
-// Mesh_primitive as a property sub-object of its mesh (doc/property-system.md
+// Mesh_primitive as a property sub-object of its mesh (doc/property_system.md
 // D29): the material is a member-backed object property, a write reaches the
 // scene host exactly as set_primitive_material did, and the owner link
 // survives every way a primitive list is copied.

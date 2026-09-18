@@ -14,7 +14,7 @@ When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff wr
 
 ## Live documents under `doc/` describe the present, not the past
 
-A live document (e.g. `doc/gl-worker-thread-contexts.md`, `doc/meshoptimizer-integration.md`, a library's `notes.md`) states the subsystem's CURRENT state - requirements, design, verification status - and the REMAINING future work. It never narrates history: no commit hashes or commit tables, no dated progress or "follow-up series" sections, no phase-by-phase records of work already landed, no "an earlier revision did X" or before/after narration. History belongs in git commit messages (`git log --follow` on the doc and on the code it describes). When updating a live doc after landing work, rewrite the affected statements in the present tense and move anything still outstanding into its future-work section - never append a dated record. Settled decisions and traps stay, stated as standing rules with their rationale, not as stories; measured results stay only while they describe current behavior or are needed to interpret a future re-run.
+A live document (e.g. `doc/gl_worker_thread_contexts.md`, `doc/meshoptimizer_integration.md`, a library's `notes.md`) states the subsystem's CURRENT state - requirements, design, verification status - and the REMAINING future work. It never narrates history: no commit hashes or commit tables, no dated progress or "follow-up series" sections, no phase-by-phase records of work already landed, no "an earlier revision did X" or before/after narration. History belongs in git commit messages (`git log --follow` on the doc and on the code it describes). When updating a live doc after landing work, rewrite the affected statements in the present tense and move anything still outstanding into its future-work section - never append a dated record. Settled decisions and traps stay, stated as standing rules with their rationale, not as stories; measured results stay only while they describe current behavior or are needed to interpret a future re-run.
 
 ## Documentation states what to do, not what to avoid
 
@@ -591,7 +591,7 @@ Get-CimInstance Win32_Process -Filter "Name='find.exe'" | ForEach-Object { Stop-
 
 ## Editor Improvement Plan
 
-See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
+See [`doc/plans/editor_improvements.md`](doc/plans/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
 
 ## Machine-Neutral Committed Files
 
@@ -658,7 +658,7 @@ of the scene. So a cached reference must handle BOTH.
   those entries for exactly this reason).
 - Verify with `scripts/undo_reference_clearing_smoke_test.py` (drives a running
   editor over MCP) and the `get_editor_references` MCP query, which reports
-  every such cached reference. See doc/import-undo-reference-clearing.md.
+  every such cached reference. See doc/import_undo_reference_clearing.md.
 
 ## No Band-Aid Fixes
 

@@ -742,7 +742,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
 
     // Determine parent node based on tool settings
     std::shared_ptr<erhe::scene::Node> parent;
-    // doc/active-item-plan.md D6: the reference node is the active item.
+    // doc/active_item.md D6: the reference node is the active item.
     const std::shared_ptr<erhe::scene::Node> active_node = m_context.selection->get_active_item_as<erhe::scene::Node>();
     if (m_parent_to_active && active_node && (active_node->get_item_host() != nullptr)) {
         parent = active_node;

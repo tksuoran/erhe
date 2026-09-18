@@ -1,5 +1,5 @@
 // Vertex_stream_packing: the backend-minimum hook that vertex position
-// quantization needs (doc/vertex-position-quantization.md 1.1). The default
+// quantization needs (doc/vertex_position_quantization.md 1.1). The default
 // packing must be exactly no constraint, so that building the hook is inert
 // until a backend actually sets a minimum.
 

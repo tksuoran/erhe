@@ -193,7 +193,7 @@ const Property<bool> Material::use_aniso_control_property = Property<bool>::regi
 
 // Texture slots (D28): entry-store object references that inherit (a
 // content-library folder can hold them for the materials below it,
-// doc/property-system.md D30); Material::on_property_changed mirrors the
+// doc/property_system.md D30); Material::on_property_changed mirrors the
 // effective value into the Material_data slot the per-frame readers use.
 // A bound slot selects the texture-using shader variant and a normal
 // texture's two-component flag rides the texture (Shader_key), so a change
@@ -790,7 +790,7 @@ namespace {
 
 // A whole-Material_values snapshot cannot say "inherit", and a value equal
 // to the material's own default (D31) is not an authored one
-// (doc/property-system.md D32): it clears the local value, so a folder or
+// (doc/property_system.md D32): it clears the local value, so a folder or
 // style value shows through and an importer that fills every field from a
 // file's defaults leaves the property at Value_source::default_value. The
 // same rule set_data applies to the texture slots.

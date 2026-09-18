@@ -49,7 +49,7 @@ Create::Create(
     set_description  ("Create");
 
     // The created brush is a raw shared_ptr held across frames; drop it when
-    // the brush leaves the editor (doc/import-undo-reference-clearing.md).
+    // the brush leaves the editor (doc/import_undo_reference_clearing.md).
     if (context.app_message_bus != nullptr) {
         m_items_removed_subscription = context.app_message_bus->items_removed.subscribe(
             [this](Items_removed_message& message) {
@@ -96,7 +96,7 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
     Selection& selection = *m_context.selection;
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
 
-    // doc/active-item-plan.md D6: the parent is the active node, else the
+    // doc/active_item.md D6: the parent is the active node, else the
     // first selected node.
     std::shared_ptr<erhe::scene::Node> selected_node = selection.get_active_item_as<erhe::scene::Node>();
     if (!selected_node) {

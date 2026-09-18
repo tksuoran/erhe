@@ -67,7 +67,7 @@ public:
     [[nodiscard]] auto get_reverse_depth    () const -> bool;
 
     // CPU wall time of execute_rendergraph_node() (P4 measurement,
-    // doc/draw_list_renderer_requirements.md): last call and running total.
+    // doc/draw_list_renderer.md): last call and running total.
     [[nodiscard]] auto get_last_cpu_time_us () const -> double      { return m_last_cpu_time_us; }
     [[nodiscard]] auto get_total_cpu_time_us() const -> double      { return m_total_cpu_time_us; }
     [[nodiscard]] auto get_execute_count    () const -> std::size_t { return m_execute_count; }
@@ -117,7 +117,7 @@ private:
     // stereo eye frustum) and its fov, without per-frame log spam.
     // Headlight for a scene whose light layer is empty: one white directional
     // light along the view camera's axis, the way usdview lights a stage that
-    // authors none (doc/usd-compatibility-plan.md S1). It is not a scene item
+    // authors none (doc/usd_compatibility_design.md S1). It is not a scene item
     // - no hierarchy row, no save, no undo - and it lives here, per render
     // node, because its direction is the direction of THIS view's camera.
     // Its own resolved set is used in place of the scene's for that frame;

@@ -33,7 +33,7 @@ public:
 // (preview thumbnails, the output node), where the sink walks upstream via
 // these references and builds an erhe::texgen::Compose_node DAG mirroring the
 // editor graph, then composes and compiles one fragment shader (Material
-// Maker's GLSL composition model, doc/texture-graph-plan.md decision 1).
+// Maker's GLSL composition model, doc/texture_graph.md decision 1).
 //
 // source_node points at the live node that produced this output. Because
 // texture evaluation is synchronous on the live graph (decision 8, no async

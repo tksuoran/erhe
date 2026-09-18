@@ -95,7 +95,7 @@ public:
     bool m_surface_maintenance1          {false};
     bool m_swapchain_maintenance1        {false};
 
-    // Frame pacing capabilities (doc/frame_pacing_capability_tiers.md).
+    // Frame pacing capabilities (doc/frame_pacing/capability_tiers.md).
     // Feature-confirmed, not merely extension-present.
     bool m_present_id           {false};
     bool m_present_wait         {false};

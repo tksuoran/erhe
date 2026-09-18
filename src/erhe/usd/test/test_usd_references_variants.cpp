@@ -1,5 +1,5 @@
 // A `variants` selection a composition arc carries into the target it brings
-// in (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// in (doc/usd_compatibility_design.md section 6, "Variant selection through a
 // composition arc"). In LIVRPS such a selection is stronger than the target's
 // own, so two carriers of one target prim compose two different prim trees:
 // the reader reports the selection on every arc of the carrier, a load that is

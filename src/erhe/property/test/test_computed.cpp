@@ -1,4 +1,4 @@
-// Computed properties (doc/property-system.md D26): a read-only
+// Computed properties (doc/property_system.md D26): a read-only
 // property whose effective value the owner provides on every read; no
 // layer applies, nothing is stored, and the owner pushes changes to
 // expressions with invalidate_dependents.

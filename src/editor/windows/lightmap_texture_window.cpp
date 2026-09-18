@@ -286,7 +286,7 @@ void Lightmap_texture_window::refresh_overlay_cache()
         // Sanity check (UV unwrap defect detector): the triangles of a
         // region must tile UV space uniquely - any pair overlapping with
         // positive area is broken (bowties / folded charts / outlier corner
-        // UVs; see doc/geogram_atlas_packing_feature_request.md). Grid-
+        // UVs; see doc/reference/geogram_atlas_packing_feature_request.md). Grid-
         // bucketed pairwise SAT with a quarter-texel epsilon, so shared
         // edges of adjacent triangles do not count.
         {

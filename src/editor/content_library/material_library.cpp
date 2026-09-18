@@ -25,7 +25,7 @@ void add_default_materials(Content_library& library)
 
     using erhe::primitive::Material;
 
-    // The traits the metals share are one style (doc/property-system.md
+    // The traits the metals share are one style (doc/property_system.md
     // D25): each material carries only its base color as a local value, so
     // an edited trait stays a local override when the style is swapped.
     const std::shared_ptr<Style> brushed_metal = make_brushed_metal_style();

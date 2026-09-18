@@ -1,6 +1,6 @@
 # Issue #251 - implementation notes / inventory (Phase 0)
 
-Companion to `doc/251-node-editor-native-rendering-plan.md`. Captures the Phase 0
+Companion to `doc/plans/node_editor_native_rendering.md`. Captures the Phase 0
 inventory so later sessions do not re-derive it. All line numbers are approximate
 (as of branch `crease`, 2026-07-04) and drift as edits land - use them as a
 starting map, re-grep before touching.

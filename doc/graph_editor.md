@@ -9,13 +9,13 @@ layer:
   geometry (primitives, Catmull-Clark / Conway operators, CSG, point
   distribution / instancing). Its output is a **`Graph_mesh`** content-library
   asset; a scene `Node` consumes it through a **Geometry Graph Mesh**
-  attachment. See [`geometry-nodes-plan.md`](geometry-nodes-plan.md) and
-  [`geometry-graph-mesh-plan.md`](geometry-graph-mesh-plan.md).
+  attachment. See [`geometry-nodes-plan.md`](geometry_nodes.md) and
+  [`geometry-graph-mesh-plan.md`](geometry_graph_mesh.md).
 - **Texture graph** (`src/editor/texture_graph/`) - authors procedural textures
   by Material-Maker-style GLSL composition. Its output is a **`Graph_texture`**
   content-library asset; a `Material` texture slot sources from it. See
-  [`texture-graph-plan.md`](texture-graph-plan.md) and
-  [`graph-texture-plan.md`](graph-texture-plan.md).
+  [`texture-graph-plan.md`](texture_graph.md) and
+  [`graph-texture-plan.md`](graph_texture.md).
 
 A third, older **shader graph** (`src/editor/graph/`, `Graph_window`) is the
 prototype the other two were forked from. It predates the current

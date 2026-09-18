@@ -1,4 +1,4 @@
-// The UsdGeom primitive schemas (doc/usd-compatibility-plan.md S1): a
+// The UsdGeom primitive schemas (doc/usd_compatibility_design.md S1): a
 // `Cube`, `Sphere`, `Cone`, `Cylinder`, `Capsule` or `Cylinder_1` prim is the
 // mesh its schema attributes describe, and it saves back as the `Mesh` it is.
 

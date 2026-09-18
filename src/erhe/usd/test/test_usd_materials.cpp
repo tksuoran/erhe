@@ -1,5 +1,5 @@
 // Materials are prims of the scene tree, placed where the stage puts them
-// (doc/usd-compatibility-plan.md U4): the reader parents a `Material` prim
+// (doc/usd_compatibility_design.md U4): the reader parents a `Material` prim
 // under the prim that holds it and the writer writes it back there, so a
 // stage whose materials live in `/World/Looks` round-trips without gaining a
 // `/Materials` scope. Two materials of one name in two scopes prove that a

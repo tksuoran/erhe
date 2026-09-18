@@ -1,6 +1,6 @@
 # Draw list renderer — implementation plan
 
-Companion to `doc/draw_list_renderer_requirements.md` (the "req doc"; requirement
+Companion to `doc/draw_list_renderer.md` (the "req doc"; requirement
 IDs below refer to it). Status: DONE 2026-08-15 — all six phases landed
 (results: `doc/draw_list_renderer_results.md`). Written 2026-08-15 after the
 req doc passed independent review; revised after plan review pass 1 (threading
@@ -265,7 +265,7 @@ Commit(s): `editor: route composition passes through Draw_list_scene`, `editor: 
 ### Phase 6 — Measurement + cleanup
 
 - P4: `ERHE_PROFILE` zones around `render_draw_lists` vs `render`; capture bistro (thousands of prims) frame time both ways, desktop and Quest; record numbers in `doc/draw_list_renderer_results.md`.
-- Remove any temp logging; update `doc/draw_list_renderer_requirements.md` status to IMPLEMENTED with deviations noted (known deliberate deviation: the graphics-preset part of the env config is re-checked per color draw alongside the light partition instead of via the `graphics_settings` bus event — equivalent, simpler).
+- Remove any temp logging; update `doc/draw_list_renderer.md` status to IMPLEMENTED with deviations noted (known deliberate deviation: the graphics-preset part of the env config is re-checked per color draw alongside the light partition instead of via the `graphics_settings` bus event — equivalent, simpler).
 - Follow-up list (in the results doc): frustum culling on entry AABB (Q6, first), re-register on determinant flip (R10b), static mobility source + cached static uploads (R9/G4), extend shadow prewarm to distance/cube, translucent depth sort, retire `bucket_primitives` for covered passes.
 
 ## 2. Risks / watch items

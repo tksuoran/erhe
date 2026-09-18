@@ -1,6 +1,6 @@
 #pragma once
 
-// Frame pacing verification UI (doc/frame_pacing_user_interface.md).
+// Frame pacing verification UI (doc/frame_pacing/user_interface.md).
 //
 // One ImGui window that (a) provides an adjustable simulated CPU workload
 // (U2) and (b) visualizes the frame time records and pacer decisions as

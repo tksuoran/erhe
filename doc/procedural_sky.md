@@ -246,6 +246,6 @@ config field has been retired.)
 ## Reference
 
 - Skill: `/d/forge-gpu/.claude/skills/forge-procedural-sky/SKILL.md` (Lesson 26).
-- API mapping: `doc/forge-erhe.md` (see the compute / storage-image rows).
+- API mapping: `doc/reference/forge_erhe.md` (see the compute / storage-image rows).
 - Hillaire, S. (2020). *A Scalable and Production-Ready Sky and Atmosphere Rendering
   Technique.* EGSR 2020.

@@ -19,7 +19,7 @@ namespace editor {
 
 class App_context;
 
-// Undoable write of one property on one item (doc/property-system.md
+// Undoable write of one property on one item (doc/property_system.md
 // D11). `before` / `after` are the item's LOCAL state - a stored value or an
 // expression (D22), nullopt meaning "no local value" - so undo restores a
 // cleared property or the formula a value replaced, not merely the previous
