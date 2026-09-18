@@ -11,7 +11,7 @@ specified in
 
 The manager is also the owner of **asynchronous loading** - `Asset_load_task`,
 `Asset_manager::tick()` and `queue_load()` - which is documented separately in
-[`async-asset-loading.md`](async_asset_loading.md). This document covers asset
+[`async_asset_loading.md`](async_asset_loading.md). This document covers asset
 identity, ownership and the registry; that one covers how a file gets loaded.
 
 ## Requirement
@@ -220,7 +220,7 @@ and container loads never recurse.
   `unresolved`. This machinery exists but does not fire yet:
   `get_or_load_container` is still synchronous, so `acquire` never actually
   returns pending. See the future work in
-  [`async-asset-loading.md`](async_asset_loading.md).
+  [`async_asset_loading.md`](async_asset_loading.md).
 - `create<T>(defining_scene, args...)` is the in-editor creation funnel:
   every site that brings a new managed asset into existence constructs it
   through the manager, naming the scene whose container record is the
@@ -281,10 +281,10 @@ but no worker path may mutate manager state or resolve references today.
 
 ## The ownership flip: content library integration
 
-Asset-typed items (brush, material, animation) **never claim an
-`Item_host`**: the content-library claim/release walks skip manager-owned
-asset types, so "asset host is always null" replaced a family of
-host-comparison checks. Consequences and rules:
+A resource prim is hosted by the scene whose tree it sits in
+(`erhe::Typed::handle_item_host_update`), but its host does not say which
+container DEFINES it. Definition is recorded manager state, never derived
+from hosting or from a library listing. Consequences and rules:
 
 - **Classification is recorded, never derived from listing or hosting.** A
   listed resource is a definition when the manager records this scene's

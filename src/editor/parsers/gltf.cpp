@@ -743,7 +743,7 @@ void finalize_imported_meshes(
 
     const std::chrono::steady_clock::time_point finalize_start_time = std::chrono::steady_clock::now();
 
-    // Load-speedup options (doc/gltf-load-speedup-plan.md). When deferred,
+    // Deferred load finalize options (doc/async_asset_loading.md). When deferred,
     // the load path builds a fill-only buffer mesh straight from the
     // triangle soup plus an AABB proxy raytrace; the per-mesh tasks of the
     // Async_raytrace_kickoff_operation build the Geometry (edges, smooth

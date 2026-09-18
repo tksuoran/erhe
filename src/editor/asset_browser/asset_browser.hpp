@@ -221,7 +221,7 @@ public:
     Asset_node_kind       kind{Asset_node_kind::other};
 };
 
-// A directory walk in flight (R6 of doc/frame-time-after-usd-import-plan.md).
+// A directory walk in flight (R1 of doc/asset_browser_scan.md).
 // Walking res/editor/assets is thousands of stat() calls - 8.1 s in the
 // startup Tracy capture - so it runs on an executor worker. The worker holds no
 // node: it publishes ordered entry batches every 50 ms and once more at the end

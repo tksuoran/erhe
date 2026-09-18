@@ -56,7 +56,7 @@ struct("Editor_settings_config",
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         field("inventory",            StructRef("Inventory_config"),       added_in=1, removed_in=4),
-        # glTF import/open performance options (doc/gltf-load-speedup-plan.md).
+        # glTF import/open performance options (doc/async_asset_loading.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),
