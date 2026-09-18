@@ -2,252 +2,161 @@
 
 Stability: mostly stable
 
-Status: implemented and building (Vulkan, OpenGL, headless all link clean); shaders
-pass an offline `glslc` syntax check. The atmosphere is wired on **Vulkan, OpenGL, and
-Metal** (OpenGL requires GL 4.3+ for compute / storage-image load-store; Metal requires
-Tier-2 read-write `RGBA16Float`, i.e. Apple Silicon -- see the Metal note below).
-Vulkan and OpenGL are runtime-verified; **Metal runtime / visual verification is
-pending** a build+run on the M-series Mac.
+A physically-based atmosphere (Sebastien Hillaire, EGSR 2020: atmospheric
+scattering with LUT-accelerated transmittance and multi-scattering) is a second
+sky mode beside the gradient / checker sky. `Sky_config::mode` selects it:
+`0` = gradient / checker, `1` = atmosphere. The atmosphere emits HDR radiance
+into the existing HDR render target, so bloom and tonemapping treat the bright
+sun disc as any other bright source.
 
-Ported the forge-gpu `forge-procedural-sky` skill (Sebastien Hillaire, EGSR 2020:
-physically-based atmospheric scattering with LUT-accelerated transmittance +
-multi-scattering) onto erhe, mirroring the earlier cube-map point-light-shadows port.
-This document records the design, per-file changes, how to finish verifying, and the
-known risks / tuning knobs.
-
-## Overview
-
-The physically-based atmosphere is added as a **second sky mode** alongside the
-existing checker/gradient sky (it does not replace it). `Sky_config::mode` selects:
-`0` = gradient/checker (unchanged), `1` = atmosphere. The atmosphere reuses erhe's
-existing HDR render target + bloom + tonemapping unchanged -- it just emits HDR
-radiance (the bright sun disc becomes a soft glow through the existing post pass).
-
-Two lookup tables are generated **once at startup via compute shaders** and then
+Two lookup tables are generated once at startup by compute shaders and then
 sampled by the atmosphere fragment ray march:
 
-- **Transmittance LUT** (256x64, RGBA16F): optical depth from a view point to the
-  atmosphere top, Bruneton non-linear (height, view-zenith) parameterization.
+- **Transmittance LUT** (256x64, RGBA16F): optical depth from a view point to
+  the atmosphere top, Bruneton non-linear (height, view-zenith) parameterization.
 - **Multi-scattering LUT** (32x32, RGBA16F): pre-integrated multiple scattering
   (Hillaire `NewMultiScatCS`), (altitude, sun-zenith) parameterization.
 
-Generating an `image2D` with a compute shader and sampling it later required **new
-storage-image compute support in `erhe::graphics`** (it previously supported only SSBO
-compute). That is the foundational, reusable part of this change.
+The atmosphere runs on Vulkan, OpenGL and Metal. OpenGL needs GL 4.3 or newer
+for compute and storage-image load-store; Metal needs Tier-2 read-write
+`RGBA16Float` (Apple Silicon). Where storage-image compute is unavailable,
+`Sky_renderer::is_atmosphere_supported()` returns false and
+`Sky_composition_pass` draws the gradient sky whatever `mode` says.
 
-### Why this shape
+## Why this shape
 
-- erhe already renders the sky as a fullscreen composition pass reading the camera UBO;
-  the atmosphere reuses that camera UBO (correct, multiview-aware `world_from_clip`) via
-  an owned `Camera_buffer`, so it never re-derives projection / reverse-Z / clip-space
-  Y-flip conventions and the sky ray always matches the scene.
-- The two LUT samplers + the dedicated atmosphere pipeline are isolated in a new editor
-  `Sky_renderer`, so the shared scene bind group layout / forward render path is
-  untouched.
-- The sun direction follows the scene's first directional light (so the sky's sun
-  matches scene lighting), with a config elevation/azimuth fallback when no directional
-  light exists.
+- The sky is drawn as a fullscreen composition pass reading the camera UBO. The
+  atmosphere reuses that camera UBO (correct, multiview-aware `world_from_clip`)
+  through an owned `Camera_buffer`, so it never re-derives projection,
+  reverse-Z or clip-space y-flip conventions and the sky ray always matches the
+  scene.
+- The two LUT samplers and the atmosphere pipeline are isolated in the editor's
+  `Sky_renderer`, so the shared scene bind group layout and the forward render
+  path are untouched.
+- The sun direction follows the scene's first directional light, so the sky's
+  sun matches scene lighting; with no directional light the config elevation and
+  azimuth drive it.
 
-### Key decisions
+## Key decisions
 
-- **Storage-image compute, not fragment-pass LUT generation.** The skill uses compute;
-  erhe lacked it, so it was built (new `Binding_type::storage_image`, GLSL `image2D`
-  emission, `Compute_command_encoder::set_storage_image`, Vulkan `STORAGE_IMAGE`
-  descriptors + `GENERAL` layout barriers).
-- **Vulkan + OpenGL + Metal.** `set_storage_image` is implemented on the Vulkan backend
-  (STORAGE_IMAGE push descriptor), the OpenGL backend (`gl::bind_image_texture`), and the
-  Metal backend (`MTL::ComputeCommandEncoder::setTexture` at the raw binding point, with
-  the storage-image GLSL declaration mirrored into the default uniform block by
-  `metal_bind_group_layout.cpp` and the `[[texture(N)]]` slot pinned in
-  `compile_spirv_to_mtl_function`; the LUT textures also gain `MTL::TextureUsageShaderWrite`).
-  OpenGL additionally requires GL 4.3 (`use_compute_shader`) -- on GL < 4.3, or on null,
-  `Sky_renderer::is_atmosphere_supported()` returns false and the `Sky_composition_pass`
-  falls back to the gradient sky regardless of `mode`.
-- **Multiscatter reads transmittance via `imageLoad` + manual bilinear**, so the compute
-  path only needs storage-image *write/read* (no compute *sampled*-image support). The
-  fragment ray march samples both LUTs with a normal sampler (hardware bilinear).
+- **Storage-image compute, not fragment-pass LUT generation.** This is what
+  `Binding_type::storage_image`, GLSL `image2D` emission,
+  `Compute_command_encoder::set_storage_image` and the Vulkan `STORAGE_IMAGE`
+  descriptors + `GENERAL` layout barriers exist for; the infrastructure is
+  reusable by any other LUT.
+- **Multiscatter reads transmittance with `imageLoad` plus manual bilinear**, so
+  the compute path needs storage-image write and read only, and no compute
+  sampled-image support. The fragment ray march samples both LUTs with a normal
+  sampler (hardware bilinear).
 - **Atmosphere parameters live in the camera UBO `Sky_parameters`** (additive,
-  std140-safe): `sun_direction` (xyz toward sun, w = illuminance) and `atmosphere`
-  (x = march steps, y = observer altitude km, z = cos sun angular radius, w = sun disc
-  brightness). The gradient sky ignores them.
+  std140-safe): `sun_direction` (xyz toward the sun, w = illuminance) and
+  `atmosphere` (x = march steps, y = observer altitude km, z = cos sun angular
+  radius, w = sun disc brightness). The gradient sky ignores them.
+- **The directional light's direction is already "toward the light".** erhe
+  stores it as `world_from_node * +Z` and `standard.frag` uses it directly as
+  `L`. `Sky_renderer::render_atmosphere` must use it unnegated; negating it puts
+  the sun below the horizon and the atmosphere correctly integrates a near-black
+  night sky.
 
-## Data flow / per-file changes
+## Storage-image compute support in erhe::graphics
 
-### erhe::graphics -- storage-image compute infrastructure (foundational, reusable)
-- `enums.hpp` / `enums.cpp`: new `Glsl_type::image_2d`, mapped to `"image2D"` in
+This part is foundational and reusable:
+
+- `enums.hpp` / `enums.cpp`: `Glsl_type::image_2d`, mapped to `"image2D"` in
   `glsl_type_c_str` (and a `get_dimension` case).
-- `bind_group_layout.hpp`: new `Binding_type::storage_image`; new
-  `Bind_group_layout_binding::image_format` (GLSL format qualifier, e.g. `"rgba16f"`).
-- `shader_resource.{hpp,cpp}`: new `Type::image`; classification helpers; an image
-  constructor + `add_image(...)`; `get_layout_string` emits
-  `layout(binding = N, <format>) uniform image2D name;` (format always emitted so
-  `imageLoad`/`imageStore` are valid without readonly/writeonly). `get_type_details`
-  treats `image_2d` as opaque (zero size) as a safety net.
-- `vulkan/vulkan_bind_group_layout.cpp` and `gl/gl_bind_group_layout.cpp`: mirror
-  storage_image bindings into the default uniform block via `add_image` (raw binding, no
-  sampler offset). Vulkan also maps `to_vulkan_descriptor_type` storage_image ->
+- `bind_group_layout.hpp`: `Binding_type::storage_image` and
+  `Bind_group_layout_binding::image_format` (the GLSL format qualifier, e.g.
+  `"rgba16f"`).
+- `shader_resource.{hpp,cpp}`: `Type::image`, an image constructor and
+  `add_image(...)`; `get_layout_string` emits
+  `layout(binding = N, <format>) uniform image2D name;`. The format is always
+  emitted, so `imageLoad` / `imageStore` are valid without a
+  readonly / writeonly qualifier. `get_type_details` treats `image_2d` as opaque
+  (zero size).
+- `vulkan/vulkan_bind_group_layout.cpp` and `gl/gl_bind_group_layout.cpp` mirror
+  storage-image bindings into the default uniform block via `add_image` (raw
+  binding, no sampler offset); Vulkan maps the binding to
   `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE`.
-- `compute_command_encoder.{hpp,cpp}` + `vulkan/`, `gl/`, `metal/`, `null/`: new
-  `set_storage_image(binding_point, texture)`. Vulkan pushes a STORAGE_IMAGE descriptor
-  with `VK_IMAGE_LAYOUT_GENERAL`; GL binds image unit N via `gl::bind_image_texture`
-  (read_write, the texture's `Internal_format`); Metal/Null are compile-only no-ops.
-- Layout transitions use the existing public `Command_buffer::transition_texture_layout`
-  (UNDEFINED->GENERAL before compute write, GENERAL->SHADER_READ_ONLY before fragment
-  sample). The inter-pass write->read hazard (both LUTs stay GENERAL) is covered by
+- `compute_command_encoder.{hpp,cpp}` plus the Vulkan, GL, Metal and null
+  backends: `set_storage_image(binding_point, texture)`. Vulkan pushes a
+  STORAGE_IMAGE descriptor with `VK_IMAGE_LAYOUT_GENERAL`; GL binds image unit N
+  through `gl::bind_image_texture` (read_write, the texture's
+  `Internal_format`); Metal sets the texture at the raw binding point, with the
+  storage-image GLSL declaration mirrored into the default uniform block by
+  `metal_bind_group_layout.cpp`, the `[[texture(N)]]` slot pinned in
+  `compile_spirv_to_mtl_function`, and `MTL::TextureUsageShaderWrite` on the LUT
+  textures.
+- Layout transitions use `Command_buffer::transition_texture_layout`
+  (UNDEFINED -> GENERAL before the compute write, GENERAL -> SHADER_READ_ONLY
+  before the fragment sample). The transmittance -> multiscatter write-to-read
+  hazard (both LUTs stay GENERAL) is covered by
   `Command_buffer::memory_barrier(shader_image_access_barrier_bit)`.
 
-### erhe::scene_renderer -- camera UBO atmosphere fields
-- `camera_buffer.hpp`: `Sky_parameters` gained `sun_direction` + `atmosphere` (vec4 each);
-  `Camera_struct` gained the matching offsets.
-- `camera_buffer.cpp`: the camera interface block adds `sun_direction` + `atmosphere`;
-  `write_camera_entry` writes them. Gradient sky / id pass pass defaults (harmless).
+## Where the pieces live
 
-### editor -- Sky_renderer + atmosphere shaders + config + wiring
-- `renderers/sky_renderer.{hpp,cpp}` (new): owns the two LUT textures + linear-clamp
-  sampler, the two compute bind group layouts + shaders + `Compute_pipeline`s, the
-  atmosphere bind group layout (camera UBO + 2 LUT samplers) + shader + far-plane
-  `Base_render_pipeline`, and a `Camera_buffer`.
-  - `ensure_luts()` -- one-time: transition + transmittance dispatch + barrier +
-    multiscatter dispatch + barrier + transition both to shader-read-only.
-  - `render_atmosphere()` -- resolves the sun direction (directional light or config
-    fallback), fills `Sky_parameters`, writes the camera UBO via `update_views`, binds
-    the pipeline + camera UBO + 2 LUTs, draws a fullscreen triangle into the viewport
-    render pass. All GPU work is gated on backends with storage-image compute
-    (`#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)`); the
-    constructor additionally bails out when `Device_info::use_compute_shader` is false
-    (GL < 4.3), leaving the members null so the gradient sky is used.
-- `app_rendering.cpp`: the "Sky" composition pass is now a `Sky_composition_pass`
-  subclass whose `render()` dispatches to `Sky_renderer::render_atmosphere` in atmosphere
-  mode (when `is_atmosphere_supported()`) and to the base gradient `Composition_pass::render`
-  otherwise.
-- `app_context.hpp`: `Sky_renderer* sky_renderer` part pointer.
-- `editor.cpp`: constructs `m_sky_renderer` in the post-processing init task (init command
-  buffer available, like `Post_processing`); assigns the App_context pointer.
-- `scene/viewport_scene_view.cpp` and `xr/headset_view.cpp`: call
-  `sky_renderer->ensure_luts(...)` before the viewport render pass begins when
-  `sky.mode == 1` (compute + barriers cannot run inside a render pass).
-- `config/definitions/sky_config.py` (v3): `mode` + atmosphere knobs (`sun_intensity`,
-  `march_steps`, `observer_altitude_km`, `sun_angular_radius_deg`, `sun_disc_intensity`,
-  `sun_elevation_deg`, `sun_azimuth_deg`). Settings-window UI is auto-generated.
-- `config/editor/editor_settings.json`: sky section bumped to v3 with the new keys.
+| File | Contents |
+|---|---|
+| `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.{hpp,cpp}` | `Sky_parameters::sun_direction` + `atmosphere`, written by `write_camera_entry` |
+| `src/editor/renderers/sky_renderer.{hpp,cpp}` | LUT textures + linear-clamp sampler, the two compute bind group layouts / shaders / pipelines, the atmosphere bind group layout (camera UBO + 2 LUT samplers) + far-plane pipeline, and a `Camera_buffer`. `ensure_luts()` runs the one-time transitions and dispatches; `render_atmosphere()` resolves the sun, fills `Sky_parameters`, binds and draws a fullscreen triangle |
+| `src/editor/app_rendering.cpp` | `Sky_composition_pass` dispatches to `render_atmosphere` in atmosphere mode and to the base gradient pass otherwise |
+| `src/editor/editor.cpp`, `app_context.hpp` | construction in the post-processing init task, `Sky_renderer*` part pointer |
+| `src/editor/scene/viewport_scene_view.cpp`, `src/editor/xr/headset_view.cpp` | call `ensure_luts(...)` before the viewport render pass begins (compute and barriers cannot run inside a render pass) |
+| `src/editor/config/definitions/sky_config.py` | `mode`, `sun_intensity`, `march_steps`, `observer_altitude_km`, `sun_angular_radius_deg`, `sun_disc_intensity`, `sun_elevation_deg`, `sun_azimuth_deg` |
+| `res/editor/shaders/sky_atmosphere_common.glsl` | Hillaire constants (Rayleigh / Mie / ozone), ray-sphere, phase functions, medium sampling, Bruneton UV mappings |
+| `res/editor/shaders/sky_transmittance_lut.comp` | `imageStore` of the transmittance LUT |
+| `res/editor/shaders/sky_multiscatter_lut.comp` | `imageLoad` of transmittance (manual bilinear) + sphere integration + ground bounce |
+| `res/editor/shaders/sky_atmosphere.vert` / `.frag` | fullscreen triangle at the far plane reconstructing the world ray from the camera UBO; ray march with single scatter (earth-shadowed, smooth terminator) + multi-scatter LUT + ground bounce + sun disc |
 
-### Shaders (`res/editor/shaders/`)
-- `sky_atmosphere_common.glsl`: Hillaire constants (Rayleigh/Mie/ozone), ray-sphere,
-  phase functions, medium sampling, and the Bruneton transmittance + multi-scatter UV
-  mappings (pure math; shared by compute + fragment).
-- `sky_transmittance_lut.comp`: `imageStore` the transmittance LUT.
-- `sky_multiscatter_lut.comp`: `imageLoad` transmittance (manual bilinear) + sphere
-  integration + ground bounce; `imageStore` the multi-scatter LUT.
-- `sky_atmosphere.vert`: fullscreen triangle at the far plane; reconstructs the world ray
-  from the camera UBO (same as `sky.vert`).
-- `sky_atmosphere.frag`: ray march with single scatter (earth-shadowed, smooth
-  terminator) + multi-scatter LUT + ground bounce + sun disc; outputs HDR radiance.
+## Risks and tuning knobs
 
-## Build / codegen
+- **Metal read-write textures.** The LUT `image2D`s carry no
+  readonly / writeonly qualifier, so SPIRV-Cross emits
+  `texture2d<float, access::read_write>`, which needs Tier-2 read-write texture
+  support for `RGBA16Float`. To run on a Tier-1 Metal GPU, add
+  readonly / writeonly to `Bind_group_layout_binding`, extend
+  `Shader_resource::get_source`'s qualifier emission to cover `Type::image`, and
+  mark each LUT binding by its actual access.
+- **Inter-pass barrier.** The transmittance -> multiscatter dependency uses a
+  global `memory_barrier(shader_image_access_barrier_bit)` between the two
+  compute passes. Switch to explicit image memory barriers if a validation layer
+  ever flags a hazard.
+- **LUT quality.** Transmittance 256x64 / multiscatter 32x32 with 40 and 64x20
+  samples; the march step count is `march_steps` (default 32).
+- **Sun disc.** `sun_disc_intensity` and `sun_angular_radius_deg` are tuned for
+  the existing bloom and tonemap; adjust if the disc clips or the glow is wrong.
+- **Observer altitude.** The sky is a background from a fixed observer altitude
+  (`observer_altitude_km`, default 0.5 km); the camera's world position does not
+  move the sky. That is correct for a sky dome and sidesteps planet-centric
+  floating-point precision.
 
-- Windows / Vulkan: `cmake --build build_vs2026_vulkan --target editor --config Debug -- -m -clp:ErrorsOnly`.
-  Config codegen reruns automatically on the `sky_config.py` change (regenerates the v3
-  `Sky_config`). Verified: Vulkan, OpenGL, and headless editor builds all link clean.
-- Shaders are compiled at editor runtime (GLSL -> SPIR-V). They were additionally syntax
-  checked offline with `glslc` (transmittance + multiscatter compute compile to SPIR-V;
-  the atmosphere fragment compiles; the vertex uses `gl_VertexID` exactly like the
-  existing `sky.vert`, which erhe's pipeline accepts).
+## Verification
 
-## Runtime status: verified on Vulkan and OpenGL; Metal pending
-
-Atmosphere mode (`Sky_config::mode == 1`) renders a bright blue daytime sky,
-verified on Vulkan (2026-06-21) and wired + verified on OpenGL; Metal runtime /
-visual verification is still pending a build+run on an M-series Mac.
-
-### Resolution of the original "renders nothing visible" bug
-
-**Root cause (fixed):** `Sky_renderer::render_atmosphere` took the sun direction
-from the scene's directional light and **negated** it:
-
-```cpp
-const glm::vec3 light_direction = world_from_node * vec4(0,0,1,0);
-toward_sun = -glm::normalize(light_direction);   // BUG
-```
-
-erhe stores a directional light's direction as `world_from_node * +Z` and uses it
-**directly** as the toward-the-light vector when shading (`standard.frag`:
-`L = normalize(light.direction_and_outer_spot_cos.xyz); dot(N, L)`). So
-`light_direction` was already "toward the sun"; negating it pushed the sun ~66
-degrees below the horizon, and the physically-based atmosphere correctly
-integrated a near-black night sky. The fix was to drop the negation:
-`toward_sun = glm::normalize(light_direction)`.
-
-**How it was found + verified:** the RenderDoc fork MCP workflow in
-[`doc/renderdoc_fork.md`](renderdoc_fork.md) -- connect to the running editor,
-`trigger_capture`, and read the numbers back. That ruled out the leading
-hypothesis (LUTs all zero -- they were fine: transmittance mean 0.73) and showed
-the sky fragment ran, passed depth/stencil, and output `[0,0,0,1]` because
-`sun_direction.y == -0.91`. After the fix, the same captured pixel outputs
-`[2.20, 3.34, 4.22, 1]` (Rayleigh blue) and the viewport's exactly-zero pixel
-count dropped from 88,424 to 872.
-
-## How to verify (remaining: Metal, and after sky changes)
-
-1. Run `build_vs2026_vulkan/bin/Debug/editor.exe` interactively (real desktop GPU).
-2. In Settings -> Sky, set **Sky Mode = 1** (atmosphere). The first atmosphere frame
-   generates the LUTs (one-time) and compiles the atmosphere pipeline (a one-time hitch).
-3. Confirm a physically-plausible sky: blue zenith, warmer horizon, a bright sun disc
-   that blooms. Rotate the view; the sky should stay consistent.
-4. Add / orient a **directional light** and confirm the sun disc + sky colors track it
-   (sunrise/sunset reddening as the light nears the horizon). With no directional light,
-   the `sun_elevation_deg` / `sun_azimuth_deg` config values drive the sun.
-5. Tune `sun_intensity`, `sun_angular_radius_deg`, `sun_disc_intensity`, `march_steps`,
-   `observer_altitude_km` in Settings and confirm they take effect live.
-6. Regression: Sky Mode = 0 must look identical to before (gradient/checker). Toggling
-   `enabled` off still hides the sky in both modes.
-7. `grep -iE "error|fatal|No shader variant|No render pipeline" logs/log.txt`. With the
-   Vulkan validation layer (on a machine where it loads) watch for STORAGE_IMAGE
-   descriptor / image-layout warnings around the LUT compute passes.
-8. OpenXR / Quest (secondary): the atmosphere is wired into both headset render-pass
-   paths; verify per-eye correctness (multiview) on device.
-
-### OpenGL
-
-Build and run `build_vs2026_opengl/bin/Debug/editor.exe` on a GL 4.3+ desktop GPU,
-then set **Sky Mode = 1**. The same visual / regression checks (1-7 above) apply.
-`capture_screenshot` works only in the headless **Vulkan** build, so confirm GL visually in
-the window (or with a RenderDoc capture: two compute dispatches binding the LUTs as images,
-then the fullscreen atmosphere draw). In `logs/log.txt`, confirm
-`Sky_renderer::ensure_luts: generating atmosphere LUTs` once and `render_atmosphere first
-call: supported=true ...`; if the startup compute-support line is false,
-`supported=false` and the gradient sky is the expected fallback. (This cannot happen on
-GL any more: OpenGL 4.5 is the hard minimum and the `force_no_compute_shader`
-config field has been retired.)
-
-## Known risks / tuning knobs
-
-- **Metal RGBA16Float read-write.** Metal is now wired (storage-image compute via
-  `setTexture` + the bind-group-layout mirroring + `MTL::TextureUsageShaderWrite`). The LUT
-  `image2D`s are declared without `readonly`/`writeonly`, so SPIRV-Cross emits
-  `texture2d<float, access::read_write>`; Metal requires Tier-2 read-write texture support
-  for `RGBA16Float`, which Apple Silicon (the M-series dev machine) provides. To run on a
-  Tier-1 Metal GPU (some older Intel Macs), add `readonly`/`writeonly` to
-  `Bind_group_layout_binding`, extend `Shader_resource::get_source`'s qualifier emission to
-  cover `Type::image`, and mark each LUT binding by its actual access -- intentionally left
-  out of scope. OpenGL remains gated on GL 4.3 (`use_compute_shader`).
-- **Multiview unverified.** The atmosphere shader is compiled with the session
-  `view_count` and the camera UBO is written per view, but per-eye correctness on Quest
-  is not yet visually verified (same caveat as the point-light port).
-- **Inter-pass barrier.** The transmittance->multiscatter dependency uses a global
-  `memory_barrier(shader_image_access_barrier_bit)` between the two compute passes (both
-  LUTs stay in `GENERAL`). If a validation layer flags a hazard, switch to explicit image
-  memory barriers.
-- **LUT quality.** Transmittance 256x64 / multiscatter 32x32 with 40 / 64x20 samples are
-  the skill's defaults. The march step count is configurable (`march_steps`, default 32).
-- **Sun disc.** Brightness (`sun_disc_intensity`) and size (`sun_angular_radius_deg`) are
-  tuned for the existing bloom/tonemap; adjust if the disc clips or the glow is wrong.
-- **Observer altitude.** The sky is a pure background from a fixed observer altitude
-  (`observer_altitude_km`, default 0.5 km); the scene camera's world position does not
-  move the sky (correct for a sky dome, and sidesteps planet-centric fp precision).
+1. In Settings -> Sky set **Sky Mode = 1**. The first atmosphere frame generates
+   the LUTs and compiles the pipeline (a one-time hitch).
+2. Confirm a physically plausible sky: blue zenith, warmer horizon, a bright sun
+   disc that blooms. Rotating the view keeps the sky consistent.
+3. Add and orient a **directional light**; the sun disc and sky colours track it
+   (reddening as the light nears the horizon). With no directional light,
+   `sun_elevation_deg` / `sun_azimuth_deg` drive the sun.
+4. `sun_intensity`, `sun_angular_radius_deg`, `sun_disc_intensity`,
+   `march_steps` and `observer_altitude_km` take effect live.
+5. Regression: Sky Mode = 0 is the unchanged gradient / checker sky, and
+   `enabled` off hides the sky in both modes.
+6. `grep -iE "error|fatal|No shader variant|No render pipeline" logs/log.txt`.
+   In `logs/log.txt`, `Sky_renderer::ensure_luts: generating atmosphere LUTs`
+   appears once and `render_atmosphere first call: supported=true ...` confirms
+   the atmosphere path; `supported=false` means the gradient fallback.
+7. On OpenGL, `capture_screenshot` serves the headless Vulkan build only, so
+   confirm GL in the window or with a RenderDoc capture (two compute dispatches
+   binding the LUTs as images, then the fullscreen atmosphere draw).
 
 ## Reference
 
-- Skill: `/d/forge-gpu/.claude/skills/forge-procedural-sky/SKILL.md` (Lesson 26).
-- API mapping: `doc/reference/forge_erhe.md` (see the compute / storage-image rows).
-- Hillaire, S. (2020). *A Scalable and Production-Ready Sky and Atmosphere Rendering
-  Technique.* EGSR 2020.
+- API mapping: `doc/reference/forge_erhe.md` (the compute / storage-image rows).
+- Hillaire, S. (2020). *A Scalable and Production-Ready Sky and Atmosphere
+  Rendering Technique.* EGSR 2020.
+
+## Future work
+
+- [plans/procedural_sky.md](plans/procedural_sky.md) - Metal and multiview
+  runtime verification.

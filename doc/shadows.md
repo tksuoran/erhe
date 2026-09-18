@@ -2,14 +2,15 @@
 
 Stability: stable
 
-All three light types now cast shadows. Directional and spot lights use 2D
-depth shadow maps (a depth `texture_2d_array`); point lights use an
-omnidirectional cube-map shadow on a separate path. This document covers the
-directional light shadow frustum fitting (the stable baseline fit and the
-modular tight fit added in June 2026), the shadow pass mechanics that support
-it, the shadow sampling shader (including the receiver depth range fix), the
+All three light types cast shadows. Directional and spot lights use 2D depth
+shadow maps (a depth `texture_2d_array`); point lights use an omnidirectional
+cube-map shadow on a separate path. This document covers the directional light
+shadow frustum fitting (the stable baseline fit and the modular tight fit), the
+shadow pass mechanics that support it, the shadow sampling shader, the
 point-light cube-map path, and the editor integration (settings, debug
-visualizations, fit target camera override).
+visualizations, fit target camera override). The fit's cost model and the
+optimizations that shape it are in
+[`shadow_tight_fit.md`](shadow_tight_fit.md).
 
 For the wider rendering architecture (rendergraph, composer, forward pass,
 winding variants) see [`editor_rendering.md`](editor_rendering.md); its
@@ -283,28 +284,18 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   paths use the same non-strict `gequal` / `lequal` semantics as the hardware
   sampler, so all three variants agree.
 
-### Receivers outside the fitted depth range (and the bug this fixed)
+### Receivers outside the fitted depth range
 
-The sampler used to begin with an early-out:
+The sampler clamps the comparison reference depth to [0, 1] after biasing and
+takes no early-out on the light texture depth. **Never add one**: with
+reverse-Z, light texture depth 0.0 is the far plane, so an
+`if (position_in_light_texture.z <= 0.0) return 1.0;` forces any receiver
+beyond the light-space far plane to fully lit before the depth comparison runs.
+With `fit_to_casters` the far plane hugs the caster bounds, so every visible
+receiver below the lowest caster (the classic floor under floating objects)
+would take that branch and lose its shadow.
 
-```glsl
-if (position_in_light_texture.z <= 0.0) {
-    return 1.0;
-}
-```
-
-With reverse-Z, light texture depth 0.0 IS the far plane, so this forced any
-receiver beyond the light-space far plane to fully lit before the depth
-comparison ever ran. The check predates the tight fit: with the stable fit
-the far plane approximates the shadow range, and "beyond the shadow range =
-no shadow" was a tolerable policy. With `fit_to_casters` the far plane hugs
-the caster bounds, so every visible receiver below the lowest caster (the
-classic floor under floating objects) hit the early-out and lost its shadow,
-regardless of the other fit settings.
-
-The fix removes the early-out and instead clamps the comparison reference
-depth to [0, 1] after biasing. This is geometrically correct, not a
-workaround:
+The clamp is geometrically correct, not a workaround:
 
 - **Beyond the far plane**: the reference clamps to the far value. Every
   caster in the map is nearer the light than the far plane, and the F_shadow
@@ -334,10 +325,12 @@ has the same property via `near_from_main_frustum` + `depth_clamp`).
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from
 https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (the shader cites it at
 `res/shaders/erhe_light.glsl:84`). This section records how the implementation
-maps onto that reference, where it goes beyond it, the known deltas, and the
-alternative "bias-free" technique exposed as the `distance` shadow technique.
+maps onto that reference, where it goes beyond it, and the alternative
+"bias-free" technique exposed as the `distance` shadow technique. The known
+deltas from the reference are listed in
+[`plans/shadows.md`](plans/shadows.md).
 
-### What erhe implements today (RPDB)
+### What erhe implements (RPDB)
 
 `sample_light_visibility()` recovers the receiver's light-space depth gradient
 `dz/dUV` by inverting the 2x2 screen-space Jacobian of the light texture
@@ -376,23 +369,6 @@ erhe also goes beyond the article:
   `set_depth_bias`) but defaults to 0. The article criticizes rasterizer slope
   bias as an over-estimate, so erhe relies on RPDB by default.
 
-### Deltas / open issues versus the reference
-
-- Unexplained 2.0 bias scale. The `2.0 *` factor (`:119,152-155,197,224`, flagged
-  in the comment at `:91-92`) has no counterpart in the article. It most likely
-  compensates a half-texel-versus-full-texel footprint or a sign subtlety and
-  should be pinned down rather than left as a fudge.
-- Surface normal unused. `sample_light_visibility(..., float N_dot_L)` receives
-  the geometric term but the bias path never uses it. The article notes that a
-  geometric slope (from the surface normal) is more robust than `ddx` / `ddy` at
-  discontinuities; erhe has the normal available and could fall back to it.
-- Degenerate Jacobian untreated. When `detJ == 0` (grazing / silhouette texels)
-  `dz_dUV` is left at zero -- no bias -- which can reintroduce acne where it is
-  worst. The article assumes an invertible Jacobian.
-- `ddx` / `ddy` across geometry edges are unreliable for both methods (a 2x2 quad
-  straddling two surfaces); erhe applies no mitigation. This is a shared RPDB
-  limitation.
-
 ### The distance / fwidth alternative
 
 The same derivative-slope idea can be moved to the caster pass instead
@@ -426,8 +402,8 @@ below); that is its own subsystem, not this 2D `shadow_technique` knob.
 
 Point lights cast **omnidirectional** shadows through a separate cube-map path.
 Directional and spot lights use the 2D depth array above; point lights never
-touch the fit, the 2D array, or `texture_from_world`. Full design, the
-capture-driven debugging history, and the coordinate-flip fix are in
+touch the fit, the 2D array, or `texture_from_world`. The full design, including
+the per-face coordinate flip, is in
 [`point_light_shadows.md`](point_light_shadows.md); this is the summary.
 
 - **Storage.** One R32F `texture_cube_map_array` (labelled `Point shadow cube
@@ -453,8 +429,8 @@ capture-driven debugging history, and the coordinate-flip fix are in
   conventions -- the cube pass gets `clip_space_y_flip` enabled iff
   `framebuffer_origin == top_left`, mirroring `Light::get_texture_from_clip` for
   the 2D map. Without it every stored face is mirrored in t and the shadows are
-  displaced. (See `point_light_shadows.md` for the RenderDoc proof and why the
-  earlier shader-side `gl_Position.y` negate was replaced.)
+  displaced. A shader-side `gl_Position.y` negate is deliberately not used: it
+  is unconditional, and so wrong on bottom_left OpenGL.
 - **Receiver.** `sample_point_light_visibility()` (`erhe_light.glsl`) samples
   `s_shadow_cube` with the direction `world_pos - light_pos` at the light's cube
   layer (`shadow_index_packed.y`) and compares the fragment's radial distance
@@ -559,4 +535,10 @@ capture-driven debugging history, and the coordinate-flip fix are in
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |
 | `src/editor/config/definitions/shadow_frustum_fit_config.py` | Frustum fit settings codegen definition |
 | `src/editor/config/definitions/shadow_technique_mode.py` | Shadow technique enum codegen definition (depth / distance) |
-| `doc/point_light_shadows.md` | Point-light cube shadow design, capture-driven debugging history, coordinate-flip fix |
+| `doc/point_light_shadows.md` | Point-light cube shadow design, per-face coordinate flip, risks and tuning knobs |
+| `doc/shadow_tight_fit.md` | Cost model and standing optimizations of the directional fit |
+
+## Future work
+
+- [plans/shadows.md](plans/shadows.md) - bias deltas from the RPDB reference,
+  remaining fit and point-shadow performance candidates.

@@ -1,106 +1,41 @@
-# DDGI (Dynamic Diffuse Global Illumination) plan
+# DDGI (dynamic diffuse global illumination)
 
 Stability: experimental
 
-## Status
+DDGI gives non-baked scenes runtime indirect diffuse light with no authoring
+step: one scene-wide probe volume is fitted to the content bounding box, the
+probes are traced with ray queries, the results are blended into octahedral
+irradiance and distance atlases, and `res/shaders/standard.frag` samples those
+atlases in place of the flat `light_block.ambient_light` term.
 
-COMPLETE on branch `ddgi` (2026-08-18); see the follow-ups at the end.
-Every phase is verified headless on the default scene with zero Vulkan
-validation errors:
+The feature requires GPU ray query (`Device_info::use_ray_query`), exactly like
+`Ray_trace_renderer`; on backends without it every part of the renderer no-ops
+and the flat ambient term stands.
 
-- Phase 0: this document.
-- Phase 1: `Scene_tlas` extracted from `Ray_trace_renderer`
-  (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - bottom level cache,
-  per-frame-in-flight top level slots, instance record SSBO.
-- Phase 2: `Ddgi_config` (erhe_codegen, `reflect=True`, shown in the
-  Settings window), `Ddgi_renderer` grid fit + texture allocation, the
-  developer `Ddgi_window`, and the MCP `set_ddgi` tool (pulled forward
-  from phase 7 - it is how every later phase was verified).
-- Phase 3: `ddgi_trace.comp`. The hit fetch and surface shading moved out
-  of `ray_trace.comp` into `res/shaders/erhe_ray_hit.glsl`, shared by both.
-- Phase 4: `ddgi_blend.comp`, one source switched by
-  `ERHE_DDGI_BLEND_DISTANCE` into the irradiance and distance passes,
-  including hysteresis and the octahedral border copy.
-- Phase 5: `ddgi_relocate.comp` - relocation and classification.
-- Phase 6: `res/shaders/erhe_ddgi.glsl` + the `standard.frag` branch, the
-  `USE_DDGI` variant axis, `Light_block` volume fields, texture heap slots
-  5-7 and `Light_buffer::bind_ddgi`, `Forward_renderer::set_ddgi`.
-- Phase 7: the probe overlay (`Ddgi_renderer` is a `Renderable`), the
-  `DDGI Irradiance` shader debug mode (33), and this status.
+## Scope
 
-Interim behaviour and known limitations:
-
-- Probe rays that escape the scene take the scene ambient as sky radiance.
-  The `sky_atmosphere` LUTs (which `Lightmap_baker`'s gather already
-  samples) are the obvious next refinement.
-- Probes see only direct light plus one implicit bounce through whatever
-  the ray hits; the field is not fed back into the trace, so there are no
-  infinite bounces yet.
-- On an open scene lit mostly by ambient - like the default scene - the
-  DDGI term is close to the flat ambient it replaces, because the probe
-  rays mostly escape. The difference shows in enclosed geometry; the
-  intensity knob and the DDGI Irradiance debug mode make it visible.
-- `Lightmap_baker` still has its own copy of the acceleration structure
-  code (its instance records carry texcoord-2 addresses).
-
-Gotcha found the hard way: a `Renderable` may only submit debug lines in
-the CPU phase (`Render_context::encoder == nullptr`). Lines submitted in
-the encoder phase miss the debug renderer's compute dispatch, and its
-buffer bookkeeping then trips an assert at frame end.
-
-## Why
-
-erhe has no runtime indirect diffuse. `res/shaders/standard.frag` uses a flat
-`light_block.ambient_light` term, or - for meshes that have been through the
-lightmap baker - a baked atlas lookup. The lightmap path is progressive, tiled,
-streamed and UV-unwrap dependent; it cannot serve dynamic geometry, moving
-lights, or freshly loaded content.
-
-Everything DDGI needs already exists in the tree and is proven:
-
-- GPU ray query in compute: `Ray_trace_renderer`
-  (`src/editor/renderers/ray_trace_renderer.{hpp,cpp}` +
-  `res/editor/shaders/ray_trace.comp`) - per-`Buffer_mesh` BLAS cache,
-  per-frame-in-flight TLAS slots, an instance-record SSBO of buffer device
-  addresses for attribute fetch, material lookup via `Material_buffer` +
-  `Texture_heap`, and light shading with traced shadow rays against
-  `Light_buffer`.
-- A second, independent ray-query gather with sky radiance and a cosine bounce:
-  `Lightmap_baker`'s `c_gather_source` (`src/editor/renderers/lightmap_baker.cpp`,
-  around line 509).
-- Compute passes writing storage-image LUTs that raster shaders then sample:
-  `Sky_renderer::ensure_luts`.
-- A budgeted, per-frame-ticked GPU subsystem whose texture is published to the
-  forward renderer: the lightmap block in `Editor::tick()`
-  (`src/editor/editor.cpp`, around lines 807-990) plus
-  `Forward_renderer::set_lightmap_texture`.
-
-So this is mostly assembly of existing machinery, not new infrastructure.
-
-`doc/lightmap_baking.md` already lists "light probes for dynamic objects"
-as its acknowledged sequel, and `doc/raytrace.md` lists GI as not yet done.
-
-## Decisions (user, 2026-08-18)
-
-| Question | Decision |
+| Question | Answer |
 |---|---|
-| Volume authoring | One scene-wide volume, auto-fitted to the content AABB. Node-attached / cascaded volumes are follow-up work. |
-| Scope | Full DDGI: octahedral irradiance **and** distance / Chebyshev visibility, temporal hysteresis, probe relocation, probe classification, border texels. |
-| Lightmap interaction | Mutually exclusive per draw: a lightmapped primitive keeps its baked term (and its analytic-light gate); everything else gets DDGI in place of the flat ambient. |
-| Backend | Ray query only (`Device_info::use_ray_query`), exactly like `Ray_trace_renderer`. A rasterized probe-cubemap fallback for Quest / GL is explicit future work. |
+| Volume authoring | One scene-wide volume, auto-fitted to the padded content AABB. |
+| Feature set | Octahedral irradiance and distance / Chebyshev visibility, temporal hysteresis, probe relocation, probe classification, border texels. |
+| Lightmap interaction | Mutually exclusive per draw: a lightmapped primitive keeps its baked term (and its analytic-light gate); every other draw gets DDGI in place of the flat ambient. |
+| Backend | Ray query only. |
 
-Intended outcome: enabling DDGI gives moving, non-baked scenes plausible bounce
-light and colour bleeding that reacts to light and geometry edits within a few
-frames, with no authoring step.
+Probes see direct light plus one implicit bounce through whatever the ray hits;
+the field is not fed back into the trace. Rays that escape the scene take the
+scene ambient as sky radiance. On an open scene lit mostly by ambient the DDGI
+term is therefore close to the flat ambient it replaces, and the difference
+shows in enclosed geometry; the intensity knob and the `DDGI Irradiance` shader
+debug mode (33) make it visible.
 
-## Two hard constraints from the graphics abstraction
+## Two constraints from the graphics abstraction
 
 1. **Storage images are `image2D` only.** `Glsl_type`
    (`src/erhe/graphics/erhe_graphics/enums.hpp`) has no `image_2d_array` or
-   `image_3d`, and the comment there says as much. All probe state is therefore
-   laid out as 2D atlases - which is the classic DDGI layout anyway.
+   `image_3d`. All probe state is therefore laid out as 2D atlases - which is
+   the classic DDGI layout anyway.
 2. **No indirect dispatch.** `Compute_command_encoder::dispatch_compute` takes
-   literal sizes. Probe and ray counts must be CPU-known; they are.
+   literal sizes, so probe and ray counts are CPU-known.
 
 ## Data layout
 
@@ -116,7 +51,7 @@ Atlas tiling: `tiles_x = nx * nz`, `tiles_y = ny`.
 | Probe data | RGBA32F | 1 texel per probe | relocation offset xyz, state w (full float so the debug overlay readback is a plain memcpy) |
 
 Single-buffered: each texel is written by exactly one invocation per pass, so no
-ping-pong is needed; a `memory_barrier` between passes suffices.
+ping-pong is needed and a `memory_barrier` between passes suffices.
 
 ## Passes (all compute, all ray-query gated)
 
@@ -125,10 +60,9 @@ ping-pong is needed; a `memory_barrier` between passes suffices.
    rotation from the control UBO. Origin = probe centre + relocation offset.
    On hit: fetch attributes via the instance-record device addresses, look up
    the material, shade against the `Light_buffer` lights with traced shadow
-   rays - the `ray_trace.comp` hit path minus the Whitted branching. On miss:
-   sky radiance via the `sky_atmosphere` LUTs (the `sky_sample_*` helpers in
-   `lightmap_baker.cpp`), or scene ambient when the sky is off. Backface hit:
-   store `-distance` and zero radiance.
+   rays - the `ray_trace.comp` hit path minus the Whitted branching, shared
+   through `res/shaders/erhe_ray_hit.glsl`. On miss: scene ambient. Backface
+   hit: store `-distance` and zero radiance.
 2. **`ddgi_blend.comp`, irradiance variant** - one workgroup per probe,
    striding over the tile's texels. Cosine-weighted accumulation of the
    probe's rays, hysteresis blend against the existing texel, then the
@@ -136,156 +70,124 @@ ping-pong is needed; a `memory_barrier` between passes suffices.
 3. **`ddgi_blend.comp`, distance variant** (`ERHE_DDGI_BLEND_DISTANCE`) - same
    shape, with `pow(max(0, cos), depth_sharpness)` weighting of distance and
    distance squared, plus the border copy.
-4. **`ddgi_relocate.comp`** - one thread per probe. Backface-hit ratio
-   over the probe's rays gives the inactive state; the offset is nudged toward
-   the most open direction, clamped to `0.5 * spacing`. Writes the probe data
+4. **`ddgi_relocate.comp`** - one thread per probe. The backface-hit ratio over
+   the probe's rays gives the inactive state; the offset is nudged toward the
+   most open direction, clamped to `0.5 * spacing`. Writes the probe data
    texture.
 
 Budgeting: a round-robin probe cursor with a `probes_per_frame` budget,
-mirroring the lightmap tile cursor. Light / geometry change invalidation resets
-hysteresis for a few frames (start with a simple FNV hash over light state and
-content transforms - the same tiering idea as `Lightmap_baker`).
+mirroring the lightmap tile cursor.
 
 ## Runtime sampling
 
-- New `res/shaders/erhe_ddgi.glsl`:
+- `res/shaders/erhe_ddgi.glsl`:
   `ddgi_sample_irradiance(world_pos, normal, view_dir)` - surface-biased sample
   point, 8 probe taps, trilinear x smooth-backface normal weight x Chebyshev
   visibility weight, log-space blend, active-probe gate.
 - Three texture heap slots next to `c_texture_heap_slot_lightmap`
   (`src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.hpp`): **5**
   `s_ddgi_irradiance`, **6** `s_ddgi_distance`, **7** `s_ddgi_probe_data` (read
-  with `texelFetch`, so it can share the bilinear clamp sampler). Declared in
-  `program_interface.cpp` alongside `s_lightmap`; bound by a new
-  `Light_buffer::bind_ddgi(...)` with 1x1 black fallbacks, called from both
+  with `texelFetch`, so it shares the bilinear clamp sampler). Declared in
+  `program_interface.cpp` alongside `s_lightmap`; bound by
+  `Light_buffer::bind_ddgi(...)` with 1x1 black fallbacks from both
   `Forward_renderer` begin-pass sites.
 - Grid parameters ride in the existing `Light_block` (grid origin, spacing,
   counts + rays, and a params vec4 of normal bias / view bias / irradiance gamma
-  / intensity) rather than a new binding point; `Light_buffer::update()` gains a
-  `Ddgi_parameters` argument. This shifts std140 offsets, so
-  `src/rendering_test/`'s duplicated shaders may fall out of sync - which
-  `AGENTS.md` explicitly allows.
-- Variant gating: add `X(USE_DDGI)` to `ERHE_SHADER_BOOL`
+  / intensity) rather than a new binding point; `Light_buffer::update()` takes a
+  `Ddgi_parameters` argument.
+- Variant gating: `X(USE_DDGI)` in `ERHE_SHADER_BOOL`
   (`src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp`), seeded
-  scene-level by `Forward_renderer` like the light counts. Keep the prewarm list
-  (`src/editor/renderers/prewarm.cpp`) from doubling - prewarm DDGI variants
-  only when the feature is enabled.
-- `standard.frag`, replacing the current ambient / lightmap branch:
-
-```glsl
-vec3 ambient_term   = light_block.ambient_light.rgb;
-bool lightmap_valid = false;
-// ... existing lightmap branch sets ambient_term / lightmap_valid ...
-#if defined(ERHE_USE_DDGI)
-if (!lightmap_valid) {
-    ambient_term = ddgi_sample_irradiance(v_position.xyz, N, V) * light_block.ddgi_params.w;
-}
-#endif
-```
-
-The analytic light loops keep running for non-lightmapped draws - DDGI is
-indirect only.
+  scene-level by `Forward_renderer` like the light counts. The prewarm list
+  (`src/editor/renderers/prewarm.cpp`) warms DDGI variants only while the
+  feature is enabled, so the variant space does not double when it is off.
+- `standard.frag` samples the field only when the draw has no valid lightmap
+  region; the analytic light loops keep running, because DDGI is indirect only.
 
 ## Component wiring
 
-New `src/editor/renderers/ddgi_renderer.{hpp,cpp}`, modelled on
-`Ray_trace_renderer` for the construction / bind-group / pipeline recipe and on
-the lightmap tick for lifecycle:
+`src/editor/renderers/ddgi_renderer.{hpp,cpp}` follows `Ray_trace_renderer` for
+the construction / bind-group / pipeline recipe and the lightmap tick for
+lifecycle:
 
-- Constructed in `editor.cpp`'s `post_processing_task`, next to
-  `Ray_trace_renderer`; stored as a `unique_ptr` member; published to
-  `App_context` in `fill_app_context()`.
+- Constructed in `editor.cpp`'s `post_processing_task` next to
+  `Ray_trace_renderer`, held as a `unique_ptr` member, published to
+  `App_context` in `fill_app_context()`. A part constructor may not read
+  `context.editor_settings` - it is assigned after part construction.
 - Ticked from `Editor::tick()` after `flush_draw_lists()`, recording into
   `m_app_context.current_command_buffer`, then
   `m_forward_renderer->set_ddgi(irradiance, distance, probe_data, params)`.
-  Scene-global, so not a rendergraph node and not per-view.
-- `is_supported()` mirrors `Ray_trace_renderer::is_supported()`
-  (`Device_info::use_ray_query`); everything no-ops otherwise.
-- Do not read `context.editor_settings` in the constructor - it is assigned
-  after part construction.
+  The volume is scene-global, so it is neither a rendergraph node nor per-view.
+- `is_supported()` mirrors `Ray_trace_renderer::is_supported()`.
+- `Ddgi_renderer` is also a `Renderable`: the probe overlay
+  (`debug_draw_probes`) draws probe spheres coloured from a periodic probe-data
+  readback.
 
-## Phases (as executed)
+## Phases
 
-Each phase was edit -> build (`scripts\build_ninja_win_vulkan.bat editor`) ->
-independent review -> fix -> commit.
+The renderer is built out of these parts; the labels are cited from source
+comments.
 
-**0. This document.** DONE.
+**1. `Scene_tlas`** (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - the bottom
+level cache, the per-frame-in-flight top level slots and the instance-record
+SSBO, shared with `Ray_trace_renderer`. `Lightmap_baker` keeps its own copy of
+this code because its instance records carry texcoord-2 addresses.
 
-**1. Extract `Scene_tlas`** (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - the
-BLAS cache, per-frame-in-flight TLAS slots and instance-record SSBO, moved out
-of `Ray_trace_renderer` and used by it. Mechanical; regressions show up in the
-Ray Trace window and the MCP `set_ray_trace` tool. `Lightmap_baker` keeps its
-own copy (its records carry texcoord-2 addresses); migrating it is a separate,
-later job.
-
-**2. Settings + skeleton.** `src/editor/config/definitions/ddgi_config.py` (copy
-`ray_trace_config.py` / `lightmap_config.py`), a line in
-`editor_settings_config.py`, three `_config_sources` entries in
-`src/editor/CMakeLists.txt`, `add_config_section(settings.ddgi)` in
-`settings_window.cpp`. Fields: `enabled`, `probe_spacing_m`, `volume_padding_m`,
+**2. Settings and skeleton.** `Ddgi_config`
+(`src/editor/config/definitions/ddgi_config.py`, erhe_codegen, `reflect=True`,
+shown in the Settings window): `enabled`, `probe_spacing_m`, `volume_padding_m`,
 `max_probes`, `rays_per_probe`, `irradiance_texels`, `distance_texels`,
 `hysteresis`, `depth_sharpness`, `normal_bias`, `view_bias`, `intensity`,
 `probes_per_frame`, `relocation_enabled`, `classification_enabled`,
-`debug_draw_probes`. Plus `Ddgi_renderer` doing grid fit and texture allocation
-only, and a developer `Ddgi_window`
-(`src/editor/developer/ddgi_window.{hpp,cpp}`, template: `ray_trace_window.*`)
-reporting grid dims / probe count / memory. Build twice after touching a codegen
-definition.
+`debug_draw_probes`. Plus the grid fit and texture allocation in
+`Ddgi_renderer`, the developer `Ddgi_window`
+(`src/editor/developer/ddgi_window.{hpp,cpp}`) reporting grid dimensions, probe
+count and memory, and the MCP `set_ddgi` tool.
 
-**3. `ddgi_trace.comp`** plus the ray data texture, with the raw ray texture
-previewable in the window. Cross-check one probe's rays against the
-`Ray_trace_renderer` image.
+**3. `ddgi_trace.comp`** and the ray data texture, previewable in the window.
 
-**4. Blend passes** (irradiance + distance, including borders and hysteresis),
-with atlas previews in the window. Expect convergence within a second and no
-flicker.
+**4. Blend passes** - irradiance and distance, including borders and hysteresis.
 
-**5. `ddgi_relocate_classify.comp`** - relocation and inactive-probe
-classification.
+**5. `ddgi_relocate.comp`** - relocation and inactive-probe classification.
 
 **6. Runtime sampling** - heap slots, `Light_block` fields, `erhe_ddgi.glsl`,
 the `USE_DDGI` axis, the `standard.frag` branch, `Forward_renderer::set_ddgi`,
-prewarm. First phase with a visible viewport result.
+prewarm.
 
-**7. Debug + tooling** - probe spheres via a `Renderable`
-(`Primitive_renderer::add_sphere`, colour from a periodic probe-data readback),
-a `Shader_debug` mode showing the DDGI term alone, an MCP `set_ddgi` tool
-mirroring `action_set_ray_trace` in `src/editor/mcp/mcp_server.cpp`, and
-`doc/editor_renderers.md` + this document updated.
+**7. Debug and tooling** - the probe overlay, the `DDGI Irradiance` shader debug
+mode and the MCP `set_ddgi` tool.
 
-## Gotchas to carry into implementation
+## Traps
 
+- A `Renderable` may submit debug lines only in the CPU phase
+  (`Render_context::encoder == nullptr`). Lines submitted in the encoder phase
+  miss the debug renderer's compute dispatch, and its buffer bookkeeping then
+  trips an assert at frame end.
 - Vulkan offsets `combined_image_sampler` bindings past the max buffer binding
   in a bind group; raw bindings (acceleration structure, storage image) are not.
-  Pick user binding points that do not collide after the offset - this bit the
-  lightmap gather.
+  Pick user binding points that do not collide after the offset.
 - `accelerationStructureEXT` must be declared by hand in GLSL; samplers, storage
   images and uniform blocks are auto-injected from the bind group layout.
 - Compute command buffers use dedicated thread slots (lightmap = 6,
-  texture-graph export = 7); pick a fresh slot for DDGI.
-- Adding a `Shader_bool` axis doubles the variant space - gate prewarm.
+  texture-graph export = 7); DDGI uses its own.
 - After changing a codegen definition, build twice or the binary is stale.
 
 ## Verification
 
-1. `scripts\build_ninja_win_vulkan.bat editor` after every phase; also build the
-   OpenGL config once at phase 6 to confirm the `USE_DDGI`-off path still
-   compiles and links.
-2. Headless verify loop: build `build_vs2026_vulkan_headless`, launch, then
+1. Headless verify loop: build `build_vs2026_vulkan_headless`, launch, then
    `py -3 scripts/mcp_call.py set_ddgi {"enabled":true,"show_window":true}`,
    `get_async_status`, `capture_screenshot`. Compare a Sponza / Bistro
-   screenshot with DDGI off vs on: bounce colour on shadowed walls, no light
-   through closed geometry.
-3. Vulkan validation must stay at zero errors - watch specifically for image
-   layout transitions between the trace and blend dispatches.
-4. Regression: with DDGI disabled the frame must match today's output, and a
-   lightmap-baked scene must look unchanged with DDGI on.
-5. Perf: report the per-frame DDGI cost in the Ddgi window (the lightmap baker's
-   ~1.5 ms/frame budget is the benchmark to stay under).
+   screenshot with DDGI off versus on: bounce colour on shadowed walls, no
+   light through closed geometry.
+2. Build the OpenGL configuration too, to confirm the `USE_DDGI`-off path still
+   compiles and links.
+3. Vulkan validation stays at zero errors - watch the image layout transitions
+   between the trace and blend dispatches.
+4. Regression: with DDGI disabled the frame matches the non-DDGI output, and a
+   lightmap-baked scene looks unchanged with DDGI on.
+5. Performance: the per-frame DDGI cost is reported in the Ddgi window; the
+   lightmap baker's ~1.5 ms/frame budget is the benchmark to stay under.
 
-## Explicitly out of scope (follow-ups)
+## Future work
 
-Infinite bounces by sampling the previous frame's field at ray hits;
-node-authored and cascaded / camera-scrolling volumes; the Quest / GL
-probe-cubemap fallback; specular reuse of the field; per-scene volume overrides;
-migrating `Lightmap_baker` onto `Scene_tlas`.
+- [plans/ddgi.md](plans/ddgi.md) - infinite bounces, sky radiance from the
+  atmosphere LUTs, authored and cascaded volumes, the non-ray-query fallback.

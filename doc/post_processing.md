@@ -125,16 +125,29 @@ Repeated convolutions converge to a Gaussian (Kraus 2007).
 
 ## Render pass synchronization
 
-### Current mechanism
+### Barriers around each render pass
 
 Each render pass emits a global `VkMemoryBarrier2` before
-`vkCmdBeginRenderPass` (see `compute_inter_pass_barrier()` in
-`vulkan_render_pass.cpp`).
+`vkCmdBeginRenderPass` (`compute_inter_pass_barrier()` in
+`vulkan_render_pass.cpp`). Its source side is derived from the attachment's
+`usage_before`; its destination side always includes
+`FRAGMENT_SHADER | SHADER_READ` plus the stage and access of whatever attachment
+types are present (`COLOR_ATTACHMENT_OUTPUT | COLOR_ATTACHMENT_WRITE` for
+color).
 
-Source side of the barrier: derived from the attachment's `usage_before`.
-Destination side: always includes `FRAGMENT_SHADER | SHADER_READ` plus
-stage/access for whatever attachment types are present
-(`COLOR_ATTACHMENT_OUTPUT | COLOR_ATTACHMENT_WRITE` for color).
+After `vkCmdEndRenderPass`, the framework emits a second `VkMemoryBarrier2`
+derived from the attachment types (source) and `usage_after` (destination)
+(`compute_post_render_pass_barrier()`):
+
+```
+srcStage  = COLOR_ATTACHMENT_OUTPUT  (from attachment type)
+srcAccess = COLOR_ATTACHMENT_WRITE
+dstStage  = FRAGMENT_SHADER          (from usage_after = sampled)
+dstAccess = SHADER_READ
+```
+
+This makes each writing pass's output visible for its declared next use, with
+no action needed in callers.
 
 The VkRenderPass itself uses canonical subpass dependencies
 (`make_canonical_subpass_dependencies2()` in `vulkan_helpers.cpp`):
@@ -174,85 +187,41 @@ layout_before = shader_read_only_optimal
 layout_after  = shader_read_only_optimal
 ```
 
-The cross-pass write-to-read dependency (color attachment write in pass
-N, fragment shader read in pass N+1) is handled by the end-of-renderpass
-barrier (Option A) that the framework emits based on `usage_after = sampled`.
+The cross-pass write-to-read dependency (color attachment write in pass N,
+fragment shader read in pass N+1) is carried entirely by the end-of-pass
+barrier that `usage_after = sampled` produces.
 
-### Synchronization hazard: write-as-attachment then sample in next pass
+### Why the end-of-pass barrier carries the dependency
 
-When downsample pass D[n] writes to `downsample_texture` mip N+1 as a
-color attachment, the next pass D[n+1] samples that same mip N+1 in its
-fragment shader. The attachment of D[n+1] is mip N+2 -- a different
-subresource.
+The other three mechanisms cannot, and a downsample chain is the case that
+proves it. When downsample pass D[n] writes `downsample_texture` mip N+1 as a
+color attachment, pass D[n+1] samples that mip in its fragment shader while its
+own attachment is mip N+2 - a different subresource:
 
-The dependency chain for the current code:
+1. D[n]'s subpass-to-EXTERNAL dependency makes `COLOR_ATTACHMENT_WRITE`
+   available in `COLOR_ATTACHMENT_OUTPUT` (dstAccess = 0), and transitions mip
+   N+1 back to `SHADER_READ_ONLY_OPTIMAL`.
+2. D[n+1]'s inter-pass barrier has `srcStage = FRAGMENT_SHADER,
+   srcAccess = SHADER_READ` (from `usage_before = sampled` on the attachment at
+   mip N+2), which does not cover `COLOR_ATTACHMENT_OUTPUT` where D[n]'s writes
+   became available.
+3. D[n+1]'s EXTERNAL-to-subpass dependency does chain with step 1, but its
+   `dstStage = COLOR_ATTACHMENT_OUTPUT` makes the data visible in the color
+   attachment output stage only, not in `FRAGMENT_SHADER` where the sampling
+   happens.
 
-1. D[n] ends. Subpass-to-EXTERNAL dependency makes `COLOR_ATTACHMENT_WRITE`
-   available in `COLOR_ATTACHMENT_OUTPUT` stage (srcAccess=WRITE,
-   dstAccess=0, dstStage=COLOR_ATTACHMENT_OUTPUT). The `finalLayout`
-   transition of mip N+1 back to `SHADER_READ_ONLY_OPTIMAL` happens
-   here.
+The end-of-pass barrier is what closes that gap, which is why every pass in both
+chains declares `usage_after = sampled` and none of them opts out.
 
-2. D[n+1] starts. The inter-pass barrier has
-   `srcStage=FRAGMENT_SHADER, srcAccess=SHADER_READ` (from
-   `usage_before=sampled` on the attachment at mip N+2). This does NOT
-   cover `COLOR_ATTACHMENT_OUTPUT` where D[n]'s writes became available.
-
-3. D[n+1]'s EXTERNAL-to-subpass dependency has
-   `srcStage=COLOR_ATTACHMENT_OUTPUT`, which does chain with step 1.
-   But its `dstStage=COLOR_ATTACHMENT_OUTPUT` only makes the data
-   visible in the color attachment output stage -- not in
-   `FRAGMENT_SHADER` where the sampling happens.
-
-**Result**: the color attachment write from D[n] is never made visible
-for fragment shader reads in D[n+1]. This is a synchronization hazard.
-
-The same pattern exists in the upsample chain, but the upsample
-attachment descriptors use `usage_before=color_attachment`, which
-generates `srcStage=COLOR_ATTACHMENT_OUTPUT` in the inter-pass barrier.
-This correctly covers the prior pass's write. (It works because the
-barrier is a global `VkMemoryBarrier2` that covers all memory, even
-though the attachment's own mip was not the one written as a color
-attachment.)
-
-### Implemented fixes
-
-Both options are implemented. Option A is the default; Option B is
-available for callers that need explicit control.
-
-#### Option A: Automatic end-of-renderpass barrier (default)
-
-After `vkCmdEndRenderPass`, the framework emits a `VkMemoryBarrier2`
-derived from the attachment types (source) and `usage_after` (destination):
-
-```
-srcStage  = COLOR_ATTACHMENT_OUTPUT  (from attachment type)
-srcAccess = COLOR_ATTACHMENT_WRITE
-dstStage  = FRAGMENT_SHADER          (from usage_after = sampled)
-dstAccess = SHADER_READ
-```
-
-This ensures the writing pass makes its output visible for its declared
-next use. No change needed in callers. Implemented in
-`compute_post_render_pass_barrier()` in `vulkan_render_pass.cpp`.
-
-#### Option B: Explicit barrier via Device::cmd_texture_barrier()
+### Explicit barriers via Device::cmd_texture_barrier()
 
 When `usage_after` includes the `user_synchronized` bit, the automatic
-barrier is suppressed. The caller must insert an explicit barrier via
-`Device::cmd_texture_barrier(usage_before, usage_after)` between render
-passes. This uses the frame's shared command buffer.
-
-The `user_synchronized` bit is a modifier in `Image_usage_flag_bit_mask`
-that does not affect layout computation or stage/access mapping -- it
-only controls whether the automatic barrier fires.
-
-#### Debug sanity check (future)
-
-A debug-only per-mip state tracker on `Texture_impl` that asserts when
-a mip is sampled without a barrier since its last write would catch
-missing barriers early. This should be used only for validation, not for
-deciding when to insert barriers.
+end-of-pass barrier is suppressed and the caller inserts an explicit barrier
+with `Device::cmd_texture_barrier(usage_before, usage_after)` between render
+passes, on the frame's shared command buffer. The `user_synchronized` bit is a
+modifier in `Image_usage_flag_bit_mask` that does not affect layout computation
+or stage / access mapping - it only controls whether the automatic barrier
+fires.
 
 ## Parameter buffer layout
 
@@ -285,3 +254,8 @@ All passes use a fullscreen triangle (3 vertices, no vertex buffers):
 - Depth/stencil: disabled
 - Color blend: disabled
 - Topology: triangle
+
+## Future work
+
+- [plans/post_processing.md](plans/post_processing.md) - debug per-mip
+  barrier tracker.

@@ -1,164 +1,137 @@
-# GPU ray tracing plan (issue #233)
+# GPU ray tracing
 
 Stability: experimental
 
-Goal: add basic GPU ray tracing capability to the erhe graphics backend. The
-API must be implementable on Vulkan and Metal. Initial milestone: render
-primary rays with minimal N.V shading into a texture, visible in the editor.
+GPU ray tracing in erhe runs as **ray queries in a compute shader**
+(`GL_EXT_ray_query` / `VK_KHR_ray_query` on Vulkan), not as a ray tracing
+pipeline with raygen / hit / miss stages and a shader binding table. This is
+distinct from `erhe::raytrace`, the CPU-side Embree / bvh abstraction used for
+picking: the GPU path lives in `erhe::graphics` and uses hardware acceleration
+structures.
 
-This is distinct from `erhe::raytrace` (CPU-side Embree/bvh abstraction used
-for picking); the GPU path lives in `erhe::graphics` and uses hardware
-acceleration structures + ray queries.
+Why ray query:
 
-## Approach: ray query in compute, not a ray tracing pipeline
+- It maps 1:1 onto both Vulkan and Metal (`MTLAccelerationStructure` + MSL
+  `raytracing::intersector`); a shader binding table does not, because Metal's
+  function tables are structured differently.
+- It reuses erhe's compute + storage-image path (the same machinery the
+  atmosphere LUTs use) with no new pipeline concepts.
+- The shading the renderer does needs no recursion, so a ray tracing pipeline
+  would buy nothing.
 
-The initial implementation uses **ray queries in a compute shader**
-(`GL_EXT_ray_query` / `VK_KHR_ray_query` on Vulkan; `MTLAccelerationStructure`
-+ MSL `raytracing::intersector` on Metal), not a full ray tracing pipeline
-(raygen/hit/miss stages + shader binding table). Rationale:
+A ray tracing pipeline abstraction can be layered on later if it is ever needed.
 
-- Ray query maps 1:1 onto both Vulkan and Metal; SBT machinery does not
-  (Metal has no SBT; its function tables are structured differently).
-- It reuses erhe's existing, production-grade compute + storage-image path
-  (see `sky_renderer.cpp` atmosphere LUTs) with zero new pipeline concepts.
-- Primary rays + N.V shading need no recursion, so a ray tracing pipeline
-  buys nothing here.
-
-A ray tracing pipeline abstraction can be layered on later if needed.
-
-## Phase 1: erhe::graphics foundation (Vulkan + null; gl/metal stubs)
+## erhe::graphics foundation
 
 1. **Buffer usage bits** (`enums.hpp`, `enums.cpp`, `vulkan_helpers.cpp`):
-   - `Buffer_usage::acceleration_structure_storage` ->
-     `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR`
-   - `Buffer_usage::acceleration_structure_build_input` ->
-     `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR`
-   - `Buffer_usage::shader_device_address` ->
-     `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
-   GL/Metal/null backends ignore these bits.
+   `Buffer_usage::acceleration_structure_storage`,
+   `acceleration_structure_build_input` and `shader_device_address` map to the
+   matching `VK_BUFFER_USAGE_*` bits. The GL, Metal and null backends ignore
+   them.
 
-2. **Vulkan device support** (`vulkan_device.hpp/.cpp`,
-   `vulkan_device_init.cpp`):
-   - Device extensions: `VK_KHR_acceleration_structure`, `VK_KHR_ray_query`,
-     `VK_KHR_deferred_host_operations` (dependency of acceleration_structure).
-   - Feature query/set chain: `VkPhysicalDeviceAccelerationStructureFeaturesKHR`,
-     `VkPhysicalDeviceRayQueryFeaturesKHR`,
-     `VkPhysicalDeviceBufferDeviceAddressFeatures` (core 1.2; required by
-     acceleration structure builds).
-   - `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` when bufferDeviceAddress
-     is enabled.
-   - `Device_info::use_ray_query` (cross-API flag, default false; true on
-     Vulkan when all of accelerationStructure + rayQuery + bufferDeviceAddress
-     were enabled). Application code gates the whole feature on this.
+2. **Vulkan device support** (`vulkan_device.{hpp,cpp}`,
+   `vulkan_device_init.cpp`): the `VK_KHR_acceleration_structure`,
+   `VK_KHR_ray_query` and `VK_KHR_deferred_host_operations` device extensions,
+   the `VkPhysicalDeviceAccelerationStructureFeaturesKHR`,
+   `VkPhysicalDeviceRayQueryFeaturesKHR` and
+   `VkPhysicalDeviceBufferDeviceAddressFeatures` chain, and
+   `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` when `bufferDeviceAddress`
+   is enabled. `Device_info::use_ray_query` (cross-API, default false) is true
+   on Vulkan when accelerationStructure, rayQuery and bufferDeviceAddress were
+   all enabled; application code gates the whole feature on it.
 
-3. **glslang target env**: bump `EShTargetVulkan_1_1` -> `EShTargetVulkan_1_3`
-   in `glsl_to_spirv.cpp` (GL_EXT_ray_query requires SPIR-V 1.4 which requires
-   a Vulkan 1.2+ client; the instance/device are created as 1.3 and the SPIR-V
-   target is already 1.6).
+3. **glslang target env**: `EShTargetVulkan_1_3` in `glsl_to_spirv.cpp`.
+   `GL_EXT_ray_query` requires SPIR-V 1.4, which requires a Vulkan 1.2+ client.
 
-4. **`Acceleration_structure`** (new public type, pimpl like Buffer/Texture):
+4. **`Acceleration_structure`** (public type, pimpl like `Buffer` and
+   `Texture`):
    - `Acceleration_structure_create_info` with
      `Acceleration_structure_type::bottom_level|top_level`.
-   - BLAS: fixed list of `Acceleration_structure_triangles` (vertex buffer +
-     offset/stride/count, positions are 3 x float32; index buffer +
-     offset/count, indices are uint32; `opaque` flag). Geometry is fixed at
-     create; `build(Command_buffer&)` records the GPU build.
+   - BLAS: a fixed list of `Acceleration_structure_triangles` (vertex buffer +
+     offset / stride / count, positions 3 x float32; index buffer + offset /
+     count, uint32 indices; `opaque` flag). Geometry is fixed at create;
+     `build(Command_buffer&)` records the GPU build.
    - TLAS: `max_instance_count` capacity at create;
      `build(Command_buffer&, std::span<const Acceleration_structure_instance>)`
-     writes the instance array (host-visible persistent buffer) and records
-     the build. `Acceleration_structure_instance` = transform (glm::mat4) +
+     writes the instance array (host-visible persistent buffer) and records the
+     build. `Acceleration_structure_instance` = transform (`glm::mat4`) +
      24-bit custom index + 8-bit mask + BLAS pointer.
-   - The Vulkan impl owns the AS buffer, scratch buffer and (TLAS) instance
-     buffer; `build()` ends with an AS-write -> AS-read/shader-read barrier so
-     callers need no explicit sync. Rebuild-in-place of a TLAS that a prior
-     in-flight frame is still reading is the caller's problem (use one TLAS
-     per frame-in-flight slot, mirroring erhe's ring-buffer convention).
-   - Null/gl/metal impls are no-ops (Metal gets a real implementation later;
-     the API shape maps to MTLPrimitiveAccelerationStructureDescriptor /
-     MTLInstanceAccelerationStructureDescriptor).
+   - The Vulkan implementation owns the acceleration-structure buffer, the
+     scratch buffer and (for a TLAS) the instance buffer; `build()` ends with an
+     AS-write to AS-read / shader-read barrier, so callers need no explicit
+     sync. Rebuilding a TLAS a prior in-flight frame is still reading is the
+     caller's problem: use one TLAS per frame-in-flight slot, mirroring erhe's
+     ring-buffer convention.
+   - The null, GL and Metal implementations are no-ops. The API shape maps onto
+     `MTLPrimitiveAccelerationStructureDescriptor` /
+     `MTLInstanceAccelerationStructureDescriptor` for a future Metal path.
 
-5. **Binding**:
-   - `Binding_type::acceleration_structure` ->
-     `VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`; uses the raw binding
-     point (no sampler offset), like `storage_image`. The shader declares
-     `layout(binding = N) uniform accelerationStructureEXT name;` explicitly
-     (no preamble synthesis for now).
-   - `Compute_command_encoder::set_acceleration_structure(binding_point, as)`;
-     Vulkan implements it as a push-descriptor write with
-     `VkWriteDescriptorSetAccelerationStructureKHR` chained; other backends
-     no-op.
+5. **Binding**: `Binding_type::acceleration_structure` maps to
+   `VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR` and uses the raw binding
+   point (no sampler offset), like `storage_image`. The shader declares
+   `layout(binding = N) uniform accelerationStructureEXT name;` explicitly.
+   `Compute_command_encoder::set_acceleration_structure(binding_point, as)` is a
+   push-descriptor write with `VkWriteDescriptorSetAccelerationStructureKHR`
+   chained on Vulkan, and a no-op elsewhere.
 
-### Position fetch (added during implementation)
+6. **Position fetch**: `VK_KHR_ray_tracing_position_fetch`
+   (`Device_info::use_ray_tracing_position_fetch`, GLSL
+   `GL_EXT_ray_tracing_position_fetch`) is enabled when available, and bottom
+   level structures are then built with
+   `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_KHR`. It lets a shader
+   fetch the committed triangle's object-space vertex positions for a geometric
+   normal without a per-instance vertex / index lookup table. The editor
+   renderer requires it in addition to `use_ray_query`; all current desktop
+   ray-query implementations expose it.
 
-`VK_KHR_ray_tracing_position_fetch` (`Device_info::use_ray_tracing_position_fetch`,
-GLSL `GL_EXT_ray_tracing_position_fetch`) is enabled when available: the ray
-query compute shader fetches the committed triangle's object-space vertex
-positions to compute the geometric normal for N.V shading, avoiding a
-per-instance vertex/index SSBO lookup table entirely. Bottom level structures
-are built with `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_KHR` when
-the feature is on. The editor renderer requires it in addition to
-`use_ray_query` (all current desktop ray-query implementations expose it).
+## Editor renderer
 
-## Phase 2: editor renderer (primary rays, N.V shading)
-
-- `Mesh_memory` vertex/index pools gain `acceleration_structure_build_input |
-  shader_device_address` usage so BLAS builds can read them in place
-  (no data duplication).
-- A BLAS cache keyed by the primitive's buffer ranges: BLAS built lazily,
-  once per unique `Buffer_mesh` (non-skinned stream 0 = position-only,
-  stride 12, offset from `base_vertex`; `triangle_fill_indices` range).
-  Skinned meshes are skipped initially (their BLAS would need post-skinning
-  positions).
-- Per-frame TLAS from visible scene mesh instances (one TLAS per
-  frame-in-flight slot; instance capacity grows to a high-water mark on
-  scene change, steady-state frames allocate nothing).
-- Compute shader (`res/editor/shaders/ray_trace.comp` or similar):
-  full-screen primary rays from the active camera (inverse view-projection),
-  `rayQueryEXT` closest-hit; on hit fetch the triangle, compute the geometric
-  normal from committed barycentrics/positions or via
-  `rayQueryGetIntersectionObjectToWorldEXT`, shade `max(dot(N, V), 0)`;
-  miss = background color. Write with `imageStore` to an rgba8/rgba16f
-  storage texture.
-- Integration (as implemented): `editor::Ray_trace_renderer`
+- `Mesh_memory` vertex and index pools carry
+  `acceleration_structure_build_input | shader_device_address` usage, so BLAS
+  builds read them in place with no data duplication.
+- `Scene_tlas` (`src/editor/renderers/scene_tlas.{hpp,cpp}`) holds the BLAS
+  cache, the per-frame-in-flight TLAS slots and the instance-record SSBO, and is
+  shared with `Ddgi_renderer`. A BLAS is built lazily, once per unique
+  `Buffer_mesh` (non-skinned stream 0 = position-only, stride 12, offset from
+  `base_vertex`; the `triangle_fill_indices` range). Skinned meshes are skipped,
+  because their BLAS would need post-skinning positions. The TLAS is built per
+  frame from the visible scene mesh instances; instance capacity grows to a
+  high-water mark on scene change, so steady-state frames allocate nothing.
+- `res/editor/shaders/ray_trace.comp` traces full-screen primary rays from the
+  active camera and shades the hits; see
+  [`raytrace_materials.md`](raytrace_materials.md) for the material, light and
+  glass shading it does.
+- `editor::Ray_trace_renderer`
   (`src/editor/renderers/ray_trace_renderer.{hpp,cpp}`) is invoked from
   `Viewport_scene_view::execute_rendergraph_node` before the viewport render
-  pass opens (same slot as the sky LUT / wide-line compute pre-passes), using
-  that viewport's camera. `Ray_trace_window`
+  pass opens (the same slot as the sky LUT and wide-line compute pre-passes),
+  using that viewport's camera. `Ray_trace_window`
   (`src/editor/developer/ray_trace_window.{hpp,cpp}`, developer menu "Ray
-  Trace") toggles it and displays the output texture; the renderer no-ops
-  while disabled. A dedicated `Texture_rendergraph_node` + composition into
-  the viewport remains future work.
+  Trace") toggles it and displays the fixed 960x540 rgba8 output texture; the
+  renderer no-ops while disabled.
 
-## Later / out of scope for the first milestone
+## Trap: the BLAS cache key
 
-- Metal backend implementation of `Acceleration_structure` + intersector.
-- Skinned meshes (needs post-skinning position buffers).
-- Materials/textures in hits (needs per-instance geometry lookup table:
-  buffer device addresses or descriptor-indexed SSBOs keyed by
-  `instance_custom_index`).
-- TLAS refit (UPDATE mode) instead of full rebuild.
-- Ray tracing pipeline / SBT abstraction, denoising, GI.
+`Scene_tlas::m_blas_cache` is keyed by a raw
+`const erhe::primitive::Buffer_mesh*` and `get_or_create_blas()` returns a cache
+hit with no validation. Entries whose primitive nothing else references are
+evicted (`render_shape.use_count() == 1`, see
+[`reloadable_asset_loads.md`](reloadable_asset_loads.md)), which stops the cache
+pinning released content and removes the "dead pointer, address reused by a new
+`Buffer_mesh`" flavour of the problem.
 
-## Open lead: the BLAS cache key can go stale over recycled buffer ranges
+What eviction does not cover:
+`Primitive_render_shape::commit_geometry_buffer_mesh()` move-assigns the new
+`Buffer_mesh` **in place** (`primitive.cpp`). The key address is unchanged and
+the live mesh keeps the refcount at 2, so no refcount sweep triggers - while the
+vertex and index pool ranges the cached acceleration structure was built over
+have been freed and can be recycled by another mesh. The result is a bottom
+level structure describing geometry that is no longer there. This is reachable
+whenever a deferred import finalize or a geometry edit swaps a primitive's
+renderable mesh while ray query is enabled. `Lightmap_baker::m_blas_cache` is
+the same cache with the same hazard.
 
-`Scene_tlas::m_blas_cache` is keyed by a raw `const erhe::primitive::Buffer_mesh*`
-and `get_or_create_blas()` returns a cache hit with no validation. Entries whose
-primitive nothing else references are now evicted
-(`render_shape.use_count() == 1`, see doc/reloadable_asset_loads.md), which stops
-the cache pinning released content and removes the "dead pointer, address reused
-by a new Buffer_mesh" flavour of the problem.
+## Future work
 
-What eviction does **not** fix: `Primitive_render_shape::commit_geometry_buffer_mesh()`
-move-assigns the new `Buffer_mesh` **in place** (`primitive.cpp`). The key address
-is unchanged and the live mesh keeps the refcount at 2, so no refcount sweep
-triggers - while the vertex / index pool ranges the cached acceleration structure
-was built over have been freed and can be recycled by another mesh. The result is
-a bottom level structure describing geometry that is no longer there.
-
-Reachable whenever a deferred import finalize or a geometry edit swaps a
-primitive's renderable mesh while ray query is enabled. The fix is to make the
-cache key carry identity beyond the address - a generation counter bumped by
-`commit_geometry_buffer_mesh()`, or keying on the buffer ranges themselves - and
-to drop entries whose generation no longer matches.
-
-The same cache and the same hazard exist in `Lightmap_baker::m_blas_cache`.
+- [plans/raytrace.md](plans/raytrace.md) - BLAS cache identity, Metal backend,
+  skinned meshes, TLAS refit, viewport composition.
