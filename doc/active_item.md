@@ -1,24 +1,21 @@
-# Active item plan: one explicit reference item in the selection
+# Active item: one explicit reference item in the selection
 
 Stability: stable
 
-Status: LANDED (phases 1-4) and verified interactively by the user
-(2026-09-15). Modeled on Blender's active object
-(`scene_layout/object/selecting.rst`; the semantics below were read off
-Blender's source: `view3d_select.cc` pick code, `object_select.cc`
-`base_activate`, `object_relations.cc` `parent_set_exec`,
-`overlay_private.hh` `object_wire_theme_id`). Builds on the per-scene
+Modeled on Blender's active object (`scene_layout/object/selecting.rst`; the
+semantics below are read off Blender's source: `view3d_select.cc` pick code,
+`object_select.cc` `base_activate`, `object_relations.cc` `parent_set_exec`,
+`overlay_private.hh` `object_wire_theme_id`). Builds on the host-scoped
 selection and the active scene of `doc/selection.md`.
 
 ## 1. Scope
 
-This document is the standing description of the active item: what it is,
-how it changes, how it is shown, which commands take it as their reference,
-and how it is exposed over MCP. `editor::Selection` keeps an ordered
-`std::vector` of selected items; the active item is the one explicit
-reference item beside it, replacing the per-consumer rules (a per-type
-"last selected" map, "first item of a type in selection order",
-`entries.front()`) that used to pick the reference invisibly.
+This document describes the active item: what it is, how it changes, how it
+is shown, which commands take it as their reference, and how it is exposed
+over MCP. `editor::Selection` keeps an ordered `std::vector` of selected
+items; the active item is the one explicit reference item beside it, so a
+command's reference is visible and chosen by the user rather than picked by a
+per-consumer rule.
 
 ## 2. Design
 
@@ -35,7 +32,7 @@ activation). At most one item is active at any time; there may be none.
 
 The item's own `active` property (`Item_base::active_property`, the USD prim
 `active` metadata, derived bit `Item_flags::active`) is a different concept and
-keeps its name. This plan's identifiers say `active_item` everywhere:
+keeps its name. The identifiers of this one say `active_item` everywhere:
 `Selection::get_active_item()`, `Item_flags::active_item`,
 `Active_item_changed_message`, MCP field `active_item`.
 
@@ -93,21 +90,21 @@ references in editor parts").
 
 ### D5. Presentation
 
-- Viewport outline: `Selection_outline_style` (version 2) adds
+- Viewport outline: `Selection_outline_style` (version 2) carries
   `active_highlight_low` / `active_highlight_high` (Vec4; defaults a lighter
   yellow than the selected orange, Blender's convention). The composition pass
   feeds them as a third constant color of `Primitive_interface_settings`, and
   `primitive_buffer.cpp` picks it when an entry's flags hold both `selected`
   and `active_item`. An active item that is not selected draws no outline
   (Blender: `TH_ACTIVE` only when `BASE_SELECTED`). The Settings window shows
-  the new fields with the existing ones.
+  those two fields beside the selected ones.
 - Hierarchy row: the active item's row draws an accent whether or not it is
   selected (Blender's outliner: `TH_SELECT_ACTIVE` on the active row): a
   brighter `ImGuiCol_Header` while selected, a tinted label while not. This
   is the one place that shows an unselected active item.
 - Properties window "Individual" mode lists the active item first.
 
-### D6. Consumers (closed list of migrations)
+### D6. Consumers (closed list)
 
 Commands follow Blender's split: the **reference** is the active item, the
 **operands** are the selected items (`parent_set_exec` parents
@@ -121,8 +118,8 @@ item is itself selected does not matter.
 Each consumer resolves its reference through one helper,
 `Selection::get_active_item_as<T>()` (the active item when it is of type `T`,
 or the node an active attachment belongs to, subject to the scene rule
-above, else empty), and falls back to the previous rule only when the helper
-returns empty:
+above, else empty), and uses its own fallback only when the helper returns
+empty:
 
 | Consumer | Reference rule |
 |----------|----------------|
@@ -130,29 +127,29 @@ returns empty:
 | `Brush_tool` "Parent to Active" | active node |
 | `Operations::can_flip_joint` / `flip_joint` | active node |
 | `Operations::create_brush` | active mesh, else first selected mesh |
-| `Scene_commands::create_new_rigid_body` / `create_new_joint` | target = active node; `create_new_joint` connects to another selected node of the same host as today |
-| `Clipboard::resolve_paste_target` | active hierarchy item, else the current fallbacks |
+| `Scene_commands::create_new_rigid_body` / `create_new_joint` | target = active node; `create_new_joint` connects to another selected node of the same host |
+| `Clipboard::resolve_paste_target` | active hierarchy item, else its own fallbacks |
 | `Create::find_parent` | active node |
 | Operations "Attach" (`Operations::attach_selection_to_active`, also the MCP tool `attach_selection_to_active`) | every selected node of the command target selection other than the active node is parented under the active node in one compound operation (Blender Ctrl-P); nodes that are ancestors of the active node are skipped with a warning; enabled with an active node and at least one other selected node |
 | `Merge_operation` and the CSG booleans | `Operations::resolve_operation_items` puts the active mesh node first in the item list, and both take the front item as their target; under `Operation_reference::active_is_target` (merge, difference, intersection, union) an unselected active mesh is inserted as the target (Blender join), while per-mesh operations (`operands_only`) act on the selected operands alone |
 | `Transform_tool` representative entry (local reference frame, single-entry numeric edit, IK effector) | `update_target_nodes` rotates the active node's target to the front, so `entries.front()` is the active node when it is among the targets, else the first target; the anchor orientation is that entry's; the tool rebuilds on `Active_item_changed_message` outside component mode and outside a drag |
 
-### D7. The per-type map after the migration
+### D7. The per-type map
 
-`m_last_selected_by_type` / `get_last_selected<T>()` remain for exactly the
-library palette types Material and Brush (`get_default_material`,
-`Brush_tool` brush fallback, `Operations` make-mesh material): those answer
-"which material / brush is current", a question the single active item does
-not answer once the user clicks a node. Every hierarchy-typed use (Node, Mesh,
-Node_attachment, Hierarchy) moves to the active item, and the map is written
-only for Material and Brush.
+`m_last_selected_by_type` / `get_last_selected<T>()` serve exactly the library
+palette types Material and Brush (`get_default_material`, the `Brush_tool`
+brush fallback, the `Operations` make-mesh material): those answer "which
+material / brush is current", a question the single active item does not
+answer once the user clicks a node. The map is written only for those two
+types; every hierarchy-typed reference (Node, Mesh, Node_attachment,
+Hierarchy) is the active item.
 
 ### D8. MCP
 
 - `get_selection` reports `active_item` `{name, type, id, scene_name, selected}`.
 - `select_items` makes the last listed item active; an optional `active`
   argument (id or path) names another one of the listed items.
-- New tool `set_active_item` `{scene_name, id | path}` calls
+- `set_active_item` `{scene_name, id | path}` calls
   `Selection::set_active_item` (D3.3); the item need not be selected.
 - `get_editor_references` reports the active item.
 - `reset_editor_state` clears it (D2).
@@ -187,8 +184,7 @@ changes to selection, the hierarchy window or the transform tool):
 - Create window parent, Brush tool "Parent to Active", Ctrl-V paste target
   and the local-mode gizmo axes with an unselected active node.
 
-## 4. Follow-ups this enables (not in scope)
+## 4. Future work
 
-Blender's Select menu entries that key off the active object: select
-children / parent / siblings of the active item, select all of the active
-item's type, select items sharing the active item's material or mesh.
+- [plans/editor.md](plans/editor.md) - Select-menu entries keyed off the
+  active item.

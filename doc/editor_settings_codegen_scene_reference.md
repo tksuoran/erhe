@@ -3,19 +3,17 @@
 Stability: stable
 
 Reference map for three subsystems that are easy to lose track of: the editor
-settings model, the `erhe_codegen` struct generator, and scene save/load. Written
-while scoping issue #239 (per-scene setting overrides). ASCII only.
-
-Everything here reflects the code as of the #239 investigation; verify a named
-file/field/line still exists before relying on it.
+settings model, the `erhe_codegen` struct generator, and scene save / load. It
+names files and fields rather than repeating their contents, so check that a
+named file or field still exists before relying on it.
 
 ---
 
 ## 1. Editor settings
 
 All editor settings are one generated struct, `Editor_settings_config`, defined in
-`src/editor/config/definitions/editor_settings_config.py` (currently `version=13`).
-It is loaded from / saved to `config/editor/editor_settings.json`.
+`src/editor/config/definitions/editor_settings_config.py`. It is loaded from and
+saved to `config/editor/editor_settings.json`.
 
 ### Load / save path
 
@@ -188,32 +186,36 @@ same build pass. Build twice, or the binary is stale.
 
 ### Save / load
 
-(UPDATED after the glTF scene roundtrip work: the `Scene_file` scene.json
-schema and `scene_serialization.{hpp,cpp}` described by earlier revisions of
-this section were removed in phase 5 of `doc/gltf_scene_roundtrip.md`.)
-
 - Scenes persist as a single erhe-authored glTF file (`<name>.glb`); the full
   process reference is `doc/scene_serialization.md`.
-- The scene codegen unit (`src/editor/scene/definitions/`) now defines only
-  `Scene_settings` and `Gltf_source_reference`.
-- The per-scene settings container landed with #239: `Scene_settings`
-  (codegen struct, `Optional` per overridable group) is stored on
-  `Scene_root` and serialized inside the `ERHE_scene` glTF extension on the
-  scene object (together with `ambient_light` and `enable_physics`,
-  `doc/gltf_extensions/ERHE_scene.md`); that extension is the place to add
-  scene-level fields.
+- The scene codegen unit is `src/editor/scene/definitions/`.
+- `Scene_settings` is stored on `Scene_root` and serialized inside the
+  `ERHE_scene` glTF extension on the scene object, together with
+  `ambient_light` and `enable_physics`
+  (`doc/gltf_extensions/ERHE_scene.md`). That extension is where a new
+  scene-level field goes.
 
 ---
 
-## 4. Issue #239 implementation (landed 2026-07)
+## 4. Per-scene setting overrides
 
-Per-scene overrides are implemented as designed: the codegen struct
-`Scene_settings` in the scene unit holds one `Optional(StructRef(...))` (or
-`Optional(scalar)`) per overridable setting; disengaged = use editor global.
-Stored on `Scene_root`, serialized as the `scene_settings` field in `Scene_file`
-(v4). Effective values are resolved by editor helpers (`scene override if
-engaged else editor_settings->field`); the override UI lives in the Properties
-window for the selected Scene (issue #240 made the Scene row selectable and
-moved ambient light there). Still pending: a few consumers read their settings
-only at init time (viewport, post_processing) and need a per-scene refactor
-before their overrides take effect; `clear_color` is not yet wired.
+`Scene_settings` holds one `Optional(StructRef(...))` or `Optional(scalar)` per
+overridable setting: disengaged means "use the editor global". It is stored on
+`Scene_root` and the override UI is in the Properties window for the selected
+Scene, which is also where a scene's ambient light is edited.
+
+`src/editor/scene/scene_settings_resolve.hpp` is the single place that resolves
+an effective value - the scene's override when it is engaged, the editor
+setting otherwise: `get_effective_sky`, `get_effective_grid`,
+`get_effective_physics`, `get_effective_shadow_frustum_fit`,
+`get_effective_camera_controls`, `get_effective_clear_color`,
+`get_effective_post_processing`. A consumer that reads its setting once at init
+time has to be refactored to ask per scene before the corresponding override
+can take effect.
+
+---
+
+## Future work
+
+- [plans/editor.md](plans/editor.md) - the per-scene overrides whose consumers
+  still read their setting once at init time.

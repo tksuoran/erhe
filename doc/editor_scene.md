@@ -51,13 +51,23 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Node_raytrace`** -- Handles raytrace instance creation/destruction for mesh nodes.
 
-## Scene persistence (erhe-authored glTF, phase 4)
+Raytrace instances carry their own world transform, and a freshly built
+instance starts at the identity, uncommitted. `Mesh::update_rt_primitives()`
+therefore seeds the rebuilt instances with the node's current world transform
+and commits them, exactly as a node move does, before it announces the
+change. Every primitive swap on an already-placed node goes through it - a
+geometry graph re-bake, the deferred raytrace commit, the initial bind of a
+placed node - and without the seeding those swaps would leave the raytrace
+hits at the origin: the mesh renders at its node, while hover and picking
+miss it until the node next moves.
+
+## Scene persistence (erhe-authored glTF)
 
 Scenes are saved as a **single glTF file**, no file dialog: a scene
 opened/loaded from a glTF file saves back to its own source file without
 confirmation (when that file is a loaded prefab source the prefab reloads,
-refreshing every instance - the former separate Save Prefab command was
-merged into Save Scene); a scene with no source file saves to
+refreshing every instance, so one Save Scene covers prefab sources too); a
+scene with no source file saves to
 `<scene name>.glb` under `res/editor/scenes` (Overwrite/Cancel modal when
 the file exists) and is then associated with that file. One `export_gltf()`
 call carries the render content plus physics data, prefab external-asset
@@ -71,18 +81,7 @@ editor state applied) and routes a foreign glTF to `Scene_open_operation`
 (undoable "open foreign glTF as new scene"). The Asset Browser branches its
 context menu on `Asset_file_gltf::extensions_used` the same way. Full
 reference (pipelines, parts map, limitations): `doc/scene_serialization.md`;
-design history: `doc/gltf_scene_roundtrip.md`.
-
-### Removed: legacy scene serialization (directory bundles, #241)
-
-The superseded `.erhescene` **directory bundle** format
-(`scene_serialization.{hpp,cpp}`: `scene.json` + `data.glb` +
-`mesh_<i>_p<p>.geogram` inside a `<name>.erhescene` directory) was removed in
-phase 5 of `doc/gltf_scene_roundtrip.md`, together with its
-scene.json-only codegen serial types under `definitions/` (only
-`gltf_source_reference.py` and `scene_settings.py` remain) and the Asset
-Browser's `Asset_file_scene` bundle handling. Existing bundles were migrated
-by loading and re-saving as `.glb`.
+design record: `doc/gltf_scene_roundtrip.md`.
 
 ## Public API / Integration Points
 

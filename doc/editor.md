@@ -22,7 +22,7 @@ The editor is the main application built on the erhe C++ graphics engine. It pro
   3. Creates no-dependency subsystems: `Commands`, `App_message_bus`, `App_settings`, `Input_state`, `Time`.
   4. Creates the OS window and `erhe::graphics::Device`.
   5. Optionally creates OpenXR headset.
-  6. Creates GPU subsystems (potentially in parallel via Taskflow): `Programs`, `Imgui_renderer`, `Debug_renderer`, `Text_renderer`, `Forward_renderer`, `Shadow_renderer`, `Mesh_memory`, `Rendergraph`, `Thumbnails`, `Icon_set`, `Post_processing`, `Id_renderer`.
+  6. Creates GPU subsystems: `Programs`, `Imgui_renderer`, `Debug_renderer`, `Text_renderer`, `Forward_renderer`, `Shadow_renderer`, `Mesh_memory`, `Rendergraph`, `Thumbnails`, `Icon_set`, `Post_processing`, `Id_renderer`.
   7. Creates editor subsystems: `Selection`, `Operation_stack`, `Tools`, `Fly_camera_tool`, transform tools (`Move_tool`, `Rotate_tool`, `Scale_tool`, `Transform_tool`), `Brush_tool`, `Create`, `Physics_tool`, `Paint_tool`, `Material_paint_tool`, `Hover_tool`, `Grid_tool`, `Hud`, `Hotbar`.
   8. Creates all ImGui windows.
   9. Creates a default `Scene_root` and `Scene_builder` to populate it.
@@ -159,9 +159,9 @@ Input handling uses `erhe::commands::Commands`. Tools register `Command` objects
 
 Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_with_mesh()` in `items.cpp` manages a global map of per-item async tasks, chaining dependent operations. `App_context::pending_async_ops` and `running_async_ops` are atomic counters displayed in the status bar.
 
-### Parallel Initialization
+### Initialization Order
 
-Initialization is serial. The retired `ERHE_PARALLEL_INIT` experiment (parallel Taskflow tasks with explicit dependency edges over `Gl_context_provider` worker contexts) was deleted; any future parallel init should build on the GL worker-context API of `doc/gl_worker_thread_contexts.md` instead.
+Initialization is serial. Parallel init, should it be wanted, builds on the GL worker-context API of `doc/gl_worker_thread_contexts.md`: a Taskflow graph over `Gl_context_provider` worker contexts with explicit dependency edges.
 
 ### Physics Integration
 
@@ -173,7 +173,7 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 
 ### Scene Serialization
 
-Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design history `doc/gltf_scene_roundtrip.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
+Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design record `doc/gltf_scene_roundtrip.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and recreated faithfully on load rather than degrading to convex hulls.
 
 ### Asynchronous asset loading
 

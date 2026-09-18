@@ -2,21 +2,20 @@
 
 Stability: stable
 
-The Properties window (`src/editor/windows/properties.cpp`) draws its rows
-through two paths, and the two handle a multi-selection differently. The
-task is to make the registered-property path the only path for the
-window's rows, so a selection of any size and any mix of types gets the
-same treatment: per-type sections, mixed-value display, one compound
-undo entry per edit, Copy / Paste Properties and Add Property.
+The Properties window (`src/editor/windows/properties.cpp`) draws every
+authored row through the registered-property path, so a selection of any size
+and any mix of types gets the same treatment: per-type sections, mixed-value
+display, one compound undo entry per edit, Copy / Paste Properties and Add
+Property. The hand-written per-class functions draw read-only diagnostics,
+actions and the list editors that have no property form.
 
-The design record is `doc/property_system.md` (D12 owns the window's
-generic section, D30 the holder rule, section 6 the future work);
-`doc/property_inventory.md` owns the per-field status and its "Not yet
-migrated" table lists the hand-written rows that are authored state;
-section 4.18 of the design record owns the recipe of the per-owner
-migrations that this task depends on.
+The design record is `doc/property_system.md` (D12 owns the window's generic
+section, D30 the holder rule, section 6 the future work);
+`doc/property_inventory.md` owns the per-field status, and its "Not yet
+migrated" table lists the hand-written rows that are authored state; section
+4.18 of the design record owns the recipe of a per-owner migration.
 
-## 1. The two paths
+## 1. Where rows come from
 
 1. Registered properties. `Dependency_property_rows::add_rows` draws the
    properties of an item's own chain, the attached properties of its
@@ -51,20 +50,19 @@ migrations that this task depends on.
   component on every item and leaves the others as they were, after
   which the shared value shows. A quaternion, a string, an enumeration
   and an object reference are mixed as a whole.
-- R2 Authored state that is not yet a property becomes one, or gets a
-  bridge (D18) where the storage must stay a member: the name (a bridged
-  string property over `Item_base::get_name` / `set_name`), the
-  persistent flags that are authored (`show_in_ui`, `lock_edit`, the
-  viewport locks, `no_transform_update`, ... as bridged booleans or one
-  enumeration-like group), the tags, and the rows of the inventory's
-  table (`Rendertarget_mesh`, `Animation`, `Node_joint`, the Light
-  derived rows as computed properties with setters, D26 - all landed
-  2026-09-05, see step 2 of the order below).
+- R2 Authored state is a property, or a bridge (D18) where the storage must
+  stay a member: the name (a bridged string property over
+  `Item_base::get_name` / `set_name`), the authored persistent flags
+  (`show_in_ui`, `lock_edit`, the viewport locks, `no_transform_update`, ...
+  as bridged booleans), the tags, and the derived rows that are computed
+  properties with setters (D26: `Rendertarget_mesh`, `Animation`,
+  `Node_joint`, the Light derived rows). New authored state of a migrated
+  owner is registered the same way rather than hand-written.
 - R3 Diagnostics (counts, dimensions, the live rigid body's state,
-  raytrace state, skin joints) stay read-only rows, drawn per item; they
-  are not authored state and need no mixed-value handling. They may
-  become read-only computed properties (D26) where that removes a
-  hand-written function for free.
+  raytrace state, skin joints) are read-only rows, drawn per item; they
+  are not authored state and need no mixed-value handling. One becomes a
+  read-only computed property (D26) where that removes a hand-written
+  function for free.
 - R4 Every material row is a property row (the slot samplers are the
   seven `<slot>_texture_*` sampler properties, section 4.1 of the design
   record); `material_properties` draws only the preview render and the
@@ -76,31 +74,22 @@ migrations that this task depends on.
   editor, drawn per item, and is the documented exception; the
   inventory's "Not yet migrated" table lists them.
 
-## 3. Order
+## 3. Item-level rows
 
-1. The item-level rows are properties: `Item_base::name_property` and
-   `tags_property` (string bridges), and the authored flag bits as
-   boolean bridges (`lock_edit_property` and the other flag properties
-   in `item.cpp`; the inventory's Item_base table lists them). The
-   window's Name and Locks rows and the developer flag grid are gone;
-   developer mode keeps the id and the flag word as read-only
-   diagnostics (R3). `lock_edit` carries
-   `Property_flags::writable_when_sealed` so the seal is lifted through
-   the same row and the same MCP call that set it
-   (`Dependency_object::is_write_sealed` is the per-property check the
-   rows, the context menu and `set_item_property` use).
-2. The per-owner migrations are done (the Light derived rows, Layout,
-   Grid, Brush_placement, Rendertarget_mesh, Animation and Node_joint each
-   deleted their hand-written rows in their own commit); the graph-node
-   parameters section 6 of the design record still lists are drawn by
-   the Node Properties window, not this one, so they are not on this
-   task's path.
-3. R4 holds: the sampler rows are Material properties and the inspect
-   snapshot is gone.
-4. Holds: the last authored rows are properties (`Brush::material_property`,
-   `Geometry_graph_mesh::graph_mesh_property`), the per-class functions
-   draw diagnostics, actions and the R5 editors only (`item_diagnostics`),
-   and `item_properties` is the frame of section 1.
+The rows every item has are properties of `Item_base`:
+`name_property` and `tags_property` are string bridges (D18), and each
+authored flag bit is a boolean bridge (`lock_edit_property` and the other
+flag properties in `item.cpp`; the inventory's `Item_base` table lists them).
+Developer mode keeps the id and the whole flag word as read-only diagnostics
+(R3).
+
+`lock_edit` carries `Property_flags::writable_when_sealed`, so the seal is
+lifted through the same row and the same MCP call that set it.
+`Dependency_object::is_write_sealed` is the per-property check that the rows,
+the context menu and `set_item_property` share.
+
+Graph-node parameters (section 6 of the design record) are drawn by the Node
+Properties window, not this one.
 
 ## 4. Verification
 

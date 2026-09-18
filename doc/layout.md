@@ -2,17 +2,9 @@
 
 Stability: stable
 
-Status as of 2026-06-05. Stack, Grid, and Flow are implemented, built, reviewed,
-and committed on `main`. Scene serialization landed as a follow-up (see "Follow-up
-work landed" below); the remaining deferred items are Dock layout, the
-dirty/serial optimization, and type icons. This document is the handoff for
-continuing the work.
-
-## Goal / task
-
-Add "layout nodes" to the scene graph. A layout node owns a volume and computes
-the transform of each of its child nodes so the children are arranged inside that
-volume (a 3D analogue of CSS flexbox/grid).
+A **layout node** owns a volume and computes the transform of each of its child
+nodes so the children are arranged inside that volume - a 3D analogue of CSS
+flexbox / grid. Three layout types exist: Stack, Grid and Flow.
 
 ### Common to all layouts
 - A layout node itself has a volume (an axis-aligned box: min and max corners).
@@ -48,14 +40,9 @@ volume (a 3D analogue of CSS flexbox/grid).
 - Children are distributed along a single axis: the (primary) flow direction,
   an axis plus pos/neg.
 
-### Deferred later: Dock layout
-- Places children inside the volume of the parent Dock layout node.
-- Cells in an X-Y-Z grid, up to 3 x 3 x 3.
-- Each node selects a cell.
+## Design
 
-## Design (as implemented)
-
-A layout node is an ordinary `erhe::scene::Node` carrying a new **`Layout`** node
+A layout node is an ordinary `erhe::scene::Node` carrying a **`Layout`** node
 attachment, modeled on `erhe::scene::Light`: a single class with a
 `Layout_type { stack, grid, flow }` enum and per-type fields. Per-child overrides
 live in a second attachment, **`Layout_item`** (alignment per axis, margins, grid
@@ -73,10 +60,14 @@ cell + span); a child without one uses default values.
   (negative -> content min at cell min; positive -> content max at cell max;
   stretch -> scale to fill, guarded against zero-extent axes). Off-origin and
   empty/degenerate content are handled without NaN.
-- Re-flow runs once per frame from the editor (`App_scenes::update_layout_nodes`),
-  shallow-to-deep (parents before nested children), BEFORE the world-transform
-  passes. It currently recomputes every layout every frame (a dirty/serial
-  optimization is intentionally deferred).
+- Re-flow runs once per frame from the editor
+  (`App_scenes::update_layout_nodes` -> `Scene::update_layouts`), before the
+  world-transform passes. Each `Scene` keeps its registered `Layout`
+  attachments through the `Scene_host` register / unregister hooks, so the pass
+  touches the layout nodes alone and never scans the hierarchy. The list is
+  sorted by node depth every pass, so a parent layout runs before a nested
+  child layout; depth changes with reparenting, which is why the (small) list
+  is sorted rather than cached. Every layout is recomputed each pass.
 
 ### Algorithms
 - **Stack**: children packed along the signed primary axis; each child's cell is
@@ -104,82 +95,45 @@ cell + span); a child without one uses default values.
   `Flow_line`, `Flow_sheet`. Algorithms: `layout_stack`, `layout_grid`, `layout_flow`.
 - `src/erhe/scene/erhe_scene/layout_item.hpp` / `layout_item.cpp` - `Layout_item`,
   `Layout_alignment`.
-- `src/erhe/scene/CMakeLists.txt` - new files registered.
-- `doc/erhe_scene.md` - library docs updated.
+- `doc/erhe_scene.md` - the library document.
 - `src/erhe/item/erhe_item/item.hpp` - item-type registration (`index_layout` = 36,
   `index_layout_item` = 37, `count` = 38, bits, and `c_bit_labels`).
 - `src/editor/scene/scene_commands.hpp` / `.cpp` - `Create_new_layout_command` +
   `create_new_layout()`; menu "Create.Layout" and key F6.
 - `src/editor/app_scenes.hpp` / `.cpp` - `update_layout_nodes()` driver.
-- `src/editor/editor.cpp` - per-frame hook (before `update_transforms`, in the
-  "Update scene transforms" block).
-- `src/editor/windows/properties.hpp` / `.cpp` - `layout_properties()` and
-  `layout_item_properties()` plus the `item_properties` dispatch.
+- `src/editor/editor.cpp` - the per-frame hook, before `update_transforms` in
+  the "Update scene transforms" block.
+- `doc/gltf_extensions/ERHE_layout.md` - the `ERHE_layout` extension that
+  persists a `Layout` / `Layout_item` attachment's fields.
 
-## Commits (on `main`)
+## Verification
 
-- `db9a9480` scene: add layout nodes with Stack layout
-- `91d2ff6a` scene: add Grid layout type
-- `58d85d8e` scene: add Flow layout type (three-level wrapping)
+- Create a layout node: Commands > Create > Layout in the main menu bar, or
+  right-click a node in the Hierarchy window and pick Create > Layout. The
+  Hierarchy context menu's Create list is authored in `Scene_root`, separately
+  from the `bind_command_to_menu` registry that feeds the Commands menu.
+- Parent a few meshes under it; with the default Stack / +X they line up
+  along X.
+- Select the layout node in Properties and change Type, Volume Min / Max, the
+  primary / secondary / tertiary axes and Gap; for Grid set the grid tracks and
+  their optional custom sizes. Select a child to set Align X / Y / Z, Margin
+  and, for Grid, Grid Cell / Grid Span.
+- Nest a layout under another layout and confirm the inner one arranges its own
+  children - the depth-sorted pass check.
+- A layout's volume is drawn by `Debug_visualizations` (`create_new_layout`
+  sets `show_debug_visualizations`), which is how a misconfigured volume shows
+  up at a glance.
 
-## Build / verify
+## Known behaviors
 
-- Build (Windows): `scripts\configure_vs2026_opengl.bat` then build the `editor`
-  target (e.g. `cmake --build build_vs2026_opengl --target editor --config Debug`).
-- Verified so far: all three steps compile; the editor boots and the per-frame
-  driver runs with no errors in `logs/log.txt`. Verified in the GUI
-  (2026-06-04): Stack and Flow arrange children as expected.
-- Visual verification (remaining: Grid with auto + explicit cells, nesting):
-  1. Run the editor; Commands > Create > Layout in the main menu bar (or F6, or
-     right-click a node in the Hierarchy window and pick Create > Layout) creates
-     a layout node. Note: the Hierarchy context menu's Create list is hardcoded in
-     `Scene_root::make_browser_window` (`src/editor/scene/scene_root.cpp`), separate
-     from the `bind_command_to_menu` registry that feeds the Commands menu.
-  2. Parent a few meshes under it; with default Stack/+X they line up along X.
-  3. Select the layout node in Properties: change Type (Stack/Grid/Flow), Volume
-     Min/Max, primary/secondary/tertiary axes, Gap; for Grid set Grid Tracks and
-     optional custom sizes. Select a child to set Align X/Y/Z, Margin, and (Grid)
-     Grid Cell / Grid Span.
-  4. Nest a layout under another layout and confirm the inner one arranges its own
-     children (re-entrancy / shallow-to-deep ordering check).
+- A layout owns its children's transforms, so dragging a layout-managed child
+  with the transform tool snaps back on the next pass.
+- Child rotation is overridden to identity.
+- The primary, secondary and tertiary settings are meant to select three
+  distinct axes. A duplicate-axis configuration is made safe - the cell is
+  seeded from the full volume - but it is not meaningful.
 
-## Follow-up work landed after the initial three commits (2026-06-04)
+## Future work
 
-- Layout entry in the Hierarchy context menu Create list (separate hardcoded
-  list from the Commands menu bindings).
-- Always-on (default All, adjustable) layout volume visualization in
-  Debug_visualizations; `create_new_layout` sets `show_debug_visualizations`.
-- Single-scene fallback for target-scene resolution so create commands work
-  before any viewport hover (`App_scenes::get_single_scene_root`).
-- Grid auto placement (`Layout_item::grid_cell_auto`, default true) and an
-  "Add Layout Item" button in Properties shown for children of layout nodes.
-- Scene serialization: codegen `Layout_data` / `Layout_item_data` structs
-  (`scene/definitions/layout_data.py`), `Scene_file` bumped to version 2 with
-  `layouts` / `layout_items` vectors (added_in=2; v1 files load with empty
-  defaults), save/load wiring in `scene_serialization.cpp` (converters for the
-  three serial enums, attach by node id). `erhe_codegen` gained an `IVec3`
-  type for this. GUI-verified 2026-06-04: layouts round-trip across
-  save/load.
-
-## Deferred / TODO
-
-- **Dirty / serial optimization**: the driver recomputes every layout each frame.
-  A correct dirty scheme must re-flow on child add/remove/reorder, child content
-  resize, and param edits - but NOT merely when the layout node's own transform
-  changes (the world-transform pass would otherwise mark it dirty every frame).
-  A per-layout input signature (child ids + content extents + item params) is the
-  suggested trigger. The earlier `m_dirty`/`m_updating` scaffolding was removed
-  because its trigger was wrong and it was unused; reintroduce a correct one here.
-- **Dock layout**: 3x3x3 cell grid, each child selects a cell. Not started.
-- **Per-track extent UI at scale**: the custom-size row in `layout_properties`
-  becomes unwieldy past a handful of tracks (cosmetic).
-- **Known behaviors / limitations**:
-  - A layout owns its children's transforms, so dragging a layout-managed child
-    with the transform tool snaps back next frame. A future option: a per-child
-    "pinned" `Layout_item` flag, or routing tool edits into the `Layout_item`.
-  - Child rotation is overridden to identity.
-  - primary/secondary/tertiary should select three distinct axes; a duplicate-axis
-    misconfiguration is made safe (the cell is seeded from the full volume) but is
-    not meaningful.
-- **No icon**: `index_layout` / `index_layout_item` have no `icon_set` glyph yet
-  (they render without a type icon).
+- [plans/editor.md](plans/editor.md) - the layout re-flow dirty scheme, the
+  Dock layout type, the per-track extent UI and the missing type icons.

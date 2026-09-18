@@ -2,16 +2,6 @@
 
 Stability: stable
 
-Status: implemented. The library (`erhe::property`), the `Item_base`
-integration, the editor operation / generic rows / MCP tools / startup
-command, the `Material`, `Node`, `Light` and `Camera` migrations, observer
-users, expressions and bindings, inherited flags, sealing, the style layer,
-computed properties, the owner type id keyed registry, the geometry
-and texture graph node migrations, object references (the material
-texture slots) and property sub-objects (the mesh primitives with their
-material) are all in and verified. This is a live document; section 6
-holds the remaining work.
-
 Document roles. This document is the design record: goal, requirements,
 the design decisions with their WPF mapping and rationale, the item
 migrations, the editor / MCP / glTF integration, future work and the
@@ -1627,9 +1617,8 @@ Gradient and curve parameters have no `Property_value` form and stay in
   thumbnail sampled at a fraction of its size reads uninitialized memory
   (was solid magenta on Metal).
 - Behavior changes from the inherited `visible` default (D23): `grid_tool`
-  "Add Grid" creates a visible grid (it previously relied on the omitted
-  bit); `Quad_view` hides its rendertarget node explicitly at
-  construction.
+  "Add Grid" sets the visible bit explicitly, and `Quad_view` hides its
+  rendertarget node explicitly at construction.
 - The camera's glTF `properties` extras object repeats `exposure` /
   `shadow_range` next to the native `ERHE_camera` fields; both import to
   the same value.
@@ -1644,9 +1633,9 @@ Gradient and curve parameters have no `Property_value` form and stay in
 as an object property (D28) with `register_member` over its `material`
 member (`reference_item_types` material, no clear button: a primitive keeps
 a material). The registration's `after_set` calls the owning mesh's
-`notify_primitive_material_changed()`, the `Scene_host::
-on_mesh_material_changed` notification `set_primitive_material` ran inline
-before; `Mesh::set_primitive_material` writes the property, so it stays the
+`notify_primitive_material_changed()`, which is the `Scene_host::
+on_mesh_material_changed` notification; `Mesh::set_primitive_material` writes
+the property, so it stays the
 one writer (draw list material set plan R4) and the generic rows, undo and
 MCP reach the same funnel. Each primitive carries an owner link (mesh,
 index) that `Mesh::stamp_primitive_owners()` writes after every change of
@@ -1967,7 +1956,8 @@ and density) - settle that split before registering anything.
   writers. A per-frame writer (the XR camera) calls the setter and pays
   nothing while the value is unchanged: the store early-outs.
 - Keep the consequence a change has (recreate the body, set the body's
-  damping) in the same hook, where the old `after_set` did it.
+  damping) in that same hook, which is where a member registration's
+  `after_set` would have run it.
 - `visible_when` callbacks may keep casting to the class: the D12
   listing rule never evaluates them on a holder (a holder lists a
   secondary property by its own value, D30).
@@ -2064,44 +2054,12 @@ style layer is D25 and the reference layer is D33.
 
 ## 6. Future work
 
-- Property serialization to glTF: expression text of driven properties
-  (D22), material local values (materials export field by field, and
-  default elision plus `Material::set_values` keep a round trip from
-  turning effective values into local ones - D32 - but a local value that
-  no native field carries, such as `reflectance`, is still lost), and one
-  carrier per item type in place of the `properties` / `mesh_properties`
-  members scattered across `ERHE_node`, `ERHE_light` and `ERHE_camera`
-  (D14, D23). Future work that is not yet fully planned:
-  `doc/plans/gltf_properties_extension.md` is the draft, explicitly
-  incomplete and not ready to implement; the decisions it records so far
-  live there and nowhere else. Its `native_gltf` flag and its elision pass
-  are implemented (D32); the `ERHE_*_properties` extensions are not.
-- Style users beyond the content library's style items (D25): the graphics presets once
-  `Graphics_settings` is an item with registered properties.
-- Further computed properties (D26) as their consumers appear: a node's
-  world bounds over its subtree, a scene's item counts.
-  `Rendertarget_mesh`'s size (section 4.15) and `Animation`'s time range
-  and counts (section 4.16) are ones already.
-- Entry storage for the geometry graph and texture graph node parameters
-  (section 4.5), the one member-backed (D18) family left whose values a
-  node or a style could hold and a descendant inherit (D30): a bridged
-  property is always local, so it is neither offered on a holder nor
-  inherited. Low value - sharing a node parameter through a style is
-  rarely wanted - and large (59 member registrations across 16 files plus
-  the texture graph bridges), so it is done only when a user asks for it;
-  the recipe is section 4.18. `doc/property_inventory.md` lists the
-  remaining hand-written rows (the "Not yet migrated" table: list-valued
-  state with no property form). `Node`'s transform stays bridged for the
-  reasons D18 gives.
-- Shader graph (`src/editor/graph/`) node parameters as properties. The
-  oldest graph editor has no parameter serialization and no undo
-  operations at all; migrating it starts with adopting the
-  `Graph_editor_node` base (or retiring the prototype), not with
-  registrations.
-- Editor per-item state as attached properties registered by the editor:
-  item tree expansion, sheet-window formulas. The naming, lookup and
-  listing side exists (D3, D12, section 4.14); each needs its own
-  `visible_when` and a registering owner type on the editor side.
+- [plans/property_system.md](plans/property_system.md) - glTF serialization of
+  expressions, material local values and a per-type carrier; style users beyond
+  the `Style` items; further computed properties; entry storage for graph node
+  parameters; shader graph parameters; editor per-item attached properties.
+- [plans/gltf_properties_extension.md](plans/gltf_properties_extension.md) -
+  the draft `ERHE_*_properties` extensions the serialization work needs.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

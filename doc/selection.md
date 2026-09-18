@@ -1,350 +1,111 @@
-# Selection improvements plan: per-scene selection
+# Selection
 
 Stability: stable
 
-Status: IMPLEMENTED (phases 1-5, 2026-07-13; commits 572141cc, 8f1ceb9b,
-a2b85321, 165a73a4, 458dcda1). Headless-verified via the MCP smoke flows
-described per phase; interactive verification (window tints, per-viewport
-gizmo visibility, drags, Ctrl-A / ctrl-click across hierarchy windows) is
-with the user. The gizmo design was revised during implementation from
-per-viewport rebuilding to active-scene binding - see the transform gizmo
-section for the rationale.
+`editor::Selection` (`src/editor/tools/selection_tool.{hpp,cpp}`) is the single
+mutation API, event source and coordinator for what is selected. Several scenes
+can be open at once, so the selection is **scoped by host**: selecting in one
+scene leaves the other scenes' selections intact, and a command acts on exactly
+one scene's items.
 
-## Problem
+The one reference item inside a selection - the active item - has its own rules,
+its own message and its own undo behavior; `doc/active_item.md` owns them.
 
-`editor::Selection` (`src/editor/tools/selection_tool.hpp`) holds a single
-global `std::vector<std::shared_ptr<erhe::Item_base>>`. When multiple scenes
-are open, the selection can span scenes, and it may also contain non-scene
-items (content library materials / brushes, items with no `Item_host`).
-Several consumers assume all selected items live in one scene, most visibly
-the transform gizmo.
+## Storage and host views
 
-Multi-scene selections have legitimate use cases (e.g. inspecting properties
-of items from two scenes, cross-scene copy), and silently dropping a scene's
-selection when the user clicks in another scene would be bad UX. So the goal
-is NOT to forbid multi-scene selection; it is to make selection per-scene:
-each `Scene_root` contains the selection of items hosted by it, selecting in
-one scene leaves other scenes' selections intact, and single-scene consumers
-(the transform gizmo first among them) operate on exactly one scene's
-selection instead of the global union.
+`Selection` keeps one authoritative union, `get_selected_items()`, which
+per-item consumers (the Properties window, per-item operations) read as they
+always have. Two filtered views are derived from it, each clearing and refilling
+a retained-capacity scratch at call time, so a host change while an item is
+selected - a cross-scene reparent - can never leave a stale view:
 
-### How cross-scene selections are produced today
+- `get_hosted_selection(Item_host*)` - the selected items that host hosts;
+  `nullptr` is the bucket of items with no host, such as content-library
+  entries.
+- `get_command_target_selection()` - what commands act on: the active scene's
+  items plus the non-hosted ones.
 
-- Ctrl-click in a second scene's Hierarchy window: `Item_tree::item_update_selection`
-  (ctrl branch) adds without clearing. There is one hierarchy window per
-  `Scene_root` (`Scene_root::make_browser_window`).
-- Ctrl-A: `Item_tree::select_all` iterates ALL `App_scenes::get_scene_roots()`
-  and selects every node in every open scene.
-- Ctrl-click in a viewport: `Selection::on_viewport_select` /
-  `toggle_mesh_selection(clear_others=false)` toggles the hovered mesh without
-  touching items selected from other scenes' viewports.
-- Undo/redo restores selection snapshots (`Item_insert_remove_operation`).
+`is_hosted_or_defined_by()` is the "belongs to this host" test the scoping uses:
+prim hosting, extended with the asset manager's defining-container lookup, so a
+selected resource another container defines counts as held by this scene's tree
+and leaves the selection when the scene closes.
 
-Conversely, a plain (non-ctrl) click ANYWHERE clears the whole global
-selection across all scenes - the "losing selection" UX problem this plan
-removes.
+`clear_selection(Item_host*)` removes one host's items and leaves the others
+alone; `clear_selection()` clears everything. The host-scoped form takes an
+`Active_item` argument saying what happens to the active item (see
+`doc/active_item.md` D2): `keep` for a plain click or an MCP `select_items`
+reset, `forget_hosted` for a closing scene.
 
-### Consumers that misbehave on a cross-scene selection (audit)
+## Scoped selection semantics
 
-| Consumer | Failure |
-|----------|---------|
-| `Transform_tool::update_target_nodes` (`src/editor/transform/transform_tool.cpp`) | Averages `world_from_node` across ALL selected nodes; different scenes have unrelated world spaces, so the anchor is meaningless. A drag then transforms nodes in scenes not shown in the viewport being dragged in. |
-| Gizmo visibility (`Handle_visualizations`) | Handle meshes live in the shared Tools scene root, rendered as overlay in every viewport, so one gizmo appears in viewports of unrelated scenes at the same world position. |
-| MCP `transform_selection` (`mcp_server_scene_action.cpp`) | Operates on the same `shared.entries`; inherits all of the above. |
-| `mesh_operation.cpp`, `geometry_operations.cpp` (booleans), `items.cpp` `async_for_nodes_with_mesh` | Lock only the FIRST node's `item_host_mutex`, then mutate/read nodes from other scenes without their lock (thread-safety hole vs async workers). Boolean/merge ops also compose world transforms across scenes. |
-| `merge_operation.cpp` | Takes scene root and reference frame from the first mesh; detaches other-scene nodes into the first scene. |
-| `Fly_camera_tool` frame-selection | Unions world-space AABBs across scenes into one bounding box, then frames one viewport's camera on it. |
-| `Scene_commands::get_scene_root(Node*)` (+ Material overload) | "Current scene" = host of whichever qualifying item happens to be first in the selection; ambiguous when the selection spans scenes. |
-| `Item_tree` shift-range across two hierarchy windows | `Range_selection` is global but entries are fed per-window per-frame, so a range whose terminators are in different windows mis-toggles (garbled partial selection), independent of the scene question. |
+- A plain click in a viewport or a hierarchy window clears only that scene's
+  items before selecting; other scenes keep their selections.
+- Ctrl-click toggles within that scene, so a deliberate multi-scene selection
+  is still possible - inspecting items of two scenes side by side is a
+  supported use case.
+- Ctrl-A in a hierarchy window selects everything in that window's scene only.
+  A content-library tree scopes to its own root the same way.
+- `Range_selection` (shift-range) is host-scoped: `reset(Item_host*)` collapses
+  a range only when a terminator belongs to that host, and
+  `reset_terminators_for_host()` drops the terminators without the
+  selection-clearing side effect, which is what `clear_selection(host)` uses.
+  A range running in another scene's tree is never cancelled by work in this
+  one.
+- A plain click on empty space in a viewport deselects within the hovered
+  scene only; other scenes and the non-hosted items keep their selection.
+  With no hovered scene it clears everything.
 
-### Non-scene items
+## The active scene
 
-Most consumers correctly skip non-`Node` items via `dynamic_pointer_cast` /
-`Item_filter`. The sharp edge: `async_for_nodes_with_mesh` (`operations/items.cpp`)
-derives the item host from the FIRST selected item and returns early when it
-has no host - a material first in the selection silently aborts the whole mesh
-operation even when mesh nodes are selected.
-
-### Existing patterns to build on
-
-- `Scene_root`'s `Selection_message` subscriber already filters by
-  `item->get_item_host() == this` (physics acquire/release) - per-scene
-  self-filtering is established.
-- `Debug_visualizations` and `Scene_views::choose_camera_for_scene` filter by
-  `node->get_scene() == <render/viewport scene>`.
-- Scene close (`editor.cpp`) removes only the closing scene's items from the
-  selection.
-- `Transform_tool::update_for_view(Scene_view*)` already runs once per
-  rendered scene view (via `Render_scene_view_message`) and refreshes
-  `Handle_visualizations` per view - the natural hook for a per-viewport
-  gizmo.
-- Active-scene candidates: `Scene_views::hover_scene_view()` (pointer
-  currently over a viewport), `Scene_views::last_scene_view()` (persists after
-  pointer leaves), `App_scenes::get_single_scene_root()`.
-
-## Design
-
-### Partitioned selection: each scene owns its selection
-
-Selection storage is partitioned by `Item_host`:
-
-- Each `Scene_root` contains the selection of items it hosts (nodes,
-  attachments, its content-library items - anything whose `get_item_host()`
-  is that scene).
-- One additional bucket holds non-hosted items (`get_item_host() == nullptr`).
-- `Selection` remains the single mutation API, event source and coordinator:
-  `add_to_selection` / `remove_from_selection` / `set_selection` route items
-  to the owning bucket by host; `begin/end_selection_change`,
-  `Selection_message`, undo snapshots and last-selected tracking stay
-  centralized and unchanged in shape. `get_selected_items()` keeps returning
-  the union (maintained, not rebuilt per call - no per-frame allocation) so
-  per-item consumers (properties window, per-item operations) keep working
-  untouched.
-- New accessors:
-  - `Scene_root::get_selection()` - the items selected in that scene.
-  - `Selection::clear_selection(erhe::Item_host* host)` - clear one bucket
-    only (nullptr host = the non-hosted bucket); the existing
-    `clear_selection()` keeps clearing everything.
-
-Owning the bucket in `Scene_root` (per user direction) also gives the right
-lifetime for free: closing a scene destroys its selection with it (the
-existing editor.cpp scene-close selection cleanup becomes mostly redundant and
-is simplified to just emitting the deselect message).
-
-### Scoped selection semantics (the UX change)
-
-Selection mutations coming from a UI context are scoped to that context's
-bucket:
-
-- Plain click in a viewport or hierarchy window clears ONLY that scene's
-  bucket before selecting; other scenes' selections persist.
-- Ctrl-click toggles within that scene's bucket (already effectively true).
-- Ctrl-A in a hierarchy window selects all in THAT window's scene only,
-  leaving other buckets intact. Content-library trees likewise scope to their
-  own root.
-- `Range_selection` becomes per-tree (terminators and entries from one tree),
-  fixing the cross-window shift-range mis-toggle.
-- Escape / explicit "deselect all" clears every bucket (see open questions).
-
-Multi-scene selection thus remains possible and intentional (ctrl-click in a
-second scene ADDS), but a scene's selection is never collateral damage of
-working in another scene.
-
-### Transform gizmo: bound to the active scene (implemented)
-
-Implementation note (revised from the earlier per-viewport-rebuild idea):
-`shared.entries` / `world_from_anchor` are consumed outside rendering too
-(numeric edits, MCP `transform_selection`, undo recording), so making them
-view-dependent within a frame would make those consumers depend on render
-order. Instead the gizmo binds to the ACTIVE scene - the same state commands
-target and the UI highlights - which the user controls via selection and
-window focus:
-
-- `update_target_nodes` builds `shared.entries` + anchor from the active
-  scene's bucket (`Selection::get_hosted_selection(active)`); selection in
-  other scenes never feeds the gizmo. Rebinds on `Active_scene_changed`
-  (window-focus activation without a selection change) and on selection
-  changes as before.
-- Per-view visibility: `Transform_tool::update_for_view` (runs once per
-  rendered view - the same flow that already drives the per-view handle
-  scale) tells `Handle_visualizations` whether the view being rendered shows
-  the active scene; handle meshes are shown only there.
-- Hover and drag: `update_hover` reports no handle hover, and
-  `Transform_tool_drag_command::try_ready` refuses, in views of non-active
-  scenes. `tool_render` (cast rays, bounding-box cube lines) draws nothing
-  into such views.
-- A drag therefore only ever moves one scene's nodes, and that scene's
-  `item_host_mutex` is the single lock needed - correct by construction.
-- Numeric edits and MCP `transform_selection` operate on `shared.entries`,
-  i.e. the active scene, deterministically.
-
-### Active scene
-
-Because commands target it (below) and the UI shows it, the active scene is
-explicit, tracked state - not a heuristic recomputed at each call site. It is
-a single `Scene_root*` (with the usual lifetime care on scene close), owned
-centrally (`Selection` or `App_scenes`), with an `Active_scene_changed`
-app message so UI and tools react to changes.
-
-The active scene changes on deliberate acts, not on hover (hover-switching
-would flicker as the pointer crosses viewports on the way elsewhere):
+The scene a command acts on is explicit tracked state, not a heuristic
+recomputed per call site: `get_active_scene_root()` /
+`set_active_scene_root()`, with an `Active_scene_changed_message` so tools and
+UI react. It changes on deliberate acts and never on hover alone, which would
+flicker as the pointer crosses a viewport on its way elsewhere:
 
 - a selection change in a scene makes that scene active;
-- clicking in / giving ImGui focus to a scene's viewport window or hierarchy
-  window makes that scene active;
-- closing the active scene falls back: `Scene_views::last_scene_view()`'s
-  scene root -> `App_scenes::get_single_scene_root()` -> null.
+- focusing a scene's viewport or hierarchy window makes that scene active;
+- with nothing explicitly active the getter falls back to the last hovered
+  scene view's scene, then to the single open scene.
 
-Exposed as `get_active_scene_root()`. This replaces the first-item scan in
-`Scene_commands::get_scene_root` and gives menu-driven operations a
-deterministic, user-visible target.
+Commands that target scene-hosted items - delete, cut, duplicate, merge,
+booleans, mesh operations, deselect-all - take
+`get_command_target_selection()`. That gives the single-lock property for free:
+one scene's items means one `item_host_mutex` to hold, instead of locking the
+first selected node's host and then mutating nodes of other scenes without
+theirs. Read-only UI keeps showing the union.
 
-### Operation scoping policy
+`push_active_scene_window_tint()` (`windows/active_scene_highlight.{hpp,cpp}`)
+is the UI half: a window showing the active scene draws its title bar and its
+dock tab tinted toward the accent color, so which scene a command will hit is
+visible in either layout.
 
-Commands that target scene-hosted items act on the ACTIVE scene's bucket
-only. Selection in other scenes is never an invisible participant in a
-command.
+## Transform gizmo
 
-- Delete, Cut, duplicate, merge, booleans, mesh operations: active scene's
-  bucket. Lock that one scene's `item_host_mutex` - fixes the single-lock
-  hole by construction.
-- Deselect-all (Escape): consistent with the rule, clears the active scene's
-  bucket (plus the non-hosted bucket); other scenes keep their selection.
-- Read-only / per-item-safe UI (properties window, selection listing) keeps
-  showing the union - inspecting items from several scenes side by side is a
-  supported use case.
-- Non-hosted items (content library selections with no host) are unaffected
-  by scene scoping and handled per command as today.
+The gizmo binds to the active scene rather than to a view. Its
+`shared.entries` and `world_from_anchor` are read outside rendering too -
+numeric edits, MCP `transform_selection`, undo recording - so making them
+view-dependent within a frame would make those consumers depend on render
+order.
 
-### Active scene UI highlight
+`Transform_tool::update_target_nodes()` builds the entries and the anchor from
+the active scene's items and rebinds on `Active_scene_changed_message` as well
+as on selection changes. `update_for_view()` runs once per rendered view and
+tells `Handle_visualizations` whether that view shows the active scene, so the
+handle meshes - which live in the shared Tools scene root and would otherwise
+appear in every viewport at the same world position - are shown only there.
+`update_hover` reports no handle hover and the drag command refuses in views of
+other scenes, and `tool_render` draws nothing into them. A drag therefore moves
+one scene's nodes under one lock, by construction.
 
-The user must be able to see which scene commands will hit. Planned
-indicators, driven by `Active_scene_changed` / `get_active_scene_root()`:
+## MCP
 
-- Viewport windows: title bar tint for viewports whose scene root is the
-  active scene (push `ImGuiCol_TitleBg` / `ImGuiCol_TitleBgActive` /
-  `ImGuiCol_TitleBgCollapsed` around the window `Begin`; `Imgui_window`
-  already has `on_begin` / `on_end` hooks).
-- Hierarchy windows: same title tint on the active scene's hierarchy window,
-  and/or an accent on the tree (e.g. header/scene-item row color or node text
-  tint). Start with the title tint (cheap, consistent with viewports); tree
-  text tinting can follow if the title alone is too subtle, but it must not
-  fight the selection highlight.
-- Keep the treatment consistent between viewport and hierarchy windows so one
-  visual language means "active scene" everywhere.
-
-## Phases
-
-### Phase 1: Partitioned selection storage
-
-1. Add the per-host buckets: selection container in `Scene_root` (plus the
-   non-hosted bucket in `Selection`), routing in `add_to_selection` /
-   `remove_from_selection` / `set_selection` / `clear_selection`, maintained
-   union for `get_selected_items()`. No behavior change yet - all producers
-   and consumers still see the union.
-2. Accessors: `Scene_root::get_selection()`,
-   `Selection::clear_selection(Item_host*)`.
-3. Active scene tracking: the tracked `Scene_root*`, `get_active_scene_root()`,
-   update on selection change and on viewport/hierarchy window focus,
-   scene-close fallback chain, and the `Active_scene_changed` app message.
-4. Scene close: selection bucket dies with the `Scene_root`; simplify the
-   editor.cpp scene-close selection cleanup to message emission.
-5. Extend `Selection::sanity_check` to verify bucket/host consistency and
-   union == sum of buckets.
-
-Verification: headless MCP - existing selection flows unchanged
-(`select_items`, `get_selection`, delete/duplicate smoke); two-scene session
-sanity_check clean.
-
-### Phase 2: Scoped selection semantics
-
-1. Plain click in viewport (`Selection::on_viewport_select`) and hierarchy
-   (`Item_tree::item_update_selection`) clears only the local scene's bucket.
-2. `Item_tree::select_all` scopes to the window's own root.
-3. `Range_selection` per tree (move ownership from `Selection` to `Item_tree`,
-   or key terminators by tree) - fixes the cross-window shift-range bug.
-4. Content-library trees scope their clear/select-all to their own bucket.
-5. Deselect-all (Escape): clear the active scene's bucket plus the non-hosted
-   bucket, per the operation scoping policy.
-6. Active scene UI highlight: viewport window title tint + hierarchy window
-   title tint for the active scene, driven by `Active_scene_changed`.
-
-Verification: interactive (user) - two hierarchy windows: plain click in
-scene B keeps scene A's selection AND moves the active-scene highlight to
-scene B's windows; Ctrl-A selects one scene; shift-range confined to one
-window behaves; viewport plain click clears only its scene; focusing a
-viewport switches the highlight without changing any selection.
-Headless MCP where reachable (`select_items` per scene, `get_selection`).
-
-### Phase 3: Per-viewport transform gizmo
-
-1. `update_target_nodes` takes the scene bucket (a `Scene_root*` parameter)
-   instead of the global selection; `on_selection` / `on_node_touched` /
-   `on_animation_update` callers pass the affected scene.
-2. `update_for_view` rebuilds anchor + entries from the rendered view's scene
-   bucket when idle; keep the existing anchor-stomp guards during active
-   drag / component edit, extended to scene identity.
-3. Drag capture: `try_ready` binds the drag to the hovered viewport's scene;
-   reject when that scene's bucket has no transformable nodes.
-4. Per-viewport gizmo visibility falls out of (2): no selected nodes in the
-   view's scene -> handles hidden for that view. Verify the tool render pass
-   ordering (visualizations update vs `Tools::render_viewport_tools`) keeps
-   handle transforms consistent per view within a frame.
-5. Mesh-component mode scoping via the component mesh's host.
-6. Numeric edits (`apply_*_edit`, Transform window) and MCP
-   `transform_selection` use `get_active_scene_root()`'s bucket. No per-call
-   scene override in MCP: scripts switch scenes via `set_active_scene`
-   (Phase 5), keeping MCP behavior identical to the UI.
-
-Verification: headless MCP - two scenes in two viewports, select a node in
-each scene, `capture_screenshot` -> each viewport shows its own gizmo at its
-own anchor; `transform_selection` moves only the active scene's nodes;
-interactive drag test by user (drag in viewport A moves only scene A nodes).
-
-### Phase 4: Consumer cleanup and latent bug fixes
-
-1. `operations/items.cpp` `async_for_nodes_with_mesh`: operate on the active
-   scene's bucket; derive the host from the bucket (not the first item of any
-   type) - fixes the leading-material silent abort.
-2. `mesh_operation.cpp`, `geometry_operations.cpp`, `merge_operation.cpp`:
-   active-scene bucket + that scene's single `item_host_mutex`; VERIFY all
-   participating nodes share the host.
-3. `Scene_commands::get_scene_root(Node*)` and Material overload: use
-   `get_active_scene_root()`; keep hover-viewport / single-scene fallbacks.
-4. `Fly_camera_tool` frame-selection: frame the viewport's own scene bucket.
-5. `Selection::delete_selection` / `cut_selection` / `duplicate_selection`:
-   scope to the active scene's bucket (plus non-hosted items where the
-   command applies), per the operation scoping policy.
-6. `Clipboard::resolve_paste_target`: null-check `m_last_hover_scene_view`
-   before `get_scene_root()` (unchecked deref found in audit).
-7. Sweep remaining first-item consumers (grid attach, brush tool parent,
-   animation keying) to use the active scene or per-item hosts as appropriate.
-
-Verification: headless MCP smoke - merge and boolean ops in a two-scene
-session touch only the active scene; mesh op with a material selected first
-plus mesh nodes runs (previously aborted).
-
-### Phase 5: MCP and polish
-
-MCP semantics mirror the user experience one-to-one, so headless MCP
-verification exercises the same rules an interactive user hits - no
-MCP-only selection or activation behavior.
-
-1. New tools `set_active_scene` / `get_active_scene`: the explicit
-   getter/setter for the active scene. `set_active_scene` goes through the
-   same activation path as focusing a scene's window (emits
-   `Active_scene_changed`); `get_active_scene` reports the tracked state.
-2. `select_items` behaves exactly like a user selection change: scoped clear
-   in the target scene, additive across scenes with toggle semantics, and it
-   activates the scene of the changed selection (same rule as the UI).
-3. `get_selection` reports each item's scene and the active scene so scripts
-   can see the partition.
-4. Command-like tools (`transform_selection`, mesh operations, delete-style
-   actions) target the active scene's bucket, exactly like their UI
-   counterparts - scripts wanting another scene call `set_active_scene`
-   first, just as a user would click that scene's window.
-5. Re-run the full selection/gizmo smoke suite; update `doc/` user-facing
-   notes if any.
-
-## Decided
-
-- Commands that target scene-hosted items act on the ACTIVE scene only
-  (Delete, Cut, duplicate, merge, booleans, mesh ops, deselect-all).
-- The active scene is explicit tracked state, changed by selection changes
-  and viewport/hierarchy window focus - never by hover alone - and is shown
-  in the UI (window title tints).
-- MCP mirrors the user experience exactly: explicit `set_active_scene` /
-  `get_active_scene` tools, `select_items` follows the same activation and
-  scoped-clear rules as UI selection, command tools target the active scene,
-  and there are no MCP-only per-call scene overrides. Headless MCP
-  verification therefore exercises the same code paths and rules as an
-  interactive user.
-
-## Open questions
-
-- Exact highlight treatment: title tint only, or also node-text / scene-row
-  accent inside the active hierarchy tree? Start with title tint, evaluate
-  visibility, extend if needed (must not fight the selection highlight).
-- Should hierarchy windows visually dim selection highlights in NON-active
-  scenes to reinforce that commands will not touch them? Nice-to-have,
-  deferred.
+MCP mirrors the user experience exactly: `get_active_scene` / `set_active_scene`
+are explicit tools, `select_items` follows the same activation and scoped-clear
+rules as a UI selection, `get_selection` reports each item's scene and the
+active scene, and the command-like tools (`transform_selection`, the mesh
+operations, the delete-style actions) target the active scene. There is no
+MCP-only per-call scene override: a script that wants another scene calls
+`set_active_scene` first, just as a user would click that scene's window.
+Headless verification therefore exercises the same code paths as an interactive
+user.

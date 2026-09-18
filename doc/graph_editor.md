@@ -24,28 +24,26 @@ prototype the other two were forked from. It predates the current
 asset/undo/serialization model and is intentionally *not* built on the shared
 layer (see [Legacy shader graph](#legacy-shader-graph)).
 
-The editor-level machinery that used to be copy-pasted between the geometry and
-texture graphs now lives in a shared **`src/editor/graph_editor/`** layer
-(namespace `editor`). This document describes the graph editor and its features
-as built; the shared layer was extracted in "Phase C" (commits
-`5a211b01`..`f85e3f56` on the `crease` branch - see the git history, which also
-contains this file's predecessor `graph-editor-shared-plan.md` and its
-step-by-step refactoring plan).
+The editor-level machinery common to the geometry and texture graphs lives in a
+shared **`src/editor/graph_editor/`** layer (namespace `editor`). This document
+describes the graph editor and its features as built; the numbered `C` labels
+name the shared-layer pieces that source comments cite.
 
 ## Table of Contents
 
 1. [User-facing features](#user-facing-features)
 2. [Architecture](#architecture)
-3. [The shared layer (`src/editor/graph_editor/`)](#the-shared-layer-srceditorgraph_editor)
-4. [Per-editor code](#per-editor-code)
-5. [Assets, attachments and the consumption model](#assets-attachments-and-the-consumption-model)
-6. [Evaluation](#evaluation)
-7. [Serialization and persistence](#serialization-and-persistence)
-8. [MCP surface](#mcp-surface)
-9. [Legacy shader graph](#legacy-shader-graph)
-10. [Verification](#verification)
-11. [Future development](#future-development)
+3. [Canvas rendering (native resolution)](#canvas-rendering-native-resolution)
+4. [The shared layer (`src/editor/graph_editor/`)](#the-shared-layer-srceditorgraph_editor)
+5. [Per-editor code](#per-editor-code)
+6. [Assets, attachments and the consumption model](#assets-attachments-and-the-consumption-model)
+7. [Evaluation](#evaluation)
+8. [Serialization and persistence](#serialization-and-persistence)
+9. [MCP surface](#mcp-surface)
+10. [Legacy shader graph](#legacy-shader-graph)
+11. [Verification](#verification)
 12. [Key files](#key-files)
+13. [Future work](#future-work)
 
 ---
 
@@ -56,8 +54,8 @@ Common to both the geometry and texture graph windows:
 - **Node canvas.** A pannable / zoomable `ax::NodeEditor` canvas. Each node draws
   a header row, input pins on the left edge, output pins on the right edge, and
   its parameter widgets in the center. A zoom overlay shows the current zoom in
-  the corner. Zoom is authored in screen space so frames, pins and widgets scale
-  together (Issue #251).
+  the corner. Zoom is authored in screen space so frames, pins, text and widgets
+  scale together - see [Canvas rendering](#canvas-rendering-native-resolution).
 - **Node palette** (companion window). A searchable, categorized list - a filter
   box plus one collapsing header per category whose entries spawn a node. Lives
   in a separate `Graph_editor_palette_window` so the palette and the canvas can
@@ -73,16 +71,18 @@ Common to both the geometry and texture graph windows:
   link connect / disconnect, and parameter edits are each undoable operations on
   the shared `Operation_stack`. A parameter edit commits **one** operation per
   completed widget gesture (on widget deactivation).
-- **Parameter widgets.** Because `ax::NodeEditor` cannot host normal ImGui popups
-  inside the canvas, node content uses canvas-safe **stepper** widgets
-  (left/right arrows cycling an enum / index) instead of combos, plus drag
-  floats/ints and (texture only) gradient and curve editors.
+- **Parameter widgets.** Node content uses ordinary ImGui widgets: drag
+  floats / ints, `imgui_enum_combo` dropdowns, `imgui_color_edit` swatches with
+  the real color picker, and (texture only) gradient and curve editors.
+  `imgui_index_stepper` remains for the places a two-state toggle reads better
+  as arrows than as a two-item list. Every one of them takes a `scale` that the
+  nodes fill with `content_scale()`.
 - **Explicit per-window target asset (Issue #252).** Each window edits one
   explicit target asset (a `Graph_mesh` / `Graph_texture`), chosen with a target
   selector row at the top of the window (drag-drop, pick, or clear) - decoupled
-  from the global selection. This fixed a bug where selecting the graph asset put
-  both the asset and its nodes in the selection, so a single Delete removed the
-  whole asset. Node selection now lives purely in the canvas.
+  from the global selection. Node selection lives purely in the canvas, so
+  selecting a graph asset never puts its nodes in the global selection and a
+  Delete cannot take the whole asset with them.
 - **Multiple window instances.** "Open Editor" (content-library context menu /
   double-click) opens additional graph windows on other assets via the
   `Editor_windows` manager (Issue #252). The primary window persists its layout;
@@ -107,7 +107,7 @@ Texture-graph-specific:
 
 - Nodes are data-driven from a descriptor registry (generators, filters, SDF,
   color, etc.), plus explicit sink nodes (output, material output, buffer).
-- Gradient and curve parameter editors (canvas-safe custom widgets).
+- Gradient and curve parameter editors (custom widgets).
 - Node preview thumbnails render each node's composed subtree.
 - A "Reseed all" control re-randomizes seeded nodes.
 
@@ -153,24 +153,92 @@ evaluation strategy are never unified - only the machinery around them is.
 
 ---
 
+## Canvas rendering (native resolution)
+
+The vendored `ax::NodeEditor` canvas (`src/erhe/imgui/erhe_imgui/
+imgui_canvas.*`, `imgui_node_editor*.{h,cpp,inl}`) renders at native
+resolution: everything is laid out and drawn directly in SCREEN space at the
+zoomed size. `ImGuiEx::Canvas` keeps pan / zoom state and the mapping
+`screen = canvas_pos * scale + origin` and nothing else - it post-transforms
+no vertices or clip rects, fakes no `io.MousePos` / viewport / `window->Pos`,
+and applies no AA fringe compensation. Glyphs are baked at the zoomed size
+through ImGui 1.92's dynamic fonts, so text stays crisp at any zoom, and pins,
+frames and links are vector shapes that scale by construction.
+
+Coordinate model:
+
+- Node, pin and group bounds are STORED in canvas units. `EndNode` measures
+  the group in screen space and stores `ceil(size / zoom)`; the ceil is what
+  keeps a node's stored size stable across zoom levels, since font metrics are
+  not linear in size.
+- The editor's own drawing goes through one helper set on
+  `Detail::EditorContext`: `DrawPos` (point to screen), `DrawVec` (vector, no
+  translation), `DrawLen` (thickness / rounding / radius, times the view
+  scale), `DrawRect`, and `HitMouse()` = `ToCanvas(real mouse)` for hit tests.
+  `ToCanvasVec` is the inverse of `DrawVec` and is what every
+  `GetMouseDragDelta` applied to canvas-space bounds needs - a drag or resize
+  delta is real screen pixels now. Missing that conversion is the easiest way
+  to break dragging.
+- Two sites are already true screen space and stay raw: the canvas outer
+  border, drawn after `Canvas::End()`, and `NavigateAction::MoveOverEdge`,
+  which runs before `Canvas::Begin()`.
+- `Object::IsVisible()` maps bounds through `ToScreen` before
+  `ImGui::IsRectVisible`, because that test is against the screen-space clip
+  rect: a canvas coordinate outside the widget's screen numeric range would
+  otherwise cull a node's background and border while its content, submitted
+  through a separate path, kept drawing.
+- `NodeBuilder::Begin` places the cursor at `ToScreen(node_pos)`, pushes the
+  font at `FontSizeBase * zoom` and pushes the layout-relevant style metrics
+  (frame padding, item spacing, item inner spacing, indent spacing, frame
+  rounding, grab min size) and the node padding scaled by zoom, all balanced
+  in `End()`.
+- Node CONTENT is authored in screen space at the zoomed size, so every
+  hardcoded pixel constant a node uses - table column widths,
+  `SetNextItemWidth`, pin half-extents, preview sizes - is multiplied by
+  `Graph_editor_node::content_scale()`, which is the view zoom
+  (`EditorContext::GetCurrentZoom()`, the view scale, not its reciprocal).
+  A pin rect is built in screen space from the node border and handed to
+  `PinRect` as `ScreenToCanvas(rect)`, because the editor stores and hit-tests
+  pins in canvas units; mixing the two spaces in one rect is what makes
+  sockets un-hittable.
+
+Zoom is snapped to the discrete `NavigateAction::s_DefaultZoomLevels` set,
+which bounds how many distinct font sizes the atlas bakes. Zoom-under-cursor
+anchors the screen point under the mouse across the change. Zoom changes log
+under `erhe.imgui.node_editor` (a programmatic `SetZoom` at info, the mouse
+wheel at trace), and each graph window shows the current zoom in a corner
+overlay. `Suspend()` / `Resume()` remain as balanced clip push / pop: vendored
+code and the background context menu still bracket with them, and the popup
+needs the node channel splitter swapped out.
+
+Because there is no fake coordinate space, ordinary ImGui popups work inside
+node content: combos, color pickers and context menus are real popups with
+real screen coordinates and real mouse input. A combo preview must
+bounds-check its index, though - a combo indexes its name table directly,
+while the arrow steppers it replaced clamped, and the graph-file and MCP
+`set_parameter` paths can drive an enum out of range.
+
+---
+
 ## The shared layer (`src/editor/graph_editor/`)
 
 | File | Role |
 |------|------|
-| `graph_editor_widgets.{hpp,cpp}` | Canvas-safe stepper widgets `imgui_index_stepper` / `imgui_enum_stepper` (ImGui-only, payload-agnostic), shared by every node's parameter UI. |
+| `graph_editor_widgets.{hpp,cpp}` | The dropdown / color / stepper widgets `imgui_enum_combo`, `imgui_color_edit`, `imgui_index_stepper` (ImGui-only, payload-agnostic), shared by every node's parameter UI. |
 | `graph_asset.hpp` | `Graph_asset<Self, GraphT, NodeT>` - CRTP base for the content-library graph assets. Holds the graph + node vector + accessors + constructors + Item identity. |
-| `graph_serialization.hpp` | `write_graph_asset_json` / `read_graph_asset_json` function templates - the v1 node/link JSON format with graceful degradation, shared by both assets' serializers. |
-| `graph_operations.hpp` | Templated undo operations (`Graph_node_insert_remove_operation`, `Graph_parameter_operation`, `Graph_link_insert_remove_operation`) + link record, parameterized on a per-editor `Traits`. |
+| `graph_serialization.hpp` (**C4**) | `write_graph_asset_json` / `read_graph_asset_json` function templates - the v1 node/link JSON format with graceful degradation, shared by both assets' serializers. |
+| `graph_operations.hpp` (**C5**) | Templated undo operations (`Graph_node_insert_remove_operation`, `Graph_parameter_operation`, `Graph_link_insert_remove_operation`) + link record, parameterized on a per-editor `Traits`. |
 | `graph_editor_node.{hpp,cpp}` | `Graph_editor_node : erhe::graph::Node` - the payload-agnostic node base: canvas rendering (`node_editor` / `show_pins`), dirty flag, factory type name, parameter (de)serialization + undo-commit plumbing. |
-| `graph_editor_window_base.{hpp,cpp}` | `Graph_editor_window_base : erhe::imgui::Imgui_window` - the window base: the node palette, the canvas "Add node" context menu, and the `controls_imgui` seam the palette window forwards to. |
+| `graph_editor_window_base.{hpp,cpp}` (**C7**) | `Graph_editor_window_base : erhe::imgui::Imgui_window` - the window base: the node palette, the canvas "Add node" context menu, and the `controls_imgui` seam the palette window forwards to. The canvas / link / target machinery stays in the concrete windows; see [Future work](#future-work). |
 | `graph_editor_palette_window.{hpp,cpp}` | `Graph_editor_palette_window` - one companion palette window that forwards `imgui()` to a `Graph_editor_window_base&`'s `controls_imgui()`. |
 
 Design notes:
 
 - **Templates vs hooks.** Type-parameterized pieces (asset base, serializer, undo
-  operations) are **templates** - zero runtime cost, and distinct instantiations
-  sidestep the ODR clash that once forced the stepper widgets to be renamed
-  apart. The **node base and window base are non-template** classes with a few
+  operations) are **templates** - zero runtime cost, and distinct `Traits` give
+  the two editors' identically shaped operations distinct types, which is what
+  keeps them clear of an ODR clash. The **node base and window base are
+  non-template** classes with a few
   **virtual hooks**, so their large bodies compile once and the derived classes
   stay small.
 - **`Graph_editor_node` hooks (3).** `pin_key_color(key)` (the per-editor pin-key
@@ -191,10 +259,11 @@ Design notes:
   `get_type()` / `get_type_name()` resolve to each asset's static type. Holds
   `m_graph` + `m_nodes` + `graph()` / `nodes()`; the *consumption model* stays in
   the derived asset (see below).
-- **Undo op traits.** Each editor's `*_graph_operations.hpp` is now just a
-  `Traits` class (`Window` / `Asset` / `Node` types + a `label` string) plus
-  `using` aliases that keep the original concrete operation names, so the window
-  construction sites are unchanged.
+- **Undo op traits (C5).** Each editor's `*_graph_operations.hpp` is a `Traits`
+  class (`Window` / `Asset` / `Node` types + a `label` string) plus `using`
+  aliases naming the concrete operations. The `Window` type supplies
+  `insert_node` / `erase_node` / `connect_pins` / `disconnect_pins` /
+  `get_node_position` / `set_node_position`, each taking `(Asset&, ...)`.
 
 ---
 
@@ -278,13 +347,16 @@ stays per-editor.
 
 ## Serialization and persistence
 
-A graph is serialized as a JSON string blob (its nodes with factory type +
-parameters, its links by node index + pin slot; canvas positions are not stored -
-a loaded graph lays out on a spawn grid). The shared
-`write_graph_asset_json` / `read_graph_asset_json` templates implement this once;
-`read` validates version, node types, pin slots and keys before mutating the live
-graph, and degrades gracefully (an unknown node type or a cyclic link is refused,
-not accepted).
+A graph is serialized as a JSON string blob (C4): nodes carry their factory type,
+their parameters and their canvas layout (position, size, pin edges); links
+reference node indices plus pin slots and carry their wire routing (mid points,
+curve params). Everything that affects how a graph LOOKS is stored with the
+graph, and the editor windows sync their canvases against it. The shared
+`write_graph_asset_json` / `read_graph_asset_json` templates implement the format
+once; `read` validates version, node types, pin slots and keys before mutating
+the live graph, and degrades gracefully - an unknown node type or a cyclic link
+is refused, malformed routing is dropped with a warning, and the rest of the
+graph still loads.
 
 The assets and their bindings persist in the **scene file** (erhe-authored
 `.glb`, `doc/scene_serialization.md`): the root-level `ERHE_node_graphs`
@@ -361,40 +433,6 @@ Gotchas worth knowing:
 
 ---
 
-## Future development
-
-- **Finish the window base ("C7-remainder").** The canvas render loop (`imgui()`
-  Begin/End + node iteration + link drawing + zoom overlay), link create/delete
-  (`handle_link_create` / `handle_deletions`), and the node-position helpers are
-  still copied between the two windows. Because `Graph_editor_node` made node
-  iteration payload-blind (the loop can cast to the shared base), these are
-  extractable into `Graph_editor_window_base` given a small set of hooks
-  (`graph()` -> `erhe::graph::Graph*` with an empty-state null, `connect` /
-  `disconnect` / `remove_node`) plus moving `m_node_editor` (the `ax::NodeEditor`
-  context) into the base. Deferred because it touches the interactive per-frame
-  render path next to the geometry graph's async engine and the #252 target
-  model; do it as its own commit and verify with both sweeps + a canvas
-  screenshot. The target model, evaluation strategy and the ~15 MCP-facing
-  methods stay per-editor regardless.
-- **Dedup the MCP / create-UI / scene-save-load boilerplate ("C8").** The ~9 twin
-  MCP tool bodies (`mcp_server_graphs.cpp`), the two `scene_root` "Create Graph *"
-  context-menu branches, and the parallel scene save/load blocks are payload-blind
-  over `<Asset, Window, folder-member, write/read fn>`. Lower value (short bodies,
-  more surface); builds on the already-shared asset-lookup helpers.
-- **Relocate the gradient / curve editors.** `texture_gradient_editor` /
-  `texture_curve_editor` (currently in `texture_graph_widgets.*`) are canvas-safe
-  widgets like the steppers; move them into `graph_editor_widgets` if a second
-  consumer appears (they carry an `erhe_texgen` dependency, so kept out of the
-  otherwise-generic shared widgets header for now).
-- **Modernize or retire the shader graph.** Either retrofit `src/editor/graph/`
-  onto the shared layer (it would need dirty/param/undo/factory/asset machinery
-  added) or remove it once nothing needs it.
-- **A fifth graph feature** (whatever it is) should be built directly on the
-  shared layer - a payload type + node set + factory + evaluation strategy + an
-  asset with its consumption model - rather than a fresh copy.
-
----
-
 ## Key files
 
 Shared low layer (unchanged): `src/erhe/graph/`,
@@ -423,3 +461,12 @@ Wiring: `src/editor/editor.cpp` (window construction),
 (persistence, `ERHE_node_graphs` extension - see `doc/scene_serialization.md`),
 `src/editor/mcp/mcp_server_graphs.cpp` (MCP tools),
 `src/erhe/item/erhe_item/item.hpp` (`Item_type` indices 42/43/44).
+
+---
+
+## Future work
+
+- [plans/graph_editor.md](plans/graph_editor.md) - the shared-layer pieces that
+  are still per-window (C7 remainder, C8) and the legacy shader graph.
+- [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) -
+  the live mouse-interaction verification of the canvas.
