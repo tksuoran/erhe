@@ -310,7 +310,7 @@ void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
 }
 
 // ERHE_rig: per-bone IK settings -> Ik_settings attachment properties
-// (doc/ik-settings-requirements.md section 6). Absent fields keep defaults;
+// (doc/plans/rigging/ik_settings.md section 6). Absent fields keep defaults;
 // out-of-range limits and stiffness are clamped to their valid ranges
 // (min in [-pi, 0], max in [0, pi], stiffness in [0, 0.99]).
 void import_rigs(const erhe::gltf::Gltf_data& gltf_data)

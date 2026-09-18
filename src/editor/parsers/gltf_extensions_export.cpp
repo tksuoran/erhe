@@ -506,8 +506,8 @@ void add_gltf_editor_state(
         // attachment's presence is user intent). Angles in radians,
         // rest_rotation as glTF-order quaternion [x, y, z, w]. The explicit
         // fields are the effective values; "properties" is the local set
-        // (doc/property-system.md section 4.19).
-        // doc/ik-settings-requirements.md section 6.
+        // (doc/erhe/property_system.md section 4.19).
+        // doc/plans/rigging/ik_settings.md section 6.
         const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(node.get());
         if (ik_settings) {
             const Ik_settings_data& ik = ik_settings->get_data();

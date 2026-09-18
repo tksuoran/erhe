@@ -1364,7 +1364,7 @@ derived cache; the world components are exposed as computed properties
 (D26), not stored ones.
 
 `Node` also registers the nine per-component transform channel locks
-(`lock_translation_x` .. `lock_scale_z`, doc/ik-settings-requirements.md
+(`lock_translation_x` .. `lock_scale_z`, doc/plans/rigging/ik_settings.md
 section 2) as bridged booleans over the `Item_flags::lock_*` bits, through
 `Item_base::register_flag_bit_property` with `Node::property_owner_type()`
 as the owner, so they list only for nodes, in the "Channel Locks" group.
@@ -2054,7 +2054,7 @@ every migration:
 ### 4.19 Ik_settings
 
 `Ik_settings` (the editor's per-bone IK attachment,
-`doc/ik-settings-requirements.md`) registers its fields as entry-stored
+`doc/plans/rigging/ik_settings.md`) registers its fields as entry-stored
 properties, owner type `Ik_settings::property_owner_type()`, UI group
 `IK`: `lock_x`, `lock_y`, `lock_z`, `limit_x`, `limit_y`, `limit_z`
 (bool), `limit_min` and `limit_max` (vec3 radians, `angle_degrees`

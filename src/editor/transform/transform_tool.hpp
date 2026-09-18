@@ -178,7 +178,7 @@ public:
     glm::vec3                          m_skew       {0.0f};
 
     // Per-component channel locks of the (single, local-mode) edited node
-    // (doc/ik-settings-requirements.md section 2): grey out locked widgets. The
+    // (doc/plans/rigging/ik_settings.md section 2): grey out locked widgets. The
     // commit paths (apply_*_edit) mask locked components regardless, which
     // also covers MCP callers.
     std::array<bool, 3>                m_lock_translation{false, false, false};
@@ -193,7 +193,7 @@ public:
     erhe::imgui::Value_edit_state      m_skew_state;
 };
 
-// Per-component transform channel locks (doc/ik-settings-requirements.md
+// Per-component transform channel locks (doc/plans/rigging/ik_settings.md
 // section 2): masks locked LOCAL components of the node's parent-from-node
 // transform back to their reference (pre-edit) values. Call after applying
 // any transform edit to a node; every Transform tool delta path, the

@@ -1,6 +1,8 @@
 # FABRIK Inverse Kinematics - Initial Requirements
 
-Status: IMPLEMENTED (2026-08-23); see Implementation status at the end.
+Status: in progress
+
+Implemented (2026-08-23); see Implementation status at the end.
 
 This plan extends `doc/editor/tools.md` (bone selection and display proxies)
 and `doc/erhe/scene.md` (skins and node transforms) with interactive inverse

@@ -1,5 +1,5 @@
 // Ik_settings fields as entry-stored erhe::property properties
-// (doc/property-system.md section 4.19): get_data() is a mirror of the
+// (doc/erhe/property_system.md section 4.19): get_data() is a mirror of the
 // effective values, every field but rest_rotation inherits, and a node
 // holds them for the attachments below it (D30).
 

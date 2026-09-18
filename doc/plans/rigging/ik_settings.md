@@ -1,10 +1,12 @@
 # Per-Bone IK Settings and Channel Locks - Phase 2 Requirements
 
-Status: reviewed (fact-check + quality review passed, 2026-08-23);
+Status: in progress
+
+Reviewed (fact-check + quality review passed, 2026-08-23);
 implemented 2026-08-25 (see Implementation status at the end); awaiting
 live-editor testing.
-This document covers Phase 2 of the rigging roadmap in `rigging-tools-plan.md`,
-building directly on Phase 1 (`fabrik-ik-requirements.md`, implemented).
+This document covers Phase 2 of the rigging roadmap in `rigging_tools.md`,
+building directly on Phase 1 (`fabrik_ik.md`, implemented).
 
 Decisions already made with the user (2026-08-23):
 
@@ -35,7 +37,7 @@ window and persist with the scene.
   `src/editor/scene/node_ik_settings.{hpp,cpp}` next to `Node_physics`),
   a pure data attachment: no runtime behavior, custom clone constructor
   only. The fields below are registered properties (entry-stored, UI group
-  "IK", `doc/property-system.md` section 4.19); `Ik_settings_data` is the
+  "IK", `doc/erhe/property_system.md` section 4.19); `Ik_settings_data` is the
   mirror of their effective values the solver reads through `get_data()`.
 - Fields, per rotation axis X/Y/Z (all following Blender's `bPoseChannel`
   `ikflag` / `limitmin` / `limitmax` / `ikstiffness` shape):
@@ -301,7 +303,7 @@ formulation adapted to swing/twist limits:
   makes it appear in the Properties "Add Attachment" popup, the Hierarchy
   window, and the MCP scene actions for free.
 - Properties section: the generic registered-property rows (group "IK",
-  `doc/property-system.md` section 4.19) - Lock X/Y/Z and Limit X/Y/Z
+  `doc/erhe/property_system.md` section 4.19) - Lock X/Y/Z and Limit X/Y/Z
   checkboxes, Limit Min / Limit Max as vec3 rows edited in degrees and
   stored in radians (coerced per component to [-180 deg, 0 deg] and
   [0 deg, 180 deg] per section 1), Stiffness developer-only (the field is
@@ -316,7 +318,7 @@ formulation adapted to swing/twist limits:
   step. Channel-lock toggles are registered `Node` properties and record
   the same operation (section 2).
 - Being properties, the IK fields (all but `rest_rotation`) inherit from
-  the node chain (D30 of `doc/property-system.md`): a node or a style can
+  the node chain (D30 of `doc/erhe/property_system.md`): a node or a style can
   hold `Ik_settings.limit_x` for the IK settings attachments below it.
 
 ### 6. Serialization - `ERHE_rig`
@@ -360,7 +362,7 @@ formulation adapted to swing/twist limits:
   `doc/gltf_extensions/ERHE_rig.md`, schema
   `doc/gltf_extensions/schema/ERHE_rig.schema.json`, a table row in
   `doc/gltf_extensions/README.md`, and the extension inventory tables in
-  `doc/scene_serialization.md`.
+  `doc/editor/scene_serialization.md`.
 - Channel-lock flags serialize as flag names through the existing
   `ERHE_node.flags` allowlist (section 2), not through `ERHE_rig`.
 - Prefabs / clone: the attachment clones with the node like other
@@ -455,7 +457,7 @@ Implemented as specified. Key locations:
 
 - `Ik_settings` attachment - `src/editor/scene/node_ik_settings.{hpp,cpp}`
   (registered properties since 2026-09-17, `Ik_settings_data` the mirror
-  of their effective values; `doc/property-system.md` section 4.19); created
+  of their effective values; `doc/erhe/property_system.md` section 4.19); created
   via `Scene_commands::attach_new_ik_settings` (bind-pose rest capture in
   `capture_ik_rest_rotation`, `scene_commands.cpp`); registered in the
   attachment catalog (`attachment_types.cpp`, bone-gated).

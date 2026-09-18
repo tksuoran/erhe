@@ -37,7 +37,7 @@ auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_
 auto draw_mode_gate       (const Node& node) -> bool { return !erhe::scene::get_attachment<Draw_mode               >(&node); }
 
 // IK settings are meaningful only on bone nodes (Item_flags::bone), one per
-// bone (doc/ik-settings-requirements.md).
+// bone (doc/plans/rigging/ik_settings.md).
 auto ik_settings_gate(const Node& node) -> bool
 {
     return

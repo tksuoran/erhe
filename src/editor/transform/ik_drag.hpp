@@ -17,7 +17,7 @@ namespace erhe::scene {
 namespace editor {
 
 // Interactive IK state for one translate drag of a bone (see
-// doc/plans/rigging/fabrik_ik.md and doc/ik-settings-requirements.md).
+// doc/plans/rigging/fabrik_ik.md and doc/plans/rigging/ik_settings.md).
 // Captures the chain, its drag-start pose, and the per-joint constraints
 // (Ik_settings attachments OR-ed with lock_rotation_* channel-lock flags)
 // in begin(); each apply() re-solves from that pose against an absolute

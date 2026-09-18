@@ -13,7 +13,7 @@
 namespace editor {
 
 // Effective values of an Ik_settings attachment, as the IK solver reads
-// them (doc/property-system.md section 4.19: a mirror of the registered
+// them (doc/erhe/property_system.md section 4.19: a mirror of the registered
 // properties, refreshed by Ik_settings::on_property_changed).
 //
 // Parameters are per local axis x = 0, y = 1, z = 2. lock wins over limit
@@ -42,7 +42,7 @@ public:
 // enforced by the constrained IK solver via swing/twist decomposition
 // relative to rest_rotation. Pure data - no runtime behavior; a bone
 // without the attachment is unconstrained. Serialized per node through
-// the ERHE_rig glTF extension. See doc/ik-settings-requirements.md.
+// the ERHE_rig glTF extension. See doc/plans/rigging/ik_settings.md.
 class Ik_settings
     : public erhe::Item<
         erhe::Item_base,
@@ -66,7 +66,7 @@ public:
         return erhe::Item_type::node_attachment | erhe::Item_type::ik_settings;
     }
 
-    // Registered properties (doc/property-system.md section 4.19), entry
+    // Registered properties (doc/erhe/property_system.md section 4.19), entry
     // stored, UI group "IK". Every one inherits from the node chain (D30)
     // except rest_rotation, a per-bone pose. limit_min / limit_max are
     // radians shown in degrees, coerced per component to [-pi, 0] and

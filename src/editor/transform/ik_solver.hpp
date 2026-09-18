@@ -9,7 +9,7 @@
 namespace editor {
 
 // Pure IK solver interface and data (no scene dependencies, unit-testable;
-// doc/ik-settings-requirements.md sections 3-4). Ik_drag owns chain discovery and
+// doc/plans/rigging/ik_settings.md sections 3-4). Ik_drag owns chain discovery and
 // node write-back; the solver poses an Ik_chain.
 
 // FABRIK solve (Aristidou & Lasenby 2011) on a chain of world-space joint
@@ -36,7 +36,7 @@ void fabrik_solve(
 // shortest-arc axis is undefined; the axis of reference_orientation's basis
 // most orthogonal to a (projected into a's orthogonal plane) makes the 180
 // degree flip deterministic (roll preservation is forfeited there - see
-// doc/fabrik-ik-requirements.md).
+// doc/plans/rigging/fabrik_ik.md).
 [[nodiscard]] auto ik_shortest_arc(glm::vec3 a, glm::vec3 b, const glm::quat& reference_orientation) -> glm::quat;
 
 // Per-joint constraint, resolved at drag start: Ik_settings attachment

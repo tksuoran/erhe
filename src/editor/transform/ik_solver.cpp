@@ -47,7 +47,7 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
 
 // Clamps the candidate local rotation to the joint's constraint, relative
 // to the drag-start local rotation (which defines the no-teleport extension
-// of the constraint region). See doc/ik-settings-requirements.md section 4.
+// of the constraint region). See doc/plans/rigging/ik_settings.md section 4.
 [[nodiscard]] auto constrain_local_rotation(
     const Ik_joint_constraint& constraint,
     const quat&                start_local,
@@ -307,7 +307,7 @@ void Fabrik_solver::solve(Ik_chain& chain)
         return;
     }
 
-    // Constrained FABRIK (doc/ik-settings-requirements.md section 4): forward pass
+    // Constrained FABRIK (doc/plans/rigging/ik_settings.md section 4): forward pass
     // unconstrained; the backward pass enforces constraints with parent
     // world orientations propagated root to tip, so every iteration ends in
     // a constraint-satisfying pose. The unreachable-target shortcut is

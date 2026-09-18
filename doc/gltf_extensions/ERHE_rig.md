@@ -1,5 +1,7 @@
 # ERHE_rig
 
+Stability: experimental
+
 ## Scope
 
 **Node** extension. Optional (`extensionsUsed` only).
@@ -13,7 +15,7 @@ zero). Written for every node carrying the attachment, all-default values
 included - the attachment's presence is itself user intent. The sub-object
 carries the attachment's persistent Item flags (see [flags.md](flags.md)).
 Future rig data (pole targets, per-chain settings) will ride as sibling
-sub-objects. See `doc/ik-settings-requirements.md`.
+sub-objects. See `doc/plans/rigging/ik_settings.md`.
 
 General transform channel locks (`lock_translation_x` ... `lock_scale_z`)
 are NOT part of this extension: they are Item flags and ride
@@ -53,7 +55,7 @@ are NOT part of this extension: they are Item flags and ride
   quantity is `inverse(rest_rotation) * parent_from_node_rotation`,
   enforced via swing/twist decomposition).
 - `properties`: the attachment's local property values by name
-  (`doc/property-system.md` D23 and section 4.19), the attachment's
+  (`doc/erhe/property_system.md` D23 and section 4.19), the attachment's
   complete local set: the explicit fields above are the effective values
   for readers without the property system, and a field the map does not
   name holds no local value after the load, so a value inherited from the

@@ -166,7 +166,7 @@ public:
     // tool, numeric transform fields, and IK (a locked rotation axis acts
     // as an IK DOF lock). Not enforced against animation, physics, or
     // programmatic set_* calls. Authored + serialized by name (see
-    // gltf_item_flags.cpp). See doc/ik-settings-requirements.md.
+    // gltf_item_flags.cpp). See doc/plans/rigging/ik_settings.md.
     static constexpr uint64_t lock_translation_x        = (uint64_t{1} << 42);
     static constexpr uint64_t lock_translation_y        = (uint64_t{1} << 43);
     static constexpr uint64_t lock_translation_z        = (uint64_t{1} << 44);

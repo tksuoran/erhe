@@ -237,7 +237,7 @@ public:
     static const erhe::property::Property<glm::vec3> world_translation_property;
     static const erhe::property::Property<glm::quat> world_rotation_property;
     static const erhe::property::Property<glm::vec3> world_scale_property;
-    // Per-component transform channel locks (doc/ik-settings-requirements.md
+    // Per-component transform channel locks (doc/plans/rigging/ik_settings.md
     // section 2): bridged over the Item_flags::lock_translation_* /
     // lock_rotation_* / lock_scale_* bits, which the Transform tool, the
     // numeric transform fields and IK read.

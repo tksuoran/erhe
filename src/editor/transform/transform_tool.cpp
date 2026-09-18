@@ -742,7 +742,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     }
 }
 
-// Per-component transform channel locks (doc/ik-settings-requirements.md
+// Per-component transform channel locks (doc/plans/rigging/ik_settings.md
 // section 2): masks locked LOCAL components of the node's parent-from-node
 // transform back to their reference (drag-start / pre-edit) values, after a
 // delta application. Rotation masking is per Euler XYZ component of the

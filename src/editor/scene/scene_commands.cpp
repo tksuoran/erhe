@@ -1260,7 +1260,7 @@ auto Scene_commands::attach_new_frame_controller(erhe::scene::Node& node) -> std
 
 namespace {
 
-// Rest orientation for IK limits (doc/ik-settings-requirements.md section 1):
+// Rest orientation for IK limits (doc/plans/rigging/ik_settings.md section 1):
 // the local bind rotation when the node and its parent are joints of the
 // same skin - the rotation of world_from_bind(parent)^-1 *
 // world_from_bind(joint) - using the first such skin in Scene::get_skins()

@@ -1039,7 +1039,7 @@ void Properties::ik_settings_actions(const std::shared_ptr<Ik_settings>& ik_sett
     ERHE_PROFILE_FUNCTION();
 
     // The locks, limits, stiffness and rest rotation are generic property
-    // rows (doc/property-system.md section 4.19); the action remains here.
+    // rows (doc/erhe/property_system.md section 4.19); the action remains here.
     // It records the same undoable write the generic rows and the MCP
     // set_item_property tool record.
     add_entry(

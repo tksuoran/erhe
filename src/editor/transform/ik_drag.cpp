@@ -27,7 +27,7 @@ constexpr int   c_max_iterations  = 16;
     return erhe::utility::test_bit_set(node.get_flag_bits(), erhe::Item_flags::ik_lock);
 }
 
-// Twist axis (doc/ik-settings-requirements.md section 4): the local coordinate
+// Twist axis (doc/plans/rigging/ik_settings.md section 4): the local coordinate
 // axis closest to the joint's child direction in the joint's own frame
 // (pose-invariant - the child's local translation does not change with the
 // joint's rotation), ties broken in X, Y, Z priority order. -1 when the
