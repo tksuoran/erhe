@@ -247,6 +247,7 @@ Every document states its standing in its first ten lines:
 ### Plans (`plans/`)
 
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (proposed): Keyframing and timeline for the Animation window
+- [plans/doc_restructure.md](plans/doc_restructure.md) (in progress): Content sweep worklist for this documentation layout
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements
 - [plans/geometry_graph/attribute_projection.md](plans/geometry_graph/attribute_projection.md) (proposed): project_attribute geometry-graph node: design research
 - [plans/geometry_graph/attribute_projection_handoff.md](plans/geometry_graph/attribute_projection_handoff.md) (proposed): project_attribute node: implementation handoff
