@@ -1,6 +1,6 @@
-// Phase 2 of doc/subdivision_crease_edges.md: semi-sharp crease rules in
-// Catmull-Clark subdivision (DeRose/Kass/Truong 1998; rule selection and
-// fractional blending per OpenSubdiv Sdc semantics).
+// doc/subdivision_crease_edges.md, "Catmull-Clark crease rules": semi-sharp
+// crease rules in Catmull-Clark subdivision (DeRose/Kass/Truong 1998; rule
+// selection and fractional blending per OpenSubdiv Sdc semantics).
 //
 // Setup used throughout: a cube of radius 1 (vertices at +-0.5) with the top
 // (y = +0.5) edge loop tagged: vertices {2, 4, 6, 7}, edges (2,6) (6,7) (4,7)

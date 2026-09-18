@@ -522,7 +522,7 @@ auto Primitive_builder::build() -> bool
 
     // Breadcrumbs localize which build sub-step a spinning render thread is
     // stuck in (these walk mesh corners/edges and can loop forever on
-    // degenerate / non-manifold geometry). See doc/intermittent_main_loop_hang.md.
+    // degenerate / non-manifold geometry). See doc/geogram.md.
     const Primitive_types& primitive_types = m_build_info.primitive_types;
     if (primitive_types.fill_triangles) {
         // Include mesh counts so the watchdog dump reveals whether the mesh is

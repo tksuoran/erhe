@@ -2,7 +2,7 @@
 """Push and run the geogram_soak harness on an attached ARM Android device.
 
 geogram_soak is a headless reproduction of the intermittent main-loop hang
-(doc/intermittent_main_loop_hang.md): N taskflow workers concurrently build the
+(doc/geogram.md): N taskflow workers concurrently build the
 editor's brush shapes through Geogram (sys:multithread), mirroring
 Scene_builder::make_brushes, and validate each mesh after the join. The
 corruption is ARM-only, so the useful runs are on-device -- but it is a plain

@@ -325,7 +325,7 @@ public:
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;
 
-// Result of validate_mesh_structure(). See doc/intermittent_main_loop_hang.md.
+// Result of validate_mesh_structure(). See doc/geogram.md.
 enum class Mesh_structure_error {
     none,                   // mesh is structurally sane
     absurd_counts,          // facets/vertices/corners count is implausibly large
@@ -340,7 +340,7 @@ enum class Mesh_structure_error {
 // counts) BEFORE any unbounded per-facet walk can spin on it. The count bound
 // is checked first so an absurd facet count cannot make the check itself spin.
 // Pure (no logging) so callers can format their own context; see
-// doc/intermittent_main_loop_hang.md.
+// doc/geogram.md.
 class Mesh_structure_check
 {
 public:

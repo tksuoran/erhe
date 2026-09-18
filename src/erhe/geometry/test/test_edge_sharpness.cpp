@@ -1,8 +1,8 @@
-// Phase 1 of doc/subdivision_crease_edges.md: the per-edge "edge_sharpness"
-// attribute channel. Geogram's edges.clear() keeps attribute bindings but
-// wipes values, so Geometry::build_edges() snapshots present sharpness values
-// by canonical vertex pair and reapplies them after the rebuild; repeated
-// process() runs must not lose or corrupt crease data.
+// doc/subdivision_crease_edges.md, "Edge sharpness attribute": the per-edge
+// "edge_sharpness" attribute channel. Geogram's edges.clear() keeps attribute
+// bindings but wipes values, so Geometry::build_edges() snapshots present
+// sharpness values keyed by canonical vertex pair and reapplies them after
+// the rebuild; repeated process() runs must not lose or corrupt crease data.
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/bake_transform.hpp"

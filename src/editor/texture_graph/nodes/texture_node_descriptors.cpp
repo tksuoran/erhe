@@ -4070,7 +4070,7 @@ auto build_japanese_glyphs() -> Node_descriptor
 // Phase 4b utility
 // ---------------------------------------------------------------------------
 
-// Gaussian Blur - a buffer-dependent filter (doc/texture_graph.md Phase 5),
+// Gaussian Blur - a buffer-dependent filter (doc/texture_graph.md),
 // concept ported from Material Maker gaussian_blur_x.mmg (MIT). Material Maker's
 // node is a separable X/Y pair wrapped around buffers; this is a self-contained
 // single-node 2D Gaussian: the rgba input is a FUNCTION-form input (function =

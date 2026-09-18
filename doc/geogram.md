@@ -1,120 +1,73 @@
-# Draft GitHub issue for BrunoLevy/geogram: concurrent use of geogram algorithms from multiple application threads
+# Geogram in erhe
 
 Stability: mostly stable
 
-Status: DRAFT, not yet filed. Prepared 2026-07-12 from a live hang observed in
-the erhe editor (Debug build, geogram at the erhe fork pin, base upstream
-around `de1b4e61`). Sibling context: https://github.com/BrunoLevy/geogram/issues/367
-(same application, different defect).
+erhe uses [Geogram](https://github.com/BrunoLevy/geogram) as the backend of
+`erhe::geometry`. Geogram's algorithms carry two constraints that erhe has to
+satisfy from the outside: its process-global thread state permits only one
+algorithm at a time, and its exact predicates require a compiler that does not
+fuse their arithmetic. This document states both contracts, the guard erhe puts
+in front of degenerate convex-hull input, and the infrastructure that names
+where a thread is stuck when one of them is violated.
 
-When filing, everything below the marker is the proposed issue body.
+The upstream request that would let the first contract be relaxed is drafted in
+`doc/reference/geogram_thread_safety_issue.md`.
 
----
+## Build contract: no FMA contraction in Geogram
 
-## Title
+Geogram's geometric predicates use Shewchuk-style error-free transformations
+plus exact orientation tests. A fused multiply-add (`a*b+c` with a single
+rounding) changes the sign of a near-zero orientation determinant and breaks
+them. Geogram states this itself: its Linux platform files set
+`-frounding-math -ffp-contract=off` to disable automatic generation of FMAs,
+which "would break exact predicates", and `delaunay_3d.cpp` carries the comment
+`// locate_inexact() loops forever !`.
 
-ParallelDelaunay3d cannot be used while other geogram threads are running
-(`CellStatusArray::resize` asserts `!Process::is_running_threads()`) - request:
-make geogram algorithms usable concurrently from multiple application threads
+Geogram's `Android-generic` and `Darwin` platform configs are empty and omit
+the flag, so erhe restores it for every non-MSVC compiler in the top-level
+`CMakeLists.txt` right after the geogram `CPMAddPackage`:
 
-## What happened
-
-Our application (the erhe 3D editor) runs geogram-based geometry operations on
-a thread pool: mesh operations (subdivide, boolean, remesh, ...) execute on
-worker threads while the main thread stays interactive. Some of those code
-paths use `GEO::parallel_for`, and the main thread occasionally builds small
-convex hulls via `GEO::Delaunay::create(3, "PDEL")`.
-
-When the main thread entered `ParallelDelaunay3d::set_vertices()` while a
-worker thread had geogram threads running (a `GEO::parallel_for` inside a mesh
-build), this debug assertion fired:
-
-```
-geo_debug_assert(!Process::is_running_threads());   // delaunay_sync.h:220, CellStatusArray::resize
-```
-
-Call stack of the asserting (main) thread:
-
-```
-GEO::geo_abort                          geogram/basic/assert.cpp:80
-GEO::geo_assertion_failed               geogram/basic/assert.cpp:117
-GEO::CellStatusArray::resize            geogram/delaunay/delaunay_sync.h:220
-GEO::CellStatusArray::resize            geogram/delaunay/delaunay_sync.h:243
-GEO::ParallelDelaunay3d::set_vertices   geogram/delaunay/parallel_delaunay_3d.cpp:2661
-erhe::geometry::make_convex_hull        (application)
+```cmake
+if (NOT MSVC)
+    foreach (geo_target geogram geogram_third_party geogram_num_3rdparty)
+        if (TARGET ${geo_target})
+            target_compile_options(${geo_target} PRIVATE -ffp-contract=off)
+        endif ()
+    endforeach ()
+endif ()
 ```
 
-The precondition is documented ("no concurrent thread is currently running"),
-so this is arguably by design - but the design makes `ParallelDelaunay3d`
-(and, we suspect, other `Process::run_threads`-based algorithms) unusable in
-any application that runs geogram work on more than one thread, even when the
-two concurrent computations touch completely disjoint data.
+Without it, clang (arm64 in particular) contracts the predicate arithmetic and
+Geogram's Delaunay `locate_inexact()` point-location walk never terminates on
+degenerate input - a brush cone's coplanar base ring is enough. The failure is
+a pure userspace spin: no crash, no memory error, no log line, and it is
+intermittent because Geogram randomizes Delaunay insertion order (BRIO) per
+process, so only some orders build the cycle-triggering tetrahedralization.
+MSVC does not contract by default, so x86 desktop builds never showed it; the
+headless reproduction ran ~25% spin on an arm64 phone and 0/100 with the flag
+restored. Any new build configuration that compiles Geogram must keep this
+flag, and the GLSL and remesh sources `erhe::geometry` emits for other tools to
+build repeat the requirement in a comment.
 
-## Secondary issue: geo_abort() blocks on getchar() on Windows
+## Threading contract: one geogram algorithm at a time
 
-On Windows, `geo_abort()` does:
-
-```cpp
-void geo_abort() {
-#ifdef GEO_OS_WINDOWS
-    std::cerr << "Aborting, press any key to continue" << std::endl;
-    std::getchar();
-#endif
-    ...
-    abort();
-}
-```
-
-In an unattended process (headless CI / automation, no console reader), the
-`getchar()` never returns, so a failed assertion turns into a silent, eternal
-hang instead of a crash. A watchdog sees the process stall, but nothing ever
-terminates it. Please consider gating the interactive prompt on something like
-`_isatty(_fileno(stdin))`, or an environment variable / `AssertMode`, so
-non-interactive processes fail fast.
-
-## What we would like
-
-1. Geogram algorithms usable concurrently from multiple application threads,
-   at least when operating on disjoint data. Concretely for this report:
-   `ParallelDelaunay3d` either (a) coordinating with `Process` so concurrent
-   use is safe, or (b) failing over to the sequential implementation instead
-   of asserting when other threads are running.
-2. If full concurrency is out of scope: an explicit, documented thread-safety
-   contract for the parallel algorithms (which entry points require exclusive
-   ownership of geogram's process-global thread state), so applications can
-   arrange their own serialization.
-3. The `geo_abort()` getchar prompt made non-interactive-safe (see above).
-
-## Our workaround
-
-We switched `make_convex_hull` to the sequential `"BDEL"` Delaunay (hull
-inputs are small, so the parallel build gained nothing) - which also avoids
-`"PDEL"`'s unbounded hang on a volume-less point set (four coplanar points
-never return from `set_vertices()`) - and we set
-`GEO::set_assert_mode(GEO::ASSERT_THROW)` explicitly when no debugger is
-attached, so future geogram assertions surface as catchable exceptions
-instead of an interactive abort prompt.
-
----
-
-# erhe-side serialization contract (implemented 2026-08-04)
-
-A second concurrency defect confirmed the draft issue's premise: geogram's
-Windows thread-pool manager (`WindowsThreadPoolManager::run_concurrent_threads`,
-process_win.cpp) resets a **static** `threadCounter_` shared by all
-invocations, so two threads entering `GEO::parallel_for` simultaneously
-corrupt each other's thread-id assignment and some worker slices never run.
-Observed as `GEO::Geom::colocate()` leaving `old2new` entries at NO_INDEX
-(assert at colocate.cpp:254) when two deferred glTF finalize tasks converted
-triangle soups concurrently (doc/gltf-load-speedup-plan.md). Upstream also
-tracks the general problem (global static state in CVT / LBFGS; "Delaunay on
-two meshes in parallel" unsupported): BrunoLevy/geogram#68.
+Geogram's Windows thread-pool manager
+(`WindowsThreadPoolManager::run_concurrent_threads`, `process_win.cpp`) resets
+a **static** `threadCounter_` shared by all invocations, so two threads
+entering `GEO::parallel_for` simultaneously corrupt each other's thread-id
+assignment and some worker slices never run. It surfaced as
+`GEO::Geom::colocate()` leaving `old2new` entries at `NO_INDEX` (assert at
+`colocate.cpp:254`) when two deferred glTF finalize tasks converted triangle
+soups concurrently. `ParallelDelaunay3d` refuses the situation outright
+(`CellStatusArray::resize` asserts `!Process::is_running_threads()`). Upstream
+tracks the general problem - global static state in CVT / LBFGS, "Delaunay on
+two meshes in parallel" unsupported - as BrunoLevy/geogram#68.
 
 erhe therefore serializes every entry into a geogram *algorithm* on one
-process-wide recursive mutex, `erhe::geometry::geogram_lock()` (geometry.hpp).
-Geogram still parallelizes each call internally across cores, so the
-throughput cost is small. Lock order: it is the innermost lock - never
-acquire a scene (Item_host) or Primitive_shape mutex while holding it.
+process-wide recursive mutex, `erhe::geometry::geogram_lock()` (`geometry.hpp`).
+Geogram still parallelizes each call internally across cores, so the throughput
+cost is small. Lock order: it is the innermost lock - never acquire a scene
+(`Item_host`) or `Primitive_shape` mutex while holding it.
 
 Guarded choke points (each takes the lock internally):
 
@@ -129,7 +82,7 @@ Guarded choke points (each takes the lock internally):
   normalize_charts); the per_facet branch reaches no Geogram algorithm
   (mesh-local loops + attribute binds; mesh.cpp `connect()`/`copy()` are
   serial at the pin) and runs UNLOCKED, so per-facet unwraps of different
-  meshes parallelize across workers (2026-08-05)
+  meshes parallelize across workers
 - `Json_library` polyhedron load (mesh_repair) in the editor
 - editor `Mesh_operation::make_entries` additionally wraps the whole
   geometry-operation callback (belt and suspenders for operations not listed
@@ -142,13 +95,16 @@ construction, `facets.connect()`, `geometry_from_flat_data`,
 `compute_mesh_tangents`, plain mesh reads (buffer-mesh and raytrace builds),
 `operation::bake_transform()` and `operation::clip_by_tile_tree()` (pure
 per-invocation clipping state; their piece post_processing self-locks via
-`Geometry::process()` - see the thread-safety note in clip_tile_tree.hpp).
+`Geometry::process()` - see the thread-safety note in `clip_tile_tree.hpp`).
 
-When the fork gains a reentrant thread manager (per-invocation context
-instead of the static counter) and upstream #68 lands, this contract can be
-relaxed.
+`make_convex_hull()` uses the sequential `"BDEL"` Delaunay for the same
+reason: it runs on async operation workers while other geogram work may be in
+flight, and hull inputs are small enough that the parallel build buys nothing.
 
-# Degenerate convex hull input (erhe-side guard)
+When the fork gains a reentrant thread manager (per-invocation context instead
+of the static counter) and upstream #68 lands, this contract can be relaxed.
+
+## Degenerate convex hull input
 
 Geogram's Delaunay has no usable answer for a point set that spans no volume,
 and its behavior differs per implementation: `"BDEL"` (sequential, the one
@@ -164,3 +120,94 @@ set before Geogram is reached, returning false and logging the reason. Every
 caller treats false as "no hull for this geometry": the collision shape stays
 absent and the MCP `create_shape` convex hull tool answers with an
 `isError` reply naming the reason.
+
+## Naming a thread that spins inside Geogram
+
+A thread spinning inside a Geogram walk never returns to a logging point, so it
+cannot report where it is. Two mechanisms stand in for it, and they are kept as
+general infrastructure rather than as diagnostics of one past defect.
+
+### Breadcrumbs
+
+`erhe::log::set_breadcrumb(std::string_view)` records the most recent named
+execution phase plus a ring of the last 32 phases, each with thread id and a
+monotonic timestamp (declared in `src/erhe/log/erhe_log/log.hpp`). It costs one
+uncontended mutex lock, reuses the current-text buffer, and is safe from any
+thread. Breadcrumbs are set at:
+
+- `Editor::tick()` major phases (`tick: wait_frame`, `tick: xr poll_events`,
+  `tick: fixed_step (physics)`, `tick: thumbnails update`,
+  `tick: rendergraph execute`, `tick: submit + end_frame`, ...) in
+  `src/editor/editor.cpp`.
+- Each rendergraph node before it executes, breadcrumb = node name
+  (`src/erhe/rendergraph/erhe_rendergraph/rendergraph.cpp`).
+- `Geometry::process()` sub-steps (`geometry: facets.connect`,
+  `geometry: update_connectivity + build_edges`,
+  `geometry: compute_smooth_vertex_normals`, ...).
+- `Primitive_builder::build()` sub-steps (`primitive: build_polygon_fill`,
+  `primitive: build_edge_lines`, `primitive: build_centroid_points`).
+- `Brush_preview::render_preview`, naming the brush whose preview primitive is
+  being built lazily.
+
+A phase that sets no breadcrumb of its own is reported under the last one set,
+so a breadcrumb naming a step is evidence of where the thread entered, not
+proof of which call it is inside.
+
+### Main-loop watchdog
+
+`Editor::start_main_loop_watchdog()` starts a thread right after `entering main
+loop` and joins it first thing in `~Editor`. It wakes once per second and, if a
+tick has been in progress without the tick-thread breadcrumb advancing for more
+than 5 seconds, logs under the `editor.watchdog` tag:
+
+```
+Main loop STALLED: tick has not progressed for N.N s. Stuck in phase: '<phase>' (tick thread 0x...).
+  breadcrumb t=...s thread=0x...: <phase>
+  ... (the recent ring, oldest -> newest)
+```
+
+The stuck phase is attributed to the tick thread specifically - worker threads
+also set breadcrumbs during background geometry processing, so the newest
+breadcrumb from the tick thread is the authoritative one. The watchdog fires
+only while a tick is actually in progress, so idle or throttled frames
+(including the in-tick 250 ms OpenXR off-head throttle) do not trip it.
+
+When a stall is reported: on Quest keep `scripts/quest_logcat.sh` streaming to
+disk beforehand (the in-memory ring rolls over), on desktop read `logs/log.txt`,
+and grep for `Main loop STALLED`. The ring dump below the report gives the
+sequence of phases leading in.
+
+### Structural mesh validation
+
+`erhe::geometry::validate_mesh_structure()` (`geometry.hpp`) is a bounded,
+allocation-free structural check of a `GEO::Mesh`: absurd facet / vertex /
+corner counts, and facets whose corner range is wrong. It is pure (no logging)
+so callers format their own context, and it checks the counts first so an
+absurd facet count cannot make the check itself spin. It exists so a mesh
+corrupted during concurrent processing can be named the moment it happens
+rather than when some later unbounded per-facet walk trips over it.
+`ERHE_DEBUG_VALIDATE_GEOMETRY` (off by default) runs it right after
+`Geometry::process()` on the worker thread; leave it off for normal runs, since
+validating there perturbs any race being hunted.
+
+### Soak harnesses
+
+`src/geogram_soak/` is a headless executable, built on desktop and Android,
+that mirrors `Scene_builder::make_brushes()` with no rendering, SDL, Vulkan or
+headset: N taskflow workers each build a brush shape on their own `GEO::Mesh`,
+run the same `Geometry::process()` flags, and validate after the join. It can
+also build all ~92 Johnson solids (`--johnson <johnson.json>`) exactly as the
+editor does - one shared parsed `rapidjson::Document` read concurrently, and
+per solid the `Json_library::make_geometry` body including `GEO::mesh_repair()`.
+`--convex-hull` exercises the Delaunay path that FMA contraction breaks.
+Knobs: `--workers N` (1 = sequential), `--multithread on|off` (Geogram
+`sys:multithread`), `--johnson PATH`, `--iters`, `--batch`, `--detail`.
+
+It links only `erhe::geometry` and taskflow, and it is built for Android
+deliberately, because the predicate defect is ARM-only:
+`scripts/run_geogram_soak.py` pushes the arm64 ELF and runs it over
+`adb shell`, with no headset or controllers involved.
+`scripts/soak_quest.py` soaks the full editor instead, cold-starting it
+repeatedly on a device (`--flavor mobile|quest`) and watching the log for
+`Main loop: completed frame 10` (pass), `Main loop STALLED` (the watchdog's
+authoritative signal) and `MESH CORRUPT`.

@@ -115,7 +115,7 @@ MCP. Creation 18 (fish) is the reference implementation.
   (`bind_material_texture(..., wrap="repeat")`); (b) coarse cell counts -
   16 cells/tile aliased into moire stripes at fish size, 6 reads as scales.
   A proper per-axis UV control is still future work
-  (doc/geometry-graph-attribute-projection.md `project_attribute` node).
+  (doc/plans/geometry_graph/attribute_projection.md `project_attribute` node).
 - Scales texture recipe (LANDED in creation 18, 2026-08-10): `shape`
   (circle, edge 1.0) -> `ensure_rgba` -> two `transform` repeats (scale
   1/cells, second offset by half a cell) -> `blend` lighten (=max) = quincunx

@@ -2,7 +2,7 @@
 """Quest main-loop-hang soak harness.
 
 Hunts the intermittent render-thread CPU-spin documented in
-doc/intermittent_main_loop_hang.md by repeatedly cold-starting the editor on a
+doc/geogram.md by repeatedly cold-starting the editor on a
 Quest 3 and watching whether it reaches steady-state content rendering.
 
 Subcommands:
@@ -80,7 +80,7 @@ def apk_for(build_type: str, flavor: str) -> Path:
 PASS_S = "Main loop: completed frame 10"   # soak target: 10 content frames
 HANG_S = "Main loop STALLED"               # the watchdog's authoritative signal
 # With the temporary build_polygon_fill / make_brushes-join validators in place
-# (doc/intermittent_main_loop_hang.md), a reproduction no longer spins -- it logs
+# (doc/geogram.md), a reproduction no longer spins -- it logs
 # "MESH CORRUPT ..." and continues to frame 10. So a corrupt-mesh log line is now
 # an authoritative reproduction signal, just like the watchdog stall.
 CORRUPT_S = "MESH CORRUPT"

@@ -1,11 +1,11 @@
-# Procedural Texture Graph for erhe Editor (issue #199)
+# Procedural texture graph
 
 Stability: mostly stable
 
-Analysis of Material Maker's architecture, assessment of erhe's existing
-infrastructure (geometry graph, runtime shader compilation, render-to-texture),
-and a phased implementation plan for a procedural texture node graph in the
-erhe editor.
+The editor's procedural texture node graph: a port of Material Maker's GLSL
+composition model onto `erhe::graph`, `erhe::texgen` and the editor's graph
+window. This document holds the architecture of the port, what the node library
+covers against Material Maker's, and how it is verified.
 
 Reference implementation: https://github.com/RodZill4/material-maker
 (clone it locally to read the node definitions; MIT license - GLSL snippets
@@ -14,67 +14,39 @@ ported from it carry an attribution comment). Referred to below as
 
 ## Table of Contents
 
-1. [Implementation Status](#implementation-status)
-2. [Node Library Comparison](#node-library-comparison-erhe-vs-material-maker)
-3. [Material Maker Architecture](#material-maker-architecture)
-4. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
-5. [Architecture Decisions](#architecture-decisions)
-6. [Implementation Plan (Phases)](#implementation-plan-phases)
-7. [Verification Strategy](#verification-strategy)
-8. [Key Files Reference](#key-files-reference)
-
----
-
-## Implementation Status
-
-| Work item                                                   | Status  | Commit |
-|-------------------------------------------------------------|---------|--------|
-| Phase 0: `erhe::graph` unit tests (foundation hardening)    | DONE    | 29ff3f31, aa59158a |
-| Phase 1: `erhe::texgen` codegen core + unit tests           | DONE    | e00df7a2 |
-| Phase 2: GPU validation (compile + render composed shaders) | DONE    | fddf2c08 |
-| Phase 3 step 1: editor window skeleton + wiring             | DONE    | e1402846 |
-| Phase 3 step 2: MVP node set (10 nodes) + factory/toolbar    | DONE    | 0b063f14 |
-| Phase 3 step 3: compose DAG, render path, previews, output  | DONE    | 003e4709 |
-| Phase 3 step 4: serialization + undo/redo                   | DONE    | bfae3ae5 |
-| Phase 3 step 5: MCP tools (get/add/connect/.../export_png)   | DONE    | bcb5520a |
-| Phase 3 step 6: headless smoke test script (124 checks)      | DONE    | 40c86afb |
-| Phase 4a: gradient + curve widgets, real Colorize, Curve    | DONE    | a0c5e873, af08c98f |
-| Phase 4b: node library expansion + searchable palette       | DONE    | b54e0060, e20f2a0c |
-| Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
-| Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
-| Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 559e7c45 |
-| Backlog: Switch (one per value type; compile-time branch select) | DONE | 3bd1a45d |
-| Backlog: Transform / UV warps (13 of ~25 nodes)              | DONE    | 3f185eae |
-| Backlog: Color / tone filters (14 nodes, new "Color" category)| DONE   | 55150bdf |
-| Backlog: Noise variants (6 of ~15 nodes)                     | DONE    | 8ac10467 |
-| Backlog: Deterministic patterns (11 of ~20 nodes)            | DONE    | b18cf4e1 |
+1. [Node Library Comparison](#node-library-comparison-erhe-vs-material-maker)
+2. [Material Maker Architecture](#material-maker-architecture)
+3. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
+4. [Architecture Decisions](#architecture-decisions)
+5. [Verification Strategy](#verification-strategy)
+6. [Key Files Reference](#key-files-reference)
+7. [Future work](#future-work)
 
 ---
 
 ## Node Library Comparison (erhe vs Material Maker)
 
-Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
-under `addons/material_maker/nodes/` plus ~19 engine-level node types in
-`engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
+Compared against Material Maker master: 392 `.mmg` node definitions under
+`addons/material_maker/nodes/` plus ~19 engine-level node types in
+`engine/nodes/gen_*.gd` (buffer, switch, image, text, graph/group, remote,
 comment, export, iterate_buffer, ...). erhe has 82 node types: 79 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
-descriptor-less `output`, `material_output`, and `buffer` nodes
-(`texture_graph_node_factory.cpp`). Note the 392 count includes internal
-companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
-`fill_preprocess`), so the user-visible Material Maker library is somewhat
-smaller than the raw file count.
+descriptor-less `output`, `material_output` and `buffer` nodes
+(`texture_graph_node_factory.cpp`). The 392 count includes internal companion
+sub-nodes of compound graphs (`edge_detect_1..3`, `fill_preprocess`, ...), so
+the user-visible Material Maker library is somewhat smaller than the raw file
+count.
 
-**Vertical orientation (fixed).** Composed textures were stored vertically
-mirrored against their own shader uv space on Vulkan and Metal: the texgen
-fullscreen triangle derived `v_uv` straight from the NDC position, which
-hardcodes the `bottom_left` (OpenGL) texture origin, so row 0 held the
-`uv.y = 1` row. Node previews and PNG exports came out upside down - a
-`seven_segment` 2 read as a 5, and `profile`'s Fill style filled the top. The
-vertex shader now takes the sign from
-`device.get_info().coordinate_conventions.texture_origin`, as all application
-code must (see the `Y_SIGN` note in `erhe::graphics` `test_topology`), so row 0
-is `uv.y = 0` on every backend and an erhe-composed image agrees with Material
-Maker, whose GLSL these nodes are ported from. `section_patterns` asserts the
+**Vertical orientation.** The texgen fullscreen triangle's vertex shader takes
+the uv sign from `device.get_info().coordinate_conventions.texture_origin`, as
+all application code must (see the `Y_SIGN` note in `erhe::graphics`
+`test_topology`), so row 0 is `uv.y = 0` on every backend and an erhe-composed
+image agrees with Material Maker, whose GLSL these nodes are ported from.
+Deriving `v_uv` straight from the NDC position instead hardcodes the
+`bottom_left` (OpenGL) texture origin, which stores composed textures
+vertically mirrored against their own shader uv space on Vulkan and Metal: node
+previews and PNG exports come out upside down, a `seven_segment` 2 reads as a
+5, and `profile`'s Fill style fills the top. `section_patterns` asserts the
 mapping, and that a Buffer node round-trips it unchanged.
 
 ### erhe nodes and their Material Maker counterparts
@@ -87,7 +59,7 @@ mapping, and that a Buffer node round-trips it unchanged.
 | `voronoi`             | Generators | `voronoi.mmg`                | 3 of 4 outputs (nodes, borders, random color); the companion-node "Fill" output is dropped. |
 | `bricks`              | Generators | `bricks.mmg`                 | Grayscale pattern output only; per-brick random-color / UV / corner outputs and mortar/bevel/round map inputs dropped. 5 bond patterns. |
 | `shape`               | Generators | `shape.mmg`                  | 3 of 5 shapes (circle, polygon, star); curved-star and rays shapes plus size/edge map inputs dropped. |
-| `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. **Follow-up:** MM's `fbm2`/`fbm3`/`fbm4` are the same node with larger basis libraries (simplex, cellular3..8, voronoise, gabor) - those bases are worth appending to this node's enum (appending keeps existing indices, so saved graphs stay valid) rather than adding three near-duplicate nodes. |
+| `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. MM's `fbm2`/`fbm3`/`fbm4` are the same node with larger basis libraries; see `doc/plans/texture_graph.md`. |
 | `noise`               | Generators | `noise.mmg`                  | Density map input dropped (parameter only). |
 | `color_noise`         | Generators | `color_noise.mmg`            | Full. |
 | `perlin_color`        | Generators | `perlin_color.mmg`           | Full. |
@@ -162,10 +134,11 @@ mapping, and that a Buffer node round-trips it unchanged.
 | `output`              | Output     | (none)                       | erhe-specific: bakes one texture into `Content_library`, optional assign-to-material. MM's nearest concept is the material node. |
 | `material_output`     | Output     | `material.mmg`               | PBR channel bake. MM also has `material_3d`, `material_unlit`, `material_dynamic`, `material_tesselated`, `material_raymarching` variants. |
 
-### Material Maker family backlog (families beyond erhe's original node set)
+### Material Maker families beyond erhe's original node set
 
-Counts are approximate `.mmg` file counts per family. Each family is scored
-for prioritization and the table is sorted by score, highest first:
+Counts are approximate `.mmg` file counts per family. Each family is scored so
+the ones still missing can be ordered, and the table is sorted by score,
+highest first:
 
 - **Cost** (1-5): implementation effort. 1 = trivial descriptor ports using
   existing `erhe::texgen` features (widgets, function-form inputs, buffers);
@@ -174,33 +147,33 @@ for prioritization and the table is sorted by score, highest first:
 - **Benefit** (1-5): material-authoring value added in erhe, given what the
   existing nodes already cover.
 - **Score** = Benefit / Cost. Coarse estimates for ordering the backlog, not
-  commitments; "named in Phase N" cites the phase of this plan that already
-  claims the family.
+  commitments.
 
-Cost / benefit scores are the estimates made when the family was first ranked
-and are deliberately not restated afterwards, so a completed family shows what
-it was predicted to take. A family that has since been implemented keeps its
-row (marked DONE in the status column) rather than being deleted, so the table
-stays a complete record of the comparison.
+Cost and benefit scores are the estimates made when the family was first
+ranked and are deliberately not restated afterwards, so a family erhe has
+since ported shows what it was predicted to take. Ported families keep their
+row rather than being deleted, so the table stays a complete comparison; the
+ones still missing are the backlog, prioritized in
+`doc/plans/texture_graph.md`.
 
 | Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
 |------------------------------|--------|----------------------|------|---------|-------|-------------|
-| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | **DONE.** All 5 ported as descriptors in a new "Gradients" palette category. |
-| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | **DONE.** Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
+| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | All 5 ported as descriptors in a new "Gradients" palette category. |
+| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
-| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | **DONE (13 of ~25).** rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
-| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | **DONE (14 nodes).** Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
-| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | **DONE (6 nodes).** Deliberately not ported: `voronoi2` (byte-identical to `voronoi.mmg`, which the existing `voronoi` node already is - only its `fill` output differs, and that needs the Fill family's iterate-buffer machinery), `clouds_noise` / `directional_noise` / `crystal` (compound nodes, no shader_model), and `fbm2..4` (13-17 KB of near-duplicate basis libraries - their extra bases belong as added values on the existing `fbm` node's enum - recorded as a follow-up on the `fbm` row above). |
-| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | **DONE (11 nodes).** Deliberately not ported: `splines` and `polycurve` (both driven by a Material Maker point-list parameter widget - "splines" / "polyline" - whose GLSL is generated per instance from the edited points; erhe has no such `Parameter_kind`, and adding one is a widget + parameter-codegen feature rather than a GLSL port), and `dirt` (a compound graph node, 26 sub-nodes, no `shader_model`). `cairo`'s `fill` output was dropped for the same reason as the Fill family generally. |
-| 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
+| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | 13 of ~25 ported: rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
+| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | 14 nodes ported. Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
+| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | 6 nodes ported. Deliberately not ported: `voronoi2` (byte-identical to `voronoi.mmg`, which the existing `voronoi` node already is - only its `fill` output differs, and that needs the Fill family's iterate-buffer machinery), `clouds_noise` / `directional_noise` / `crystal` (compound nodes, no shader_model), and `fbm2..4` (13-17 KB of near-duplicate basis libraries; their extra bases belong on the existing `fbm` node's enum instead). |
+| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | 11 nodes ported. Deliberately not ported: `splines` and `polycurve` (both driven by a Material Maker point-list parameter widget - "splines" / "polyline" - whose GLSL is generated per instance from the edited points; erhe has no such `Parameter_kind`, and adding one is a widget + parameter-codegen feature rather than a GLSL port), and `dirt` (a compound graph node, 26 sub-nodes, no `shader_model`). `cairo`'s `fill` output was dropped for the same reason as the Fill family generally. |
+| 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; needs an `sdf2d` value type plus shape / ops / stroke / fill nodes. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
 | Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | 3 | 4 | 1.3 | Only `normal_map` covered. Key for PBR authoring; several need buffers (exist). |
 | Brick / weave variants       | 13     | `bricks2`, `bricks3`, `bricks_uneven*`, `skewed_bricks`, `weave2`, `diagonal_weave`, `weave_random` | 2 | 2 | 1.0 | Base `bricks`/`weave` covered; variants are straight ports with diminishing returns. |
-| Tiling / splatter            | 10     | `tiler`, `tiler_advanced`, `splatter`, `circle_splatter`, `tile2x2`, `make_tileable` | 4 | 4 | 1.0 | Missing; `make_tileable` named in Phase 5. Signature MM feature for organic materials, but `tiler`/`splatter` are complex compound nodes. |
+| Tiling / splatter            | 10     | `tiler`, `tiler_advanced`, `splatter`, `circle_splatter`, `tile2x2`, `make_tileable` | 4 | 4 | 1.0 | Missing. Signature MM feature for organic materials, but `tiler`/`splatter` are complex compound nodes. |
 | Bit packing                  | 4      | `pack_1x32_to_2x16`, `pack_2x16_to_1x32`, ... | 1 | 1 | 1.0 | Missing. Trivial ports, niche use. |
-| Image-processing filters     | 30     | `sharpen`, `emboss`, `edge_detect`, `dilate`, `morphology`, `denoiser`, `*_kuwahara`, `symmetric_nearest_neighbor`, `pixelize`, `supersample`, `fast_blur`, `directional_blur`, `slope_blur`, `bevel` | 4 | 3 | 0.75 | Only `blur` covered; `slope_blur`/`bevel`/`distance` named in Phase 5. Mostly buffer-dependent multi-pass filters. |
-| Node groups (subgraphs)      | 1      | `graph` (engine, `gen_graph.gd`) | 4 | 3 | 0.75 | Named in Phase 6; the geometry graph's Group pattern is the precedent. Payoff grows with library size. |
+| Image-processing filters     | 30     | `sharpen`, `emboss`, `edge_detect`, `dilate`, `morphology`, `denoiser`, `*_kuwahara`, `symmetric_nearest_neighbor`, `pixelize`, `supersample`, `fast_blur`, `directional_blur`, `slope_blur`, `bevel` | 4 | 3 | 0.75 | Only `blur` covered. Mostly buffer-dependent multi-pass filters. |
+| Node groups (subgraphs)      | 1      | `graph` (engine, `gen_graph.gd`) | 4 | 3 | 0.75 | Missing; the geometry graph's Group pattern is the precedent. Payoff grows with library size. |
 | Fill family                  | 25     | `fill`, `fill_to_color`, `fill_to_gradient`, `fill_to_position`, `fill_to_random_color`, `fill_to_size`, `fill_to_uv`, `rgba_to_fill` | 5 | 3 | 0.6 | Missing; requires iterate-buffer machinery (`gen_iterate_buffer.gd`), which erhe does not have. |
-| Variations / randomization   | 11     | `variations_*`, `randomize`, `controlled_variations`, `iterate_variations`, `layer_variations` | 4 | 2 | 0.5 | Missing; the per-node seed/reseed system (Phase 5) covers part of the use case. |
+| Variations / randomization   | 11     | `variations_*`, `randomize`, `controlled_variations`, `iterate_variations`, `layer_variations` | 4 | 2 | 0.5 | Missing; the per-node seed and reseed system covers part of the use case. |
 | Editor conveniences          | ~8     | `comment`, `remote`, `export`, `portal`, `text`, `webcam` (engine) | 2 | 1 | 0.5 | Missing; low value in erhe (PNG export and MCP scripting already cover the main uses). |
 | 3D SDF + raymarching         | 42     | `sdf3d_sphere`, `sdf3d_box`, `sdf3d_boolean`, `sdf3d_revolution`, `raymarching`, `material_raymarching` | 5 | 2 | 0.4 | Out of scope (no `sdf3d` type planned). |
 | 3D / mesh-based textures     | 42     | `tex3d_*` (36), `mesh`, `mesh_curvature`, `brush_triplanar`, `sphere`, `box`, `mwf_*` workflow nodes | 5 | 1 | 0.2 | Out of scope (erhe texture graph is 2D `vec2 uv` only). |
@@ -313,9 +286,8 @@ node - covers the canonical noise -> warp -> colorize -> blend -> normal loop.
 `etl::vector` for pointer stability), `Pin` (semantic `std::size_t` key),
 `Link`. `connect()` enforces key equality + acyclicity
 (`would_create_cycle`); `sort()` is topological. Fully payload-agnostic; pin
-keys are unenumerated so a texture graph adds its own. **Has no unit tests
-today** - Phase 0 fixes that (known issue list in
-`src/erhe/graph/claude_review.md`).
+keys are unenumerated so a texture graph adds its own. Covered by
+`erhe_graph_tests` (`src/erhe/graph/test/`).
 
 ### Geometry graph - the pattern to follow
 
@@ -372,7 +344,7 @@ precedent; it is unrelated to this feature despite the name.
    flowing through graph links is a *shader code fragment* (globals +
    uniforms + inline code + an output expression still containing `$uv`), not
    a texture. Rendering happens only at sinks: node preview thumbnails, the
-   output node, and (Phase 5) buffer nodes. Rationale: the entire codegen core
+   output node and buffer nodes. Rationale: the entire codegen core
    is pure string logic - unit-testable without a GPU; no intermediate
    quantization or VRAM cost; scalar parameter edits update uniforms without
    recompiling; the SPIR-V cache absorbs recompiles of unchanged sources.
@@ -414,8 +386,8 @@ precedent; it is unrelated to this feature despite the name.
    types: a float constant node outputs type `f` with expression `0.5`; a
    color constant outputs `rgba`. Pin compatibility follows Material Maker's
    slot classes (`f`/`rgb`/`rgba` interconnect via conversion expressions).
-   MVP types: `f`, `rgb`, `rgba`; `sdf2d` arrives with the SDF nodes in
-   Phase 4.
+   Types today: `f`, `rgb`, `rgba`; an `sdf2d` type would arrive with the SDF
+   nodes.
 
 7. **Parameters as uniforms.** Float/color parameters become entries in one
    std140 UBO per composed shader (respecting the project's explicit
@@ -432,172 +404,28 @@ precedent; it is unrelated to this feature despite the name.
 
 ---
 
-## Implementation Plan (Phases)
-
-Each phase ends with: build green (ninja MSVC), unit tests green, headless
-MCP verification where applicable, an independent review of the diff, and a
-commit. Phases are sized so one agent can own one phase (or one step of
-phase 3+) with fresh context.
-
-### Phase 0 - Foundation hardening: `erhe::graph` unit tests
-
-New `src/erhe/graph/test/` gtest target `erhe_graph_tests` (mirror
-`src/erhe/item/test/CMakeLists.txt`), gated behind `ERHE_BUILD_TESTS`:
-
-- `connect` accepts key-matched acyclic links, refuses key mismatch,
-  self-link, 2-node and 3-node cycles (`would_create_cycle`)
-- `disconnect` removes exactly the link from both pins
-- `sort` yields a valid topological order for chain / diamond / multi-root
-  graphs; `m_is_sorted` invalidation on structural edits
-- `unregister_node` leaves no dangling `Link*` on peer pins
-- multi-link fan-in/fan-out pin behavior
-
-Fix real defects these tests surface (candidates catalogued in
-`src/erhe/graph/claude_review.md`); geometry-graph smoke sweep must stay
-120/120 afterwards.
-
-### Phase 1 - `erhe::texgen` codegen core (the foundation)
-
-New library `src/erhe/texgen/` + `src/erhe/texgen/test/`. Deliverables:
-
-- **Type system**: `Texgen_type` (f, rgb, rgba; extensible), slot classes,
-  conversion-expression table, canonical coordinate signature (`vec2 uv`)
-- **`Shader_code`**: globals (deduped by content), uniform list (name, type,
-  default), defs, inline code, per-type output expressions
-- **Substitution engine**: `$name` / `$(name)` parameter and built-in
-  resolution (`$uv`, `$seed`, `$name` -> unique node id, `$name_uv`),
-  enum-as-code-fragment, `$input(coord)` sampling with inline and
-  emitted-helper-function forms, `$rnd(a, b)` positional-offset rewrite
-- **`Node_descriptor`** model (inputs with defaults + function flag, outputs,
-  parameters with min/max/step/enum values, global GLSL, inline code)
-- **Composer**: given a sink node in a graph of descriptor-driven nodes,
-  produce the complete fragment-shader body: common hash library + deduped
-  globals + defs + main() with `uv`, inline code, output expression wrapped
-  by output type (grayscale -> `vec4(vec3(v), 1.0)`), plus the UBO member
-  list for scalar parameters (std140-aligned) and default-expression
-  fallbacks for unconnected inputs
-
-Unit tests (no GPU): every substitution rule, conversion insertion, global
-dedup across nodes sharing a library, inline vs function input forms,
-unconnected-input defaults, unique-id collision freedom, golden composed
-sources for 2-3 small graphs (constant -> blend, perlin -> colorize).
-
-### Phase 2 - GPU validation of composed shaders
-
-In `src/erhe/graphics/test/` (links `erhe::texgen`): compose sources from
-descriptor graphs, `build_shader_stages` -> assert `is_valid()`, render 8x8
-via the fixture, `read_texture_rgba8`, assert pixels:
-
-- constant color node -> exact color
-- `f`->`rgba` conversion (gray expression) -> gray pixels
-- blend(multiply) of two constants -> product
-- uv gradient -> corner pixel ordering
-- perlin/hash library compiles and yields finite, deterministic values
-- parameter UBO: same shader, two uniform values -> two results (no recompile)
-
-This proves the erhe shader template (version, UBO layout, fragment output)
-before any editor code exists.
-
-### Phase 3 - Editor MVP (`src/editor/texture_graph/`)
-
-Follows the geometry-graph file layout. Steps, each independently
-committable:
-
-1. **Payload + node base + graph + window skeleton**: `Texture_payload`
-   (composed `Shader_code` handle + type), `Texture_pin_key`, pin colors,
-   `Texture_graph_node` (descriptor-driven: pins, parameter widgets with
-   steppers, write/read_parameters JSON), `Texture_graph` (dirty-flag topo
-   evaluation), `Texture_graph_window` (ax::NodeEditor canvas, link
-   validation, node toolbar, spawn grid), wiring in `editor.cpp` /
-   `App_context` / CMake.
-2. **MVP node set** (descriptors + ported GLSL, MIT attribution): uniform
-   color, perlin, voronoi, bricks, shape, blend, colorize (fixed 2-stop
-   gradient initially), transform, brightness_contrast, normal_map.
-3. **Preview + output node**: shared preview renderer (compose -> compile ->
-   fullscreen pass into a per-node thumbnail texture, rendered during the
-   editor frame; recompile only when composition changed - hash the source);
-   node thumbnails via `Imgui_renderer::image`; `Texture_output_node` bakes
-   at a power-of-two size parameter into a persistent `Texture`, registers it
-   in `Content_library` under an editable name, optional
-   assign-to-material (base color) selector.
-4. **Serialization + undo/redo**: JSON v1 save/load/clear with the geometry
-   graph's validation rules (factory names, slots, keys, cycles); the four
-   undo operations + parameter-gesture undo adapted to
-   `Texture_graph_window`.
-5. **MCP tools**: `get_texture_graph` (nodes, pins, links, parameters,
-   composed-source hash per node), `texture_graph_add_node` / `remove_node` /
-   `connect` / `disconnect` / `set_parameter` / `save` / `load` / `clear`,
-   plus `texture_graph_export_png` (readback + fpng) for scripted visual
-   verification.
-6. **Headless smoke test**: `scripts/texture_graph_smoke_test.py` modeled on
-   `scripts/geometry_nodes_smoke_test.py` - node CRUD, connect rules, param
-   sweeps with undo/redo, save/load round-trip, export_png pixel checks,
-   screenshots.
-
-Exit criteria: perlin -> colorize -> output produces a texture visible on a
-material in the headless viewport screenshot; smoke script green.
-
-### Phase 4 - Node library expansion + rich parameter widgets
-
-- **Gradient and curve widgets**: control-point editing in the node UI,
-  codegen to GLSL helper functions + uniform arrays (value edits =
-  uniform update; stop add/remove = recompile), real `colorize` and tone
-  `curve` nodes
-- **Nodes**: fbm (multi-basis), noise variants, tiling patterns (weave,
-  truchet, cairo), math, adjust_hsv, quantize, remap, invert, combine/decompose
-  channels, `sdf2d` type + shape/ops/stroke/fill nodes, switch, reroute
-- **Node palette**: searchable spawn menu replacing the fixed toolbar
-- Smoke-test extension per node family
-
-### Phase 5 - Buffers, async compile, seeds and variations
-
-- **Buffer node**: explicit RTT cut point - renders its input subtree to a
-  real texture (size + format parameters) and exposes a `sampler2D`-backed
-  expression downstream; dependency-driven re-render on upstream dirtiness
-- Buffer-dependent filters: blur/convolution, slope_blur, bevel, distance,
-  make_tileable
-- **Async shader compilation** on the existing `tf::Executor` (compose on
-  main thread - cheap; compile off-thread; swap pipeline when ready, keep
-  showing the stale preview meanwhile)
-- **Seed system**: per-node seed uniform, cascade from graph, `$rnd`
-  variations; reseed button on nodes
-- Performance pass: preview throttling, compile dedup metrics
-
-### Phase 6 - PBR material output, bake and export
-
-- **Material output node** with PBR channel inputs (albedo, metallic,
-  roughness, emission, normal, occlusion, height/depth, opacity): bakes each
-  connected channel at the chosen size, produces/updates a set of
-  `Content_library` textures, and drives a full `erhe::primitive::Material`
-  (base color + metallic-roughness + normal + occlusion + emissive samplers)
-- **PNG export** of any channel/output (readback + `Image_writer`), optional
-  ORM packing
-- **Node groups** (reuse the geometry graph's Group pattern) once the node
-  library is large enough to warrant them
-- Stretch: import a subset of `.mmg` node definitions directly
-
----
-
 ## Verification Strategy
 
-- **Unit tests** (every phase): `erhe_graph_tests` (Phase 0),
-  `erhe_texgen_tests` (Phase 1+, pure string logic), composed-shader GPU
-  tests in `erhe_graphics_tests` (Phase 2+, headless Vulkan). Run via ctest /
-  direct exe from `build_tests*` trees per `AGENTS.md` Testing section.
-- **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
-  against the headless Vulkan editor build over the in-editor MCP server,
-  including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 600 checks as of 2026-07-19; its
-  `NODE_SPECS` table must gain a row (pins + default parameters) for every new
-  node type, which is what keeps the "all N node types present" check honest.
+- **Unit tests**: `erhe_graph_tests` (the shared graph core),
+  `erhe_texgen_tests` (pure string logic: every substitution rule, conversion
+  insertion, global dedup, inline vs function input forms, unconnected-input
+  defaults, and golden composed sources) and the composed-shader GPU tests in
+  `erhe_graphics_tests` (headless Vulkan: compile, render 8x8, assert pixels,
+  including a parameter-UBO case that proves a value edit needs no recompile).
+  Run via ctest or the executable directly from a `build_tests*` tree, per the
+  Testing section of `AGENTS.md`.
+- **Headless end-to-end**: `scripts/texture_graph_smoke_test.py` against the
+  headless Vulkan editor build over the in-editor MCP server, including
+  `texture_graph_export_png` pixel assertions and `capture_screenshot` visual
+  checks. Its `NODE_SPECS` table must gain a row (pins + default parameters)
+  for every new node type, which is what keeps the "all N node types present"
+  check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
-  confirmation that a newly added descriptor's GLSL substitutes and assembles
-  (N = 68 as of 2026-07-19).
-- **Process**: per step - edit, build (ninja MSVC), tests, independent diff
-  review, fix, commit (per-topic commits). Restore
-  `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
+  confirmation that a newly added descriptor's GLSL substitutes and assembles.
+- **Editor runs**: restore
+  `config/editor/desktop_window_imgui_host_imgui.ini` afterwards.
 
 ---
 
@@ -631,8 +459,15 @@ erhe (existing infrastructure):
   materials
 - `src/erhe/graphics/erhe_graphics/image_writer.hpp` - PNG export
 
-erhe (new, this feature):
+erhe (this feature):
 
-- `src/erhe/texgen/` + `src/erhe/texgen/test/` - codegen core (Phase 1)
-- `src/editor/texture_graph/` - editor integration (Phase 3+)
-- `scripts/texture_graph_smoke_test.py` - headless verification (Phase 3)
+- `src/erhe/texgen/` + `src/erhe/texgen/test/` - codegen core
+  (`doc/erhe_texgen.md`)
+- `src/editor/texture_graph/` - editor integration
+- `scripts/texture_graph_smoke_test.py` - headless verification
+
+## Future work
+
+- [plans/texture_graph.md](plans/texture_graph.md) - the missing Material
+  Maker families, async shader compilation, node groups and the uniform-array
+  gradient / curve control points.

@@ -315,7 +315,7 @@ public:
 
         // Breadcrumbs mark the current main-loop phase so the watchdog can
         // report where a spinning tick is stuck. See
-        // doc/intermittent_main_loop_hang.md.
+        // doc/geogram.md.
         erhe::log::set_breadcrumb("tick: wait_frame");
 
         // log_frame->trace("tick() begin");
@@ -1131,7 +1131,7 @@ public:
         // only. Bounded to the first frames so it never floods the log. A run
         // that hangs during the early thumbnail builds stops emitting these
         // before reaching the target, and the watchdog then names the stuck
-        // phase. See doc/intermittent_main_loop_hang.md.
+        // phase. See doc/geogram.md.
         {
             const uint64_t main_loop_frame = m_time->get_frame_number();
             if (main_loop_frame <= 12) {
@@ -4000,7 +4000,7 @@ public:
     // it never returns, so it cannot log where it is stuck. This background
     // thread watches the diagnostic breadcrumb (erhe::log::set_breadcrumb) and
     // reports the last phase when a tick fails to progress past a threshold.
-    // See doc/intermittent_main_loop_hang.md.
+    // See doc/geogram.md.
     std::thread             m_watchdog_thread;
     std::mutex              m_watchdog_mutex;
     std::condition_variable m_watchdog_cv;

@@ -254,7 +254,7 @@ void Brush_preview::render_preview(
 {
     // Breadcrumb names the brush whose preview primitive is being (lazily)
     // built, so the watchdog can identify the culprit if build_polygon_fill
-    // spins on a corrupt mesh. See doc/intermittent_main_loop_hang.md.
+    // spins on a corrupt mesh. See doc/geogram.md.
     erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
     const float time_s = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);

@@ -1,8 +1,9 @@
-# Geometry graph: attribute projection node (design research)
+# Geometry graph: attribute projection node
 
 Status: proposed
 
-Research 2026-08-10, motivated by creation 18 (fish): a geometry-graph node
+This plan extends `doc/geometry_nodes.md`, which describes the geometry node
+graph as it is. Motivated by creation 18 (the fish): a geometry-graph node
 that projects a selected attribute from a SOURCE mesh onto a TARGET mesh -
 output is the target with that one attribute channel replaced by projected
 values; everything else on the target is untouched. Prime use case: transfer
@@ -74,13 +75,11 @@ thread; build the AABB once per evaluation.
 
 ## Seams: value-space charts + exact seam imprinting
 
-Requirements this section serves (2026-08-10 review): source texture
-coordinates are TILED - values run past 1 (repeating patterns) - and
-seams must transfer EXACTLY, not approximately.
-
 ### Value-space semantics for repeating UVs
 
-Never fract()/wrap anywhere in the transfer. Tiling continuation
+Source texture coordinates are TILED - values run past 1 for a repeating
+pattern - and seams must transfer EXACTLY, not approximately. Never
+fract() or wrap anywhere in the transfer. Tiling continuation
 (u: 0.8 -> 1.2 across an edge) is CONTINUOUS and must not be treated as
 a seam; a seam exists only where the two facets' corner values across a
 shared edge DISAGREE (author discontinuity, e.g. u jumps 3.95 -> 0.0).
@@ -203,3 +202,111 @@ AUTHORED layouts; atlas alone gives arbitrary charts.
   wiring the node help text.
 - Whether `along_normal` is worth shipping in v1 or added when a real
   case needs it (closest_point + backface rejection covers the fish).
+
+## Implementation notes
+
+### File map
+
+Core operation (new):
+
+- `src/erhe/geometry/erhe_geometry/operation/project_attribute.{hpp,cpp}`,
+  registered in `src/erhe/geometry/CMakeLists.txt` next to `lattice_deform`.
+
+Templates to read before writing:
+
+- `operation/geometry_operation.{hpp,cpp}` - the two-source constructor
+  (lhs = target, rhs = source; CSG uses it), `Source_table`,
+  `make_edge_midpoints` (uniform-t edge splits with provenance; this node
+  needs a per-edge-t variant), `interpolate_mesh_attributes()`,
+  `copy_mesh_attributes()`, and the batch element creation notes - create
+  destination elements in bulk, see the "No-create variants" comment block
+  and `doc/catmull_clark.md`.
+- `operation/lattice_deform.cpp` - a clean operation of similar size.
+- `operation/make_atlas.cpp` - the attribute bind and unbind discipline
+  around Geogram calls: attributes must be UNBOUND before Geogram mutates or
+  copies meshes, and rebound after.
+- `erhe_geometry/geometry.hpp` - the `Mesh_attributes` typed accessors
+  (`corner_texcoord(i)` and friends), `Attribute_present<T>` (value plus
+  present flag), `Attribute_descriptor::Interpolation_mode`.
+
+Graph node (new):
+
+- `src/editor/geometry_graph/nodes/project_attribute_node.{hpp,cpp}`,
+  registered in `geometry_graph_node_factory.cpp` (type name
+  `project_attribute`), the palette, the editor `CMakeLists.txt` and the
+  `geometry_graph_add_node` type enum in `mcp_server_tool_list.cpp` - without
+  that last one MCP cannot create the node at all. `boolean_node` is the exact
+  two-geometry-input template and `subdivide_node` the parameter and
+  serialization template.
+- Node UI: attribute combo, method combo, max distance drag, `cut_seams`
+  checkbox, projected and missed counts.
+
+Tests (new):
+
+- `src/erhe/geometry/test/test_project_attribute.cpp`, registered in
+  `src/erhe/geometry/test/CMakeLists.txt`. The test list is the Verification
+  plan above; the tiled-seam one is the point of the feature. Follow how
+  `test_lattice_deform.cpp` builds and runs.
+
+### Phases
+
+One commit per phase, built and tested before the commit.
+
+1. **Core operation, no cutting**: chart decomposition (value-space
+   continuity), per-chart triangulated copies plus `GEO::MeshFacetsAABB`,
+   per-target-facet chart anchoring, corner sampling with facet-local
+   barycentrics, `Interpolation_mode`-aware blending, `Attribute_present`-aware
+   miss fallback, backface rejection. This completes the `cut_seams = false`
+   behavior. Tests: cube projection, miss fallback, normal rejection.
+2. **Seam imprinting**: vertex labeling, bisector zero crossings (per edge,
+   shared, bisection-refined, epsilon-snapped), facet splits (chord insertion;
+   a CDT only if a junction case actually needs one), the per-edge-t edge-split
+   provenance variant, then re-sampling the sub-facets. Test: the tiled-UV seam
+   imprint (exact 4.0 / 0.0 per side, no cuts on tiling continuation, no
+   T-junctions).
+3. **Graph node**: pins, parameters, serialization, factory, palette, UI, and
+   `evaluate()` calling the operation; a missing source passes the target
+   through with a warning.
+4. **End-to-end on the fish**: extend `scripts/creations/creation_18_fish.py`
+   with a proxy branch - a cylinder-ish mesh with clean cylindrical UVs run
+   through the SAME lattice node, then `project_attribute(texcoord_0)` before
+   the output. Verify with the texcoord debug view, then bind the scales
+   texture graphs.
+
+### Traps
+
+- **`GEO::MeshFacetsAABB` triangulates its input mesh, even through the const
+  overload** (`const_cast` inside Geogram). Always build it on a triangulated
+  COPY carrying an `orig_facet` facet attribute. Geogram's fan triangulation
+  preserves vertex ids, so a hit triangle maps back to the original facet and
+  its three original vertices, which vertex-match to that facet's corners.
+- Every node parameter must appear in `write_parameters` / `read_parameters`,
+  because that is the path `geometry_graph_set_parameter` takes; a parameter
+  outside it cannot be driven from MCP.
+- `get_geometry_graph` is the MCP evaluation completion barrier. Graph meshes
+  evaluate asynchronously on shadow clones, so `evaluate()` must never touch
+  live scene state.
+- Attribute-channel traps that have bitten this area before: `build_edges()`
+  wipes edge-domain values unless they are snapshotted
+  (`doc/subdivision_crease_edges.md`), and `transform_mesh` transforms a
+  hardcoded channel list. Check both when a channel goes missing.
+- **Texcoord debug view**: `res/shaders/standard.frag` `ERHE_SHADER_DEBUG == 7`
+  visualizes `fract(v_texcoord_0)`; set `"shader_debug": 7` in the active
+  graphics preset. Success on the fish is a continuous cylindrical gradient,
+  failure is per-quad moire. Meshes with no texcoords at all (the CSG and sweep
+  outputs - tail fin, sweep fins, eyes) render black there.
+- Screenshot iteration: `edge_lines: true` in
+  `config/editor/default_viewport_config.json` makes a dense mesh read black.
+  It is read at every viewport construction, so it can be toggled without a
+  restart - back it up and restore it.
+
+### Done when
+
+- All four test groups are green and the Vulkan and OpenGL editor targets
+  build.
+- The fish body shows a continuous texcoord gradient under
+  `ERHE_SHADER_DEBUG 7` with the proxy-projection graph, the seams are cut
+  exactly (inspect the seam line under the belly), and the scales albedo and
+  normal graphs bind and render.
+- The open questions above are resolved and this plan is folded into
+  `doc/geometry_nodes.md`.

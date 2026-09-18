@@ -118,7 +118,7 @@ public:
 
     virtual void evaluate(Texture_graph& graph);
 
-    // Node <-> texgen bridge (doc/texture_graph.md, Phase 3 Step 2).
+    // Node <-> texgen bridge (doc/texture_graph.md, decision 4).
     //
     // descriptor() returns this node's immutable texgen Node_descriptor (the
     // GLSL snippet table shared by every instance of the type), or nullptr for

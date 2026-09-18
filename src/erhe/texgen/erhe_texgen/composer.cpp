@@ -148,13 +148,13 @@ namespace {
 // the "$param" substitution resolves to, so an output expression such as
 // colorize's "$gradient($input($uv))" becomes "o5_gradient_gradient(<input>)".
 //
-// DECISION (Phase 4, doc/texture_graph.md): the control points are baked
+// DECISION (doc/erhe_texgen.md): the control points are baked
 // into the function body as GLSL constants rather than uploaded through uniform
 // arrays. Any value edit therefore recomposes the source and recompiles - but
 // the SPIR-V cache de-duplicates unchanged sources, and this keeps the codegen
 // pure string logic (no std140 array-uniform layout, no per-frame upload path).
 // The uniform-array live-update path (value edits that skip recompile) is a
-// future optimization; see doc/erhe_texgen.md.
+// future optimization; see doc/plans/texture_graph.md.
 //
 // GLSL ported from Material Maker's MMGradient.get_shader / MMCurve.get_shader
 // (types/gradient.gd, types/curve.gd, MIT license), with pv()/pc()/p_*_x baked

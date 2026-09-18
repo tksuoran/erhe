@@ -1,114 +1,69 @@
-# Handoff: AI creation tools / geometry graph — continuing work
+# AI creation tools: outstanding work
 
 Status: in progress
 
-Written 2026-08-11 at the end of a long session; read this FIRST in a
-fresh context, then the canonical sources it points at. Everything from
-today is committed on `main`, ALL UNPUSHED (the user pushes).
-`git log --oneline -20` is the authoritative history; highlights below.
+This plan extends `doc/geometry_nodes.md` and
+`doc/geometry_graph_transform_from_node.md`. It lists what the AI-creation
+workflow still lacks; the workflow itself and its recipes live in
+`.agents/skills/erhe-creations/SKILL.md` and its
+`references/geometry_graph_sculpt.md`, which are the canonical sources to read
+before any creation work.
 
-## Read these before working (canonical sources, in order)
+## Graph-hover to Hierarchy highlight: confirm interactively
 
-1. `.agents/skills/erhe-creations/SKILL.md` — the creation workflow
-   contract + gotcha index. MANDATORY before any creation work; it has a
-   maintenance contract (fold new learnings in at session end).
-2. `.agents/skills/erhe-creations/references/geometry_graph_sculpt.md` —
-   ALL geometry-graph body-building recipes: roundness rule,
-   exact-landing limb alignment + joint balls, pose rig via
-   transform_from_node, union texturing, probed accents.
-3. `doc/geometry_graph_transform_from_node.md` — design + implementation
-   record of the transform_from_node node (the session's main editor
-   feature); its "open follow-ups" list is the near-term backlog.
-4. Memory: `project_20_frog_creation`, `project_transform_from_node`,
-   `project_19_dolphin_creation` (auto-recalled; they point here).
+Hovering a graph node that references a scene node (`Transform_from_node`,
+`Lattice_node`, through the `Geometry_graph_node::get_referenced_scene_node()`
+virtual) flags that node, its ancestors and its descendants with the transient
+`Item_flags` bits `hovered_in_graph`, `child_hovered_in_graph` and
+`ancestor_hovered_in_graph` (not in the glTF persistent allowlist), and the
+Hierarchy draws the same blue rect as a viewport hover; a folded ancestor takes
+over through `child_hovered`. `Geometry_graph_window::update_graph_hover_flags()`
+is driven for the primary window from `update_evaluation()` and for the extra
+"[N]" windows from `Editor_windows::update_once_per_frame()`.
 
-## What exists now (landed today, main, unpushed)
+The logic mirrors `Hover_tool` and builds clean, but it has never been
+confirmed interactively - automated cursor-over-canvas verification does not
+work, because taking console focus clears the hover and display scaling skews
+the coordinates. **Ask the user whether the highlight works before building on
+it.**
 
-- **Creation 20 frog** (`scripts/creations/creation_20_frog.py`), three
-  passes: v1 basic (42c9343e), v2 detail — 25 graph parts, articulated
-  legs, toes, probed iris/nostril/tympanum, fbm-mottle skin, CSG pad
-  slits, dragonfly (6f5c3852), weld fix — segments overlap anchors +
-  joint balls (88d193bb, user-reported gap bug), v3 LIVE POSE RIG
-  (e5cb76f3): all 30 part poses are `transform_from_node` graph nodes
-  driven by flat empty scene nodes under `Frog > Frog Rig`; move a
-  driver, the part re-poses. Scene: res/editor/scenes/creations/frog.glb.
-- **`transform_from_node` geometry-graph node** (7d6b72cd): applies a
-  referenced scene node's transform (local/world) to input geometry;
-  drag-and-drop driver assignment via `item_reference_imgui` on the
-  canvas; name-keyed persistence; live tracking via `update_live()`;
-  MCP-drivable (`geometry_graph_add_node` type enum extended — a step
-  the older add-a-node docs omit). Verified 7/7 over MCP incl. scene
-  save/load round trip. Follows `Lattice_node`'s driver pattern exactly.
-- **Graph-hover -> Hierarchy highlight** (73031465 + 6d40614e): new
-  transient `Item_flags` bits 34-36 (`hovered_in_graph`,
-  `child_hovered_in_graph`, `ancestor_hovered_in_graph`; NOT in the
-  glTF persistent allowlist). Hovering a graph node that references a
-  scene node (Transform_from_node / Lattice_node, via new virtual
-  `Geometry_graph_node::get_referenced_scene_node()`) flags that node +
-  ancestors + descendants; the Hierarchy draws the same blue rect as
-  viewport hover (folded ancestors take over via child_hovered).
-  Maintenance: `Geometry_graph_window::update_graph_hover_flags()` —
-  primary window from `update_evaluation()`, extra "[N]" windows ticked
-  from `Editor_windows::update_once_per_frame()`.
-  **VERIFICATION PENDING**: builds clean, logic mirrors Hover_tool, but
-  the interactive hover check was handed to the user (automated
-  cursor-over-canvas verification fails: console focus-steal clears
-  hover, 125% display scaling skews coordinates — see Environment).
-  ASK THE USER whether the highlight worked before building on it.
+## Per-axis UV control for graph bodies
 
-## Open follow-ups (rough priority)
+A graph-built body has no usable UV layout, which is why its texturing is
+limited to mottle-style procedural noise. The answer is the
+`project_attribute` node - see
+[attribute_projection.md](attribute_projection.md).
 
-1. Confirm the hover highlight with the user; fix if broken.
-2. `project_attribute` node — queued NEXT TASK from earlier
-   (memory `project_attribute_projection_node`): read
-   doc/plans/geometry_graph/attribute_projection.md + its -handoff.md first.
-   Would give graph bodies proper per-axis UV control (the mottle-only
-   texturing constraint traces back to this).
-3. uid-in-key persistence for scene-node references: name-only keys
-   break on rename and are ambiguous under duplicates; write
-   `key.uid` (glTF uid) too and prefer it on load; upgrade
-   `Lattice_node` and `Transform_from_node` together.
-4. mat4 pin plumbing: `mat4_value` pin key exists with ZERO users;
-   a mat4 output on transform_from_node + mat4 input on Transform_node
-   would enable transform composition — and with it FK chains
-   (today the rig is FLAT because a transform_from_node captures ONE
-   node's local transform; nested drivers do not cascade).
-5. Refactor `Lattice_node`'s hand-rolled drop target to
-   `item_reference_imgui` (transform_from_node already uses it).
-6. Optional: hovering the graph's Output node could highlight the
-   BOUND scene node(s) via the `apply_baked_products_to_attachments`
-   sweep (0..N nodes; deliberately skipped in the first cut).
-7. The Laplacian `smooth` MCP op is BROKEN (explodes meshes) — known,
-   unfiled, do not use; fix only if asked.
+## Nested drivers do not cascade
 
-## Environment gotchas (this machine, cost real time today)
+A `transform_from_node` captures ONE node's local transform, so a pose rig
+built from them is FLAT: there are no FK chains. Transform composition needs
+the `mat4` pin plumbing described in
+[geometry_nodes.md](geometry_nodes.md) ("A `mat4` output pin"), together with
+the uid-based reference persistence in the same plan.
 
-- Python: `python`/`py` on PATH are broken Store stubs in these shells;
-  run `C:\Users\tksuo\AppData\Local\Python\pythoncore-3.14-64\python.exe`.
-- Builds: `cmake --build build_vs2026_vulkan --config Release --target
-  editor`. The exe cannot link while an editor runs (user may be USING
-  it — check before killing; the user was live at the machine today).
-- Screenshots: back up + set `edge_lines:false` in
-  `config/editor/default_viewport_config.json` (backup kept at
-  `%TEMP%\erhe_default_viewport_config_backup.json`), RESTORE after.
-  The cursor-hover hotbar/label pollutes captures and lingers a few
-  seconds after the mouse stops; `screenshot()` runs the hide pass that
-  re-hides windows shown via `set_window_visibility` (use a raw
-  `capture_screenshot` mutate instead when windows must stay up; the
-  window arg is `title`, e.g. "Scene Hierarchy [1]").
-- Repeated `--reuse` scene cycles can spawn the new viewport as a tiny
-  corner window; relaunch the editor to restore the docked layout.
-- Display scale is 125%: swapchain pixels = 1.25 x logical cursor
-  coords (`GetClientRect` gave 1843x960 for a 2304x1200 swapchain).
-- Frog iteration: `--reuse` full rebuild (~10 s, 594 MCP calls);
-  `--only` unsupported (graph assets can't be recreated by name).
+## Smaller items
 
-## State at handoff
+- Refactor `Lattice_node`'s hand-rolled `BeginDragDropTarget` block to the
+  shared `item_reference_imgui` widget, which `transform_from_node` already
+  uses.
+- Hovering the graph's Output node could highlight the BOUND scene nodes, via
+  the sweep `apply_baked_products_to_attachments` performs (zero or many
+  nodes). Deliberately skipped in the first cut.
+- The Laplacian `smooth` MCP operation explodes meshes. It is unfiled and
+  unusable; fix it when a creation needs it.
 
-Editor: windowed Release running, `frog` scene loaded (from glb),
-Scene Hierarchy + Geometry Graph windows visible, Frog Graph targeted —
-set up for the user's hover verification. Working tree clean except the
-user's own config noise (desktop_windows.json, editor_settings.json —
-do not touch) and long-standing untracked dirs. prompt_queue.txt and
-`mcp-creation-scripts-*` memory only POINT at git log + the skill — do
-not grow ledgers there.
+## Iteration notes
+
+- A creation script rebuilds its whole graph on `--reuse` (hundreds of MCP
+  calls); there is no `--only` mode, because graph assets cannot be recreated
+  by name.
+- Repeated `--reuse` scene cycles can spawn the new viewport as a tiny corner
+  window; relaunch the editor to restore the docked layout.
+- For screenshots, back up `config/editor/default_viewport_config.json`, set
+  `edge_lines: false` and restore it afterwards. The hover hotbar and label
+  pollute a capture and linger for a few seconds after the mouse stops.
+  `screenshot()` runs a hide pass that re-hides windows shown through
+  `set_window_visibility`, so use a raw `capture_screenshot` when the windows
+  must stay up (its window argument is the title, for example
+  `"Scene Hierarchy [1]"`).

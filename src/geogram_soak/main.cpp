@@ -3,7 +3,7 @@
 // Reproduces, with no rendering / SDL / Vulkan / headset, the GEO::Mesh
 // corruption that the editor's parallel brush init (Scene_builder::make_brushes)
 // produces on ARM (~1/8) and that later spins build_polygon_fill(). See
-// doc/intermittent_main_loop_hang.md.
+// doc/geogram.md.
 //
 // It mirrors make_brushes() faithfully: N taskflow workers, each on its OWN
 // task-local Geometry/GEO::Mesh, generate the same shapes the editor builds and

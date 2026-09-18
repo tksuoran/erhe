@@ -43,6 +43,11 @@ Only built when `ERHE_VOXEL_LIBRARY=openvdb` (CMake option, default `none`).
 - MSVC: C4701 is disabled for voxel.cpp (fires inside OpenVDB's
   ConvexVoxelizer.h at template instantiation time) and consumers of the
   OpenVDB headers need `/bigobj`.
-- Tests: src/erhe/voxel/test (`erhe_voxel_tests`; includes the Phase 1
-  OpenVDB smoke test). Test main must initialize Geogram + geometry logs
-  (same as geometry tests).
+- Tests: src/erhe/voxel/test (`erhe_voxel_tests`; includes an OpenVDB smoke
+  test). Test main must initialize Geogram + geometry logs (same as geometry
+  tests).
+
+## Future work
+
+- [plans/geometry_graph/openvdb_sdf.md](plans/geometry_graph/openvdb_sdf.md) -
+  SDF geometry graph nodes built on this library.

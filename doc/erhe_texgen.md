@@ -3,14 +3,15 @@
 Stability: experimental
 
 ## Purpose
-Procedural texture shader-code composition core (Phase 1 of
-`doc/texture_graph.md`, issue #199). Ports the semantics of Material
-Maker's GLSL composition engine (https://github.com/RodZill4/material-maker,
-MIT license): nodes contribute GLSL snippets described by immutable data
-tables, and composing a node DAG produces one monolithic fragment-shader body
-plus an ordered list of live-editable uniforms. Pure string logic - no GPU,
-no graphics dependency; GPU validation lives in `src/erhe/graphics/test/`
-(Phase 2) and the editor node graph bridges to this library later (Phase 3).
+Procedural texture shader-code composition core: the codegen layer under the
+editor's texture graph (`doc/texture_graph.md`). Ports the semantics of
+Material Maker's GLSL composition engine
+(https://github.com/RodZill4/material-maker, MIT license): nodes contribute
+GLSL snippets described by immutable data tables, and composing a node DAG
+produces one monolithic fragment-shader body plus an ordered list of
+live-editable uniforms. Pure string logic - no GPU, no graphics dependency;
+GPU validation of the composed shaders lives in `src/erhe/graphics/test/`, and
+the editor's node graph bridges to this library.
 
 ## Key Types
 - `Value_type` -- MVP value types flowing between nodes: `grayscale` (GLSL
@@ -55,7 +56,7 @@ no graphics dependency; GPU validation lives in `src/erhe/graphics/test/`
   `float`) emitted once into globals, so `$gradient($input($uv))` becomes
   `o5_gradient_gradient(<input>)`.
 
-### Gradient / curve parameter codegen (Phase 4)
+### Gradient / curve parameter codegen
 `Parameter_kind::gradient_parameter` / `curve_parameter` carry control-point
 data on `Parameter_descriptor` (defaults) and `Parameter_value` (live values:
 `gradient_stops` + `gradient_interpolation`, `curve_points`).
@@ -74,11 +75,7 @@ Material Maker uploads the stops/points into `p_<name>_pos[]` / `p_<name>_col[]`
 recompile), erhe bakes the literals into the function body. Any value edit
 therefore recomposes the source and recompiles - but the on-disk SPIR-V cache
 de-duplicates unchanged sources, and this keeps the codegen pure string logic
-with no std140 array-uniform layout or per-frame array upload. **Future
-optimization:** emit the control points as std140 uniform-array members (like
-the float/color uniforms already do) so gradient/curve value edits skip the
-recompile; structural edits (add/remove stop) would still recompile. Not done
-in this chunk - constant-baked is correct and much simpler.
+with no std140 array-uniform layout or per-frame array upload.
 - Built-ins: `$uv` (current coordinate expression), `$seed` (per-node float
   uniform `p_o{id}_seed`), `$name` -> `o{id}`, `$name_uv` -> variant-unique
   `o{id}_{variant}` (only defined inside nodes with a `code` stanza),
@@ -179,3 +176,8 @@ in this chunk - constant-baked is correct and much simpler.
   assemblies. Test-local descriptors live in `test/test_descriptors.hpp`.
 - GLSL ported from Material Maker carries an MIT attribution comment
   (`common_library.cpp`, conversion table in `value_type.cpp`).
+
+## Future work
+
+- [plans/texture_graph.md](plans/texture_graph.md) - uniform-array gradient and
+  curve control points, so a value edit skips the recompile.

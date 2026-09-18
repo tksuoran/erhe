@@ -2,8 +2,8 @@ plugins {
      id 'com.android.application'
 }
 
-// Opt-in HWAddressSanitizer build (diagnostic; see
-// doc/intermittent_main_loop_hang.md). Enable with `-Phwasan`. HWASan requires
+// Opt-in HWAddressSanitizer build, for chasing native memory errors that only
+// appear on device. Enable with `-Phwasan`. HWASan requires
 // c++_shared (the NDK toolchain rejects hwaddress + c++_static), a debuggable
 // build with extracted native libs so the platform honors lib/<abi>/wrap.sh
 // (LD_HWASAN=1), and the hwasan runtime .so bundled into the APK.

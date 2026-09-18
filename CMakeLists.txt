@@ -378,7 +378,7 @@ CPMAddPackage(
 # degenerate input (a cone's coplanar base ring) -- the intermittent, ARM-only
 # main-loop hang (reproduced headless ~2/10 on arm64, 0/30 on x86/MSVC which does
 # not contract by default). Restore geogram's intended flag on every non-MSVC
-# compiler. See doc/intermittent_main_loop_hang.md.
+# compiler. See doc/geogram.md.
 if (NOT MSVC)
     foreach (geo_target geogram geogram_third_party geogram_num_3rdparty)
         if (TARGET ${geo_target})

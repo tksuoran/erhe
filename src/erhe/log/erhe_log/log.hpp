@@ -82,7 +82,7 @@ private:
 // CPU-spinning thread last was: the spinning thread cannot log for itself
 // (it never returns to a logging point), so the watchdog reads the last
 // breadcrumb and the recent ring instead. See
-// doc/intermittent_main_loop_hang.md.
+// doc/geogram.md.
 //
 // set_breadcrumb() is cheap (one uncontended mutex lock; the current text
 // reuses its buffer) and safe to call from any thread.
