@@ -1742,8 +1742,53 @@ void Transform_tool::tool_render(const Render_context& context)
     render_translate_drag_guides(context);
     render_drag_readout(context);
     render_offscreen_indicator(context);
+    render_ik_drag(context);
 
     m_context.rotate_tool->render(context);
+}
+
+void Transform_tool::render_ik_drag(const Render_context& context)
+{
+    // Drawn exactly while one IK drag gesture is running: try_translate_ik()
+    // starts it through Ik_drag::begin() on the drag's first update and
+    // end_drag() clears it through Ik_drag::reset(), so this one flag is the
+    // whole visibility rule (doc/plans/rigging/ik_drag_options.md R13).
+    if (!m_ik_drag.is_active()) {
+        return;
+    }
+
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = m_ik_drag.get_joints();
+    m_ik_drag_positions.clear(); // capacity kept
+    for (const std::shared_ptr<erhe::scene::Node>& joint : joints) {
+        if (!joint) {
+            continue;
+        }
+        m_ik_drag_positions.push_back(vec3{joint->position_in_world()});
+    }
+
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+    const Ik_drag_line_input input{
+        .joint_positions = m_ik_drag_positions,
+        .pole_position   = m_ik_drag.has_pole()
+            ? std::optional<glm::vec3>{m_ik_drag.get_pole_position()}
+            : std::optional<glm::vec3>{},
+        .chain_color     = style.ik_chain_color,
+        .root_color      = style.ik_root_color,
+        .pole_color      = style.ik_pole_color
+    };
+    build_ik_drag_lines(input, m_ik_drag_lines);
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
+    for (const Ik_drag_line& line : m_ik_drag_lines.path_lines) {
+        line_renderer.add_line(line.color, style.ik_chain_width, line.p0, line.color, style.ik_chain_width, line.p1);
+    }
+    for (const Ik_drag_line& line : m_ik_drag_lines.marker_lines) {
+        line_renderer.add_line(line.color, style.ik_marker_width, line.p0, line.color, style.ik_marker_width, line.p1);
+    }
+
+    // Nothing of the chain is held past the frame that drew it.
+    m_ik_drag_positions.clear();
+    m_ik_drag_lines.clear();
 }
 
 void Transform_tool::render_offscreen_indicator(const Render_context& context)

@@ -4,6 +4,8 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <optional>
+#include <span>
 #include <vector>
 
 namespace editor {
@@ -122,5 +124,67 @@ class Fabrik_solver final : public Ik_solver
 public:
     void solve(Ik_chain& chain) override;
 };
+
+// Chain visualization of a running IK drag
+// (doc/plans/rigging/ik_drag_options.md section 2). The geometry is built by
+// the pure function below, with no scene access, so it is unit testable
+// without a display; the drawing owner (Transform_tool::tool_render) hands the
+// result to erhe::renderer::Primitive_renderer.
+
+// One world-space coloured line segment.
+class Ik_drag_line
+{
+public:
+    glm::vec3 p0{0.0f};
+    glm::vec3 p1{0.0f};
+    glm::vec4 color{1.0f};
+};
+
+// Caller-owned line record, cleared and refilled at the point of use so a
+// steady-state drag frame allocates nothing once the high-water mark is
+// reached (AGENTS.md "Run-time Memory Allocation Discipline"). The two
+// vectors are the two line widths the drawing owner uses: path_lines is drawn
+// at Debug_visualizations_style::ik_chain_width and marker_lines at
+// ik_marker_width.
+class Ik_drag_line_buffer
+{
+public:
+    std::vector<Ik_drag_line> path_lines;   // chain polyline + pole line
+    std::vector<Ik_drag_line> marker_lines; // root, effector and pole crosses
+
+    void clear() // keeps capacity
+    {
+        path_lines.clear();
+        marker_lines.clear();
+    }
+
+    [[nodiscard]] auto line_count() const -> std::size_t
+    {
+        return path_lines.size() + marker_lines.size();
+    }
+};
+
+// Input of build_ik_drag_lines(): everything the visualization needs, in
+// world space, taken from the state the drag already holds.
+class Ik_drag_line_input
+{
+public:
+    std::span<const glm::vec3> joint_positions;      // root .. effector
+    std::optional<glm::vec3>   pole_position;        // unset = unpoled drag
+    float                      marker_scale{0.05f};  // marker arm / chain reach
+    glm::vec4                  chain_color{0.2f, 0.9f, 1.0f, 1.0f};
+    glm::vec4                  root_color {1.0f, 0.4f, 0.1f, 1.0f};
+    glm::vec4                  pole_color {1.0f, 0.2f, 0.8f, 1.0f};
+};
+
+// Builds the drag visualization's line list into buffer, which is cleared
+// first. Produces one line per chain segment through joint_positions, a
+// three-axis cross at the root and at the effector, and - when
+// pole_position is set - a line from the pole to the root plus a cross at
+// the pole. Marker arms are marker_scale times the chain's reach (the sum of
+// its segment lengths), so they scale with the rig rather than with the
+// scene's units. Fewer than two joints, or a chain of zero reach, leaves the
+// corresponding lines out; nothing else is drawn and no scene is touched.
+void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& buffer);
 
 } // namespace editor

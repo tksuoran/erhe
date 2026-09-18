@@ -454,6 +454,18 @@ private:
     // consumed the translation (FK translation must not run).
     auto try_translate_ik(glm::vec3 translation) -> bool;
 
+    // Chain visualization of a running IK drag, drawn exactly while
+    // m_ik_drag.is_active() (doc/plans/rigging/ik_drag_options.md section 2).
+    void render_ik_drag(const Render_context& context);
+
+    // Reused scratch of the IK drag visualization: the chain joints' world
+    // positions and the line list built from them. Both are cleared at the
+    // point of use and again after use, so a drag frame allocates nothing
+    // once they have reached their high-water mark. They hold no node
+    // reference, so nothing scene-hosted outlives the gesture.
+    std::vector<glm::vec3> m_ik_drag_positions;
+    Ik_drag_line_buffer    m_ik_drag_lines;
+
     // Reused scratch for the Reference node picker popup (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>> m_reference_candidates;
 

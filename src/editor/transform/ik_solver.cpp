@@ -429,4 +429,51 @@ void Fabrik_solver::solve(Ik_chain& chain)
     }
 }
 
+namespace {
+
+// Three-axis cross of half-length arm at position, in the world axes.
+void add_ik_drag_marker(
+    std::vector<Ik_drag_line>& lines,
+    const vec3                 position,
+    const float                arm,
+    const vec4&                color
+)
+{
+    if (!(arm > 0.0f)) {
+        return;
+    }
+    lines.push_back(Ik_drag_line{.p0 = position - vec3{arm, 0.0f, 0.0f}, .p1 = position + vec3{arm, 0.0f, 0.0f}, .color = color});
+    lines.push_back(Ik_drag_line{.p0 = position - vec3{0.0f, arm, 0.0f}, .p1 = position + vec3{0.0f, arm, 0.0f}, .color = color});
+    lines.push_back(Ik_drag_line{.p0 = position - vec3{0.0f, 0.0f, arm}, .p1 = position + vec3{0.0f, 0.0f, arm}, .color = color});
+}
+
+} // anonymous namespace
+
+void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& buffer)
+{
+    buffer.clear(); // capacity kept: this runs every frame of a drag
+
+    const std::span<const glm::vec3>& positions  = input.joint_positions;
+    const std::size_t                 joint_count = positions.size();
+    if (joint_count < 2) {
+        return;
+    }
+
+    float reach = 0.0f;
+    for (std::size_t i = 1; i < joint_count; ++i) {
+        reach += distance(positions[i - 1], positions[i]);
+        buffer.path_lines.push_back(Ik_drag_line{.p0 = positions[i - 1], .p1 = positions[i], .color = input.chain_color});
+    }
+
+    const float arm = reach * input.marker_scale;
+    add_ik_drag_marker(buffer.marker_lines, positions[0],               arm, input.root_color);
+    add_ik_drag_marker(buffer.marker_lines, positions[joint_count - 1], arm, input.chain_color);
+
+    if (input.pole_position.has_value()) {
+        const vec3 pole_position = input.pole_position.value();
+        buffer.path_lines.push_back(Ik_drag_line{.p0 = pole_position, .p1 = positions[0], .color = input.pole_color});
+        add_ik_drag_marker(buffer.marker_lines, pole_position, arm, input.pole_color);
+    }
+}
+
 } // namespace editor

@@ -479,4 +479,123 @@ TEST(Ik_solver, twist_only_constraint_is_a_no_op)
     EXPECT_LT(distance(constrained.positions[2], constrained.target), 0.02f);
 }
 
+// Chain visualization line list (doc/plans/rigging/ik_drag_options.md R16,
+// R17). A bent three-joint chain: root, elbow, effector.
+[[nodiscard]] auto make_drag_line_positions() -> std::vector<vec3>
+{
+    return { vec3{0.0f, 0.0f, 0.0f}, vec3{0.6f, 0.8f, 0.0f}, vec3{0.0f, 1.6f, 0.0f} };
+}
+
+TEST(Ik_drag_lines, three_joint_chain_without_pole)
+{
+    const std::vector<vec3>    positions = make_drag_line_positions();
+    editor::Ik_drag_line_input input{};
+    input.joint_positions = positions;
+
+    editor::Ik_drag_line_buffer buffer;
+    editor::build_ik_drag_lines(input, buffer);
+
+    // Two segment lines, no pole line; a three-arm cross at the root and one
+    // at the effector.
+    EXPECT_EQ(buffer.path_lines.size(),   2u);
+    EXPECT_EQ(buffer.marker_lines.size(), 6u);
+    EXPECT_EQ(buffer.line_count(),        8u);
+    EXPECT_EQ(buffer.path_lines[0].p0, positions[0]);
+    EXPECT_EQ(buffer.path_lines[0].p1, positions[1]);
+    EXPECT_EQ(buffer.path_lines[1].p0, positions[1]);
+    EXPECT_EQ(buffer.path_lines[1].p1, positions[2]);
+    EXPECT_EQ(buffer.path_lines[0].color, input.chain_color);
+
+    // Marker arms are a fraction of the chain's reach, centered on the joint.
+    const float reach = distance(positions[0], positions[1]) + distance(positions[1], positions[2]);
+    const float arm   = reach * input.marker_scale;
+    EXPECT_NEAR(distance(buffer.marker_lines[0].p0, buffer.marker_lines[0].p1), 2.0f * arm, 1.0e-5f);
+    for (std::size_t i = 0; i < 3; ++i) {
+        const vec3 center = 0.5f * (buffer.marker_lines[i].p0 + buffer.marker_lines[i].p1);
+        EXPECT_LT(distance(center, positions[0]), 1.0e-5f);
+        EXPECT_EQ(buffer.marker_lines[i].color, input.root_color);
+    }
+    for (std::size_t i = 3; i < 6; ++i) {
+        const vec3 center = 0.5f * (buffer.marker_lines[i].p0 + buffer.marker_lines[i].p1);
+        EXPECT_LT(distance(center, positions[2]), 1.0e-5f);
+        EXPECT_EQ(buffer.marker_lines[i].color, input.chain_color); // effector marker: chain color
+    }
+}
+
+TEST(Ik_drag_lines, pole_adds_line_to_root_and_marker)
+{
+    const std::vector<vec3>    positions     = make_drag_line_positions();
+    const vec3                 pole_position = vec3{2.0f, 0.5f, -1.0f};
+    editor::Ik_drag_line_input input{};
+    input.joint_positions = positions;
+    input.pole_position   = pole_position;
+
+    editor::Ik_drag_line_buffer buffer;
+    editor::build_ik_drag_lines(input, buffer);
+
+    EXPECT_EQ(buffer.path_lines.size(),   3u);
+    EXPECT_EQ(buffer.marker_lines.size(), 9u);
+    EXPECT_EQ(buffer.path_lines[2].p0,    pole_position);
+    EXPECT_EQ(buffer.path_lines[2].p1,    positions[0]); // pole line ends at the chain root
+    EXPECT_EQ(buffer.path_lines[2].color, input.pole_color);
+    for (std::size_t i = 6; i < 9; ++i) {
+        const vec3 center = 0.5f * (buffer.marker_lines[i].p0 + buffer.marker_lines[i].p1);
+        EXPECT_LT(distance(center, pole_position), 1.0e-5f);
+        EXPECT_EQ(buffer.marker_lines[i].color, input.pole_color);
+    }
+}
+
+TEST(Ik_drag_lines, refill_is_stable_and_allocation_free)
+{
+    const std::vector<vec3>    positions = make_drag_line_positions();
+    editor::Ik_drag_line_input input{};
+    input.joint_positions = positions;
+    input.pole_position   = vec3{2.0f, 0.5f, -1.0f};
+
+    editor::Ik_drag_line_buffer buffer;
+    editor::build_ik_drag_lines(input, buffer);
+    const std::size_t path_count       = buffer.path_lines.size();
+    const std::size_t marker_count     = buffer.marker_lines.size();
+    const std::size_t path_capacity    = buffer.path_lines.capacity();
+    const std::size_t marker_capacity  = buffer.marker_lines.capacity();
+    const editor::Ik_drag_line first_path_line = buffer.path_lines[0];
+
+    // The high-water mark is reached: a second build clears and refills the
+    // same storage, so a steady-state drag frame allocates nothing (R16).
+    editor::build_ik_drag_lines(input, buffer);
+    EXPECT_EQ(buffer.path_lines.size(),      path_count);
+    EXPECT_EQ(buffer.marker_lines.size(),    marker_count);
+    EXPECT_EQ(buffer.path_lines.capacity(),  path_capacity);
+    EXPECT_EQ(buffer.marker_lines.capacity(), marker_capacity);
+    EXPECT_EQ(buffer.path_lines[0].p0,       first_path_line.p0);
+    EXPECT_EQ(buffer.path_lines[0].p1,       first_path_line.p1);
+
+    // clear() keeps the capacity too.
+    buffer.clear();
+    EXPECT_EQ(buffer.line_count(),           0u);
+    EXPECT_EQ(buffer.path_lines.capacity(),  path_capacity);
+    EXPECT_EQ(buffer.marker_lines.capacity(), marker_capacity);
+}
+
+TEST(Ik_drag_lines, degenerate_inputs_draw_nothing_extra)
+{
+    editor::Ik_drag_line_buffer buffer;
+
+    // Fewer than two joints: no chain to draw.
+    const std::vector<vec3>    single = { vec3{1.0f, 2.0f, 3.0f} };
+    editor::Ik_drag_line_input one_joint{};
+    one_joint.joint_positions = single;
+    editor::build_ik_drag_lines(one_joint, buffer);
+    EXPECT_EQ(buffer.line_count(), 0u);
+
+    // Zero reach: the segment lines exist (degenerate) but the markers, whose
+    // arm is a fraction of the reach, are left out.
+    const std::vector<vec3>    folded = { vec3{1.0f}, vec3{1.0f}, vec3{1.0f} };
+    editor::Ik_drag_line_input zero_reach{};
+    zero_reach.joint_positions = folded;
+    editor::build_ik_drag_lines(zero_reach, buffer);
+    EXPECT_EQ(buffer.path_lines.size(),   2u);
+    EXPECT_EQ(buffer.marker_lines.size(), 0u);
+}
+
 } // anonymous namespace

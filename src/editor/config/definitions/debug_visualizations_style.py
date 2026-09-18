@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=1,
+    version=2,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -71,6 +71,15 @@ struct("Debug_visualizations_style",
         field("bone_solid",                        Bool,  added_in=1, default="false", short_desc="Solid Bones", long_desc="Draw skeleton bones as N.V shaded solid octahedra (the pickable bone proxies) instead of lines"),
         field("bone_aspect_ratio",                 Float, added_in=1, default="0.1f",  short_desc="Bone Aspect Ratio",  long_desc="Bone half-width as a fraction of bone length, so a short bone is drawn as thin as it is short; also the click target size in bone selection mode"),
         field("skin_bone_xray",                    Bool,  added_in=1, default="true",   short_desc="Skin Bone X-Ray", long_desc="Draw bones occluded by geometry at full strength instead of the dim hidden-line look; bone visibility is then the bone colors' alpha"),
+
+        # Chain visualization of a running IK drag (Transform_tool::tool_render,
+        # doc/plans/rigging/ik_drag_options.md section 2). Drawn only while an
+        # IK drag gesture is active.
+        field("ik_chain_color",                    Vec4,  added_in=2, default="0.2f, 0.9f, 1.0f, 1.0f", short_desc="IK Chain Color",  long_desc="Color of the IK chain polyline and of the effector marker during an IK drag"),
+        field("ik_chain_width",                    Float, added_in=2, default="4.0f",                   short_desc="IK Chain Width",  long_desc="Line width of the IK chain polyline and of the pole line during an IK drag"),
+        field("ik_root_color",                     Vec4,  added_in=2, default="1.0f, 0.4f, 0.1f, 1.0f", short_desc="IK Root Color",   long_desc="Color of the marker at the IK chain's fixed root during an IK drag"),
+        field("ik_pole_color",                     Vec4,  added_in=2, default="1.0f, 0.2f, 0.8f, 1.0f", short_desc="IK Pole Color",   long_desc="Color of the line to the governing pole target and of the pole marker during an IK drag"),
+        field("ik_marker_width",                   Float, added_in=2, default="2.0f",                   short_desc="IK Marker Width", long_desc="Line width of the IK root, effector and pole markers during an IK drag"),
 
         field("mesh_primitive_box_color",          Vec4,  added_in=1, default="0.0f, 0.8f, 1.0f, 1.0f", short_desc="Primitive Box Color"),
         field("mesh_primitive_box_width",          Float, added_in=1, default="1.0f",  short_desc="Primitive Box Width"),

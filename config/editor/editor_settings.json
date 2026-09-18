@@ -11,6 +11,7 @@
         "turn_speed": 1
     },
     "debug_visualizations_style": {
+        "_version": 2,
         "shadow_fit_casters_color": [0.2,1,0.3,0.6],
         "shadow_fit_casters_culled_color": [1,0.2,0.2,0.4],
         "shadow_fit_casters_width": 1,
@@ -62,6 +63,11 @@
         "bone_solid": true,
         "bone_aspect_ratio": 0.1,
         "skin_bone_xray": true,
+        "ik_chain_color": [0.2,0.9,1,1],
+        "ik_chain_width": 4,
+        "ik_root_color": [1,0.4,0.1,1],
+        "ik_pole_color": [1,0.2,0.8,1],
+        "ik_marker_width": 2,
         "mesh_primitive_box_color": [0,0.8,1,1],
         "mesh_primitive_box_width": 1,
         "bone_box_color": [1,0.6,0.1,1],

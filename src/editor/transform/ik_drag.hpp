@@ -85,6 +85,10 @@ public:
     [[nodiscard]] auto has_pole     () const -> bool { return m_has_pole; }
     [[nodiscard]] auto get_pole_node() const -> std::shared_ptr<erhe::scene::Node> { return m_pole_node.lock(); }
     [[nodiscard]] auto get_pole_angle() const -> float { return m_pole_angle; }
+    // The pole's world position as begin() captured it (R9): a drag-start
+    // capture, so the chain visualization's pole line does not chase a pole
+    // that moves during the gesture. Meaningless when has_pole() is false.
+    [[nodiscard]] auto get_pole_position() const -> glm::vec3 { return m_pole_position; }
 
     // One Compound_operation of Node_transform_operation covering the joints
     // whose parent_from_node changed since begin(), so a complete gesture is

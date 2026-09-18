@@ -3,9 +3,9 @@
 Status: in progress
 
 This document specifies two slices of Phase 2 of the rigging roadmap in
-`rigging_tools.md`: the **effector orientation option** (section 1,
-implemented) and the **chain visualization** (section 2, specified here and
-implemented by a later commit). Both act on the interactive IK drag of
+`rigging_tools.md`: the **effector orientation option** (section 1) and the
+**chain visualization** (section 2). Both are implemented (see Implementation
+status at the end); both act on the interactive IK drag of
 `fabrik_ik.md` (Phase 1) as extended by `ik_settings.md` (per-bone locks and
 limits) and `pole_target.md` (the pole).
 
@@ -140,10 +140,13 @@ reference, and it is called once per view per frame with the `Render_context`
 the lines need.
 
 **R12.** The current line API is `erhe::renderer::Primitive_renderer`, taken
-from the render context as
-`context.get({erhe::graphics::Primitive_type::line, <stride>, true, true})`,
-the form every call site in `src/editor/tools/debug_visualizations.cpp` uses.
-`pole_target.md` section 7 names that same type and needs no correction.
+from the render context as `context.get(<config>)`, the form every call site in
+`src/editor/tools/debug_visualizations.cpp` uses. The config is the Transform
+tool's own `handle_line_config` - the x-ray line bucket its handles and drag
+guides already use - so the chain stays readable inside the skinned mesh it
+runs through, for the reason `Bone_visualization` gives for drawing bones
+x-ray. `pole_target.md` section 7 names that same type and needs no
+correction.
 
 **R13.** The visualization is drawn exactly while `Ik_drag::is_active()` is
 true, which is the span of one gesture: `Transform_tool::try_translate_ik`
@@ -167,7 +170,9 @@ holds.
 
 Marker arms are sized as a fraction of the chain's reach (the sum of its
 segment lengths), so the markers scale with the rig rather than with the
-scene's units.
+scene's units. That fraction is a constant of the line-building input (R16),
+not a setting: it states the markers' proportion to the chain, which no rig
+needs to change.
 
 **R15.** Colors and line widths are fields of the existing
 `Debug_visualizations_style` codegen struct
@@ -185,14 +190,21 @@ declared beside the solver in `src/editor/transform/ik_solver.hpp`:
 void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& buffer);
 ```
 
-`Ik_drag_line_input` carries the joint world positions, the pole position and
-a `bool`-free `has_pole` discriminator (an `std::optional<glm::vec3>` pole
-position), the marker scale and the four colors; `Ik_drag_line_buffer` is a
-caller-owned record of `std::vector`s of coloured line endpoints. The buffer
-is a member of the drawing owner, cleared at the point of use and again after
-use, so a steady-state drag frame allocates nothing (AGENTS.md "Run-time
-Memory Allocation Discipline"). `tool_render` calls the function and then
-hands the buffer's contents to the `Primitive_renderer`.
+`Ik_drag_line_input` carries the joint world positions, the pole position as a
+`bool`-free discriminator (an `std::optional<glm::vec3>`, unset meaning an
+unpoled drag), the marker scale (defaulted, R14) and the three colors of R15 -
+the effector marker takes the chain color, so there are three, not four.
+`Ik_drag_line_buffer` is a caller-owned record of two `std::vector`s of
+coloured line endpoints, one per line width the owner draws with:
+`path_lines` (the chain polyline and the pole line, `ik_chain_width`) and
+`marker_lines` (the three crosses, `ik_marker_width`). The buffer is a member
+of the drawing owner, cleared at the point of use and again after use, so a
+steady-state drag frame allocates nothing (AGENTS.md "Run-time Memory
+Allocation Discipline"); the joint positions the input spans are gathered into
+a second scratch vector of the owner under the same rule, and neither scratch
+holds a node reference. `tool_render` calls the function and then hands the
+buffer's contents to the `Primitive_renderer`, one `add_line` per line with
+that group's width.
 
 **R17.** Verification:
 
@@ -202,7 +214,10 @@ hands the buffer's contents to the `Primitive_renderer`.
   line; the same chain with a pole produces the pole line from the pole
   position to `joints[0]` and the pole marker; a second call into the same
   buffer produces the same line count (the clear-and-fill rule of R16) and
-  performs no reallocation once the buffer has reached its high-water mark.
+  performs no reallocation once the buffer has reached its high-water mark;
+  and the degenerate inputs draw nothing spurious (fewer than two joints
+  produces no lines at all, a chain of zero reach produces its segment lines
+  and no markers).
 - Interactive, in a windowed editor: drag a bone of the `RiggedFigure`
   fixture with "Bone IK" on and observe the chain, root and pole visuals
   appear for the duration of the drag and vanish on release.
@@ -241,7 +256,22 @@ Section 1 is implemented as specified:
   exercised by `Mcp_test.ik_drag_solves_a_bone_chain_and_records_one_undo_entry`.
 - Acceptance verification - `scripts/ik_effector_orientation_verify.py`.
 
-Section 2 is not implemented.
+Section 2 is implemented as specified:
 
-Outstanding: interactive (windowed) verification of the Move tool combo and
-of a live gizmo drag under `follow_last_segment`.
+- Line building - `build_ik_drag_lines` with `Ik_drag_line`,
+  `Ik_drag_line_input` and `Ik_drag_line_buffer`, beside the solver in
+  `src/editor/transform/ik_solver.{hpp,cpp}`; unit tests in
+  `src/editor/transform/test/test_ik_solver.cpp` (`Ik_drag_lines.*`).
+- Drawing - `Transform_tool::render_ik_drag`, called from
+  `Transform_tool::tool_render` while `Ik_drag::is_active()`
+  (`transform_tool.{hpp,cpp}`), with the buffer and the joint-position scratch
+  as members; the pole's drag-start position is read through
+  `Ik_drag::get_pole_position()`.
+- Appearance - `Debug_visualizations_style::ik_chain_color` / `ik_chain_width`
+  / `ik_root_color` / `ik_pole_color` / `ik_marker_width`
+  (`src/editor/config/definitions/debug_visualizations_style.py`, struct
+  version 2).
+
+Outstanding: interactive (windowed) verification of the Move tool combo, of a
+live gizmo drag under `follow_last_segment`, and of the chain visualization
+(R17's second bullet - a live drag is not reachable headlessly).

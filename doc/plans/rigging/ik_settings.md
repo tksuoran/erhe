@@ -377,8 +377,8 @@ formulation adapted to swing/twist limits:
 - **Effector orientation option** (keep world orientation vs follow last
   segment) - Transform tool setting; implemented, specified in
   `ik_drag_options.md` section 1.
-- **Chain visualization** during drag (highlight chain, root, later pole)
-  via `erhe::renderer::Primitive_renderer` - specified in
+- **Chain visualization** during drag (chain, root, effector and pole) via
+  `erhe::renderer::Primitive_renderer` - implemented, specified in
   `ik_drag_options.md` section 2.
 - Phase 1 deferred open questions (mid-chain drag feel, incremental vs
   from-start solve) - revisit with constrained-solver experience.
