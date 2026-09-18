@@ -1762,6 +1762,34 @@ TEST_F(Mcp_test, ik_drag_solves_a_bone_chain_and_records_one_undo_entry)
 
     advance_frames(client, 4);
     EXPECT_EQ(undo_depth(), undo_before + 1) << "one ik_drag records exactly one undo entry";
+    EXPECT_EQ(solved.payload.at("effector_orientation").get<std::string>(), "keep_world")
+        << "the effector orientation default is keep_world";
+
+    // doc/plans/rigging/ik_drag_options.md R10: the mode is an explicit
+    // argument with a fixed default, and an unrecognized value is refused.
+    Mcp_client::Tool_result followed = client.call_tool(
+        "ik_drag",
+        json{
+            {"scene_name",           scene},
+            {"node_name",            "arm_joint_L_3"},
+            {"target",               {target[0], target[1], target[2]}},
+            {"effector_orientation", "follow_last_segment"}
+        }
+    );
+    ASSERT_FALSE(followed.is_error) << followed.text;
+    EXPECT_EQ(followed.payload.at("effector_orientation").get<std::string>(), "follow_last_segment");
+
+    Mcp_client::Tool_result refused = client.call_tool(
+        "ik_drag",
+        json{
+            {"scene_name",           scene},
+            {"node_name",            "arm_joint_L_3"},
+            {"target",               {target[0], target[1], target[2]}},
+            {"effector_orientation", "sideways"}
+        }
+    );
+    EXPECT_TRUE(refused.is_error) << "an unrecognized effector_orientation must be refused";
+    advance_frames(client, 4);
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

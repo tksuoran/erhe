@@ -1789,12 +1789,26 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         target[static_cast<glm::length_t>(i)] = component.get<float>();
     }
 
+    // doc/plans/rigging/ik_drag_options.md R10: an explicit argument with its
+    // own fixed default, never the Move tool's combo.
+    const std::string orientation_string = args.value("effector_orientation", "keep_world");
+    Ik_effector_orientation effector_orientation = Ik_effector_orientation::keep_world;
+    if (orientation_string == "follow_last_segment") {
+        effector_orientation = Ik_effector_orientation::follow_last_segment;
+    } else if (orientation_string != "keep_world") {
+        json r = make_text_content(
+            "Invalid effector_orientation: " + orientation_string + " (keep_world, follow_last_segment)"
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
     // One complete gesture: discovery, one solve against an absolute world
     // target, and one compound operation covering the joints it moved
     // (doc/plans/rigging/pole_target.md R22). Nothing here reads UI state -
     // no selection, no gizmo, no Transform tool setting.
     Ik_drag drag;
-    if (!drag.begin(effector)) {
+    if (!drag.begin(effector, effector_orientation)) {
         json r = make_text_content(
             "No IK chain for '" + effector->get_name() +
             "': the effector must be a bone (or a node parented under one) that is not ik_lock, with at least one bone ancestor"
@@ -1829,6 +1843,7 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         {"joints",        joints},
         {"pole",          nullptr},
         {"pole_angle",    drag.has_pole() ? drag.get_pole_angle() : 0.0f},
+        {"effector_orientation", orientation_string},
         {"recorded",      operation ? true : false}
     };
     if (pole) {

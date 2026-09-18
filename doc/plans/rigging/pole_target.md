@@ -348,10 +348,10 @@ model.
 - **Chain visualization** owns every pole visual: the line from the governing
   pole to the chain, the pole marker, and the chain and root highlight during
   a drag, all through `erhe::renderer::Primitive_renderer`. This slice draws
-  nothing.
+  nothing. Requirements: `ik_drag_options.md` section 2.
 - **Effector orientation option** owns the Transform tool setting choosing
   between the effector keeping its world orientation and following the last
-  segment.
+  segment. Implemented; requirements: `ik_drag_options.md` section 1.
 - **Stiffness** owns the solver enforcement and the UI of the
   `Ik_settings::stiffness` field, which stays inert here
   (`ik_settings.md` section 1).

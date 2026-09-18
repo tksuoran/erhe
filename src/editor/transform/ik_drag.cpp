@@ -103,9 +103,13 @@ constexpr int   c_max_iterations  = 16;
 
 } // anonymous namespace
 
-auto Ik_drag::begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool
+auto Ik_drag::begin(
+    const std::shared_ptr<erhe::scene::Node>& effector,
+    const Ik_effector_orientation             effector_orientation
+) -> bool
 {
     reset();
+    m_effector_orientation = effector_orientation;
     if (!effector) {
         return false;
     }
@@ -117,7 +121,8 @@ auto Ik_drag::begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool
         // Non-bone drag handle (an Add Bone Tip Nodes tip, or any node
         // parented under a bone): it joins the chain as the effector point,
         // so the parent bone rotates to aim at it - which a bone-effector
-        // drag never does (the effector keeps its own orientation).
+        // drag never does (the effector is never aimed at anything; what its
+        // own orientation does is the Ik_effector_orientation choice).
         const std::shared_ptr<erhe::scene::Node> parent = effector->get_parent_node();
         if (!parent || !erhe::scene::is_bone(parent.get())) {
             return false;
@@ -360,13 +365,20 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
         }
     }
 
-    // The effector keeps its drag-start world orientation; only its position
-    // follows the chain.
+    // The effector's own orientation (ik_drag_options.md R3, R4). Its local
+    // rotation was never touched: the write-back loops above stop before it,
+    // and the drag-start restore at the top of apply() put it back. So
+    // follow_last_segment only has to refresh the effector's cached world
+    // transform under its solved parent - it then rides rigidly on that parent
+    // like any other child. keep_world additionally rotates it back to its
+    // drag-start world rotation, so only its position follows the chain.
     erhe::scene::Node& effector = *m_joints.back();
     effector.update_world_from_node(); // its parent joint is final
-    const quat effector_rotation = effector.world_from_node_transform().get_rotation();
-    const quat restore_delta = m_effector_world_rotation_before * inverse(effector_rotation);
-    effector.set_world_from_node(erhe::scene::rotate(effector.world_from_node_transform(), restore_delta));
+    if (m_effector_orientation == Ik_effector_orientation::keep_world) {
+        const quat effector_rotation = effector.world_from_node_transform().get_rotation();
+        const quat restore_delta = m_effector_world_rotation_before * inverse(effector_rotation);
+        effector.set_world_from_node(erhe::scene::rotate(effector.world_from_node_transform(), restore_delta));
+    }
 }
 
 void Ik_drag::reset()
@@ -382,6 +394,7 @@ void Ik_drag::reset()
     m_root_parent_world_rotation = quat{1.0f, 0.0f, 0.0f, 0.0f};
     m_has_constraints = false;
     m_effector_world_rotation_before = quat{1.0f, 0.0f, 0.0f, 0.0f};
+    m_effector_orientation = Ik_effector_orientation::keep_world;
     m_has_pole      = false;
     m_pole_position = vec3{0.0f};
     m_pole_angle    = 0.0f;

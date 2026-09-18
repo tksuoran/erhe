@@ -20,6 +20,25 @@ namespace editor {
 
 class Operation;
 
+// What the effector's own orientation does while the chain bends under it
+// (doc/plans/rigging/ik_drag_options.md section 1). The solver rotates every
+// joint except the effector - the effector has no child segment in the chain -
+// so this is a free choice:
+//   keep_world          - the effector keeps its drag-start WORLD rotation;
+//                         only its position follows the chain (Phase 1).
+//   follow_last_segment - the effector keeps its drag-start LOCAL rotation, so
+//                         it rides rigidly on its solved parent joint like any
+//                         other child of that joint.
+enum class Ik_effector_orientation : unsigned int {
+    keep_world          = 0,
+    follow_last_segment = 1
+};
+
+static constexpr const char* c_ik_effector_orientation_strings[] = {
+    "Keep World",
+    "Follow Last Segment"
+};
+
 // Interactive IK state for one translate drag of a bone (see
 // doc/plans/rigging/fabrik_ik.md and doc/plans/rigging/ik_settings.md).
 // Captures the chain, its drag-start pose, and the per-joint constraints
@@ -39,7 +58,14 @@ public:
     // rotates to aim at it. Returns false - leaving the drag to plain FK -
     // when the effector is an ik_lock bone, or when neither the effector nor
     // its parent is a bone (chain of at least two joints required).
-    auto begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool;
+    //
+    // effector_orientation is captured for the whole gesture, beside the chain
+    // and the pole, so every apply() of one drag solves under one mode and
+    // reads no setting (ik_drag_options.md R2).
+    auto begin(
+        const std::shared_ptr<erhe::scene::Node>& effector,
+        Ik_effector_orientation                   effector_orientation
+    ) -> bool;
 
     // Solve against target and write the pose to the joint nodes. Restores
     // the drag-start pose first, so the target is absolute and dragging back
@@ -87,6 +113,7 @@ private:
     glm::quat                               m_root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                                    m_has_constraints{false};
     glm::quat                               m_effector_world_rotation_before{1.0f, 0.0f, 0.0f, 0.0f};
+    Ik_effector_orientation                 m_effector_orientation{Ik_effector_orientation::keep_world};
     bool                                    m_has_pole{false};
     glm::vec3                               m_pole_position{0.0f};
     float                                   m_pole_angle{0.0f};

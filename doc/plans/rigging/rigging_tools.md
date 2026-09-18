@@ -205,8 +205,10 @@ Builds directly on Phase 1's solver and drag UX.
   nodes (Blender `protectflag` equivalent), respected by IK, by the Transform
   tool, and by Properties editing. Useful well beyond rigging.
 - **Effector orientation option**: keep world orientation (Phase 1 default) vs
-  follow last segment, as a Transform tool setting.
+  follow last segment, as a Transform tool setting. Implemented;
+  requirements: `ik_drag_options.md` section 1.
 - **Chain visualization**: highlight active chain, root, pole during drag.
+  Requirements: `ik_drag_options.md` section 2.
 - Resolve Phase 1 open questions that were deferred (mid-chain drag feel,
   incremental vs from-start solve) with the added experience.
 

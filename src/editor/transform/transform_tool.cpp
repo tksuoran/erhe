@@ -908,7 +908,7 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
             const bool effector_locked =
                 effector &&
                 erhe::utility::test_bit_set(effector->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
-            if (effector && !effector_locked && m_ik_drag.begin(effector)) {
+            if (effector && !effector_locked && m_ik_drag.begin(effector, shared.settings.effector_orientation)) {
                 // Append the ancestor joints so record_transform_operation()
                 // (undo, autokey) covers every node the solve changes. The
                 // effector is entries[0] already.

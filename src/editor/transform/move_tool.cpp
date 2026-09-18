@@ -47,6 +47,26 @@ void Move_tool::imgui(Property_editor& property_editor)
             ImGui::SetTooltip("Dragging a bone solves its ancestor chain with FABRIK IK (chain root: first IK Lock bone); off = plain translation");
         }
     });
+    p.add_entry("Effector Orientation", [this]() {
+        Transform_tool_settings& settings = get_shared().settings;
+        const int current = static_cast<int>(settings.effector_orientation);
+        if (ImGui::BeginCombo("##", c_ik_effector_orientation_strings[current])) {
+            for (int i = 0, end = IM_ARRAYSIZE(c_ik_effector_orientation_strings); i < end; ++i) {
+                bool selected = (i == current);
+                if (ImGui::Selectable(c_ik_effector_orientation_strings[i], &selected, ImGuiSelectableFlags_None)) {
+                    settings.effector_orientation = static_cast<Ik_effector_orientation>(i);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "What the dragged bone's own orientation does while the chain bends: "
+                "Keep World holds its world orientation (only its position follows the chain); "
+                "Follow Last Segment holds its local orientation, so it turns with the bone that aims at it"
+            );
+        }
+    });
     // Persistent preference (Transform_tool_config); touch() schedules the autosave.
     p.add_entry("Snap Absolute", [this]() {
         if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.translate_snap_absolute)) {

@@ -1238,9 +1238,17 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. Per-bone Ik_settings attachments supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled).",
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. Per-bone Ik_settings attachments supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled) and the effective effector_orientation.",
     "inputSchema": {
       "properties": {
+        "effector_orientation": {
+          "description": "What the effector's own orientation does while the chain bends: 'keep_world' (default) keeps its drag-start world rotation, so only its position follows the chain; 'follow_last_segment' keeps its drag-start local rotation, so it turns with the joint that aims at it",
+          "enum": [
+            "keep_world",
+            "follow_last_segment"
+          ],
+          "type": "string"
+        },
         "node_id": {
           "description": "Effector node ID (the dragged end of the chain)",
           "type": "integer"

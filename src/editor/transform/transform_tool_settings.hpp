@@ -1,5 +1,7 @@
 #pragma once
 
+#include "transform/ik_drag.hpp"
+
 namespace editor {
 
 enum class Scale_gizmo_mode : unsigned int {
@@ -50,6 +52,11 @@ public:
     // with FABRIK IK instead of translating the bone (see
     // doc/plans/rigging/fabrik_ik.md). Off = plain FK translation.
     bool                     translate_ik_enable  {true};
+    // What the effector's own orientation does during an IK drag
+    // (doc/plans/rigging/ik_drag_options.md R7). Session state, like
+    // translate_ik_enable: a drag-behavior choice owned by the running tool,
+    // not a persisted preference of Transform_tool_config.
+    Ik_effector_orientation  effector_orientation {Ik_effector_orientation::keep_world};
     bool                     rotate_snap_enable   {false};
     float                    rotate_snap          {15.0f};
     Scale_gizmo_mode         scale_gizmo_mode     {Scale_gizmo_mode::basic};

@@ -375,9 +375,11 @@ formulation adapted to swing/twist limits:
   `pole_target.md` (a pole node reference and an angle on `Ik_settings`,
   carried by `ERHE_rig`).
 - **Effector orientation option** (keep world orientation vs follow last
-  segment) - Transform tool setting; small, after pole.
+  segment) - Transform tool setting; implemented, specified in
+  `ik_drag_options.md` section 1.
 - **Chain visualization** during drag (highlight chain, root, later pole)
-  via `erhe::renderer::Primitive_renderer` - after pole.
+  via `erhe::renderer::Primitive_renderer` - specified in
+  `ik_drag_options.md` section 2.
 - Phase 1 deferred open questions (mid-chain drag feel, incremental vs
   from-start solve) - revisit with constrained-solver experience.
 
