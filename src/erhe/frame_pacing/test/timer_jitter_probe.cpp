@@ -2,7 +2,7 @@
 //
 // Measures the wake-up error of the highest-resolution wait available on
 // this machine, to ground the frame pacer 'guard' tunable
-// (doc/frame_pacing/inputs.md section 3.4, gap G6). Standalone console
+// (doc/frame_pacing/inputs.md section 3.5, release gating). Standalone console
 // tool, no erhe dependencies; run it on the target machine and read the
 // p99 line - that is the evidence-based 'guard' floor.
 

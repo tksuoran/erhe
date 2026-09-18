@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Frame pacing algorithm reference model and verification simulation.
 
-Supports deliverable 2 of doc/frame_pacing/requirements.md: implements the algorithm
-specified in doc/frame_pacing/algorithm.md and verifies claims C1..C8 from
-doc/frame_pacing/control_model.md against a deterministic simulated plant
+Implements the algorithm specified in doc/frame_pacing/algorithm.md and verifies
+the claims of doc/frame_pacing/control_model.md section 11 (and the later claims
+listed in doc/frame_pacing/algorithm.md section 8) against a deterministic plant
 (virtual clock, synthetic CPU/GPU stage times, modeled presentation engine).
 No real GPU, display, or wall clock is involved; runs are reproducible.
 
