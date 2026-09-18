@@ -14,8 +14,8 @@ namespace editor {
 class Content_library;
 
 // A style item of the content library's Styles category
-// (doc/style_library.md D2): a named holder of property values of any item
-// class. Its secondary owner type (doc/property_system.md D30) is the root
+// (doc/editor/style_library.md D2): a named holder of property values of any item
+// class. Its secondary owner type (doc/erhe/property_system.md D30) is the root
 // owner type, so the Add Property picker offers every class's value
 // properties by qualified name (`Material.roughness`, `Light.color`) and
 // the values live in this item's own store. Any item uses it through its
@@ -34,7 +34,7 @@ public:
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom
-    // typeName (doc/usd_compatibility.md).
+    // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Style"; }
 
     // Overrides Dependency_object: every class's value properties are this

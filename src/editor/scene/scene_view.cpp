@@ -615,7 +615,7 @@ void Scene_view::update_hover_with_raytrace()
             // Non-blocking: get_geometry() would build the Geometry on the
             // main thread, or wait seconds for a loader worker building this
             // same shape. A hit on a still-proxy raytrace simply has no facet
-            // detail this frame. See doc/primitive_shape_locking.md.
+            // detail this frame. See doc/erhe/primitive_shape_locking.md.
             entry.geometry = shape->get_geometry_const();
             if (entry.geometry) {
                 GEO::Mesh& geo_mesh = entry.geometry->get_mesh();

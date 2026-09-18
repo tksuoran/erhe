@@ -196,7 +196,7 @@ class Material_buffer
 public:
     Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface);
 
-    // Slot-table-driven record writer (doc/draw_list_material_set.md D2).
+    // Slot-table-driven record writer (doc/erhe/draw_list_material_set.md D2).
     // Writes one record per entry of slot_materials, in slot order, into
     // storage the caller owns; a null entry is a hole and is zero-filled. It
     // assigns no slot and writes nothing on the Material - the slot IS the

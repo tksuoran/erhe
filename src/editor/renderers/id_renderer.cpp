@@ -393,7 +393,7 @@ void Id_renderer::render_buckets(
         // GPU-written id back into a (mesh, primitive, triangle) hit (picking).
         // No material set: the id shader reads only the id, and this renderer
         // binds no material state at all. Primitive_buffer then writes a
-        // constant slot 0 (doc/draw_list_material_set.md D5).
+        // constant slot 0 (doc/erhe/draw_list_material_set.md D5).
         erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, nullptr, primitive_mode, primitive_settings, use_id_ranges);
         erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode);
         ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());

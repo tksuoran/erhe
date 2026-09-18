@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 # One variant selection of a scene (Scene_settings::variant_selections,
-# doc/usd_compatibility_design.md X4). `prim_path` is the M1 path of the prim
+# doc/erhe/usd_compatibility_design.md X4). `prim_path` is the M1 path of the prim
 # carrying the variant set, `set_name` the set's name and `variant_name` the
 # variant chosen for it. A set without an entry keeps the selection the file
 # it came from authored; an entry is written by Scene_root::select_variant

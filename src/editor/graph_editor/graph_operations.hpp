@@ -24,7 +24,7 @@ class App_context;
 //   static constexpr const char* label;              ("Geometry graph" / ...)
 // The Window must expose insert_node / erase_node / connect_pins /
 // disconnect_pins / get_node_position / set_node_position taking (Asset&, ...)
-// (see doc/graph_editor.md C5). The per-editor headers instantiate
+// (see doc/editor/graph_editor.md C5). The per-editor headers instantiate
 // these under the original concrete operation names via using-aliases, so
 // distinct Traits give distinct instantiations - the templates sidestep the ODR
 // clash that would otherwise force the identically-shaped classes apart.

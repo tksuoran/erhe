@@ -200,7 +200,7 @@ void Content_library::announce_attached(const std::shared_ptr<erhe::Item_base>& 
     );
     // Cancels a pending removal note: a move between scopes is a detach
     // immediately followed by this attach, and must not be announced as a
-    // removal (doc/import_undo_reference_clearing.md).
+    // removal (doc/editor/import_undo_reference_clearing.md).
     m_asset_manager->note_item_attached(item.get());
 }
 
@@ -213,7 +213,7 @@ void Content_library::announce_detached(const std::shared_ptr<erhe::Item_base>& 
     m_asset_manager->on_library_prim_detached(owner, item);
     // EVERY kind, not just the manager-owned ones: the graph editor windows
     // hold Graph_mesh / Graph_texture resources, which the same undo removes
-    // (doc/import_undo_reference_clearing.md).
+    // (doc/editor/import_undo_reference_clearing.md).
     m_asset_manager->note_item_detached(item);
 }
 
@@ -386,7 +386,7 @@ auto Content_library::get_existing_scope(const uint64_t kind_type_bit) -> std::s
     // A saved scene brings its kind scopes back as the prims they are, and a
     // file carries a scope's name and its place: the name is the recognition,
     // so a reloaded "Materials" scope is adopted rather than joined by a
-    // second one of the same name (doc/usd_compatibility_design.md E4d).
+    // second one of the same name (doc/erhe/usd_compatibility_design.md E4d).
     const std::shared_ptr<erhe::Scope> scope = find_kind_scope_prim(scope_name);
     if (scope) {
         m_scopes.emplace(kind_type_bit, scope);
@@ -594,12 +594,12 @@ auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, 
     }
     // The copy keeps the source name; attaching it gives it the numeric
     // suffix when the target scope already holds that name
-    // (doc/usd_compatibility_design.md M2).
+    // (doc/erhe/usd_compatibility_design.md M2).
     copy_prim->set_parent(scope);
 
     // The copy's style must not point into the source scene: a style of the
     // same name in the target library, else a copy of the style
-    // (doc/style_library.md D2).
+    // (doc/editor/style_library.md D2).
     if (copy->get_style()) {
         const std::shared_ptr<const erhe::Item_base> source_style = std::dynamic_pointer_cast<const erhe::Item_base>(copy->get_style());
         std::shared_ptr<erhe::Item_base> target_style{};

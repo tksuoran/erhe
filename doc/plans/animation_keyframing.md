@@ -2,8 +2,8 @@
 
 Status: proposed
 
-This plan extends `doc/editor.md` (the `animation/` part) and
-`doc/erhe_scene.md` ("Animation playback") with keyframe authoring.
+This plan extends `doc/editor/editor.md` (the `animation/` part) and
+`doc/erhe/scene.md` ("Animation playback") with keyframe authoring.
 
 Goal: extend the Animation window (curve editor + Animation_player, added for
 issue #243) with a LightWave-Layout-like keyframing workflow: a scrubbable

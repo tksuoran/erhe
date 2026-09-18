@@ -237,7 +237,7 @@ auto Clipboard::try_ready() -> bool
     Selection& selection = *m_context.selection;
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
 
-    // Any prim takes pasted children (doc/usd_compatibility_design.md C5).
+    // Any prim takes pasted children (doc/erhe/usd_compatibility_design.md C5).
     const std::shared_ptr<erhe::Typed> target_prim = get<erhe::Typed>(selected_items);
     return !m_contents.empty() && target_prim;
 }
@@ -252,7 +252,7 @@ auto Clipboard::try_ready() -> bool
     }
 
     Selection& selection = *m_context.selection;
-    // doc/active_item.md D6: the paste target is the active hierarchy
+    // doc/editor/active_item.md D6: the paste target is the active hierarchy
     // item.
     const std::shared_ptr<erhe::Hierarchy> active_hierarchy = selection.get_active_item_as<erhe::Hierarchy>();
     if (active_hierarchy) {
@@ -347,7 +347,7 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
             if (owning_prefab) {
                 // The prefab template owns it; the pasted mesh binding is
                 // what gives it a material slot, so the target scene lists
-                // nothing (doc/usd_compatibility_design.md U4).
+                // nothing (doc/erhe/usd_compatibility_design.md U4).
                 continue;
             }
             log_scene->info(

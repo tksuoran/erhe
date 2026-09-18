@@ -18,7 +18,7 @@ namespace editor {
 // reference its content.
 //
 // Deliberately kept in its own dependency-free header so the rule can be unit
-// tested without building the editor (doc/reloadable_asset_loads.md).
+// tested without building the editor (doc/editor/reloadable_asset_loads.md).
 [[nodiscard]] auto select_free_undone_loads_target(const std::vector<bool>& has_payload) -> std::optional<std::size_t>;
 
 }

@@ -76,7 +76,7 @@ public:
     // Implements / overrides Node_attachment
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
-    // Registered properties (doc/property_system.md section 4.17).
+    // Registered properties (doc/erhe/property_system.md section 4.17).
     // connected_node is a node-typed object reference (D28) bridged (D18)
     // over the weak member: a joint keeps no strong reference to a scene
     // node, so two joints connected to each other's nodes form no cycle

@@ -4,7 +4,7 @@ Status: in progress
 
 Extends section 9 (spatial tiling, bake to disk, streaming) and section 10
 (world-space tile partitioning) of
-[../../lightmap_baking.md](../../lightmap_baking.md), which describe what the
+[../../lightmap_baking.md](../../editor/lightmap_baking.md), which describe what the
 grid, the clipper, the partitioner, the streamer and the tile persistence do
 today. Only the open work is listed here.
 

@@ -2,8 +2,8 @@
 
 Status: in progress
 
-This plan extends `doc/gltf_scene_roundtrip.md` (the scene persistence design
-record), `doc/scene_serialization.md` (the pipeline) and `doc/erhe_gltf.md`
+This plan extends `doc/editor/gltf_scene_roundtrip.md` (the scene persistence design
+record), `doc/editor/scene_serialization.md` (the pipeline) and `doc/erhe/gltf.md`
 (the library) with the items they do not yet describe as shipping behavior.
 
 ## EXT_mesh_polygon ratification watch
@@ -46,7 +46,7 @@ scene, and decide whether the retention should be bounded.
 
 ## Persist what a save currently drops
 
-`doc/scene_serialization.md` "What is not persisted" lists the state a save
+`doc/editor/scene_serialization.md` "What is not persisted" lists the state a save
 drops. Three items there are worth closing rather than accepting:
 
 - A content-library material that no mesh references is not exported, because

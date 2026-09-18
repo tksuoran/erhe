@@ -1,4 +1,4 @@
-// The UsdPhysics content of a USD file (doc/usd_compatibility.md, "Physics"):
+// The UsdPhysics content of a USD file (doc/erhe/usd_compatibility.md, "Physics"):
 // what the reader puts into the format-neutral
 // `erhe::scene::Physics_description` and into the USD-side record beside it.
 
@@ -341,7 +341,7 @@ TEST_F(Physics_import, joint_prim_uses_the_settings_it_names)
 // A joint prim that authors `localPos` / `localRot` of its own states two
 // frames, and erhe takes a joint's frames from two nodes: each authored frame
 // is a node below the body prim, which is where the joint then sits
-// (doc/usd_compatibility.md, "Physics").
+// (doc/erhe/usd_compatibility.md, "Physics").
 TEST_F(Physics_import, authored_joint_frames_become_frame_nodes)
 {
     const erhe::scene::Physics_node_description* frame0 = body("/World/Panel/Flap_frame0");

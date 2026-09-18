@@ -62,7 +62,7 @@ public:
 };
 
 // One driven property of one target object. The property is a registered
-// property of the target (doc/property_system.md): the transform components
+// property of the target (doc/erhe/property_system.md): the transform components
 // of an Xformable are the common case, and any other property whose type the
 // sampler packing covers (is_animatable) is driven the same way. Playback
 // writes the animated layer (D5), so the authored value under it is what a
@@ -122,10 +122,10 @@ public:
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom
-    // typeName (doc/usd_compatibility.md).
+    // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Animation"; }
 
-    // Read-only computed properties (doc/property_system.md D26, section
+    // Read-only computed properties (doc/erhe/property_system.md D26, section
     // 4.16) over the samplers and channels: the keyed time range and the
     // counts. A writer of `samplers` / `channels` / a sampler's timestamps
     // calls notify_keyframes_changed() so an expression reading them
@@ -142,7 +142,7 @@ public:
     [[nodiscard]] auto get_last_time () const -> float;
 
     // Puts every channel target into the sampled pose at `time_current` by
-    // writing the animated layer (doc/property_system.md D5) of the driven
+    // writing the animated layer (doc/erhe/property_system.md D5) of the driven
     // property. The pose is not authored state: the value the target authored
     // stays readable as the base under it, a save writes that base, and
     // clear_applied() puts the target back on it.

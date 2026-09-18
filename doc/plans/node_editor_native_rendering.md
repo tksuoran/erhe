@@ -2,7 +2,7 @@
 
 Status: in progress
 
-Extends `doc/graph_editor.md` "Canvas rendering (native resolution)", which
+Extends `doc/editor/graph_editor.md` "Canvas rendering (native resolution)", which
 describes the canvas as built. What is left is verification that needs a
 display and a mouse, which the headless MCP loop cannot drive.
 

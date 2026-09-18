@@ -138,7 +138,7 @@ static constexpr const char* c_tangent         = "tangent"        ;
 static constexpr const char* c_bitangent       = "bitangent"      ;
 static constexpr const char* c_texcoord_0      = "texcoord_0"     ;
 static constexpr const char* c_texcoord_1      = "texcoord_1"     ;
-static constexpr const char* c_texcoord_2      = "texcoord_2"     ; // lightmap UVs (see doc/lightmap_baking.md)
+static constexpr const char* c_texcoord_2      = "texcoord_2"     ; // lightmap UVs (see doc/editor/lightmap_baking.md)
 static constexpr const char* c_color_0         = "color_0"        ;
 static constexpr const char* c_color_1         = "color_1"        ;
 static constexpr const char* c_joint_indices_0 = "joint_indices_0";
@@ -325,7 +325,7 @@ public:
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;
 
-// Result of validate_mesh_structure(). See doc/geogram.md.
+// Result of validate_mesh_structure(). See doc/erhe/geogram.md.
 enum class Mesh_structure_error {
     none,                   // mesh is structurally sane
     absurd_counts,          // facets/vertices/corners count is implausibly large
@@ -340,7 +340,7 @@ enum class Mesh_structure_error {
 // counts) BEFORE any unbounded per-facet walk can spin on it. The count bound
 // is checked first so an absurd facet count cannot make the check itself spin.
 // Pure (no logging) so callers can format their own context; see
-// doc/geogram.md.
+// doc/erhe/geogram.md.
 class Mesh_structure_check
 {
 public:
@@ -839,7 +839,7 @@ public:
     [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> const std::vector<GEO::index_t>&;
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
 
-    // Semi-sharp crease sharpness accessors (see doc/subdivision_crease_edges.md).
+    // Semi-sharp crease sharpness accessors (see doc/erhe/subdivision_crease_edges.md).
     // Both resolve the edge from the canonical vertex pair; get returns 0.0f
     // (smooth) for absent values or nonexistent edges, set is a no-op for a
     // nonexistent edge. Requires build_edges() to have run.

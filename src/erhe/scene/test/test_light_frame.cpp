@@ -27,7 +27,7 @@ class Light_test_scene
 public:
     Light_test_scene(const erhe::scene::Light_type light_type, const glm::mat4& world_from_light_node)
     {
-        // A Camera and a Light are prims (doc/usd_compatibility_design.md C5):
+        // A Camera and a Light are prims (doc/erhe/usd_compatibility_design.md C5):
         // each carries its own transform.
         camera = std::make_shared<erhe::scene::Camera>("camera");
         camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);

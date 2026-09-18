@@ -27,7 +27,7 @@ class App_context;
 // (position, size, pin edges); links reference node indices + pin slots and
 // carry their wire routing (mid points + curve params). Everything that
 // affects how the graph LOOKS is stored with the graph - the editor windows
-// sync their canvases against it. See doc/graph_editor.md (C4).
+// sync their canvases against it. See doc/editor/graph_editor.md (C4).
 
 // Serialize the node graph to JSON. NodeT is deduced from the node vector.
 // graph is non-const because erhe::graph::Graph::get_links() is non-const.

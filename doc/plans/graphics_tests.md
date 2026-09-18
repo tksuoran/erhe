@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Extends `doc/graphics_test_coverage.md` and
-`doc/graphics_test_nonheadless_port.md`.
+Extends `doc/erhe/graphics_test_coverage.md` and
+`doc/erhe/graphics_test_nonheadless_port.md`.
 
 ## GPU tests in CI under a software Vulkan
 

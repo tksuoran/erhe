@@ -1,4 +1,4 @@
-// doc/subdivision_crease_edges.md, "Catmull-Clark crease rules": semi-sharp
+// doc/erhe/subdivision_crease_edges.md, "Catmull-Clark crease rules": semi-sharp
 // crease rules in Catmull-Clark subdivision (DeRose/Kass/Truong 1998; rule
 // selection and fractional blending per OpenSubdiv Sdc semantics).
 //

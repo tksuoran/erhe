@@ -2,11 +2,11 @@
 
 Status: in progress
 
-This plan extends `doc/property_system.md` (section 6 points here and carries
-no content of its own) and `doc/scene_serialization.md`, by giving the
+This plan extends `doc/erhe/property_system.md` (section 6 points here and carries
+no content of its own) and `doc/editor/scene_serialization.md`, by giving the
 property system its own glTF wire form.
 
-Steps 0 and 1 are implemented (they are what `doc/usd_compatibility_design.md`
+Steps 0 and 1 are implemented (they are what `doc/erhe/usd_compatibility_design.md`
 M4 needed); steps 2 to 5 - the `ERHE_*_properties` extensions themselves - are
 not, and the plan is not ready to implement them: it needs more work before
 any of them is started, so a reader must expect gaps in the sections that
@@ -82,7 +82,7 @@ old members so existing files load.
 `Property_flags::native_gltf` (`property_metadata.hpp`) is data only, like
 the other R15 flags. It marks a registration whose value the exporter
 writes through a native glTF field or a typed `ERHE_*` field whenever it
-differs from the property's default; `doc/property_inventory.md`
+differs from the property's default; `doc/erhe/property_inventory.md`
 ("Registration flags") owns the list of registrations that carry it and
 the reason each conditionally carried field is left out.
 
@@ -91,7 +91,7 @@ the reason each conditionally carried field is left out.
 `clear_default_valued_local_properties` is implemented, in
 `erhe::property` rather than in `erhe_gltf`: the rule is format
 independent and the USD importer runs the same pass
-(doc/property_system.md D32 owns its definition and its ordering against
+(doc/erhe/property_system.md D32 owns its definition and its ordering against
 the `ERHE_*` extension pass). The helpers below are what the extensions of
 step 2 still need:
 
@@ -167,14 +167,14 @@ round trip is exact; elision drops a default-white color).
 
 ### 4. Documentation
 
-- `doc/property_system.md`: move the section 6 extension item into the
+- `doc/erhe/property_system.md`: move the section 6 extension item into the
   implemented record, renamed to the per-type `ERHE_*_properties`
   extensions (extend D14 or add a D28); update the D22 and D25
   serialization bullets and the D23 serialization paragraph; replace the
   light-temperature gotcha in 4.8 with the new exporter behavior (external
   readers lose the tint); note default-elision + the legacy caveat and the
   `native_gltf` flag.
-- `doc/erhe_gltf.md`: add the `ERHE_*_properties` extensions to the
+- `doc/erhe/gltf.md`: add the `ERHE_*_properties` extensions to the
   extension list (:64), note the dropped members and the legacy read path.
 
 ### 5. Verification (once, at the end)

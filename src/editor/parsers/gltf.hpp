@@ -25,7 +25,7 @@ namespace tf              { class Executor; }
 namespace editor {
 
 // The name of the one variant set a glTF asset's KHR_materials_variants list
-// becomes (doc/usd_compatibility_design.md X4). glTF holds a single asset-wide
+// becomes (doc/erhe/usd_compatibility_design.md X4). glTF holds a single asset-wide
 // list of variant names, so a glTF-backed scene's variant table holds exactly
 // one set under this name.
 inline constexpr const char* c_gltf_variant_set_name = "materials";
@@ -55,7 +55,7 @@ class Scene_root;
 // a scene of its own (Scene_open_operation, e.g. --scene); importing into an
 // existing scene leaves that scene's view alone.
 // A glTF parse already produced by an asynchronous load
-// (doc/async_asset_loading_design.md step 7): the parsed data plus the
+// (doc/editor/async_asset_loading_design.md step 7): the parsed data plus the
 // import_root node its content hangs from, ready to hand to
 // make_import_gltf_operation instead of having it parse inline. The root node
 // must already carry the import_root flags and be unparented, exactly as the
@@ -68,7 +68,7 @@ public:
 };
 
 // Everything needed to build - or REBUILD - one glTF import
-// (doc/reloadable_asset_loads.md). An Import_gltf_operation keeps this after
+// (doc/editor/reloadable_asset_loads.md). An Import_gltf_operation keeps this after
 // dropping its payload, so a redo can re-read the file.
 class Gltf_import_recipe
 {
@@ -118,7 +118,7 @@ void import_gltf(
 // import_gltf, scene open, prefab loading): all primitive types enabled,
 // GPU buffers from the shared Mesh_memory.
 // The queue selector picks which Mesh_memory transfer queue the built
-// vertex / index bytes go through (doc/async_asset_loading_design.md 2.6).
+// vertex / index bytes go through (doc/editor/async_asset_loading_design.md 2.6).
 // Only a caller whose publish gates on the loader watermark may pass
 // Mesh_memory_queue::loader; everything that publishes immediately must keep
 // the default interactive queue.
@@ -134,7 +134,7 @@ void import_gltf(
 // non-null, nodes carrying meshes are appended to it (for the raytrace
 // kickoff operation).
 // Worker-side Buffer_mesh build for an asynchronous load
-// (doc/async_asset_loading_design.md phase 3a). Safe off the main thread; the
+// (doc/editor/async_asset_loading_design.md phase 3a). Safe off the main thread; the
 // build_infos must be made on the main thread by the caller. See the
 // definition for why it is serial. finalize_imported_meshes still runs
 // afterwards on the main thread and fast-paths over the built primitives.
@@ -187,7 +187,7 @@ public:
 // a full Scene_root instead of imported as an asset.
 [[nodiscard]] auto is_erhe_scene(const std::vector<std::string>& extensions_used) -> bool;
 
-// Scene save (doc/gltf_scene_roundtrip.md phase 4): one export_gltf()
+// Scene save (doc/editor/gltf_scene_roundtrip.md phase 4): one export_gltf()
 // call writing the whole scene state into a single glTF file - render
 // content plus physics data, prefab external-asset references, embedded
 // texture sources, animations, and every editor-domain ERHE_* extension
@@ -216,7 +216,7 @@ public:
 // default_scene_dir()/<scene name>.glb (a new file; UI confirms overwrite).
 [[nodiscard]] auto resolve_scene_save_path(const Scene_root& scene_root) -> std::filesystem::path;
 
-// Scene open (doc/gltf_scene_roundtrip.md phase 4): opens an
+// Scene open (doc/editor/gltf_scene_roundtrip.md phase 4): opens an
 // erhe-authored glTF file (see is_erhe_scene) as a full Scene_root - NOT
 // undoable. Reuses the
 // import machinery (parse_gltf + finalize_imported_meshes + physics import
@@ -264,7 +264,7 @@ public:
 ) -> std::shared_ptr<Scene_root>;
 
 // Gltf_export_arguments::image_source_provider backed by the scene's
-// content library (doc/gltf_scene_roundtrip.md phase 0): serves the
+// content library (doc/editor/gltf_scene_roundtrip.md phase 0): serves the
 // retained compressed source image bytes stored on texture entries.
 // Fallback for textures imported before retention landed: re-read the
 // texture's standalone source image file (images that were embedded in a

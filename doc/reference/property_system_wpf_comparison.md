@@ -1,13 +1,13 @@
 # erhe property system vs WPF dependency properties
 
 A feature-by-feature comparison of `erhe::property` against the WPF
-property system it was ported from. Companion to `doc/property_system.md`
-(design record) and `doc/erhe_property.md` (library reference); this
+property system it was ported from. Companion to `doc/erhe/property_system.md`
+(design record) and `doc/erhe/property.md` (library reference); this
 document adds nothing to either, it only lines them up against WPF.
 
 Sources compared:
 
-- erhe: `doc/property_system.md`, `doc/erhe_property.md` and the
+- erhe: `doc/erhe/property_system.md`, `doc/erhe/property.md` and the
   headers under `src/erhe/property/erhe_property/`.
 - WPF: `https://github.com/dotnet/wpf` at commit
   `1cfc37f708f91ff4556bd25af414546c446f3a16` (2026-08-21), files under
@@ -48,7 +48,7 @@ integration and the editor.
 
 Status legend: **ported** (same concept, same semantics), **adapted**
 (same concept, different mechanism or narrower scope), **omitted**
-(deliberately left out, `doc/property_system.md` section 5), **future**
+(deliberately left out, `doc/erhe/property_system.md` section 5), **future**
 (listed in section 6 of the design record), **erhe-only** (no WPF
 counterpart).
 
@@ -260,7 +260,7 @@ writers, it does not license lock-free reads.
 ## 3. Differences in detail
 
 The rows above condense to these behavioral differences. Each one is a
-choice recorded in `doc/property_system.md`; the D-numbers point there.
+choice recorded in `doc/erhe/property_system.md`; the D-numbers point there.
 
 1. **Fixed value vocabulary.** WPF stores any CLR object; erhe stores a
    12-alternative variant plus enumerations. This removes boxing,

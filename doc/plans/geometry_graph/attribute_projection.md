@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/geometry_nodes.md`, which describes the geometry node
+This plan extends `doc/editor/geometry_nodes.md`, which describes the geometry node
 graph as it is. Motivated by creation 18 (the fish): a geometry-graph node
 that projects a selected attribute from a SOURCE mesh onto a TARGET mesh -
 output is the target with that one attribute channel replaced by projected
@@ -220,7 +220,7 @@ Templates to read before writing:
   needs a per-edge-t variant), `interpolate_mesh_attributes()`,
   `copy_mesh_attributes()`, and the batch element creation notes - create
   destination elements in bulk, see the "No-create variants" comment block
-  and `doc/catmull_clark.md`.
+  and `doc/erhe/catmull_clark.md`.
 - `operation/lattice_deform.cpp` - a clean operation of similar size.
 - `operation/make_atlas.cpp` - the attribute bind and unbind discipline
   around Geogram calls: attributes must be UNBOUND before Geogram mutates or
@@ -288,7 +288,7 @@ One commit per phase, built and tested before the commit.
   live scene state.
 - Attribute-channel traps that have bitten this area before: `build_edges()`
   wipes edge-domain values unless they are snapshotted
-  (`doc/subdivision_crease_edges.md`), and `transform_mesh` transforms a
+  (`doc/erhe/subdivision_crease_edges.md`), and `transform_mesh` transforms a
   hardcoded channel list. Check both when a channel goes missing.
 - **Texcoord debug view**: `res/shaders/standard.frag` `ERHE_SHADER_DEBUG == 7`
   visualizes `fract(v_texcoord_0)`; set `"shader_debug": 7` in the active
@@ -309,4 +309,4 @@ One commit per phase, built and tested before the commit.
   exactly (inspect the seam line under the belly), and the scales albedo and
   normal graphs bind and render.
 - The open questions above are resolved and this plan is folded into
-  `doc/geometry_nodes.md`.
+  `doc/editor/geometry_nodes.md`.

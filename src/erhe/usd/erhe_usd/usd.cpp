@@ -401,7 +401,7 @@ void fill_stage_metas_from_sublayers(
 }
 
 // Copy the `def` children of every variant block of `spec` into `spec` itself
-// (doc/usd_compatibility_design.md X4). Every variant's prims end up in the
+// (doc/erhe/usd_compatibility_design.md X4). Every variant's prims end up in the
 // tree, whichever variant is selected: the selected variant's are left as
 // they are, and the rest are marked `active = false`, which prunes them from
 // the render, the pick and the simulation the way USD's own `active` does
@@ -544,7 +544,7 @@ void collect_variant_set_specs(
 }
 
 // The entries of `variant_selections` the layer's prims answer for, with one
-// warning for each entry that is dropped (doc/usd_compatibility_design.md C7).
+// warning for each entry that is dropped (doc/erhe/usd_compatibility_design.md C7).
 // This is the one validation of a carried selection: the hoist and the reader
 // both take the result, so neither warns again.
 [[nodiscard]] auto validate_variant_selections(
@@ -746,7 +746,7 @@ void compose_variant_prims(
 // name it belongs to. Tydra leaves such an input at its schema fallback and
 // warns, so the connection is recorded here for the importer, which maps
 // `displayColor` / `displayOpacity` onto the mesh's vertex colors
-// (doc/usd_compatibility.md, "Materials").
+// (doc/erhe/usd_compatibility.md, "Materials").
 constexpr std::string_view c_preview_surface_info_id      {"UsdPreviewSurface"};
 constexpr std::string_view c_primvar_reader_info_id_prefix{"UsdPrimvarReader_"};
 constexpr std::string_view c_shader_prim_type_name        {"Shader"};
@@ -976,7 +976,7 @@ auto load_stage(const std::filesystem::path& path, const Usd_variant_selections&
         // A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds is an input
         // Tydra leaves at its schema fallback, so what the material carries for
         // it is recorded off the layer and the importer applies it
-        // (doc/usd_compatibility.md, "Materials").
+        // (doc/erhe/usd_compatibility.md, "Materials").
         collect_primvar_reader_inputs(impl->layer, impl->primvar_inputs);
         if (!impl->primvar_inputs.empty()) {
             log_usd->info(

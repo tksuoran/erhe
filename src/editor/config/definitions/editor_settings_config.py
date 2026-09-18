@@ -56,7 +56,7 @@ struct("Editor_settings_config",
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         field("inventory",            StructRef("Inventory_config"),       added_in=1, removed_in=4),
-        # glTF import/open performance options (doc/async_asset_loading.md).
+        # glTF import/open performance options (doc/editor/async_asset_loading.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),
@@ -80,7 +80,7 @@ struct("Editor_settings_config",
             visible=True,
             developer=False
         ),
-        # doc/draw_list_renderer.md: render eligible composition
+        # doc/erhe/draw_list_renderer.md: render eligible composition
         # passes and shadow maps from the scene's persistent draw lists
         # (Draw_list_scene) instead of re-bucketing mesh spans every pass.
         # Runtime toggle; ineligible passes always use the classic path.

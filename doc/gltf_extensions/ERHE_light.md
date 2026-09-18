@@ -24,11 +24,11 @@ Carries erhe light state `KHR_lights_punctual` cannot express:
 - `flags`: the light attachment's persistent Item flags
   (see [flags.md](flags.md)).
 - `properties`: the light's local property values as a name to text map
-  (`doc/property_system.md` D14), the registered properties of `Light`
+  (`doc/erhe/property_system.md` D14), the registered properties of `Light`
   by name. The map is the light's complete local set: on load, a value
   the `KHR_lights_punctual` entry carried (color, intensity, range, spot
   angles) that the map does not name is cleared again, so a light that
-  inherits it from its node (`doc/property_system.md` D30) still does
+  inherits it from its node (`doc/erhe/property_system.md` D30) still does
   after a reload.
 
 ## JSON layout

@@ -23,7 +23,7 @@ class App_context;
 class App_message_bus;
 class Scene_view;
 
-// Lightmap atlas viewer (doc/lightmap_texture_viewer.md): shows the
+// Lightmap atlas viewer (doc/editor/lightmap_texture_viewer.md): shows the
 // baked atlas (or the G-buffer position / normal / albedo debug views)
 // with interactive mouse pan + zoom, and optional overlays in atlas UV
 // space: chart edge lines of all lightmapped meshes, highlighted edges of

@@ -22,7 +22,7 @@ class App_context;
 class Property_editor;
 
 // Generic Properties-window rows for the registered properties of one or
-// more items (doc/property_system.md D12): one widget per
+// more items (doc/erhe/property_system.md D12): one widget per
 // Property_type shaped by the property's Property_ui metadata, a value
 // source indicator, "Reset to default", Copy / Paste Properties, mixed-value
 // display for multi-selection, undo through Property_set_operation /
@@ -35,7 +35,7 @@ class Property_editor;
 // effective value local so the row appears. An attached row offers
 // "Remove Property" in its context menu, and an "x" after its widget when
 // the local value is the only reason it is listed; both clear the local
-// value (doc/property_system.md D12).
+// value (doc/erhe/property_system.md D12).
 class Dependency_property_rows
 {
 public:
@@ -48,7 +48,7 @@ public:
     void add_rows(Property_editor& editor, const std::vector<std::shared_ptr<erhe::Item_base>>& items);
 
     // Rows for the properties of one of the item's property sub-objects
-    // (doc/property_system.md D29, e.g. a mesh primitive): the sub-object's
+    // (doc/erhe/property_system.md D29, e.g. a mesh primitive): the sub-object's
     // owner type lists the properties, every write is a Property_set_operation
     // on (item, index), and the bag entries of the context menu (copy, paste,
     // style) are not offered. Same push_group() / show_entries() protocol.
@@ -90,7 +90,7 @@ private:
     void reset_to_default  (const erhe::property::Dependency_property& property);
     void edit_as_expression(const erhe::property::Dependency_property& property);
     void remove_expression (const erhe::property::Dependency_property& property);
-    // The "Add Property" row and its picker (doc/property_system.md D12):
+    // The "Add Property" row and its picker (doc/erhe/property_system.md D12):
     // the candidates are collect_addable_properties over the
     // items, the add is one Property_set_operation per item without a
     // local value, writing its current effective value.
@@ -132,7 +132,7 @@ private:
     std::vector<const erhe::property::Dependency_property*>  m_add_candidates;     // Add Property: the picker's entries, refilled each frame the row draws
     std::vector<const erhe::property::Dependency_property*>  m_add_scratch;        // Add Property: one item's candidates while forming the union
     // Owner types a Scope offers first in Add Property: the classes of the
-    // prims below it (doc/content_library_folders.md D8).
+    // prims below it (doc/editor/content_library_folders.md D8).
     std::vector<erhe::property::Owner_type>                  m_add_preferred_owner_types;
     std::string                                              m_add_filter;         // Add Property: the filter text
     std::string                                              m_add_filter_lower;   // Add Property: the filter lowered for matching

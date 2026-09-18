@@ -9,12 +9,12 @@
 
 namespace erhe::property {
 
-// A named style source (D25 in doc/property_system.md; WPF Style
+// A named style source (D25 in doc/erhe/property_system.md; WPF Style
 // setters): a Dependency_object whose local values are the style, filled
 // from a Property_set at construction and editable afterwards like any
 // object - a change reaches every object using it. Shared between users
 // through std::shared_ptr<const Property_style>. The editor's style items
-// are Dependency_objects of their own (doc/style_library.md D2); this
+// are Dependency_objects of their own (doc/editor/style_library.md D2); this
 // class serves tests and non-item users.
 class Property_style : public Dependency_object
 {

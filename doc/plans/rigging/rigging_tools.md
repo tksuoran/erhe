@@ -2,8 +2,8 @@
 
 Status: proposed
 
-This plan extends `doc/editor_tools.md` (the tools the editor has for posing
-and selecting bones) and `doc/erhe_scene.md` (skins, joints and animation)
+This plan extends `doc/editor/tools.md` (the tools the editor has for posing
+and selecting bones) and `doc/erhe/scene.md` (skins, joints and animation)
 with a rigging tool set. Companion document: `fabrik_ik.md` (detailed
 requirements for phase 1).
 

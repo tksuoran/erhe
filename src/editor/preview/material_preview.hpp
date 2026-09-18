@@ -31,7 +31,7 @@ public:
     void show_preview  ();
 
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import_undo_reference_clearing.md).
+    // (doc/editor/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_last_material() const -> const std::shared_ptr<erhe::primitive::Material>&;
 private:
     // Scene close: when the last previewed material is hosted by the closing

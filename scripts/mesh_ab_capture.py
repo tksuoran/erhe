@@ -6,7 +6,7 @@
     ERHE_SHOT_EXE=<path>          editor build to run (default: ninja vulkan Debug)
     ERHE_SHOT_FRAME=0             keep the asset's authored camera placement
 
-Built for verifying the meshoptimizer work (doc/meshoptimizer_integration.md),
+Built for verifying the meshoptimizer work (doc/erhe/meshoptimizer_integration.md),
 but nothing here is specific to it: it is the general recipe for comparing two
 editor renders and having the difference mean something.
 

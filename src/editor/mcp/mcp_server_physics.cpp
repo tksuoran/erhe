@@ -616,7 +616,7 @@ auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        // Sibling-unique names (doc/usd_compatibility_design.md M2).
+        // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
         const std::string new_name = args["new_name"].get<std::string>();
         if (!item->is_name_available(new_name)) {
             log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
@@ -716,7 +716,7 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        // Sibling-unique names (doc/usd_compatibility_design.md M2).
+        // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
         const std::string new_name = args["new_name"].get<std::string>();
         if (!item->is_name_available(new_name)) {
             log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
@@ -809,7 +809,7 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        // Sibling-unique names (doc/usd_compatibility_design.md M2).
+        // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2).
         const std::string new_name = args["new_name"].get<std::string>();
         if (!item->is_name_available(new_name)) {
             log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);

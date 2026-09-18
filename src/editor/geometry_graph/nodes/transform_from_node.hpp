@@ -17,7 +17,7 @@ class App_context;
 // The driver's transform is captured on the main thread and tracked live
 // (update_live), so dragging the driver in the viewport re-poses the
 // geometry; shadow clones copy the captured matrix and never touch the
-// scene (see doc/geometry_graph_transform_from_node.md).
+// scene (see doc/editor/geometry_graph_transform_from_node.md).
 //
 // Space selects which transform is captured:
 // - local: the driver's parent-relative transform (matches Lattice_node's

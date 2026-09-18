@@ -17,7 +17,7 @@ namespace erhe::graphics {
 namespace erhe::gltf {
 
 // How an Image_transfer gets its staging space and its command buffer
-// (doc/async_asset_loading_design.md 2.6).
+// (doc/editor/async_asset_loading_design.md 2.6).
 enum class Image_transfer_mode : unsigned int
 {
     // The original mode: a private fixed-size staging ring and a transfer

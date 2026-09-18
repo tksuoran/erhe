@@ -29,7 +29,7 @@ class App_context;
 class App_message_bus;
 class Scene_root;
 
-// An asynchronous glTF scan in flight (doc/async_asset_loading_design.md
+// An asynchronous glTF scan in flight (doc/editor/async_asset_loading_design.md
 // step 8). scan_gltf is a whole-file read plus a full JSON parse, so it must
 // not run inside ImGui iteration - hovering a large .glb in the asset browser
 // used to freeze the editor for as long as the read took.
@@ -199,7 +199,7 @@ public:
 };
 
 // The node class one directory entry gets, decided by the walk from the entry's
-// kind and extension (doc/asset_browser_scan.md D1). It travels with
+// kind and extension (doc/editor/asset_browser_scan.md D1). It travels with
 // the entry so the main thread constructs the node without a filesystem call.
 enum class Asset_node_kind
 {
@@ -221,7 +221,7 @@ public:
     Asset_node_kind       kind{Asset_node_kind::other};
 };
 
-// A directory walk in flight (R1 of doc/asset_browser_scan.md).
+// A directory walk in flight (R1 of doc/editor/asset_browser_scan.md).
 // Walking res/editor/assets is thousands of stat() calls - 8.1 s in the
 // startup Tracy capture - so it runs on an executor worker. The worker holds no
 // node: it publishes ordered entry batches every 50 ms and once more at the end

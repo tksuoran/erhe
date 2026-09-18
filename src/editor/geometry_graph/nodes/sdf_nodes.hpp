@@ -2,7 +2,7 @@
 
 // SDF (signed distance field) geometry graph nodes over erhe::voxel::Grid
 // (OpenVDB narrow-band level sets). Only compiled when
-// ERHE_VOXEL_LIBRARY=openvdb; see the SDF nodes in doc/geometry_nodes.md.
+// ERHE_VOXEL_LIBRARY=openvdb; see the SDF nodes in doc/editor/geometry_nodes.md.
 //
 // Grids flowing through "sdf" pins are immutable by convention (like
 // geometries): operation nodes deep-copy before modifying. Grids are not

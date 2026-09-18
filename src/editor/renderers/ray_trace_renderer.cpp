@@ -423,7 +423,7 @@ void Ray_trace_renderer::render(
     }
 
     // Materials: the scene root's FORWARD set, already updated for this frame
-    // (doc/draw_list_material_set.md D5, D6). This dispatch binds it and
+    // (doc/erhe/draw_list_material_set.md D5, D6). This dispatch binds it and
     // the TLAS instance records name slots in it.
     erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
     if (material_set.get_live_count() == 0) {

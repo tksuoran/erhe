@@ -536,7 +536,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        // A Camera is a prim (doc/usd_compatibility_design.md C5): it carries
+        // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): it carries
         // its own transform, so no node holds it.
         auto camera = std::make_shared<erhe::scene::Camera>(name);
         camera->set_fov_y          (glm::radians(45.0f));
@@ -565,7 +565,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        // A Light is a prim (doc/usd_compatibility_design.md C5): it carries
+        // A Light is a prim (doc/erhe/usd_compatibility_design.md C5): it carries
         // its own transform, so no node holds it.
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(erhe::scene::Light::Type::directional);
@@ -625,7 +625,7 @@ private:
     erhe::scene_renderer::Program_interface        m_program_interface;
     erhe::scene_renderer::Shader_variant_cache     m_shader_variant_cache;
     Programs                                       m_programs;
-    // A consumer outside any scene (doc/draw_list_material_set.md D0,
+    // A consumer outside any scene (doc/erhe/draw_list_material_set.md D0,
     // D3): no scene root, no draw list, no registered objects. Its membership
     // comes entirely from sync_library(m_gltf_data.materials), which is by
     // construction every material its meshes use, and it is the clearest

@@ -35,20 +35,20 @@ class Content_library;
 class Scene_root;
 
 // What one loaded template is: the source file, the prim of it the template
-// was taken from - for a USD source (doc/usd_compatibility_design.md X1) - and
+// was taken from - for a USD source (doc/erhe/usd_compatibility_design.md X1) - and
 // the `variants` selection the arc that named it carries in. An empty prim
 // path is a glTF file, or a USD file taken at its default prim, so the two
 // formats share one key. The selection is part of the identity because USD
 // composes a target selected differently as a different prim index: two
 // carriers of one prim with different selections are two templates
-// (doc/usd_compatibility_design.md C7).
+// (doc/erhe/usd_compatibility_design.md C7).
 //
 // The selection here is the part of the arc's selection the target CONSUMES:
 // the entries naming a variant set the target's own file declares, or one a
 // file below it declares (Prefab::consumed_variant_sets). An entry outside
 // that list selects nothing anywhere in the template, so two arcs differing
 // only in such entries name one and the same template and parse the chain
-// once (doc/editor_parsers.md, "A `variants` selection an arc carries").
+// once (doc/editor/parsers.md, "A `variants` selection an arc carries").
 // The arc's full
 // selection - what a USD save writes back on the carrier - is the
 // Prefab_instance's, not the key's.
@@ -129,7 +129,7 @@ public:
         const std::vector<Prefab_variant_selection>& variant_selections = {}
     ) -> std::shared_ptr<Prefab>;
 
-    // Asynchronous form (doc/async_asset_loading_design.md step 7): the file is
+    // Asynchronous form (doc/editor/async_asset_loading_design.md step 7): the file is
     // read, parsed and made GPU-resident off the tick, then the template is
     // finished on the main thread and on_ready is called with it.
     //
@@ -167,7 +167,7 @@ public:
     // material `material` is an instance's clone of (its counterpart, and so
     // on up the chain). The materials a template supplies live in the
     // template's holding scene, so no scene lists them and no container
-    // record defines them (doc/usd_compatibility_design.md U4 2e), and a clone
+    // record defines them (doc/erhe/usd_compatibility_design.md U4 2e), and a clone
     // of one exists only because the template supplies it. A scene an
     // instance's meshes enter asks this to tell an owned material from a
     // material nobody owns. Linear in the number of loaded templates and
@@ -211,7 +211,7 @@ private:
     // resolve nested external assets. Shared by get_or_load and reload.
     auto load_template(Prefab& prefab) -> bool;
 
-    // The USD branch of load_template (doc/usd_compatibility_design.md X1): the
+    // The USD branch of load_template (doc/erhe/usd_compatibility_design.md X1): the
     // template is the prim `Prefab::prim_path` names, and the arcs authored
     // inside it are instantiated recursively through this library.
     auto load_usd_template(Prefab& prefab) -> bool;
@@ -282,7 +282,7 @@ auto instantiate_prefab(
 // import. `arc_kind` is the composition arc the instance was authored as,
 // which a USD save writes back (X1); a glTF prefab is a reference.
 // `overrides`, when non-null, are the sparse overrides the instance holds
-// (doc/usd_compatibility_design.md X2): they are applied to the fresh clones
+// (doc/erhe/usd_compatibility_design.md X2): they are applied to the fresh clones
 // before a glTF instance is sealed, so a sealed item still receives them.
 // `authored_variant_selections`, when non-null, is the `variants` selection
 // the arc carries as the file spells it; the instance records that, which is
@@ -318,7 +318,7 @@ void attach_prefab_instance(
 // The instancing scene lists nothing of the template: a material a template
 // supplies is owned by the prefab library (Prefab_library::owns_material) and
 // stays there, and the scene renders it through the binding its meshes carry
-// (doc/usd_compatibility_design.md U4 2e). `content_library` is accepted for
+// (doc/erhe/usd_compatibility_design.md U4 2e). `content_library` is accepted for
 // that reason alone and is not written to.
 // Used by import_gltf / open_scene_gltf (destination scene's content layer
 // and library) and by Prefab_library itself when the loaded template

@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends [../ddgi.md](../ddgi.md), which describes the probe volume, the trace /
+Extends [../ddgi.md](../editor/ddgi.md), which describes the probe volume, the trace /
 blend / relocate passes and the runtime sampling that exist today.
 
 ## Sky radiance for escaping rays

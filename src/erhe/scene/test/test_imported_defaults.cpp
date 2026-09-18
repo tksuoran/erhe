@@ -1,4 +1,4 @@
-// A local value is an authored value (doc/property_system.md D32): an
+// A local value is an authored value (doc/erhe/property_system.md D32): an
 // importer fills a Light or a Camera field by field from a file that
 // carries the format's own defaults, and the generic elision pass takes
 // back the values that merely repeat the item's default.

@@ -193,7 +193,7 @@ auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
     return get_default_material(m_context, *scene_root);
 }
 
-// The reference node of a tool (doc/active_item.md D6): the active node,
+// The reference node of a tool (doc/editor/active_item.md D6): the active node,
 // or the node the active Node_attachment belongs to. When there is no active
 // node, the first node (or node of an attachment) of the command target
 // selection answers instead.

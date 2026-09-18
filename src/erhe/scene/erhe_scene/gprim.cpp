@@ -3,7 +3,7 @@
 
 namespace erhe::scene {
 
-// USD `doubleSided` (doc/usd_compatibility.md, geometry attributes). It
+// USD `doubleSided` (doc/erhe/usd_compatibility.md, geometry attributes). It
 // inherits like the other render-state properties, so a node or a style can
 // hold `Gprim.double_sided` for the geometry below it (D30).
 const erhe::property::Property<bool> Gprim::double_sided_property = erhe::property::Property<bool>::register_property(
@@ -16,7 +16,7 @@ const erhe::property::Property<bool> Gprim::double_sided_property = erhe::proper
     }
 );
 
-// USD `primvars:displayColor` at constant interpolation (doc/usd_compatibility.md,
+// USD `primvars:displayColor` at constant interpolation (doc/erhe/usd_compatibility.md,
 // geometry attributes). It inherits like the other Gprim render-state
 // properties, so a node or a style can hold `Gprim.display_color` for the
 // geometry below it (D30).

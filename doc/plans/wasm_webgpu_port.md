@@ -2,8 +2,8 @@
 
 Status: proposed
 
-This plan extends `doc/erhe_graphics.md` (the compile-time backend selection
-and the per-backend `_impl` classes) and `doc/metal_backend.md` (the
+This plan extends `doc/erhe/graphics.md` (the compile-time backend selection
+and the per-backend `_impl` classes) and `doc/erhe/metal_backend.md` (the
 backend-authoring recipe) with a WebGPU backend and a WebAssembly build. No
 wasm or WebGPU code exists in the repository yet.
 
@@ -16,7 +16,7 @@ wasm or WebGPU code exists in the repository yet.
   null ~2.8k.
 - `null/` is the minimal skeleton to fork; **`metal/` is the closest functional
   analogue to WebGPU** (explicit encoders, up-front pipelines, no geometry shaders).
-  `doc/metal_backend.md` is the backend-authoring recipe; `doc/erhe_graphics.md`
+  `doc/erhe/metal_backend.md` is the backend-authoring recipe; `doc/erhe/graphics.md`
   documents the frame lifecycle / bind-group / texture-heap design.
 - Shaders are GLSL assembled at runtime; Vulkan path already does GLSL -> glslang ->
   SPIR-V with a disk cache (`spirv_cache.cpp`); Metal adds SPIRV-Cross -> MSL.
@@ -107,7 +107,7 @@ Two independent tracks, then convergence:
 - Milestones = the graphics test ladder run natively: `test_m1_device_up`,
   `test_m2_clear_color`, `test_m3_triangle`, `test_m4_compute_ssbo`,
   `test_m5_blend`/`m5_depth`, then the rest of the real-GPU suite
-  (see `doc/graphics_test_coverage.md`).
+  (see `doc/erhe/graphics_test_coverage.md`).
 
 ### A5. Renderer bring-up on native WebGPU
 - `rendering_test` cell grid green (textured quad, stencil, compute triangle,
@@ -273,9 +273,9 @@ erhe::geometry/log/math) is the validation vehicle for either route.
 
 ## Reading list before starting
 
-1. `doc/metal_backend.md` - backend-authoring recipe.
-2. `doc/erhe_graphics.md` - frame lifecycle, bind groups, texture heap paths.
+1. `doc/erhe/metal_backend.md` - backend-authoring recipe.
+2. `doc/erhe/graphics.md` - frame lifecycle, bind groups, texture heap paths.
 3. `src/erhe/graphics/erhe_graphics/null/` - the skeleton to fork.
 4. `CMakeLists.txt:90-134` - platform + forced-option blocks to extend.
 5. `doc/android.md`, `doc/quest.md` - precedent for a constrained-platform port.
-6. `doc/graphics_test_coverage.md` - the milestone test ladder.
+6. `doc/erhe/graphics_test_coverage.md` - the milestone test ladder.

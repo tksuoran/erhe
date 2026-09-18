@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Extends `doc/gl_worker_thread_contexts.md` and
-`doc/gl_worker_context_enforcement.md`.
+Extends `doc/erhe/gl_worker_thread_contexts.md` and
+`doc/erhe/gl_worker_context_enforcement.md`.
 
 ## F. Narrow the slot scopes
 

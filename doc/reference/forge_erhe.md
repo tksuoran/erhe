@@ -186,7 +186,7 @@ and Metal (`metal_compute_command_encoder.cpp` uses `setTexture`; assumes Tier-2
 read-write `RGBA16Float`, i.e. Apple Silicon). Features built on it should still
 query a capability and fall back (the procedural-sky atmosphere uses
 `Sky_renderer::is_atmosphere_supported()` and renders the gradient sky otherwise).
-Precedent for the whole compute-LUT pattern: `doc/procedural_sky.md`.
+Precedent for the whole compute-LUT pattern: `doc/erhe/procedural_sky.md`.
 
 ## Porting checklist
 

@@ -2,14 +2,14 @@
 
 Status: proposed
 
-Extends `doc/mesh_memory.md`, `doc/mesh_memory_deferred_free.md`,
-`doc/primitive_shape_locking.md` and `doc/vertex_position_quantization.md`.
+Extends `doc/erhe/mesh_memory.md`, `doc/erhe/mesh_memory_deferred_free.md`,
+`doc/erhe/primitive_shape_locking.md` and `doc/erhe/vertex_position_quantization.md`.
 
 ## Destroy empty pool blocks
 
 `Buffer_pool` only appends blocks and never destroys one, so the process
 footprint never drops below its high-water mark (see "Pool blocks are never
-destroyed" in `doc/mesh_memory.md`).
+destroyed" in `doc/erhe/mesh_memory.md`).
 
 Destroy a block whose allocator reports zero used bytes, at a safe point
 (scene close, or the frame-completion gate the deferred frees already use).
@@ -44,7 +44,7 @@ no buffer WAR / RAW reports on the mesh vertex and index pool buffers.
 
 Every site that swaps a shared `Primitive`'s render shape in place has to
 re-register every mesh sharing that primitive (see "Shared primitives and
-draw-list records" in `doc/mesh_memory_deferred_free.md`). Make the draw list
+draw-list records" in `doc/erhe/mesh_memory_deferred_free.md`). Make the draw list
 robust by construction instead: a buffer-mesh generation on
 `Primitive_render_shape` checked at `flush_pending`, or a shape-to-meshes
 back-reference.
@@ -54,7 +54,7 @@ back-reference.
 `Primitive_shape::get_element_mappings()`, `get_raytrace()` and
 `get_renderable_mesh()` hand out references to state that `commit_*` mutates,
 so the state lock cannot protect their readers (see "Limits" in
-`doc/primitive_shape_locking.md`). `get_renderable_mesh()`'s safety rests on
+`doc/erhe/primitive_shape_locking.md`). `get_renderable_mesh()`'s safety rests on
 the contract that every `commit_*` call site holds `item_host_mutex`. Give the
 three accessors signatures that can be made safe (returning by value, or a
 lock-holding view), or state the contract where the compiler can check it.
@@ -65,7 +65,7 @@ window, with the same shape of problem in a different subsystem.
 ## Vertex position quantization follow-ups
 
 Quantization applies to the meshoptimizer optimized variant only; see
-`doc/vertex_position_quantization.md` for the design it follows.
+`doc/erhe/vertex_position_quantization.md` for the design it follows.
 
 - **One definition of the affine.** The encode affine is written out in
   `primitive_builder.cpp`, `primitive.cpp`, `primitive_buffer.cpp` and

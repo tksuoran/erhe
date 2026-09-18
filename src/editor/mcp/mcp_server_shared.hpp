@@ -73,7 +73,7 @@ auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id
 
 // Finds a PRIM by the integer args[id_key], or by the string args[name_key]
 // (a name, or a path when it holds '/'), walking the scene tree from the root
-// node: any prim may parent any other prim (doc/usd_compatibility_design.md C5),
+// node: any prim may parent any other prim (doc/erhe/usd_compatibility_design.md C5),
 // so a lookup that only visits the registered node lists misses the prims that
 // are not nodes - a Scope and the prims below it.
 auto find_prim_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::Hierarchy>;
@@ -91,7 +91,7 @@ enum class Absent_prim : unsigned int
 // the erhe::Hierarchy::get_path() form when it holds '/' (a leading '/' is
 // accepted, so '/cube' names the root's child 'cube'), else a name that
 // names exactly one prim of the scene tree. Any prim qualifies
-// (doc/usd_compatibility_design.md C5). On failure returns empty and sets
+// (doc/erhe/usd_compatibility_design.md C5). On failure returns empty and sets
 // out_error, naming the prim by `role`.
 auto find_unique_prim_in_scene(
     Scene_root&       scene_root,
@@ -107,7 +107,7 @@ auto find_unique_prim_in_scene(
 // can: every prim may parent every other prim (C5) except that the scene
 // root stays the root, a prim does not move under itself or its own
 // subtree, and reference instances keep their structure
-// (doc/usd_compatibility_design.md X2, prefabs/instance_structure.hpp).
+// (doc/erhe/usd_compatibility_design.md X2, prefabs/instance_structure.hpp).
 auto prim_move_refusal(const erhe::Hierarchy& prim, const erhe::Hierarchy& new_parent) -> std::optional<std::string>;
 
 // The parent a resource creator (create_material, create_style, ...) inserts

@@ -285,7 +285,7 @@ auto Shader_stages_create_info::final_source(
     // workaround they need, not on the backend. Each WORKAROUND_* macro is
     // emitted only on devices detected to need it (see Device_info and the
     // backend device init), so it becomes part of the shader variant. Policy:
-    // doc/shader_workarounds.md.
+    // doc/erhe/shader_workarounds.md.
     if (graphics_device.get_info().workaround_no_compute_storage_image_read) {
         sb << "#define WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ 1\n";
     }

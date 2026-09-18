@@ -194,7 +194,7 @@ void collect_item(
 enum class Instance_level : unsigned int {
     // The item is a carrier: erhe keeps the arc's target clone as one level of
     // its own below it while USD composes the target's content directly under
-    // the referencing prim (doc/usd_compatibility_design.md X1), so the level is
+    // the referencing prim (doc/erhe/usd_compatibility_design.md X1), so the level is
     // transparent and the segment is looked for among the children of each
     // clone the carrier holds first, and among the carrier's own children
     // after - the referencing prim and the target clone are one prim in the
@@ -272,7 +272,7 @@ enum class Instance_level : unsigned int {
 // The item `path` names below `item`, with the extra level an instance keeps
 // treated as transparent: USD composes an arc's content directly under the
 // referencing prim, while erhe keeps the arc's target clone as one level of
-// its own (doc/usd_compatibility_design.md X1), so a name that matches no child
+// its own (doc/erhe/usd_compatibility_design.md X1), so a name that matches no child
 // is looked for below each child that is such a clone (a child that names a
 // counterpart).
 [[nodiscard]] auto find_by_composed_path(erhe::Hierarchy& item, const std::string_view path) -> erhe::Hierarchy*

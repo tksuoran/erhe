@@ -130,7 +130,7 @@ with per-course verification and retry.
 | Creation feature | Editor feature underneath |
 |---|---|
 | `save_scene` / `load_scene` (`res/editor/scenes/creations/*.glb`) | The glTF exporter/importer with erhe extensions: `ERHE_brushes` (content-library brushes), `ERHE_physics` (bodies, joints), `ERHE_scene` (scene settings, physics materials) - a saved creation round-trips with its physics rig and brush pool intact |
-| `export_gltf` / `import_gltf`, prefabs, asset manager tools | The broader asset pipeline (see `doc/asset_manager.md`) |
+| `export_gltf` / `import_gltf`, prefabs, asset manager tools | The broader asset pipeline (see `doc/editor/asset_manager.md`) |
 
 ## The Python layer
 

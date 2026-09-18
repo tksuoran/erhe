@@ -4,7 +4,7 @@ from erhe_codegen import *
 # the ERHE_SHADOW_TECHNIQUE compile-time variant axis; keep it in sync with the
 # ERHE_SHADOW_TECHNIQUE_* handling in res/shaders/erhe_light.glsl.
 #   depth    = hardware depth map + receiver-plane depth bias (RPDB) applied in
-#              the shading pass. The default; see doc/shadows.md.
+#              the shading pass. The default; see doc/erhe/shadows.md.
 #   distance = "bias-free" map: the shadow pass stores a linear distance with a
 #              fwidth slope bias baked in, and the shading pass compares without
 #              any receiver-side bias. Directional lights only for now.

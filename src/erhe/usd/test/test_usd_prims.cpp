@@ -1,5 +1,5 @@
 // The prim class hierarchy across the USD round trip
-// (doc/usd_compatibility_design.md U1): the importer creates the class the
+// (doc/erhe/usd_compatibility_design.md U1): the importer creates the class the
 // `typeName` names and the exporter writes the `typeName` the class names.
 
 #include "erhe_item/hierarchy.hpp"
@@ -139,7 +139,7 @@ TEST_F(Prim_import, prims_are_listed)
 
 // A prim outside Xformable carries no transform, so the mesh under the scope
 // composes with the transform of the Xform above it
-// (doc/usd_compatibility_design.md C5).
+// (doc/erhe/usd_compatibility_design.md C5).
 TEST_F(Prim_import, transform_composes_through_a_scope)
 {
     const std::shared_ptr<erhe::Hierarchy> cube = find_prim(root, "cube");
@@ -153,7 +153,7 @@ TEST_F(Prim_import, transform_composes_through_a_scope)
 }
 
 // A `Mesh` prim of the stage is an erhe::scene::Mesh prim, not an Xform
-// carrying a mesh attachment (doc/usd_compatibility_design.md C5).
+// carrying a mesh attachment (doc/erhe/usd_compatibility_design.md C5).
 TEST_F(Prim_import, mesh_prim_is_a_mesh)
 {
     const std::shared_ptr<erhe::Hierarchy> cube = find_prim(root, "cube");

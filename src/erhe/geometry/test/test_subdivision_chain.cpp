@@ -1,4 +1,4 @@
-// Verifies doc/catmull_clark.md item 11: in an iterated subdivision chain,
+// Verifies doc/erhe/catmull_clark.md item 11: in an iterated subdivision chain,
 // running the intermediate iterations with structural-only post-process flags
 // (connect + build_edges + centroids, skipping smooth-vertex-normal and
 // facet-texcoord regeneration) must not change the final iteration's output:

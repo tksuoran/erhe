@@ -21,13 +21,13 @@ for:
   bool, which cannot distinguish `kinematic_non_physical` from
   `kinematic_physical`, and static bodies have no motion object at all.
 - `properties`: the body attachment's local property values as a name to
-  text map (`doc/property_system.md` D14), the registered properties of
+  text map (`doc/erhe/property_system.md` D14), the registered properties of
   `Node_physics` by name. The map is the attachment's complete local
   set: on load, a value the `KHR_physics_rigid_bodies` motion / collider
   entries carried (mass, gravity factor, velocities, center of mass, the
   material and filter references) that the map does not name is cleared
   again, so a body that inherits it from its node or a style
-  (`doc/property_system.md` D30) still does after a reload. The
+  (`doc/erhe/property_system.md` D30) still does after a reload. The
   material and filter references resolve by identity from the KHR
   collider, never from the map's text.
 

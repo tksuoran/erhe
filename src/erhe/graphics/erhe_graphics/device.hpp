@@ -255,7 +255,7 @@ public:
     // formats but NOT for VK_FORMAT_R16G16B16_SNORM, so the Vulkan backend
     // queries it per physical device; GL and Metal have it unconditionally.
     // A device without it must fall back to unquantized positions (or, later,
-    // to a padded snorm16x4) - see doc/vertex_position_quantization.md.
+    // to a padded snorm16x4) - see doc/erhe/vertex_position_quantization.md.
     bool use_16_vec3_snorm_vertex_buffer{true};
 
     // The device can source a vertex attribute from a 3-component 16-bit unorm
@@ -314,7 +314,7 @@ public:
     // driver ID) and drives both a WORKAROUND_* shader define (see
     // shader_stages_create_info.cpp) and matching C++ resource setup. We never
     // branch shaders on the graphics API itself - only on the concrete
-    // capability/workaround. Policy: doc/shader_workarounds.md.
+    // capability/workaround. Policy: doc/erhe/shader_workarounds.md.
     //
     // Mesa KosmicKrisp (Vulkan-on-Metal) rejects OpImageRead from a storage
     // image (imageLoad on a `uniform image2D`) at vkCreateComputePipelines with
@@ -426,7 +426,7 @@ public:
     // Device-frame lifecycle. A frame is bracketed by wait_frame() at the
     // top and end_frame() at the bottom, with one or more cb submits in
     // between. All cbs are obtained from get_command_buffer() and
-    // committed via submit_command_buffers(). See doc/erhe_graphics.md
+    // committed via submit_command_buffers(). See doc/erhe/graphics.md
     // ("Frame lifecycle") for the full sequence.
     //
     //   wait_frame  -- pace the ring on the device's timeline semaphore,

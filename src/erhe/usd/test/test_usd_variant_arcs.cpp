@@ -1,4 +1,4 @@
-// Composition authored inside a variant block (doc/usd_compatibility_design.md
+// Composition authored inside a variant block (doc/erhe/usd_compatibility_design.md
 // C6). A variant block
 // authors composition arcs of its own, and the prim carrying the set holds
 // the selected variant's arcs: the reader reports them on that prim, named by

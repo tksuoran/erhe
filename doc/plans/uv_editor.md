@@ -2,8 +2,8 @@
 
 Status: proposed
 
-This plan extends `doc/mesh_component_selection.md` (face / edge / vertex
-selection) and `doc/editor_windows.md` with a UV editing window.
+This plan extends `doc/editor/mesh_component_selection.md` (face / edge / vertex
+selection) and `doc/editor/windows.md` with a UV editing window.
 
 Plan for implementing a UV editor in the erhe editor, modeled on Blender's
 UV editor (https://docs.blender.org/manual/en/latest/editors/uv/index.html).
@@ -98,7 +98,7 @@ the missing piece is almost entirely the 2D editor front-end.
 
 ### Mesh component selection (the 3D-side selection this syncs with)
 
-`doc/mesh_component_selection.md`;
+`doc/editor/mesh_component_selection.md`;
 `src/editor/tools/mesh_component_selection.{hpp,cpp}` and
 `mesh_component_selection_tool.{hpp,cpp}`:
 
@@ -170,7 +170,7 @@ the missing piece is almost entirely the 2D editor front-end.
   (all attribute stores, including corner texcoords and any new seam
   attribute) bit-exact through the `ERHE_geometry` glTF extension
   (`doc/gltf_extensions/ERHE_geometry.md`; process:
-  `doc/scene_serialization.md`). UV edits therefore persist with no
+  `doc/editor/scene_serialization.md`). UV edits therefore persist with no
   serializer work.
 - glTF: import preserves all `TEXCOORD_n` sets; export emits
   `TEXCOORD_{usage_index}`. Material per-sampler UV set
@@ -485,7 +485,7 @@ faces; pack margin; stretch display (angle vs area).
 | UV storage | `src/erhe/geometry/erhe_geometry/geometry.hpp` (`corner_texcoord_*`, `Attribute_present`) |
 | Unwrap backend | `src/erhe/geometry/erhe_geometry/operation/make_atlas.{hpp,cpp}` |
 | Geogram parameterization | `.cpm_cache/geogram/.../src/lib/geogram/parameterization/` (LSCM, ABF, segmentation, packer) |
-| 3D component selection | `src/editor/tools/mesh_component_selection{,_tool}.{hpp,cpp}`, `doc/mesh_component_selection.md` |
+| 3D component selection | `src/editor/tools/mesh_component_selection{,_tool}.{hpp,cpp}`, `doc/editor/mesh_component_selection.md` |
 | Live GPU attribute patch | `src/editor/tools/paint_tool.cpp:292-391`, `src/erhe/primitive/erhe_primitive/build_info.hpp` (`Element_mappings`) |
 | Renderable build / texcoord flow | `src/erhe/primitive/erhe_primitive/primitive_builder.cpp:625` |
 | Mesh operations / undo | `src/editor/operations/mesh_operation.{hpp,cpp}`, `geometry_operations.{hpp,cpp}` (`Make_atlas_operation`) |
@@ -494,7 +494,7 @@ faces; pack margin; stretch display (angle vs area).
 | Window pattern | `src/editor/windows/properties.{hpp,cpp}`, registration in `src/editor/editor.cpp` |
 | Command pattern | `src/editor/tools/mesh_component_selection_tool.cpp:373-440` |
 | MCP pattern | `src/editor/mcp/mcp_server.cpp`, `mcp_server_tool_list.cpp`, `mcp_server_mesh_components.cpp` |
-| Persistence | `ERHE_geometry` glTF extension (bit-exact geogram attribute dump; `doc/gltf_extensions/ERHE_geometry.md`, `doc/scene_serialization.md`) |
+| Persistence | `ERHE_geometry` glTF extension (bit-exact geogram attribute dump; `doc/gltf_extensions/ERHE_geometry.md`, `doc/editor/scene_serialization.md`) |
 | Material UV set | `src/erhe/primitive/erhe_primitive/material.hpp:34` (`Material_texture_sampler::tex_coord`) |
 
 ## Known constraints and gotchas

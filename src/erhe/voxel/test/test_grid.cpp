@@ -1,4 +1,4 @@
-// Tests for erhe::voxel::Grid (doc/erhe_voxel.md):
+// Tests for erhe::voxel::Grid (doc/erhe/voxel.md):
 // SDF primitives, mesh round-trip against erhe::geometry::Geometry,
 // CSG identities, offset/smooth behavior.
 

@@ -1,4 +1,4 @@
-// The USD `active` state (doc/usd_compatibility_design.md X2): `active` is
+// The USD `active` state (doc/erhe/usd_compatibility_design.md X2): `active` is
 // the item's own opinion (not an inherits-flagged property), and the
 // derived Item_flags::active bit carries USD's subtree pruning - an item
 // below an inactive one is inactive whatever it says of itself.
@@ -170,7 +170,7 @@ TEST(Item_active, copy_rederives_the_bit)
     EXPECT_FALSE(inactive_copy.is_active());
 }
 
-// Draw-mode pruning (doc/usd_compatibility.md, "Draw modes"): a prim whose
+// Draw-mode pruning (doc/erhe/usd_compatibility.md, "Draw modes"): a prim whose
 // draw mode asks for a proxy keeps its own bit and takes its children's
 // subtrees out, the way an inactive prim's subtree goes out.
 

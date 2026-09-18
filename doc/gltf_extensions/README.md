@@ -3,8 +3,8 @@
 Stability: mostly stable
 
 erhe persists full editor scenes as single glTF files (process and parts:
-[`../scene_serialization.md`](../scene_serialization.md); the design record:
-[`../gltf_scene_roundtrip.md`](../gltf_scene_roundtrip.md)).
+[`../scene_serialization.md`](../editor/scene_serialization.md); the design record:
+[`../gltf_scene_roundtrip.md`](../editor/gltf_scene_roundtrip.md)).
 Editor state that core glTF 2.x cannot express is carried in the vendor
 extensions specified here. Conventions shared by all of them:
 

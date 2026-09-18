@@ -10,7 +10,7 @@ namespace editor {
 class App_context;
 
 // The composition arc that brings a value to the prim it is read on
-// (doc/usd_compatibility_design.md X5).
+// (doc/erhe/usd_compatibility_design.md X5).
 enum class Property_arc : unsigned int {
     none       = 0, // no layer authors the value: a schema fallback, a computed value
     root_layer = 1, // authored on the prim itself, in the scene's own file

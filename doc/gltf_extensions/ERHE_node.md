@@ -15,30 +15,30 @@ Carries the erhe Item state of a node that core glTF cannot express:
   (which carried only `exclude_from_prefab`); the extras remain parsed for
   older files, this extension wins when both are present.
 - `properties`: the node's local property values as a name to text map
-  (`doc/property_system.md` D14): the registered properties of `Node`
+  (`doc/erhe/property_system.md` D14): the registered properties of `Node`
   by name, attached properties (D3) by their qualified
   `<owner>.<name>`, such as the `Layout.*` per-child layout hints
   (`ERHE_layout` names the layout itself), and the attachment-class
   values the node holds for the attachments below it (D30, `Light.color`)
   by the same qualified form. Enumerations travel as their labels; an
   object reference travels as the referenced item's name and is resolved
-  in the scene once the file's items exist (`doc/property_system.md`
+  in the scene once the file's items exist (`doc/erhe/property_system.md`
   D28), so a node-held `Node_physics.physics_material` names a physics
   material the same file's `KHR_physics_rigid_bodies` array defines. The
   item-level properties of every node travel here by their plain names:
   `visible`, `purpose` and `active`. `active`
-  (`doc/usd_compatibility_design.md` X2) is USD's prim `active` metadatum -
+  (`doc/erhe/usd_compatibility_design.md` X2) is USD's prim `active` metadatum -
   `"active": "false"` takes the node and its whole subtree out of
   rendering, picking, simulation and every consumer that walks content,
   and dims the row in the item tree. The subtree effect is derived from
   the values of the node and its ancestors, so it is never written; only
   the node's own value is.
 - `style` (optional): the name of the style item the node uses
-  (`doc/style_library.md` D4), one of the scene's `ERHE_scene` `styles`;
+  (`doc/editor/style_library.md` D4), one of the scene's `ERHE_scene` `styles`;
   emitted only when the node has a style. Assigned on load once the
   styles exist; an unknown name is logged and assigns nothing.
 - `prim_class` (optional): the erhe prim class of the node
-  (`doc/usd_compatibility_design.md` C5), `"Scope"` or `"Typed"` - the two
+  (`doc/erhe/usd_compatibility_design.md` C5), `"Scope"` or `"Typed"` - the two
   classes that carry no transform. A node without the field is an `Xform`,
   the class every glTF node has. The reader creates the named class and
   reads no transform for it; the writer gives such a node the identity
@@ -48,7 +48,7 @@ Carries the erhe Item state of a node that core glTF cannot express:
   carries, empty for a typeless `def`. Written for `"prim_class":
   "Typed"` only - a `Scope` names its own token.
 - `overrides` (optional): the sparse overrides the prefab instance the
-  node carries holds (`doc/usd_compatibility_design.md` X2). A carrier node
+  node carries holds (`doc/erhe/usd_compatibility_design.md` X2). A carrier node
   is written with `externalAssetIndex` and no children - the referenced
   file supplies the instance content - but a value the user changed inside
   the instance belongs to this file, and this is where it travels. One

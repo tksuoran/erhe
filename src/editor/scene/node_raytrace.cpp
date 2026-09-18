@@ -39,7 +39,7 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
     // Render proxies (lightmap piece meshes) are never raytrace-pickable:
     // mask 0 = unhittable, so rays pass through to the proxy_hidden source
     // mesh they stand in for (same pattern as bone proxies outside bone
-    // mode; see doc/editor_tools.md).
+    // mode; see doc/editor/tools.md).
     if ((flags & Item_flags::render_proxy) != 0) {
         return 0;
     }
@@ -101,7 +101,7 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
         // out of range.
         return hit.normal;
     }
-    // Non-blocking, see doc/primitive_shape_locking.md.
+    // Non-blocking, see doc/erhe/primitive_shape_locking.md.
     const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (!geometry) {
         return hit.normal;

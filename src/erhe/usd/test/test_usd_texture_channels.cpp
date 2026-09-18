@@ -1,7 +1,7 @@
 // Texture coordinates across USD's `st` space and erhe's, the per-channel
 // output a scalar UsdPreviewSurface input is connected through, and the
-// schema fallback of an unauthored input (doc/usd_compatibility.md,
-// Materials and Geometry attributes; doc/erhe_usd.md).
+// schema fallback of an unauthored input (doc/erhe/usd_compatibility.md,
+// Materials and Geometry attributes; doc/erhe/usd.md).
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/hierarchy.hpp"

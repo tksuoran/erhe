@@ -11,7 +11,7 @@ namespace erhe {
 
 namespace editor {
 
-// Brings a content library's kind `Scope` into the tree (doc/usd_compatibility_design.md
+// Brings a content library's kind `Scope` into the tree (doc/erhe/usd_compatibility_design.md
 // C5 / U4: resources sit under a lazily made scope named for their kind).
 // The scope a resource insert needed is part of the operation that needed it,
 // so the same undo that takes the resource out takes the scope it created out

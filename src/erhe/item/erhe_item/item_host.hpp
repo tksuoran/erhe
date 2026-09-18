@@ -20,7 +20,7 @@ public:
     [[nodiscard]] virtual auto get_host_name() const -> const char* = 0;
 
     // The hosted item a path or a name addresses, for expression
-    // references (doc/property_system.md D22) and object references (D28);
+    // references (doc/erhe/property_system.md D22) and object references (D28);
     // nullptr when the host has no such item or does no lookup. A text
     // holding '/' is a path (Hierarchy::get_path()) and a text without one
     // is a name, so both the current and the older stored form resolve.
@@ -29,7 +29,7 @@ public:
     // library, whose folder paths use the same form.
     [[nodiscard]] virtual auto find_hosted_item(std::string_view name_or_path) -> Item_base* { static_cast<void>(name_or_path); return nullptr; }
 
-    // Prim registration (doc/usd_compatibility_design.md C5): every `Typed`
+    // Prim registration (doc/erhe/usd_compatibility_design.md C5): every `Typed`
     // prim that enters a tree this host holds reports itself here once, and
     // reports itself out again when it leaves. `Typed::handle_item_host_update`
     // is the single call site, so a prim added anywhere below a hosted prim -
@@ -39,7 +39,7 @@ public:
     // registration and does not reach these.
     //
     // The editor's `Scene_root` implements them by keeping the scene's
-    // content-library index up to date (doc/editor_content_library.md).
+    // content-library index up to date (doc/editor/content_library.md).
     virtual void register_prim  (const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
     virtual void unregister_prim(const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
 

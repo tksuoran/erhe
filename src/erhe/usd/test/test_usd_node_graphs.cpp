@@ -1,5 +1,5 @@
 // Texture node graphs as marked `NodeGraph` prims
-// (doc/usd_node_graphs.md). The reader records every `NodeGraph` prim
+// (doc/erhe/usd_node_graphs.md). The reader records every `NodeGraph` prim
 // carrying the `erhe:graph:format` marker with its nodes, their parameters,
 // their pins and the links between them, records which material slot reads a
 // graph, and stops the scene conversion at the graph, so its `Shader` children
@@ -258,7 +258,7 @@ TEST_F(Node_graphs_import, an_input_with_a_value_is_a_parameter_of_its_authored_
     EXPECT_EQ(size->value,    "5");
 
     // A type with no USD form travels as its text in a `string`, which is how
-    // a gradient rides the file (doc/usd_node_graphs.md 2.1).
+    // a gradient rides the file (doc/erhe/usd_node_graphs.md 2.1).
     const erhe::usd::Usd_node_graph_node* colorize = find_node(*graph, "Colorize");
     ASSERT_NE(colorize, nullptr);
     const erhe::usd::Usd_node_graph_parameter* gradient = find_parameter(*colorize, "gradient");
@@ -440,7 +440,7 @@ TEST_F(Node_graphs_export, a_graph_bound_material_slot_connects_to_the_graph_out
 }
 
 // The written prims read back as the records they were, and writing those
-// again spells the same file (doc/usd_node_graphs.md R4).
+// again spells the same file (doc/erhe/usd_node_graphs.md R4).
 TEST_F(Node_graphs_export, a_second_save_of_the_reloaded_graphs_is_byte_identical)
 {
     std::shared_ptr<erhe::scene::Node>  reload_root = std::make_shared<erhe::scene::Xform>("reload_root");

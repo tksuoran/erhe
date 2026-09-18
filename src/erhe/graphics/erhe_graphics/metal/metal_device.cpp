@@ -205,7 +205,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     // Short4Normalized (8 bytes) divides both. The 12 byte minimum still rules the
     // unskinned stride out, which is why the minimum is published rather than
     // silently violated - Mesh_memory declines quantization when this device also
-    // ray traces. See doc/vertex_position_quantization.md.
+    // ray traces. See doc/erhe/vertex_position_quantization.md.
     m_info.use_16_vec3_snorm_acceleration_structure_vertex_buffer = false;
     m_info.use_16_vec4_snorm_acceleration_structure_vertex_buffer = true;
     m_info.min_acceleration_structure_vertex_stride = 12;
@@ -403,7 +403,7 @@ auto Device_impl::end_frame() -> bool
     // CONTRACT: end_frame advances the frame index and drives per-frame
     // GPU-completion processing (frame_completed) for frames the GPU has
     // reported done. It does not submit, it does not present. See
-    // doc/erhe_graphics.md ("Frame lifecycle") and the Vulkan
+    // doc/erhe/graphics.md ("Frame lifecycle") and the Vulkan
     // implementation, whose end_frame()/update_frame_completion() does the
     // same, for the rationale.
     ERHE_VERIFY(

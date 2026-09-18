@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends `doc/graph_editor.md`, which describes the graph editor as built. This
+Extends `doc/editor/graph_editor.md`, which describes the graph editor as built. This
 plan holds what is not shared yet and the open questions around it.
 
 ## C7 remainder - finish the window base
@@ -42,7 +42,7 @@ otherwise dependency-free shared widgets header does not hold them yet.
 ## Modernize or retire the legacy shader graph
 
 `src/editor/graph/` is the prototype the two current graphs were forked from,
-and `doc/graph_editor.md` lists what it lacks. Either retrofit it onto the
+and `doc/editor/graph_editor.md` lists what it lacks. Either retrofit it onto the
 shared layer - it needs the dirty flag, parameter (de)serialization, undo, a
 factory type name and an owning asset - or remove it once nothing needs it.
 

@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends `doc/property_system.md`, the design record of `erhe::property` and
+Extends `doc/erhe/property_system.md`, the design record of `erhe::property` and
 its editor integration, whose section 6 links here.
 
 ## Property serialization to glTF

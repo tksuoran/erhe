@@ -1,4 +1,4 @@
-// `class` prims and `inherits` arcs (doc/usd_compatibility_design.md X3). The
+// `class` prims and `inherits` arcs (doc/erhe/usd_compatibility_design.md X3). The
 // reader records every class prim of the root layer with its opinions and its
 // chain, and every prim's `inherits` targets in list-op order; the writer puts
 // a style item back as a `class` prim and a prim with a style back as an

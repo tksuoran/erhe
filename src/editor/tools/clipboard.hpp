@@ -58,7 +58,7 @@ public:
     void set_contents(const std::shared_ptr<erhe::Item_base>& item);
     auto get_contents() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
 
-    // Copy / Paste Properties (doc/property_system.md D12): a bag of
+    // Copy / Paste Properties (doc/erhe/property_system.md D12): a bag of
     // (property, value) read from one item's local values, applied to the
     // selection by Property_set_apply_operation. Independent of the item
     // contents above.

@@ -43,7 +43,7 @@ public:
     // Deliberately NOT forwarded by Compound_operation: a child cannot know
     // whether a sibling recorded after it still holds references to its
     // content, so a nested import keeps its payload.
-    // See doc/reloadable_asset_loads.md.
+    // See doc/editor/reloadable_asset_loads.md.
     virtual void on_lossless_undo(App_context& context);
 
     // True when this operation is holding content it could rebuild from
@@ -52,7 +52,7 @@ public:
 
     // Releases that content. The caller is responsible for making it safe:
     // every entry recorded after this one must be discarded, because they hold
-    // raw references to what is being dropped (doc/reloadable_asset_loads.md).
+    // raw references to what is being dropped (doc/editor/reloadable_asset_loads.md).
     virtual void drop_payload();
 
     [[nodiscard]] auto        describe  () const -> const std::string&;

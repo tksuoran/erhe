@@ -594,7 +594,7 @@ auto Light_buffer::update(
 
     write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
 
-    // DDGI probe volume (doc/ddgi.md phase 6). ddgi_counts.w is the
+    // DDGI probe volume (doc/editor/ddgi.md phase 6). ddgi_counts.w is the
     // gate the fragment shader reads: 0 = no volume, keep the flat ambient.
     const bool       ddgi_valid = (ddgi != nullptr) && ddgi->is_valid();
     const glm::vec4  ddgi_grid_origin  = ddgi_valid ? glm::vec4{ddgi->grid_origin,  0.0f} : glm::vec4{0.0f};

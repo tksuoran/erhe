@@ -50,14 +50,14 @@ public:
     std::optional<Gltf_source_reference>           gltf_source;
     // Texture resources only: the retained compressed source image stream,
     // so glTF export can re-embed the image byte-exact
-    // (doc/gltf_scene_roundtrip.md phase 0).
+    // (doc/editor/gltf_scene_roundtrip.md phase 0).
     std::shared_ptr<erhe::gltf::Gltf_image_source> image_source;
     // Asset identity when the defining container is known (asset-manager
     // plan, R5 sub-plan resolution 2).
     std::optional<Asset_key>                       asset_key;
 };
 
-// The per-scene index of the scene's resources (doc/usd_compatibility_design.md
+// The per-scene index of the scene's resources (doc/erhe/usd_compatibility_design.md
 // U4). A resource - a material, a texture, a brush, a style, a physics
 // material, a collision filter, joint settings, a geometry or texture graph,
 // an animation, a skin - is a `Typed` prim of the scene's prim tree, under
@@ -132,7 +132,7 @@ public:
     // it is attached: every `Scope` of the subtree whose name is a kind scope
     // name and whose kind has no scope yet becomes that kind's scope, so the
     // resources of the load land in the scopes the file wrote rather than in
-    // a second set (doc/usd_compatibility_design.md E4d).
+    // a second set (doc/erhe/usd_compatibility_design.md E4d).
     void adopt_kind_scopes(const erhe::Hierarchy& subtree);
     [[nodiscard]] auto find_scope(uint64_t kind_type_bit) const -> std::shared_ptr<erhe::Scope>;
     // The kind whose scope this prim is, or sits below; 0 when it is neither.

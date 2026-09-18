@@ -188,7 +188,7 @@ Scene_root::Scene_root(
     // node, and report this Scene_root as their Item_host. Resources added
     // before this point (e.g. the default materials created ahead of
     // Scene_root construction) move into the tree here
-    // (doc/usd_compatibility_design.md U4).
+    // (doc/erhe/usd_compatibility_design.md U4).
     if (m_content_library) {
         m_content_library->set_owner(this, m_scene->get_root_node());
     }
@@ -545,7 +545,7 @@ auto Scene_root::make_browser_window(
     );
     // "Create": every creatable kind, on every prim row and on the Scene
     // header row (which creates under the scene root node). Any prim parents
-    // any prim (doc/usd_compatibility_design.md C5), so each entry inserts the
+    // any prim (doc/erhe/usd_compatibility_design.md C5), so each entry inserts the
     // new item, undoably, as the last child of the clicked prim - a Camera
     // under a Material as readily as a Material under an Xform.
     m_node_tree_window->add_item_context_menu_callback(
@@ -563,7 +563,7 @@ auto Scene_root::make_browser_window(
             if (!parent) {
                 return;
             }
-            // Structure protection (doc/usd_compatibility_design.md X2):
+            // Structure protection (doc/erhe/usd_compatibility_design.md X2):
             // nothing is created under a reference instance carrier or
             // inside one; the whole menu is greyed with the reason.
             const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
@@ -839,7 +839,7 @@ auto Scene_root::make_browser_window(
     // Content-library context menu (migrated from the removed Content Library
     // window, #241 follow-up): the resource verbs on a resource prim this
     // scene's library lists, wherever the prim sits in the tree
-    // (doc/usd_compatibility_design.md U4). Creation is the "Create" menu above.
+    // (doc/erhe/usd_compatibility_design.md U4). Creation is the "Create" menu above.
     m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
@@ -1177,7 +1177,7 @@ auto Scene_root::get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t
     if (mesh == nullptr) {
         return 0;
     }
-    // A Mesh is a prim (doc/usd_compatibility_design.md C5): its own flags
+    // A Mesh is a prim (doc/erhe/usd_compatibility_design.md C5): its own flags
     // carry the role bits (content, tool, brush, rendertarget, ...), and
     // any attachment it holds contributes its bits on top.
     uint32_t mask = raytrace_node_mask(*mesh);
@@ -1358,7 +1358,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // another scene's definition, a loaded container's asset - is listed by
     // nobody here: it renders because the mesh binding gives it a slot in
     // this scene's Material_set (enqueue_mesh_materials below), and its
-    // membership stays with its owner (doc/usd_compatibility_design.md U4). A
+    // membership stays with its owner (doc/erhe/usd_compatibility_design.md U4). A
     // material has a live home when this scene defines it, when the asset
     // manager knows it, when it sits in a prim tree (U4: a resource is a prim
     // where it sits, and the tree that holds it is what owns it - this
@@ -1762,7 +1762,7 @@ void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node
         return;
     }
     // An inactive item and everything below it is out of the simulation
-    // (doc/usd_compatibility_design.md X2); the body enters the world when
+    // (doc/erhe/usd_compatibility_design.md X2); the body enters the world when
     // Node_physics::handle_flag_bits_update sees the bit come back.
     if (!node_physics->is_active()) {
         return;

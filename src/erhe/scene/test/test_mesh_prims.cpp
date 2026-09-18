@@ -1,4 +1,4 @@
-// A Mesh is a geometric prim (doc/usd_compatibility_design.md C5): a child prim
+// A Mesh is a geometric prim (doc/erhe/usd_compatibility_design.md C5): a child prim
 // of its parent with its own transform, and a parent holds any number of them.
 
 #include "erhe_scene/camera.hpp"

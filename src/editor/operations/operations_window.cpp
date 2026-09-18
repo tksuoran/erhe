@@ -651,7 +651,7 @@ auto Operations::resolve_operation_items(
     }
     out_items = m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
 
-    // The active item is the operation's reference (doc/active_item.md D6):
+    // The active item is the operation's reference (doc/editor/active_item.md D6):
     // when it is a node carrying a mesh it becomes the FIRST item, which is the
     // target of Merge_operation and of the CSG booleans. This is the one place
     // the target rule is implemented; every consumer reads out_items.front().
@@ -949,7 +949,7 @@ Operations::Operations(
             try {
                 // A USD file opens as a USD-backed scene: the file's prims
                 // become the scene's nodes and Save Scene writes USDA back
-                // (doc/usd_compatibility_design.md E1). No conversion between
+                // (doc/erhe/usd_compatibility_design.md E1). No conversion between
                 // the formats happens in either direction (G3).
                 if (is_usd_file_extension(message.path)) {
                     std::shared_ptr<Scene_root> usd_scene_root = editor::open_scene_usd(m_context, message.path);
@@ -963,7 +963,7 @@ Operations::Operations(
                 // editor state; any other glTF opens as a foreign scene
                 // (Scene_open_operation: undoable, own new viewport).
                 //
-                // Asynchronous path (doc/async_asset_loading_design.md step 6):
+                // Asynchronous path (doc/editor/async_asset_loading_design.md step 6):
                 // the task runs the scan AND the parse on workers and spreads
                 // residency over frames, so nothing here reads the file on
                 // the main thread. The erhe-vs-foreign decision comes back
@@ -1550,7 +1550,7 @@ void Operations::merge()
 {
     // Items (and with them the merge target, out_items.front()) come from the
     // one resolver, so merge follows the same active-item target rule as the
-    // CSG booleans (doc/active_item.md D6).
+    // CSG booleans (doc/editor/active_item.md D6).
     std::vector<std::shared_ptr<erhe::Item_base>> items;
     if (!resolve_operation_items(false, Operation_reference::active_is_target, items)) {
         return;
@@ -1888,7 +1888,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
 
 auto Operations::can_flip_joint() const -> bool
 {
-    // doc/active_item.md D6: the reference node is the active item.
+    // doc/editor/active_item.md D6: the reference node is the active item.
     const std::shared_ptr<erhe::scene::Node> node = m_context.selection->get_active_item_as<erhe::scene::Node>();
     if (!node) {
         return false;
@@ -2666,7 +2666,7 @@ void Operations::export_gltf()
 void Operations::save_scene()
 {
     // Scenes are saved as single erhe-authored glTF files
-    // (doc/gltf_scene_roundtrip.md phase 4). A scene opened/loaded from
+    // (doc/editor/gltf_scene_roundtrip.md phase 4). A scene opened/loaded from
     // a glTF file saves back to its own source file without confirmation
     // (when that file is a loaded prefab, every instance refreshes - this
     // subsumed the former Save Prefab command). A scene with no source file
@@ -2695,7 +2695,7 @@ void Operations::save_scene()
 void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)
 {
     try {
-        // Save follows the scene's own format (doc/usd_compatibility_design.md
+        // Save follows the scene's own format (doc/erhe/usd_compatibility_design.md
         // E1, G3): a USD-backed scene writes a USDA layer, everything else
         // writes the erhe-authored glTF. Neither format is ever converted
         // into the other.
@@ -2923,7 +2923,7 @@ void Operations::create_joint_settings()
 
 void Operations::create_brush()
 {
-    // Find mesh: the active mesh (doc/active_item.md D6), else the first
+    // Find mesh: the active mesh (doc/editor/active_item.md D6), else the first
     // selected mesh or the mesh of a selected node.
     std::shared_ptr<erhe::scene::Mesh> mesh = m_context.selection->get_active_item_as<erhe::scene::Mesh>();
     if (!mesh) {

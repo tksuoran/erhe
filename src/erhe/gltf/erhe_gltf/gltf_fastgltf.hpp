@@ -85,7 +85,7 @@ public:
 };
 
 // Compressed source image stream retained at import so a later export can
-// re-embed the image verbatim, byte-exact (doc/gltf_scene_roundtrip.md
+// re-embed the image verbatim, byte-exact (doc/editor/gltf_scene_roundtrip.md
 // phase 0). GPU-only textures (e.g. editor graph-texture bakes) have no
 // Gltf_image_source and are never exported as images.
 class Gltf_image_source
@@ -96,7 +96,7 @@ public:
 };
 
 // Generic ERHE_* vendor-extension passthrough
-// (doc/gltf_scene_roundtrip.md phases 1 + 3): raw JSON payloads of
+// (doc/editor/gltf_scene_roundtrip.md phases 1 + 3): raw JSON payloads of
 // extensions erhe::gltf has no typed support for, captured per object at
 // parse time. Only `ERHE_`-prefixed extension names are captured; typed
 // extensions (KHR_*, EXT_*) keep their typed paths.
@@ -111,7 +111,7 @@ public:
 // upload its Texture. parse_gltf produces these on the CPU only - decoding
 // touches no device, so it is safe on executor workers - and creating the
 // GPU texture from one is a separate residency step run by whoever owns a
-// command buffer (doc/async_asset_loading_design.md step 3, phase 3b).
+// command buffer (doc/editor/async_asset_loading_design.md step 3, phase 3b).
 class Gltf_decoded_image
 {
 public:
@@ -213,7 +213,7 @@ public:
 };
 
 // One KHR_materials_variants mapping, resolved to the objects the parse
-// created (doc/usd_compatibility_design.md X4): the Mesh prim a node
+// created (doc/erhe/usd_compatibility_design.md X4): the Mesh prim a node
 // instantiated from the glTF mesh, which of that prim's primitives the
 // mapping names, and the material the variant binds to it. The primitive
 // index is the erhe one - a glTF primitive erhe cannot build is skipped, so
@@ -247,7 +247,7 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Skin>>         skins;
     std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
     // Parallel to nodes: every parsed prim, whatever its class
-    // (doc/usd_compatibility_design.md C5). A glTF node whose ERHE_node
+    // (doc/erhe/usd_compatibility_design.md C5). A glTF node whose ERHE_node
     // extension names a `prim_class` is a prim of a class that carries no
     // transform - a `Scope` or a `Typed` - so `nodes` holds null at its
     // index and this vector holds the prim; for every other node both hold
@@ -256,7 +256,7 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     // Parallel to materials (sized on first use): the ERHE_material "style"
     // name of each material, empty for none. The editor assigns the style
-    // item of that name once its library holds it (doc/style_library.md D4).
+    // item of that name once its library holds it (doc/editor/style_library.md D4).
     std::vector<std::string>                                material_style_names;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
     // Parallel to images: the retained encoded source stream of each loaded
@@ -284,7 +284,7 @@ public:
     std::vector<Gltf_external_asset>        external_assets;
     std::vector<std::optional<std::size_t>> node_external_assets;
     // The sparse overrides a carrier node's ERHE_node extension holds, by
-    // node index (doc/usd_compatibility_design.md X2). The parse records them;
+    // node index (doc/erhe/usd_compatibility_design.md X2). The parse records them;
     // the caller applies them when it attaches the external asset's content.
     std::map<std::size_t, std::vector<erhe::scene::Instance_override>> node_instance_overrides;
 
@@ -348,7 +348,7 @@ public:
 // The two device-derived values the parse needs. Queried by the caller on
 // the main thread and passed in by value, so parse_gltf itself never touches
 // an erhe::graphics::Device - which is what makes it safe to run on a worker
-// (doc/async_asset_loading_design.md 2.3 invariant 1). See
+// (doc/editor/async_asset_loading_design.md 2.3 invariant 1). See
 // query_gltf_device_options().
 class Gltf_device_options
 {
@@ -424,7 +424,7 @@ public:
 };
 
 // Raw JSON members to splice into exported objects' "extensions" objects
-// (doc/gltf_scene_roundtrip.md phase 3). Each string holds one or more
+// (doc/editor/gltf_scene_roundtrip.md phase 3). Each string holds one or more
 // comma-separated members, e.g. R"("ERHE_node":{"flags":["hidden"]})" - no
 // surrounding braces. Keyed by the erhe objects the exporter maps to glTF
 // indices; payloads for objects that do not end up in the export are
@@ -442,7 +442,7 @@ public:
 };
 
 // One material binding to write into an exported primitive's
-// KHR_materials_variants "mappings" (doc/usd_compatibility_design.md X4). A
+// KHR_materials_variants "mappings" (doc/erhe/usd_compatibility_design.md X4). A
 // binding whose mesh or primitive is not in the export is skipped with a
 // warning; the primitive's own "material" stays what it is either way.
 class Gltf_export_material_variant_binding
@@ -463,7 +463,7 @@ public:
 
 // An extra glTF mesh to export that no node references, carrying one
 // geometry-normative primitive (the ERHE_geometry accessor/dump path).
-// Used by the editor for brush geometry (doc/gltf_scene_roundtrip.md
+// Used by the editor for brush geometry (doc/editor/gltf_scene_roundtrip.md
 // phase 3, ERHE_brushes).
 class Gltf_export_extra_mesh
 {
@@ -524,7 +524,7 @@ public:
     std::vector<std::string> extensions_used{};
     // Mesh attachments to skip in the node pass (the node exports without
     // its mesh): baked artifacts that are rebuilt on load, e.g. graph-mesh
-    // controlled meshes (doc/gltf_scene_roundtrip.md phase 3
+    // controlled meshes (doc/editor/gltf_scene_roundtrip.md phase 3
     // exclusion hook).
     std::unordered_set<const erhe::scene::Mesh*> excluded_meshes{};
     // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).

@@ -177,7 +177,7 @@ erhe is classes in `erhe::graphics`. Closest-equivalent mapping:
 | `RootSignature` (reflected + static samplers) | `Bind_group_layout` | Same role: binding contract |
 | `Pipeline` (Graphics/Mesh/Compute/RT params) | `Render_pipeline` (via `Render_pipeline_create_info`), `Compute_pipeline` | |
 | `PipelineCache` + `GetPipelineCacheData` | `spirv_cache/` on disk + driver `VkPipelineCache` via `warmup_render_pipeline` | |
-| All PSOs created at init (hard rule) | On-demand `Base_render_pipeline::get_pipeline_for(...)` + prewarm (`doc/prewarm.md`) | Opposite policies |
+| All PSOs created at init (hard rule) | On-demand `Base_render_pipeline::get_pipeline_for(...)` + prewarm (`doc/editor/prewarm.md`) | Opposite policies |
 | `CommandSignature` | — (fixed indirect layout) | Needed only for indirect-with-root-constant patterns |
 | `BlendState`/`DepthStencilState`/`RasterizerState` | `Color_blend_state`/`Depth_stencil_state`/`Rasterization_state`/`Multisample_state`/`Input_assembly_state` (`state/`) | |
 | `DataFormat` (~150, DXBC/ASTC) | `erhe::dataformat::Format` (~70) | Gap: erhe formats lack BC/ASTC compressed-texture entries in the pipeline (loads uncompressed) |

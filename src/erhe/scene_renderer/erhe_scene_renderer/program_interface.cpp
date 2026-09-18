@@ -140,7 +140,7 @@ Program_interface::Program_interface(
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
             {
-                // Baked lightmap atlas (doc/lightmap_baking.md phase 5).
+                // Baked lightmap atlas (doc/editor/lightmap_baking.md phase 5).
                 // Bilinear color sampler; bound by Light_buffer::bind_lightmap
                 // (baked atlas or 1x1 black fallback). The fragment shader
                 // gates sampling on the per-primitive lightmap scale.
@@ -154,7 +154,7 @@ Program_interface::Program_interface(
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
             {
-                // DDGI octahedral irradiance atlas (doc/ddgi.md phase
+                // DDGI octahedral irradiance atlas (doc/editor/ddgi.md phase
                 // 6). Bound by Light_buffer::bind_ddgi (probe atlas or 1x1
                 // black fallback); the fragment shader gates sampling on
                 // light_block.ddgi_counts.w.

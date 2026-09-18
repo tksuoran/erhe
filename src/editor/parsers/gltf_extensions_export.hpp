@@ -14,7 +14,7 @@ class Scene_root;
 
 // Fills glTF export arguments with the editor-domain ERHE_* extension
 // payloads and exclusions for full scene persistence
-// (doc/gltf_scene_roundtrip.md phase 3). Interchange exports (File >
+// (doc/editor/gltf_scene_roundtrip.md phase 3). Interchange exports (File >
 // Export glTF) do NOT use this: these extensions carry editor state that
 // only the erhe open / import paths consume, and ERHE_scene in
 // extensionsUsed is the marker distinguishing an erhe-authored scene from

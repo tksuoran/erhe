@@ -1,4 +1,4 @@
-// The prim's composed specifier (doc/usd_compatibility_design.md X2): a prim no
+// The prim's composed specifier (doc/erhe/usd_compatibility_design.md X2): a prim no
 // layer defines composes as `over`, USD's default traversal predicate reaches
 // neither it nor anything below it, and erhe carries that as the item's
 // `defined` property feeding the derived Item_flags::active bit. The prim is

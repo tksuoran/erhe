@@ -1,6 +1,6 @@
 // GL-specific worker-context tests: worker-side texture create + upload,
 // worker-side blit-encoder writes, and context-index introspection. See
-// doc/gl_worker_thread_contexts.md and doc/graphics_test_coverage.md.
+// doc/erhe/gl_worker_thread_contexts.md and doc/erhe/graphics_test_coverage.md.
 //
 // This file is added to the target only on the OpenGL backend (CMake); it
 // reaches GL internals through the public Device::get_impl() and the

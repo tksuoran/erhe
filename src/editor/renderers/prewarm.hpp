@@ -18,7 +18,7 @@ class App_context;
 // Intended call site: editor.cpp's init flow, between
 // run_startup_script() and the close+submit+wait_idle block.
 //
-// See doc/prewarm.md for what each phase warms and why. init_message,
+// See doc/editor/prewarm.md for what each phase warms and why. init_message,
 // when non-empty, is invoked once per Scene_root with the scene name so
 // Init_status_display can show per-scene progress on the loading screen.
 void prewarm_all(

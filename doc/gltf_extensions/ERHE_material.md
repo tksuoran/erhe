@@ -59,7 +59,7 @@ no divergent fields gets no extension at all. `unlit` rides the standard
   overrides the channel layout at render time; the handedness is always
   honored.
 - `style`: the name of the style item the material uses
-  (`doc/style_library.md` D4), one of the scene's `ERHE_scene` `styles`;
+  (`doc/editor/style_library.md` D4), one of the scene's `ERHE_scene` `styles`;
   emitted only when the material has a style. Assigned on load once the
   styles exist; an unknown name is logged and assigns nothing.
 

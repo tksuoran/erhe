@@ -168,7 +168,7 @@ public:
     // no allocation transaction may interleave with the frees).
     static void apply_retired(const std::vector<Retired_range>& retired);
 
-    // Byte accounting for memory reporting (doc/reloadable_asset_loads.md).
+    // Byte accounting for memory reporting (doc/editor/reloadable_asset_loads.md).
     // Capacity is what the pool has committed in VkBuffer blocks - it only
     // ever grows, because blocks are never destroyed. Used is what the free
     // list currently hands out, so it is what drops when meshes are released.

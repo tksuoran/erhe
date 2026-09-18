@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/geometry_nodes.md`, which describes the geometry node
+This plan extends `doc/editor/geometry_nodes.md`, which describes the geometry node
 graph as it is. The field system below is designed but not built; the node
 types after it are a backlog.
 
@@ -75,7 +75,7 @@ gesture operation).
 
 ## Graph mesh asset and attachment gaps
 
-`doc/geometry_graph_mesh.md` describes the `Graph_mesh` asset and the
+`doc/editor/geometry_graph_mesh.md` describes the `Graph_mesh` asset and the
 `Geometry Graph Mesh` attachment. These are open:
 
 - **Binding is not undoable.** Binding an attachment to an asset from the
@@ -97,7 +97,7 @@ gesture operation).
 
 ## Lattice deform, beyond v1
 
-`doc/lattice_deform_geometry_node.md` describes the lattice node as it is. In
+`doc/editor/lattice_deform_geometry_node.md` describes the lattice node as it is. In
 rough priority order:
 
 1. **Rest and deformed cage geometry inputs**, for full Houdini parity: two
@@ -124,7 +124,7 @@ rough priority order:
 ## Scene-node references by uid
 
 `transform_from_node` and `Lattice_node` both persist their scene-node
-reference as a NAME (`doc/geometry_graph_transform_from_node.md`), which breaks
+reference as a NAME (`doc/editor/geometry_graph_transform_from_node.md`), which breaks
 on rename and is ambiguous under duplicate names. Scene nodes do have a stable
 persistent id, the glTF 2.1 uid (`Item_base::get_gltf_uid()`, stamped at
 export). Write `"transform_node_uid"` alongside the name and prefer the uid on
@@ -145,7 +145,7 @@ that pin key. Check `Geometry_payload::operator+=` multi-link semantics for
 - Convex hull, extrude, merge by distance, set material.
 - Attribute nodes: read, write and delete a named attribute.
 - A "Set crease" node that selects edges by angle or tag and writes
-  `edge_sharpness` (`doc/subdivision_crease_edges.md`). It is the graph-native
+  `edge_sharpness` (`doc/erhe/subdivision_crease_edges.md`). It is the graph-native
   answer to painting creases, which does not survive on graph-produced
   geometry.
 - Curve support, which needs a new geometry type.

@@ -2,7 +2,7 @@
 
 // Format-neutral, plain-data description of the draw mode of one prim: the
 // `UsdGeomModelAPI` attributes that ask the imaging layer to draw a subtree as
-// a proxy (doc/usd_compatibility.md, "Draw modes"). The USD reader fills it
+// a proxy (doc/erhe/usd_compatibility.md, "Draw modes"). The USD reader fills it
 // from the schema and the USD writer authors it back; the editor turns each
 // record into the `Draw_mode` attachment of the prim it names.
 //

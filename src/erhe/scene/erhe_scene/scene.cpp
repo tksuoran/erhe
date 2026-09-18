@@ -369,7 +369,7 @@ void Scene::update_subtree_transforms(erhe::Hierarchy& prim, const bool carry_bo
         if (!erhe::is<Node>(child.get())) {
             // A prim outside Xformable - a Scope - has no transform of its
             // own, so the moving ancestor's transform passes through it to
-            // the transformable prims below (doc/usd_compatibility_design.md
+            // the transformable prims below (doc/erhe/usd_compatibility_design.md
             // C5): recurse without recomputing anything on it.
             update_subtree_transforms(*child, carry_body_driven);
             continue;

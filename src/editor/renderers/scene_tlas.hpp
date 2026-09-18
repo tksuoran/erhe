@@ -34,7 +34,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 // Shared GPU acceleration structure builder for the ray-query consumers
-// (Ray_trace_renderer, DDGI probe tracing - doc/ddgi.md phase 1).
+// (Ray_trace_renderer, DDGI probe tracing - doc/editor/ddgi.md phase 1).
 //
 // Owns three things the consumers used to each own a copy of:
 //  - a bottom level structure cache, one entry per unique Buffer_mesh,
@@ -120,7 +120,7 @@ public:
     [[nodiscard]] auto get_instance_count() const -> std::size_t;
 
     // Cached bottom level structure count, for memory reporting
-    // (doc/reloadable_asset_loads.md). Each entry pins its Primitive, and
+    // (doc/editor/reloadable_asset_loads.md). Each entry pins its Primitive, and
     // through it the GPU vertex / index ranges, so this is the figure that
     // must drop when imported content is released.
     [[nodiscard]] auto get_blas_count() const -> std::size_t;
@@ -132,7 +132,7 @@ public:
     // nothing to trace against.
     //
     // material_source is the set the tracing dispatch binds - the scene root's
-    // FORWARD set (doc/draw_list_material_set.md D5). Each instance
+    // FORWARD set (doc/erhe/draw_list_material_set.md D5). Each instance
     // record's material_index is a slot in it, so the two must be the same
     // object; null writes slot 0 for every instance.
     [[nodiscard]] auto update(
@@ -158,7 +158,7 @@ private:
     // Without this the cache is an unbounded pin: each entry holds a
     // shared_ptr<Primitive>, and through it the GPU vertex / index ranges, so
     // content removed from the scene (an undone glTF import) can never give its
-    // memory back (doc/reloadable_asset_loads.md).
+    // memory back (doc/editor/reloadable_asset_loads.md).
 //
     // The refcount is tested on render_shape, not on the Primitive: Primitive's
     // copy constructor is defaulted and render_shape is a shared_ptr, so two

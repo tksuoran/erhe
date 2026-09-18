@@ -2,7 +2,7 @@
 
 Status: in progress
 
-Extends [../../lightmap_baking.md](../../lightmap_baking.md), which describes
+Extends [../../lightmap_baking.md](../../editor/lightmap_baking.md), which describes
 the interactive baker, its artifact defenses, the tile grid and the world-space
 partition as they work today.
 
@@ -30,7 +30,7 @@ This is a user decision about appearance, not a defect to fix in passing.
 The gather handles punctual lights only - directional, point and spot shadow
 rays plus one diffuse bounce - so a ray that escapes to the sky contributes
 nothing. Feed the procedural sky
-([../../procedural_sky.md](../../procedural_sky.md)) into the gather's miss
+([../../procedural_sky.md](../../erhe/procedural_sky.md)) into the gather's miss
 path, through the `sky_sample_*` helpers. Do this before tuning any threshold
 that is measured against baked luminance, such as the seam classifier in
 [seam_driven_unwrap.md](seam_driven_unwrap.md).

@@ -129,7 +129,7 @@ void Brush_preview::make_preview_scene()
         content_library->add(m_headlight_material);
     }
 
-    // A Camera is a prim (doc/usd_compatibility_design.md C5): it carries its
+    // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): it carries its
     // own transform, so the preview needs no node to hold it.
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     //m_camera->enable_flag_bits(erhe::Item_flags::content);
@@ -254,7 +254,7 @@ void Brush_preview::render_preview(
 {
     // Breadcrumb names the brush whose preview primitive is being (lazily)
     // built, so the watchdog can identify the culprit if build_polygon_fill
-    // spins on a corrupt mesh. See doc/geogram.md.
+    // spins on a corrupt mesh. See doc/erhe/geogram.md.
     erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
     const float time_s = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);

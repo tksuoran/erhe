@@ -44,7 +44,7 @@ public:
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom
-    // typeName (doc/usd_compatibility.md).
+    // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Graph_texture"; }
 
     // Implements erhe::graphics::Texture_reference: the most recently baked

@@ -378,7 +378,7 @@ CPMAddPackage(
 # degenerate input (a cone's coplanar base ring) -- the intermittent, ARM-only
 # main-loop hang (reproduced headless ~2/10 on arm64, 0/30 on x86/MSVC which does
 # not contract by default). Restore geogram's intended flag on every non-MSVC
-# compiler. See doc/geogram.md.
+# compiler. See doc/erhe/geogram.md.
 if (NOT MSVC)
     foreach (geo_target geogram geogram_third_party geogram_num_3rdparty)
         if (TARGET ${geo_target})
@@ -782,7 +782,7 @@ CPMAddPackage(
 )
 
 # USD library. LightUSD is the in-editor USD reader/writer (see
-# doc/usd_compatibility_design.md, step L1); erhe::usd is the only erhe library
+# doc/erhe/usd_compatibility_design.md, step L1); erhe::usd is the only erhe library
 # that includes its headers. OpenUSD stays a schema and validation reference,
 # never a build dependency. With ERHE_USD_LIBRARY=none nothing below is
 # fetched, configured, built or linked.
@@ -808,7 +808,7 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
         # erhe fork of lighttransport/LightUSD, carrying MSVC / Visual Studio
         # 2026 build fixes, Tydra behavior fixes, USDA parse fixes and writer
         # type conformance that upstream does not have yet (branch erhe-fixes;
-        # doc/erhe_usd.md names what each one is). Pinned to a tag on
+        # doc/erhe/usd.md names what each one is). Pinned to a tag on
         # that branch rather than to the branch name, so the build does not
         # move when the branch does. Drop the fork once an upstream release
         # carries the same fixes.

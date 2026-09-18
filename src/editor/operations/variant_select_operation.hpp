@@ -11,7 +11,7 @@ namespace editor {
 class App_context;
 class Scene_root;
 
-// The selection half of a variant switch (doc/usd_compatibility_design.md X4):
+// The selection half of a variant switch (doc/erhe/usd_compatibility_design.md X4):
 // the scene's variant table records which variant of the set is selected, and
 // Scene_settings::variant_selections records the same so a save carries it.
 // The material assignments are Mesh_material_assign_operations built beside

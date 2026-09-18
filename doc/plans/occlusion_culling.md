@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/editor_rendering.md` (the composer passes and the
+This plan extends `doc/editor/rendering.md` (the composer passes and the
 forward renderer) with depth-buffer-based occlusion culling.
 
 Sketch:

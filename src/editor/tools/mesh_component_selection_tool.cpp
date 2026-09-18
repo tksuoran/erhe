@@ -782,7 +782,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             triangle_renderer.add_triangles(world_from_node, style.face_color, m_scratch_positions, m_scratch_indices);
         }
 
-        // Crease sharpness overlay (doc/subdivision_crease_edges.md): every
+        // Crease sharpness overlay (doc/erhe/subdivision_crease_edges.md): every
         // edge carrying an edge_sharpness value is drawn colored by a viridis
         // gradient mapped over the min..max of the present finite values
         // (values are unclamped floats; infinity renders at the top of the
@@ -1016,7 +1016,7 @@ void Mesh_component_selection_tool::viewport_toolbar()
     }
 
     // Crease sharpness painting (edge mode): apply / clear the semi-sharp
-    // crease sharpness of the selected edges (doc/subdivision_crease_edges.md).
+    // crease sharpness of the selected edges (doc/erhe/subdivision_crease_edges.md).
     // Undoable via Set_edge_sharpness_operation; the value only affects the
     // crease overlay and future Catmull-Clark subdivisions, so no rebuild.
     if (selection.get_mode() == Mesh_component_mode::edge) {

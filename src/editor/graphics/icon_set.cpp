@@ -103,7 +103,7 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_collision_filter      ] = { .code = icons.physics,  .color = glm::vec4{0.5f, 0.8f, 0.5f, 1.0f}};
     type_icons[erhe::Item_type::index_physics_joint_settings] = { .code = icons.physics,  .color = glm::vec4{1.0f, 0.8f, 0.2f, 1.0f}};
     type_icons[erhe::Item_type::index_style                 ] = { .code = icons.material, .color = glm::vec4{0.9f, 0.5f, 0.9f, 1.0f}};
-    // Prim class levels (doc/usd_compatibility_design.md C5). get_item_icon()
+    // Prim class levels (doc/erhe/usd_compatibility_design.md C5). get_item_icon()
     // takes the lowest set type bit that carries an icon, so a level's icon
     // is reached only when no more specific class of the prim has one: Scope
     // (bit 49) wins over Typed (bit 50), and every transformable prim shows

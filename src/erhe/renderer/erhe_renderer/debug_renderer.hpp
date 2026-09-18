@@ -43,7 +43,7 @@ public:
     // Single-view callers populate cameras[0] only and set view_count
     // = 1 at runtime; multiview callers populate all N entries.
     // Mirrors Content_wide_line_renderer; see
-    // doc/debug_renderer_multiview.md for the full layout.
+    // doc/erhe/debug_renderer_multiview.md for the full layout.
     explicit Debug_renderer_program_interface(
         erhe::graphics::Device& graphics_device,
         int                     view_count = 1
@@ -156,7 +156,7 @@ class Debug_renderer
 public:
     // view_count threads through to Debug_renderer_program_interface.
     // Default 1 keeps single-view callers unchanged; pass >= 2 for
-    // stereo / OpenXR multiview. See doc/debug_renderer_multiview.md.
+    // stereo / OpenXR multiview. See doc/erhe/debug_renderer_multiview.md.
     explicit Debug_renderer(
         erhe::graphics::Device& graphics_device,
         int                     view_count = 1

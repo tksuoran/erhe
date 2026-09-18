@@ -4,7 +4,7 @@ struct("Ddgi_config",
     reflect=True,
     version=1,
     short_desc="DDGI",
-    long_desc="Dynamic diffuse global illumination (doc/ddgi.md). A single scene-wide probe volume is auto-fitted to the content bounding box; probes are traced with ray queries, blended into octahedral irradiance and distance atlases, and sampled by the forward shader in place of the flat ambient term. Requires GPU ray query support; the feature stays off on backends without it.",
+    long_desc="Dynamic diffuse global illumination (doc/editor/ddgi.md). A single scene-wide probe volume is auto-fitted to the content bounding box; probes are traced with ray queries, blended into octahedral irradiance and distance atlases, and sampled by the forward shader in place of the flat ambient term. Requires GPU ray query support; the feature stays off on backends without it.",
     developer=False,
     fields=[
         field(

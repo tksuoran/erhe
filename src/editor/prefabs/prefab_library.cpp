@@ -64,7 +64,7 @@ void retarget_meshes(
             out_mesh_node_items->push_back(item);
         }
     }
-    // Any prim parents any (doc/usd_compatibility_design.md U4), so the walk is
+    // Any prim parents any (doc/erhe/usd_compatibility_design.md U4), so the walk is
     // over the Hierarchy: a `Scope` or a typeless prim in the middle of a USD
     // template holds meshes below it.
     for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
@@ -101,7 +101,7 @@ void seal_instance_subtree(const std::shared_ptr<erhe::Hierarchy>& item)
     }
 }
 
-// The reference layer of one instance item (doc/property_system.md D33): the
+// The reference layer of one instance item (doc/erhe/property_system.md D33): the
 // clone reads its template counterpart, and every local value the clone
 // carries only because the copy brought it over is cleared, so what the
 // template authored reports Value_source::reference and a local value on the
@@ -485,7 +485,7 @@ void Prefab_library::get_or_load_async(
     }
 
     // Only the glTF parse has an asynchronous path; a USD template is loaded
-    // inline (doc/usd_compatibility_design.md X1).
+    // inline (doc/erhe/usd_compatibility_design.md X1).
     if ((m_context.asset_manager == nullptr) || is_usd_file_extension(canonical_path)) {
         on_ready(get_or_load(canonical_path, prim_path, variant_selections));
         return;
@@ -815,7 +815,7 @@ auto instantiate_prefab(
     // tree: the instance's meshes bind them, and the scene's Material_set
     // gives them slots through its per-object membership
     // (Scene_root::enqueue_mesh_materials), so the instancing scene lists
-    // nothing (doc/usd_compatibility_design.md U4).
+    // nothing (doc/erhe/usd_compatibility_design.md U4).
     std::vector<std::shared_ptr<Operation>> operations;
 
     std::shared_ptr<erhe::Hierarchy> insert_parent = parent;
@@ -951,13 +951,13 @@ void resolve_external_assets(
             continue;
         }
         // The template owns its textures and materials: the instancing scene
-        // lists nothing (doc/usd_compatibility_design.md U4). register_mesh
+        // lists nothing (doc/erhe/usd_compatibility_design.md U4). register_mesh
         // adopts a material only when this scene's container record defines
         // it (Scene_root::is_asset_definition), which a template material is
         // not, and the instance's meshes are what give it a material slot.
         static_cast<void>(content_library);
         // The sparse overrides the file authored inside this instance
-        // (doc/usd_compatibility_design.md X2). They are handed to the attach
+        // (doc/erhe/usd_compatibility_design.md X2). They are handed to the attach
         // rather than applied after it, because a glTF instance is sealed:
         // the attach applies them while the clones are still writable.
         const std::map<std::size_t, std::vector<erhe::scene::Instance_override>>::const_iterator overrides_it =
@@ -1034,7 +1034,7 @@ void attach_prefab_instance(
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 
-    // A template child is any prim (doc/usd_compatibility_design.md U4, S1): a
+    // A template child is any prim (doc/erhe/usd_compatibility_design.md U4, S1): a
     // USD arc names a `Scope` or a typeless `def` as readily as an `Xform`.
     std::vector<std::shared_ptr<erhe::Hierarchy>> clone_prims;
     const erhe::scene::Xform_op_stack* carrier_stack = node->get_xform_op_stack();
@@ -1072,7 +1072,7 @@ void attach_prefab_instance(
             // that stack in place of the target prim's own: `xformOpOrder`
             // is one attribute, the referencing layer's opinion is the
             // stronger one, and an op the order does not list applies
-            // nothing (doc/usd_compatibility_design.md X1). The carrier holds
+            // nothing (doc/erhe/usd_compatibility_design.md X1). The carrier holds
             // the authored stack, so the target's clone - the wrapper's one
             // child, the prim the arc named - takes the identity; a carrier
             // without a stack of its own lets the target's transform stand.
@@ -1094,7 +1094,7 @@ void attach_prefab_instance(
         clone_prims.push_back(clone_prim);
     }
 
-    // The instance's own overrides (doc/usd_compatibility_design.md X2). They
+    // The instance's own overrides (doc/erhe/usd_compatibility_design.md X2). They
     // are applied while the clones are still unsealed, so a sealed glTF
     // instance receives them too - a seal makes every property read-only, and
     // an override is a value the file authored, not a user edit made now.
@@ -1141,7 +1141,7 @@ void refresh_instance_subtrees(
                 // own transform / name / flags are untouched.
                 //
                 // The overrides the instance holds are read off the clones
-                // before they go (doc/usd_compatibility_design.md X2) and put
+                // before they go (doc/erhe/usd_compatibility_design.md X2) and put
                 // back on the fresh ones, so a template reload keeps the
                 // user's edits inside the instance.
                 const std::vector<erhe::scene::Instance_override> overrides =

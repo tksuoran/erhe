@@ -2,8 +2,8 @@
 
 Status: in progress
 
-Extends [../../lightmap_baking.md](../../lightmap_baking.md) and
-[../../lightmap_texture_viewer.md](../../lightmap_texture_viewer.md). Phase 1
+Extends [../../lightmap_baking.md](../../editor/lightmap_baking.md) and
+[../../lightmap_texture_viewer.md](../../editor/lightmap_texture_viewer.md). Phase 1
 (the per-facet unwrap mode) is in place and is described below because the
 source cites it; phases 2 to 4 are the open work.
 

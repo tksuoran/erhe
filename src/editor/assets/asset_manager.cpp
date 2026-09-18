@@ -477,7 +477,7 @@ auto Asset_manager::acquire_or_pending(const Asset_key& key) -> Asset_acquire_re
         return result;
     }
     // No load spans frames yet: get_or_load_container still parses inline
-    // (Gltf_load_task is step 6 of doc/async_asset_loading_design.md 3), so a
+    // (Gltf_load_task is step 6 of doc/editor/async_asset_loading_design.md 3), so a
     // null item here is always a real failure. Once container loads become
     // tasks this is where `pending` starts coming back, and the callers below
     // already treat it as "retry" rather than "give up".
@@ -1547,7 +1547,7 @@ void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
     // The scene left the editor registry: undoing Scene_open_operation gets
     // here without closing the scene and without publishing any message at
     // all, so this is the only notice the editor parts holding this scene's
-    // assets ever get (doc/import_undo_reference_clearing.md). Redo
+    // assets ever get (doc/editor/import_undo_reference_clearing.md). Redo
     // re-registers and re-arms the record, but does not restore a window's
     // selection - intended.
     visit_record_assets(

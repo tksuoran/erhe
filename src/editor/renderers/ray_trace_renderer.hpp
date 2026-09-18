@@ -128,7 +128,7 @@ private:
     std::unique_ptr<erhe::scene_renderer::Camera_buffer>       m_camera_buffer;
     // No material buffer, texture heap or fallback pair: the tracing dispatch
     // binds the scene root's forward Material_set, which owns all three
-    // (doc/draw_list_material_set.md D5).
+    // (doc/erhe/draw_list_material_set.md D5).
     std::unique_ptr<erhe::scene_renderer::Light_buffer>        m_light_buffer;
     uint32_t                                                   m_tlas_binding_point  {0};
     uint32_t                                                   m_output_binding_point{0};

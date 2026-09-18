@@ -1,5 +1,5 @@
 // Permanent per-phase timing harness for the Catmull-Clark / geometry
-// operation performance work (doc/catmull_clark.md). DISABLED_ so the
+// operation performance work (doc/erhe/catmull_clark.md). DISABLED_ so the
 // regular test run stays fast; run it explicitly with:
 //
 //   erhe_geometry_tests --gtest_also_run_disabled_tests --gtest_filter=*TimingHarness*
@@ -126,7 +126,7 @@ TEST(TimingHarness, DISABLED_CatmullClarkChain)
 }
 
 // Intermediate iterations run structural-only post-processing, the way the
-// editor's subdivide node runs the chain (doc/catmull_clark.md item 11).
+// editor's subdivide node runs the chain (doc/erhe/catmull_clark.md item 11).
 TEST(TimingHarness, DISABLED_CatmullClarkChainStructuralIntermediates)
 {
     run_catmull_clark_chain(true);

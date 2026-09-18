@@ -1,4 +1,4 @@
-// Computed properties on scene items (doc/property_system.md D26): a
+// Computed properties on scene items (doc/erhe/property_system.md D26): a
 // node's world transform components and child count, a mesh's world
 // bounds - read from the owner's derived state, never stored, pushed to
 // expressions where that state changes.

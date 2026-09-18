@@ -149,7 +149,7 @@ public:
     Transform     texture_from_world{};
 };
 
-// A light prim (doc/usd_compatibility_design.md C5, UsdLux): an `Xformable`
+// A light prim (doc/erhe/usd_compatibility_design.md C5, UsdLux): an `Xformable`
 // with its own transform, name and children, and a child prim of its parent.
 // The `light_type` enumeration picks the UsdLux schema the writer emits; a
 // light type that needs properties of its own gets a class of its own then.
@@ -247,7 +247,7 @@ public:
     // from the light prim's own world transform.
     [[nodiscard]] auto get_light_frame() const -> Light_frame;
 
-    // Registered properties (erhe::property, doc/property_system.md
+    // Registered properties (erhe::property, doc/erhe/property_system.md
     // section 4.3). The authored light state lives in the item's property
     // store; every property shares one changed callback that re-resolves
     // the scene's light set (D19), so no writer has to notify by hand.

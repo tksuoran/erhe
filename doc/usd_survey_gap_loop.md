@@ -22,7 +22,7 @@ py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets> --usd-root <usd_root
 `--failing-first` then the recorded failures and gaps, shortest run first,
 and the passing entries last, so a run reaches the next open gap in one
 or two entries. MaterialX is excluded because it is scoped future work
-(`doc/usd_compatibility_design.md` section 6). Set `ERHE_AI_DRIVER=1` in the
+(`doc/erhe/usd_compatibility_design.md` section 6). Set `ERHE_AI_DRIVER=1` in the
 environment. The `<usd_root>` and `<usd-wg-assets>` paths are per machine
 (`memory-bank/local/context.md`).
 
@@ -33,7 +33,7 @@ The state the loop keeps between runs, all committed except the first:
 - `doc/usd-wg-assets-expected.json`: the issues an entry reports by
   design (`diagnostics`, `gaps`, `appearance` patterns with a `reason`).
 - `doc/usd-wg-assets-eye.json`: the by-eye verdicts.
-- `doc/usd_compatibility_design.md` section 6: the gaps deferred as future
+- `doc/erhe/usd_compatibility_design.md` section 6: the gaps deferred as future
   work.
 
 ## Triage of a stopped entry

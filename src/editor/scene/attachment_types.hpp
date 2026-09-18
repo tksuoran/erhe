@@ -17,7 +17,7 @@ class Scene_commands;
 // One user-creatable typed prim that the Hierarchy context menu "Create"
 // lists beside the kinds Scene_commands builds directly, and that the
 // add_node_attachment MCP tool accepts: Mesh, Camera, Light. Any prim parents
-// any prim (doc/usd_compatibility_design.md C5), so the parent is the Hierarchy
+// any prim (doc/erhe/usd_compatibility_design.md C5), so the parent is the Hierarchy
 // it is and every parent takes any number of these.
 //
 // make(scene_commands, parent) queues the undoable insert of a new prim as

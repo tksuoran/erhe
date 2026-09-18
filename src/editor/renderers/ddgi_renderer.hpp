@@ -42,7 +42,7 @@ class App_context;
 class Render_context;
 class Scene_root;
 
-// Dynamic diffuse global illumination (doc/ddgi.md).
+// Dynamic diffuse global illumination (doc/editor/ddgi.md).
 //
 // One scene-wide probe volume, auto-fitted to the padded content bounding
 // box. Probes are traced with ray queries into a ray data texture, blended
@@ -220,7 +220,7 @@ private:
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_relocate_pipeline;
     // No material buffer, texture heap or fallback pair: the tracing dispatch
     // binds the scene root's forward Material_set, which owns all three
-    // (doc/draw_list_material_set.md D5).
+    // (doc/erhe/draw_list_material_set.md D5).
     std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_projections>  m_light_projections;
     uint32_t                                                  m_tlas_binding_point      {0};

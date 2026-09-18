@@ -1,4 +1,4 @@
-// The prim class hierarchy (doc/usd_compatibility_design.md C5, step U1):
+// The prim class hierarchy (doc/erhe/usd_compatibility_design.md C5, step U1):
 // Typed carries the USD typeName token and Scope is a typed prim that holds
 // children only and category values for its descendants (D30).
 

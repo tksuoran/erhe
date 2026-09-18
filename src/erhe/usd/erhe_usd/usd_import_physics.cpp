@@ -1,5 +1,5 @@
-// The UsdPhysics half of the USD reader (doc/usd_compatibility.md, "Physics",
-// and doc/erhe_usd.md, "Physics"): the bodies, colliders, physics
+// The UsdPhysics half of the USD reader (doc/erhe/usd_compatibility.md, "Physics",
+// and doc/erhe/usd.md, "Physics"): the bodies, colliders, physics
 // materials, collision groups, joints and the physics scene of a stage, read
 // into the format-neutral `erhe::scene::Physics_description` the glTF reader
 // fills too, plus the USD-side record that says where each of those sits on
@@ -1187,7 +1187,7 @@ private:
             // A drive's spring constants are per USD unit of the axis, which
             // for an angular axis is a degree, and erhe applies them per
             // radian: the numbers travel as they are
-            // (doc/erhe_usd.md, "Physics").
+            // (doc/erhe/usd.md, "Physics").
             if (read_float(props, prefix + "stiffness", value)) { drive.stiffness = value; }
             if (read_float(props, prefix + "damping",   value)) { drive.damping   = value; }
             joint.drives.push_back(drive);
@@ -1261,7 +1261,7 @@ private:
             // The two frames the joint prim authors are two nodes: erhe takes
             // a joint's frames from the transforms of the node it sits on and
             // of the node it names, so a frame of its own is a node of its
-            // own below the body (doc/usd_compatibility.md, "Physics").
+            // own below the body (doc/erhe/usd_compatibility.md, "Physics").
             std::string                             joint_node_path = body0_path;
             const std::shared_ptr<erhe::scene::Node> joint_node =
                 resolve_joint_frame(entry, base, node0, body0_path, Joint_frame::first, joint_node_path);
@@ -1290,7 +1290,7 @@ private:
         second
     };
 
-    // The node one authored joint frame becomes (doc/usd_compatibility.md,
+    // The node one authored joint frame becomes (doc/erhe/usd_compatibility.md,
     // "Physics"): the body prim itself for an identity frame, else a frame
     // node below the body prim carrying the authored frame - the node erhe's
     // constraint then reads the frame off. A file erhe wrote already holds

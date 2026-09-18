@@ -2,11 +2,11 @@
 
 Status: proposed
 
-This plan extends `doc/usd_compatibility_design.md`, which states what USD
+This plan extends `doc/erhe/usd_compatibility_design.md`, which states what USD
 support holds today: it holds the work that is left, ranked, and the work
 items themselves. A USD scene loads, edits and saves without any of them.
 Each item is independent of the others except where named, and its substance
-is stated here once; the design record and `doc/erhe_usd.md` link here rather
+is stated here once; the design record and `doc/erhe/usd.md` link here rather
 than restating an item.
 
 ## Ranking
@@ -61,14 +61,14 @@ export uses is the suspect.
 
 A texture packed in a `.usdz` is written as a path that names no file
 (`MissingReferenceChecker`). Closing it means writing the packed bytes next to
-the file, or the `archive.usdz[entry]` form (`doc/erhe_usd.md`, "Export").
+the file, or the `archive.usdz[entry]` form (`doc/erhe/usd.md`, "Export").
 
 ### Asynchronous load
 
 `load_usd` runs on the calling thread and the editor's import and open are
 synchronous, where a glTF import goes through the asset manager's
 `Asset_load_request` and the droppable-payload import operation
-(`doc/reloadable_asset_loads.md`). The conversion creates no GPU object, so it
+(`doc/editor/reloadable_asset_loads.md`). The conversion creates no GPU object, so it
 moves onto a worker once the asset manager learns a second format. This is
 what a large stage's settle time is spent on and the only thing left that
 trips the stall watchdog there: of `simpleAssetScene.usd`'s 202 s (the design
@@ -86,7 +86,7 @@ anisotropic or transmissive material is not one).
 
 ### Node-held secondary values
 
-A node-held value of another class (`doc/property_system.md` D30,
+A node-held value of another class (`doc/erhe/property_system.md` D30,
 `Light.color` on a plain `Xform`) is written as `erhe:Light:color`, and the
 import resolves neither the qualified nor the bare name against a node, so
 such a value does not come back.
@@ -116,7 +116,7 @@ the surveyed assets that ask for the second.
 
 erhe has no environment map, so a dome's `inputs:texture:file` is named in one
 warning and not sampled, and the dome contributes the constant radiance of its
-`color`, `intensity` and `exposure` only (`doc/erhe_usd.md`, DomeLight). The
+`color`, `intensity` and `exposure` only (`doc/erhe/usd.md`, DomeLight). The
 usd-wg McUsd entries are the surveyed assets that author one. Taking it up
 means an image-based ambient term in the renderer first; the reader already
 keeps the dome prim and its texture path.
@@ -134,7 +134,7 @@ network needs none of that and is read and written (the design record's E2).
 ### Grid depth
 
 The grid's depth does not agree with the content's, so grid lines cross opaque
-objects below the horizon (`doc/editor_rendering.md`, Grid). Needs a RenderDoc
+objects below the horizon (`doc/editor/rendering.md`, Grid). Needs a RenderDoc
 session on the windowed build.
 
 ### inherits and specializes arcs whose target is not a class prim
@@ -168,7 +168,7 @@ schema's attributes on the prim itself).
 ### Layer-stack editing
 
 A root layer's sublayers are composed at load and a save writes one flattened
-layer with no `subLayers` (the mapping's `subLayers` row; `doc/erhe_usd.md`
+layer with no `subLayers` (the mapping's `subLayers` row; `doc/erhe/usd.md`
 "Sublayers"), so an edit cannot be written back to the layer that authored the
 value. A stack the editor edits layer by layer needs per-value layer
 provenance, which `CompositeSublayers` does not keep (the design record's X5).
@@ -177,4 +177,4 @@ provenance, which `CompositeSublayers` does not keep (the design record's X5).
 
 `configure_xcode_*.sh` and `configure_ninja_linux_*.sh` leave
 `ERHE_USD_LIBRARY` at `none`; turning it on there is the step that first needs
-USD on those platforms (`doc/erhe_usd.md` "Configurations").
+USD on those platforms (`doc/erhe/usd.md` "Configurations").

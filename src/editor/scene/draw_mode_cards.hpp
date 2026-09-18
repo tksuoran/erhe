@@ -11,7 +11,7 @@ class Draw_mode;
 
 // Builds the card proxy of one draw-mode attachment: the generated quad
 // geometry a `cards` draw mode supplies in place of the subtree it prunes
-// (doc/usd_compatibility.md, "Draw modes").
+// (doc/erhe/usd_compatibility.md, "Draw modes").
 //
 // The result is one Mesh with one primitive per drawn face, each with its own
 // unlit material - the face's `cardTexture` when it has one, the draw-mode

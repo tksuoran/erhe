@@ -17,7 +17,7 @@ namespace editor {
 
 class App_context;
 
-// `UsdGeomModelAPI` as an erhe attachment (doc/usd_compatibility.md, "Draw
+// `UsdGeomModelAPI` as an erhe attachment (doc/erhe/usd_compatibility.md, "Draw
 // modes"): the request that a model prim's subtree be drawn as a proxy
 // instead of by itself. The attachment holds every attribute of the schema as
 // an entry property under the class name `Draw_mode`, which is the name a

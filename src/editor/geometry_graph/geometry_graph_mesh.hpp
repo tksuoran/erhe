@@ -69,7 +69,7 @@ public:
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // The referenced Graph_mesh asset (member-backed object property,
-    // doc/property_system.md D18 / D28). A write releases the controlled
+    // doc/erhe/property_system.md D18 / D28). A write releases the controlled
     // products at once - a rebind target may never publish a bake, and a
     // stale mesh must not linger - and applies the new asset's latest
     // bake (main thread). set_graph_mesh writes the property.

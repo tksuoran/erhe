@@ -227,7 +227,7 @@ TEST_F(Cube_round_trip, material_local_sets_survive)
 
 // A `Camera` prim and a UsdLux prim of the stage are erhe Camera / Light
 // prims with their own xformOps, not Xforms carrying an attachment
-// (doc/usd_compatibility_design.md C5).
+// (doc/erhe/usd_compatibility_design.md C5).
 TEST_F(Cube_round_trip, camera_and_light_prims_round_trip_with_their_own_xform_ops)
 {
     const std::shared_ptr<erhe::scene::Node> cam = find_node(trip->reloaded.data, "cam");
@@ -513,7 +513,7 @@ TEST_F(Authored_round_trip, asset_path_and_arrays_survive_as_custom_attributes)
 
 // A DomeLight is erhe's ambient light on the way in and the prim it was on
 // the way out: nothing of the scene tree carries it, so the writer takes the
-// records the load produced (doc/usd_compatibility_design.md S1).
+// records the load produced (doc/erhe/usd_compatibility_design.md S1).
 class Dome_round_trip : public testing::Test
 {
 protected:

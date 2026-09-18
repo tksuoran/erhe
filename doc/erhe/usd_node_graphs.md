@@ -1,0 +1,221 @@
+# Node graphs in a USD file
+
+Stability: mostly stable
+
+An erhe texture graph (`doc/editor/texture_graph.md`) and an erhe geometry graph
+(`doc/editor/geometry_graph_mesh.md`) ride a USD file as the `UsdShade` network they
+are, so a USD-backed scene keeps its graphs across a save and a
+`UsdShade`-aware tool reads the same prims. This document owns the form and
+the record; `doc/erhe/usd.md` "Node graphs" states what the library reads and
+writes, and `doc/editor/parsers.md` the editor half. The design record names
+the step as E4c (`doc/erhe/usd_compatibility_design.md`).
+
+## 1. Rules
+
+- R1 A `Graph_texture` asset is a `NodeGraph` prim where the asset sits
+  in the tree (U4: a resource is a prim where it sits); every node of the
+  graph is a `Shader` child of it; every link is an attribute connection.
+  Nothing rides a JSON string.
+- R2 A material slot that samples the graph's result is the material's
+  own `UsdPreviewSurface` input connected to the `NodeGraph`'s interface
+  output, in place of a `UsdUVTexture`: the file's native way of feeding
+  a computed value into a surface.
+- R3 The baked image is not written (as in glTF: a graph loads born
+  dirty and the first evaluation re-bakes). A tool without erhe's nodes
+  sees a material whose input connects to a network it cannot evaluate,
+  which is the same outcome MaterialX gives a tool without MaterialX.
+- R4 A save and a reload keep the graph node for node, parameter for
+  parameter, link for link, node position included; a second save is
+  byte-identical (E3).
+- R5 A `NodeGraph` a foreign file authors without erhe's marker (section
+  2.1) is not an erhe graph and is left to Tydra's material conversion.
+- R6 The writer in `erhe::usd` names no editor type (the X3 and E4a
+  rule): the editor hands the graph over in a neutral record and
+  rebuilds it from one.
+
+## 2. Design
+
+### 2.1 Prims
+
+```
+def Scope "Graph_Textures" {
+    def NodeGraph "Rust" (
+        # the marker: an erhe texture graph, not a foreign network
+    ) {
+        custom token erhe:graph:format = "erhe_texture_graph"
+        color3f outputs:rgb.connect = </World/Graph_Textures/Rust/Output.inputs:rgb>
+
+        def Shader "Noise" {
+            uniform token info:id = "erhe:texture:noise"
+            custom float2 erhe:ui:position = (120, 40)
+            float inputs:scale = 4
+            int inputs:octaves = 3
+            float outputs:grayscale
+        }
+        def Shader "Colorize" {
+            uniform token info:id = "erhe:texture:colorize"
+            custom float2 erhe:ui:position = (320, 40)
+            float inputs:value.connect = </World/Graph_Textures/Rust/Noise.outputs:grayscale>
+            string inputs:gradient = "..."
+            color3f outputs:rgb
+        }
+        def Shader "Output" {
+            uniform token info:id = "erhe:texture:output"
+            custom float2 erhe:ui:position = (520, 40)
+            color3f inputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>
+        }
+    }
+}
+
+def Material "Iron" {
+    def Shader "PreviewSurface" {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgb>
+    }
+}
+```
+
+- The `NodeGraph` prim is the `Graph_texture` asset: its name is the
+  asset's name, its place is the asset's place (the `Graph Textures`
+  kind scope when nothing else places it, spelled `Graph_Textures` by the
+  identifier rule of E1). `erhe:graph:format` is the marker
+  R5 needs and takes the value the glTF `ERHE_node_graphs` `format`
+  field takes, so both formats spell the graph kind the same way.
+- A `Shader` prim is one node: its name the node's name (sibling-unique,
+  M2), `info:id` the factory type name under the `erhe:texture:`
+  prefix (`make_texture_graph_node` takes the same string back), and
+  `erhe:ui:position` the node's editor position.
+- A node parameter is an `inputs:<name>` attribute whose USD type and
+  literal text the editor chooses, since the editor's nodes serialize a
+  parameter as JSON rather than through the property system: float, int,
+  bool, token for an enumeration, float2 for a size, color3f / color4f for
+  a color, float3 / float4 for a tuple that is a quantity rather than a
+  color (`doc/erhe/usd_compatibility.md` "Property system" holds the value
+  rows). A `token` and a `string` carry their text as it stands, with no
+  quotes around it, so a value with no USD form of its own - a gradient, a
+  curve - travels as its D16 text in a `string` attribute, one rule for
+  both, and the USDA quoting and escaping stays inside `erhe::usd`.
+- A pin is an `inputs:<pin>` / `outputs:<pin>` attribute typed from the
+  pin's value type: `grayscale` is `float`, `rgb` is `color3f`, `rgba`
+  is `color4f`. An input pin with a link is the attribute with a
+  `.connect` to the source node's output; an input pin without one is
+  the attribute with no value, so the pin exists in the file.
+- The graph's result: the `output` sink node's input source is also the
+  `NodeGraph`'s interface `outputs:<pin>` connection, so the graph has a
+  value a material can name (R2). The `material_output` and `buffer`
+  sinks are nodes like any other (their meaning is erhe's).
+- Recognition on read: a `NodeGraph` prim carrying the marker is a
+  texture graph; a `Shader` child whose `info:id` lacks the
+  `erhe:texture:` prefix, or names a kind the factory does not make, is
+  one warning and no node, and the links into it are dropped with it.
+  A `NodeGraph` without the marker is R5.
+
+### 2.2 The record between erhe::usd and the editor
+
+`Usd_data::node_graphs` (read) and `Usd_save_arguments::node_graphs`
+(write) carry a `Usd_node_graph`: stage path, name, format token, the
+interface outputs (pin name, type, source node and pin), and the nodes,
+each with name, type name, position, parameters as (USD type, literal
+text), input pins as (name, value type, optional source node and pin) and
+output pins as (name, value type). Values are text on both sides, as
+the X2 override values are, so `erhe::usd` needs no node vocabulary.
+The editor's `graph_texture_serialization.cpp` turns a `Graph_texture`
+into nodes with type names, parameters and links for glTF; the same walk
+fills the record, and the same rebuild consumes it.
+
+### 2.3 Reading
+
+The reader walks the composed prim tree (composition is a no-op, X1),
+not Tydra's render scene, which never reports shading prims: for each
+`NodeGraph` with the marker it reads the children's `info:id`, the
+`inputs:` / `outputs:` properties with their connections
+(`Attribute::connections()`), and the position attribute, into the
+record; the scene conversion stops there, as it does at a `Brush` prim,
+so no node becomes a scene prim. A material input whose connection
+targets a marked `NodeGraph`'s output is recorded on the material
+record as (slot, graph path); Tydra leaves that slot at its schema
+fallback with a warning, since the target is no `UsdUVTexture`, so the
+stage is converted from the composed layer as it stands, and the editor
+binds the slot to the rebuilt `Graph_texture` (a `Texture_reference`) the
+way the glTF `material_bindings` binder does.
+
+### 2.4 Writing
+
+The writer receives the records, plans a `NodeGraph` prim at each
+asset's path (the two-pass plan of U4 2g), writes each node as a generic
+`lightusd::Shader` (`info_id` plus a property map), sets a connection
+with `Attribute::set_connection(Path{node path, "outputs:<pin>"})`, and
+writes the interface output on the `NodeGraph`. The material writer
+connects a slot bound to a graph to that output instead of writing a
+`UsdUVTexture` for it. Node order in the file is the graph's node order,
+so the output is stable across saves (R4).
+
+### 2.5 Editor
+
+`collect_usd_node_graphs` (save) and `resolve_usd_node_graphs` (open and
+import, after materials exist) in `src/editor/parsers/usd.cpp`, the E4a
+shape: create the `Graph_texture` items at the recorded paths through
+the same operation glTF import uses, rebuild the nodes through the
+factory, set parameters by D16 text and positions, link pins, bind the
+material slots, and leave the graph dirty for the next frame's
+`evaluate_if_dirty`.
+
+## 3. Verification
+
+The round-trip script's `texture_graph.usda` and geometry-graph legs
+(`scripts/scene_roundtrip_verify.py`), `erhe_usd_tests`
+(`test_usd_node_graphs.cpp`, `test_usd_geometry_graphs.cpp`), and a
+headless session that opens the fixture, screenshots the material
+rendering the generated texture (a non-uniform surface), saves, reopens
+and matches `get_scene_node_graphs` and the material's slot binding, with
+a byte-identical second save and a clean scene close.
+
+## 4. Geometry graphs reuse this form
+
+A `Graph_mesh` is the same prim form with `info:id` under
+`erhe:geometry:` and the evaluated geometry as a child `Mesh "result"`
+prim, written the way a brush writes its geometry (E4a), so a viewer
+without erhe sees the result. A reload rebuilds the graph from the nodes
+and re-evaluates it, and reads the child mesh only when the record
+carries no node - the one case where the child is all there is to say
+what the graph makes. Pin value types are the geometry payload types the
+mapping gives them (`doc/erhe/usd_compatibility.md`, "Geometry node graphs"),
+and a tuple-valued node parameter takes the `float3` / `float4` spelling
+a texture graph's color parameter does not.
+
+A geometry node names its pins and its parameters for the reader ("x
+size"), and a USD property name is an identifier, so both travel in the
+identifier spelling `sanitize_usd_identifier` gives them and the reload
+matches a recorded name against the spelling the rebuilt node's pin or
+parameter key would take.
+
+Two things a `NodeGraph` prim has no form for ride the `erhe:scene`
+`customLayerData` block instead, one entry per graph under
+`graph_meshes`: the scene prims bound to the graph (a
+`Geometry_graph_mesh` attachment, an object reference no `erhe:` custom
+attribute can carry), and the graph's Houdini-style display / ghost node
+designations, which USD has no counterpart for. Each entry names a prim
+by the path `erhe::usd::plan_usd_prim_paths` plans for it, in the
+item-path spelling: the save plans the paths from the arguments it has
+filled, writes the block with them and hands the same arguments to the
+write, which plans identically. A planned path is where the prim lands -
+the `World` prim that gathers several top-level prims, the identifier
+spelling of every name and the sibling-unique suffix included - so it is
+the path the item has when the file is opened again and the entry
+matches it exactly. The save is therefore its own fixed point: what the
+block says about a prim does not change when the file is reloaded and
+saved again.
+
+## 5. Out of scope
+
+- Standard `UsdShade` nodes (`UsdUVTexture`, `UsdPrimvarReader_*`) inside
+  an erhe graph, and a MaterialX node vocabulary for erhe's nodes: an
+  erhe node has its own semantics, and a mapping to MaterialX definitions
+  is the material-fidelity step E2's territory.
+- Writing the baked image (R3).
+- Evaluating a foreign `NodeGraph` (R5).
+
+## Future work
+
+- [plans/usd_compatibility.md](../plans/usd_compatibility.md) "A material slot
+  that a texture graph feeds and that carries an authored factor".

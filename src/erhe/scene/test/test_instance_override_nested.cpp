@@ -1,5 +1,5 @@
 // An override path that crosses a carrier deeper inside an instance
-// (doc/usd_compatibility_design.md C6, X1): erhe keeps the clone of an
+// (doc/erhe/usd_compatibility_design.md C6, X1): erhe keeps the clone of an
 // arc's target as one level of its own below the carrier, while a file's own
 // path composes the target's content directly under the referencing prim. The
 // level is transparent at every carrier the path crosses, not only at the one

@@ -1046,7 +1046,7 @@ auto Mcp_server::action_csg(const json& args) -> std::string
         selection.insert(selection.end(), tool_nodes.begin(), tool_nodes.end());
         Scoped_selection_change change{*m_context.selection};
         // The target is named explicitly as the active item: the CSG target is
-        // the active mesh (doc/active_item.md D6), so an implicit active
+        // the active mesh (doc/editor/active_item.md D6), so an implicit active
         // item (the last listed) must not take the target's place here.
         m_context.selection->set_selection(selection, target_node);
     }

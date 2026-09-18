@@ -182,7 +182,7 @@ void Primitive_buffer::write_primitive(
 
     using erhe::graphics::as_span;
     // The active item of the selection draws in its own color
-    // (doc/active_item.md D5); every other selected entry in
+    // (doc/editor/active_item.md D5); every other selected entry in
     // constant_color0.
     const glm::vec4 selected_color = settings.get_selected_color(mesh->get_flag_bits());
     const auto color_span =
@@ -281,7 +281,7 @@ auto Primitive_buffer::update(
     std::size_t                       write_offset       = 0;
     std::size_t                       primitive_count    = 0;
 
-    // Fast path (doc/draw_list_performance_improvements.md): the draw list
+    // Fast path (doc/erhe/draw_list_performance_improvements.md): the draw list
     // owns a complete GPU-layout record per entry; copy it and patch only the
     // pass-dependent color / size. Settings that need per-mesh evaluation
     // (id offsets, mesh point size / line width) take the

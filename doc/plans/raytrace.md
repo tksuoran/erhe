@@ -2,9 +2,9 @@
 
 Status: proposed
 
-Extends [../raytrace.md](../raytrace.md) (the GPU ray query path),
-[../raytrace_materials.md](../raytrace_materials.md) (its material shading) and
-[../bvh_scene_acceleration.md](../bvh_scene_acceleration.md) (the CPU bvh
+Extends [../raytrace.md](../editor/raytrace.md) (the GPU ray query path),
+[../raytrace_materials.md](../editor/raytrace_materials.md) (its material shading) and
+[../bvh_scene_acceleration.md](../erhe/bvh_scene_acceleration.md) (the CPU bvh
 backend's TLAS).
 
 ## Give the BLAS cache an identity beyond the pointer

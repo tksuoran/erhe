@@ -10,10 +10,10 @@ Rules checked (see doc/README.md for the conventions they enforce):
 2. Every relative Markdown link `[text](target)` inside a `.md` file resolves
    relative to that file (URLs and anchors-only links are skipped).
 3. No file mentions a `notes.md` path: library and editor notes live under
-   doc/ as doc/erhe_<name>.md / doc/editor_<subdir>.md.
+   doc/ as doc/erhe/<name>.md / doc/editor/<subdir>.md.
 4. Every `.md` under doc/ (except doc/reference/, doc/gltf_extensions/schema/)
    has, within its first ten lines, exactly one of:
-       Stability: stable | mostly stable | experimental   (doc/*.md, doc/<topic>/*.md)
+       Stability: stable | mostly stable | experimental   (doc/*.md, doc/erhe/, doc/editor/, doc/<topic>/)
        Status: proposed | in progress | blocked           (doc/plans/**)
 
 Exit code 0 when clean, 1 when any check fails. Run from anywhere:

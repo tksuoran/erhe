@@ -10,7 +10,7 @@ namespace erhe::geometry {
 class Geometry;
 
 // Flat, glTF-accessor-shaped serialization of a Geometry
-// (doc/gltf_scene_roundtrip.md phase 2). Plain buffers that map 1:1
+// (doc/editor/gltf_scene_roundtrip.md phase 2). Plain buffers that map 1:1
 // onto glTF accessors / buffer views plus the ERHE_geometry attribute
 // records; pure data with no glTF or GPU dependency, so the round-trip is
 // unit-testable. The attribute dump carries raw geogram attribute store

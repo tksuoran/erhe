@@ -40,7 +40,7 @@ Async_raytrace_kickoff_operation::~Async_raytrace_kickoff_operation() noexcept =
 namespace {
 
 // Deferred per-mesh finalize, running on a tf::Executor worker
-// (doc/async_asset_loading.md): builds the Geometry (edges, smooth
+// (doc/editor/async_asset_loading.md): builds the Geometry (edges, smooth
 // normals), the real triangle raytrace and - when the load path deferred it -
 // the full geometry-based buffer mesh (edge lines, corner / centroid points)
 // for one mesh, all without touching the live scene, then hands the swap to

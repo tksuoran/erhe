@@ -1,4 +1,4 @@
-// A Material's local values are its AUTHORED values (doc/property_system.md
+// A Material's local values are its AUTHORED values (doc/erhe/property_system.md
 // D32): a Material_values snapshot at the defaults leaves every property at
 // Value_source::default_value, and the generic elision pass takes back what
 // a field-by-field importer fill made local.

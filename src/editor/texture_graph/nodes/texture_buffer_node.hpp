@@ -7,7 +7,7 @@ namespace editor {
 class App_context;
 
 // Buffer node: an explicit render-to-texture cut point
-// (doc/texture_graph.md; Material Maker's gen_buffer.gd). It renders its
+// (doc/editor/texture_graph.md; Material Maker's gen_buffer.gd). It renders its
 // connected input subtree ONCE into a persistent square texture at a chosen
 // power-of-two resolution, then exposes that texture as a sampler2D source
 // downstream - so a filter that samples its input many times (blur, warp) reads

@@ -151,7 +151,7 @@ enum class Texture_channel : uint16_t {
 // `vertex_color` is the mesh's color attribute alone - the factor and the
 // texture of that input are not read at all - which is what a
 // `UsdPreviewSurface` input fed by a `UsdPrimvarReader` of `displayColor` /
-// `displayOpacity` says (doc/usd_compatibility.md, "Materials"). The
+// `displayOpacity` says (doc/erhe/usd_compatibility.md, "Materials"). The
 // enumerator values are what the material record carries to the shader.
 enum class Material_input_source : uint16_t {
     value        = 0,

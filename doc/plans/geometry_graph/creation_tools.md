@@ -2,8 +2,8 @@
 
 Status: in progress
 
-This plan extends `doc/geometry_nodes.md` and
-`doc/geometry_graph_transform_from_node.md`. It lists what the AI-creation
+This plan extends `doc/editor/geometry_nodes.md` and
+`doc/editor/geometry_graph_transform_from_node.md`. It lists what the AI-creation
 workflow still lacks; the workflow itself and its recipes live in
 `.agents/skills/erhe-creations/SKILL.md` and its
 `references/geometry_graph_sculpt.md`, which are the canonical sources to read
@@ -39,7 +39,7 @@ limited to mottle-style procedural noise. The answer is the
 A `transform_from_node` captures ONE node's local transform, so a pose rig
 built from them is FLAT: there are no FK chains. Transform composition needs
 the `mat4` pin plumbing described in
-[geometry_nodes.md](geometry_nodes.md) ("A `mat4` output pin"), together with
+[geometry_nodes.md](../../editor/geometry_nodes.md) ("A `mat4` output pin"), together with
 the uid-based reference persistence in the same plan.
 
 ## Smaller items

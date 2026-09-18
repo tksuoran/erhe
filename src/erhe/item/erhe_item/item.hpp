@@ -14,7 +14,7 @@ namespace erhe {
 
 class Item_host;
 
-// USD purpose token (doc/usd_compatibility_design.md M3): what an item is
+// USD purpose token (doc/erhe/usd_compatibility_design.md M3): what an item is
 // drawn for. `default_` is ordinary content; `render` is the high-quality
 // stand-in of a pair; `proxy` is reserved for the low-cost stand-in a
 // future proxy mesh provides; `guide` is editor-only content the user
@@ -92,7 +92,7 @@ public:
     // Static geometry that participates in lightmap baking: gets automatic
     // lightmap UVs (texcoord channel 2), an atlas region, and baked lighting.
     // Authored + serialized (by name, like all flags). See
-    // doc/lightmap_baking.md.
+    // doc/editor/lightmap_baking.md.
     static constexpr uint64_t lightmapped               = (1u << 30);
     // Editor-generated render-only stand-in for another item (e.g. the
     // lightmap partitioner's world-space piece meshes). Renders (and casts
@@ -129,7 +129,7 @@ public:
     // back to plain FK translation. Authored + serialized (by name; see
     // gltf_item_flags.cpp). See doc/plans/rigging/fabrik_ik.md.
     static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
-    // Effective USD `active` state (doc/usd_compatibility_design.md X2): the
+    // Effective USD `active` state (doc/erhe/usd_compatibility_design.md X2): the
     // item's own active property AND its own defined property AND the bit of
     // its parent. USD prunes the whole subtree of an inactive prim, and its
     // default traversal predicate reaches neither an undefined prim (composed
@@ -147,7 +147,7 @@ public:
     // never carries the bit, so a camera the user creates is saved.
     static constexpr uint64_t session_only              = (uint64_t{1} << 39);
     // The generated proxy geometry a `cards` draw mode supplies in place of
-    // the subtree it replaces (doc/usd_compatibility.md, "Draw modes"): a
+    // the subtree it replaces (doc/erhe/usd_compatibility.md, "Draw modes"): a
     // child prim of the pruning model prim that the pruning itself must not
     // reach, since it is the replacement. Carried by the proxy mesh and by
     // the materials it owns; the item tree never shows it, no exporter
@@ -155,7 +155,7 @@ public:
     // selects the model prim.
     static constexpr uint64_t draw_mode_proxy           = (uint64_t{1} << 40);
     // The one item of the editor-wide selection that is the reference item
-    // for commands and the one the UI highlights (doc/active_item.md).
+    // for commands and the one the UI highlights (doc/editor/active_item.md).
     // Written only by editor::Selection; at most one item carries it, and it
     // is independent of the selected bit - an item can be active while
     // unselected. Transient session state, never serialized.
@@ -171,7 +171,7 @@ public:
         hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
         negative_determinant | affects_shadow | active_item;
 
-    // Derived bits (D23 in doc/property_system.md): the effective value
+    // Derived bits (D23 in doc/erhe/property_system.md): the effective value
     // of the visible and active properties (Item_base) and of the
     // shadow_cast / lightmapped properties (erhe::scene::Mesh), written
     // only by the property changed callbacks. set_flag_bits rejects them;
@@ -531,7 +531,7 @@ public:
     [[nodiscard]] auto get_reference_path  () const -> std::string override;
     [[nodiscard]] auto get_shared_reference() const -> std::shared_ptr<erhe::property::Dependency_object> override;
 
-    // Property sub-objects (doc/property_system.md D29): Dependency_objects
+    // Property sub-objects (doc/erhe/property_system.md D29): Dependency_objects
     // this item owns by value that are not items themselves and that the
     // editor addresses as (item, index) - a Mesh's primitives. The index is
     // stable for the item's current list; a label names the sub-object in
@@ -550,7 +550,7 @@ public:
     // graph asset to its nodes).
     virtual void set_item_host(Item_host* item_host);
 
-    // Inheritance container (doc/content_library_folders.md D1): the object
+    // Inheritance container (doc/editor/content_library_folders.md D1): the object
     // an item with no structural parent inherits property values from - the
     // content-library node wrapping it. Maintained by the container; null
     // outside one; not copied by copy / clone. Classes whose parent comes
@@ -587,10 +587,10 @@ public:
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_debug_label             () const -> erhe::utility::Debug_label;
 
-    // Sibling-unique names (doc/usd_compatibility_design.md M2): true when this
+    // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): true when this
     // item may be renamed to `name`. An item that is not itself in a hierarchy
     // still shares one namespace when a content-library entry node wraps it
-    // (the item's inheritance container, doc/content_library_folders.md D1):
+    // (the item's inheritance container, doc/editor/content_library_folders.md D1):
     // the entry node's siblings are the item's. Every other item has no
     // namespace of its own, so every name is available. Hierarchy overrides
     // this with its own siblings.
@@ -602,7 +602,7 @@ public:
     // so filters and readers stay bit tests. shadow_cast and lightmapped
     // are erhe::scene::Mesh properties mirrored the same way.
     static const erhe::property::Property<bool> visible_property;
-    // USD prim `active` metadata (doc/usd_compatibility_design.md X2): the
+    // USD prim `active` metadata (doc/erhe/usd_compatibility_design.md X2): the
     // item's own opinion, so it is NOT an inherits-flagged property. The
     // subtree effect - USD prunes everything below an inactive prim,
     // whatever a descendant says of itself - is carried by the derived
@@ -619,7 +619,7 @@ public:
     // is the derived Item_flags::active bit, recomputed by
     // rederive_active_flag_bits().
     static const erhe::property::Property<bool> defined_property;
-    // USD purpose vocabulary (doc/usd_compatibility_design.md M3): an
+    // USD purpose vocabulary (doc/erhe/usd_compatibility_design.md M3): an
     // inherited enumeration whose default layer is derived from the
     // editor-only flag bits (D31), so an item that authors nothing reports
     // the purpose its flags imply and an authored value - local, from a
@@ -640,7 +640,7 @@ public:
     // through the property layers, so an authored value wins and an
     // unauthored item answers from its own flag bits.
     [[nodiscard]] auto get_purpose() const -> Purpose;
-    // The item's style source (doc/style_library.md D3): a bridged object
+    // The item's style source (doc/editor/style_library.md D3): a bridged object
     // reference over Dependency_object::set_style / get_style, so the
     // Properties window shows a "Style" row with the picker; style_applies
     // is the rule the setter and the picker's candidate list share.
@@ -710,7 +710,7 @@ public:
 
     // Whether the children of this item are drawn by a proxy this item
     // supplies instead of by themselves - the `UsdGeomModelAPI` draw mode of
-    // a model prim (doc/usd_compatibility.md, "Draw modes"). The item itself
+    // a model prim (doc/erhe/usd_compatibility.md, "Draw modes"). The item itself
     // stays active, since it carries the proxy; every child's subtree leaves
     // render, pick and simulation through the derived Item_flags::active bit,
     // the way an inactive prim's does. This is derived state of the item, not

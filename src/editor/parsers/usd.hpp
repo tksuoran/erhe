@@ -37,7 +37,7 @@ public:
 // textures and materials the file names, and the insert of the imported node
 // tree under an import_root node. The same Item_insert_remove_operation /
 // library attach path glTF import takes, so an undo
-// announces the removals (doc/import_undo_reference_clearing.md).
+// announces the removals (doc/editor/import_undo_reference_clearing.md).
 //
 // Failures - USD support not built (ERHE_USD_LIBRARY=none), no target scene,
 // an unreadable file, a conversion error - are values in `error`, and are
@@ -89,7 +89,7 @@ void import_usd(
 ) -> bool;
 
 // What one USD file contributes as a prefab template
-// (doc/usd_compatibility_design.md X1). `root` is an unhosted node whose
+// (doc/erhe/usd_compatibility_design.md X1). `root` is an unhosted node whose
 // children are what an instance clones: the prim the arc named, wrapped so
 // that the prim's own class, transform and content ride the instance.
 class Usd_prefab_template
@@ -101,7 +101,7 @@ public:
     // ones the files its arcs bring in declare - in the template root's
     // coordinates. Prefab_library keys the template on the selection entries
     // naming one of these; the rest select nothing here
-    // (doc/editor_parsers.md, "A `variants` selection an arc carries").
+    // (doc/editor/parsers.md, "A `variants` selection an arc carries").
     std::vector<Prefab_variant_set_key>                     consumed_variant_sets;
     std::string                                             error;
 };
@@ -116,7 +116,7 @@ public:
 // `variant_selections` is the `variants` selection the arc that named this
 // template carries in, measured from the prim the arc targets: it selects
 // among the target's variant sets before the target's own selection does
-// (doc/usd_compatibility_design.md C7).
+// (doc/erhe/usd_compatibility_design.md C7).
 [[nodiscard]] auto load_usd_prefab_template(
     App_context&                                 context,
     Prefab_library&                              prefab_library,

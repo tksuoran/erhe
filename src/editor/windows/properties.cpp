@@ -170,7 +170,7 @@ void Properties::animation_properties(const std::shared_ptr<erhe::scene::Animati
     ERHE_PROFILE_FUNCTION();
 
     // The time range and the sampler / channel counts are computed
-    // properties drawn by the generic rows (doc/property_system.md section
+    // properties drawn by the generic rows (doc/erhe/property_system.md section
     // 4.16). Playback and curve editing live in the Animation window
     // (issue #243).
     add_entry("Edit", [this, animation]() {
@@ -251,7 +251,7 @@ void Properties::variant_properties(Scene_root& scene_root)
     ERHE_PROFILE_FUNCTION();
 
     // One combo per variant set the scene carries
-    // (doc/usd_compatibility_design.md X4). Change-driven: the combo is drawn
+    // (doc/erhe/usd_compatibility_design.md X4). Change-driven: the combo is drawn
     // from the table, and only a change queues the switch. A set a variant
     // block declares is listed below the set carrying that block, indented and
     // named by the block, and is editable only while that block is the
@@ -336,7 +336,7 @@ void Properties::light_properties(erhe::scene::Light& light)
     // blackbody swatch: computed properties, D26) are drawn by the generic
     // property rows (Dependency_property_rows); every write re-resolves the
     // scene light set through the Light property callback
-    // (doc/property_system.md D19). Only the diagnostic remains here.
+    // (doc/erhe/property_system.md D19). Only the diagnostic remains here.
     const erhe::scene::Light::Type type = light.get_light_type();
     if ((type == erhe::scene::Light::Type::point) && (light.get_range() <= 0.0f)) {
         add_entry("Warning", [](){
@@ -356,7 +356,7 @@ void Properties::layout_properties(erhe::scene::Layout& layout)
 
     // The authored layout parameters (type, volume, axes, gap, grid track
     // count) are drawn by the generic property rows (Dependency_property_rows,
-    // doc/property_system.md section 4.13). Only the per-track extent lists
+    // doc/erhe/property_system.md section 4.13). Only the per-track extent lists
     // remain here.
     if (layout.get_layout_type() == erhe::scene::Layout_type::grid) {
         static const char* const c_grid_size_labels[] = { "Sizes X", "Sizes Y", "Sizes Z" };
@@ -591,7 +591,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         }
         push_group(m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         // The primitive's registered properties (its material): generic rows
-        // on the property sub-object (doc/property_system.md D29), undo
+        // on the property sub-object (doc/erhe/property_system.md D29), undo
         // through Property_set_operation on (mesh, primitive index).
         m_dependency_rows.add_sub_object_rows(*this, mesh_shared, static_cast<std::size_t>(primitive_index));
         if (m_context.developer_mode) {
@@ -668,7 +668,7 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // The brush, facet and corner are generic rows (doc/property_system.md
+    // The brush, facet and corner are generic rows (doc/erhe/property_system.md
     // 4.11); the polygon counts of the brush follow as diagnostics.
     std::shared_ptr<Brush> brush = brush_placement.get_brush();
     if (!brush) {
@@ -746,7 +746,7 @@ void Properties::node_physics_properties(Node_physics& node_physics)
     // The authored rigid body state (motion mode, trigger, mass, friction,
     // restitution, damping, gravity factor, wind receptivity, initial
     // velocities, center of mass, physics material, collision filter) is
-    // generic rows (doc/property_system.md 4.10), drawn by
+    // generic rows (doc/erhe/property_system.md 4.10), drawn by
     // dependency_properties() after the item rows.
 }
 
@@ -756,7 +756,7 @@ void Properties::node_joint_properties(Node_joint& node_joint)
     ERHE_PROFILE_FUNCTION();
 
     // The connected node, the joint settings and the collision flag are
-    // generic property rows (doc/property_system.md section 4.17); the
+    // generic property rows (doc/erhe/property_system.md section 4.17); the
     // actions and the diagnostic remain here.
     add_entry(
         "Connect",
@@ -1032,7 +1032,7 @@ void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::p
     pop_group();
 }
 
-// Developer diagnostics (R3 of doc/properties_window.md): the
+// Developer diagnostics (R3 of doc/editor/properties_window.md): the
 // whole flag word as text. The authored bits are property rows
 // (Item_base::lock_edit_property and the other flag bridges); the rest are
 // transient presentation state and not editable here.
@@ -1054,7 +1054,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 }
 
 // The per-item part of the window (R3 / R5 of
-// doc/properties_window.md): the read-only diagnostics of the
+// doc/editor/properties_window.md): the read-only diagnostics of the
 // item's class, the actions, and the list editors that have no property
 // form (the scene's settings block, a layout's track extents, a collision
 // filter's system lists, joint limits and drives), all drawn per item and
@@ -1192,7 +1192,7 @@ auto Properties::effective_items() -> const std::vector<std::shared_ptr<erhe::It
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
 
     // Individual mode shows one section per item: the active item
-    // (doc/active_item.md D5) comes first, the rest keep selection order.
+    // (doc/editor/active_item.md D5) comes first, the rest keep selection order.
     // Combined mode groups by owner type, where the order does not show.
     if (m_selection_mode != Selection_mode::individual) {
         return selected_items;

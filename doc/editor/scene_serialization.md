@@ -1,0 +1,445 @@
+# erhe scene serialization
+
+Stability: stable
+
+Reference for how the editor persists scenes: the file format, the save and
+open pipelines, every part that participates, and what is (and is not)
+persisted. Design history and rationale live in
+[`gltf_scene_roundtrip.md`](gltf_scene_roundtrip.md); the wire
+format of each vendor extension is specified in
+[`gltf_extensions/`](../gltf_extensions/README.md).
+
+## Overview
+
+A scene saves as a **single erhe-authored glTF file** (`.glb` binary by
+default; a `.gltf` path selects the JSON form, which is inspection-only - it
+writes no buffer URI and cannot be re-imported). One `export_gltf()` call
+writes everything: render content as plain glTF 2.x, physics as
+`KHR_physics_rigid_bodies` / `KHR_implicit_shapes`, prefab instances as glTF
+2.1 `externalAssets` references, embedded texture source images, animations,
+and the editor-domain state as `ERHE_*` vendor extensions.
+
+`ERHE_scene` in `extensionsUsed` is the **erhe-authored marker**: a glTF file
+carrying it opens as a full scene (fresh `Scene_root`, saved editor state
+applied); any other glTF opens as a foreign asset import. All `ERHE_*`
+extensions are optional (`extensionsUsed` only, never `extensionsRequired`),
+so any stock glTF viewer can open a saved scene and see the render content.
+
+There is no sidecar: no scene JSON, no per-scene imgui ini, no companion
+geometry files.
+
+## File anatomy
+
+Standard GLB container: 12-byte header, `JSON` chunk, `BIN` chunk. Inside the
+JSON, erhe state attaches at three levels:
+
+| Level | Extensions |
+|---|---|
+| per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry`, `ERHE_physics`, `ERHE_layout` |
+| the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
+| asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
+
+A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
+that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
+(`doc/erhe/usd_compatibility_design.md` C5): the glTF node's name, transform, children
+and remaining attachments are the prim's, and the writer inverts it - such a
+prim is written as one glTF node with `mesh` / `camera` / the light
+extension set, and a `Mesh`, `Camera` or `Light` child of another prim as a
+child node of its own. A node that carries two of the three is the prim of
+the first in the order mesh > camera > light, and the others become its
+child prims with identity transforms, which is the form the writer then
+round-trips. The `ERHE_node` payload of a mesh node carries both halves,
+`flags` / `properties` for the prim and `mesh_flags` / `mesh_properties` for
+its mesh state; the `ERHE_light` payload of a light node is the light prim's
+own. The glTF `mesh` and `camera` entries carry no `uid`: such a prim's
+identity is its node entry.
+
+A scene's content-library resources - materials, textures, brushes, styles,
+physics materials, collision filters, joint settings, animations, skins and
+node graphs - are prims of the same tree, under the kind `Scope`s the library
+keeps below the scene root or under any other prim
+(`doc/erhe/usd_compatibility_design.md` C5, U4). Those scopes and the resource prims
+carry no `Item_flags::content`, and the node writer emits a transform-less
+prim only when it carries that flag, so they are never written as nodes: a
+resource rides its own flat glTF list (materials, images, animations, skins)
+or its `ERHE_*` asset-root table (brushes, node graphs), and where it sits
+rides `ERHE_scene` `library_folders`, whose `path` names the prim that holds
+it - a folder `Scope`, an `Xform`, the `Mesh` that binds it
+(`doc/gltf_extensions/ERHE_scene.md`). The load resolves a node path after the
+imported nodes are in the scene, so the `library_folders` operation is the
+last of an import and of an open, after the node inserts.
+
+A prim of a class that carries no transform - an `erhe::Scope`, or the
+`erhe::Typed` a USD `typeName` erhe has no class for becomes - is written as
+a glTF node with the identity transform whose `ERHE_node` extension names
+its `prim_class` (and, for a `Typed`, its `prim_type_name`); the reader
+creates that class and reads no transform for it. A node with none of a
+`mesh`, a `camera`, a light or the field is an `Xform`, the class every
+other glTF node has.
+
+Cross-references between payloads use glTF indices within the same asset
+(node index, material index, mesh index). Item flags serialize as name lists
+(see [`gltf_extensions/flags.md`](../gltf_extensions/flags.md)). Geometry-normative
+meshes carry a bit-exact geogram dump in `ERHE_geometry` on the mesh
+primitive, dual-listed with plain TRIANGLES render data so foreign viewers
+still render them (flat-shaded where no fully-present per-vertex NORMAL
+could be dual-listed; corner normals stay `ERHE_geometry`-only). A primitive
+whose source of truth is an imported triangle soup exports the soup instead
+(full vertex attributes: TEXCOORD_n, JOINTS_n / WEIGHTS_n, COLOR_n) with no
+`ERHE_geometry` - its geometry is a derived artifact, re-derived on load.
+
+## Save pipeline
+
+Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
+`src/editor/parsers/gltf.cpp`. It assembles one
+`erhe::gltf::Gltf_export_arguments` and calls `erhe::gltf::export_gltf()`:
+
+1. **Root node** - the scene's root; export walks the node tree. Nodes
+   flagged `import_root` are transparent (their children are written in
+   their place), so open/save cycles do not nest wrappers.
+2. **Physics data** - `build_physics_description()`
+   (`parsers/physics_export.cpp`, the builder the USD save uses too) converts `Node_physics` /
+   `Node_joint` attachments and the content library's physics materials,
+   collision filters and joint settings into the plain-data
+   `erhe::scene::Physics_description` carrier (`KHR_physics_rigid_bodies` +
+   `KHR_implicit_shapes`; spec support notes in
+   [`khr_physics_rigid_bodies_support.md`](../erhe/khr_physics_rigid_bodies_support.md)).
+   Compound / off-axis shapes export via synthesized child collider nodes;
+   the importer folds them back (and removes the carrier nodes when they
+   have no other content, keeping save/open/re-save node-identical).
+   A settings-less joint (free six-dof) exports as a joint description with
+   no limits / drives; reload materializes a `Physics_joint_settings` item
+   from it. World-attached joints (no connected node) are skipped with a
+   warning - the Khronos extension cannot express them.
+3. **Prefab external assets** - `collect_prefab_external_assets()`
+   (`prefabs/prefab_library.cpp`) walks the tree for `Prefab_instance`
+   attachments and maps those nodes to glTF 2.1 `externalAssets` references
+   (URIs relativized against the save directory); the instanced subtree is
+   NOT flattened into the file. See
+   [`plans/gltf_prefabs.md`](../plans/gltf_prefabs.md).
+4. **Image sources** - `make_gltf_image_source_provider()` snapshots the
+   content library's retained encoded source images (PNG/JPEG bytes kept
+   from import time) so textures re-embed byte-identical; a fallback re-reads
+   standalone source image files for textures imported before retention
+   existed. Textures with no exportable source (e.g. graph-texture bakes)
+   skip the slot - graph-baked slots are reconstructed by re-baking on load.
+5. **Animations** - `collect_gltf_export_animations()` exports every
+   animation in the content library (samplers + channels, glTF-native).
+6. **Editor state** - `add_gltf_editor_state()`
+   (`parsers/gltf_extensions_export.cpp`) appends the editor-domain
+   extension payloads and `extensionsUsed` entries:
+   - per node: `ERHE_physics` (erhe rigid-body state the Khronos extension
+     cannot express), `ERHE_layout` (Layout / Layout_item attachments),
+     node bindings for graph meshes;
+   - scene level: `ERHE_scene` - ambient light, `enable_physics`, and the
+     per-scene `Scene_settings` overrides, serialized through
+     the codegen struct (`scene/definitions/scene_settings.py`). One field
+     of it is scene content rather than a setting override:
+     `variant_selections`, which variant each variant set of the scene has
+     selected (`{prim_path, set_name, enclosing_set_name,
+     enclosing_variant_name, variant_name}` per switched set,
+     doc/erhe/usd_compatibility_design.md X4); a set without an entry keeps the
+     selection the file it came from authored. The two enclosing fields (v2
+     of the codegen struct) name the variant block a set is declared inside,
+     both empty for a set the prim declares itself - which is what a file
+     written before them holds, so it reads unchanged. They are part of the
+     name because two blocks of one set may each declare a nested set of the
+     same name; an entry naming such a set is applied after the entry naming
+     the set that carries its block, because switching the outer set applies
+     what the block it selects declares. A glTF save writes the entry
+     of the one set it carries (see "material variants" below) with an empty `prim_path`: the
+     file's set is carried by the file's own root, which is the prim the
+     reloaded scene carries it on. `KHR_materials_variants` itself has no
+     selection - the primitives' `material` is what a plain loader binds - so
+     this entry is what keeps the selection across an erhe save;
+   - material variants: `find_exported_variant_set()` +
+     `collect_gltf_material_variants()` write the scene's variant set back as
+     `KHR_materials_variants` - the asset's `variants` name list and, per
+     primitive, the material each variant binds. The primitive's own
+     `material` stays what the scene has bound, which is what a loader shows
+     while no variant is selected. A glTF asset holds ONE variant list, so
+     the set written is the one the file's own root carries: the scene's root
+     prim, or an `import_root` child of it, whose children the writer writes
+     in the root's place. Any other set is named in a warning and not
+     written;
+   - asset root: `ERHE_brushes` (brush library; brush geometry rides as
+     extra unreferenced glTF meshes), `ERHE_node_graphs` (graph texture and
+     graph mesh assets as embedded node-graph JSON, plus
+     `material_bindings` / `node_bindings`), `ERHE_collections` (item
+     tags);
+   - the **exclusion hook**: meshes and physics controlled by a
+     `Geometry_graph_mesh` attachment are excluded from plain export - they
+     are baked products, re-derived from the graph on load, and must not be
+     double-persisted. An excluded mesh is a prim, so the writer skips the
+     whole prim rather than only its glTF `mesh`; writing it as a
+     transform-only node would resurrect it beside the rebuilt one.
+   The library-domain extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
+   `ERHE_material`, `ERHE_geometry`) are written by the exporter itself in
+   `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`.
+7. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
+   `erhe::file::write_file()` writes it.
+
+Save entry points. There is ONE save shape: full editor state. Saving a
+prefab source is Save Scene on the scene opened from that source.
+
+- **File > Save Scene** (`operations_window.cpp` `Operations::save_scene`):
+  a scene opened/loaded from a glTF file (`Scene_root::get_source_path`)
+  saves back to that file without confirmation; a scene with no source file
+  writes `<scene name>.glb` under `res/editor/scenes` (created on demand),
+  with an Overwrite/Cancel modal when the file exists, and is then
+  associated with that file (further saves write back silently).
+- **MCP `save_scene`** (`mcp/mcp_server_file_io.cpp`): optional path
+  (default: same resolution as File > Save Scene); an explicit path with a
+  missing/other extension is normalized to `.glb`.
+- Both run `editor::save_scene_gltf(App_context&, ...)`: a save triggers
+  `Scene_saved_message` (Asset Browser rescan), and when the written file is
+  a loaded prefab source the prefab is reloaded so every instance in every
+  scene reflects the edit - the prefab editing round-trip is open the
+  source as a scene, edit, Save Scene.
+- **MCP `export_gltf`** exports plain interchange (same call minus
+  `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
+  for handing content to other tools, `save_scene` for full state.
+
+## Open pipeline
+
+Single load entry: the `Load_scene_file_message` handler (subscribed in the
+`Operations` constructor, `operations_window.cpp`). Every load source funnels
+through it:
+
+- File > Load Scene (`.glb`/`.gltf` file picker, defaults to
+  `res/editor/scenes`)
+- Asset Browser context menu ("Load scene" on an erhe-authored file)
+- MCP `load_scene` (queued; poll `list_scenes` to observe completion)
+- `--scene <file>` command-line option (startup, instead of the procedural
+  startup script)
+- `scene.load_scene` in `config/editor/commands.json`
+
+The handler scans the file (`editor::scan_gltf` -> `Gltf_scan_summary`,
+JSON-only, no buffer decode) and branches on
+`is_erhe_scene(extensions_used)`:
+
+- **Foreign glTF** -> `Scene_open_operation` (undoable operation: new scene
+  root + content library + browser + viewport, then a normal glTF *import*
+  with default camera/lights and an `import_root` wrapper).
+- **erhe-authored scene** -> `editor::open_scene_gltf()`
+  (`parsers/gltf.cpp`), which is NOT undoable and does not appear on the
+  operation stack:
+  1. Parse into a temporary container (`erhe::gltf::parse_gltf`), because
+     the `ERHE_scene` payload must be read before the `Scene_root` can be
+     constructed (`enable_physics` is a construction-time property).
+  2. Construct the `Scene_root` with a **fresh, empty `Content_library`** -
+     the file carries the scene's own brushes / materials / textures /
+     animations / graphs; nothing leaks in from other scenes.
+  3. Apply the rest of the `ERHE_scene` payload: ambient light and the
+     per-scene `Scene_settings` overrides (codegen deserialize).
+  4. `finalize_imported_meshes()` - build GPU vertex/index buffers
+     (skinned variant when needed), build edges for wireframe rendering
+     when the geometry arrived without them (geometry restored from
+     `ERHE_geometry` already has them, byte-exact), and register raytrace
+     primitives.
+  5. Resolve glTF 2.1 external assets: each referenced prefab is parsed
+     (once, cached by `Prefab_library`) and instantiated under its carrier
+     node.
+  6. Execute inline (built as operations, executed and dropped - same
+     ordering as the import compound): content-library attaches (textures /
+     materials / skins / animations), `import_gltf_physics()` -> `import_physics()` (Khronos
+     payload -> `Node_physics` / `Node_joint`, compound folding, carrier
+     node removal) and `import_gltf_editor_state()`
+     (`parsers/gltf_extensions_import.cpp`: flags, layouts, tags, brushes,
+     node graphs + their bindings; graph meshes re-bake).
+  7. Reparent the parsed top-level nodes directly under the new scene's
+     root - no `import_root` wrapper, no injected default camera / lights
+     (an erhe-authored scene has exactly what it was saved with).
+  8. Fill the scene's `Variant_table` from the asset's
+     `KHR_materials_variants` list (one set named `materials`, carried by
+     the scene's root prim) and apply the `ERHE_scene` selection.
+  9. Kick off `Async_raytrace_kickoff_operation` (BVH builds on worker
+     threads, synchronized via the scene's `Item_host` mutex).
+- The handler then wires UI for the returned scene root: a browser window,
+  a viewport (an existing empty viewport is repurposed when present, else a
+  new one is created), and `Scene_created_message` homes the global tools
+  (Hud / Hotbar / Headset_view) when no scene owned them yet.
+
+Legacy pre-extension files: node `extras.erhe_flags` and the material extras
+carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are still parsed
+(never written) so files exported before the `ERHE_*` extensions existed
+keep their state on import.
+
+## Parts map
+
+| Part | Location | Role |
+|---|---|---|
+| `save_scene_gltf` / `open_scene_gltf` | `src/editor/parsers/gltf.{hpp,cpp}` | scene save / open entry points |
+| `scan_gltf`, `is_erhe_scene` | `src/editor/parsers/gltf.cpp` | cheap scan; erhe-authored detection |
+| `add_gltf_editor_state` | `src/editor/parsers/gltf_extensions_export.cpp` | editor-domain `ERHE_*` payloads + exclusion hook |
+| `import_gltf_editor_state` | `src/editor/parsers/gltf_extensions_import.cpp` | editor-domain `ERHE_*` apply on open/import |
+| physics export / import | `src/editor/parsers/physics_export.cpp` / `physics_import.cpp` (`gltf_physics_import.cpp` = the glTF entry) | format-neutral physics description <-> erhe::physics |
+| `export_gltf`, `parse_gltf` + library `ERHE_*` writers/readers | `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` | core glTF I/O (fastgltf fork: physics extensions, glTF 2.1 externalAssets, generic extension passthrough) |
+| prefab externalAssets | `src/editor/prefabs/prefab_library.cpp` | collect on save, resolve + instantiate on open |
+| `Scene_settings` / `Gltf_source_reference` codegen | `src/editor/scene/definitions/*.py` | per-scene overrides payload; content-library item -> source-file back-references |
+| `Load_scene_file_message` handler | `src/editor/operations/operations_window.cpp` | single load entry, erhe-vs-foreign branch, UI wiring |
+| `Scene_open_operation` | `src/editor/operations/scene_open_operation.cpp` | undoable "open foreign glTF as new scene" |
+| MCP tools (`save_scene`, `load_scene`, `open_scene`, `export_gltf`, `import_gltf`) | `src/editor/mcp/mcp_server_file_io.cpp` | scripted access to the same paths |
+| extension specs + JSON schemas | `doc/gltf_extensions/` | wire-format reference (schemas double as test fixtures) |
+
+## What is not persisted (known limitations)
+
+- **Content-library materials referenced by no mesh are not exported**
+  (glTF materials exist only where meshes reference them). Consequently a
+  graph-texture binding on an unused material is dropped at save with a
+  warning (`"binding dropped"`). Bind materials that meshes use.
+- Textures whose source cannot be reconstructed (embedded in a source
+  .glb/.gltf imported before source retention, or graph bakes) do not embed
+  an image; graph bakes are re-derived on load, others lose the slot with a
+  warning.
+- **`Brush_placement` attachments are not persisted** (the brush *library*
+  is, via `ERHE_brushes`): a placed-brush node reloads as a plain mesh node
+  without the link back to its source brush. The legacy scene.json format
+  did not persist them either.
+- A static rigid body's mass is not persisted (KHR_physics_rigid_bodies has
+  no `motion` object for static bodies); the value is meaningless for
+  statics and is shape-derived on reload.
+- Window layout / imgui state is not part of the scene; only the global
+  editor layout is persisted, and it is not per scene.
+- Undo/redo history, selection, and other transient session state are not
+  saved.
+- **A file carries the cameras it authored plus the ones the user created.**
+  The default camera the editor injects so that a camera-less file has
+  something to render through - the foreign-glTF import's, and the one
+  `open_scene_usd` adds - is session state, flagged
+  `erhe::Item_flags::session_only`: the glTF exporter and the USD writer both
+  leave it out, and the next open of the file injects a fresh one fitted to
+  the content. A file therefore saves as the prim tree it authored; a
+  camera-less file stays camera-less and its top-level prim stays its root.
+- Corner normals of geometry-normative meshes live only in `ERHE_geometry`;
+  foreign viewers render such meshes flat-shaded.
+- **Prefab templates ignore editor-domain payloads.** Saving over a prefab
+  source writes the full editor state (the file becomes erhe-authored:
+  `ERHE_scene` in `extensionsUsed`), but instantiating it as a prefab parses
+  only the render and physics content -
+  `ERHE_*` payloads (layouts, tags, brushes, node graphs) do not transfer
+  into instances. In particular, a mesh controlled by a
+  `Geometry_graph_mesh` attachment is excluded from the save (re-derived
+  from the graph on scene load) and prefab instances do not rebuild it, so
+  graph-baked products are missing from instances of such a prefab.
+
+## USD-backed scenes
+
+glTF is the editor's own format and the one a scene saves in by default. A
+scene opened from a `.usd` / `.usda` / `.usdc` / `.usdz` file is USD-backed
+instead: `Scene_root::get_source_format()` reports `usd`, and Save Scene
+(the menu command, the Asset Browser's "Load scene", MCP `save_scene`)
+writes a `.usda` layer back through `erhe::usd` (`save_scene_usd`,
+`doc/erhe/usd.md`). A scene never converts between the two formats -
+neither direction is offered anywhere
+([`usd_compatibility_design.md`](../erhe/usd_compatibility_design.md) G3).
+
+Opening a USD file as a scene (`open_scene_usd`) builds a fresh `Scene_root`
+with its own empty content library, puts the file's top-level prims directly
+under the scene root - a USD file *is* the scene, so no `import_root`
+wrapper is added - and indexes the file's materials and the textures its
+image files decode to as the scene's own resources. A material is a prim of
+that tree and enters the scene with it, at the place the file gave it; only a
+material the file placed nowhere is attached under the `Materials` kind
+scope, and a texture always is, because a USD file names image files rather
+than texture prims. Importing the same
+file as an asset (the Asset Browser's "Import", MCP `import_usd`) keeps
+using the wrapper and the target scene's library, unchanged.
+
+A file that authors no camera is looked at through the editor's default
+camera, fitted to the content; it is session state and is not written back
+(see "What is not persisted"), so the layer saves with the top-level prims
+the file authored.
+
+What the written layer carries beyond the USD mapping
+([`usd_compatibility.md`](../erhe/usd_compatibility.md)) is the editor's scene state,
+as string entries of the root layer's `customLayerData`:
+
+| key | value |
+|---|---|
+| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd_node_graphs.md`](../erhe/usd_node_graphs.md) section 4) |
+| `erhe:version` | the writer's revision, `"1"` |
+
+An opened file that has no `erhe:scene` entry keeps the editor defaults, so a
+USD file written by any other tool opens as a scene without complaint.
+
+Wherever that block names a prim - a `graph_meshes` entry, a
+`variant_selections` entry - it carries the path `erhe::usd::plan_usd_prim_paths`
+plans for the prim, in the item-path spelling. The save plans the paths from
+the arguments it has filled, writes the block with them, and hands the same
+arguments to the write, which plans identically; a planned path is where the
+prim lands in the file, so it is the path the item has once the file is opened
+again and the entry resolves by an exact match.
+
+A prefab instance is carried as the composition arc it came from: a node with
+`Prefab_instance` attachments is written as a referencing prim with one
+`references` (or `payload`) arc per attachment, in the attachments' order, and
+the instance content below it is not written - the arcs' targets hold it. An
+arc names the target file relative to the layer being written, or no file at
+all when it targets a prim of that same layer.
+
+Every content-library kind is a prim of the layer where it sits: a style is
+a `class` prim ([`usd_compatibility_design.md`](../erhe/usd_compatibility_design.md)
+X3), a brush a `Brush` prim holding its geometry as a child `Mesh`, a node
+graph of either kind a marked `NodeGraph` prim holding one `Shader` per node
+([`usd_node_graphs.md`](../erhe/usd_node_graphs.md)), and a folder
+the `Scope` it is (E4). The physics of the scene is the `UsdPhysics` prims
+and API schemas of the mapping ([`usd_compatibility.md`](../erhe/usd_compatibility.md),
+"Physics"): a body is its prim's `PhysicsRigidBodyAPI`, a physics material,
+a collision filter and a joint-settings item are prims where they sit, a
+joint is a `PhysicsJoint` child prim of the prim it joins, and the physics
+world's gravity is a `PhysicsScene` prim, so the `erhe:scene` block carries
+only `enable_physics` of it. Textures are
+named by their source image file: a generated texture has no bytes on disk, so
+its slot is left out of the material's shading network with a warning - except
+a slot fed by a texture graph, which is written as a connection to that
+graph's `NodeGraph` prim and needs no image.
+
+## Verifying round-trips
+
+**`scripts/scene_roundtrip_verify.py`** is the standing verification
+harness (`doc/editor/gltf_scene_roundtrip.md` phase 6): against a fresh headless editor
+session it builds a scene exercising every `ERHE_*` extension (shapes,
+imported textured + skinned/animated assets, physics bodies + joint, brush
+placement, graph mesh + graph texture bindings, layouts, tags, authored
+animation keys, an external-asset prefab instance), saves it, validates
+every `ERHE_*` payload against the JSON schemas in
+`doc/gltf_extensions/schema/`, reloads it and diffs the MCP-visible state,
+round-trips `res/editor/scenes/Prefab test.glb` when present, and runs the
+optional foreign-tool checks (Khronos glTF validator via
+`--gltf-validator` / `ERHE_GLTF_VALIDATOR`; Blender headless import+render
+via `--blender` / `ERHE_BLENDER`). Exit 0 = all executed checks passed.
+
+The graph asset round-trips are additionally covered by
+`scripts/geometry_nodes_smoke_test.py` and
+`scripts/texture_graph_smoke_test.py` (each parses the saved GLB JSON chunk
+directly; run each suite in its own fresh editor session). Ad-hoc checks:
+save -> load -> compare via the in-editor MCP (`get_scene_nodes`,
+`get_scene_materials`, `get_physics_items`, `get_scene_brushes`, ...) and
+`capture_screenshot`. The design behind the format is
+`doc/editor/gltf_scene_roundtrip.md`.
+
+`scripts/scene_roundtrip_verify.py` also carries the **USD leg**
+(`usd-roundtrip`), which mirrors the glTF sections on USD content and shares
+their diff and normalization helpers and nothing else - neither format is
+converted into the other. Each `.usda` under `src/erhe/usd/test/data/` opens
+as a scene, `authored.usda` takes one MCP edit per item kind (a node name, a
+material value, a light value, a `purpose`, and the erhe-only
+`Mesh.shadow_cast`), and the scene is saved under `logs/`, closed, reloaded
+into a fresh scene and diffed: nodes, materials, lights, cameras, textures
+and the set of locally authored property names per item. The reloaded scene
+is then saved a second time and the two `.usda` files are compared line by
+line - the writer is a function of the scene, so a save of a reloaded scene
+reproduces its own input file, and any line that differs is reported as a
+failing check. `usdchecker` runs on the first saved file when it is on PATH
+or `--usdchecker` / `ERHE_USDCHECKER` names it (the `usdchecker.bat`
+wrapper of the OpenUSD binary distribution's `scripts/` folder is what to
+name on Windows), and prints SKIP otherwise;
+the whole section skips when the editor was built with
+`ERHE_USD_LIBRARY=none`.
+
+## Future work
+
+- [plans/gltf.md](../plans/gltf.md) - open items of the persistence design,
+  including the state listed under "What is not persisted".
+- [plans/gltf_prefabs.md](../plans/gltf_prefabs.md) - the remaining prefab phases.

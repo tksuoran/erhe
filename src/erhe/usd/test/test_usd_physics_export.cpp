@@ -1,4 +1,4 @@
-// The UsdPhysics write (doc/usd_compatibility.md, "Physics"): the physics of
+// The UsdPhysics write (doc/erhe/usd_compatibility.md, "Physics"): the physics of
 // a loaded file, written back and read again, is the physics it was, and the
 // second write of it is byte for byte the first.
 
@@ -563,7 +563,7 @@ TEST_F(Physics_export, the_joints_survive)
 // hangs below plus that node's transform as the joint frame, and the frame
 // node is written as the `Xform` prim it is - so the reload finds that node
 // again rather than making a second one
-// (doc/usd_compatibility.md, "Physics").
+// (doc/erhe/usd_compatibility.md, "Physics").
 TEST_F(Physics_export, the_joint_frames_survive)
 {
     const std::string first = read_file(trip->first_path);

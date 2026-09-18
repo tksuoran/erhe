@@ -14,7 +14,7 @@ children inside a volume) with the attachment's persistent Item flags
 
 A child's per-child hints (alignment, margins, grid cell and span) are
 attached properties registered by `Layout` and set on the child node
-(`doc/property_system.md` section 4.14), so they ride the child's
+(`doc/erhe/property_system.md` section 4.14), so they ride the child's
 [`ERHE_node`](ERHE_node.md) `properties` map by their qualified names
 (`Layout.align_x` .. `Layout.grid_span`); this extension carries nothing
 for them.
@@ -48,7 +48,7 @@ for them.
 - `layout.grid_track_extent_{x,y,z}`: per-track extents; empty array =
   uniform tracks.
 - `layout.properties`: the attachment's local property values by name
-  (`doc/property_system.md` D23), the layout's complete local set: the
+  (`doc/erhe/property_system.md` D23), the layout's complete local set: the
   explicit fields above are the effective values for readers without the
   property system, and a field the map does not name holds no local
   value after the load, so a value inherited from the node

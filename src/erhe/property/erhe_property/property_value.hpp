@@ -24,7 +24,7 @@ struct Enum_value
     [[nodiscard]] auto operator==(const Enum_value&) const -> bool = default;
 };
 
-// A reference to another object (doc/property_system.md D28): a strong
+// A reference to another object (doc/erhe/property_system.md D28): a strong
 // pointer, compared by identity. The library knows Dependency_object only;
 // the text form and the parse go through the object's virtuals
 // (get_reference_path / resolve_expression_object).
@@ -34,7 +34,7 @@ struct Object_reference
     [[nodiscard]] auto operator==(const Object_reference&) const -> bool = default;
 };
 
-// A path to an asset (doc/usd_compatibility_design.md M6): the USD form of a
+// A path to an asset (doc/erhe/usd_compatibility_design.md M6): the USD form of a
 // texture's `inputs:file`. Kept distinct from `string` so generic code can
 // tell a path from free text; its text form is the path verbatim.
 class Asset_path
@@ -87,7 +87,7 @@ enum class Property_type : uint8_t {
     ivec4       = 11,
     object      = 12,
 
-    // USD needs these (doc/usd_compatibility_design.md M6): `double` carries
+    // USD needs these (doc/erhe/usd_compatibility_design.md M6): `double` carries
     // USD `double` transforms and time codes, `mat4` an xformOp matrix,
     // `asset_path` an asset identifier and the array types a primvar.
     double_floating = 13,

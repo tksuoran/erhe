@@ -87,10 +87,10 @@ class Rendertarget_mesh;
 class Scene_root;
 
 // The file format a scene is bound to. It decides what Save Scene writes:
-// `gltf` writes the erhe-authored glTF of doc/scene_serialization.md, `usd`
+// `gltf` writes the erhe-authored glTF of doc/editor/scene_serialization.md, `usd`
 // writes a USDA layer through erhe::usd, and `none` is a scene that has no
 // file yet - it saves as glTF, the editor's default. A scene never converts
-// between the two formats (doc/usd_compatibility_design.md G3).
+// between the two formats (doc/erhe/usd_compatibility_design.md G3).
 enum class Scene_source_format : unsigned int {
     none = 0,
     gltf = 1,
@@ -104,7 +104,7 @@ enum class Scene_source_format : unsigned int {
 // (erhe::scene::Scene::ambient_light) and the prim itself is kept here so a
 // save spells it back as the `DomeLight` it was. The record is USD-only
 // state: an erhe-authored scene carries its ambient light in the scene block
-// and holds no dome (doc/erhe_usd.md).
+// and holds no dome (doc/erhe/usd.md).
 class Usd_dome_light_record
 {
 public:
@@ -115,7 +115,7 @@ public:
     std::string texture_file;
 };
 // The time coordinates a USD-backed scene was opened from authored
-// (doc/erhe_usd.md, "Time samples"). A time code becomes seconds by
+// (doc/erhe/usd.md, "Time samples"). A time code becomes seconds by
 // dividing by `time_codes_per_second`; the `*_authored` flags say which of
 // the three the file spelled, so a save writes back what the file had. The
 // record is USD-only state, held the way the dome lights are: an
@@ -194,11 +194,11 @@ class Scene_root
 public:
     // draw_list_dependencies: non-null and valid -> this scene root owns a
     // Draw_list_scene and its content renders through persistent draw lists
-    // (doc/draw_list_renderer.md); null -> no Draw_list_scene,
+    // (doc/erhe/draw_list_renderer.md); null -> no Draw_list_scene,
     // Forward_renderer / Shadow_renderer fallback for every pass (R1b).
     //
     // material_set_create_info: what this root's FORWARD Material_set is built
-    // from (doc/draw_list_material_set.md D3, D4). Every root has one,
+    // from (doc/erhe/draw_list_material_set.md D3, D4). Every root has one,
     // including roots with no draw list - it is the slot space the
     // Forward_renderer bucket path and the shadow bucket path resolve
     // materials through, and its object references come from this root's own
@@ -248,7 +248,7 @@ public:
 
     // Every `Typed` prim of this scene's tree that is not an `Xformable` (a
     // `Scope`, a resource prim): forwarded to the content library, which keeps
-    // the scene's resource index (doc/usd_compatibility_design.md U4).
+    // the scene's resource index (doc/erhe/usd_compatibility_design.md U4).
     void register_prim    (const std::shared_ptr<erhe::Typed>&         prim)   override;
     void unregister_prim  (const std::shared_ptr<erhe::Typed>&         prim)   override;
 
@@ -315,7 +315,7 @@ public:
     void enqueue_mesh_materials        (const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_release_mesh_materials(const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
-    // Draw lists (doc/draw_list_renderer.md). get_draw_list_scene()
+    // Draw lists (doc/erhe/draw_list_renderer.md). get_draw_list_scene()
     // is null for scene roots constructed without dependencies.
     [[nodiscard]] auto get_draw_list_scene() -> erhe::scene_renderer::Draw_list_scene*;
     // Main thread, once per frame before any rendering of this scene:
@@ -330,7 +330,7 @@ public:
     // The draw-mode attachments of this scene, which is where the proxy
     // renderer finds them: the attachment registers itself when it reaches a
     // host and leaves the list when it leaves the host, so no pass scans the
-    // tree for them (doc/usd_compatibility.md, "Draw modes").
+    // tree for them (doc/erhe/usd_compatibility.md, "Draw modes").
     void register_draw_mode  (const std::shared_ptr<Draw_mode>& draw_mode);
     void unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode);
     [[nodiscard]] auto get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&;
@@ -456,7 +456,7 @@ public:
     [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
 
     // The variant sets this scene's prims carry
-    // (doc/usd_compatibility_design.md X4), filled by the USD parser when the
+    // (doc/erhe/usd_compatibility_design.md X4), filled by the USD parser when the
     // scene is opened or an asset is imported and dying with this scene root.
     [[nodiscard]] auto get_variant_table()       -> Variant_table&;
     [[nodiscard]] auto get_variant_table() const -> const Variant_table&;
@@ -516,7 +516,7 @@ private:
     // handles them instead. See Raytrace_node_mask::skinned.
     [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
 
-    // Shape-to-meshes index (doc/usd_compatibility_design.md, "A load of a
+    // Shape-to-meshes index (doc/erhe/usd_compatibility_design.md, "A load of a
     // stage holding thousands of prims"). For every
     // Primitive a registered mesh of this scene names, the meshes that name
     // it; m_primitives_by_mesh is the reverse list that makes removal exact,

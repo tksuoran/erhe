@@ -273,7 +273,7 @@ void Texture_heap_impl::acquire_descriptor_set()
     // to an immutable descriptor snapshot.
     //
     // Set_entry::frame is stamped on every bind, not only on acquisition
-    // (doc/draw_list_material_set.md D2b), because a persistent heap
+    // (doc/erhe/draw_list_material_set.md D2b), because a persistent heap
     // keeps binding one set for as long as its contents stand - which may be
     // hundreds of frames after it was acquired. The current set is skipped
     // outright: it is the one this heap is still handing to passes, and its

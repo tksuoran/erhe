@@ -29,7 +29,7 @@
 ✓Node_physics-entry-store+material-carries-damping/wind/density{a5233529c+901dab96a,2026-09-04}
 ✓interactive-fixes{holder-type+per-type-multiselect+Mesh-owned-shadow_cast/lightmapped;900328b01..9c4ff5327}
 ✓Light-derived-rows{56615421c}+Layout{90ab4c97b}+Grid{07be30baa}+Brush_placement{65620bed4}+Rendertarget_mesh{11897628c}+Animation{526f35383}+Node_joint{c8146b473};2026-09-05;all-headless-verified
-?graph-node-parameters::future-work{doc/property_system.md-section-6;only-when-user-asks}
+?graph-node-parameters::future-work{doc/erhe/property_system.md-section-6;only-when-user-asks}
 ?user-interactive-verify{Light-flux-slider-undo;Layout/Grid/Brush_placement-holders;joint-rows}
 
 [TASK::usd-compatibility]{DONE-2026-09-06,via-doc/agent-orchestration-harness.md}
@@ -48,7 +48,7 @@
 ?user-interactive-verify{asset-browser-Import/Load-scene-on-USD;Save-Scene-on-USD-scene;Properties-purpose-row}
 
 [TASK::usd-object-model]{U1-U4,NEXT}
-✓plan-revised-2026-09-06{C5-unified-prim-tree;doc/usd_compatibility_design.md-section-3-U1..U4;section-4-order}
+✓plan-revised-2026-09-06{C5-unified-prim-tree;doc/erhe/usd_compatibility_design.md-section-3-U1..U4;section-4-order}
 ✓U1-prim-class-hierarchy{commit-1✓7986a326f:erhe::item-Typed(type_name-bridged-property;get_class_type_name-fixes-token)+Scope(root_owner_type-secondary);169-item-tests|commit-2a✓e635b27b6:Imageable/Xformable(=Node-alias,static_type_name-Xformable,bit-index-20)/Xform/Boundable/Gprim;113-creation-sites->Xform;74-fwd-decls=class-Xformable+using-Node;levels-below-Xformable-clone-via-(src,for_clone);no-icons-for-level-bits{draw_icon-draws-per-set-bit};item169/scene71/property100;viewport-pixel-identical|commit-2b✓d84968ad3:get_parent_node=walk-to-nearest-Xformable{not-cached};Typed::handle_parent_update+virtual-handle_item_host_update{host-carried-down-subtree;Xformable-overrides-for-scene-registration};Scene::update_subtree_transforms(Hierarchy&)-recurses-through-Scope;editor-lookups-walk-tree{find_prim_in_scene,find_items_by_ids,get_scene_nodes};create_node.prim_type=Xform|Scope;index_scope=49<index_typed=50{icon-picks-lowest-bit};transform_selection-refuses-Scope{generic-msg};scene75|commit-3✓b7e902fb3:import-dispatch-on-typeName{Model-prim=authored-token;shading-Scope-stays-namespace-until-U4;Typed-with-authored-xform=dropped+warn};export-typeName-per-class;Usd_data.prims+Gltf_data.prims{index-parallel};ERHE_node.prim_class/prim_type_name;usd-tests-38;roundtrip-152/164{12=save>5s-MCP-k_request_timeout;content-checks-all-pass}}
   U1-DONE-2026-09-06
   left-after-U1::collect_reference_candidates+Layout-do-not-reach-through-Scope;Create-menu-Scope-entry
@@ -105,11 +105,11 @@
 !scope::©User-2026-09-08:MaterialX=FUTURE-WORK{not-S1;findings-kept:Tydra-converts-ND_standard_surface/open_pbr→RenderMaterial::openPBRShader-which-erhe-never-reads;.mtlx-targets-need-LIGHTUSD_WITH_USDMTLX;orange_squares-fails=LightUSD-usda-parser-defect-on-attribute-colorSpace-metadata}
 ✓time-samples-2026-09-08{c1df4dee6:Xform_op::samples{file-time-codes;authored-record-writer-writes-back}+Xform_op::value=pose-at-stage-wide-eval-time{startTimeCode|earliest-sample;Tydra-given-same};one-Animation-per-file-in-content-library{TRS-stacks-only;LINEAR;seconds=timeCode/tcps-24};non-TRS-stacks-warned{BoxAnimated-orient-before-translate};layer-time-code-metas-written;usd199→209;LEFT:keyed-edit-in-erhe-changes-channels-not-samples-on-save}
 ✓doubleSided-2026-09-08{e90fc37f8:Gprim::double_sided-entry-property{inherits};is_double_sided(mesh,primitive)=material||prim{draw_list_scene+mesh_memory};Mesh::handle_gprim_render_state_changed→notify_primitives_changed;usd209→214,scene114→118;glTF-via-ERHE_node-mesh-properties;FOUND-RENDERER-BUG:grid-pass-between-opaque+translucent-fills-writes-depth,stencil-guard-not_equal-bit7-never-rejects{polygon_fill_standard-writes-no-stencil}→NO-alpha_blend/alpha_test-primitive-renders-with-grid-on;McUsd-glass+cards-correct-with-grid-off}
-✓grid-fix-2026-09-08{22e8e23c4:grid-pipeline-depth_write_enable=false{overlay-not-surface;measured-4-builds:reorder-puts-lines-over-glass,stencil-guard-IS-live-for-selection};draw_list-logger-in-logging.json;McUsd-glass+cards-render-with-grid-on;OPEN:grid-depth-disagrees-with-content{lines-cross-opaque-objects-below-horizon;doc/editor_rendering.md;needs-RenderDoc-windowed}}
+✓grid-fix-2026-09-08{22e8e23c4:grid-pipeline-depth_write_enable=false{overlay-not-surface;measured-4-builds:reorder-puts-lines-over-glass,stencil-guard-IS-live-for-selection};draw_list-logger-in-logging.json;McUsd-glass+cards-render-with-grid-on;OPEN:grid-depth-disagrees-with-content{lines-cross-opaque-objects-below-horizon;doc/editor/rendering.md;needs-RenderDoc-windowed}}
 ✓RoughnessTest-2026-09-08{b50b91033:PREMISE-WRONG:usdz-subdir-paths-already-resolved{Tydra-fs-probe-warning=noise,filtered};REAL-BUG:shared-metallic_roughness-slot-multiplied-BOTH-inputs-by-texture→Texture_channel::none=4{texture_channel_value()-in-erhe_texture.glsl/standard.frag/erhe_ray_hit.glsl→1.0};importer-names-none-for-untextured-partner;writer-skips;highlight-gap=framing;usd214→216;validation-run-clean{warnings-only}}
   S1-ROUND-2-DONE-2026-09-08{13-code-commits;usd-tests-173→216;survey-doc=subset-merges,full-run-NOT-re-run-this-session}
 !scope::©User-2026-09-08:FUTURE-WORK{not-S1}=16-bit-PNG+CMYK-JPEG-decode{wuffs-decode-failure-undiagnosed;.hdr-via-stb_image-in-cpm-cache}+load-perf{collect_meshes_sharing_primitives-O(N)-scan-per-commit→O(N^2);hover-linear-trace-while-TLAS-cannot-settle;finalize_imported_meshes-serial-BVH-on-tick-thread;rebuild_all-churn}+grid-depth-disagreement{lines-cross-opaque-objects}+animation-edit-write-back{keyed-edit-changes-channels-not-samples}
-✓stopped-2026-09-08{plan-S1-empty+section-6-future-work;queue-rewritten};NEXT-SESSION:full-survey-run-ONCE→E4c{doc/usd_node_graphs.md}→E4b→E4d→E2
+✓stopped-2026-09-08{plan-S1-empty+section-6-future-work;queue-rewritten};NEXT-SESSION:full-survey-run-ONCE→E4c{doc/erhe/usd_node_graphs.md}→E4b→E4d→E2
 ?S1-remaining{doubleSided→Gprim-property{brief-drafted;McUsd-cards};usdz-subdir-texture-paths{RoughnessTest:0/roughness.png-unresolved};image-formats{16-bit/CMYK-blank=undiagnosed-decode-failure;.hdr-via-stb_image-in-cpm-cache};animation-time-sample;16/32-bit+CMYK+.hdr-images;McUsd-alpha+cards;RoughnessTest-specular;load-perf-4000-prims;MaterialX;null-material-fallback}→E4c
   traps::save_usda-writes-/Materials-from-index{would-duplicate-kind-scope};Xformable::node_sanity_check-static_casts-Item_host->Scene_host{palette-prims-must-not-reach};kind-scopes+resource-prims-carry-no-content-flag{glTF-node-export-skips}
 
@@ -172,7 +172,7 @@
 
 
 [TASK::metal-headless]{DONE-2026-09-12;870efa949;via-harness;1-coder}
-✓emulated-ring-in-Swapchain_impl+SDL-guarded-surface+synchronous-headless-readback+configure_xcode_metal_headless.sh+doc/metal_headless.md
+✓emulated-ring-in-Swapchain_impl+SDL-guarded-surface+synchronous-headless-readback+configure_xcode_metal_headless.sh+doc/erhe/metal_headless.md
 ?user-interactive{windowed-Metal-regression:present+armed-capture}
 
 [TASK::usd-physics-P1]{DONE-2026-09-12;via-harness;4-coders-3-agents}
@@ -262,7 +262,7 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-3{721be3dca:deferred-finalize-commit-collects-sharers-only-on-swap{quadratic-refresh-was-the-cost};USD-phase-breadcrumbs;simpleAssetScene-340->203s,stalls-BVH-commit-39->0}
 ?left::synchronous-load-on-tick-thread{plan-section-3-item-1-Asynchronous-load;simpleAssetScene-203s='usd: attach to scene'}
 
-[TASK::active-item]{doc/active_item.md;via-harness;started-2026-09-15}
+[TASK::active-item]{doc/editor/active_item.md;via-harness;started-2026-09-15}
 ✓plan{7f0409f36}+phase-1{41c535c30:state+rules+message+undo-snapshot+MCP+Mcp_test;item-tests-188;Mcp_-52/53(first-case-flake-pre-existing);smoke-55/55;scene-close-clean}
 ✓phase-2{outline-3rd-color-via-Primitive_interface_settings::constant_color_active+get_selected_color;TRAP:selection-outline-is-drawn-by-Content_wide_line_renderer-fed-in-viewport_scene_view/headset_view-not-primitive_buffer;hierarchy-accent+Properties-order;headless-pixel-verified}|?user-interactive{accent-tint,Settings-fields}
 ✓3a{05646d4e7:get_active_item_as<T>+is_command_reference_host;Tool::get_node/Brush_tool-Parent-to-Active/flip_joint/create_brush/rigid_body/joint/paste/Create::find_parent;D7-map=Material+Brush-only;MCP-cannot-reach-5-of-7-rows-bare->user-interactive}

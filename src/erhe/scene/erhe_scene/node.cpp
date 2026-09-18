@@ -261,7 +261,7 @@ auto Xformable::get_parent_node() const -> std::shared_ptr<Xformable>
     // The nearest Xformable ancestor, not simply the parent: a prim outside
     // Xformable - a Scope - has no transform, so a transform composes with the
     // first Xformable above it and passes through the prims that have none
-    // (doc/usd_compatibility_design.md C5). The walk steps only over those
+    // (doc/erhe/usd_compatibility_design.md C5). The walk steps only over those
     // transformless prims, so on a tree of nodes it is the single hop the cast
     // was; it is a walk rather than a cached pointer because a cached nearest
     // ancestor would have to be invalidated through the whole subtree on every
@@ -630,7 +630,7 @@ void Xformable::node_sanity_check(bool destruction_in_progress) const
         // A host is not necessarily a Scene_host: the editor's content library
         // hosts the prims of a library that has no scene (the template
         // palette), so the cast is checked and a non-scene host simply reports
-        // no scene (doc/usd_compatibility_design.md U4).
+        // no scene (doc/erhe/usd_compatibility_design.md U4).
         auto*            child_scene_host = dynamic_cast<Scene_host*>(child_host);
         auto*            self_scene_host  = dynamic_cast<Scene_host*>(self_host);
         Scene*           child_scene      = (child_scene_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;

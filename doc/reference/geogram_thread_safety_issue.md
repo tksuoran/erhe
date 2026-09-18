@@ -5,7 +5,7 @@ Draft, not yet filed. Prepared from a live hang observed in the erhe editor
 Sibling context: https://github.com/BrunoLevy/geogram/issues/367 (same
 application, different defect). Everything below the marker is the proposed
 issue body. The erhe-side contract that stands in for the requested fix is
-`doc/geogram.md`.
+`doc/erhe/geogram.md`.
 
 ---
 

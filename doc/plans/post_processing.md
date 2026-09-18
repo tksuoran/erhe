@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends [../post_processing.md](../post_processing.md), which describes the
+Extends [../post_processing.md](../editor/post_processing.md), which describes the
 bloom mip chain and the render-pass synchronization the passes rely on.
 
 ## Debug per-mip barrier tracker

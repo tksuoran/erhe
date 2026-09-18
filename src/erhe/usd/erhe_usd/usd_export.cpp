@@ -76,17 +76,17 @@ namespace {
 
 // The name of the wrapper prim created when the scene has more than one
 // top-level prim: a stage names one `defaultPrim` and an erhe scene has one
-// root (doc/usd_compatibility.md, stage-level constants).
+// root (doc/erhe/usd_compatibility.md, stage-level constants).
 constexpr const char* c_world_prim_name = "World";
 
 // The class token erhe::Typed fixes for an editor style item
-// (doc/style_library.md D2). erhe::usd depends on no editor type, so a style
+// (doc/editor/style_library.md D2). erhe::usd depends on no editor type, so a style
 // is recognized by its token; a style prim is written as a USD `class` prim
-// (doc/usd_compatibility_design.md X3).
+// (doc/erhe/usd_compatibility_design.md X3).
 constexpr std::string_view c_style_class_type_name{"Style"};
 
 // The `SkelAnimation` prim name a skeleton's joint channels are written
-// under (doc/usd_compatibility_design.md K1). USD carries no name of its own
+// under (doc/erhe/usd_compatibility_design.md K1). USD carries no name of its own
 // for it - Tydra hands the importer the channels, not the prim - so the
 // writer fixes one, which is what keeps a second save byte-identical.
 constexpr std::string_view c_skel_animation_prim_name{"anim"};
@@ -112,7 +112,7 @@ enum class Skin_influences {
 // physical-camera-first and erhe stores the two field-of-view angles, so one
 // of the three is free; fixing the focal length puts the angles in the
 // apertures, which `2 * atan(0.5 * aperture / focalLength)` reads back
-// exactly (doc/usd_compatibility.md, cameras).
+// exactly (doc/erhe/usd_compatibility.md, cameras).
 constexpr float c_export_focal_length = 50.0f;
 
 // The USD `purpose` vocabulary, which erhe's Purpose enumeration mirrors
@@ -285,7 +285,7 @@ void visit_xform_op_value(const erhe::scene::Xform_op& op, const erhe::scene::Xf
 // `float3` op. erhe keeps every value in double precision, so a `half` op
 // round-trips through the nearest half - the same value it was read from.
 // The op's value and, when it carries any, its time samples
-// (doc/erhe_usd.md, "Time samples"). A sampled op is written with both:
+// (doc/erhe/usd.md, "Time samples"). A sampled op is written with both:
 // the samples are what a viewer plays, and the value is the pose at the
 // stage's start time, which is what a reader that evaluates nothing sees.
 void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& op)
@@ -392,9 +392,9 @@ private:
 // is, the transform that reached it, its sanitized sibling-unique name and
 // the stage path that name gives it. The writer needs the paths before it
 // writes anything, because a mesh binds a material by the path the material
-// prim ends up at (doc/usd_compatibility_design.md U4).
+// prim ends up at (doc/erhe/usd_compatibility_design.md U4).
 // What the clone of an arc's target contributes to the carrier prim it is
-// written as (doc/usd_compatibility_design.md X2): the item whose local values
+// written as (doc/erhe/usd_compatibility_design.md X2): the item whose local values
 // are authored on the carrier - the clone and the carrier are one prim in USD
 // - and the material its mesh binds when the mesh is one group of facets,
 // which the carrier binds as its own.
@@ -417,7 +417,7 @@ public:
 };
 
 // One prim of the tree that belongs to one variant of one of its parent's
-// variant sets (doc/usd_compatibility_design.md X4). It is planned like every
+// variant sets (doc/erhe/usd_compatibility_design.md X4). It is planned like every
 // other prim, and written
 // inside its variant block under the name the file authored rather than among
 // the plain children of the prim carrying the set.
@@ -470,10 +470,10 @@ public:
     // The composition arcs this prim carries, null when it carries none. A
     // prim that carries arcs is written as the referencing prim it is and
     // `children` stays empty: the arcs' targets supply the prims below it
-    // (doc/usd_compatibility_design.md X1).
+    // (doc/erhe/usd_compatibility_design.md X1).
     const std::vector<Usd_save_reference>* references{nullptr};
     // The overrides the instances below a carrier hold
-    // (doc/usd_compatibility_design.md X2). `override_root` is the item at the
+    // (doc/erhe/usd_compatibility_design.md X2). `override_root` is the item at the
     // relative path of the arc's target clone, whose values are authored on
     // the carrier prim itself - the clone and the carrier are one prim in USD
     // - and `overrides` holds every deeper item, each an `over` prim below
@@ -485,7 +485,7 @@ public:
     // GeomSubset prim the group is written as.
     std::vector<std::pair<std::string, const erhe::primitive::Material*>> root_subset_bindings;
     // The variant sets the caller named for this prim
-    // (doc/usd_compatibility_design.md X4). A set adds variant blocks to the
+    // (doc/erhe/usd_compatibility_design.md X4). A set adds variant blocks to the
     // prim and changes nothing else about it, so a prim carrying one is
     // written and walked the way it otherwise would be.
     std::vector<const Usd_save_variant_set*> variant_sets;
@@ -493,7 +493,7 @@ public:
     // `children`: each is written inside its own variant block.
     std::vector<Plan_variant_prim>   variant_prims;
     std::vector<Plan_prim>           children;
-    // The physics this prim carries (doc/usd_compatibility.md, "Physics"):
+    // The physics this prim carries (doc/erhe/usd_compatibility.md, "Physics"):
     // the body description it is the prim of, and the names the plan gave the
     // prims that body adds below it.
     std::size_t                      physics_body{c_no_physics_index};
@@ -519,13 +519,13 @@ public:
     bool                   planned{false};
 };
 
-// One skeleton the writer authors (doc/usd_compatibility_design.md K1): the
+// One skeleton the writer authors (doc/erhe/usd_compatibility_design.md K1): the
 // prim that is the pivot of at least one skin, that skin's joints in
 // `joints` order, and the bind transform each joint is written with. The
 // first skin registered for a skeleton is the one the bind pose comes from.
 // The three transform channels of `Usd_save_arguments::animations` that drive
 // one node: what the writer reconciles a sampled `xformOp` stack with
-// (doc/erhe_usd.md, "Time samples").
+// (doc/erhe/usd.md, "Time samples").
 class Node_transform_channels final
 {
 public:
@@ -536,7 +536,7 @@ public:
 
 // The channels of `Usd_save_arguments::animations` that drive one item's
 // non-xformOp attributes: the closed list of attributes a save carries
-// beyond the transform (doc/erhe_usd.md, "Time samples").
+// beyond the transform (doc/erhe/usd.md, "Time samples").
 class Item_attribute_channels final
 {
 public:
@@ -582,8 +582,8 @@ public:
 
 // The erhe properties this writer carries in a USD attribute of the schema -
 // the exact inverse of what the importer reads back
-// (doc/usd_compatibility_design.md I2, and the per-domain tables of
-// doc/usd_compatibility.md), and the USD spelling each of them gets. Every
+// (doc/erhe/usd_compatibility_design.md I2, and the per-domain tables of
+// doc/erhe/usd_compatibility.md), and the USD spelling each of them gets. Every
 // other local value travels as an `erhe:` custom attribute, so a property is
 // listed here exactly once: writing both forms would author one value twice.
 // `Native_property_form` (usd.hpp) says which of the two a prim offers;
@@ -662,7 +662,7 @@ public:
     }
     if (owner == "Brush") {
         // The material a placed instance gets is the brush prim's own
-        // material binding (doc/usd_compatibility_design.md E4a).
+        // material binding (doc/erhe/usd_compatibility_design.md E4a).
         if (name == "material") { return "material:binding"; }
         return {};
     }
@@ -904,13 +904,13 @@ public:
         // The skeletons the tree's skinned meshes name, before anything is
         // planned: a joint is an entry of its skeleton's `joints` rather than
         // a prim, so the plan has to know which prims are joints
-        // (doc/usd_compatibility_design.md K1).
+        // (doc/erhe/usd_compatibility_design.md K1).
         collect_skeletons(*m_arguments.root_node.get());
         collect_skeleton_tokens(*m_arguments.root_node.get());
 
         // The transform channels an edited clip holds, before any prim is
         // written: a sampled stack is reconciled with them
-        // (doc/erhe_usd.md, "Time samples").
+        // (doc/erhe/usd.md, "Time samples").
         collect_transform_channels();
         collect_attribute_channels();
 
@@ -926,7 +926,7 @@ public:
         // Several top-level prims are gathered under one Xform that plays the
         // erhe root's part, so the stage still names one defaultPrim. A
         // top-level `Scope` - a content-library kind scope or folder, which
-        // sits beside the scene's own prims (doc/usd_compatibility_design.md
+        // sits beside the scene's own prims (doc/erhe/usd_compatibility_design.md
         // E4d) - is a namespace a reference has no use for and does not force
         // the wrapper: a scene with one prim of its own beside such scopes
         // names that prim as the defaultPrim and writes the scopes beside it,
@@ -1111,7 +1111,7 @@ private:
     std::map<const erhe::scene::Node*, Node_transform_channels> m_transform_channels;
 
     // The channels driving a non-xformOp attribute, by the item each drives
-    // (doc/erhe_usd.md, "Time samples").
+    // (doc/erhe/usd.md, "Time samples").
     std::map<const erhe::Item_base*, Item_attribute_channels>    m_attribute_channels;
     std::set<const erhe::scene::Node*>                          m_write_back_refusals;
     bool                                                        m_warned_interpolation{false};
@@ -1173,7 +1173,7 @@ private:
 
     // Every local value of `object` that no schema attribute of the prim
     // already carries, as an `erhe:Owner:name` custom attribute
-    // (doc/usd_compatibility.md, property system). A bridged property is the
+    // (doc/erhe/usd_compatibility.md, property system). A bridged property is the
     // object's own engineered representation - the node transform, the item
     // name and tags - and travels in the USD form that owns it; a property
     // without the serialize flag is session state, and so is an expression
@@ -1234,7 +1234,7 @@ private:
             typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
         }
         // A clip driving `visible` writes the token samples beside that
-        // value (doc/erhe_usd.md, "Time samples").
+        // value (doc/erhe/usd.md, "Time samples").
         write_sampled_attribute<lightusd::Visibility>(
             typed_prim.visibility, get_attribute_channels(item).visible, 1,
             [](const glm::vec4& value) -> lightusd::Visibility {
@@ -1244,7 +1244,7 @@ private:
         write_active(item, typed_prim);
     }
 
-    // `doubleSided` of a geometry prim (doc/usd_compatibility.md, geometry
+    // `doubleSided` of a geometry prim (doc/erhe/usd_compatibility.md, geometry
     // attributes). Written when the value is local, the authored-only rule
     // every native attribute follows (M4).
     template <typename T>
@@ -1255,7 +1255,7 @@ private:
         }
     }
 
-    // The `active` prim metadatum (doc/usd_compatibility_design.md X2): an
+    // The `active` prim metadatum (doc/erhe/usd_compatibility_design.md X2): an
     // authored value only, so a prim of a scene erhe never deactivated
     // carries no `active` line. USD prunes the whole subtree of an inactive
     // prim, which is what the derived Item_flags::active bit does in erhe;
@@ -1269,7 +1269,7 @@ private:
     }
 
     // The prim's specifier from the item's `defined` value
-    // (doc/usd_compatibility_design.md X2): an undefined prim - one the stage
+    // (doc/erhe/usd_compatibility_design.md X2): an undefined prim - one the stage
     // it was read from composed as `over` - is spelled `over` again, which is
     // what makes the round trip a fixed point and keeps it and its subtree
     // out of USD's default traversal. The specifier is the carrier, so no
@@ -1517,7 +1517,7 @@ private:
         // The slot's UV transform, back in USD's `st` space. An erhe
         // identity maps onto the USD identity, so a slot at its defaults
         // reads the primvar reader directly and no UsdTransform2d prim is
-        // written (doc/erhe_usd.md, "Texture coordinates").
+        // written (doc/erhe/usd.md, "Texture coordinates").
         const Erhe_uv_transform erhe_transform{
             .rotation = slot_state.rotation,
             .scale    = slot_state.scale,
@@ -1643,7 +1643,7 @@ private:
     // A texture slot with a local value whose image the caller could not
     // resolve to a file: a generated texture has no bytes on disk, so the
     // slot stays out of the shading network (commit 1, see
-    // doc/erhe_usd.md).
+    // doc/erhe/usd.md).
     void warn_about_unresolved_textures(const erhe::primitive::Material& material)
     {
         using Slot_property = erhe::property::Property<erhe::property::Object_reference>;
@@ -1705,7 +1705,7 @@ private:
     // pair only OpenPBR carries) or a transmission. Such a material is written
     // with an OpenPBR network beside its preview surface; every other material
     // writes none, so a file of ordinary materials is the file it was
-    // (doc/usd_compatibility_design.md E2).
+    // (doc/erhe/usd_compatibility_design.md E2).
     [[nodiscard]] static auto needs_open_pbr_network(const erhe::primitive::Material& material) -> bool
     {
         using erhe::primitive::Material;
@@ -1764,7 +1764,7 @@ private:
     // authored where it differs from its OpenPBR fallback - except
     // `base_color` and `specular_roughness`, whose fallbacks are not erhe
     // defaults, so they are authored whatever the value is (the mirror of the
-    // import rule, `doc/erhe_usd.md`, "OpenPBR networks").
+    // import rule, `doc/erhe/usd.md`, "OpenPBR networks").
     void write_open_pbr_shader(
         lightusd::Prim&                  material_prim,
         const std::string&               material_path,
@@ -1896,7 +1896,7 @@ private:
     }
 
     // One `Material` prim where the material sits in the scene tree
-    // (doc/usd_compatibility_design.md U4): the material's own name and place,
+    // (doc/erhe/usd_compatibility_design.md U4): the material's own name and place,
     // its `UsdPreviewSurface` shader and the texture shaders that feed it.
     // The shader prims occupy the material prim's namespace, so a prim the
     // user parented to a material is not written.
@@ -1909,7 +1909,7 @@ private:
         usd_material.surface.set(lightusd::Path{plan_prim.path + "/surface", "outputs:surface"});
         // A material the preview surface cannot carry offers a second
         // terminal: the OpenPBR network, through the output the importer
-        // prefers (doc/usd_compatibility_design.md E2).
+        // prefers (doc/erhe/usd_compatibility_design.md E2).
         const bool open_pbr = needs_open_pbr_network(material);
         if (open_pbr) {
             usd_material.mtlxSurface.set(
@@ -1982,7 +1982,7 @@ private:
             surface.occlusion.set_value(material.get_value(Material::occlusion_texture_strength_property));
         }
         // The keys of a clip driving the material, beside those values
-        // (doc/erhe_usd.md, "Time samples"). erhe's roughness is
+        // (doc/erhe/usd.md, "Time samples"). erhe's roughness is
         // anisotropic and UsdPreviewSurface has one, so a keyed roughness
         // writes the x component of each key, the way the plain value does.
         // A cubic clip writes a `Ts` spline as a property of the shader node
@@ -2101,7 +2101,7 @@ private:
     }
 
     // The path of the graph interface output one slot reads, empty when the
-    // slot reads no graph (doc/usd_node_graphs.md R2). The pin is the
+    // slot reads no graph (doc/erhe/usd_node_graphs.md R2). The pin is the
     // graph's first interface output: that is the value the graph has, and a
     // graph without one is one warning and no connection.
     [[nodiscard]] auto find_graph_output(
@@ -2203,11 +2203,11 @@ private:
 
     // Where the children being planned sit: below an ordinary prim of the
     // tree, or below a `class` prim, whose children are the prototypes it
-    // holds abstract (doc/usd_compatibility_design.md X3). A prototype carries
+    // holds abstract (doc/erhe/usd_compatibility_design.md X3). A prototype carries
     // no `content` - that is what keeps it out of the render - and is written
     // back as the ordinary `def` prim it is.
     // A point instancer's prototypes are held abstract the same way
-    // (doc/usd_compatibility_design.md S1), so the whole subtree below an
+    // (doc/erhe/usd_compatibility_design.md S1), so the whole subtree below an
     // instancer is planned whatever the content flag says.
     enum class Prim_holder : unsigned int {
         tree            = 0,
@@ -2219,7 +2219,7 @@ private:
     // variant block of that prim authored. A carrier's other children are the
     // instance content its arcs supply, which is not written, while a prim one
     // of its variant blocks authored is the variant's own content
-    // (doc/usd_compatibility_design.md C6).
+    // (doc/erhe/usd_compatibility_design.md C6).
     enum class Child_selection : unsigned int {
         all_children       = 0,
         variant_prims_only = 1
@@ -2239,7 +2239,7 @@ private:
     // a folder scope and a resource prim carry show_in_ui rather than
     // content, so every `Scope`, every material and every prim on the way
     // down to one are planned as well
-    // (doc/usd_compatibility_design.md U4, E4d).
+    // (doc/erhe/usd_compatibility_design.md U4, E4d).
     void plan_children(
         const erhe::Hierarchy&          parent,
         const glm::mat4&                pre_transform,
@@ -2289,7 +2289,7 @@ private:
             if ((child_node != nullptr) && (m_joint_items.count(child_prim) != 0)) {
                 // A joint is an entry of its skeleton's `joints` and
                 // `restTransforms`, not a prim: the Skeleton prim writes it
-                // (doc/usd_compatibility_design.md K1). A prim parented under a
+                // (doc/erhe/usd_compatibility_design.md K1). A prim parented under a
                 // joint is written where the joint sits, with the joint's own
                 // local transform composed into it, the way an import_root
                 // container's children are.
@@ -2307,7 +2307,7 @@ private:
             // An instance of a point instancer is the instancer's expansion,
             // not a prim of its own: the instancer writes it as one entry of
             // `positions` / `orientations` / `scales`
-            // (doc/usd_compatibility_design.md S1).
+            // (doc/erhe/usd_compatibility_design.md S1).
             if (m_point_instancer_instances.count(child_prim) != 0) {
                 continue;
             }
@@ -2438,7 +2438,7 @@ private:
     }
 
     // The variant sets the caller named for this prim, empty when it named
-    // none (doc/usd_compatibility_design.md X4).
+    // none (doc/erhe/usd_compatibility_design.md X4).
     [[nodiscard]] auto find_prim_variant_sets(const erhe::Typed& prim) const -> std::vector<const Usd_save_variant_set*>
     {
         const std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>>::const_iterator i =
@@ -2448,7 +2448,7 @@ private:
 
     // A carrier's children are the instance content the arcs' targets supply,
     // so none of them is written as a prim of its own: what a carrier writes
-    // of them is the overrides they hold (doc/usd_compatibility_design.md X2).
+    // of them is the overrides they hold (doc/erhe/usd_compatibility_design.md X2).
     // The clone of an arc's target prim is the carrier prim itself - X1's one
     // extra level - so its overrides are authored on the carrier, and every
     // deeper item becomes an `over` prim at the path it has below the
@@ -2550,7 +2550,7 @@ private:
         }
     }
 
-    // A style item (doc/style_library.md D2), which is a `class` prim on the
+    // A style item (doc/editor/style_library.md D2), which is a `class` prim on the
     // stage. erhe::usd depends on no editor type, so the class is recognized
     // by the token erhe::Typed fixes for it - the same token the importer
     // writes as the prim's typeName for every other class.
@@ -2559,7 +2559,7 @@ private:
         return prim.get_class_type_name() == c_style_class_type_name;
     }
 
-    // A brush item (doc/usd_compatibility_design.md E4a), which is a
+    // A brush item (doc/erhe/usd_compatibility_design.md E4a), which is a
     // `Brush`-typed prim on the stage. As with a style, erhe::usd depends on
     // no editor type, so the kind is recognized by the token erhe::Typed
     // fixes for it; what the brush holds comes from Usd_save_arguments.
@@ -2568,7 +2568,7 @@ private:
         return prim.get_class_type_name() == c_brush_prim_type_name;
     }
 
-    // A node graph item (doc/usd_node_graphs.md), which is a
+    // A node graph item (doc/erhe/usd_node_graphs.md), which is a
     // marked `NodeGraph` prim on the stage. erhe::usd names no editor type
     // (R6) and a graph carries no class token of its own the way a brush
     // does, so what makes an item a graph prim is being named in
@@ -2583,7 +2583,7 @@ private:
     // which is what widens the content filter. Three kinds answer true: every
     // `Scope` - a content-library folder, a kind scope, an authored USD
     // `Scope` - which is written where it sits whatever it holds, so a folder
-    // tree survives a save (doc/usd_compatibility_design.md E4d); a resource
+    // tree survives a save (doc/erhe/usd_compatibility_design.md E4d); a resource
     // prim the file carries, which today is a material, a style, a brush or a
     // node graph; and a prim on the way down to one of those.
     // A physics material, a collision filter and a joint-settings item are
@@ -2768,7 +2768,7 @@ private:
         return prim;
     }
 
-    // The `over` prims of one carrier (doc/usd_compatibility_design.md X2). One
+    // The `over` prims of one carrier (doc/erhe/usd_compatibility_design.md X2). One
     // entry per item that holds overrides, at the path it has below the
     // carrier; an item on the way down to one that holds none is still an
     // `over`, with no attributes, so the path exists.
@@ -2779,7 +2779,7 @@ private:
         const erhe::Item_base*           item                {nullptr};
         bool                             transform_overridden{false};
         // The `variants` selection an arc of the carrier carries for this path
-        // (doc/usd_compatibility_design.md C7): an `over` prim is what carries
+        // (doc/erhe/usd_compatibility_design.md C7): an `over` prim is what carries
         // a selection made for a prim below the target.
         lightusd::VariantSelectionMap    variants;
         // The material the `over` binds, null when it binds none. A binding
@@ -3037,7 +3037,7 @@ private:
 
     // The xformOps of an `over`, as the `xformOp:*` attributes and the
     // `xformOpOrder` a typed prim's writer emits from its `xformOps` member
-    // (doc/usd_compatibility_design.md M8).
+    // (doc/erhe/usd_compatibility_design.md M8).
     void write_override_xform_ops(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
     {
         const erhe::scene::Node* node = dynamic_cast<const erhe::scene::Node*>(&item);
@@ -3105,7 +3105,7 @@ private:
     }
 
     // The style of a prim as the `inherits` arc it is
-    // (doc/usd_compatibility_design.md X3): one explicit list op naming the
+    // (doc/erhe/usd_compatibility_design.md X3): one explicit list op naming the
     // class prim's path, the way a material binding names a material prim's
     // path. A style whose class prim is not in the written tree - a style of
     // another scene - is one warning and no arc.
@@ -3133,7 +3133,7 @@ private:
     }
 
     // ---------------------------------------------------------------------
-    // Variant sets (doc/usd_compatibility_design.md X4)
+    // Variant sets (doc/erhe/usd_compatibility_design.md X4)
     // ---------------------------------------------------------------------
 
     // One prim of a variant block: an `over` at its path below the prim
@@ -3291,7 +3291,7 @@ private:
         }
         // The composition arcs the variant block authors, back inside the block
         // they came from rather than on the prim carrying the set
-        // (doc/usd_compatibility_design.md C6).
+        // (doc/erhe/usd_compatibility_design.md C6).
         if (!variant.references.empty()) {
             write_references(usd_variant.metas(), variant.references);
         }
@@ -3299,7 +3299,7 @@ private:
             usd_variant.primChildren().push_back(write_variant_prim(variant_prim));
         }
         // The prims this variant adds, each the `def` it is, with its whole
-        // subtree (doc/usd_compatibility_design.md X4).
+        // subtree (doc/erhe/usd_compatibility_design.md X4).
         for (const Plan_variant_prim& added : plan_prim.variant_prims) {
             if ((added.set != &set) || (added.variant_name != variant.name)) {
                 continue;
@@ -3482,7 +3482,7 @@ private:
     // `payload` list ops USD reads them back from: one unqualified (explicit)
     // op per arc kind, holding the arcs in the order the caller named them,
     // which is the order USD composes them in
-    // (doc/usd_compatibility_design.md X1).
+    // (doc/erhe/usd_compatibility_design.md X1).
     void write_references(lightusd::PrimMetas& metas, const std::vector<Usd_save_reference>& references)
     {
         std::vector<lightusd::Reference> usd_references;
@@ -3522,7 +3522,7 @@ private:
     }
 
     // The `variants` selection the carrier authors for what its arcs bring in
-    // (doc/usd_compatibility_design.md C7): the entries of the empty path,
+    // (doc/erhe/usd_compatibility_design.md C7): the entries of the empty path,
     // which is the carrier itself. Every arc of one carrier holds the same
     // entries, so the first arc that names a set is what it is written from.
     // The selection is merged into whatever the prim's metadata already holds
@@ -3548,7 +3548,7 @@ private:
     }
 
     // One prim of a class that carries no transform as one prim of the
-    // stage: the `typeName` is the class's (doc/usd_compatibility_design.md
+    // stage: the `typeName` is the class's (doc/erhe/usd_compatibility_design.md
     // C5). The transform that reached it composes with its children, which
     // is what the importer inverts.
     [[nodiscard]] auto write_prim(const Plan_prim& plan_prim) -> lightusd::Prim
@@ -3576,7 +3576,7 @@ private:
             : write_typed_prim(*plan_prim.item, plan_prim.name);
     }
 
-    // A style item as the `class` prim it is (doc/usd_compatibility_design.md
+    // A style item as the `class` prim it is (doc/erhe/usd_compatibility_design.md
     // X3): a typeless prim that defines nothing and holds the opinions its
     // `inherits` arcs hand on. It carries no schema, so every value of it -
     // `Material.roughness`, `Mesh.shadow_cast` - travels as an
@@ -3615,7 +3615,7 @@ private:
     }
 
     // A brush item as the `Brush`-typed prim it is
-    // (doc/usd_compatibility_design.md E4a): a prim of erhe's own type name
+    // (doc/erhe/usd_compatibility_design.md E4a): a prim of erhe's own type name
     // holding the brush's geometry as a child `Mesh`, the density and the
     // normal style as `erhe:Brush:` custom attributes, and the material a
     // placed instance gets as the prim's own `material:binding`. USD has no
@@ -3665,7 +3665,7 @@ private:
     }
 
     // One node parameter as the attribute its recorded USD type names
-    // (doc/usd_node_graphs.md 2.2). A type the writer has no USD form
+    // (doc/erhe/usd_node_graphs.md 2.2). A type the writer has no USD form
     // for is one warning and a `string` carrying the text as it stands, which
     // is the same rule a gradient or a curve travels by. A `string` and a
     // `token` carry their own text, so the value reaches the file exactly as
@@ -3698,7 +3698,7 @@ private:
             // A geometry graph's vector parameters - a translation, a scale, a
             // centre - are quantities, not colors, so the caller names them
             // `float3` / `float4` where a texture graph names a color
-            // (doc/usd_compatibility.md, "Geometry node graphs").
+            // (doc/erhe/usd_compatibility.md, "Geometry node graphs").
             const std::vector<float> v = parse_usd_float_tuple(text, 3);
             attribute.set_value(lightusd::value::float3{v[0], v[1], v[2]});
         } else if (usd_type == "float4") {
@@ -3718,7 +3718,7 @@ private:
     // One pin as the `inputs:` / `outputs:` attribute it is: the pin's value
     // type, and a `.connect` to the source node's output when the pin carries
     // a link. An unlinked pin is the typed attribute alone, so the pin exists
-    // in the file (doc/usd_node_graphs.md 2.1).
+    // in the file (doc/erhe/usd_node_graphs.md 2.1).
     [[nodiscard]] static auto make_node_graph_pin_attribute(
         const Usd_node_graph_pin&                   pin,
         const std::string&                          graph_path,
@@ -3794,7 +3794,7 @@ private:
     }
 
     // A graph asset as the marked `NodeGraph` prim it is
-    // (doc/usd_node_graphs.md 2.4, section 4): the marker attribute,
+    // (doc/erhe/usd_node_graphs.md 2.4, section 4): the marker attribute,
     // the interface outputs as connections into the nodes, one generic
     // `Shader` child per node, in the record's order so a second save spells
     // the same file (R4), and - for a geometry graph that has evaluated
@@ -3870,7 +3870,7 @@ private:
 
     // One erhe node as one prim: a `Mesh`, `Camera` or UsdLux prim for a prim
     // of that class and an `Xform` for a plain one, each with its own xformOp
-    // (doc/usd_compatibility.md, object model). The importer inverts it.
+    // (doc/erhe/usd_compatibility.md, object model). The importer inverts it.
     [[nodiscard]] auto write_node(const Plan_prim& plan_prim) -> lightusd::Prim
     {
         ++m_node_count;
@@ -3901,7 +3901,7 @@ private:
         const Instance_root_override& override_root = plan_prim.override_root;
 
         // A prim that is the pivot of a skin is the file's `Skeleton`
-        // (doc/usd_compatibility_design.md K1), which is a transformable prim
+        // (doc/erhe/usd_compatibility_design.md K1), which is a transformable prim
         // of its own kind rather than the plain `Xform` it would otherwise be.
         const std::map<const erhe::Item_base*, Skeleton_record>::const_iterator skeleton = m_skeletons.find(&node);
         if (skeleton != m_skeletons.end()) {
@@ -3919,7 +3919,7 @@ private:
 
     // ------------------------------------------------------------------
     // Reconciling an edited clip with the authored ops
-    // (doc/erhe_usd.md, "Time samples")
+    // (doc/erhe/usd.md, "Time samples")
     // ------------------------------------------------------------------
 
     // Index the transform channels of the animations the caller handed over
@@ -3927,7 +3927,7 @@ private:
     // offset is left out: its keys are not the sampler's own, and the
     // write-back reads keys rather than resampling.
     // Index the channels driving the attributes a save carries beyond the
-    // transform, by the item each drives (doc/erhe_usd.md, "Time
+    // transform, by the item each drives (doc/erhe/usd.md, "Time
     // samples"). A channel reading its sampler at a value offset is left out
     // for the reason collect_transform_channels() gives, and a channel
     // driving any other property is named in one warning per animation: USD
@@ -4013,7 +4013,7 @@ private:
     }
 
     // One schema attribute written with the samples of the channel driving it
-    // (doc/erhe_usd.md, "Time samples"): one sample per key, at
+    // (doc/erhe/usd.md, "Time samples"): one sample per key, at
     // `key time * timeCodesPerSecond`, beside the default the caller already
     // wrote. No authored sample record is kept for these attributes, so the
     // keys are always what a save writes.
@@ -4060,7 +4060,7 @@ private:
     }
 
     // Whether a channel's sampler is one erhe writes as a `Ts` spline rather
-    // than as time samples (doc/erhe_usd.md, "Time samples").
+    // than as time samples (doc/erhe/usd.md, "Time samples").
     [[nodiscard]] static auto is_spline_sampler(const erhe::scene::Animation_sampler* sampler) -> bool
     {
         return (sampler != nullptr) &&
@@ -4068,7 +4068,7 @@ private:
     }
 
     // One scalar schema attribute written as a `Ts` spline of its own property
-    // (doc/erhe_usd.md, "Time samples"): a hermite spline of one knot
+    // (doc/erhe/usd.md, "Time samples"): a hermite spline of one knot
     // per key, at `key time * timeCodesPerSecond`, whose tangent slopes are
     // the key's tangents divided by that same rate - erhe keys value units per
     // second, USD value units per time code. The default beside it is the
@@ -4627,7 +4627,7 @@ private:
 
     // The stack a sampled prim is written with: the authored one when the
     // animation's keys are still the projection of its samples, and one
-    // carrying the keys when they are not (doc/erhe_usd.md, "Time
+    // carrying the keys when they are not (doc/erhe/usd.md, "Time
     // samples"). False when the authored stack is what gets written; an edit
     // the ops cannot hold is named in one warning per prim.
     [[nodiscard]] auto reconcile_sampled_stack(
@@ -4661,7 +4661,7 @@ private:
         return written;
     }
 
-    // The prim's transform (doc/usd_compatibility_design.md M8): the ops it was
+    // The prim's transform (doc/erhe/usd_compatibility_design.md M8): the ops it was
     // authored with when it carries a stack and the transform being written
     // is the stack's own composition, else the composed matrix as one
     // `xformOp:transform`. The composition test is what keeps a stack out of
@@ -4693,7 +4693,7 @@ private:
         // layer (D5), so the pose a playing animation put the prim in never
         // reaches here. A time-sampled stack is written whatever that matrix
         // says: the samples are the authority over the stack's composition
-        // (doc/erhe_usd.md, "Time samples").
+        // (doc/erhe/usd.md, "Time samples").
         if ((stack != nullptr) && (stack->has_time_samples() || is_near(glm::mat4{stack->compose()}, matrix))) {
             write_xform_op_stack(xform_ops, *stack);
             return;
@@ -4732,7 +4732,7 @@ private:
     }
 
     // One point instancer as the `PointInstancer` prim it is
-    // (doc/usd_compatibility_design.md S1). The prototypes are the children the
+    // (doc/erhe/usd_compatibility_design.md S1). The prototypes are the children the
     // plan holds - the instances are not among them - named by `rel
     // prototypes` in tree order, and `positions`, `orientations` and `scales`
     // and `protoIndices` are recomputed from the instance prims - their own
@@ -4836,7 +4836,7 @@ private:
     }
 
     // The overrides of the clone of an arc's target prim
-    // (doc/usd_compatibility_design.md X2). The clone and the referencing prim
+    // (doc/erhe/usd_compatibility_design.md X2). The clone and the referencing prim
     // are one prim in USD - X1 gives the instance one level more than USD's
     // own composition - so the clone's local values are authored on the
     // carrier prim, below the carrier's own: an attribute both author is the
@@ -5021,7 +5021,7 @@ private:
     // decision not to write the tree prim it came from: Tydra hands the
     // importer the joint channels rather than the prim, so the prim of the
     // tree carries nothing, and the writer rebuilds it from the channels
-    // (doc/usd_compatibility_design.md K1). Keeping the authored name is what
+    // (doc/erhe/usd_compatibility_design.md K1). Keeping the authored name is what
     // makes a save a fixed point.
     [[nodiscard]] auto take_skel_animation_prim_name(const erhe::scene::Node& skeleton) -> std::string
     {
@@ -5340,7 +5340,7 @@ private:
     // The polygons of every primitive of one erhe mesh, concatenated into
     // the arrays of one USD Mesh prim. The primvars are faceVarying: one
     // value per polygon corner is the domain erhe's corner attributes live
-    // in (doc/usd_compatibility.md, element table).
+    // in (doc/erhe/usd_compatibility.md, element table).
     class Mesh_accumulator final
     {
     public:
@@ -5354,7 +5354,7 @@ private:
         // The joint influences of every point, `c_joint_slots` per point, and
         // whether they are being collected at all: a skinned mesh writes them
         // as `vertex` primvars indexed by the point index, which is the domain
-        // erhe carries them in (doc/usd_compatibility_design.md K1).
+        // erhe carries them in (doc/erhe/usd_compatibility_design.md K1).
         std::vector<int32_t>                     joint_indices;
         std::vector<float>                       joint_weights;
         Skin_influences                          skin_influences{Skin_influences::skip};
@@ -5415,7 +5415,7 @@ private:
                 out.has_normals = out.has_normals || normal.has_value();
 
                 // Back to USD's bottom-left `st` origin
-                // (doc/erhe_usd.md, "Texture coordinates").
+                // (doc/erhe/usd.md, "Texture coordinates").
                 const std::optional<GEO::vec2f> texcoord = attributes.corner_texcoord_0.try_get(corner);
                 const glm::vec2 st = texcoord.has_value()
                     ? flip_texcoord_v(glm::vec2{texcoord.value().x, texcoord.value().y})
@@ -5643,7 +5643,7 @@ private:
 
     // One erhe geometry as one `Mesh` prim of its own: no transform, no
     // material binding and no item behind it - what a brush's geometry child
-    // is (doc/usd_compatibility_design.md E4a). The authored polygons are the
+    // is (doc/erhe/usd_compatibility_design.md E4a). The authored polygons are the
     // mesh rather than a subdivision cage, which is what makes the importer
     // build erhe geometry back rather than a triangle soup. An erhe geometry
     // binds no material of its own, so the prim carries no GeomSubset: a
@@ -5675,7 +5675,7 @@ private:
         set_transform(geom_mesh.xformOps, node, matrix);
         // The authored polygons are the mesh, not a subdivision cage: this is
         // what makes the importer build erhe geometry rather than a triangle
-        // soup (doc/usd_compatibility.md, geometry attributes).
+        // soup (doc/erhe/usd_compatibility.md, geometry attributes).
         geom_mesh.subdivisionScheme.set_value(lightusd::GeomMesh::SubdivisionScheme::SubdivisionSchemeNone);
 
         Mesh_accumulator         accumulator;
@@ -5757,7 +5757,7 @@ private:
         return prim;
     }
 
-    // The `SkelBindingAPI` of one skinned mesh (doc/usd_compatibility_design.md
+    // The `SkelBindingAPI` of one skinned mesh (doc/erhe/usd_compatibility_design.md
     // K1): the skeleton it binds, the influences its vertices carry and the
     // geometry bind transform the skin was written with. The influences are
     // `vertex` primvars indexed by the point index, which is the domain the
@@ -5948,7 +5948,7 @@ private:
             usd_light.shadowEnable.set_value(light.get_value(Light::cast_shadow_property));
         }
         // The keys of a clip driving the light, beside those values
-        // (doc/erhe_usd.md, "Time samples"). erhe has no exposure on a
+        // (doc/erhe/usd.md, "Time samples"). erhe has no exposure on a
         // light, so the whole quantity is the intensity and `inputs:exposure`
         // stays at its zero fallback - which is what the importer folds back
         // in.
@@ -6019,7 +6019,7 @@ private:
         lightusd::Prim prim{sphere_light};
         if (light_type == Light_type::spot) {
             // The applied ShapingAPI, not the cone attributes, is what makes
-            // an imported sphere light a spot light (doc/usd_compatibility.md,
+            // an imported sphere light a spot light (doc/erhe/usd_compatibility.md,
             // lights).
             apply_api_schema(prim, lightusd::APISchemas::APIName::ShapingAPI, std::string{});
         }
@@ -6049,7 +6049,7 @@ private:
     }
 
     // -------------------------------------------------------------------
-    // Draw modes (doc/usd_compatibility.md, "Draw modes")
+    // Draw modes (doc/erhe/usd_compatibility.md, "Draw modes")
     // -------------------------------------------------------------------
 
     void index_draw_modes()
@@ -6240,7 +6240,7 @@ private:
     }
 
     // -------------------------------------------------------------------
-    // Physics (doc/usd_compatibility.md, "Physics")
+    // Physics (doc/erhe/usd_compatibility.md, "Physics")
     // -------------------------------------------------------------------
 
     // The records of `Usd_save_physics`, by the item each names: what the
@@ -6995,7 +6995,7 @@ private:
 
     // One frame of a joint: the transform of the node holding that side of
     // the joint in the space of the body prim it hangs below
-    // (doc/usd_compatibility.md, "Physics"). A node that is the body prim
+    // (doc/erhe/usd_compatibility.md, "Physics"). A node that is the body prim
     // itself states the identity, which is left unwritten.
     void write_joint_frame(
         lightusd::PhysicsJoint&        usd_joint,
@@ -7401,7 +7401,7 @@ private:
     // -------------------------------------------------------------------
 
     // Item tags become UsdCollectionAPI collections on the default prim
-    // (doc/usd_compatibility.md, object model): one collection per tag whose
+    // (doc/erhe/usd_compatibility.md, object model): one collection per tag whose
     // `includes` names every prim carrying it, at the path the first pass
     // gave the prim.
     void record_tags(const erhe::Item_base& item, const std::string& path)
@@ -7462,11 +7462,11 @@ private:
     Usd_save_result&          m_result;
 
     // The physics records of the arguments, by the item each names, and where
-    // every prim of the tree landed (doc/usd_compatibility.md, "Physics").
+    // every prim of the tree landed (doc/erhe/usd_compatibility.md, "Physics").
     std::map<const erhe::Item_base*, std::size_t>              m_physics_body_index;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_body_record;
     // The draw-mode records of the arguments, by the item each names
-    // (doc/usd_compatibility.md, "Draw modes").
+    // (doc/erhe/usd_compatibility.md, "Draw modes").
     std::map<const erhe::Item_base*, const Usd_save_draw_mode*> m_draw_mode_record;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_material_record;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_filter_record;
@@ -7486,7 +7486,7 @@ private:
     std::map<std::string, std::vector<std::string>>          m_tag_members;
     std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*> m_prim_references;
     // What every brush prim of the tree holds, by the item the caller named
-    // (doc/usd_compatibility_design.md E4a).
+    // (doc/erhe/usd_compatibility_design.md E4a).
     std::map<const erhe::Item_base*, const Usd_save_brush*>                  m_brushes;
 
     // What every texture node graph prim of the tree holds, by the item the
@@ -7494,13 +7494,13 @@ private:
     std::map<const erhe::Item_base*, const Usd_save_node_graph*>             m_node_graphs;
     std::map<const erhe::Item_base*, std::string>                           m_node_graph_paths;
     // The point instancers of the scene, and the prims that are their
-    // expansion (doc/usd_compatibility_design.md S1): an instance prim is not
+    // expansion (doc/erhe/usd_compatibility_design.md S1): an instance prim is not
     // planned, and an instancer reads its instances' transforms back out of
     // the tree.
     std::map<const erhe::Item_base*, const Usd_save_point_instancer*>        m_point_instancers;
     std::set<const erhe::Item_base*>                                         m_point_instancer_instances;
     // The variant sets the caller named, by the item carrying them; one item
-    // can carry more than one set (doc/usd_compatibility_design.md X4).
+    // can carry more than one set (doc/erhe/usd_compatibility_design.md X4).
     std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>> m_prim_variant_sets;
     // Which variant of which set each prim a variant adds belongs to, by the
     // item: what tells plan_children to write it inside the block instead of
@@ -7508,7 +7508,7 @@ private:
     std::map<const erhe::Item_base*, Variant_prim_membership>                  m_variant_prims;
     // The skeletons of the skins the tree's meshes bind, by the prim that is
     // a skin's pivot, and where each of those prims landed on the stage so a
-    // skinned mesh names it by path (doc/usd_compatibility_design.md K1).
+    // skinned mesh names it by path (doc/erhe/usd_compatibility_design.md K1).
     std::map<const erhe::Item_base*, Skeleton_record>                          m_skeletons;
     std::map<const erhe::Item_base*, std::string>                              m_skeleton_paths;
     // The geometry bind transform each skin is written with.

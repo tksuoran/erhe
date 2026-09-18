@@ -62,7 +62,7 @@ public:
     // Every live Item_tree, in construction order. There is no other registry:
     // instances are owned by four unrelated places (Scene_root, Tools,
     // Asset_browser, Editor), so this is what lets the MCP reference query and
-    // its test hook reach them (doc/import_undo_reference_clearing.md).
+    // its test hook reach them (doc/editor/import_undo_reference_clearing.md).
     [[nodiscard]] static auto get_instances() -> const std::vector<Item_tree*>&;
 
     // Identifies this tree in the reference query / test hook. Defaults to the

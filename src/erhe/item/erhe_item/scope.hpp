@@ -9,12 +9,12 @@
 
 namespace erhe {
 
-// A `Scope` prim (doc/usd_compatibility_design.md C5, USD `Scope`): children
+// A `Scope` prim (doc/erhe/usd_compatibility_design.md C5, USD `Scope`): children
 // and nothing else - no transform exists on it, so a transform composes
 // through it to the nearest transformable ancestor. It is the prim
 // resources are conventionally gathered under.
 //
-// Its secondary property owner type (doc/property_system.md D30) is the root
+// Its secondary property owner type (doc/erhe/property_system.md D30) is the root
 // owner type, as an editor `Style` item's is, so a scope holds any class's
 // value properties by qualified name (`Material.roughness` on a materials
 // scope) and its descendants inherit them - the content-library folder rule.

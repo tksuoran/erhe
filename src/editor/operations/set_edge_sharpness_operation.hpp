@@ -16,7 +16,7 @@ namespace editor {
 class App_context;
 
 // Undo-able edit that sets (or clears) the semi-sharp crease sharpness of a
-// set of edges of a single Geometry (doc/subdivision_crease_edges.md).
+// set of edges of a single Geometry (doc/erhe/subdivision_crease_edges.md).
 //
 // Like Move_mesh_vertices_operation this mutates and reuses the *same*
 // Geometry object so the Mesh_component_selection - keyed on the Geometry

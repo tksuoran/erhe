@@ -365,7 +365,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         instance_create_info.material->get_name()
     );
 
-    // The instance prim IS the mesh (doc/usd_compatibility_design.md C5): it
+    // The instance prim IS the mesh (doc/erhe/usd_compatibility_design.md C5): it
     // carries the instance transform, the node flags and the physics body.
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     const std::shared_ptr<erhe::scene::Node>& node = mesh;

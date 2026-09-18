@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends [../procedural_sky.md](../procedural_sky.md), which describes the
+Extends [../procedural_sky.md](../erhe/procedural_sky.md), which describes the
 atmosphere sky mode that exists today. Both items are verification gaps, not
 missing code.
 

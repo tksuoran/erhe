@@ -43,7 +43,7 @@ namespace {
 // rather than ship bytes no encoder wrote.
 //
 // Position is not here: it has its own encode branch (the AABB affine is not a
-// pure format conversion). See doc/meshoptimizer_attribute_encodings.md.
+// pure format conversion). See doc/erhe/meshoptimizer_attribute_encodings.md.
 //
 // The soup path does not consult this list - Primitive_shape::make_buffer_mesh()
 // routes every non-position attribute through erhe::dataformat::convert()
@@ -522,7 +522,7 @@ auto Primitive_builder::build() -> bool
 
     // Breadcrumbs localize which build sub-step a spinning render thread is
     // stuck in (these walk mesh corners/edges and can loop forever on
-    // degenerate / non-manifold geometry). See doc/geogram.md.
+    // degenerate / non-manifold geometry). See doc/erhe/geogram.md.
     const Primitive_types& primitive_types = m_build_info.primitive_types;
     if (primitive_types.fill_triangles) {
         // Include mesh counts so the watchdog dump reveals whether the mesh is

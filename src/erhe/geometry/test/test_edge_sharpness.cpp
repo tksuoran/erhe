@@ -1,4 +1,4 @@
-// doc/subdivision_crease_edges.md, "Edge sharpness attribute": the per-edge
+// doc/erhe/subdivision_crease_edges.md, "Edge sharpness attribute": the per-edge
 // "edge_sharpness" attribute channel. Geogram's edges.clear() keeps attribute
 // bindings but wipes values, so Geometry::build_edges() snapshots present
 // sharpness values keyed by canonical vertex pair and reapplies them after

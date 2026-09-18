@@ -1,4 +1,4 @@
-// Material_set membership and slot logic (doc/draw_list_material_set.md
+// Material_set membership and slot logic (doc/erhe/draw_list_material_set.md
 // V1). No window, no device, no scene and no draw list: the slot table is
 // bookkeeping over shared_ptr<Material>, and the reported bug it exists to
 // prevent - one material resolving through different slots depending on what

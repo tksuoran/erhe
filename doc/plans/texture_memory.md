@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/reloadable_asset_loads.md` (the `get_memory_usage` MCP
+This plan extends `doc/editor/reloadable_asset_loads.md` (the `get_memory_usage` MCP
 tool) with a per-texture breakdown, and records the measurement that motivates
 it.
 

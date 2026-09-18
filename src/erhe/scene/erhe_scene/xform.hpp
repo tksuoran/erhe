@@ -7,7 +7,7 @@
 
 namespace erhe::scene {
 
-// An `Xform` prim (doc/usd_compatibility_design.md C5, USD `Xform`): a
+// An `Xform` prim (doc/erhe/usd_compatibility_design.md C5, USD `Xform`): a
 // transform with children and nothing else. It is the prim every
 // node-creation path makes - the Create menu, the MCP `create_node` tool and
 // the import of a transform-only node.

@@ -65,7 +65,7 @@ public:
 
     std::size_t  ambient_light;                // vec4
 
-    // Dynamic diffuse global illumination (doc/ddgi.md phase 6). The
+    // Dynamic diffuse global illumination (doc/editor/ddgi.md phase 6). The
     // probe volume rides in this block rather than a binding point of its
     // own: it is small, and every shader that reads the lights also wants
     // the indirect term. Inactive (ddgi_counts.w == 0) means no volume, and
@@ -91,12 +91,12 @@ static constexpr uint32_t c_texture_heap_slot_shadow_distance  {2};
 // cube (6 faces) per shadow-casting point light. Sampled by direction.
 static constexpr uint32_t c_texture_heap_slot_shadow_cube      {3};
 // Color-aspect sampler2D binding for the baked lightmap atlas
-// (doc/lightmap_baking.md phase 5). Bound to the Lightmap_baker's
+// (doc/editor/lightmap_baking.md phase 5). Bound to the Lightmap_baker's
 // atlas when a bake exists, else to a 1x1 black fallback; the fragment
 // shader gates sampling on the per-primitive lightmap scale.
 static constexpr uint32_t c_texture_heap_slot_lightmap        {4};
 // Color-aspect sampler2D bindings for the DDGI probe atlases
-// (doc/ddgi.md phase 6): octahedral irradiance (rgba16f), octahedral
+// (doc/editor/ddgi.md phase 6): octahedral irradiance (rgba16f), octahedral
 // mean / mean-squared distance (rg16f), and one texel per probe carrying
 // the relocation offset and the active flag. Bound to the Ddgi_renderer's
 // textures when a volume exists, else to 1x1 black fallbacks; the fragment

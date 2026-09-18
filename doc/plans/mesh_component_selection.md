@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/mesh_component_selection.md` (face, edge and vertex
+This plan extends `doc/editor/mesh_component_selection.md` (face, edge and vertex
 selection with its viewport overlay) with the editing and the wider selection
 scope it does not cover.
 
@@ -15,7 +15,7 @@ for undo, writing the transformed positions back into the `Geometry`, and
 re-uploading or rebuilding the affected `Primitive` GPU buffers.
 
 The component selection has to survive the edit, so the geometry-identity
-invalidation of `doc/mesh_component_selection.md` section 3 has to relax to an
+invalidation of `doc/editor/mesh_component_selection.md` section 3 has to relax to an
 index remap for an in-place edit.
 
 ## Set vertex attribute values
@@ -43,13 +43,13 @@ overlays rendered in the deformed pose (skinning the overlay positions).
 Compute-shader selection over the GPU vertex and index buffers themselves:
 vertex and edge marking, and lasso selection. The region and brush FACE
 selection already gathers on the GPU
-(`doc/mesh_component_selection.md` section 7); this extends the same idea to
+(`doc/editor/mesh_component_selection.md` section 7); this extends the same idea to
 the other component kinds.
 
 ## Multiview overlays
 
 The triangle and point direct path of `Debug_renderer` is single-view only, so
 the overlays render in the desktop viewport alone
-(`doc/mesh_component_selection.md` section 6). Lifting that needs a multiview
+(`doc/editor/mesh_component_selection.md` section 6). Lifting that needs a multiview
 variant of the `line_simple` shader and per-eye view data on the direct path,
 the way the wide-line compute path already has a multiview graphics stage.

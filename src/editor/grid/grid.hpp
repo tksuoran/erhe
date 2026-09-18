@@ -46,7 +46,7 @@ public:
     static constexpr std::string_view static_type_name{"Grid"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::grid; }
 
-    // Registered properties (erhe::property, doc/property_system.md
+    // Registered properties (erhe::property, doc/erhe/property_system.md
     // section 4.11), stored in the entry store and inheriting from the
     // node chain (D30): a node or a style holds "Grid.cell_size" for the
     // grids below it. The members below are a mirror of the effective

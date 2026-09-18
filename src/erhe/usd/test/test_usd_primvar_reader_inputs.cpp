@@ -1,8 +1,8 @@
 // A UsdPreviewSurface input a UsdPrimvarReader feeds: the reader of
 // `displayColor` / `displayOpacity` is the mesh's vertex colors, every other
 // primvar is a warning and the input keeps its own value, and the rest of the
-// material converts either way (doc/usd_compatibility.md, "Materials";
-// doc/erhe_usd.md, "UsdPreviewSurface fallbacks and channel outputs").
+// material converts either way (doc/erhe/usd_compatibility.md, "Materials";
+// doc/erhe/usd.md, "UsdPreviewSurface fallbacks and channel outputs").
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"

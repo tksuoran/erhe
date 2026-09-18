@@ -3,7 +3,7 @@
 
 [LIB_STRUCTURE]
 src/erhe/<name>::CMakeTarget{erhe_<name>}
-EachLib→doc/erhe_<name>.md{purpose+types+API+deps;named-after-CMake-target;editor=doc/editor.md+doc/editor_<subdir>.md}!checkFirst
+EachLib→doc/erhe/<name>.md{purpose+types+API+deps;erhe_<name>-target-minus-prefix;editor=doc/editor/{editor.md+<subdir>.md+<feature>.md}}!checkFirst
 Core::gl+graphics+rendergraph+scene+scene_renderer+geometry+primitive+item+renderer+imgui+physics+window+commands+log+verify
 Editor::src/editor{main.cpp→run_editor()}+rendergraph/+tools/+operations/+windows/+scene/+res/
 
@@ -12,12 +12,12 @@ Rendergraph::DAG{Rendergraph_node,typed-io,exec/frame}
 App_context::holds-all-parts+shared-resources
 !rule::PartCtor¬ReadAppContext{nullptr-until-post-construct}→PassRefsExplicit
 Backends::swappable{#ifdef ERHE_<SUBSYS>_LIBRARY_<VALUE>}{physics+raytrace+window+xr}
-ScenePersistence::single-erhe-authored-glb{ERHE_scene-marker+ERHE_*-extensions;ref:doc/scene_serialization.md;wire:doc/gltf_extensions/;¬persisted:unused-library-materials+session-state+Brush_placement-attachments+static-body-mass}
+ScenePersistence::single-erhe-authored-glb{ERHE_scene-marker+ERHE_*-extensions;ref:doc/editor/scene_serialization.md;wire:doc/gltf_extensions/;¬persisted:unused-library-materials+session-state+Brush_placement-attachments+static-body-mass}
 !gltf-export-rule::soup=source-of-truth-when-present{exports-full-vertex-attrs¬ERHE_geometry;geometry-normative=authored-only;dual-list-NORMAL-requires-fully-present-present_*-mask;import_root-wrappers-transparent{children-in-their-place};settings-less-joint→empty-joint-description{reload-materializes-settings-item}}
 GltfUid::Item_base.m_gltf_uid{glTF-2.1-#2597;assigned-once{import|first-export-store-back}+never-changed+¬copied-by-clone;export-stamps-item-backed-objects-only{¬accessors/buffers/samplers/extra-meshes/synthesized-nodes→no-churn};uid+name=one-identifier-namespace-per-file;isolated-behind-erhe::gltf{pre-ratification};since-577d9f75}
-ScenePersistenceVerify::scripts/scene_roundtrip_verify.py{fresh-headless-session;all-11-ERHE_*-build→schema-validate+reload-MCP-diff+prefab-roundtrip+Khronos-validator{0-errors}+Blender-render;run-book@doc/scene_serialization.md}
+ScenePersistenceVerify::scripts/scene_roundtrip_verify.py{fresh-headless-session;all-11-ERHE_*-build→schema-validate+reload-MCP-diff+prefab-roundtrip+Khronos-validator{0-errors}+Blender-render;run-book@doc/editor/scene_serialization.md}
 ItemHostMutex::async-workers-lock-scene-item_host_mutex-for-hosted-state-mutation;main-thread-consumers-lock-too{Scene::update_node_transforms-locks-internally-since-f5a58c5b}
-!geogram-threading::PDEL/parallel-algos-require-no-other-geogram-threads{unenforceable-in-erhe→use-sequential-BDEL-for-convex-hull;asserts→ASSERT_THROW-sans-debugger;upstream-ask:doc/geogram.md}
+!geogram-threading::PDEL/parallel-algos-require-no-other-geogram-threads{unenforceable-in-erhe→use-sequential-BDEL-for-convex-hull;asserts→ASSERT_THROW-sans-debugger;upstream-ask:doc/erhe/geogram.md}
 !geometry-payload-invariant::graph-payload-geometries-carry-connectivity+edges{process_for_graph}→every-producer-incl-merges-must-process{violation=fastfail-on-worker,uncatchable}
 GraphPins::input-default-single-link{editors-replace-on-connect,one-Compound-undo}|Pin::multi_link=multi-input-socket{accumulate;join+instance-points+realize-instances}
 GraphSourceNodes::external-item-refs{brush/scene_mesh}capture-geometry-MAIN-thread{lazy-getters-worker-unsafe}+serialize-by-name{owner-scene→all-scenes-resolution;shadow-clones-ownerless}

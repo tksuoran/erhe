@@ -1,7 +1,7 @@
 // The OpenPBR network of a USD material, which is the terminal erhe reads
 // wherever a Material prim offers one: it carries the anisotropic roughness
 // and the transmission UsdPreviewSurface has no input for
-// (doc/usd_compatibility.md, Materials; doc/erhe_usd.md).
+// (doc/erhe/usd_compatibility.md, Materials; doc/erhe/usd.md).
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"

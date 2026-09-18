@@ -292,7 +292,7 @@ void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bo
         if (!scene_root) {
             return;
         }
-        // Asynchronous prefab load (doc/async_asset_loading_design.md step 7):
+        // Asynchronous prefab load (doc/editor/async_asset_loading_design.md step 7):
         // the drop returns immediately and the instance appears once the
         // template is ready. on_ready runs on the main thread, and inline
         // when the prefab is already cached.

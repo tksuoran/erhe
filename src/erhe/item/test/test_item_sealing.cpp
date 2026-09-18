@@ -1,5 +1,5 @@
 // Item_flags::lock_edit is the property-store seal (D24 in
-// doc/property_system.md): every writer of the flag seals through
+// doc/erhe/property_system.md): every writer of the flag seals through
 // set_flag_bits, and copies re-derive the seal from the copied flag.
 
 #include "erhe_item/hierarchy.hpp"

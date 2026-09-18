@@ -46,7 +46,7 @@ namespace {
 
 } // namespace
 
-// doc/usd_compatibility_design.md X3: a `def` descendant of a `class` prim is a
+// doc/erhe/usd_compatibility_design.md X3: a `def` descendant of a `class` prim is a
 // prototype - a prim of the tree, held abstract.
 TEST(Class_prototypes, def_descendants_are_prims)
 {
@@ -117,7 +117,7 @@ TEST(Class_prototypes, referencing_prims_carry_their_arcs)
     }
 }
 
-// doc/usd_compatibility_design.md S1: any prim is a reference target - a `Scope`
+// doc/erhe/usd_compatibility_design.md S1: any prim is a reference target - a `Scope`
 // and a typeless `def` are prims of the tree the same way an `Xform` is.
 TEST(Scope_reference_target, scope_and_typeless_targets_are_prims)
 {

@@ -663,7 +663,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
     // (DS+SAMPLED+TSRC+TDST+STORAGE) is logged for diagnostic context
     // only; on GL probe_image_format_support returns true unconditionally
     // so the highest-scored candidate always wins. See
-    // doc/vulkan_backend.md log.
+    // doc/erhe/vulkan_backend.md log.
     {
         constexpr uint64_t full_usage_mask =
             erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
@@ -825,7 +825,7 @@ auto Xr_session::create_swapchains() -> bool
     };
 
     // On Vulkan the depth swapchain creation is currently disabled (see
-    // doc/vulkan_backend.md). On GL the runtime accepts the depth format
+    // doc/erhe/vulkan_backend.md). On GL the runtime accepts the depth format
     // and the editor uses the resulting depth texture for the projection
     // layer's depth info.
     bool create_depth_stencil_swapchain = m_instance.get_configuration().swapchain_depth_attachment;

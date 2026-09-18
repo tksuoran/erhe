@@ -40,7 +40,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
     const GEO::index_t vertex_count = source_mesh.vertices.nb();
     const GEO::index_t edge_count   = source_mesh.edges.nb();
 
-    // Semi-sharp crease context (doc/subdivision_crease_edges.md, DeRose/Kass/
+    // Semi-sharp crease context (doc/erhe/subdivision_crease_edges.md, DeRose/Kass/
     // Truong 1998). Per-edge sharpness s drives the crease rules below; the
     // whole path is skipped (has_creases == false) when the source carries no
     // edge_sharpness values, keeping the smooth output bit-identical to the

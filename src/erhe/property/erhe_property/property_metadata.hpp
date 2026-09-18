@@ -53,14 +53,14 @@ public:
 using Property_changed_callback = std::function<void(Dependency_object&, const Property_changed_args&)>;
 using Coerce_callback           = std::function<Property_value(const Dependency_object&, const Property_value&)>;
 using Validate_callback         = std::function<bool(const Property_value&)>;
-// Value provider of a computed property (doc/property_system.md D26):
+// Value provider of a computed property (doc/erhe/property_system.md D26):
 // the effective value is whatever it returns, read on every get_value.
 using Compute_callback          = std::function<Property_value(const Dependency_object&)>;
 // Setter of a writable computed property (D26): set_value hands the value
 // to it, and it writes the underlying stored property the provider derives
 // its value from (a light's flux setter writes the intensity).
 using Compute_set_callback      = std::function<void(Dependency_object&, const Property_value&)>;
-// Per-object default of a property (doc/property_system.md D31): the
+// Per-object default of a property (doc/erhe/property_system.md D31): the
 // default layer - below inherited, style and local - is whatever it
 // returns for the object, so an item derives its own default from state
 // it already holds (Item_base::purpose_property from the editor-only
@@ -124,7 +124,7 @@ public:
     bool                 show_clear_button   {true};
 };
 
-// Storage outside the object's entry store (doc/property_system.md
+// Storage outside the object's entry store (doc/erhe/property_system.md
 // D18): when `get` is bound, the property's local value is whatever `get`
 // returns and set_value / clear_value go through `set`. The object never
 // gets an entry for the property, it always reports Value_source::local,
@@ -141,7 +141,7 @@ public:
     // the write (Dependency_object::validate_value). Unlike
     // Dependency_property::validate, which sees the value alone, this sees the
     // object, which is what a name that must be unique among siblings needs
-    // (doc/usd_compatibility_design.md M2).
+    // (doc/erhe/usd_compatibility_design.md M2).
     std::function<bool(const Dependency_object&, const Property_value&, std::string&)> validate{};
 
     [[nodiscard]] auto is_bound() const -> bool { return static_cast<bool>(get); }

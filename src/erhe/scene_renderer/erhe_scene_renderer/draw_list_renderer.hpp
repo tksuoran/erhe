@@ -27,7 +27,7 @@ namespace erhe::scene_renderer {
 class Draw_list_scene;
 class Program_interface;
 
-// The draw-list colour entry point (doc/draw_list_renderer.md
+// The draw-list colour entry point (doc/erhe/draw_list_renderer.md
 // R8/R8a): the same per-pass prologue / epilogue as the bucket path - camera,
 // joints, lights, and the bind of a material set the pass is handed, all of it
 // Scene_pass_resources' - but the draws come from the scene's persistent

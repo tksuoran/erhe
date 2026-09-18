@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Extends `doc/editor.md` and the editor documents it indexes - `doc/layout.md`,
-`doc/active_item.md`, `doc/editor_settings_codegen_scene_reference.md`. Each
+Extends `doc/editor/editor.md` and the editor documents it indexes - `doc/erhe/layout.md`,
+`doc/editor/active_item.md`, `doc/editor/settings_codegen_scene_reference.md`. Each
 section is one piece of outstanding work; architectural cleanups live in
 `doc/plans/editor_improvements.md` instead.
 
@@ -43,6 +43,6 @@ overrides take effect.
 ## Select-menu entries keyed off the active item
 
 Blender's Select menu entries that key off the active object, now that
-`doc/active_item.md` gives erhe the same reference: select the children, the
+`doc/editor/active_item.md` gives erhe the same reference: select the children, the
 parent or the siblings of the active item, select everything of the active
 item's type, select the items that share the active item's material or mesh.

@@ -503,7 +503,7 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
     const uint64_t changed_bits = old_flag_bits ^ new_flag_bits;
 
     // Mirror every flag change to the scene host (draw list entry flags,
-    // doc/draw_list_renderer.md R12a) before the raytrace-only
+    // doc/erhe/draw_list_renderer.md R12a) before the raytrace-only
     // visibility gate below.
     {
         const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
@@ -555,7 +555,7 @@ void Mesh::update_transform_dependent_state()
     // each when nothing depends on them.
     invalidate_dependents(world_bounds_min_property);
     invalidate_dependents(world_bounds_max_property);
-    // Draw list primitive records (doc/draw_list_performance_improvements.md):
+    // Draw list primitive records (doc/erhe/draw_list_performance_improvements.md):
     // the host only enqueues; the records are rewritten once per frame.
     {
         const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());

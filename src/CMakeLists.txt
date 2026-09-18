@@ -61,7 +61,7 @@ add_subdirectory(quickhull)
 add_subdirectory(erhe)
 
 # Headless ARM soak harness for the intermittent main-loop hang
-# (doc/geogram.md). Built on desktop AND Android -- the
+# (doc/erhe/geogram.md). Built on desktop AND Android -- the
 # corruption is ARM-only, so the useful runs are on-device via `adb shell`.
 add_subdirectory(geogram_soak)
 

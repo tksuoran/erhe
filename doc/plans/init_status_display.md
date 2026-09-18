@@ -2,9 +2,9 @@
 
 Status: proposed
 
-This plan extends `doc/editor.md` (the init status display,
+This plan extends `doc/editor/editor.md` (the init status display,
 `src/editor/init_status_display.{hpp,cpp}` plus the `init_message` lambda
-wired into `Programs::load_programs`) and `doc/gl_worker_thread_contexts.md`
+wired into `Programs::load_programs`) and `doc/erhe/gl_worker_thread_contexts.md`
 with a status display that any worker thread may publish to.
 
 The editor's init is serial by construction, so the shipping display needs no

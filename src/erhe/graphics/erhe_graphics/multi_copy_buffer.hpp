@@ -33,7 +33,7 @@ public:
 
 // Storage for a payload that is written when its owner has something new to
 // say and re-bound unchanged on every frame in between
-// (doc/draw_list_material_set.md D9).
+// (doc/erhe/draw_list_material_set.md D9).
 //
 // It holds N complete copies of the payload and keeps one of them current.
 // begin_write() hands out a copy that no unretired frame is reading, commit()

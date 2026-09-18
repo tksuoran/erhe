@@ -86,7 +86,7 @@ public:
 // Asset_manager - a scene container record holds them strongly and is what
 // a definition-vs-reference question is answered from. They are hosted like
 // every other prim now that a resource lives in its scene's tree
-// (doc/usd_compatibility_design.md U4), so hosting says which scene HOLDS a
+// (doc/erhe/usd_compatibility_design.md U4), so hosting says which scene HOLDS a
 // resource while the record says which container DEFINES it. mesh is a
 // scene_local resolution convenience for graph source nodes, not a
 // manager-owned type.

@@ -14,10 +14,10 @@ When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff wr
 
 ## Documentation layout (`doc/`)
 
-`doc/README.md` states the layout, the header-line convention and the writing rules, and indexes every document; read it before adding or moving a document. In short: `doc/<subject>.md` describes current behavior; `doc/erhe_<name>.md` is the document of the library built by CMake target `erhe_<name>` and `doc/editor.md` / `doc/editor_<subdir>.md` are the editor's; `doc/plans/` holds future work (a current document links to its plans from a "Future work" section that holds nothing but those links); `doc/reference/` holds material erhe does not own (bug reports for other projects, comparisons, transcribed specifications, dated reports). Every document carries a `Stability:` line (`stable` / `mostly stable` / `experimental`) and every plan a `Status:` line (`proposed` / `in progress` / `blocked`) in its first ten lines. `py -3 scripts/check_doc_links.py` verifies that every `doc/...md` reference in the repository resolves and that every document carries its header line; run it after any documentation change and keep it clean. Moving a document is a `git mv` plus a rewrite of every reference to it (sources, scripts, workflows, this file, the memory bank), in the same commit.
+`doc/README.md` states the layout, the header-line convention and the writing rules, and indexes every document; read it before adding or moving a document. In short: `doc/erhe/<name>.md` describes the library built by CMake target `erhe_<name>` and every subsystem that lives in `src/erhe/`; `doc/editor/` holds the editor (`editor.md`, one document per source subdirectory, one per editor feature); `doc/<subject>.md` at the top level is for cross-cutting workflows (building, platforms, tooling); `doc/plans/` holds future work (a current document links to its plans from a "Future work" section that holds nothing but those links); `doc/reference/` holds material erhe does not own (bug reports for other projects, comparisons, transcribed specifications, dated reports). Every document carries a `Stability:` line (`stable` / `mostly stable` / `experimental`) and every plan a `Status:` line (`proposed` / `in progress` / `blocked`) in its first ten lines. `py -3 scripts/check_doc_links.py` verifies that every `doc/...md` reference in the repository resolves and that every document carries its header line; run it after any documentation change and keep it clean. Moving a document is a `git mv` plus a rewrite of every reference to it (sources, scripts, workflows, this file, the memory bank), in the same commit.
 ## Live documents under `doc/` describe the present, not the past
 
-A live document (e.g. `doc/gl_worker_thread_contexts.md`, `doc/meshoptimizer_integration.md`, a library's `doc/erhe_<name>.md`) states the subsystem's CURRENT state - requirements, design, verification status - and the REMAINING future work. It never narrates history: no commit hashes or commit tables, no dated progress or "follow-up series" sections, no phase-by-phase records of work already landed, no "an earlier revision did X" or before/after narration. History belongs in git commit messages (`git log --follow` on the doc and on the code it describes). When updating a live doc after landing work, rewrite the affected statements in the present tense and move anything still outstanding into its future-work section - never append a dated record. Settled decisions and traps stay, stated as standing rules with their rationale, not as stories; measured results stay only while they describe current behavior or are needed to interpret a future re-run.
+A live document (e.g. `doc/erhe/gl_worker_thread_contexts.md`, `doc/erhe/meshoptimizer_integration.md`, a library's `doc/erhe/<name>.md`) states the subsystem's CURRENT state - requirements, design, verification status - and the REMAINING future work. It never narrates history: no commit hashes or commit tables, no dated progress or "follow-up series" sections, no phase-by-phase records of work already landed, no "an earlier revision did X" or before/after narration. History belongs in git commit messages (`git log --follow` on the doc and on the code it describes). When updating a live doc after landing work, rewrite the affected statements in the present tense and move anything still outstanding into its future-work section - never append a dated record. Settled decisions and traps stay, stated as standing rules with their rationale, not as stories; measured results stay only while they describe current behavior or are needed to interpret a future re-run.
 
 ## Documentation states what to do, not what to avoid
 
@@ -219,7 +219,7 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   performance measurement, `scripts\configure_tests.bat` produces
   `build_tests/` (no ASAN, profiler none; VS generator, so `--config Release`
   and `--config Debug` build from the same tree) -- used by the geometry
-  timing harness, see `doc/catmull_clark.md`.
+  timing harness, see `doc/erhe/catmull_clark.md`.
 - With tests enabled, the `erhe_tests` target builds every test executable
   the configuration defines (each test `CMakeLists.txt` registers its target
   with `add_dependencies(erhe_tests ...)`; a new test target must do the
@@ -246,7 +246,7 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   summarizes them with `scripts/ci_test_summary.py` and gives the tests
   badge in README.md. A build run that did not succeed fails the tests
   workflow too. Running the `gpu` tests in CI under a software Vulkan is
-  future work (`doc/graphics_test_coverage.md`).
+  future work (`doc/erhe/graphics_test_coverage.md`).
 - Run via `ctest` from the build directory, or invoke the
   `.../bin/<config>/erhe_<name>_tests.exe` binary directly.
   Run suites serially and fix one failure at a time -- an abort hides the rest
@@ -260,7 +260,7 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
 
 ### Library Structure (`src/erhe/`)
 
-Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a document `doc/erhe_<name>.md`** (named after the CMake target) with details on purpose, key types, public API, dependencies, and implementation notes. Always check `doc/erhe_<name>.md` first when working with a library; the editor's own documents are `doc/editor.md` and `doc/editor_<subdir>.md`.
+Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a document `doc/erhe/<name>.md`** (the CMake target `erhe_<name>` without its prefix) with details on purpose, key types, public API, dependencies, and implementation notes. Always check `doc/erhe/<name>.md` first when working with a library; the editor's own documents live under `doc/editor/` (`doc/editor/editor.md` for the application, `doc/editor/<subdir>.md` per source subdirectory, and one document per editor feature).
 
 - **`erhe::gl`** - Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
 - **`erhe::graphics`** - Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
@@ -272,7 +272,7 @@ Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has
 - **`erhe::item`** - Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes.
 - **`erhe::renderer`** - GPU ring buffer, `Line_renderer` (debug lines), `Text_renderer` (2D labels in 3D viewports).
 - **`erhe::imgui`** - Custom ImGui backend and window management helpers.
-- **`erhe::physics`** - Thin abstraction over Jolt and Box3D physics (backend chosen at configure time; see `doc/erhe_physics.md`).
+- **`erhe::physics`** - Thin abstraction over Jolt and Box3D physics (backend chosen at configure time; see `doc/erhe/physics.md`).
 - **`erhe::window`** - SDL/GLFW windowing abstraction.
 - **`erhe::commands`** - Input command system.
 - **`erhe::log`** - spdlog wrappers.
@@ -661,7 +661,7 @@ of the scene. So a cached reference must handle BOTH.
   those entries for exactly this reason).
 - Verify with `scripts/undo_reference_clearing_smoke_test.py` (drives a running
   editor over MCP) and the `get_editor_references` MCP query, which reports
-  every such cached reference. See doc/import_undo_reference_clearing.md.
+  every such cached reference. See doc/editor/import_undo_reference_clearing.md.
 
 ## No Band-Aid Fixes
 

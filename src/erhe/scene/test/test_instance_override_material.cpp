@@ -1,5 +1,5 @@
 // A material binding as an override of a prefab instance
-// (doc/usd_compatibility_design.md X2): a primitive whose material differs from
+// (doc/erhe/usd_compatibility_design.md X2): a primitive whose material differs from
 // the counterpart's is collected as a binding, and a collected binding put
 // back on a fresh instance reaches the primitive it names.
 

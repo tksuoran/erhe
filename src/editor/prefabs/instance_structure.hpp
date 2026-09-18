@@ -14,7 +14,7 @@ namespace editor {
 class Prefab_instance;
 
 // What a reference arc protects is STRUCTURE, not values
-// (doc/usd_compatibility_design.md X2): under a prim carrying a
+// (doc/erhe/usd_compatibility_design.md X2): under a prim carrying a
 // Prefab_instance attachment no prim is added, removed or reparented, while
 // every property of every item inside the instance stays editable (a local
 // value there is an override of the reference layer).
@@ -49,7 +49,7 @@ class Prefab_instance;
 [[nodiscard]] auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*;
 
 // Where an item sits inside a prefab instance
-// (doc/usd_compatibility_design.md X1, X5). `carrier` is the referencing prim
+// (doc/erhe/usd_compatibility_design.md X1, X5). `carrier` is the referencing prim
 // at or above the item and `prefab_instance` its first arc; `relative_path`
 // is the item's M1 path below the arc's target clone, which is the carrier's
 // own child - so an empty path means the item IS that clone, the level a USD

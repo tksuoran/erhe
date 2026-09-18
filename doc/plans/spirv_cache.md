@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/erhe_graphics.md` with two changes to the on-disk
+This plan extends `doc/erhe/graphics.md` with two changes to the on-disk
 SPIR-V cache (`src/erhe/graphics/erhe_graphics/spirv_cache.cpp`).
 
 ## Hash the compile settings into the cache salt

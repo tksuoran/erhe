@@ -1,5 +1,5 @@
 // Layout parameters as entry-stored erhe::property properties
-// (doc/property_system.md section 4.13): the members update() reads are a
+// (doc/erhe/property_system.md section 4.13): the members update() reads are a
 // mirror of the effective values, every parameter inherits, and a node
 // holds them for the layouts below it (D30).
 

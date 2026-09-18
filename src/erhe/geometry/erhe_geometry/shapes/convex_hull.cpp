@@ -9,7 +9,7 @@ auto make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points) 
 {
     // The hull itself is built by erhe::geometry::make_convex_hull(), which
     // owns the degenerate-input guard, the geogram lock and the sequential
-    // Delaunay ("BDEL"); see doc/geogram.md.
+    // Delaunay ("BDEL"); see doc/erhe/geogram.md.
     GEO::Mesh source_mesh{};
     source_mesh.vertices.set_dimension(3);
     source_mesh.vertices.set_single_precision();

@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/weight_paint.md` (the weight visualization mode and the
+This plan extends `doc/editor/weight_paint.md` (the weight visualization mode and the
 weight paint brush the editor has) with the brushes and options it does not.
 
 ## Further brushes

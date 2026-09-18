@@ -2,9 +2,9 @@
 
 Status: in progress
 
-This plan extends `doc/scene_serialization.md` (prefab instances save as glTF
-2.1 `externalAssets` references), `doc/erhe_gltf.md` (what `erhe::gltf`
-surfaces of glTF 2.1) and `doc/usd_compatibility_design.md` X2 (the structure
+This plan extends `doc/editor/scene_serialization.md` (prefab instances save as glTF
+2.1 `externalAssets` references), `doc/erhe/gltf.md` (what `erhe::gltf`
+surfaces of glTF 2.1) and `doc/erhe/usd_compatibility_design.md` X2 (the structure
 rule and the reference layer every instance obeys) with the prefab work that
 is not built.
 

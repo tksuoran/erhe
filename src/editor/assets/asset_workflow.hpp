@@ -105,7 +105,7 @@ auto reference_material_into_scene(
 // IMPORT TEXTURE: load an image file (PNG / JPEG / KTX2 / DDS) into a fresh
 // GPU texture and list it in the scene's content library as an owning
 // definition entry, placed as the last child of `parent` - any prim of the
-// scene (doc/usd_compatibility_design.md C5) - or in the Textures scope when
+// scene (doc/erhe/usd_compatibility_design.md C5) - or in the Textures scope when
 // `parent` is null. The decode and the upload are asynchronous
 // (Texture_file_loader); the undoable library insert is
 // queued once the texture is resident, so nothing appears in the library for

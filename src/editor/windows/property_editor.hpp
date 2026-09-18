@@ -35,7 +35,7 @@ public:
     void add_entry          (std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
     // Extra tooltip text for the entry just added, produced only while that
     // row is hovered: the composition origin of a property value
-    // (doc/usd_compatibility_design.md X5) costs an ancestor walk and a few
+    // (doc/erhe/usd_compatibility_design.md X5) costs an ancestor walk and a few
     // strings, which no frame should pay for every row.
     void set_entry_tooltip_extra(std::function<std::string()> provider);
     // Opt in to the text search filter row drawn at the top of show_entries().

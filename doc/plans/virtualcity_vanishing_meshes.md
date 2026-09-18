@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/editor_scene.md` (scene views, hover and raytrace
+This plan extends `doc/editor/scene.md` (scene views, hover and raytrace
 integration) with the diagnosis of one open defect.
 
 Open, unexplained. It reproduces with `optimize_meshes=false`, so it is not a

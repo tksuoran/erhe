@@ -4,7 +4,7 @@
 #include "erhe_log/log.hpp"
 
 // TEMPORARY diagnostic for the intermittent main-loop hang -- see
-// doc/geogram.md. Set to 1 to validate each mesh's
+// doc/erhe/geogram.md. Set to 1 to validate each mesh's
 // structural sanity right after process() (on the worker thread) via the
 // public validate_mesh_structure() helper, logging + naming a mesh corrupted
 // during parallel init the moment it happens, instead of waiting for that
@@ -49,7 +49,7 @@
 // fork pin, see the geogram CPMAddPackage GIT_TAG in the top-level
 // CMakeLists.txt). The build is now SEQUENTIAL ("BDEL" instead of "PDEL"):
 // PDEL requires that no other geogram threads are running, which erhe cannot
-// guarantee (see doc/geogram.md). The QuickHull path is kept behind this
+// guarantee (see doc/erhe/geogram.md). The QuickHull path is kept behind this
 // define as an alternative / fallback.
 //
 // https://github.com/BrunoLevy/geogram/issues/367
@@ -857,7 +857,7 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         // Delaunay has no usable answer for one: the sequential "BDEL" used
         // below warns and returns a triangulation that is not a hull, the
         // parallel "PDEL" never returns from set_vertices() (measured; see
-        // doc/geogram.md). Refuse such input here, before geogram is reached.
+        // doc/erhe/geogram.md). Refuse such input here, before geogram is reached.
         const erhe::math::Affine_span affine_span = erhe::math::classify_affine_span(std::span<const glm::vec3>{in_points});
         if (affine_span != erhe::math::Affine_span::volumetric) {
             log_geometry->warn(
@@ -916,10 +916,10 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         // !Process::is_running_threads()), which cannot be guaranteed here -
         // convex hulls are built both on the main thread (brush previews) and
         // on async operation workers while other geogram work (parallel_for in
-        // mesh builds) may be in flight (see doc/geogram.md). Hull inputs are
+        // mesh builds) may be in flight (see doc/erhe/geogram.md). Hull inputs are
         // small, so the parallel build bought nothing anyway.
         // NOTE: geogram MUST be built with -ffp-contract=off (see the geogram
-        // section of the top-level CMakeLists.txt and doc/geogram.md);
+        // section of the top-level CMakeLists.txt and doc/erhe/geogram.md);
         // otherwise FMA contraction breaks its exact predicates and this call
         // spins forever in locate_inexact() on degenerate input such as a cone's
         // coplanar base ring (ARM-only, intermittent).
@@ -1472,7 +1472,7 @@ void Geometry::process(const Geometry_process_parameters& parameters)
     // Breadcrumbs localize which mesh-processing step a spinning thread is
     // stuck in. update_connectivity()/build_extra_connectivity() and the
     // smoothing steps walk corner rings and can loop on degenerate /
-    // non-manifold geometry. See doc/geogram.md.
+    // non-manifold geometry. See doc/erhe/geogram.md.
     erhe::log::set_breadcrumb("geometry: process");
 
     if (flags & process_flag_connect) {
@@ -1533,14 +1533,14 @@ void Geometry::process(const Geometry_process_parameters& parameters)
 #if ERHE_DEBUG_VALIDATE_GEOMETRY
     // Catch + name a mesh corrupted during (concurrent) processing, the moment
     // it happens, so we do not have to wait for that geometry's thumbnail to
-    // hang in build_polygon_fill(). See doc/geogram.md.
+    // hang in build_polygon_fill(). See doc/erhe/geogram.md.
     // OFF by default: validating here on the worker perturbs the race.
     const Mesh_structure_check check = validate_mesh_structure(m_mesh);
     if (!check.ok()) {
         log_geometry->error(
             "MESH CORRUPT after process(): geometry '{}' error={} facets={} verts={} corners={} "
             "bad_facet={} bad_facet_corner_count={} corner_sum={} -- intermittent-hang culprit; "
-            "see doc/geogram.md",
+            "see doc/erhe/geogram.md",
             m_name, c_str(check.error), check.facet_count, check.vertex_count, check.corner_count,
             check.bad_facet, check.bad_facet_corner_count, check.corner_sum
         );

@@ -145,7 +145,7 @@ void Grid_tool::window_imgui()
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
         const std::shared_ptr<Grid>& grid = m_grids[m_grid_index];
         changed |= grid->imgui(m_context);
-        // The grid's registered properties (doc/property_system.md 4.11):
+        // The grid's registered properties (doc/erhe/property_system.md 4.11):
         // generic rows, undo through Property_set_operation; a change
         // touches the settings store through the Grid's own callback.
         m_property_editor.reset();

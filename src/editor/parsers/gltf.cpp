@@ -673,7 +673,7 @@ void build_imported_buffer_meshes(
 }
 
 // Attaches the optimized mesh variant to one imported primitive, per
-// doc/meshoptimizer_integration.md, "The soup path (import time)". Off by
+// doc/erhe/meshoptimizer_integration.md, "The soup path (import time)". Off by
 // default (Mesh_memory_config::optimize_meshes).
 //
 // MUST be called before the owning mesh is registered with the draw list -
@@ -743,7 +743,7 @@ void finalize_imported_meshes(
 
     const std::chrono::steady_clock::time_point finalize_start_time = std::chrono::steady_clock::now();
 
-    // Deferred load finalize options (doc/async_asset_loading.md). When deferred,
+    // Deferred load finalize options (doc/editor/async_asset_loading.md). When deferred,
     // the load path builds a fill-only buffer mesh straight from the
     // triangle soup plus an AABB proxy raytrace; the per-mesh tasks of the
     // Async_raytrace_kickoff_operation build the Geometry (edges, smooth
@@ -888,7 +888,7 @@ void finalize_imported_meshes(
 }
 
 // The asset's KHR_materials_variants list as the scene's own variant table
-// (doc/usd_compatibility_design.md X4): one set named c_gltf_variant_set_name
+// (doc/erhe/usd_compatibility_design.md X4): one set named c_gltf_variant_set_name
 // carried by `carrier` - the prim the file's content sits under - holding one
 // binding per mapped primitive, named by its path below the carrier. glTF
 // authors no default selection: a primitive's own `material` is what is bound
@@ -1157,7 +1157,7 @@ auto make_import_gltf_operation(
     // build made, instead of re-deriving them from a scene that may have
     // gained a camera or a light meanwhile - otherwise the redo would produce
     // a different node set than the import it is redoing
-    // (doc/reloadable_asset_loads.md).
+    // (doc/editor/reloadable_asset_loads.md).
     if (recipe != nullptr) {
         if (recipe->decisions_recorded) {
             add_default_camera = recipe->add_default_camera;
@@ -1180,7 +1180,7 @@ auto make_import_gltf_operation(
     // exclude_from_prefab keeps them out of prefab instances (the flag
     // persists in node extras and instantiation filters flagged items).
     if (add_default_camera) {
-        // A Camera is a prim (doc/usd_compatibility_design.md C5): it carries
+        // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): it carries
         // its own transform, so the camera IS the node inserted below.
         default_camera_node = make_default_camera(content_fit);
     }
@@ -1239,7 +1239,7 @@ auto make_import_gltf_operation(
     // mesh finalization above (mesh-sourced collision shapes need Geometry).
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
 
-    // Editor-domain ERHE_* extensions (doc/gltf_scene_roundtrip.md
+    // Editor-domain ERHE_* extensions (doc/editor/gltf_scene_roundtrip.md
     // phase 3): ERHE_layout / ERHE_collections onto the imported nodes,
     // ERHE_brushes / ERHE_node_graphs into the content library. ERHE_scene
     // is deliberately NOT applied here - importing an asset must not
@@ -1325,7 +1325,7 @@ void import_gltf(
     const bool                         materials_as_references
 )
 {
-    // Asynchronous path (doc/async_asset_loading_design.md step 7): the parse,
+    // Asynchronous path (doc/editor/async_asset_loading_design.md step 7): the parse,
     // the Buffer_mesh build and texture residency happen off the tick; the
     // undoable operation is then built from the finished parse and stays the
     // cheap synchronous thing plan 2.8 wants it to be.
@@ -1345,7 +1345,7 @@ void import_gltf(
                 }
                 // Wrapped in the reloadable operation so an undo can give the
                 // memory back and a redo re-reads the file
-                // (doc/reloadable_asset_loads.md). The asynchronously prepared
+                // (doc/editor/reloadable_asset_loads.md). The asynchronously prepared
                 // parse is handed over for the first execute; later rebuilds
                 // parse inline.
                 Gltf_import_recipe recipe{

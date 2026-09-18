@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Extends `doc/meshoptimizer_integration.md` and
-`doc/meshoptimizer_attribute_encodings.md`.
+Extends `doc/erhe/meshoptimizer_integration.md` and
+`doc/erhe/meshoptimizer_attribute_encodings.md`.
 
 ## Measure the runtime win
 

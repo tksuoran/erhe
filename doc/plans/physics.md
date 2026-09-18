@@ -2,8 +2,8 @@
 
 Status: in progress
 
-This plan extends `doc/erhe_physics.md`, `doc/box3d_physics.md` and
-`doc/khr_physics_rigid_bodies_support.md` with the work those documents do not
+This plan extends `doc/erhe/physics.md`, `doc/erhe/box3d_physics.md` and
+`doc/erhe/khr_physics_rigid_bodies_support.md` with the work those documents do not
 yet describe as shipping behavior.
 
 ## Box3D end-to-end verification sweep

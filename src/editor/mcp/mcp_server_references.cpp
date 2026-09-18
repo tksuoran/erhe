@@ -1,12 +1,12 @@
 // Mcp_server tools for the cached-reference bug class
-// (doc/import_undo_reference_clearing.md):
+// (doc/editor/import_undo_reference_clearing.md):
 //
 //   get_editor_references     - every cross-frame reference the editor parts
 //                               cache, so "did this window let go?" is
 //                               answerable headless.
 //   get_memory_usage          - where a loaded scene's memory actually sits, so
 //                               "did dropping it free anything?" is answerable
-//                               (doc/reloadable_asset_loads.md).
+//                               (doc/editor/reloadable_asset_loads.md).
 //   debug_set_item_tree_hover - drives the tree hover / popup pin that only
 //                               ImGui interaction sets, so its release is
 //                               verifiable. Test hook, same category as
@@ -206,7 +206,7 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
     result["selection"] = selection;
 
     // The active item is a reference of its own: it can outlive the selection
-    // (doc/active_item.md D2).
+    // (doc/editor/active_item.md D2).
     if (m_context.selection != nullptr) {
         result["active_item"] = reference_json(m_context.selection->get_active_item());
     }

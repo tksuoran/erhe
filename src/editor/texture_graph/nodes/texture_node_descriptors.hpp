@@ -10,7 +10,7 @@ namespace erhe::texgen {
 
 namespace editor {
 
-// Texture node descriptors (doc/texture_graph.md, decision 4).
+// Texture node descriptors (doc/editor/texture_graph.md, decision 4).
 //
 // Each descriptor is an immutable erhe::texgen::Node_descriptor whose GLSL is
 // ported from Material Maker (https://github.com/RodZill4/material-maker, MIT

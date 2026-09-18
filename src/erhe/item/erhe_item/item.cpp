@@ -105,7 +105,7 @@ const erhe::property::Property<bool> Item_base::visible_property = erhe::propert
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .inherits = true, .ui = erhe::property::Property_ui{.label = "Visible"}}
 );
 
-// USD prim `active` metadata (doc/usd_compatibility_design.md X2). Not
+// USD prim `active` metadata (doc/erhe/usd_compatibility_design.md X2). Not
 // inherits-flagged: the value is the item's own opinion, and the subtree
 // effect USD gives it is carried by the derived Item_flags::active bit
 // (rederive_active_flag_bits).
@@ -114,7 +114,7 @@ const erhe::property::Property<bool> Item_base::active_property = erhe::property
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .ui = erhe::property::Property_ui{.label = "Active"}}
 );
 
-// The prim's composed USD specifier (doc/usd_compatibility_design.md X2): true
+// The prim's composed USD specifier (doc/erhe/usd_compatibility_design.md X2): true
 // for `def`, false for the `over` a prim keeps when no layer defines it. USD's
 // default traversal predicate requires a defined prim, so an undefined prim
 // and its whole subtree are out of render, pick and simulation; like `active`
@@ -138,7 +138,7 @@ constexpr erhe::property::Enum_entry c_purpose_entries[] = {
 
 const erhe::property::Enum_info c_purpose_enum_info{"Purpose", c_purpose_entries};
 
-// USD purpose (doc/usd_compatibility_design.md M3). The default layer is the
+// USD purpose (doc/erhe/usd_compatibility_design.md M3). The default layer is the
 // value the editor-only flag bits imply (D31), so no item needs a local
 // value to report the purpose it already has, and nothing is written to a
 // file for an item that authored none.
@@ -207,7 +207,7 @@ const erhe::property::Property<std::string> Item_base::name_property = erhe::pro
                     item.set_name(name);
                 }
             },
-            // Sibling-unique names (doc/usd_compatibility_design.md M2): every
+            // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): every
             // writer of the name - the Properties window row, the MCP
             // set_item_property - goes through set_value, so the refusal of a
             // name a sibling already holds lives here alone.
@@ -703,7 +703,7 @@ void Item_base::set_name(const std::string_view name)
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())};
     bump_item_mutation_serial();
 
-    // Sibling-unique names (doc/usd_compatibility_design.md M2): a
+    // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): a
     // content-library entry node's name mirrors the name of the item it
     // wraps, so renaming the item renames the entry node with it. The item's
     // name is the one the user sees, and the entry node's name is the one the

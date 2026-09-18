@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends `doc/vulkan_backend.md`.
+Extends `doc/erhe/vulkan_backend.md`.
 
 ## ID-buffer edge lines: line ends must be rounded in the fragment shader
 

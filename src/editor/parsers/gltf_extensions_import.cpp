@@ -339,7 +339,7 @@ void import_collections(const erhe::gltf::Gltf_data& gltf_data)
 
 // Resolve (creating as needed) the folder scope for a slash-separated path
 // relative to the given scope, so the saved folder hierarchy is reconstructed
-// instead of flattened (doc/content_library_folders.md D2: a folder is a
+// instead of flattened (doc/editor/content_library_folders.md D2: a folder is a
 // Scope).
 [[nodiscard]] auto resolve_library_folder(
     const std::shared_ptr<erhe::Scope>& root,
@@ -681,7 +681,7 @@ void import_node_graphs(
 }
 
 // One saved library folder (ERHE_scene library_folders,
-// doc/content_library_folders.md D5).
+// doc/editor/content_library_folders.md D5).
 class Library_folder_record
 {
 public:
@@ -972,7 +972,7 @@ void append_library_folders_operation(
 namespace {
 
 // Assigns a material's ERHE_material style by name at execute time, when
-// the style items of the same import exist (doc/style_library.md D4).
+// the style items of the same import exist (doc/editor/style_library.md D4).
 // Assigns the style item of the named style to an item (a material from
 // ERHE_material.style, a node from ERHE_node.style) once the styles exist.
 class Item_style_by_name_operation : public Operation
@@ -1011,7 +1011,7 @@ private:
     std::shared_ptr<const erhe::property::Dependency_object> m_before;
 };
 
-// ERHE_scene styles (doc/style_library.md D4): one attach operation per
+// ERHE_scene styles (doc/editor/style_library.md D4): one attach operation per
 // style item, run before anything that names a style, then one assignment
 // operation per style that uses a style itself.
 void import_styles(
@@ -1162,7 +1162,7 @@ void import_material_styles(
     }
 }
 
-// ERHE_node.style (doc/style_library.md D4): the node's style item by name.
+// ERHE_node.style (doc/editor/style_library.md D4): the node's style item by name.
 void import_node_styles(
     const erhe::gltf::Gltf_data&             gltf_data,
     const std::shared_ptr<Content_library>&  content_library,

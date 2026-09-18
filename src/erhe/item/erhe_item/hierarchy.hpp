@@ -38,7 +38,7 @@ public:
     virtual void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent);
 
     // Overrides Item_base: a child prim is drawn by its parent's proxy when
-    // the parent's draw mode asks for one (doc/usd_compatibility.md, "Draw
+    // the parent's draw mode asks for one (doc/erhe/usd_compatibility.md, "Draw
     // modes"). Only a child of the hierarchy is: the parent's own
     // attachments, which supply that proxy, are not children of it.
     [[nodiscard]] auto is_pruned_by_parent() const -> bool override;
@@ -48,7 +48,7 @@ public:
     [[nodiscard]] auto get_inheritance_parent() const -> const erhe::property::Dependency_object* override;
     void for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback) override;
 
-    // Computed (doc/property_system.md D26): get_child_count(), pushed
+    // Computed (doc/erhe/property_system.md D26): get_child_count(), pushed
     // to expressions from handle_add_child / handle_remove_child.
     static const erhe::property::Property<int> child_count_property;
 
@@ -57,7 +57,7 @@ public:
     // by its name, as items outside a hierarchy are.
     [[nodiscard]] auto get_reference_path() const -> std::string override;
 
-    // Namespace path (doc/usd_compatibility_design.md M1): the names of this
+    // Namespace path (doc/erhe/usd_compatibility_design.md M1): the names of this
     // item and of its ancestors below the root, outermost first, separated
     // by '/'. The root's own name is not part of the path, so a child of
     // the root is named by its name alone and a deeper item by
@@ -67,7 +67,7 @@ public:
     // alike. Built on demand - never call it per frame.
     [[nodiscard]] auto get_path() const -> std::string;
 
-    // Sibling-unique names (doc/usd_compatibility_design.md M2): the name
+    // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): the name
     // `wanted_name` can be attached to `parent` with, which is `wanted_name`
     // itself when no child of `parent` other than `exclude` holds it, and
     // otherwise the first free `<base>_<number>` counting from 1. The base is

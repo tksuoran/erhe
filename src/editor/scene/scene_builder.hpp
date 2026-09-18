@@ -149,7 +149,7 @@ private:
     // the refusing command) when no target scene exists at all.
     [[nodiscard]] auto resolve_scene_target(const char* command_name) -> bool;
 
-    // A Camera and a Light are prims (doc/usd_compatibility_design.md C5), so
+    // A Camera and a Light are prims (doc/erhe/usd_compatibility_design.md C5), so
     // each maker returns the prim it made; it carries its own transform and
     // enters the scene as a child of the scene root.
     auto make_camera(

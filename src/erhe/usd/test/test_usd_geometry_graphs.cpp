@@ -1,5 +1,5 @@
 // Geometry node graphs as marked `NodeGraph` prims
-// (doc/usd_node_graphs.md section 4). A geometry graph is the prim
+// (doc/erhe/usd_node_graphs.md section 4). A geometry graph is the prim
 // form a texture graph takes, with its nodes' `info:id` under the
 // `erhe:geometry:` prefix its `erhe:graph:format` token names and its
 // evaluated geometry as the child `def Mesh "result"` a brush's geometry is
@@ -217,7 +217,7 @@ TEST_F(Geometry_graphs_import, a_node_of_another_graph_kind_is_dropped_with_its_
 }
 
 // The pin value types the mapping gives a geometry graph
-// (doc/usd_compatibility.md, "Geometry node graphs"): an opaque payload pin
+// (doc/erhe/usd_compatibility.md, "Geometry node graphs"): an opaque payload pin
 // is a `token` and a value pin is the USD type of its value, each carried
 // through the record as the attribute type it was authored with.
 TEST_F(Geometry_graphs_import, the_pin_and_parameter_types_are_read_as_authored)
@@ -264,7 +264,7 @@ TEST_F(Geometry_graphs_import, the_pin_and_parameter_types_are_read_as_authored)
 
 // A vector parameter of a geometry node is a quantity, so it takes the
 // `float3` / `float4` spelling a texture graph's color parameter does not
-// (doc/usd_compatibility.md, "Geometry node graphs").
+// (doc/erhe/usd_compatibility.md, "Geometry node graphs").
 TEST_F(Geometry_graphs_import, a_vector_parameter_is_read_as_float3_or_float4)
 {
     const erhe::usd::Usd_node_graph* graph = find_graph(loaded.data, "/World/Graph_Meshes/Terrain");

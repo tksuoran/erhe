@@ -116,7 +116,7 @@ void Geometry_graph_mesh::release_controlled_products()
         // An attachment is released through the node that holds it.
         node->detach(m_node_physics.get());
     }
-    // A Mesh is a child prim (doc/usd_compatibility_design.md C5), so it is
+    // A Mesh is a child prim (doc/erhe/usd_compatibility_design.md C5), so it is
     // released from whatever parent holds it - reaching the controlled node
     // is neither needed nor sufficient, and a mesh left behind here comes
     // back as a second, name-suffixed sibling on the next bake.

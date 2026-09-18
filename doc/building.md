@@ -163,7 +163,7 @@ disabling unused features and selecting different backends.
 
 **ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. `box3d` selects the Box3D
 backend, which the editor also runs on; its deferred and unsupported features are
-tabulated in `doc/erhe_physics.md`. Set to `none` to disable physics.
+tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
 
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.
 

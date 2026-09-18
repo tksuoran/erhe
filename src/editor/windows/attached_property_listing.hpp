@@ -12,7 +12,7 @@ enum class Developer_mode : unsigned int {
 };
 
 // The one place for the rules of the properties an object holds beyond its
-// own class chain - attached properties (doc/property_system.md R7, D12,
+// own class chain - attached properties (doc/erhe/property_system.md R7, D12,
 // D13) and the secondary-type properties of a content-library folder (D30)
 // - shared by the Properties window and the MCP property tools.
 

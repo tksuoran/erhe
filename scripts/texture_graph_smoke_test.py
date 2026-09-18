@@ -16,7 +16,7 @@ structured PASS/FAIL report and exits non-zero on any failure.
 
 Assumes the headless editor is already running with the MCP server reachable on
 127.0.0.1:3743 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
-graph evaluation is synchronous (doc/texture_graph.md decision 8), so a
+graph evaluation is synchronous (doc/editor/texture_graph.md decision 8), so a
 get_texture_graph after a mutation reads settled state with no async barrier.
 """
 

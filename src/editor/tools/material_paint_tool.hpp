@@ -84,7 +84,7 @@ public:
     void set_material(const std::shared_ptr<erhe::primitive::Material>& material);
 
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import_undo_reference_clearing.md).
+    // (doc/editor/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_material() const -> const std::shared_ptr<erhe::Item_base>&;
 private:
     [[nodiscard]] auto get_hover_mesh() const -> const Hover_entry*;

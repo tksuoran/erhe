@@ -69,7 +69,7 @@ public:
 // (UsdImagingDrawModeAdapter::_GetUVsForQuad and
 // _GenerateTextureCoordinates) in USD's `st` space, converted to erhe's
 // texture coordinates by the one involution `v' = 1 - v`
-// (doc/erhe_usd.md, "Texture coordinates"). A face showing its own
+// (doc/erhe/usd.md, "Texture coordinates"). A face showing its own
 // image takes the unflipped quad, except Z-, whose image the adapter maps
 // with both s and t flipped. (The adapter's other flips are for a face
 // borrowing the opposite face's image; erhe draws such a face flat in the
@@ -458,7 +458,7 @@ constexpr float c_card_opacity_threshold = 0.1f;
 // The faces the resolved card visibility draws, in the record's face order.
 // `simple` leaves out the pair normal to the stage's up axis; erhe rotates a
 // Z-up stage at its root, and the axis a file authored does not travel into
-// the editor, so the up axis is Y (doc/usd_compatibility.md, "Draw modes").
+// the editor, so the up axis is Y (doc/erhe/usd_compatibility.md, "Draw modes").
 [[nodiscard]] auto is_face_drawn(const Draw_mode_card_face face, const Draw_mode_card_visibility visibility) -> bool
 {
     if (visibility != Draw_mode_card_visibility::simple) {

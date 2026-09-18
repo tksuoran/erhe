@@ -96,7 +96,7 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 auto Device_impl::end_frame() -> bool
 {
     // Contract: end_frame only advances the frame index. See
-    // doc/erhe_graphics.md ("Frame lifecycle") and the matching
+    // doc/erhe/graphics.md ("Frame lifecycle") and the matching
     // Vulkan implementation for the rationale.
     ++m_frame_index;
     // Nothing executes on a GPU: the frame just recorded is complete.

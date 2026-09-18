@@ -35,7 +35,7 @@ using Filter_traits   = erhe::property::Member_value_traits<std::shared_ptr<erhe
 using Mesh_traits     = erhe::property::Member_value_traits<std::shared_ptr<erhe::scene::Mesh>>;
 
 // Evaluated on Node_physics objects only (a holder of Node_physics values
-// lists them by its own value, doc/property_system.md D30).
+// lists them by its own value, doc/erhe/property_system.md D30).
 auto is_movable(const Dependency_object& object) -> bool
 {
     return static_cast<const Node_physics&>(object).get_motion_mode() != Motion_mode::e_static;
@@ -48,7 +48,7 @@ auto slider(const float min, const float max, const std::string_view label, cons
 
 } // anonymous namespace
 
-// Every property is entry-stored and inherits (doc/property_system.md
+// Every property is entry-stored and inherits (doc/erhe/property_system.md
 // section 4.10, D30): a node above or a style holds Node_physics.* for
 // the bodies below it. The create info and m_motion_mode mirror the
 // effective values (on_property_changed), so the body is (re)created from

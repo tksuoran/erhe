@@ -37,7 +37,7 @@ struct("Load_config",
             visible=True,
             developer=False
         ),
-        # Asynchronous loading (doc/async_asset_loading_design.md). The master
+        # Asynchronous loading (doc/editor/async_asset_loading_design.md). The master
         # switch selects between the blocking load path (whole glTF inside one
         # tick) and Asset_load_tasks advanced a bounded amount from
         # Asset_manager::tick. The remaining fields are that bound: they are

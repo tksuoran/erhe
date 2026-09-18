@@ -61,7 +61,7 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    // Property owner type under Mesh's (doc/property_system.md D27), and
+    // Property owner type under Mesh's (doc/erhe/property_system.md D27), and
     // the size as read-only computed properties (D26): the texture width
     // and height in pixels and the pixels per meter (the mesh is the
     // quotient, in meters), read from the texture the last resize made.

@@ -54,7 +54,7 @@ const Property<float> gadget_tint = Property<float>::register_property("tint", G
 
 // A style-like item: its secondary owner type is the root type, so it holds
 // every class's value properties and applies to every item, the editor's
-// Style item's rule (doc/style_library.md D2).
+// Style item's rule (doc/editor/style_library.md D2).
 constexpr uint64_t c_type_look = uint64_t{1} << 57;
 class Look : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Look>
 {
@@ -309,7 +309,7 @@ TEST(Item_properties, tags_bridge)
 
 TEST(Item_properties, style_property_chain_and_cycle)
 {
-    // The style row (doc/style_library.md D3) over a chain of styles: the
+    // The style row (doc/editor/style_library.md D3) over a chain of styles: the
     // bridge assigns through set_style, so an assignment whose chain reaches
     // the item is refused and the item keeps its style (D25 style chain).
     auto a = std::make_shared<Look>("a");

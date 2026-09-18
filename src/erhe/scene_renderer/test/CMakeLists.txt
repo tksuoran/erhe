@@ -10,7 +10,7 @@ CPMAddPackage(
 
 # Deviceless: the membership and slot logic of Material_set is pure
 # bookkeeping over shared_ptr<Material>, so it is tested with no window, no
-# device, no scene and no draw list (doc/draw_list_material_set.md R16).
+# device, no scene and no draw list (doc/erhe/draw_list_material_set.md R16).
 set(_target "erhe_scene_renderer_tests")
 add_executable(${_target}
     main.cpp

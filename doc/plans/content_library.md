@@ -2,17 +2,17 @@
 
 Status: proposed
 
-Extends [`doc/editor_content_library.md`](../editor_content_library.md) and
+Extends [`doc/editor/content_library.md`](../editor/content_library.md) and
 the design records beside it -
-[`doc/content_library_ownership.md`](../content_library_ownership.md),
-[`doc/content_library_folders.md`](../content_library_folders.md),
-[`doc/style_library.md`](../style_library.md),
-[`doc/asset_manager.md`](../asset_manager.md) and
-[`doc/import_undo_reference_clearing.md`](../import_undo_reference_clearing.md).
+[`doc/editor/content_library_ownership.md`](../editor/content_library_ownership.md),
+[`doc/editor/content_library_folders.md`](../editor/content_library_folders.md),
+[`doc/editor/style_library.md`](../editor/style_library.md),
+[`doc/editor/asset_manager.md`](../editor/asset_manager.md) and
+[`doc/editor/import_undo_reference_clearing.md`](../editor/import_undo_reference_clearing.md).
 
 ## 1. Managed asset types beyond materials
 
-`doc/asset_manager.md`, "Current restrictions", states what the asset manager
+`doc/editor/asset_manager.md`, "Current restrictions", states what the asset manager
 covers today: the managed types are brush, material and animation, while the
 workflow verbs (make external, make internal, reference into scene,
 import-as-reference) and the `ERHE_asset_reference` wire format cover
@@ -28,7 +28,7 @@ texture references alive as a transitive pin.
 
 ## 2. Headless coverage for removal announcements
 
-`doc/import_undo_reference_clearing.md` lists three things its smoke test
+`doc/editor/import_undo_reference_clearing.md` lists three things its smoke test
 cannot reach:
 
 - **Brush references.** The test glTF carries no `ERHE_brushes`, and

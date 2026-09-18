@@ -73,7 +73,7 @@ enum class World_transform_state {
     needs_update
 };
 
-// A transformable prim (doc/usd_compatibility_design.md C5, USD
+// A transformable prim (doc/erhe/usd_compatibility_design.md C5, USD
 // `UsdGeomXformable`): the level of the prim class hierarchy that carries a
 // transform. Every class below it transforms its children; a prim outside it
 // has no transform of its own, so a transform composes through it.
@@ -163,7 +163,7 @@ public:
     [[nodiscard]] auto transform_direction_from_local_to_world(glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto get_scene                              () const -> Scene*;
 
-    // The authored USD xformOp stack (doc/usd_compatibility_design.md M8), when
+    // The authored USD xformOp stack (doc/erhe/usd_compatibility_design.md M8), when
     // the prim has one. A prim without a stack is the common case and carries
     // nothing but a null pointer. While a stack is present it is the
     // authoritative form of the local transform: every write to
@@ -188,7 +188,7 @@ public:
     // write the transform components in place.
     void handle_local_transform_written(World_transform_state world_state);
 
-    // The animated layer (doc/property_system.md D5) over the local
+    // The animated layer (doc/erhe/property_system.md D5) over the local
     // transform: while an animation plays over this prim, the transform it
     // holds is the pose and the base under it is the authored transform.
     // A transform write made while the layer is present edits the base, so
@@ -222,7 +222,7 @@ public:
     void set_node_from_world   (glm::mat4 node_from_world);
     void set_node_from_world   (const Transform& node_from_world);
 
-    // Registered properties (doc/property_system.md section 4.2, D18):
+    // Registered properties (doc/erhe/property_system.md section 4.2, D18):
     // bridged onto node_data.transforms.parent_from_node, so the transform
     // keeps its deferred matrix decomposition and its per-frame write paths,
     // and the editor / undo / MCP reach it through the property store. Writes
@@ -230,7 +230,7 @@ public:
     static const erhe::property::Property<glm::vec3> translation_property;
     static const erhe::property::Property<glm::quat> rotation_property;
     static const erhe::property::Property<glm::vec3> scale_property;
-    // Computed (doc/property_system.md D26): the components of
+    // Computed (doc/erhe/property_system.md D26): the components of
     // world_from_node_transform(), pushed to expressions from
     // handle_transform_update (which the propagation pass runs on every
     // descendant whose world transform it recomputes).
@@ -267,7 +267,7 @@ private:
 };
 
 // The name most of erhe spells `Xformable` with. It is retired when the
-// prim class hierarchy (doc/usd_compatibility_design.md C5) is complete.
+// prim class hierarchy (doc/erhe/usd_compatibility_design.md C5) is complete.
 using Node = Xformable;
 
 // Make `prim` a child prim of `parent` (a null parent detaches it), keeping

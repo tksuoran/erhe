@@ -10,7 +10,7 @@
 
 namespace erhe {
 
-// A typed prim of the one object model (doc/usd_compatibility_design.md C5,
+// A typed prim of the one object model (doc/erhe/usd_compatibility_design.md C5,
 // USD `UsdTyped`): the level of the class hierarchy that carries the USD
 // `typeName` token. It is instantiated as itself for a prim whose type has
 // no erhe class of its own (`Cube`, `PointInstancer`, `SkelRoot`, a typeless
@@ -51,7 +51,7 @@ public:
     void set_prim_type_name(std::string_view prim_type_name);
 
     // The `typeName` token as a bridged string property
-    // (doc/property_system.md D18) over the accessors above.
+    // (doc/erhe/property_system.md D18) over the accessors above.
     static const erhe::property::Property<std::string> type_name_property;
 
     // Overrides Hierarchy: a prim's item host is the host of the prim it is
@@ -59,7 +59,7 @@ public:
     // host to every prim below it, and detaching it takes the host away
     // again. The hook lives at this level so a prim with no transform - a
     // `Scope` - carries the host through to the transformable prims below it
-    // (doc/usd_compatibility_design.md C5).
+    // (doc/erhe/usd_compatibility_design.md C5).
     void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent) override;
 
     // The prim's item host changed: adopt the new host and carry it down the

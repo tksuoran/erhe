@@ -19,7 +19,7 @@
 #include <vector>
 
 // The compact non-position attribute encodings of the optimized variant
-// (doc/meshoptimizer_attribute_encodings.md): the TBN quaternion, the
+// (doc/erhe/meshoptimizer_attribute_encodings.md): the TBN quaternion, the
 // per-primitive texcoord affine, and the implicit-sum joint weights.
 //
 // Every one of them is a pair - a C++ encoder and a GLSL decoder that must

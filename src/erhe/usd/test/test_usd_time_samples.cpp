@@ -378,7 +378,7 @@ TEST_F(Time_samples, samples_and_time_codes_are_written_back)
 }
 
 // A save made while an animation plays writes what the prims authored, not the
-// pose the playback put them in: the animated layer (doc/property_system.md
+// pose the playback put them in: the animated layer (doc/erhe/property_system.md
 // D5) never reaches a serializer, and stopping leaves the stage byte for byte
 // where it started.
 TEST_F(Time_samples, a_save_during_playback_writes_the_authored_transforms)

@@ -2,11 +2,11 @@
 
 Status: proposed
 
-Extends [`doc/async_asset_loading.md`](../async_asset_loading.md) and its
-design record [`doc/async_asset_loading_design.md`](../async_asset_loading_design.md),
-plus [`doc/asset_manager.md`](../asset_manager.md),
-[`doc/reloadable_asset_loads.md`](../reloadable_asset_loads.md) and
-[`doc/ring_buffer_memory.md`](../ring_buffer_memory.md), which describe the
+Extends [`doc/editor/async_asset_loading.md`](../editor/async_asset_loading.md) and its
+design record [`doc/editor/async_asset_loading_design.md`](../editor/async_asset_loading_design.md),
+plus [`doc/editor/asset_manager.md`](../editor/asset_manager.md),
+[`doc/editor/reloadable_asset_loads.md`](../editor/reloadable_asset_loads.md) and
+[`doc/erhe/ring_buffer_memory.md`](../erhe/ring_buffer_memory.md), which describe the
 loading pipeline that exists.
 
 In rough priority order.
@@ -70,7 +70,7 @@ the way the scene-open flow does through `take_adopted_parse`.
 alive across undo by design: `undo()` only unregisters the scene and drops the
 browser window, and redo re-registers the same living objects without
 re-importing. So undoing "open a large glTF as a scene" frees nothing - the
-case that motivates doc/reloadable_asset_loads.md most.
+case that motivates doc/editor/reloadable_asset_loads.md most.
 
 The mechanism carries over unchanged: give it a recipe (the path is already a
 member) and let `on_lossless_undo()` drop the `Scene_root`. What makes it a
@@ -125,7 +125,7 @@ waits on a handle or returns a handle id plus a documented poll, as
 
 ## 10. Ring buffer follow-ups
 
-From `doc/ring_buffer_memory.md`:
+From `doc/erhe/ring_buffer_memory.md`:
 
 - Dedicated one-shot staging for very large uploads (image mip chains, mesh
   vertex / index pool block init): a plain host-visible `Buffer`, the copy

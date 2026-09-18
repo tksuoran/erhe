@@ -2,7 +2,7 @@
 
 Status: proposed
 
-This plan extends `doc/editor_rendering.md` ("ID renderer") with the coverage
+This plan extends `doc/editor/rendering.md` ("ID renderer") with the coverage
 its picking path still lacks.
 
 `src/editor/renderers/id_renderer.{hpp,cpp}`, its pipeline setup in

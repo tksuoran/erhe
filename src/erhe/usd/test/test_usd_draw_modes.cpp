@@ -1,4 +1,4 @@
-// `UsdGeomModelAPI` draw modes (doc/usd_compatibility.md, "Draw modes"): a
+// `UsdGeomModelAPI` draw modes (doc/erhe/usd_compatibility.md, "Draw modes"): a
 // prim that applies the schema becomes one `Usd_draw_mode` record of the
 // authored attributes, a prim that authors a `model:` attribute without the
 // schema becomes one too, the attributes a variant block authors are carried

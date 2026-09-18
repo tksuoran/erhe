@@ -1,5 +1,5 @@
 // Filesystem cache for optimize_triangle_soup(); see
-// doc/meshoptimizer_integration.md, "The filesystem cache (soup path only)".
+// doc/erhe/meshoptimizer_integration.md, "The filesystem cache (soup path only)".
 //
 // Soup path only. The geometry path runs its passes uncached at
 // build/finalize time - a deliberate cost decision recorded in that doc - so

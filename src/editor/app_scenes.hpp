@@ -56,7 +56,7 @@ public:
     void update_node_transforms              ();
     // Main thread, once per frame before any scene renders: applies queued
     // draw list changes of every registered scene root
-    // (doc/draw_list_renderer.md, threading contract).
+    // (doc/erhe/draw_list_renderer.md, threading contract).
     void flush_draw_lists                    ();
     // Main thread, once per frame before flush_draw_lists(): kicks off the
     // rebuild of the primitives of every mesh whose Gprim.display_color
@@ -64,16 +64,16 @@ public:
     // renderers read (Buffer_mesh::has_vertex_colors). Change-driven - a frame
     // in which nothing was written walks the registered roots and finds empty
     // queues. The builds themselves run on executor workers and swap in
-    // through Scene_commit_queue (doc/async_asset_loading.md, "Display-color
+    // through Scene_commit_queue (doc/editor/async_asset_loading.md, "Display-color
     // rebuild").
     void rebuild_display_colors              ();
     // Main thread, once per frame beside rebuild_display_colors(): builds the
     // card proxy of every draw-mode attachment whose values, extent or
-    // placement changed (doc/usd_compatibility.md, "Draw modes").
+    // placement changed (doc/erhe/usd_compatibility.md, "Draw modes").
     // Change-driven for the same reason and in the same shape.
     void rebuild_draw_mode_proxies           ();
     // Step 2 of the per-frame material schedule
-    // (doc/draw_list_material_set.md D6), for every registered root:
+    // (doc/erhe/draw_list_material_set.md D6), for every registered root:
     // reconcile each set against the root's content library, apply the
     // forward set's enqueued object references, then update both sets. Runs
     // AFTER flush_draw_lists(), which is where draw-list records are written

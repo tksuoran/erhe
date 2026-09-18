@@ -10,7 +10,7 @@ Stability: mostly stable
 ## Overview
 
 Named collections of node references (USD UsdCollectionAPI-inspired, see
-doc/usd_compatibility.md). Initially used to persist item TAGS: each
+doc/erhe/usd_compatibility.md). Initially used to persist item TAGS: each
 distinct tag becomes a collection named after it whose items are the glTF
 node indices of the tagged nodes. Tags were runtime-only before this
 extension (never persisted by any format), so this is net-new persistence.

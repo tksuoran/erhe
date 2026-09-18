@@ -84,7 +84,7 @@ public:
     void set_target(const std::shared_ptr<erhe::Item_base>& item);
 
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import_undo_reference_clearing.md).
+    // (doc/editor/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_target            () const -> std::shared_ptr<erhe::Item_base>;
     [[nodiscard]] auto get_target_items      () const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
     [[nodiscard]] auto get_inspected_material() const -> const std::shared_ptr<erhe::primitive::Material>&;
@@ -125,7 +125,7 @@ private:
     void node_physics_properties      (Node_physics& node_physics);
     void node_joint_properties        (Node_joint& node_joint);
     // Generic rows for the item's registered properties
-    // (doc/property_system.md D12), inside the item's group.
+    // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
     void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
     void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
@@ -159,7 +159,7 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>> m_target_items;
 
     // Individual mode: the selection with the active item moved to the front
-    // (doc/active_item.md D5). Scratch, filled in effective_items() and
+    // (doc/editor/active_item.md D5). Scratch, filled in effective_items() and
     // cleared at the end of imgui() so it pins no item between frames.
     std::vector<std::shared_ptr<erhe::Item_base>> m_ordered_items;
 

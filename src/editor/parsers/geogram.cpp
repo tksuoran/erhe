@@ -84,7 +84,7 @@ void import_geogram(
     const bool raytrace_ok = primitive->make_raytrace();
     static_cast<void>(raytrace_ok);
 
-    // The imported prim IS the mesh (doc/usd_compatibility_design.md C5).
+    // The imported prim IS the mesh (doc/erhe/usd_compatibility_design.md C5).
     auto mesh = std::make_shared<erhe::scene::Mesh>(path_string);
     const std::shared_ptr<erhe::scene::Node>& node = mesh;
     mesh->add_primitive(primitive, material);

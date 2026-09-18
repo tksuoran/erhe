@@ -1,5 +1,5 @@
 // Light authored state as erhe::property properties
-// (doc/property_system.md section 4.3): defaults match the previous
+// (doc/erhe/property_system.md section 4.3): defaults match the previous
 // field initializers, every property change re-resolves the light set
 // through the shared changed callback (D19), clones copy the values.
 

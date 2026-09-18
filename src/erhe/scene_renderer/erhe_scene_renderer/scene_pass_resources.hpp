@@ -61,7 +61,7 @@ public:
     const Light_projections*                                           light_projections{nullptr};
     const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
     // The material slot space this pass resolves through, already updated for
-    // this frame (doc/draw_list_material_set.md D5). The pass binds it
+    // this frame (doc/erhe/draw_list_material_set.md D5). The pass binds it
     // and looks slots up in it; it never creates, updates or resets one.
     // Null selects the shared empty set, which is what the passes that carry
     // no materials of their own - the grid / sky branch, the depth
@@ -152,14 +152,14 @@ public:
     void end_pass(Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder);
 
     // Baked lightmap atlas sampled by standard.frag through s_lightmap
-    // (doc/lightmap_baking.md phase 5). Null binds the black fallback;
+    // (doc/editor/lightmap_baking.md phase 5). Null binds the black fallback;
     // per-primitive lightmap_scale_offset gates sampling per draw.
     void set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture) { m_lightmap_texture = texture; }
     // Viewport lightmap filtering: bicubic B-spline reconstruction when
     // true (the default), plain bilinear when false.
     void set_lightmap_bicubic(const bool enabled) { m_lightmap_bicubic = enabled; }
 
-    // DDGI probe volume sampled by standard.frag (doc/ddgi.md phase 6).
+    // DDGI probe volume sampled by standard.frag (doc/editor/ddgi.md phase 6).
     // A default-constructed Ddgi_parameters (or null textures) means no
     // volume: the USE_DDGI variant axis stays off and the flat ambient term
     // is used, exactly as before DDGI existed.

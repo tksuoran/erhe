@@ -99,7 +99,7 @@ public:
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom
-    // typeName (doc/usd_compatibility.md).
+    // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Brush"; }
 
     auto clone() const -> std::shared_ptr<Item_base> override
@@ -119,7 +119,7 @@ public:
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
     // The material a placed instance gets (member-backed object property,
-    // doc/property_system.md D18 / D28; a brush keeps a material, no clear).
+    // doc/erhe/property_system.md D18 / D28; a brush keeps a material, no clear).
     static const erhe::property::Property<erhe::property::Object_reference> material_property;
     [[nodiscard]] auto get_material              () const -> const std::shared_ptr<erhe::primitive::Material>&;
     [[nodiscard]] auto get_density               () const -> float;

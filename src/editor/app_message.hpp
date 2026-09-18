@@ -69,7 +69,7 @@ struct Active_scene_changed_message
     std::shared_ptr<Scene_root> scene_root{};
 };
 
-// Published when the active item changes (doc/active_item.md D4). The
+// Published when the active item changes (doc/editor/active_item.md D4). The
 // active item is the one item of the selection that is the reference item
 // for commands; it can be outside the selection, and either pointer is
 // empty when there was / is none.

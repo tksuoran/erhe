@@ -242,7 +242,7 @@ void Operation_stack::undo()
     // may therefore release its payload without invalidating a later redo.
     // Driven here rather than queried by the operation, because a child of a
     // Compound_operation would see the stack instead of its siblings
-    // (doc/reloadable_asset_loads.md).
+    // (doc/editor/reloadable_asset_loads.md).
     if (m_undone.size() == 1) {
         operation->on_lossless_undo(m_context);
     }

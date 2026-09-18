@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Extends `doc/quest.md`, `doc/xr_controller_render_model.md`, `doc/prewarm.md`
-and `doc/multiview.md`.
+Extends `doc/quest.md`, `doc/erhe/xr_controller_render_model.md`, `doc/editor/prewarm.md`
+and `doc/erhe/multiview.md`.
 
 ## Controller render models
 

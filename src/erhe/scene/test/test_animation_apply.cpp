@@ -138,7 +138,7 @@ TEST(animation_apply, keeps_moving_the_node_on_later_frames)
     EXPECT_FLOAT_EQ(node->world_from_node()[3][0], 7.5f);
 }
 
-// Playback writes the animated layer (doc/property_system.md D5), not the
+// Playback writes the animated layer (doc/erhe/property_system.md D5), not the
 // authored transform: the prim reads the pose, the transform it authored stays
 // readable as the base under it, and nothing a save looks at moves.
 TEST(animation_apply, writes_the_animated_layer_and_keeps_the_authored_pose)
@@ -467,7 +467,7 @@ TEST(animation_property_channel, get_animation_path_classifies_the_driven_proper
 
 
 // The keyed time range and the counts as computed properties (D26,
-// doc/property_system.md section 4.16): read-only, always current on read,
+// doc/erhe/property_system.md section 4.16): read-only, always current on read,
 // pushed to expression readers by notify_keyframes_changed().
 TEST(animation_apply, time_range_and_counts_are_computed_properties)
 {

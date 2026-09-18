@@ -2,9 +2,9 @@
 
 Status: proposed
 
-Extends [../shadows.md](../shadows.md) (the shadow pipeline),
-[../shadow_tight_fit.md](../shadow_tight_fit.md) (its cost model and standing
-optimizations) and [../point_light_shadows.md](../point_light_shadows.md) (the
+Extends [../shadows.md](../erhe/shadows.md) (the shadow pipeline),
+[../shadow_tight_fit.md](../erhe/shadow_tight_fit.md) (its cost model and standing
+optimizations) and [../point_light_shadows.md](../erhe/point_light_shadows.md) (the
 cube path). Decide each item from a Tracy capture rather than in advance.
 
 ## Receiver-plane bias deltas versus the reference

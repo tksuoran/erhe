@@ -9,7 +9,7 @@ class Device;
 // Backend-neutral queries for the calling thread's worker-context state,
 // callable from code that also builds for Vulkan / Metal / null (where they
 // are constant). They exist for the blocking-invariant enforcement in
-// doc/gl_worker_context_enforcement.md: the spawn guard and the taskflow
+// doc/erhe/gl_worker_context_enforcement.md: the spawn guard and the taskflow
 // observer both run in cross-backend code and may not include the
 // OpenGL-only gl_context_index.hpp.
 //

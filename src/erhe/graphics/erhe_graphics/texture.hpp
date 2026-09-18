@@ -93,7 +93,7 @@ public:
     // Overrides erhe::Typed: the class fixes the token. USD has no prim
     // type for a texture - it writes one as a `UsdUVTexture` shading
     // network node of the material that reads it
-    // (doc/usd_compatibility.md, "Materials") - so the token is the erhe
+    // (doc/erhe/usd_compatibility.md, "Materials") - so the token is the erhe
     // class name. A Texture is a prim only when a loader registers it as
     // content; a render target, shadow map or other device-internal
     // texture is the same class and is never placed in the tree.
@@ -103,7 +103,7 @@ public:
     auto get_referenced_texture() const -> const Texture* override;
 
     // Process-wide image memory accounting for memory reporting
-    // (doc/reloadable_asset_loads.md). Estimated from the create info - format
+    // (doc/editor/reloadable_asset_loads.md). Estimated from the create info - format
     // times dimensions times levels times layers - not queried from the
     // allocator, so it is backend-neutral and approximate. Views and textures
     // wrapping an externally owned image are not counted, since they own no

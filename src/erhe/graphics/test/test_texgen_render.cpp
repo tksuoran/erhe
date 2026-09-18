@@ -36,7 +36,7 @@
 #include <vector>
 
 // -----------------------------------------------------------------------------
-// GLSL dialect / fixture-fit decisions (doc/texture_graph.md)
+// GLSL dialect / fixture-fit decisions (doc/editor/texture_graph.md)
 // -----------------------------------------------------------------------------
 // The headless test device is Vulkan (glslang). Vulkan GLSL rejects a plain
 // non-opaque global uniform, and it also rejects a default initializer on a

@@ -131,7 +131,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    // A Camera is a prim (doc/usd_compatibility_design.md C5): it carries its
+    // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): it carries its
     // own transform, so no node holds it.
     std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(name);
     camera->set_fov_y          (glm::radians(35.0f));
@@ -1294,7 +1294,7 @@ auto Scene_builder::make_directional_light(
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    // A Light is a prim (doc/usd_compatibility_design.md C5): it carries its
+    // A Light is a prim (doc/erhe/usd_compatibility_design.md C5): it carries its
     // own transform, so no node holds it.
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::directional);

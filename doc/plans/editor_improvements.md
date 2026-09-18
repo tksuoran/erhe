@@ -2,7 +2,7 @@
 
 Status: proposed
 
-Extends `doc/editor.md`. A prioritized list of improvements to `src/editor/`,
+Extends `doc/editor/editor.md`. A prioritized list of improvements to `src/editor/`,
 each stated as the change to make and what it buys.
 
 ## 1. Operation validation before queue (small effort, low impact)
@@ -30,7 +30,7 @@ time and transaction semantics to the compound.
 - `s_item_tasks` (`src/editor/items.cpp`) is documented main-thread-only and
   purged once per frame, but nothing verifies the contract. Give it the
   `verify_main_thread()` treatment `Operation_stack` has, so an off-thread
-  caller fails loudly (`doc/editor_operations.md`, "Threading and
+  caller fails loudly (`doc/editor/operations.md`, "Threading and
   re-entrancy").
 
 ## 4. Assert on `weak_ptr::lock` where the pointer must be valid (small effort, low-medium impact)

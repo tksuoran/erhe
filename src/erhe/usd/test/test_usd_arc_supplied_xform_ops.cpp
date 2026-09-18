@@ -49,7 +49,7 @@ void expect_near(const glm::dvec3 value, const glm::dvec3 expected)
 }
 
 // `arc_supplied_xform_op.usda` is the shape `full_assets/Teapot/DrawModes.usd`
-// authors (doc/usd_compatibility_design.md C6): a prim whose
+// authors (doc/erhe/usd_compatibility_design.md C6): a prim whose
 // `xformOpOrder` names an op its reference target authors and it does not.
 class Arc_supplied_xform_op : public testing::Test
 {

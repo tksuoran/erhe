@@ -3,7 +3,7 @@ from erhe_codegen import *
 struct("Lightmap_config",
     version=1,
     short_desc="Lightmap",
-    long_desc="Lightmap baking settings (doc/lightmap_baking.md). Texel density comes from the world-space tile grid: tile_texture_size / cell size, per tile. The boolean toggles switch individual bake/sampling features off for A/B comparison and debugging. (The legacy standalone texels_per_meter unwrap density was removed in version 11; stale keys are ignored.)",
+    long_desc="Lightmap baking settings (doc/editor/lightmap_baking.md). Texel density comes from the world-space tile grid: tile_texture_size / cell size, per tile. The boolean toggles switch individual bake/sampling features off for A/B comparison and debugging. (The legacy standalone texels_per_meter unwrap density was removed in version 11; stale keys are ignored.)",
     developer=False,
     fields=[
         field(

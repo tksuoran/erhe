@@ -203,7 +203,7 @@ TEST_F(Cube_import, light)
     EXPECT_NEAR(light.get_color().z,   0.8f, 1e-5f);
 }
 
-// doc/usd_compatibility_design.md I2: an attribute the composed stage has an
+// doc/erhe/usd_compatibility_design.md I2: an attribute the composed stage has an
 // authored opinion for becomes a local value; an attribute at its schema
 // fallback leaves the erhe property at the ERHE default.
 class Authored_import : public testing::Test
@@ -320,7 +320,7 @@ TEST(Usd_import, missing_file_is_an_error)
 
 // A DomeLight has no erhe light counterpart - erhe has no environment map -
 // so it is read as the scene's ambient light and recorded as a prim
-// (doc/usd_compatibility_design.md S1).
+// (doc/erhe/usd_compatibility_design.md S1).
 class Dome_import : public testing::Test
 {
 protected:

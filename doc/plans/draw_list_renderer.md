@@ -2,15 +2,15 @@
 
 Status: proposed
 
-Extends `doc/draw_list_renderer.md`, and with it
-`doc/draw_list_material_set.md` and
-`doc/draw_list_performance_improvements.md`, which describe the renderer, its
+Extends `doc/erhe/draw_list_renderer.md`, and with it
+`doc/erhe/draw_list_material_set.md` and
+`doc/erhe/draw_list_performance_improvements.md`, which describe the renderer, its
 material state and its cached primitive records as they are. This document
 holds what those three leave open, in rough priority order.
 
 ## 1. Frustum culling on the entry AABB
 
-Q6 in `doc/draw_list_renderer.md` deferred culling; `Draw_list_entry` already
+Q6 in `doc/erhe/draw_list_renderer.md` deferred culling; `Draw_list_entry` already
 carries a world-space AABB (R15) so no data-model change is needed. The
 blocker is that the AABB is written at registration and goes stale for dynamic
 objects. Either recompute it per draw from the node, or maintain it from the
@@ -36,7 +36,7 @@ non-skinned mesh registers as dynamic, because `Scene_root::register_mesh` has
 no mobility information and there is no static item flag. Add the source (item
 flag or asset metadata), then let a static list upload its
 `primitive_records` block once instead of per frame (G4 / R9); the contiguous
-GPU-layout records described in `doc/draw_list_performance_improvements.md` are
+GPU-layout records described in `doc/erhe/draw_list_performance_improvements.md` are
 the precondition that already exists.
 
 ## 4. Translucent depth sorting
@@ -60,7 +60,7 @@ technique or a point light compiles on the spot.
 
 ## 7. Material-set follow-ups
 
-From `doc/draw_list_material_set.md`:
+From `doc/erhe/draw_list_material_set.md`:
 
 - **Distinct types for the two sets.** `Scene_root::get_material_set()` and
   `Draw_list_scene::get_material_set()` return interchangeable types, so
@@ -85,5 +85,5 @@ From `doc/draw_list_material_set.md`:
 What remains in the draw-list cost is per-list rather than per-primitive:
 pipeline lookup, the formatted debug label, one ring-buffer acquire per chunk
 and one indirect command write per entry (section 10 of
-`doc/draw_list_renderer.md`). Caching the debug label per entry count is the
+`doc/erhe/draw_list_renderer.md`). Caching the debug label per entry count is the
 cheapest of these.

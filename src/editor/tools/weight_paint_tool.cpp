@@ -530,7 +530,7 @@ void Weight_paint_tool::apply_dab()
             // painted value. All-zero others are left alone (total < 1);
             // erhe's skinning shader does not renormalize, so this matches
             // the "weights may sum < 1 when painting a single influence"
-            // note in doc/weight_paint.md.
+            // note in doc/editor/weight_paint.md.
             float others_sum = 0.0f;
             for (int k = 0; k < 4; ++k) {
                 if (k != slot) {

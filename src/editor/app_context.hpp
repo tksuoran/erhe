@@ -196,7 +196,7 @@ public:
     [[nodiscard]] auto is_scene_load_in_flight() const -> bool;
 
     // The one place that maps a property's consequence flags
-    // (erhe::property::Property_flags, doc/property_system.md D11) to
+    // (erhe::property::Property_flags, doc/erhe/property_system.md D11) to
     // editor actions. Called after every property write made through
     // Property_set_operation / Property_set_apply_operation.
     void on_item_property_changed(erhe::Item_base& item, const erhe::property::Dependency_property& property);

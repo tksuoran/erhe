@@ -315,7 +315,7 @@ public:
 
         // Breadcrumbs mark the current main-loop phase so the watchdog can
         // report where a spinning tick is stuck. See
-        // doc/geogram.md.
+        // doc/erhe/geogram.md.
         erhe::log::set_breadcrumb("tick: wait_frame");
 
         // log_frame->trace("tick() begin");
@@ -559,7 +559,7 @@ public:
         m_scene_commit_queue.flush();
 
         // Advance asynchronous asset loads a bounded amount
-        // (doc/async_asset_loading_design.md). This sits right after the commit
+        // (doc/editor/async_asset_loading_design.md). This sits right after the commit
         // queue so that worker results land first, and it runs on hidden ticks
         // too: the command buffer is recording for the whole tick either way
         // (see the begin() above), so a load keeps streaming while the window
@@ -718,7 +718,7 @@ public:
         // their cached references in the same frame the removal happened. Here
         // and not at the producers: this is outside ImGui iteration and
         // outside the Content_library / Item_host mutexes the producing
-        // operations hold (doc/import_undo_reference_clearing.md).
+        // operations hold (doc/editor/import_undo_reference_clearing.md).
         if (m_asset_manager) {
             m_asset_manager->flush_pending_removals();
         }
@@ -816,7 +816,7 @@ public:
         // Material slot spaces, after the flush that settles membership and
         // before the first pass that binds one - the DDGI tick below, and the
         // rendergraph (which is also where XR renders) further down
-        // (doc/draw_list_material_set.md D6). The preview roots and the
+        // (doc/erhe/draw_list_material_set.md D6). The preview roots and the
         // BRDF slice window are not in m_scene_roots and run their own
         // sync + flush + update at their render entry points.
         if (m_app_context.current_command_buffer != nullptr) {
@@ -827,7 +827,7 @@ public:
             }
         }
 
-        // Dynamic diffuse global illumination (doc/ddgi.md): refit the
+        // Dynamic diffuse global illumination (doc/editor/ddgi.md): refit the
         // probe volume and record this frame's probe update into the frame
         // command buffer, before the rendergraph samples the probe atlases.
         if (m_ddgi_renderer && (m_app_context.current_command_buffer != nullptr)) {
@@ -862,7 +862,7 @@ public:
             }
         }
 
-        // Interactive lightmap bake (doc/lightmap_baking.md section
+        // Interactive lightmap bake (doc/editor/lightmap_baking.md section
         // 3a): record this frame's budgeted gather slice + publish into the
         // frame command buffer before the rendergraph samples the published
         // atlas.
@@ -1131,7 +1131,7 @@ public:
         // only. Bounded to the first frames so it never floods the log. A run
         // that hangs during the early thumbnail builds stops emitting these
         // before reaching the target, and the watchdog then names the stuck
-        // phase. See doc/geogram.md.
+        // phase. See doc/erhe/geogram.md.
         {
             const uint64_t main_loop_frame = m_time->get_frame_number();
             if (main_loop_frame <= 12) {
@@ -3175,7 +3175,7 @@ public:
     // Content taken out of the editor without a scene closing - undo of a
     // glTF import, a node delete, a scene leaving the registry. Parts that
     // cache their own references subscribe themselves; this handles the
-    // references Editor owns (doc/import_undo_reference_clearing.md).
+    // references Editor owns (doc/editor/import_undo_reference_clearing.md).
     void on_items_removed(Items_removed_message& message)
     {
         const Removed_items& removed = *message.removed.get();
@@ -3224,7 +3224,7 @@ public:
         // selections are untouched.
         // The active item is tracked beside the selection and can be outside
         // it, so the close forgets it explicitly when this scene hosts it
-        // (doc/active_item.md D2).
+        // (doc/editor/active_item.md D2).
         m_selection->clear_selection(static_cast<erhe::Item_host*>(scene_root.get()), Active_item::forget_hosted);
 
         // The lightmap partitioner stores shared_ptrs to this scene's meshes
@@ -3264,7 +3264,7 @@ public:
         // pinning its Primitive and the GPU ranges behind it - plus the
         // G-buffer and accumulation targets. Pause semantics keep all of that
         // on a plain disable so a resume continues where it left off, but a
-        // closed scene is never resumed (doc/reloadable_asset_loads.md).
+        // closed scene is never resumed (doc/editor/reloadable_asset_loads.md).
         if (m_lightmap_baker) {
             m_lightmap_baker->release_working_set();
         }
@@ -3371,7 +3371,7 @@ public:
                     for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
                         // Every listed resource is a prim this scene owns, so
                         // every one of them must die with it
-                        // (doc/usd_compatibility_design.md U4).
+                        // (doc/erhe/usd_compatibility_design.md U4).
                         if (item) {
                             watch.items.emplace_back(item);
                         }
@@ -3775,7 +3775,7 @@ public:
                 // Sets one registered property of an item in the default
                 // scene through Property_set_operation (undoable); value is
                 // the erhe_property/property_string.hpp form, omitted to
-                // reset to default (doc/property_system.md D13).
+                // reset to default (doc/erhe/property_system.md D13).
                 run_set_property_command(has_args ? &args_obj : nullptr);
                 continue;
             }
@@ -4000,7 +4000,7 @@ public:
     // it never returns, so it cannot log where it is stuck. This background
     // thread watches the diagnostic breadcrumb (erhe::log::set_breadcrumb) and
     // reports the last phase when a tick fails to progress past a threshold.
-    // See doc/geogram.md.
+    // See doc/erhe/geogram.md.
     std::thread             m_watchdog_thread;
     std::mutex              m_watchdog_mutex;
     std::condition_variable m_watchdog_cv;

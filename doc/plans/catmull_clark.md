@@ -2,11 +2,11 @@
 
 Status: proposed
 
-This plan extends `doc/catmull_clark.md`, which describes erhe's Catmull-Clark
+This plan extends `doc/erhe/catmull_clark.md`, which describes erhe's Catmull-Clark
 implementation and holds the stable numbering of the optimization items. Items
 1, 2, 3, 11 and 12 are in place and are described there; the items below are
 the ones still open, under the same numbers. Re-rank them against a fresh run
-of the timing harness (`doc/catmull_clark.md`, "Timing harness") before
+of the timing harness (`doc/erhe/catmull_clark.md`, "Timing harness") before
 investing: the current Release profile puts `cc_quads` and the Source_table
 traffic ahead of everything else that is still open.
 

@@ -2,8 +2,8 @@
 
 Status: proposed
 
-This plan extends `doc/editor_tools.md` (bone selection and display proxies)
-and `doc/erhe_scene.md` (skins and node transforms) with interactive inverse
+This plan extends `doc/editor/tools.md` (bone selection and display proxies)
+and `doc/erhe/scene.md` (skins and node transforms) with interactive inverse
 kinematics posing. It is phase 1 of the rigging roadmap in
 `rigging_tools.md`.
 

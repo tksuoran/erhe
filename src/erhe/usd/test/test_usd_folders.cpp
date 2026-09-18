@@ -1,8 +1,8 @@
 // A content-library folder is a `Scope` of the scene tree
-// (doc/content_library_folders.md), and a USD file carries every `Scope` it
+// (doc/editor/content_library_folders.md), and a USD file carries every `Scope` it
 // is given: the writer writes one where it sits whatever it holds, and the
 // reader makes an `erhe::Scope` item of one wherever it finds it, so a folder
-// tree survives a save empty (doc/usd_compatibility_design.md E4d).
+// tree survives a save empty (doc/erhe/usd_compatibility_design.md E4d).
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"

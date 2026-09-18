@@ -49,7 +49,7 @@ private:
 
     // A consumer outside any scene: no scene root, no draw list, no
     // registered objects, so sync_library({material}) is its whole membership
-    // mechanism (doc/draw_list_material_set.md D0, D3). One material
+    // mechanism (doc/erhe/draw_list_material_set.md D0, D3). One material
     // wide, so it is sized down accordingly.
     erhe::scene_renderer::Material_set         m_material_set;
 

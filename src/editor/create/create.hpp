@@ -37,7 +37,7 @@ public:
 
     void tool_render(const Render_context& context) override;
     // Cached reference, for the MCP get_editor_references query
-    // (doc/import_undo_reference_clearing.md).
+    // (doc/editor/import_undo_reference_clearing.md).
     [[nodiscard]] auto get_brush() const -> const std::shared_ptr<Brush>&;
 
 private:

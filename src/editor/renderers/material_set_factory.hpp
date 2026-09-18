@@ -18,7 +18,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 // The application-wide pieces every Material_set is built from
-// (doc/draw_list_material_set.md D3, D8): the one fallback texture /
+// (doc/erhe/draw_list_material_set.md D3, D8): the one fallback texture /
 // sampler pair that replaces the pair each renderer used to create for
 // itself, and the shared empty set.
 //

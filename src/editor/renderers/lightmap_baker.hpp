@@ -49,7 +49,7 @@ class Lightmap_partitioner;
 class Lightmap_report;
 class Scene_root;
 
-// Lightmap baker (doc/lightmap_baking.md).
+// Lightmap baker (doc/editor/lightmap_baking.md).
 //
 // Phase 2: the per-instance atlas layout (milestone A) and the texel
 // G-buffer raster pass (milestone B). Each lightmapped, non-skinned
@@ -232,7 +232,7 @@ public:
     // Everything released is rebuilt on demand by the next enabled tick.
     // Called when a scene closes: pause semantics deliberately keep the
     // working set on a plain disable, but a closed scene is never resumed
-    // (doc/reloadable_asset_loads.md).
+    // (doc/editor/reloadable_asset_loads.md).
     void release_working_set();
     [[nodiscard]] auto get_options() const -> const Bake_options& { return m_options; }
 
@@ -662,7 +662,7 @@ private:
     // entries whose primitive nothing else refers to, so content removed from
     // the scene can give its memory back. Tested on render_shape.use_count(),
     // because a defaulted Primitive copy can alias one Buffer_mesh key
-    // (doc/reloadable_asset_loads.md).
+    // (doc/editor/reloadable_asset_loads.md).
     void evict_unreferenced_blas();
 
     auto get_or_create_blas(

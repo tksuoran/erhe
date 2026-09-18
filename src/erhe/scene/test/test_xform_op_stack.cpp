@@ -1,4 +1,4 @@
-// Authored USD xformOp stacks on a prim (doc/usd_compatibility_design.md M8):
+// Authored USD xformOp stacks on a prim (doc/erhe/usd_compatibility_design.md M8):
 // op matrices, the composition order of a stack, and the write-back that
 // lands an erhe TRS edit in the op the stack designates.
 

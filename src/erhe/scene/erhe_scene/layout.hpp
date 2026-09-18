@@ -95,7 +95,7 @@ public:
     // deliberately left for later; recomputing each frame is simple and correct.
     void update();
 
-    // Registered properties (doc/property_system.md section 4.13), stored
+    // Registered properties (doc/erhe/property_system.md section 4.13), stored
     // in the entry store and inheriting from the node chain (D30): an
     // empty node or a style holds "Layout.gap" for the layouts below it.
     // The members are a mirror of the effective values kept current by
@@ -109,7 +109,7 @@ public:
     static const erhe::property::Property<glm::vec3>      gap_property;
     static const erhe::property::Property<glm::ivec3>     grid_track_count_property;
 
-    // Per-child hints as attached properties (R7, doc/property_system.md
+    // Per-child hints as attached properties (R7, doc/erhe/property_system.md
     // section 4.14; WPF Grid.Row): registered by Layout, set on the child
     // Node, qualified names "Layout.align_x" .. "Layout.grid_span". update()
     // reads them from each direct child; a child without a local value

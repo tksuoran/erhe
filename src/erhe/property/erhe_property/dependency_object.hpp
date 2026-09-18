@@ -198,7 +198,7 @@ public:
 
     // Style (D25): one shared style source per object - another
     // Dependency_object whose LOCAL values are the style (a Property_style,
-    // or the editor's style item, doc/style_library.md D1) - read between
+    // or the editor's style item, doc/editor/style_library.md D1) - read between
     // the local and inherited layers; a bridged property ignores it.
     // set_style notifies every property whose effective value or source
     // changes (locals shadow the style and are untouched); nullptr clears.
@@ -514,8 +514,8 @@ private:
     bool                                            m_sealed{false};
 };
 
-// A local value is an AUTHORED value (doc/property_system.md D32,
-// doc/usd_compatibility_design.md M4). An importer that fills an object
+// A local value is an AUTHORED value (doc/erhe/property_system.md D32,
+// doc/erhe/usd_compatibility_design.md M4). An importer that fills an object
 // field by field cannot say "the file did not author this", so it writes
 // every field and every one of them becomes a local value; this pass takes
 // the unauthored ones back out. For each stored, serializable, non-driven

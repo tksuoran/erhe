@@ -462,7 +462,7 @@ void Animation_sampler::apply(Animation_channel& channel, const float time_curre
     seek(channel, time_current);
 
     // The sampled value goes into the target's animated layer
-    // (doc/property_system.md D5): the value the prim authored is the base
+    // (doc/erhe/property_system.md D5): the value the prim authored is the base
     // under it, so a save writes the authored state whatever the playhead
     // says and stopping the animation puts the prim back on it. The write
     // notifies the property readers but not the scene - a transform channel

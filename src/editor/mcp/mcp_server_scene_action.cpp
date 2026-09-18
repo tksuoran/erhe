@@ -223,7 +223,7 @@ auto Mcp_server::action_select_variant(const json& args) -> std::string
     const std::string scene_name   = args.value("scene_name", "");
     const std::string variant_name = args.value("variant_name", "");
     // An empty enclosing block is a set the prim declares itself, which is
-    // every set of a file that nests none (doc/usd_compatibility_design.md
+    // every set of a file that nests none (doc/erhe/usd_compatibility_design.md
     // section 6, "Variant opinions a variant set does not carry").
     const Variant_set_key key{
         .prim_path              = args.value("prim_path", ""),
@@ -238,7 +238,7 @@ auto Mcp_server::action_select_variant(const json& args) -> std::string
         return r.dump();
     }
     // An empty prim_path is the scene's root prim, which is what carries a
-    // glTF asset's one variant set (doc/usd_compatibility_design.md X4).
+    // glTF asset's one variant set (doc/erhe/usd_compatibility_design.md X4).
     if (key.set_name.empty() || variant_name.empty()) {
         json r = make_text_content("set_name and variant_name are required");
         r["isError"] = true;
@@ -285,7 +285,7 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
         }
     }
 
-    // Item paths (doc/usd_compatibility_design.md M1) name the same items ids
+    // Item paths (doc/erhe/usd_compatibility_design.md M1) name the same items ids
     // do; a text without '/' is taken as a name, as it is everywhere else.
     const json paths_json = args.value("paths", json::array());
     std::vector<std::shared_ptr<erhe::Item_base>> items_by_path;
@@ -320,7 +320,7 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     }
     // The last listed item is the active item by construction (every
     // add_to_selection activates); an explicit `active` argument names
-    // another one of the listed items (doc/active_item.md D8).
+    // another one of the listed items (doc/editor/active_item.md D8).
     std::shared_ptr<erhe::Item_base> active_item;
     if (args.contains("active")) {
         const json& active_value = args.at("active");
@@ -386,7 +386,7 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
-// Make one item the active item (doc/active_item.md D8): the reference
+// Make one item the active item (doc/editor/active_item.md D8): the reference
 // item commands act on. The item need not be selected, and this does not
 // change the selection.
 auto Mcp_server::action_set_active_item(const json& args) -> std::string
@@ -439,7 +439,7 @@ auto Mcp_server::action_set_active_item(const json& args) -> std::string
     }).dump();
 }
 
-// The Operations window "Attach" button (doc/active_item.md D6, Blender
+// The Operations window "Attach" button (doc/editor/active_item.md D6, Blender
 // Ctrl-P): parent every node of the command target selection other than the
 // active node under the active node, as one undoable compound operation.
 auto Mcp_server::action_attach_selection_to_active(const json& args) -> std::string
@@ -505,7 +505,7 @@ auto Mcp_server::action_delete_nodes(const json& args) -> std::string
             have_ids.insert(item->get_id());
         }
         // Any prim of the tree by name, a Scope or a resource as readily as a
-        // node (doc/usd_compatibility_design.md C5).
+        // node (doc/erhe/usd_compatibility_design.md C5).
         const std::shared_ptr<erhe::scene::Node> root_node = sr->get_scene().get_root_node();
         if (root_node) {
             root_node->for_each<erhe::Hierarchy>(
@@ -525,7 +525,7 @@ auto Mcp_server::action_delete_nodes(const json& args) -> std::string
         return r.dump();
     }
 
-    // Structure protection (doc/usd_compatibility_design.md X2): an item
+    // Structure protection (doc/erhe/usd_compatibility_design.md X2): an item
     // inside a reference instance is not deleted (deleting the carrier
     // deletes the whole instance).
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
@@ -1887,7 +1887,7 @@ auto Mcp_server::place_brush_instance(
         }
     }
 
-    // Any prim parents the instance (doc/usd_compatibility_design.md C5); the
+    // Any prim parents the instance (doc/erhe/usd_compatibility_design.md C5); the
     // instance keeps the world transform the placement arguments give it.
     std::shared_ptr<erhe::Hierarchy> parent = parent_override;
     if (!parent && (args.contains("parent_node_id") || args.contains("parent_node_name"))) {
@@ -1898,7 +1898,7 @@ auto Mcp_server::place_brush_instance(
         }
     }
     if (parent) {
-        // Structure protection (doc/usd_compatibility_design.md X2).
+        // Structure protection (doc/erhe/usd_compatibility_design.md X2).
         const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
         if (child_refusal.has_value()) {
             log_mcp->info("brush placement refused: {}", child_refusal.value());
@@ -2597,7 +2597,7 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         return r.dump();
     }
 
-    // Any prim may parent any other prim (doc/usd_compatibility_design.md C5),
+    // Any prim may parent any other prim (doc/erhe/usd_compatibility_design.md C5),
     // so the parent is looked up as a prim: a new prim goes under a Scope as
     // readily as under an Xform.
     std::shared_ptr<erhe::Hierarchy> parent{};
@@ -2608,7 +2608,7 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        // Structure protection (doc/usd_compatibility_design.md X2).
+        // Structure protection (doc/erhe/usd_compatibility_design.md X2).
         const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
         if (child_refusal.has_value()) {
             log_mcp->info("create_node refused: {}", child_refusal.value());
@@ -2719,7 +2719,7 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
     const float       range       = args.value("range", (type == erhe::scene::Light_type::directional) ? 0.0f : 25.0f);
     const std::string name        = args.value("name", "MCP light");
 
-    // A Light is a prim (doc/usd_compatibility_design.md C5): it carries its
+    // A Light is a prim (doc/erhe/usd_compatibility_design.md C5): it carries its
     // own transform, so the light IS the node the caller addresses.
     std::shared_ptr<erhe::scene::Node>  node;
     std::shared_ptr<erhe::scene::Light> light;
@@ -2785,14 +2785,14 @@ auto Mcp_server::action_add_node_attachment(const json& args) -> std::string
     }
 
     // A child prim kind (Mesh, Camera, Light) goes under any prim
-    // (doc/usd_compatibility_design.md C5).
+    // (doc/erhe/usd_compatibility_design.md C5).
     const Child_prim_type_info* const child_prim_info = find_child_prim_type(type_key);
     if (child_prim_info != nullptr) {
         const std::shared_ptr<erhe::Hierarchy> parent = find_prim_in_scene(*sr, args, "node_id", "node_name");
         if (!parent) {
             return make_error_content("Prim not found (give node_id or node_name)");
         }
-        // Structure protection (doc/usd_compatibility_design.md X2).
+        // Structure protection (doc/erhe/usd_compatibility_design.md X2).
         const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
         if (child_refusal.has_value()) {
             log_mcp->info("add_node_attachment refused: {}", child_refusal.value());
@@ -3134,12 +3134,12 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
     }).dump();
 }
 
-// Moves any prim under any prim (doc/usd_compatibility_design.md C5): scene
+// Moves any prim under any prim (doc/erhe/usd_compatibility_design.md C5): scene
 // nodes, resources (materials, brushes, styles, ...) and Scopes alike. The
 // move is one set_parent: erhe::Hierarchy detaches from the old parent and
 // attaches to the new one inside the call, so the removal note the detach
 // records is cancelled by the attach before the frame's flush - a move does
-// not read as a removal (doc/import_undo_reference_clearing.md).
+// not read as a removal (doc/editor/import_undo_reference_clearing.md).
 auto Mcp_server::action_reparent_item(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -3302,7 +3302,7 @@ auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
     std::vector<std::shared_ptr<erhe::Item_base>> clones;
     json copied = json::array();
     // Any prim is copied, a Scope as readily as a node
-    // (doc/usd_compatibility_design.md C5).
+    // (doc/erhe/usd_compatibility_design.md C5).
     std::set<std::size_t> copied_ids;
     for (const std::shared_ptr<erhe::Item_base>& item : find_items_by_ids(*sr, target_ids)) {
         if (!copied_ids.insert(item->get_id()).second) {
@@ -3335,14 +3335,14 @@ auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
         return r.dump();
     }
 
-    // Any prim is a paste target (doc/usd_compatibility_design.md C5).
+    // Any prim is a paste target (doc/erhe/usd_compatibility_design.md C5).
     std::string error{};
     const std::shared_ptr<erhe::Hierarchy> parent_node = find_unique_prim_in_scene(*sr, args, "parent_id", "parent_name", "Parent", Absent_prim::scene_root, error);
     if (!parent_node) {
         return make_error_content(error);
     }
 
-    // Structure protection (doc/usd_compatibility_design.md X2).
+    // Structure protection (doc/erhe/usd_compatibility_design.md X2).
     const std::optional<std::string> child_refusal = instance_child_refusal(*parent_node);
     if (child_refusal.has_value()) {
         log_mcp->info("clipboard_paste refused: {}", child_refusal.value());

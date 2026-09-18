@@ -621,7 +621,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         // (the sign that pushes the stored occluder away from the light), +1 for
         // forward-Z. pcfRadius = K/2 from the active Shadow_filter_mode (whose
         // value is the PCF kernel width K), so the bake covers the receiver's PCF
-        // footprint (see doc/shadows.md).
+        // footprint (see doc/erhe/shadows.md).
         const float cdd        = m_scene_view.get_reverse_depth() ? -1.0f : 1.0f;
         const float pcf_radius = 0.5f * static_cast<float>(static_cast<uint32_t>(preset.shadow_filter));
         distance_bias_coeff    = cdd * (1.0f + pcf_radius);

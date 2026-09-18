@@ -351,7 +351,7 @@ Mesh_memory::Mesh_memory(
     // a more compact FORMAT. Derived here rather than written out again so an
     // edit to the source format cannot leave them behind. Done BEFORE the repack
     // below, so offsets and strides are recomputed for the changed attribute
-    // list. See doc/meshoptimizer_attribute_encodings.md.
+    // list. See doc/erhe/meshoptimizer_attribute_encodings.md.
     //
     // Why each dropped attribute is dropped:
     //  - custom_attribute_id is per FACET, and welding merges corners across
@@ -986,7 +986,7 @@ void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
     log_mesh_memory->trace("Mesh_memory::flush()");
     m_buffer_transfer_queue.flush(command_buffer);
 
-    // Free gate (doc/async_asset_loading_design.md 2.5): batches whose frame
+    // Free gate (doc/editor/async_asset_loading_design.md 2.5): batches whose frame
     // has completed but whose loader watermark had not caught up yet.
     apply_ready_pending_frees();
 

@@ -169,7 +169,7 @@ auto Debug_visualizations::get_selected_camera(const Render_context& render_cont
             if (node->get_scene() != scene) {
                 continue;
             }
-            // A Camera is a prim (doc/usd_compatibility_design.md C5): the
+            // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): the
             // selected item itself, or a camera child of it.
             const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_camera(node.get());
             if (camera) {

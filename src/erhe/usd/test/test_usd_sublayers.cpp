@@ -123,7 +123,7 @@ namespace {
 }
 
 // `sublayers.usda` lists two sublayers that disagree, and overrides one of
-// their prims with an `over` of its own (doc/usd_compatibility_design.md S1).
+// their prims with an `over` of its own (doc/erhe/usd_compatibility_design.md S1).
 class Sublayers_import : public testing::Test
 {
 protected:
@@ -221,7 +221,7 @@ TEST(Sublayers_asset_paths, a_parent_relative_sublayer_resolves)
 
 // A USD-backed scene is edited as the one composed stage it became, so a save
 // writes the composed content into one layer and authors no `subLayers`
-// (doc/erhe_usd.md).
+// (doc/erhe/usd.md).
 TEST_F(Sublayers_import, a_save_writes_one_layer_and_is_a_fixed_point)
 {
     const std::filesystem::path         first_path = temporary_path("sublayers.usda");
@@ -262,7 +262,7 @@ TEST_F(Sublayers_import, a_save_writes_one_layer_and_is_a_fixed_point)
 // stage: `sublayer_authored.usda` authors nothing but one `over` and lets its
 // sublayer author a `class` prim, an `inherits` arc, an `over` below a
 // reference carrier, an `xformOp` stack, an `erhe:` custom attribute and a
-// `variantSet` (doc/usd_compatibility_design.md S1).
+// `variantSet` (doc/erhe/usd_compatibility_design.md S1).
 class Sublayer_authored_import : public testing::Test
 {
 protected:

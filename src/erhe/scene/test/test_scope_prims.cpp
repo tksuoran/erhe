@@ -1,5 +1,5 @@
 // A prim outside Xformable - a Scope - in a scene tree
-// (doc/usd_compatibility_design.md C5): it has no transform, so a transform
+// (doc/erhe/usd_compatibility_design.md C5): it has no transform, so a transform
 // composes with the nearest Xformable ancestor and passes through it; it
 // carries the scene host to the prims below it; and it clones with its
 // subtree.

@@ -1,4 +1,4 @@
-// Sealing (D24 in doc/property_system.md): while sealed, every write
+// Sealing (D24 in doc/erhe/property_system.md): while sealed, every write
 // of the local layer is rejected; reads, inheritance, observers and an
 // installed expression keep working; a copy is unsealed.
 

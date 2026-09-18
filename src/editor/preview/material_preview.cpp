@@ -117,7 +117,7 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
     const auto paremt = m_scene_root_shared->get_hosted_scene()->get_root_node();
     m_node->set_parent(paremt);
 
-    // A Light is a prim (doc/usd_compatibility_design.md C5): it carries its
+    // A Light is a prim (doc/erhe/usd_compatibility_design.md C5): it carries its
     // own transform, so the preview needs no node to hold it.
     m_key_light = std::make_shared<erhe::scene::Light>("Key Light");
     m_key_light->enable_flag_bits(erhe::Item_flags::content);

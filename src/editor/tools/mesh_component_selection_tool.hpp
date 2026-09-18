@@ -329,7 +329,7 @@ private:
     // undid the Clear button).
     uint64_t               m_paint_commit_request_frame{0};
 
-    // Crease sharpness editing (edge mode, doc/subdivision_crease_edges.md):
+    // Crease sharpness editing (edge mode, doc/erhe/subdivision_crease_edges.md):
     // toolbar value applied to the selected edges via the undoable
     // Set_edge_sharpness_operation. nullopt clears (back to smooth).
     void apply_crease_sharpness(const std::optional<float>& value);

@@ -2,8 +2,8 @@
 
 Status: in progress
 
-This plan extends `doc/erhe_voxel.md` (the `erhe::voxel` library) and the SDF
-node section of `doc/geometry_nodes.md`. SDF support is built on OpenVDB behind
+This plan extends `doc/erhe/voxel.md` (the `erhe::voxel` library) and the SDF
+node section of `doc/editor/geometry_nodes.md`. SDF support is built on OpenVDB behind
 the `ERHE_VOXEL_LIBRARY` CMake option (`openvdb` or `none`): oneTBB and the
 OpenVDB static core come in through CPM, `erhe::voxel` wraps them, and the
 geometry graph has SDF primitive, voxelize, mesh, boolean, offset and smooth

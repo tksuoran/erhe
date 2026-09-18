@@ -15,7 +15,7 @@ class Draw_mode;
 class Tools;
 
 // Draws the proxy a prim's draw mode asks for, per viewport
-// (doc/usd_compatibility.md, "Draw modes"). A background tool rather than a
+// (doc/erhe/usd_compatibility.md, "Draw modes"). A background tool rather than a
 // window: it has no state and no UI, it only submits lines for the draw-mode
 // attachments the rendered scene registered with its Scene_root.
 //

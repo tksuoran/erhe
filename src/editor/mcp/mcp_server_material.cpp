@@ -844,7 +844,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
 
     // A material is a resource prim, so its creation is the ordinary
     // undoable insert under the parent prim, or under the Materials scope
-    // without one (doc/usd_compatibility_design.md U4, C5).
+    // without one (doc/erhe/usd_compatibility_design.md U4, C5).
     m_context.operation_stack->queue(
         make_resource_insert_operation(m_context, library, material, parent)
     );
@@ -859,7 +859,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
 }
 
 // Assign a material to one mesh primitive - the MCP equivalent of dragging a
-// material from the library onto a mesh (doc/draw_list_material_set.md,
+// material from the library onto a mesh (doc/erhe/draw_list_material_set.md,
 // phase 1). Two things make this a test surface rather than a convenience:
 //
 // - it goes through Mesh::set_primitive_material(), the one writer of a

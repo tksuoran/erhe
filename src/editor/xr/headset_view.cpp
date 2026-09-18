@@ -847,7 +847,7 @@ void Headset_view::update_hover_with_id_render()
         const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
-            // Non-blocking, see doc/primitive_shape_locking.md.
+            // Non-blocking, see doc/erhe/primitive_shape_locking.md.
             entry.geometry = shape->get_geometry_const();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
@@ -971,7 +971,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // resolves and each eye reads its own camera entry from
     // cameras[gl_ViewIndex]. Content_wide_line_renderer and
     // Debug_renderer feed the same multiview pass via per-view-strided
-    // compute (see doc/debug_renderer_multiview.md). Mirror mode is still
+    // compute (see doc/erhe/debug_renderer_multiview.md). Mirror mode is still
     // skipped under multiview; the ID pick pass runs once above,
     // independent of this path.
     if (m_frame_timing.should_render && m_use_multiview) {
@@ -1134,7 +1134,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                                 for (const auto& mesh : mesh_layer->meshes) {
                                     if (filter(mesh->get_flag_bits())) {
                                         // The active item of the selection gets its own
-                                        // outline color (doc/active_item.md D5).
+                                        // outline color (doc/editor/active_item.md D5).
                                         content_wide_line_renderer->add_mesh(
                                             *m_context.mesh_memory,
                                             *mesh,

@@ -280,7 +280,7 @@ public:
     auto create_new_scene       () -> std::shared_ptr<Scene_root>;
 
     // Prim creation. Any prim may parent any other prim
-    // (doc/usd_compatibility_design.md C5), so every creator below takes the
+    // (doc/erhe/usd_compatibility_design.md C5), so every creator below takes the
     // parent as the Hierarchy it is: a Camera is created under a Scope or a
     // Material as readily as under an Xform. Each queues one undoable insert
     // of the new prim as the last child of `parent`; without a parent the
@@ -307,7 +307,7 @@ public:
     // camera; returns empty when no camera is selected.
     auto create_new_rendertarget(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
 
-    // Resource prim creation (doc/usd_compatibility_design.md U4): each queues
+    // Resource prim creation (doc/erhe/usd_compatibility_design.md U4): each queues
     // one undoable insert of a new resource as the last child of `parent`,
     // any prim; without a parent the resource lands in its kind scope of the
     // active scene's content library (make_library_insert_operation). The
@@ -316,7 +316,7 @@ public:
     auto create_new_physics_material(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Physics_material>;
     auto create_new_collision_filter(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Collision_filter>;
     auto create_new_joint_settings  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::physics::Physics_joint_settings>;
-    // An empty style named uniquely in the scene's library (doc/style_library.md R1).
+    // An empty style named uniquely in the scene's library (doc/editor/style_library.md R1).
     auto create_new_style           (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Style>;
     // A texture graph asset; the Texture Graph window is pointed at it (#252).
     auto create_new_graph_texture   (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Graph_texture>;

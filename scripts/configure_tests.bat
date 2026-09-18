@@ -8,7 +8,7 @@ REM   cmake --build build_tests --target erhe_geometry_tests --config Debug
 REM   cmake --build build_tests --target erhe_geometry_tests --config Release
 REM
 REM Used by the timing harness (src/erhe/geometry/test/test_timing_harness.cpp,
-REM see doc/catmull_clark.md). For correctness runs prefer
+REM see doc/erhe/catmull_clark.md). For correctness runs prefer
 REM configure_tests_asan.bat.
 
 cmake ^

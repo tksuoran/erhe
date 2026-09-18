@@ -650,7 +650,7 @@ auto Scene_commands::create_new_camera(erhe::Hierarchy* parent) -> std::shared_p
         return {};
     }
 
-    // A Camera is a prim (doc/usd_compatibility_design.md C5): it enters the
+    // A Camera is a prim (doc/erhe/usd_compatibility_design.md C5): it enters the
     // scene as a child of `parent`, carrying its own transform.
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
     new_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
@@ -705,7 +705,7 @@ auto Scene_commands::create_new_mesh(erhe::Hierarchy* parent) -> std::shared_ptr
     }
 
     // An empty mesh (no primitives) renders nothing until the user adds
-    // geometry. A Mesh is a prim (doc/usd_compatibility_design.md C5), so it
+    // geometry. A Mesh is a prim (doc/erhe/usd_compatibility_design.md C5), so it
     // enters the scene as a child of `parent`, carrying its own transform.
     auto new_mesh = std::make_shared<erhe::scene::Mesh>("new mesh");
     new_mesh->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -886,7 +886,7 @@ auto Scene_commands::create_new_light(erhe::Hierarchy* parent) -> std::shared_pt
         return {};
     }
 
-    // A Light is a prim (doc/usd_compatibility_design.md C5): it enters the
+    // A Light is a prim (doc/erhe/usd_compatibility_design.md C5): it enters the
     // scene as a child of `parent`, carrying its own transform.
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
     new_light->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
@@ -990,7 +990,7 @@ auto Scene_commands::create_new_physics_material(erhe::Hierarchy* parent) -> std
     if (scene_root == nullptr) {
         return {};
     }
-    // doc/property_system.md section 4.12.
+    // doc/erhe/property_system.md section 4.12.
     const std::shared_ptr<erhe::physics::Physics_material> new_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
     queue_resource_insert(*scene_root, parent, new_material);
     return new_material;
@@ -1028,7 +1028,7 @@ auto Scene_commands::create_new_style(erhe::Hierarchy* parent) -> std::shared_pt
     if (!library) {
         return {};
     }
-    // doc/style_library.md R1: an empty style.
+    // doc/editor/style_library.md R1: an empty style.
     const std::shared_ptr<Style> new_style = std::make_shared<Style>(make_unique_style_name(*library, "New Style"));
     queue_resource_insert(*scene_root, parent, new_style);
     return new_style;
@@ -1068,7 +1068,7 @@ auto Scene_commands::create_new_graph_mesh(erhe::Hierarchy* parent) -> std::shar
 
 auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
 {
-    // doc/active_item.md D6: without an explicit node the target is the
+    // doc/editor/active_item.md D6: without an explicit node the target is the
     // active node.
     std::shared_ptr<erhe::scene::Node> target = (node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
@@ -1157,7 +1157,7 @@ auto Scene_commands::create_new_joint(
     if (node != nullptr) {
         target = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this());
     } else {
-        // doc/active_item.md D6: the target is the active node.
+        // doc/editor/active_item.md D6: the target is the active node.
         target = m_context.selection->get_active_item_as<erhe::scene::Node>();
         if (target && !connected) {
             // Convenience for the bare command: connect to another selected

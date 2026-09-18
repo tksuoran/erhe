@@ -61,11 +61,11 @@ fallback only.
   types, where glTF requires a finite `zfar`.
 - `exposure`, `shadow_range`: erhe camera parameters.
 - `properties`: the camera's local property values as a name to text map
-  (`doc/property_system.md` D14), the registered properties of `Camera`
+  (`doc/erhe/property_system.md` D14), the registered properties of `Camera`
   by name. The map is the camera's complete local set: on load, a
   projection field of this extension or of the core camera that the map
   does not name is cleared again, so a camera that inherits it from its
-  node (`doc/property_system.md` D30) still does after a reload.
+  node (`doc/erhe/property_system.md` D30) still does after a reload.
 - `flags`: the camera attachment's persistent Item flags
   (see [flags.md](flags.md)).
 

@@ -1,5 +1,5 @@
 // Bit-exact Geometry <-> Geometry_flat_data round-trip
-// (doc/gltf_scene_roundtrip.md phase 2). The flat form is what the
+// (doc/editor/gltf_scene_roundtrip.md phase 2). The flat form is what the
 // glTF exporter maps onto accessors + the ERHE_geometry extension; the
 // round-trip must preserve every geogram attribute byte-exact (attribute
 // bytes are compared with memcmp, satisfying the hexfloat discipline).

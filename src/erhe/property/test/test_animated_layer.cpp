@@ -1,4 +1,4 @@
-// Animated layer (D5 / R3 in doc/property_system.md): coerced > animated >
+// Animated layer (D5 / R3 in doc/erhe/property_system.md): coerced > animated >
 // local > style > reference > inherited > default. An animated value is a
 // playback pose: it is read above the local layer, it is never authored, and
 // a write made while it runs goes to the base under it.

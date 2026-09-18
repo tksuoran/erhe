@@ -85,7 +85,7 @@ Texture_graph_window::Texture_graph_window(
     // Self-consistency check for the ported node descriptors: the editor has no
     // gtest target, so compose every MVP descriptor standalone once at startup
     // and log any that fail to assemble (see the descriptor self-check in
-    // doc/texture_graph.md). Pin <-> descriptor consistency is already
+    // doc/editor/texture_graph.md). Pin <-> descriptor consistency is already
     // guaranteed by construction (build_pins_from_descriptor).
     const std::vector<std::string> descriptor_failures = check_texture_node_descriptors();
     if (descriptor_failures.empty()) {

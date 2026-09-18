@@ -2,7 +2,7 @@
 // and the UsdTransform2d land on the erhe material slot, the inputs:scale of
 // a color input becomes the factor the shader multiplies the texture with,
 // and the normal slot carries the inputs:scale / inputs:bias decode
-// (doc/usd_compatibility.md, Materials).
+// (doc/erhe/usd_compatibility.md, Materials).
 
 #include "erhe_graphics/enums.hpp"
 #include "erhe_item/hierarchy.hpp"

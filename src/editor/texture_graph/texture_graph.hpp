@@ -10,7 +10,7 @@ namespace editor {
 // Unlike the geometry graph, texture evaluation is cheap - each node only
 // records how it composes into GLSL (the heavy shader compile / render happens
 // at sinks during the editor frame), so there is no async shadow-clone engine
-// here (doc/texture_graph.md decision 8). evaluate_if_dirty() runs
+// here (doc/editor/texture_graph.md decision 8). evaluate_if_dirty() runs
 // directly on the live graph.
 //
 // Evaluation is incremental: only dirty nodes and their downstream dependents
