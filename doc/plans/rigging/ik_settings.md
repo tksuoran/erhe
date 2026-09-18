@@ -371,9 +371,9 @@ formulation adapted to swing/twist limits:
 
 ### 7. Scope markers for the rest of Phase 2 (not in this slice)
 
-- **Pole target / swivel control** - next slice; requirements to be
-  written after this slice lands (will add pole data to `ERHE_rig` if
-  persistent).
+- **Pole target / swivel control** - next slice, specified in
+  `pole_target.md` (a pole node reference and an angle on `Ik_settings`,
+  carried by `ERHE_rig`).
 - **Effector orientation option** (keep world orientation vs follow last
   segment) - Transform tool setting; small, after pole.
 - **Chain visualization** during drag (highlight chain, root, later pole)
