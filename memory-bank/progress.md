@@ -288,3 +288,8 @@ verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-
 ✓checker+moves+notes-migration+headers+index{5-commits}
 ✓content-sweep{9-group-commits;~190-docs;18-docs-folded/deleted;~45-plans-created}
 ?changelog=prompt_queue.txt-item-1{erhe::*-API-only}
+
+[TASK::rigging-phase-2]{started-2026-09-18;via-harness}
+✓pole-target-slice{484bac408+67aafe503+c59ba15b3+08a7a73e0;ik_pole_verify.py-all-pass;solver-tests-22;roundtrip-418/421}
+?effector-orientation-option{coder-running}->chain-visualization->deferred-Phase-1-questions
+?user-interactive-deferred{ik_settings-slice;pole-picker;live-drag}
