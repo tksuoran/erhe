@@ -1,40 +1,16 @@
-# Debug_renderer multiview port
+# Debug_renderer multiview
 
 Stability: stable
 
-> **Note (2026-05-19, settled): the pipeline-create-info split has landed.**
-> The data flow described below is correct; the pipeline plumbing differs
-> from the original port as follows:
->
-> - `Render_pipeline_create_info` was split into
->   `Base_render_pipeline_create_info` (format-independent state) and
->   `Render_pipeline_create_info` (composes the base plus shader_stages,
->   vertex_input, vertex_format). `Base_render_pipeline` now takes the base
->   and resolves shader_stages / vertex_input at the call site via
->   `get_pipeline_for(render_pass_desc, shader_stages, vertex_input,
->   vertex_format)`.
-> - `Shader_stages_create_info::enable_multiview(N)` is gone; set
->   `view_count` directly. With this, the multiview graphics pipeline no
->   longer needs a separate `Base_render_pipeline` bypass -- the
->   per-call `get_pipeline_for(...)` resolves either the single-view or the
->   multiview `Shader_stages*` per draw.
-> - The "Compute / graphics pipelines" section below still references the
->   `vertex_input = nullptr` bypass via `Render_pipeline_state`; the same
->   shape is now spelled by passing `vertex_input = nullptr` into
->   `Base_render_pipeline::get_pipeline_for(...)`.
->
-> The view UBO layout, compute / graphics shader pairing, and bucket
-> internals described below are unchanged.
+## What it does
 
-## Status
-
-Implemented. `Debug_renderer` participates in
+`Debug_renderer` participates in
 `Headset_view::multiview_callback` so debug lines (tool gizmos,
 manipulators, debug visualisations) render in both eyes on Quest in
 a single multiview render pass. Single-view callers keep working
 unchanged.
 
-The port mirrors `erhe::scene_renderer::Content_wide_line_renderer`
+It mirrors `erhe::scene_renderer::Content_wide_line_renderer`
 (read that side-by-side when extending the multiview path):
 
 - `src/erhe/scene_renderer/erhe_scene_renderer/content_wide_line_renderer.{hpp,cpp}`
@@ -136,8 +112,9 @@ Graphics has two variants:
   triangle SSBO via the input assembler, fragment stage uses
   `gl_FragCoord` directly.
 - `multiview_graphics_shader_stages` (built only when
-  `view_count >= 2`): same `line_after_compute.{vert,frag}`
-  source recompiled with `enable_multiview(N)`. The vertex stage's
+  `view_count >= 2`): the same `line_after_compute.{vert,frag}`
+  source recompiled with `Shader_stages_create_info::view_count = N`
+  and `no_vertex_input = true`. The vertex stage's
   `#ifdef ERHE_MULTIVIEW` branch reads the SSBO at `gl_VertexID +
   gl_ViewIndex * view.stride_per_view`; the fragment stage's
   multiview branch subtracts `view.cameras[c_view_index].viewport.xy`
@@ -145,14 +122,14 @@ Graphics has two variants:
 
 Bind group layouts:
 
-- `bind_group_layout` -- compute + single-view graphics. Binds the
-  line-input SSBO (binding 0), triangle-output SSBO writeonly
-  (binding 1), and the view UBO (binding 3).
-- `multiview_graphics_bind_group_layout` -- multiview graphics only.
-  Binds the triangle SSBO read-only (binding 1) and the view UBO
-  (binding 3); intentionally omits the line-input SSBO at binding
-  0 because the multiview vertex shader reads pre-transformed
-  triangles directly from the SSBO and never touches the original
+- `bind_group_layout` -- the compute pass. Binds the line-input SSBO
+  (binding 0), the triangle-output SSBO writeonly (binding 1), and the
+  view UBO (binding 3).
+- `graphics_bind_group_layout` -- the compute-path render, single-view
+  and multiview alike. Binds the triangle SSBO read-only (binding 1)
+  and the view UBO (binding 3); it intentionally omits the line-input
+  SSBO at binding 0, because the vertex shader reads pre-transformed
+  triangles directly from binding 1 and never touches the original
   line vertices.
 
 `triangle_vertex_buffer_read_block` is the read-only sibling
@@ -161,11 +138,15 @@ descriptor binding (1). Different GLSL block names (auto-suffixed
 `_block`) avoid duplicate-symbol errors but the descriptor binding
 is shared so a single buffer bind serves both declarations.
 
-The multiview graphics path bypasses `Base_render_pipeline` and
-constructs a per-call `Render_pipeline_state` with `vertex_input =
-nullptr` and the multiview shader stages. This is the same pattern
-`Forward_renderer` and `Content_wide_line_renderer` use for their
-multiview overrides.
+Both compute-path render variants bypass the `Base_render_pipeline`
+cache (which is keyed on the single-view shader stages) and construct a
+per-call `Render_pipeline_state` that mirrors the cached pipeline's
+depth / stencil / blend state and overrides the shader stages; the
+encoder's own pipeline cache handles `VkPipeline` reuse. The
+line-topology path instead resolves a pipeline through
+`Base_render_pipeline::get_pipeline_for(render_pass_descriptor,
+color_blend, shader_stages, vertex_input, vertex_format)`, which picks
+the single-view or multiview `Shader_stages*` per draw.
 
 ## Bucket internals
 
@@ -250,12 +231,14 @@ also idle. The single trailing memory barrier covers both with
 - **vp_y_sign and clip_depth_direction stay top-level**: they are
   per-coordinate-convention scalars, not per-view. Do not push
   them inside the `cameras[]` struct.
-- **Multiview pipeline `vertex_input` is null**: the multiview
-  vertex shader reads pre-transformed triangles from the SSBO, not
-  through the input assembler. The pipeline must be created with
-  `vertex_input = nullptr` (see how the bucket builds the
-  per-call `Render_pipeline_state`). Setting a non-null
-  `vertex_input` here is the easy way to trip
+- **The compute-path render pipeline binds an EMPTY vertex input, not
+  a null one.** The vertex shader reads pre-transformed triangles from
+  the SSBO via `gl_VertexID`, not through the input assembler, so the
+  shader stages are built with `no_vertex_input = true`; but OpenGL
+  core profile requires a non-default VAO bound for the draw to fire,
+  so the per-call `Render_pipeline_state` uses
+  `Debug_renderer::get_empty_vertex_input()`. Giving it a real vertex
+  input instead is the easy way to trip
   `VUID-VkGraphicsPipelineCreateInfo` input-assembler-format
   mismatches.
 - **Per-eye fragment shader viewport**: each multiview layer's

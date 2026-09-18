@@ -148,9 +148,8 @@ group layout declared so the cross-backend path matches Vulkan.
 
 Renderers using the dedicated-sampler path: `Light_buffer` (shadow maps),
 `post_processing` (`s_input`/`s_downsample`/`s_upsample`), `text_renderer`
-(`s_texture`, optional `s_vertex_data`), `imgui_renderer` (`s_texture_array`),
-the rendering_test depth_visualize cell (`s_depth`), the rendering_test
-sep_tex cell (`s_tex0/1/2`).
+(`s_texture`, optional `s_vertex_data`), `imgui_renderer`
+(`s_texture_array`).
 
 ### Texture Heap
 
@@ -230,9 +229,9 @@ render command encoder via `setStencilFrontReferenceValue` /
 `format_flag_require_stencil` and returns `format_d32_sfloat_s8_uint` when
 the caller asks for a packed depth+stencil format. The
 `Render_pipeline_create_info::set_format_from_render_pass()` swapchain
-branch picks up the stencil format from `desc.stencil_attachment` when set
-(this used to silently leave it `Invalid`, which Metal pipeline validation
-flagged as a stencil format mismatch).
+branch picks up the stencil format from `desc.stencil_attachment` when set.
+Leaving it `Invalid` there is what Metal pipeline validation flags as a
+stencil format mismatch.
 
 ### MSAA Depth/Stencil Resolve
 
@@ -240,8 +239,6 @@ Metal supports resolving the depth and stencil aspects of an MSAA texture
 into a single-sample texture via `MTLMultisampleDepthResolveFilter` /
 `MTLMultisampleStencilResolveFilter`. The `erhe::graphics::Resolve_mode`
 enum (`sample_zero` / `average` / `min` / `max`) maps to these filters.
-The rendering_test MSAA depth-resolve cell exercises the path on both
-Vulkan and Metal.
 
 ### Swapchain
 
@@ -285,5 +282,6 @@ states, argument encoders, etc.) may still be referenced by command buffers
 that have not finished executing on the GPU. The Metal backend uses the
 same `add_completion_handler()` pattern as the Vulkan backend: destructors
 capture handles by value into a lambda and defer release until the device
-shuts down. This eliminated a class of intermittent crashes on shutdown
-when destroying resources still referenced by in-flight command buffers.
+shuts down. Releasing a resource that an in-flight command buffer still
+references is what this prevents - it shows up as intermittent shutdown
+crashes.

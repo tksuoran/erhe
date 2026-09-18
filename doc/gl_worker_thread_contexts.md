@@ -2,33 +2,19 @@
 
 Stability: stable
 
-Live document for the GL worker-context subsystem: requirements, design,
-verification, future work, traps. The subsystem is implemented and in use:
-glTF scenes load on the OpenGL build, the log confirms "Created 4 GL worker
-share contexts", and a dedicated multithreaded test suite covers the
-worker-prepare / main-consume contract (see Verification). History lives in
-the git log, not here.
+The GL worker-context subsystem lets taskflow workers create and use shared GL
+objects on the OpenGL backend. Without it, a worker reaching
+`glCreateBuffers` with no current context faults inside the driver - which any
+glTF load on the OpenGL build reached, through
+`deferred_finalize_mesh_items` -> `prepare_geometry_buffer_mesh` ->
+`Mesh_memory::allocate_vertex_buffer_range`. Vulkan and the procedural default
+scene have no such rule.
 
 The GL spec grounding for the cross-context rules is transcribed in
 `doc/reference/gl_spec_section_5.md` (the "Shared Objects and Multiple Contexts"
 chapter); consult it when touching publication or teardown.
 
 ## Requirements
-
-**The motivating bug.** The OpenGL build faulted in the driver at
-`glCreateBuffers`, called from a taskflow worker that had no GL context:
-
-```
-atio6axx.dll  (access violation)
-gl::create_buffers <- Device_impl::create_buffer <- Buffer_impl
-  <- Buffer_pool::create_new_block <- Mesh_memory::allocate_vertex_buffer_range
-  <- Primitive_builder::build <- prepare_geometry_buffer_mesh
-  <- deferred_finalize_mesh_items  ... tf::Executor worker
-```
-
-Any glTF load reproduced it (`build_vs2026_opengl`, `--scene
-res/editor/assets/ABeautifulGame.glb`); Vulkan and the procedural default
-scene were unaffected.
 
 What the subsystem must provide:
 
@@ -368,50 +354,12 @@ repeatable tests runnable on the OpenGL `build_tests` tree and under ASAN
 - **The guard**: a death test proves off-scope worker creation dies on
   `HAS_CONTEXT` instead of faulting in the driver.
 
-Still manual / not covered by the tests:
-
-1. **The mesh-edit call-site remainder**: CSG, geometry-graph evaluation,
-   and a lightmap partition run (parallel path, and serial for the main
-   no-op) on the GL build -- drivable over the editor MCP server
-   (127.0.0.1:3743). The Catmull-Clark half is done.
-2. **Guards on a full glTF load**: a few hundred frames with no assert
-   fired, plus forcing a worker-side failure path (`create_new_block`
-   returning false) -- the happy path exercises no error paths.
-3. **Editor-level clean shutdown under ASan** (the test environment's
-   device + populated-pool teardown runs clean under ASAN; the editor's
-   own shutdown ordering is a separate check).
-4. **Fence mutation-checks** (remove a producer fence / consumer wait and
-   observe breakage) -- the fences are exercised end to end by the tests
-   above, but not mutation-tested; this driver may mask a missing fence.
-
 ## Future work
 
-- **Nested taskflows inside `parse_gltf`** (gltf_fastgltf.cpp runs nested
-  taskflows on a worker) -- never explicitly examined. Parse is otherwise
-  CPU-only, but if a scope were taken on the parse thread and a nested flow
-  stole work to other threads, re-entrancy would not help (the lightmap
-  subflow shape). Confirm, or fold into the verification sweep.
-- **Optional gate collapse** (required by nothing): the remaining
-  constant-true capability gates (`use_texture_view`, `use_clear_texture`,
-  `use_base_instance`, `use_debug_output` / `use_debug_groups`,
-  `use_clip_control`, `use_solid_wireframe`,
-  `use_multi_draw_indirect_core`, `primitive_restart_fixed_index`) and the
-  GLSL-version emulation for `glsl_version < 420/430`. Bindless textures
-  stay conditional (extension, not 4.5 core), as does the
-  `GL_ARB_shading_language_packing` polyfill.
-- **`Vertex_input_state::set()` is dormant and silently broken** under
-  per-context instances (reconfiguring in place would need to re-run
-  `update()` on every context's VAO). No caller in the tree. Delete it, or
-  give it an explicit invalidation rule (clear every slot under the
-  adoption mutex; contexts re-adopt on next use).
-- **`Programs`' shader compile / link taskflow** is commented out; if
-  revived it needs a worker context.
-- **Worker-side rendering / compute** ("a worker could run a full render
-  pass") is now structurally possible -- per-context caches, per-context
-  active-render-pass slot -- but has no call site. The moment one lands,
-  every shared object it writes needs the per-object publication sync and
-  the consumer re-attach: the publication-point set grows with every newly
-  legalized producer.
+- [GL worker contexts](plans/gl_worker_contexts.md) - the verification the
+  automated tests do not cover, the `parse_gltf` nested flows, the dormant
+  `Vertex_input_state::set()`, the optional gate collapse, and worker-side
+  rendering.
 
 ## Traps
 

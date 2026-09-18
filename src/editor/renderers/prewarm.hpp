@@ -18,11 +18,9 @@ class App_context;
 // Intended call site: editor.cpp's init flow, between
 // run_startup_script() and the close+submit+wait_idle block.
 //
-// Currently disabled (the body is a stub). See doc/prewarm.md for the
-// design intent; re-enabling waits on the wider variant / mesh-memory
-// rework. init_message, when non-empty, is invoked once per Scene_root
-// with the scene name so Init_status_display can show per-scene
-// progress on the loading screen.
+// See doc/prewarm.md for what each phase warms and why. init_message,
+// when non-empty, is invoked once per Scene_root with the scene name so
+// Init_status_display can show per-scene progress on the loading screen.
 void prewarm_all(
     App_context&                                 context,
     const std::function<void(std::string_view)>& init_message = {}

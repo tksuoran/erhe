@@ -221,3 +221,7 @@ per-eye renderer dispatches, single-view shaders).
 | `src/editor/xr/headset_view.{hpp,cpp}` | Multiview render path |
 | `src/erhe/xr/erhe_xr/xr_session.{hpp,cpp}` | `render_frame_multiview()`; shared layered swapchain |
 | `src/erhe/xr/erhe_xr/xr_swapchain_image.{hpp,cpp}` | `array_layer_count` parameter |
+
+## Future work
+
+- [XR](plans/xr.md) - view configurations beyond stereo.

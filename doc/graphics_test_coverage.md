@@ -4,10 +4,10 @@ Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
 target builds and runs on headless Vulkan / lavapipe (41/41) and on non-headless
-OpenGL (40 passed + 1 capability skip, no failures); Metal builds but still needs
-macOS validation (see
-[`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each row
-maps to one or more `TEST_F(Gpu_test, ...)` cases.
+OpenGL (40 passed + 1 capability skip, no failures); Metal builds but has not
+been run there (see
+[`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
+row maps to one or more `TEST_F(Gpu_test, ...)` cases.
 `[x]` = covered, `[ ]` = gap, `[-]` = not testable on this device (a device/engine
 limitation, not a coverage gap to fill).
 
@@ -75,20 +75,7 @@ matrix entry that supports it and runs ctest with `--label-exclude
 target does not (the runners have no GPU; the target carries the ctest label
 `gpu`). The GPU coverage above is exercised on developer machines.
 
-## Future work: GPU tests in CI under a software Vulkan
+## Future work
 
-Deferred by decision: it cannot be developed/verified from the (Windows) dev
-machine and needs new infrastructure. Add a matrix entry (or a step of the
-Linux Vulkan entry) that configures `-DERHE_BUILD_TESTS=ON
--DERHE_GRAPHICS_API=vulkan -DERHE_WINDOW_LIBRARY=none`, installs a software
-Vulkan (Mesa lavapipe on Ubuntu runners; SwiftShader as alternative), points
-the loader at its ICD, verifies with `vulkaninfo`, then runs
-`ctest -L gpu` in addition to the label-excluded run.
-
-Software Vulkan does not support every format/feature; tests must probe and
-skip: `probe_image_format_support`, `get_format_properties`,
-`get_supported_depth_stencil_formats` / `choose_depth_stencil_format`, and
-`Device_info` flags. The Environment `SetUp` should `GTEST_SKIP()` (not fail)
-if no Vulkan device can be created. Keep targets tiny (16x16, N~1000).
-Optionally enable `VK_LAYER_KHRONOS_validation` in CI to keep the 0-VUID
-guarantee under software.
+- [Graphics tests](plans/graphics_tests.md) - GPU tests in CI under a software
+  Vulkan, and running the suite on Metal.

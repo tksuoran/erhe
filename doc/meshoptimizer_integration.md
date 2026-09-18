@@ -2,16 +2,11 @@
 
 Stability: stable
 
-Live document for the mesh-optimization subsystem built on
+The mesh-optimization subsystem is built on
 [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) (vanilla
-upstream, pinned via CPM): requirements, design, verification, future
-work, traps. History lives in the git log, not here.
-
-Status: implemented and verified, including the interactive edit paths
-(paint, weight paint, component drag). Remaining items (perf, Quest) are
-in "Future work". `optimize_meshes` defaults to **true** in
-`config/editor/mesh_memory.json`; `mesh_optimize_cache` stays **false**
-(the user's call).
+upstream, pinned via CPM). `optimize_meshes` defaults to **true** in
+`config/editor/mesh_memory.json`; `mesh_optimize_cache` defaults to
+**false**.
 
 ## Requirements
 
@@ -39,17 +34,17 @@ User-confirmed; the first is a hard requirement.
    original variant.
 6. Live mesh edits (paint, weight paint, vertex drag) keep working: the
    optimized build is invalidated at edit start, never written through.
-7. Vertex-position quantization is routed through `meshopt_quantizeSnorm`,
-   bit-identical to the `float_to_snorm16` encoder (both encode sites
-   pre-clamp to [-1, 1], where the two agree).
-8. The unoptimized **base** variant never uses position quantization:
+7. Vertex-position quantization is routed through `meshopt_quantizeSnorm`.
+8. That encode is bit-identical to the `float_to_snorm16` encoder, because
+   both encode sites pre-clamp to [-1, 1], where the two agree.
+9. The unoptimized **base** variant never uses position quantization:
    full-float positions. In the editor, every primitive always maintains
    this variant, so it is always renderable -- and in-place GPU edits can
    express any position (no AABB clamp, ever).
-9. The **optimized** variant is the only build that applies quantization.
-   Because the base variant is always available, the optimized variant can
-   be built lazily on request, in the background.
-10. During a mesh edit operation (paint, weight paint, active mesh-component
+10. The **optimized** variant is the only build that applies quantization.
+    Because the base variant is always available, the optimized variant can
+    be built lazily on request, in the background.
+11. During a mesh edit operation (paint, weight paint, active mesh-component
     move) the optimized variant is invalidated as soon as the edit starts,
     re-optimization is blocked for the duration of the edit, and at edit end
     an optimization task can start on a background thread.
@@ -113,7 +108,7 @@ Consequences designed against:
   `Mesh_memory::optimized_position_format` -- snorm16x3 when
   `quantize_vertex_positions` is on and the device supports it as vertex
   input, float3 otherwise; the content (base) formats always store float3
-  (requirement 8), so quantization has no effect unless `optimize_meshes`
+  (requirement 9), so quantization has no effect unless `optimize_meshes`
   is on. **Both paths (soup and geometry) build in that format, or it is
   not an invariant.** `Mesh_memory` derives the optimized formats from the
   content ones in its constructor (facet-id drop + position substitution);
@@ -219,10 +214,10 @@ glTF meshes. Unbounded growth is accepted for v1.
 GPU vertex edits (paint colors, weight paint, live-drag positions) address
 the per-corner original buffer through the mappings. Writing through the
 welded variant is not possible -- merged corners share one slot -- and with
-the base variant unquantized (requirement 8) any edited position is
+the base variant unquantized (requirement 9) any edited position is
 representable in place: no AABB clamp, ever.
 
-Requirement 10's bracket: when the edit STARTS (drag begin, stroke begin --
+Requirement 11's bracket: when the edit STARTS (drag begin, stroke begin --
 before the first GPU write) the tool calls
 `Mesh::begin_optimized_variant_edit()`, which takes an **optimization
 hold** on the `Primitive`, drops the live optimized shape frame-safely and
@@ -247,7 +242,7 @@ At edit END the commit operations (`Move_mesh_vertices_operation`,
 `Paint_weights_operation`, `Paint_colors_operation` -- paint is durable and
 undoable: strokes write the geometry's `corner_color_0` attribute, the
 attribute the builder prefers) rebuild the primitive **base-only
-synchronously** (immediately renderable, requirement 8) and kick off the
+synchronously** (immediately renderable, requirement 9) and kick off the
 background re-optimization: `kickoff_deferred_finalize()` dispatches the
 same worker-prepare / `Scene_commit_queue`-commit finalize the import path
 uses. The finalize decides re-optimization **at snapshot time under the
@@ -280,7 +275,7 @@ is a separate, known figure.
 
 ### Position quantization (optimized variant only)
 
-Quantization applies **only to the optimized variant** (requirements 8-9):
+Quantization applies **only to the optimized variant** (requirements 9-10):
 the content (base) formats always store float3, so `quantize_vertex_positions`
 has no effect unless `optimize_meshes` is on, and the format choice has no
 acceleration-structure gate -- every BLAS source is pinned to the original
@@ -381,41 +376,10 @@ the optimized variant is selected and rendered.
   erhe_graphics_gpu_tests discovery include when that target has not been
   built (it is not in the default target) -- build it explicitly or run
   ctest per test directory.
-- **Build sweep**: ninja vulkan Debug, VS opengl Debug, Quest APK.
-
-## Future work
-
-1. **Perf.** Not measurable headlessly (the frame pacer reports tier "OFF"
-   and no MCP surface reports GPU frame time). Use the Frame Pacing window
-   or a GPU capture on the RELEASE build; Bistro is ~119 ms/frame in
-   Debug. The static side is measured (the -62% fetch figures above).
-   Also measure the transient RSS spike of the staging snapshot + optimizer
-   temporaries on a Bistro-scale rebuild with several finalize workers, and
-   the base variant's memory (12 bytes/position, always resident; the
-   minimal `id_renderer`-variant seam below is the recorded way to reclaim
-   it).
-2. **Quest verification of the on-by-default configuration - DONE
-   2026-09-01.** A clean reinstall (uninstall first;
-   `migrate_android_assets_to_writable()` never overwrites an existing
-   config) followed by a confirmed OpenXR launch, user-verified visually in
-   the headset. Nothing further is required of this item.
-3. **Shader-compile stutter watch.** The base and optimized formats carry
-   different position encodings, so both sets of content-shader variants
-   exist whenever both variants render (the load window, and any mesh
-   whose variant an edit dropped). Not yet observed in practice; keep
-   watching. Datapoint 2026-09-01: on Quest, startup shader prewarm took
-   **13.7 s of a ~23 s startup** ("prewarm: ... scene phase 13672.4 ms").
-   That is prewarm, not stutter, but it is the same variant explosion and
-   it is the first measurement of its cost on the device.
-
-Recorded seams, deliberately not implemented: LOD chains
-(`meshopt_simplify`, natural fit on the deferred-allocation staging seam),
-meshlets, a cache size cap / LRU, a dedicated minimal `id_renderer` variant
-(position + facet id + joints/weights) that would let the full original
-variant be dropped and reclaim the accepted 2x GPU mesh memory, a
-geometry-path disk cache (only if profiling disagrees), and an
-`ERHE_VERIFY(isfinite)` on the centroid position path (deliberately not
-added: it would turn previously-silent broken scenes into aborts).
+- **Build sweep** for a change here: ninja vulkan Debug, VS opengl Debug and
+  the Quest APK. The OpenGL build matters on its own, because this work
+  touches vertex formats and GLSL and the Vulkan build cannot speak for that
+  backend.
 
 ### How to verify: the A/B screenshot harness
 
@@ -457,12 +421,6 @@ almost entirely clipped at 0.02, measured); 0.001 makes it readable.
 costs one RPC per node -- thousands of round trips on Bistro, minutes per
 run, looks like a hang -- and the authored camera is just as deterministic.
 Both sides of one comparison must use the same executable.
-
-Reference baselines for the current encoding split (untracked, in `logs/`
-of the machine the runs were made on): `logs/r911_qoff_off_a.png` /
-`r911_qoff_off_b.png` (control pair, 2 px apart), `r911_qoff_on.png`
-(quantize=false, optimize on), `r911_qon_off.png` / `r911_qon_on.png`
-(quantize=true off / on -- the 0.84% epsilon pair).
 
 ## Traps
 
@@ -521,3 +479,8 @@ Each of these cost a review or debugging round. Do not rediscover them.
   the optimized-build path abandons the partial transaction (successful
   ranges released via `~Buffer_mesh` into the retired list) -- the same
   behavior as the pre-existing allocation sites.
+
+## Future work
+
+- [Mesh optimization](plans/meshoptimizer.md) - runtime perf measurement,
+  Quest verification, encoding candidates, LOD and meshlet seams.

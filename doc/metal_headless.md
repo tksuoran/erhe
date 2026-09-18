@@ -32,8 +32,8 @@ this document states what the Metal side does.
   one the windowed layer uses (`BGRA8Unorm_sRGB`), so pipeline format
   derivation, which on Metal reads `Swapchain::get_color_format`, is
   unchanged.
-- R5. The windowed Metal build (`build_xcode_metal`) builds and behaves as
-  before: real drawables, `presentDrawable`, armed capture.
+- R5. The windowed Metal build (`build_xcode_metal`) keeps its own path: real
+  drawables, `presentDrawable`, armed capture.
 - R6. `metal_surface.mm` compiles in both window configurations: the SDL
   view and layer creation exist only under `ERHE_WINDOW_LIBRARY_SDL`; with
   `ERHE_WINDOW_LIBRARY_NONE` no SDL header is included.
@@ -89,7 +89,7 @@ this document states what the Metal side does.
    not a uniform color (a scene is visible).
 4. `logs/log.txt` holds no `error` lines from `erhe.graphics` and no
    Metal validation message.
-5. `cmake --build build_xcode_metal --target editor --config Debug` still
-   builds; a windowed launch still presents and `capture_screenshot`
-   still works there (needs a live display).
-6. `scripts/run_graphics_tests_metal.sh` passes as before.
+5. `cmake --build build_xcode_metal --target editor --config Debug` builds; a
+   windowed launch presents and `capture_screenshot` works there (needs a live
+   display).
+6. `scripts/run_graphics_tests_metal.sh` passes.

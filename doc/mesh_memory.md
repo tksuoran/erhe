@@ -28,10 +28,15 @@ allocations come in; nothing is reserved up front.
   streams (binding 0 = position family, binding 1 =
   normal/tangent/tex_coord/color, binding 2 = wireframe-bias smooth normal plus
   three custom attributes), and only stream 0 differs: the skinned form adds
-  `joint_indices` and `joint_weights`. The solid-wireframe and edge-line work
-  added `vertex_format_not_skinned_wireframe` / `vertex_format_skinned_wireframe`
-  (expanded fill geometry) and `vertex_format_edge_line` /
-  `vertex_format_edge_line_joints` (wide-line edges).
+  `joint_indices` and `joint_weights`. Beside them are
+  `vertex_format_not_skinned_wireframe` / `vertex_format_skinned_wireframe`
+  (expanded fill geometry for solid wireframe) and `vertex_format_edge_line` /
+  `vertex_format_edge_line_joints` (wide-line edges). The constructor also
+  derives `vertex_format_{not_,}skinned_optimized` from the content formats
+  (facet-id drop plus per-attribute substitutions, see
+  doc/meshoptimizer_attribute_encodings.md); `get_all_vertex_formats()` is the
+  single list that repack, lockstep block sizing and vertex-input registration
+  read.
 - `std::vector<Vertex_input_entry> m_vertex_input_entries` -- a cache of
   `(key, unique_ptr<Vertex_input_state>, Vertex_format)`. The constructor
   pre-warms it with one entry per built-in format; further entries are added
@@ -68,15 +73,14 @@ sink object, not a parameter on the queue).
 ### Two transfer queues
 
 Asynchronous asset loading (see
-[`async-asset-loading.md`](async_asset_loading.md)) needs vertex/index uploads
+[`async_asset_loading.md`](async_asset_loading.md)) needs vertex/index uploads
 to be spread over frames, but almost every other caller relies on the opposite
 guarantee. Hence two queues:
 
 - **interactive** -- full drain in `flush()`. "Enqueued implies uploaded by
   end of frame" holds, which is what lets a caller build a mesh and draw it in
   the SAME command buffer with no gate at all (rendertarget meshes, brush
-  previews, the scene builder, the init-command-buffer paths of `example` and
-  `rendering_test`).
+  previews, the scene builder, the init-command-buffer path of `example`).
 - **loader** -- partial FIFO drain in `flush_budgeted(command_buffer, bytes)`,
   called only from `Asset_manager::tick`. "Enqueued" does NOT imply
   "uploaded", so the rule is: **only traffic whose publish gates on the
@@ -281,7 +285,7 @@ multi-draw indirect and the second wastes more memory than the
 current approach. See the long-form rationale in the `Buffer_pool`
 class comment in `src/erhe/scene_renderer/erhe_scene_renderer/buffer_pool.hpp`.
 
-## Open lead: pool blocks are never destroyed
+## Pool blocks are never destroyed
 
 `Buffer_pool` only ever appends blocks (`buffer_pool.cpp`, `create_new_block`);
 there is no path that destroys one, and `~Buffer_pool` is defaulted. Releasing a
@@ -299,13 +303,11 @@ Consequences:
   logs and returns an empty allocation, and the caller sets `build_failed`
   (`primitive_builder.cpp`), so meshes silently fail to build.
 
-Possible improvement: destroy blocks whose allocator reports zero used bytes, at
-a safe point (scene close, or the same frame-completion gate the deferred frees
-already use). `erhe::graphics::Buffer` destruction already defers
-`vmaDestroyBuffer` through a completion handler, so the release path exists; what
-is missing is the "is this block empty and safe to drop" bookkeeping and a
-trigger.
+Per-pool `capacity_bytes` / `used_bytes` / `block_count` are reported by the
+`get_memory_usage` MCP tool (see doc/reloadable_asset_loads.md).
 
-Measure before and after with the `get_memory_usage` MCP tool, which reports
-per-pool `capacity_bytes` / `used_bytes` / `block_count`
-(see doc/reloadable_asset_loads.md).
+## Future work
+
+- [Mesh memory and primitive shapes](plans/mesh_memory.md) - destroying empty
+  pool blocks, ordering in-place Vulkan uploads, shared-primitive swaps,
+  vertex position quantization follow-ups.
