@@ -41,15 +41,15 @@ class Scene_root;
 // formats share one key. The selection is part of the identity because USD
 // composes a target selected differently as a different prim index: two
 // carriers of one prim with different selections are two templates
-// (doc/usd_compatibility_design.md section 6, "Variant selection through a
-// composition arc").
+// (doc/usd_compatibility_design.md C7).
 //
 // The selection here is the part of the arc's selection the target CONSUMES:
 // the entries naming a variant set the target's own file declares, or one a
 // file below it declares (Prefab::consumed_variant_sets). An entry outside
 // that list selects nothing anywhere in the template, so two arcs differing
 // only in such entries name one and the same template and parse the chain
-// once (doc/frame-time-after-usd-import-plan.md R4). The arc's full
+// once (doc/editor_parsers.md, "A `variants` selection an arc carries").
+// The arc's full
 // selection - what a USD save writes back on the carrier - is the
 // Prefab_instance's, not the key's.
 class Prefab_key

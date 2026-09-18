@@ -107,7 +107,7 @@ public:
 }
 
 // The `erhe:graph:format` marker token of each kind of erhe node graph
-// (doc/plans/usd_texture_graphs.md 2.1, section 4). The token is the graph
+// (doc/usd_node_graphs.md 2.1, section 4). The token is the graph
 // kind, spelled the way the glTF `ERHE_node_graphs` `format` field spells it,
 // and the caller names it: erhe::usd carries a graph's nodes without knowing
 // what any of them mean.
@@ -217,7 +217,7 @@ public:
 
 // Which composition arc a Usd_reference came from. A payload is read as a
 // reference: erhe loads every arc when the stage is read and has no deferred
-// loading (doc/usd_compatibility_design.md section 5).
+// loading (doc/usd_compatibility_design.md, "Out of scope").
 enum class Usd_reference_kind : unsigned int {
     reference = 0,
     payload   = 1
@@ -238,10 +238,9 @@ public:
 // A `variants` selection made from outside the prims that declare the sets:
 // the selection an arc carrier authors for the target it brings in, which
 // LIVRPS resolves stronger than the target's own
-// (doc/usd_compatibility_design.md section 6, "Variant selection through a
-// composition arc"). A load consults it before the prim's own `variants`
-// metadatum, so two carriers selecting different variants of one target load
-// two stages, which is what USD composes - two prim indexes.
+// (doc/usd_compatibility_design.md C7). A load consults it before the prim's
+// own `variants` metadatum, so two carriers selecting different variants of
+// one target load two stages, which is what USD composes - two prim indexes.
 class Usd_variant_selections final
 {
 public:
@@ -578,7 +577,7 @@ public:
     std::vector<erhe::scene::Instance_override_value> values;
 };
 
-// One pin of a node graph (doc/plans/usd_texture_graphs.md 2.2). A pin is an
+// One pin of a node graph (doc/usd_node_graphs.md 2.2). A pin is an
 // `inputs:<name>` / `outputs:<name>` attribute of a `Shader` prim, and
 // the graph's interface outputs have the same shape. `source_node` and
 // `source_pin` name the link into an input pin - the source node's name below
@@ -636,7 +635,7 @@ public:
 };
 
 // One node graph a USD file carries as a `NodeGraph` prim marked with
-// `erhe:graph:format` (doc/plans/usd_texture_graphs.md R1, section 4).
+// `erhe:graph:format` (doc/usd_node_graphs.md R1, section 4).
 // erhe::usd creates no item - the caller rebuilds the graph asset from this
 // record, as it makes the Brush of a `Brush` prim - and a `NodeGraph` without
 // the marker is left to the material conversion (R5).
@@ -661,7 +660,7 @@ public:
 };
 
 // A material slot fed by a texture node graph instead of by an image
-// (doc/plans/usd_texture_graphs.md R2): the material's own `UsdPreviewSurface`
+// (doc/usd_node_graphs.md R2): the material's own `UsdPreviewSurface`
 // input connects to the marked `NodeGraph`'s interface output. The keying is
 // the one Usd_material_texture_binding uses; `graph_path` is the stage path of
 // the `NodeGraph` prim, which is the `Usd_node_graph` of that path.
@@ -776,7 +775,7 @@ public:
     erhe::scene::Draw_mode_description     description;
 };
 
-// The stage's time coordinates (doc/usd_compatibility_design.md section 5).
+// The stage's time coordinates (doc/erhe_usd.md, "Time samples").
 // A time code becomes seconds by dividing by `time_codes_per_second`, whose
 // USD fallback is 24 when no layer of the stack authors one;
 // `start_time_code` / `end_time_code` are the clip range the layer authors.
@@ -858,7 +857,7 @@ public:
     // path the prim has.
     std::vector<Usd_brush_prim>                             brushes;
     // The marked `NodeGraph` prims of the composed layer, in the order the
-    // layer spells them (doc/plans/usd_texture_graphs.md R1). A graph prim is
+    // layer spells them (doc/usd_node_graphs.md R1). A graph prim is
     // never a prim of the lists above: the conversion stops at it, so its
     // `Shader` children are no scene content, and the caller rebuilds one
     // graph asset per record at the path the prim has.
@@ -1132,7 +1131,7 @@ public:
 };
 
 // One node graph of the scene the writer authors as a marked `NodeGraph`
-// prim (doc/plans/usd_texture_graphs.md 2.4, section 4). erhe::usd names no
+// prim (doc/usd_node_graphs.md 2.4, section 4). erhe::usd names no
 // editor type (R6), so the caller hands the graph over as a neutral record:
 // `item` is the graph asset prim itself, whose place in the tree decides where
 // the `NodeGraph` prim goes, and the rest is what the prim carries. Being
@@ -1156,7 +1155,7 @@ public:
 };
 
 // One material slot the writer feeds from a texture node graph instead of
-// from an image (doc/plans/usd_texture_graphs.md R2): the slot's
+// from an image (doc/usd_node_graphs.md R2): the slot's
 // `UsdPreviewSurface` input is connected to the graph's first interface
 // output and no `UsdUVTexture` is written for it. The keying is the one
 // Usd_save_texture uses, and `graph` is the item of the Usd_save_node_graph
@@ -1277,7 +1276,7 @@ public:
     // The brushes the scene's tree holds, one entry per brush prim.
     std::vector<Usd_save_brush>                             brushes;
     // The texture node graphs the scene's tree holds, one entry per graph
-    // asset prim (doc/plans/usd_texture_graphs.md).
+    // asset prim (doc/usd_node_graphs.md).
     std::vector<Usd_save_node_graph>                        node_graphs;
     // The material slots fed by one of those graphs.
     std::vector<Usd_save_material_graph_binding>            material_graph_bindings;

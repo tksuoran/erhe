@@ -46,7 +46,7 @@ constexpr std::string_view c_brush_normal_style_attribute   {"erhe:Brush:normal_
 constexpr std::string_view c_brush_density_value_name       {"Brush.density"};
 constexpr std::string_view c_brush_normal_style_value_name  {"Brush.normal_style"};
 
-// How a node graph travels in a USD file (doc/plans/usd_texture_graphs.md 2.1
+// How a node graph travels in a USD file (doc/usd_node_graphs.md 2.1
 // and section 4). The graph is a `NodeGraph` prim carrying the marker
 // attribute that says it is erhe's - a `NodeGraph` without it is a foreign
 // shading network (R5) - each node is a `Shader` child whose `info:id` is the

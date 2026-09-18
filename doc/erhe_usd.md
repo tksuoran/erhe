@@ -185,8 +185,10 @@ translation units.
   `Usd_data::ambient_light` and the prim itself is recorded in
   `Usd_data::dome_lights`. The first dome of a file sets the ambient light; a
   second one is a warning. `inputs:texture:file` is named in a warning and
-  not sampled - an environment map is future work, and until it exists a
-  textured dome contributes its constant color only. A save writes the
+  not sampled - an environment map is future work
+  (doc/plans/usd_compatibility.md, "An environment map from a DomeLight
+  texture"), and until it exists a textured dome contributes its constant
+  color only. A save writes the
   records of `Usd_save_arguments::dome_lights` back as `DomeLight` prims at
   the stage root, which is where the editor sends the domes the scene was
   opened from (`Scene_root::get_usd_dome_lights`); a scene that read no dome
@@ -522,7 +524,8 @@ same function - sees that one composed stage.
 - A save writes ONE layer holding the composed content and authors no
   `subLayers`. erhe edits the flattened stage, so it has no layer to write an
   edit back to; a sublayer stack the editor could edit layer by layer is
-  future work (doc/usd_compatibility_design.md section 5). The save logs one
+  future work (doc/plans/usd_compatibility.md, "Layer-stack editing"). The
+  save logs one
   line naming the sublayers the file it was opened from had
   (`editor::save_scene_usd`, from `Scene_root::get_usd_sublayers()`).
 
@@ -624,7 +627,8 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   can name a material another carrier's arc supplies, so the caller applies
   every carrier's overrides once every arc of the file is instantiated.
 - A `def` below a referencing prim adds a prim to a reference, which a
-  reference does not allow (plan section 5): it is named in one warning and
+  reference does not allow (doc/usd_compatibility_design.md, "Out of scope"):
+  it is named in one warning and
   dropped.
 
 ### Class prims and inherits arcs
@@ -763,7 +767,7 @@ the editor Brush at the path the prim has.
 
 A node graph is a `NodeGraph` prim carrying the custom attribute
 `erhe:graph:format`, which is the marker that says the network is erhe's
-(doc/plans/usd_texture_graphs.md). A `NodeGraph` without it is a foreign
+(doc/usd_node_graphs.md). A `NodeGraph` without it is a foreign
 shading network and is left to the material conversion. The marker's token
 says which kind of graph it is: `erhe_texture_graph` for a texture graph and
 `erhe_geometry_graph` for a geometry graph, spelled the way the glTF
@@ -804,11 +808,10 @@ The format is read before the children for that reason. The tokens are
   (type, text) pair it is handed. A value with no USD form - a gradient, a
   curve - travels as its text in a `string`, one rule for both: the editor
   hands over the nested value's JSON text as it stands, quotes included, and
-  the writer escapes what the file format asks for. A file written before that
-  rule spells a nested value with single quotes in place of its own double
-  quotes, which is not valid JSON, so the editor's read side parses the text
-  strictly first and only a text that parse rejects is read in the old
-  spelling.
+  the writer escapes what the file format asks for. The editor's read side
+  parses such a text strictly as JSON first and reads a text that parse
+  rejects as the older spelling that puts single quotes in place of the
+  value's own double quotes, so a file written in either spelling loads.
 - The graph's own `outputs:<pin>` connections are its interface outputs: the
   value a material can name. A `UsdPreviewSurface` input connected to one is
   recorded in `Usd_data::material_graph_bindings` as (material, slot, graph
@@ -1541,9 +1544,11 @@ over the tree with no file work in it.
   (`Item_flags::content`), or when it is a resource the file carries or holds
   one below it - a resource prim is shown in the UI and is not content, so
   that widening is what puts a material and the scopes down to it on the
-  stage, and it leaves an empty kind scope out of the file. Today the file
-  carries materials, styles and brushes; the other resource kinds are plan
-  steps E4b to E4d.
+  stage, and it leaves an empty kind scope out of the file. Every resource
+  kind travels: materials, styles, brushes and node graphs as prims of their
+  own, the physics items as the `UsdPhysics` prims and API schemas they are,
+  and the folder tree as its `Scope` prims; a skin and an animation ride what
+  they drive rather than being written as prims.
 - Two passes. The first decides every prim's stage path - the sanitized,
   sibling-unique name under each parent, and the `World` wrapper when the
   scene has several top-level prims - and records where each material and
@@ -1659,7 +1664,8 @@ over the tree with no file work in it.
   when the arc names the target's default prim. A child of a carrier that
   names no template counterpart is one the user parented there: it is left out
   too, and the writer names it in a warning - a reference protects its
-  structure (plan section 5). `erhe::usd` knows nothing of prefabs: the editor
+  structure (doc/usd_compatibility_design.md, "Out of scope"). `erhe::usd`
+  knows nothing of prefabs: the editor
   fills the arcs from the carrier's `Prefab_instance` attachments.
 - An `over` prim is typeless, so it carries no schema attribute: every value
   of an overriding item travels as an `erhe:Owner:name` custom attribute -
@@ -1855,11 +1861,14 @@ so a card texture opinion keeps the path the file spelled.
 ## Dependency
 
 LightUSD (Apache 2.0, C++17, dependency-free) through `CPMAddPackage` in the
-root `CMakeLists.txt`, linked as `lightusd::lightusd_static`. The pin is a
-commit of the erhe fork `tksuoran/LightUSD`, branch `fix-vs2026`, which
-carries MSVC / Visual Studio 2026 build fixes upstream does not have yet; the
-comment on the pin says when the fork can be dropped. `GIT_SHALLOW` is off
-because a shallow clone cannot fetch a raw commit id.
+root `CMakeLists.txt`, linked as `lightusd::lightusd_static`. The pin is a tag
+on the `erhe-fixes` branch of the erhe fork `tksuoran/LightUSD`, which carries
+the build fixes, Tydra behavior, USDA parsing and writer type conformance
+upstream does not have yet - each one named where the behavior it produces is
+described below. The pin is a tag rather than the branch name, so the build
+does not move when the branch does, and the fork is dropped once an upstream
+release carries the same fixes. `GIT_SHALLOW` is off because a shallow clone
+cannot fetch a raw commit id.
 
 Tydra, the composition cache (`LIGHTUSD_WITH_PCP`) and the OpenVDB reader
 (`LIGHTUSD_WITH_USDVOL`) are enabled. Every other optional module is off, for
@@ -2162,31 +2171,17 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 
 ## Future work
 
-- No asynchronous load path: `load_usd` runs on the calling thread and the
-  editor's import and scene open are synchronous, where a glTF import goes
-  through the asset manager's `Asset_load_request` and the droppable-payload
-  `Import_gltf_operation` (doc/reloadable_asset_loads.md). The conversion
-  itself creates no GPU object, so it is ready to move onto a worker when the
-  asset manager learns a second format.
-- Of the editor state `ERHE_scene` and the asset-root extensions hold in
-  glTF, the scene-level block travels as the `erhe:scene` string of
-  `customLayerData` (doc/scene_serialization.md, USD-backed scenes), the
-  materials travel as the prims they are, the folder tree travels as the
-  `Scope` prims it is (E4d), and the brushes, styles and node graphs travel
-  as prims of their own, and the physics travels as the `UsdPhysics` prims and
-  API schemas of the mapping ("Physics" above). The writer emits no `.usdc` or
-  `.usdz`, and no `.mtlx` document (the inline OpenPBR network it writes for
-  an anisotropic or transmissive material is not one).
-- A node-held secondary value (D30, `Light.color` on a plain Xform) is written
-  as `erhe:Light:color` but the import resolves neither the qualified nor the
-  bare name against a node, so such a value does not come back.
-- A camera's `infinite_z_far` has no USD form; the finite `clippingRange` is
-  written and one warning says so.
-- usdchecker on a written file reports one thing the writer still does: a
-  texture that came out of a `.usdz` archive is written with the path the
-  archive authored, resolved against the written file's directory, which
-  names no file on disk (`MissingReferenceChecker`); writing such a scene
-  needs the packed bytes extracted next to the file, or the
-  `archive.usdz[entry]` form.
-- The macOS and Linux configure wrappers still default to `none`; turning the
-  option on there is part of the step that first needs USD on those platforms.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "Asynchronous
+  load" - `load_usd` runs on the calling thread.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "Binary and
+  packaged output" - the writer emits `.usda` only.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "A writer finding
+  of usdchecker" - a texture out of a `.usdz` is written as a path that
+  names no file.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "Node-held
+  secondary values" - a value of another class held by a node does not come
+  back.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "Camera
+  infinite_z_far" - no USD form; the finite `clippingRange` is written.
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "macOS and Linux
+  wrappers" - they leave `ERHE_USD_LIBRARY` at `none`.

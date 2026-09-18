@@ -315,7 +315,7 @@ public:
     void enqueue_mesh_materials        (const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_release_mesh_materials(const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
-    // Draw lists (doc/draw_list_renderer_plan.md). get_draw_list_scene()
+    // Draw lists (doc/draw_list_renderer.md). get_draw_list_scene()
     // is null for scene roots constructed without dependencies.
     [[nodiscard]] auto get_draw_list_scene() -> erhe::scene_renderer::Draw_list_scene*;
     // Main thread, once per frame before any rendering of this scene:
@@ -480,11 +480,11 @@ public:
 
     // Applies every Scene_settings::variant_selections entry that names a set
     // of the table whose selection differs, without touching the undo stack:
-    // what a scene being opened does once its variant table is filled. A set
-    // a variant block declares is applied after the set carrying that block,
-    // so the enclosing selection is standing when the inner one is applied
-    // (doc/usd_compatibility_design.md section 6, "Variant opinions a variant
-    // set does not carry").
+    // what a scene being opened does once its variant table is filled. A set a
+    // variant block declares is applied after the set carrying that block, so
+    // the enclosing selection is standing when the inner one is applied
+    // (doc/plans/usd_compatibility.md, "Variant opinions a variant set does
+    // not carry").
     void apply_variant_selections(App_context& context);
 
     // Persistent scene identity (Scene_settings::scene_id, saved with the
@@ -516,8 +516,8 @@ private:
     // handles them instead. See Raytrace_node_mask::skinned.
     [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
 
-    // Shape-to-meshes index (doc/usd_compatibility_design.md section 6, "Load
-    // performance of a scene holding thousands of prims"). For every
+    // Shape-to-meshes index (doc/usd_compatibility_design.md, "A load of a
+    // stage holding thousands of prims"). For every
     // Primitive a registered mesh of this scene names, the meshes that name
     // it; m_primitives_by_mesh is the reverse list that makes removal exact,
     // so a mesh whose primitive list was replaced leaves the entries of the

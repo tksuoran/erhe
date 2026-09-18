@@ -544,10 +544,9 @@ void collect_variant_set_specs(
 }
 
 // The entries of `variant_selections` the layer's prims answer for, with one
-// warning for each entry that is dropped
-// (doc/usd_compatibility_design.md section 6, "Variant selection through a
-// composition arc"). This is the one validation of a carried selection: the
-// hoist and the reader both take the result, so neither warns again.
+// warning for each entry that is dropped (doc/usd_compatibility_design.md C7).
+// This is the one validation of a carried selection: the hoist and the reader
+// both take the result, so neither warns again.
 [[nodiscard]] auto validate_variant_selections(
     const lightusd::Layer&        layer,
     const std::string&            filename,

@@ -2101,7 +2101,7 @@ private:
     }
 
     // The path of the graph interface output one slot reads, empty when the
-    // slot reads no graph (doc/plans/usd_texture_graphs.md R2). The pin is the
+    // slot reads no graph (doc/usd_node_graphs.md R2). The pin is the
     // graph's first interface output: that is the value the graph has, and a
     // graph without one is one warning and no connection.
     [[nodiscard]] auto find_graph_output(
@@ -2568,7 +2568,7 @@ private:
         return prim.get_class_type_name() == c_brush_prim_type_name;
     }
 
-    // A node graph item (doc/plans/usd_texture_graphs.md), which is a
+    // A node graph item (doc/usd_node_graphs.md), which is a
     // marked `NodeGraph` prim on the stage. erhe::usd names no editor type
     // (R6) and a graph carries no class token of its own the way a brush
     // does, so what makes an item a graph prim is being named in
@@ -2778,10 +2778,9 @@ private:
         std::string                      name;
         const erhe::Item_base*           item                {nullptr};
         bool                             transform_overridden{false};
-        // The `variants` selection an arc of the carrier carries for this
-        // path (doc/usd_compatibility_design.md section 6, "Variant selection
-        // through a composition arc"): an `over` prim is what carries a
-        // selection made for a prim below the target.
+        // The `variants` selection an arc of the carrier carries for this path
+        // (doc/usd_compatibility_design.md C7): an `over` prim is what carries
+        // a selection made for a prim below the target.
         lightusd::VariantSelectionMap    variants;
         // The material the `over` binds, null when it binds none. A binding
         // that covers one group of facets is written on the GeomSubset prim
@@ -3523,13 +3522,12 @@ private:
     }
 
     // The `variants` selection the carrier authors for what its arcs bring in
-    // (doc/usd_compatibility_design.md section 6, "Variant selection through a
-    // composition arc"): the entries of the empty path, which is the carrier
-    // itself. Every arc of one carrier holds the same entries, so the first
-    // arc that names a set is what it is written from. The selection is merged
-    // into whatever the prim's metadata already holds and never replaces it -
-    // the carrier's own variant sets author their selection into the same
-    // metadatum.
+    // (doc/usd_compatibility_design.md C7): the entries of the empty path,
+    // which is the carrier itself. Every arc of one carrier holds the same
+    // entries, so the first arc that names a set is what it is written from.
+    // The selection is merged into whatever the prim's metadata already holds
+    // and never replaces it - the carrier's own variant sets author their
+    // selection into the same metadatum.
     void write_carried_variant_selection(lightusd::PrimMetas& metas, const std::vector<Usd_save_reference>& references)
     {
         lightusd::VariantSelectionMap selection = metas.variants.has_value()
@@ -3667,7 +3665,7 @@ private:
     }
 
     // One node parameter as the attribute its recorded USD type names
-    // (doc/plans/usd_texture_graphs.md 2.2). A type the writer has no USD form
+    // (doc/usd_node_graphs.md 2.2). A type the writer has no USD form
     // for is one warning and a `string` carrying the text as it stands, which
     // is the same rule a gradient or a curve travels by. A `string` and a
     // `token` carry their own text, so the value reaches the file exactly as
@@ -3720,7 +3718,7 @@ private:
     // One pin as the `inputs:` / `outputs:` attribute it is: the pin's value
     // type, and a `.connect` to the source node's output when the pin carries
     // a link. An unlinked pin is the typed attribute alone, so the pin exists
-    // in the file (doc/plans/usd_texture_graphs.md 2.1).
+    // in the file (doc/usd_node_graphs.md 2.1).
     [[nodiscard]] static auto make_node_graph_pin_attribute(
         const Usd_node_graph_pin&                   pin,
         const std::string&                          graph_path,
@@ -3796,7 +3794,7 @@ private:
     }
 
     // A graph asset as the marked `NodeGraph` prim it is
-    // (doc/plans/usd_texture_graphs.md 2.4, section 4): the marker attribute,
+    // (doc/usd_node_graphs.md 2.4, section 4): the marker attribute,
     // the interface outputs as connections into the nodes, one generic
     // `Shader` child per node, in the record's order so a second save spells
     // the same file (R4), and - for a geometry graph that has evaluated

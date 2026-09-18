@@ -1621,7 +1621,7 @@ def usd_snapshot(scene_name):
     )
 
     # The texture node graphs the scene carries
-    # (doc/plans/usd_texture_graphs.md): every graph asset with its nodes,
+    # (doc/usd_node_graphs.md): every graph asset with its nodes,
     # parameters and node positions, the links between them by name, and the
     # material slots fed from it. Names rather than ids, because a reload
     # reshuffles ids. The graph's own path is not diffed: a save of a scene
@@ -2193,7 +2193,7 @@ def usd_graph_mesh_state(scene_name, graph_name):
 
 
 def usd_geometry_graph_leg(S):
-    """A geometry graph in a USD file (doc/plans/usd_texture_graphs.md section
+    """A geometry graph in a USD file (doc/usd_node_graphs.md section
     4): a `Graph_mesh` is the marked `NodeGraph` prim a texture graph is, with
     its nodes' `info:id` under `erhe:geometry:` and its evaluated geometry as
     the child `Mesh "result"`, and the prim it is bound to gets its binding
@@ -2368,7 +2368,7 @@ def section_usd_round_trip(usdchecker_arg):
     # set of them - and the mesh keeps its binding.
     skinning_saved = usd_round_trip_leg(S, "skinning.usda", "skinning", edits=[], extra_keys=[])
     # texture_graph.usda holds a marked NodeGraph the material samples in
-    # place of an image (doc/plans/usd_texture_graphs.md): the graph must come
+    # place of an image (doc/usd_node_graphs.md): the graph must come
     # back node for node, parameter for parameter and link for link, at the
     # place it had, with the material slot still fed from it.
     usd_round_trip_leg(S, "texture_graph.usda", "texture_graph", edits=[], extra_keys=["node_graphs"])
@@ -2388,7 +2388,7 @@ def section_usd_round_trip(usdchecker_arg):
     usd_open_pbr_terminals(S, open_pbr_saved)
     # A geometry graph is the same prim form with the evaluated geometry as a
     # child Mesh, and the prim it drives bound to it again after a reload
-    # (doc/plans/usd_texture_graphs.md section 4).
+    # (doc/usd_node_graphs.md section 4).
     usd_geometry_graph_leg(S)
     usd_resource_placement_leg(S)
     usd_library_folder_leg(S)

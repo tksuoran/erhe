@@ -1081,7 +1081,7 @@ void resolve_usd_brushes(
 }
 
 // --------------------------------------------------------------------------
-// Texture node graphs (doc/plans/usd_texture_graphs.md)
+// Texture node graphs (doc/usd_node_graphs.md)
 // --------------------------------------------------------------------------
 
 // The material slots a USD file carries an image or a node graph for, in the
@@ -1103,7 +1103,7 @@ constexpr Usd_save_slot c_usd_save_slots[] = {
 };
 
 // The USD value type of a texture graph pin, from the pin key each
-// erhe::texgen::Value_type has (doc/plans/usd_texture_graphs.md 2.1).
+// erhe::texgen::Value_type has (doc/usd_node_graphs.md 2.1).
 [[nodiscard]] auto usd_texture_pin_type(const std::size_t pin_key, const std::string& owner) -> std::string
 {
     switch (pin_key) {
@@ -1191,7 +1191,7 @@ enum class Usd_tuple_form
 }
 
 // One node parameter of the editor's JSON as the (USD type, USD literal text)
-// pair the record carries (doc/plans/usd_texture_graphs.md 2.2).
+// pair the record carries (doc/usd_node_graphs.md 2.2).
 void append_usd_node_graph_parameter(
     const std::string&                                name,
     const nlohmann::json&                             value,
@@ -1343,7 +1343,7 @@ void insert_usd_node_graph_parameter(
 }
 
 // One node graph record as the graph asset it is
-// (doc/plans/usd_texture_graphs.md 2.5, and section 4 for a geometry graph):
+// (doc/usd_node_graphs.md 2.5, and section 4 for a geometry graph):
 // the nodes through the factory in the record's order, each parameter back
 // from its USD text, and the links by node and pin name. A node the factory
 // does not make, and a link naming a node or a pin the rebuilt graph has not
@@ -1448,7 +1448,7 @@ void rebuild_usd_graph_asset(
 
 // The geometry a geometry graph's `result` child carried, as the graph's
 // baked products: what a `Graph_mesh` rebuilt from a record with no node has
-// to show (doc/plans/usd_texture_graphs.md section 4). The products are the
+// to show (doc/usd_node_graphs.md section 4). The products are the
 // ones an evaluation publishes - the geometry and a renderable primitive
 // built from it - so a bound prim materializes the file's result the way it
 // materializes a bake.
@@ -1525,7 +1525,7 @@ public:
 };
 
 // The `NodeGraph` prims the file marked, as the graph assets they are
-// (doc/plans/usd_texture_graphs.md 2.5 and section 4): a `Graph_texture` for a
+// (doc/usd_node_graphs.md 2.5 and section 4): a `Graph_texture` for a
 // texture graph and a `Graph_mesh` for a geometry graph, with the material
 // slots the file feeds from a texture graph and the scene prims the scene
 // block binds to a geometry graph. A graph whose holding prim is in the
@@ -1575,7 +1575,7 @@ void resolve_usd_node_graphs(
             );
             // A graph the file carried no node for keeps the geometry its
             // `result` child holds: that child is then the only statement of
-            // what the graph makes (doc/plans/usd_texture_graphs.md section
+            // what the graph makes (doc/usd_node_graphs.md section
             // 4). A graph that has nodes re-evaluates instead, and its own
             // bake is what its bound prims get.
             if (record.nodes.empty() && record.geometry) {
@@ -1686,7 +1686,7 @@ void resolve_usd_node_graphs(
 }
 
 // One graph asset as the writer's record
-// (doc/plans/usd_texture_graphs.md 2.5): the nodes in the graph's own order,
+// (doc/usd_node_graphs.md 2.5): the nodes in the graph's own order,
 // each with its parameters as (USD type, text) pairs and its pins with the
 // links into them, and the graph's interface output taken from the `output`
 // sink node's linked input - the value a material slot names (R2). The two
@@ -1810,7 +1810,7 @@ template <typename AssetT, typename NodeT, typename PinTypeFn>
 // a texture graph are recorded alongside, so the writer connects them to the
 // graph instead of writing a `UsdUVTexture`; a geometry graph hands over its
 // evaluated geometry, which the writer writes as the graph's `result` child
-// (doc/plans/usd_texture_graphs.md section 4).
+// (doc/usd_node_graphs.md section 4).
 void collect_usd_node_graphs(
     const Content_library&                                         content_library,
     const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials,
@@ -2982,9 +2982,8 @@ auto load_usd_prefab_template(
             // through the carrier prim the instance hangs from.
             .stage_metrics = erhe::usd::Stage_metrics::referenced,
             // The arc's selection is measured from the prim the arc targets
-            // (doc/usd_compatibility_design.md section 6, "Variant selection
-            // through a composition arc"). An arc that names no prim path
-            // targets the file's default prim: the root is left empty and
+            // (doc/usd_compatibility_design.md C7). An arc that names no prim
+            // path targets the file's default prim: the root is left empty and
             // load_stage resolves it from the layer's own `defaultPrim`.
             .variant_selections = erhe::usd::Usd_variant_selections{
                 .root_prim_path = prim_path,
@@ -3034,7 +3033,8 @@ auto load_usd_prefab_template(
     // nested sets included, the reader tables them beside their enclosing set -
     // plus the ones the arcs above reported. A selection entry naming none of
     // these selects nothing here, so the template is the same one with or
-    // without it (doc/frame-time-after-usd-import-plan.md R4).
+    // without it (doc/editor_parsers.md, "A `variants` selection an arc
+    // carries").
     for (const erhe::usd::Usd_variant_set& variant_set : usd_data.variant_sets) {
         if (!is_under_prim_path(variant_set.stage_path, root_prim_path)) {
             continue;
@@ -3737,7 +3737,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     // composed stage it became, so the save writes that content into this one
     // layer and authors no `subLayers` (doc/erhe_usd.md; a sublayer
     // stack the editor could edit layer by layer is
-    // doc/usd_compatibility_design.md section 5).
+    // doc/plans/usd_compatibility.md, "Layer-stack editing").
     const std::vector<std::string>& sublayers = scene_root.get_usd_sublayers();
     if (!sublayers.empty()) {
         std::string sublayer_list;
@@ -3779,7 +3779,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
                 continue;
             }
             // A slot fed by a texture graph is written as a connection to the
-            // graph's NodeGraph prim (doc/plans/usd_texture_graphs.md R2), not
+            // graph's NodeGraph prim (doc/usd_node_graphs.md R2), not
             // as an image.
             if (is_graph_texture_slot(sampler)) {
                 continue;

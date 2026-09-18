@@ -25,8 +25,7 @@ enum class Prefab_arc_kind : unsigned int {
 // One entry of the `variants` selection a composition arc carries into the
 // template it brings in: the variant of `set_name` chosen for the prim
 // `relative_path` names below the arc's target prim, an empty path being the
-// target prim itself (doc/usd_compatibility_design.md section 6, "Variant
-// selection through a composition arc"). This is
+// target prim itself (doc/usd_compatibility_design.md C7). This is
 // erhe::usd::Usd_variant_selection in the terms the editor's prefab types can
 // speak: erhe::usd is an optional dependency (ERHE_USD_LIBRARY) and a prefab
 // is a glTF file as readily as a USD one, so no prefab header names it.
@@ -51,7 +50,8 @@ public:
 // plus the ones the files its arcs bring in declare, re-rooted at this
 // template's root - and a selection entry naming a set outside that list
 // selects nothing anywhere in the template, so it is not part of the
-// template's identity (doc/frame-time-after-usd-import-plan.md R4).
+// template's identity (doc/editor_parsers.md, "A `variants` selection an
+// arc carries").
 class Prefab_variant_set_key final
 {
 public:

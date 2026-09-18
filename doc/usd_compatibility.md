@@ -7,9 +7,9 @@ erhe saves scenes as glTF (2.1 + `ERHE_*` extensions; see
 independent scene format. This document is the erhe <-> OpenUSD
 **concept and naming mapping**: for every erhe mechanism the USD concept it
 corresponds to, so that a USD importer / exporter / composition step is a
-table lookup, not a redesign. The steps that make erhe more USD-compatible,
-and the order to take them in, are the subject of
-`doc/usd_compatibility_design.md`; this document holds the mapping only.
+table lookup, not a redesign. What USD support holds today and what is out of
+scope is `doc/usd_compatibility_design.md`, and the work that is left is
+`doc/plans/usd_compatibility.md`; this document holds the mapping only.
 
 erhe's glTF extensions keep erhe / glTF-context naming, not USD vocabulary
 (a `faceVarying` primvar term would be confusing inside a Khronos file);
@@ -196,7 +196,7 @@ inputs the network carries beyond the rows above:
 
 An erhe texture graph (`editor::Graph_texture`, `doc/texture_graph.md`)
 rides a USD file as the `UsdShade` network it is
-([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md)); the design
+([`usd_node_graphs.md`](usd_node_graphs.md)); the design
 document owns the rules, this table owns the mapping rows.
 
 | erhe | USD | notes |
@@ -213,7 +213,7 @@ document owns the rules, this table owns the mapping rows.
 
 An erhe geometry graph (`editor::Graph_mesh`) rides a USD file as the prim
 form a texture graph takes
-([`usd-texture-graphs-plan.md`](plans/usd_texture_graphs.md) section 4); the
+([`usd_node_graphs.md`](usd_node_graphs.md) section 4); the
 design document owns the rules, this table owns the mapping rows. Every row
 of "Texture node graphs" holds unchanged except the four below.
 
@@ -340,7 +340,7 @@ mechanism composes as, and what has no erhe counterpart yet.
 | a variant set on a prim | variant sets (`V`) | material-binding variant sets are read, the selected variant is applied to the meshes (LightUSD composes no variant), and the whole table is written back; the `def` children a variant authors are hoisted into the tree (also below a prim that references), and the selected variant's own `references` / `payload` arcs are the prim's; a variant that authors anything else, an unselected variant's arcs included, has that counted and reported once for the set. A `variantSet` a variant block itself declares is a set of the same prim, tabled beside the set carrying the block and written back inside it; its blocks contribute - prims active, opinions and bindings applied, arcs carried - only while that block is the selected one. A selection is resolved in the LIVRPS order: the selection a composition arc carries in, then the enclosing block's own `variants` metadatum, then the prim's, then the first block, and an entry naming a set the prim does not declare or a variant the set does not hold is one warning and is dropped. The per-scene selection the user switches is the editor half of X4 |
 | prefab instance from a `payload` arc | payloads (`P`) | read and written as the arc form it is; erhe's prefab library loads eagerly, so a payload is never deferred |
 | none | `specializes` (`S`) | |
-| a scene's whole content | a root layer's `subLayers` (`L`) | composed at load, strongest first: the root layer's opinions beat every sublayer, an earlier `subLayers` entry beats a later one, a prim absent from the stronger layers is added whole, and stage metadata the root leaves unauthored comes from the strongest sublayer that authors it. A save writes ONE layer holding the composed content and authors no `subLayers` - erhe edits the flattened stage and has no layer to write an edit back to (`doc/erhe_usd.md`, "Sublayers"); a stack the editor could edit layer by layer is future work |
+| a scene's whole content | a root layer's `subLayers` (`L`) | composed at load, strongest first: the root layer's opinions beat every sublayer, an earlier `subLayers` entry beats a later one, a prim absent from the stronger layers is added whole, and stage metadata the root leaves unauthored comes from the strongest sublayer that authors it. A save writes ONE layer holding the composed content and authors no `subLayers` - erhe edits the flattened stage and has no layer to write an edit back to (`doc/erhe_usd.md`, "Sublayers"); a stack the editor could edit layer by layer is future work (`doc/plans/usd_compatibility.md`, "Layer-stack editing") |
 | none | session layer | an undo stack is not a layer |
 | `Value_source` | opinion provenance | erhe resolves every arc itself, so the erhe value source IS the composition provenance; the table below restates each source as the USD origin the Properties window and MCP report (`doc/usd_compatibility_design.md` X5) |
 

@@ -101,7 +101,7 @@ public:
     // ones the files its arcs bring in declare - in the template root's
     // coordinates. Prefab_library keys the template on the selection entries
     // naming one of these; the rest select nothing here
-    // (doc/frame-time-after-usd-import-plan.md R4).
+    // (doc/editor_parsers.md, "A `variants` selection an arc carries").
     std::vector<Prefab_variant_set_key>                     consumed_variant_sets;
     std::string                                             error;
 };
@@ -116,8 +116,7 @@ public:
 // `variant_selections` is the `variants` selection the arc that named this
 // template carries in, measured from the prim the arc targets: it selects
 // among the target's variant sets before the target's own selection does
-// (doc/usd_compatibility_design.md section 6, "Variant selection through a
-// composition arc").
+// (doc/usd_compatibility_design.md C7).
 [[nodiscard]] auto load_usd_prefab_template(
     App_context&                                 context,
     Prefab_library&                              prefab_library,

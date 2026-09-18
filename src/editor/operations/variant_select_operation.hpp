@@ -71,8 +71,8 @@ private:
 //
 // A variant block is free to declare a variant set of its own, whose blocks
 // contribute only while that block is the selected one
-// (doc/usd_compatibility_design.md section 6, "Variant opinions a variant set
-// does not carry"), so the compound reaches those too: the sets the block
+// (doc/plans/usd_compatibility.md, "Variant opinions a variant set does not
+// carry"), so the compound reaches those too: the sets the block
 // being left declares go off - their opinions back to their base values and
 // every prim of theirs inactive, their own nested sets first - and the sets
 // the chosen block declares come on, each applying the selection it holds,

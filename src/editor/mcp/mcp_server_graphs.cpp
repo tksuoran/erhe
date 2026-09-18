@@ -1133,7 +1133,7 @@ void describe_graph_asset(AssetT& asset, json& out_nodes, json& out_links)
 } // anonymous namespace
 
 // The node graphs a scene's content library holds, as the file carries them
-// (doc/plans/usd_texture_graphs.md): every graph asset with its nodes, the
+// (doc/usd_node_graphs.md): every graph asset with its nodes, the
 // links between them by name, the material slots fed from a texture graph and
 // the prims bound to a geometry graph. This is what the scene round-trip
 // harness diffs a saved and reloaded file with, so it names nodes, pins and
@@ -1190,7 +1190,7 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
         }
         // A geometry graph reports the same shape, with the prims bound to it
         // in place of the material slots fed from it
-        // (doc/plans/usd_texture_graphs.md section 4).
+        // (doc/usd_node_graphs.md section 4).
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {
             if (!graph_mesh) {
                 continue;

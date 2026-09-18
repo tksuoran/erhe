@@ -20,13 +20,12 @@ namespace editor {
 
 // Which variant set of a scene an entry names. A variant block is free to
 // declare a variant set of its own, which is a set of the same prim
-// (doc/usd_compatibility_design.md section 6, "Variant opinions a variant set
-// does not carry"), so the prim and the set name do not name a set on their
-// own: two blocks of one set may each declare a nested set of the same name -
+// (doc/plans/usd_compatibility.md, "Variant opinions a variant set does not
+// carry"), so the prim and the set name do not name a set on their own: two
+// blocks of one set may each declare a nested set of the same name -
 // `full_assets/Teapot/DrawModes.usd` declares a `shadingVariant` inside both
-// of its `modelVariant` blocks. The block the set is declared inside
-// completes the name, both fields being empty for a set the prim declares
-// itself.
+// of its `modelVariant` blocks. The block the set is declared inside completes
+// the name, both fields being empty for a set the prim declares itself.
 class Variant_set_key
 {
 public:
@@ -107,9 +106,9 @@ public:
     std::weak_ptr<erhe::Item_base> prim;
     std::string                    set_name;
     // The variant block the set is declared inside, both empty when the prim
-    // declares the set itself (doc/usd_compatibility_design.md section 6,
-    // "Variant opinions a variant set does not carry"). A save writes such a
-    // set back inside that block, which is where the file authored it.
+    // declares the set itself (doc/plans/usd_compatibility.md, "Variant
+    // opinions a variant set does not carry"). A save writes such a set back
+    // inside that block, which is where the file authored it.
     std::string                    enclosing_set_name;
     std::string                    enclosing_variant_name;
     std::vector<Variant>           variants;

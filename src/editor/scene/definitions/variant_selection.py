@@ -8,8 +8,8 @@ from erhe_codegen import *
 # and is what a saved scene carries the selection in.
 #
 # A variant block is free to declare a variant set of its own, which is a set
-# of the same prim (doc/usd_compatibility_design.md section 6, "Variant opinions
-# a variant set does not carry"), so the set name alone does not name a set:
+# of the same prim (doc/plans/usd_compatibility.md, "Variant opinions a
+# variant set does not carry"), so the set name alone does not name a set:
 # two blocks of one set may each declare a nested set of the same name.
 # `enclosing_set_name` / `enclosing_variant_name` are the block the set is
 # declared inside, both empty for a set the prim declares itself - which is

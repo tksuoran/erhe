@@ -256,8 +256,8 @@ void Properties::variant_properties(Scene_root& scene_root)
     // block declares is listed below the set carrying that block, indented and
     // named by the block, and is editable only while that block is the
     // selected one - its variants reach the scene through nothing else
-    // (doc/usd_compatibility_design.md section 6, "Variant opinions a variant
-    // set does not carry").
+    // (doc/plans/usd_compatibility.md, "Variant opinions a variant set does
+    // not carry").
     Variant_table&                  variant_table = scene_root.get_variant_table();
     const std::vector<Variant_set>& sets          = variant_table.get_sets();
     if (sets.empty()) {

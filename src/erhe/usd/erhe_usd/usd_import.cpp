@@ -3775,7 +3775,7 @@ private:
                         create_info.name
                     );
                     // An erhe texture graph binds a material slot through a
-                    // UsdPreviewSurface input (doc/plans/usd_texture_graphs.md),
+                    // UsdPreviewSurface input (doc/usd_node_graphs.md),
                     // whichever terminal supplies the values, so the bindings
                     // are read off that shader here too.
                     read_material_graph_bindings(material_index, find_surface_shader_path(usd_material.abs_path));
@@ -4791,7 +4791,7 @@ private:
 
     // The evaluated geometry of every geometry graph the layer walk recorded:
     // the graph prim's `def Mesh "result"` child, converted the way every
-    // other mesh of the file is (doc/plans/usd_texture_graphs.md section 4).
+    // other mesh of the file is (doc/usd_node_graphs.md section 4).
     // The mesh is not scene content - convert_node stops at the graph prim,
     // as it does at a brush - so only its geometry is taken, and a graph
     // written without one simply carries none: the nodes are what a reload
@@ -5190,7 +5190,7 @@ private:
             return;
         }
         // A marked `NodeGraph` prim is a texture graph asset
-        // (doc/plans/usd_texture_graphs.md R1): the caller rebuilds it from the
+        // (doc/usd_node_graphs.md R1): the caller rebuilds it from the
         // record, and its `Shader` children are the graph's nodes, so the
         // whole subtree is left out here.
         if (m_node_graph_paths.count(usd_node.abs_path) != 0) {
@@ -6095,15 +6095,14 @@ private:
     }
 
     // The `variants` selection the referencing layer authors for what a prim's
-    // arcs bring in (doc/usd_compatibility_design.md section 6, "Variant
-    // selection through a composition arc"). In LIVRPS such a selection is
-    // stronger than the target's own, and it reaches the sets of whatever the
-    // arcs compose in, so it belongs to the prim rather than to one arc. An
-    // entry naming a set the referencing prim declares itself is that prim's
-    // own selection - the reader applies it to its own blocks - so it is not
-    // carried into the target. A `variants` metadatum on an `over` prim below
-    // the carrier is the entry of that prim's relative path, read the walk
-    // read_instance_overrides takes.
+    // arcs bring in (doc/usd_compatibility_design.md C7). In LIVRPS such a
+    // selection is stronger than the target's own, and it reaches the sets of
+    // whatever the arcs compose in, so it belongs to the prim rather than to
+    // one arc. An entry naming a set the referencing prim declares itself is
+    // that prim's own selection - the reader applies it to its own blocks - so
+    // it is not carried into the target. A `variants` metadatum on an `over`
+    // prim below the carrier is the entry of that prim's relative path, read
+    // the walk read_instance_overrides takes.
     [[nodiscard]] auto read_reference_variant_selections(const std::string& absolute_path) -> std::vector<Usd_variant_selection>
     {
         std::vector<Usd_variant_selection> selections;
@@ -6561,7 +6560,7 @@ private:
             return;
         }
         // A marked `NodeGraph` prim is an erhe texture graph
-        // (doc/plans/usd_texture_graphs.md R1): its `Shader` children are the
+        // (doc/usd_node_graphs.md R1): its `Shader` children are the
         // graph's nodes rather than a shading network of the scene, so the
         // walk stops here the way it stops at a `Brush` prim. An unmarked
         // `NodeGraph` is a foreign network and is walked like any other prim
@@ -6633,7 +6632,7 @@ private:
     }
 
     // Whether a `NodeGraph` prim spec carries the marker that says it is an
-    // erhe texture graph (doc/plans/usd_texture_graphs.md 2.1).
+    // erhe texture graph (doc/usd_node_graphs.md 2.1).
     [[nodiscard]] static auto spec_has_node_graph_marker(const lightusd::PrimSpec& spec) -> bool
     {
         const std::map<std::string, lightusd::Property>::const_iterator i =
@@ -6643,7 +6642,7 @@ private:
 
     // The scalar text of an attribute: the text a string or a token carries,
     // and otherwise the spelling USD gives the value - a number, a tuple.
-    // What a node parameter travels as (doc/plans/usd_texture_graphs.md 2.2):
+    // What a node parameter travels as (doc/usd_node_graphs.md 2.2):
     // a string value crosses verbatim, so the quoting and escaping the file
     // format asks for stays inside erhe::usd.
     [[nodiscard]] static auto attribute_literal(const lightusd::Attribute& attribute) -> std::string
@@ -6707,7 +6706,7 @@ private:
     }
 
     // One `Shader` child of a marked `NodeGraph` as one node of the graph
-    // (doc/plans/usd_texture_graphs.md 2.3). An `inputs:` attribute carrying a
+    // (doc/usd_node_graphs.md 2.3). An `inputs:` attribute carrying a
     // value is a parameter, one carrying a connection or nothing at all is an
     // input pin, and every `outputs:` attribute is an output pin. A shader
     // whose `info:id` is not under the prefix the graph's format names is one
@@ -6785,7 +6784,7 @@ private:
 
     // A link into a node the graph does not hold - a `Shader` the reader
     // rejected - goes with that node, and an interface output that named it
-    // goes with it too (doc/plans/usd_texture_graphs.md 2.1).
+    // goes with it too (doc/usd_node_graphs.md 2.1).
     static void drop_dangling_node_graph_links(Usd_node_graph& record)
     {
         std::set<std::string> node_names;
@@ -6811,7 +6810,7 @@ private:
     }
 
     // One marked `NodeGraph` prim as the record the caller rebuilds the graph
-    // asset from (doc/plans/usd_texture_graphs.md 2.3, section 4). The marker
+    // asset from (doc/usd_node_graphs.md 2.3, section 4). The marker
     // is read before the children: the format is what says which `info:id`
     // prefix the graph's nodes are under.
     void read_node_graph_prim(const std::string& path, const lightusd::PrimSpec& spec)
@@ -6865,7 +6864,7 @@ private:
     }
 
     // The material slots a marked `NodeGraph` feeds
-    // (doc/plans/usd_texture_graphs.md R2). Tydra leaves such a slot unset -
+    // (doc/usd_node_graphs.md R2). Tydra leaves such a slot unset -
     // the connection targets no `UsdUVTexture` - so the surface shader's own
     // prim spec is where the connection is read from.
     void read_material_graph_bindings(const std::size_t material_index, const std::string& shader_path)

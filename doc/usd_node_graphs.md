@@ -1,14 +1,16 @@
-# Texture graphs in a USD file (USD plan E4c)
+# Node graphs in a USD file
 
-Status: proposed
+Stability: mostly stable
 
-The plan step `doc/usd_compatibility_design.md` E4c: an erhe texture graph
-(`doc/texture_graph.md`) rides a USD file as the `UsdShade` network
-it is, so a USD-backed scene keeps its graphs across a save and a
-`UsdShade`-aware tool reads the same prims. This document owns the
-design; the plan step refers here.
+An erhe texture graph (`doc/texture_graph.md`) and an erhe geometry graph
+(`doc/geometry_graph_mesh.md`) ride a USD file as the `UsdShade` network they
+are, so a USD-backed scene keeps its graphs across a save and a
+`UsdShade`-aware tool reads the same prims. This document owns the form and
+the record; `doc/erhe_usd.md` "Node graphs" states what the library reads and
+writes, and `doc/editor_parsers.md` the editor half. The design record names
+the step as E4c (`doc/usd_compatibility_design.md`).
 
-## 1. Requirements
+## 1. Rules
 
 - R1 A `Graph_texture` asset is a `NodeGraph` prim where the asset sits
   in the tree (U4: a resource is a prim where it sits); every node of the
@@ -26,8 +28,7 @@ design; the plan step refers here.
   parameter, link for link, node position included; a second save is
   byte-identical (E3).
 - R5 A `NodeGraph` a foreign file authors without erhe's marker (section
-  2.1) is not an erhe graph and is left to Tydra's material conversion
-  exactly as today.
+  2.1) is not an erhe graph and is left to Tydra's material conversion.
 - R6 The writer in `erhe::usd` names no editor type (the X3 and E4a
   rule): the editor hands the graph over in a neutral record and
   rebuilds it from one.
@@ -84,12 +85,16 @@ def Material "Iron" {
   M2), `info:id` the factory type name under the `erhe:texture:`
   prefix (`make_texture_graph_node` takes the same string back), and
   `erhe:ui:position` the node's editor position.
-- A node parameter is an `inputs:<name>` attribute typed from the
-  parameter's registered property type by the mapping's value rows
-  (`doc/usd_compatibility.md` "Property system": float, int, bool, token for
-  an enumeration, float2 for a size, color3f / color4f for a color); a
-  type with no USD form (gradient, curve) travels as its D16 text in a
-  `string` attribute, one rule for both.
+- A node parameter is an `inputs:<name>` attribute whose USD type and
+  literal text the editor chooses, since the editor's nodes serialize a
+  parameter as JSON rather than through the property system: float, int,
+  bool, token for an enumeration, float2 for a size, color3f / color4f for
+  a color, float3 / float4 for a tuple that is a quantity rather than a
+  color (`doc/usd_compatibility.md` "Property system" holds the value
+  rows). A `token` and a `string` carry their text as it stands, with no
+  quotes around it, so a value with no USD form of its own - a gradient, a
+  curve - travels as its D16 text in a `string` attribute, one rule for
+  both, and the USDA quoting and escaping stays inside `erhe::usd`.
 - A pin is an `inputs:<pin>` / `outputs:<pin>` attribute typed from the
   pin's value type: `grayscale` is `float`, `rgb` is `color3f`, `rgba`
   is `color4f`. An input pin with a link is the attribute with a
@@ -110,13 +115,13 @@ def Material "Iron" {
 `Usd_data::node_graphs` (read) and `Usd_save_arguments::node_graphs`
 (write) carry a `Usd_node_graph`: stage path, name, format token, the
 interface outputs (pin name, type, source node and pin), and the nodes,
-each with name, type name, position, parameters as (name, D16 text),
-input pins as (name, value type, optional source node and pin) and
+each with name, type name, position, parameters as (USD type, literal
+text), input pins as (name, value type, optional source node and pin) and
 output pins as (name, value type). Values are text on both sides, as
 the X2 override values are, so `erhe::usd` needs no node vocabulary.
-The editor's `graph_texture_serialization.cpp` already turns a
-`Graph_texture` into nodes with type names, parameters and links for
-glTF; the same walk fills the record, and the same rebuild consumes it.
+The editor's `graph_texture_serialization.cpp` turns a `Graph_texture`
+into nodes with type names, parameters and links for glTF; the same walk
+fills the record, and the same rebuild consumes it.
 
 ### 2.3 Reading
 
@@ -128,10 +133,11 @@ not Tydra's render scene, which never reports shading prims: for each
 record; the scene conversion stops there, as it does at a `Brush` prim,
 so no node becomes a scene prim. A material input whose connection
 targets a marked `NodeGraph`'s output is recorded on the material
-record as (slot, graph path); Tydra leaves that slot unset, since the
-target is no `UsdUVTexture`, and the editor binds the slot to the
-rebuilt `Graph_texture` (a `Texture_reference`) the way the glTF
-`material_bindings` binder does.
+record as (slot, graph path); Tydra leaves that slot at its schema
+fallback with a warning, since the target is no `UsdUVTexture`, so the
+stage is converted from the composed layer as it stands, and the editor
+binds the slot to the rebuilt `Graph_texture` (a `Texture_reference`) the
+way the glTF `material_bindings` binder does.
 
 ### 2.4 Writing
 
@@ -152,40 +158,17 @@ shape: create the `Graph_texture` items at the recorded paths through
 the same operation glTF import uses, rebuild the nodes through the
 factory, set parameters by D16 text and positions, link pins, bind the
 material slots, and leave the graph dirty for the next frame's
-`evaluate_if_dirty`. A save no longer logs texture graphs as not carried.
+`evaluate_if_dirty`.
 
-## 3. Phases
+## 3. Verification
 
-Phase 1 holds (`doc/erhe_usd.md`, "Node graphs") and so does
-phase 2. Two facts phase 1 settled that section 2 did not foresee: the
-parameter travels as a (USD type, USD literal text) pair chosen by the
-editor, since the editor's nodes serialize parameters as JSON rather than
-through the property system, and a `UsdPreviewSurface` input wired to a graph
-output is an input the fork's Tydra leaves at its schema fallback with a
-warning, so the stage it converts is the composed layer as it stands. Phase 2
-settled a third: a `string` parameter carries the text itself rather than a
-quoted literal, so a nested value travels as its JSON text as it stands and
-`erhe::usd` does the quoting and escaping the file format asks for
-(`doc/usd_compatibility.md`, "Texture node graphs").
-
-1. `erhe::usd`: the record types, the reader (marked `NodeGraph` prims,
-   material slot connections to them), the writer (generic `Shader`
-   prims with connections, interface outputs, material slot connection),
-   a fixture `texture_graph.usda` with three nodes, a gradient parameter
-   and a material bound to the graph, tests for read, write and
-   byte-identical double save.
-2. Editor: the record to and from `Graph_texture`, material binding,
-   save and open paths, MCP `get_scene_node_graphs` reporting nodes and
-   links for the round-trip script, the `usd_snapshot` `node_graphs`
-   block and a `usd_round_trip_leg` over the fixture, docs
-   (`doc/erhe_usd.md`, `doc/usd_compatibility.md` rows,
-   `doc/scene_serialization.md`).
-
-Verification of the step: the round-trip leg green, and a headless
-session that opens the fixture, screenshots the material rendering the
-generated texture (a non-uniform surface), saves, reopens and matches
-`get_scene_node_graphs` and the material's slot binding, with a
-byte-identical second save and a clean scene close.
+The round-trip script's `texture_graph.usda` and geometry-graph legs
+(`scripts/scene_roundtrip_verify.py`), `erhe_usd_tests`
+(`test_usd_node_graphs.cpp`, `test_usd_geometry_graphs.cpp`), and a
+headless session that opens the fixture, screenshots the material
+rendering the generated texture (a non-uniform surface), saves, reopens
+and matches `get_scene_node_graphs` and the material's slot binding, with
+a byte-identical second save and a clean scene close.
 
 ## 4. Geometry graphs reuse this form
 
@@ -231,3 +214,8 @@ saved again.
   is the material-fidelity step E2's territory.
 - Writing the baked image (R3).
 - Evaluating a foreign `NodeGraph` (R5).
+
+## Future work
+
+- [plans/usd_compatibility.md](plans/usd_compatibility.md) "A material slot
+  that a texture graph feeds and that carries an authored factor".
