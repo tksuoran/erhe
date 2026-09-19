@@ -4,7 +4,9 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <functional>
 #include <memory>
+#include <vector>
 
 namespace erhe::graphics {
     class Device;
@@ -44,6 +46,12 @@ public:
     void set_status_bar_callback    (const std::function<void(Window_imgui_host& host)>& callback);
     void set_dock_layout_callback   (Dock_layout_callback callback);
 
+    // Queues a one-shot DockBuilder operation. It runs on the next frame just
+    // before ImGui::DockSpace(), after the dock layout callback - the point of
+    // the frame where the dock tree may be rebuilt - and is then discarded.
+    using Dock_operation = std::function<void(Window_imgui_host& host)>;
+    void queue_dock_operation       (Dock_operation operation);
+
     // Implements Imgui_host
     void begin_imgui_frame  ()                            override;
     void process_events     (float dt_s, int64_t time_ns) override;
@@ -64,6 +72,8 @@ private:
     float                                        m_this_frame_dt_s    {0.0f};
     std::function<void(Window_imgui_host& host)> m_status_bar_callback{};
     Dock_layout_callback                         m_dock_layout_callback{};
+    std::vector<Dock_operation>                  m_dock_operations;
+    std::vector<Dock_operation>                  m_running_dock_operations;
 };
 
 } // namespace erhe::imgui

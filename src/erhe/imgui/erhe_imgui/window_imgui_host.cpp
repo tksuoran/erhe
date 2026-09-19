@@ -216,6 +216,14 @@ void Window_imgui_host::begin_imgui_frame()
         const ImVec2 available_size{static_cast<float>(width), static_cast<float>(height) - status_bar_height};
         m_dock_layout_callback(*this, available_size);
     }
+    if (!m_dock_operations.empty()) {
+        // Swapped out first: an operation may queue a follow-up operation.
+        m_running_dock_operations.swap(m_dock_operations);
+        for (Dock_operation& operation : m_running_dock_operations) {
+            operation(*this);
+        }
+        m_running_dock_operations.clear();
+    }
     ImGui::DockSpace(m_root_dock_id, ImVec2{0.0f, -status_bar_height}, ImGuiDockNodeFlags_PassthruCentralNode);
 
     // Status bar
@@ -299,6 +307,11 @@ void Window_imgui_host::set_status_bar_callback(const std::function<void(Window_
 void Window_imgui_host::set_dock_layout_callback(Dock_layout_callback callback)
 {
     m_dock_layout_callback = std::move(callback);
+}
+
+void Window_imgui_host::queue_dock_operation(Dock_operation operation)
+{
+    m_dock_operations.push_back(std::move(operation));
 }
 
 }  // namespace erhe::imgui
