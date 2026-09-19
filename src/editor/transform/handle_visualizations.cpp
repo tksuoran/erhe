@@ -595,6 +595,17 @@ auto Handle_visualizations::get_gizmo_radius() const -> float
     return gz.rotate_ring_major_radius * m_view_scale;
 }
 
+auto Handle_visualizations::get_eye(const erhe::scene::Camera& camera) const -> vec3
+{
+    if (!camera.projection()->is_orthogonal()) {
+        return vec3{camera.position_in_world()};
+    }
+    // Camera looks down its -Z axis; +Z points from the scene back to the eye.
+    const vec3  back     = normalize(vec3{camera.world_from_node()[2]});
+    const float distance = 1000.0f * std::max(get_gizmo_radius(), 1.0e-3f);
+    return vec3{m_world_from_anchor.get_translation()} + (distance * back);
+}
+
 auto Handle_visualizations::get_view_scale() const -> float
 {
     return m_view_scale;
@@ -751,8 +762,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     if (!has_target()) {
         return;
     }
-    const auto* camera_node = context.get_camera_node();
-    if (camera_node == nullptr) {
+    if (context.camera == nullptr) {
         return;
     }
     const float s = m_view_scale;
@@ -762,7 +772,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
 
     const vec3 c     = m_world_from_anchor.get_translation();
     const mat3 basis = get_basis();
-    const vec3 eye   = vec3{camera_node->position_in_world()};
+    const vec3 eye   = get_eye(*context.camera);
 
     const Transform_tool_config& tt_config = m_context.editor_settings->transform_tool;
     const Gizmo_sizes gz = get_gizmo_sizes(tt_config);

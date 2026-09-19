@@ -310,4 +310,13 @@ auto Projection::get_scale() const -> float
     return 1.0f;
 }
 
+auto Projection::is_orthogonal() const -> bool
+{
+    return
+        (projection_type == Type::orthogonal_horizontal) ||
+        (projection_type == Type::orthogonal_vertical  ) ||
+        (projection_type == Type::orthogonal           ) ||
+        (projection_type == Type::orthogonal_rectangle );
+}
+
 } // namespace erhe::scene

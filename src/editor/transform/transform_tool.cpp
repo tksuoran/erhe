@@ -1256,9 +1256,8 @@ void Transform_tool::update_hover(Scene_view& scene_view, const glm::vec3 ray_or
         // XR originates at the controller.
         glm::vec3 eye_position = ray_origin;
         const std::shared_ptr<erhe::scene::Camera> camera = scene_view.get_camera();
-        const erhe::scene::Node* camera_node = camera ? camera.get() : nullptr;
-        if (camera_node != nullptr) {
-            eye_position = glm::vec3{camera_node->position_in_world()};
+        if (camera) {
+            eye_position = visualizations->get_eye(*camera.get());
         }
         const std::optional<Handle_pick> pick = visualizations->pick(eye_position, ray_origin, ray_direction);
         if (pick.has_value()) {
@@ -2318,11 +2317,10 @@ void Transform_tool::render_hover_preview(const Render_context& context)
         vec3  side2{0.0f};
         float ring_r = radius;
         if (handle == Handle::e_handle_rotate_view) {
-            const auto* camera_node = context.get_camera_node();
-            if (camera_node == nullptr) {
+            if (context.camera == nullptr) {
                 return;
             }
-            const vec3 view_dir = normalize(vec3{camera_node->position_in_world()} - center);
+            const vec3 view_dir = normalize(visualizations->get_eye(*context.camera) - center);
             const vec3 ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
             side1  = normalize(cross(view_dir, ref));
             side2  = normalize(cross(view_dir, side1));
