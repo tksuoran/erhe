@@ -480,6 +480,18 @@ class Creation:
         self.mutate("save_scene", {"scene_name": self.scene, "path": path})
         print(f"saved scene to {path}")
 
+    def export(self, path, binary=True):
+        """export_gltf: a plain interchange glTF, which is what an asset
+        meant to be IMPORTED into other scenes wants (save() writes the
+        scene's own source format, carrying the editor state with it)."""
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        self.mutate("export_gltf", {
+            "scene_name": self.scene, "path": path, "binary": bool(binary),
+        })
+        print(f"exported scene to {path}")
+
     # ------------------------------------------------------------ materials
 
     def materials(self):
@@ -1034,6 +1046,27 @@ class Creation:
         if node is None:
             raise RuntimeError(f"group '{name}' did not appear")
         return node["id"]
+
+    def skin(self, name, parts, parent_node_id=None, material=None):
+        """create_skin: merge the given mesh prims into ONE rigidly skinned
+        mesh. parts is a list of (mesh_node_id, joint_node_id) pairs; every
+        vertex of a part is driven by that part's joint with weight 1, and
+        the skin's joints are the distinct joint nodes in order of first
+        appearance. The part mesh prims are removed. Returns the tool's
+        result payload (node_id, skin_name, joint_count, vertex_count and a
+        per-joint vertex count)."""
+        args = {
+            "scene_name": self.scene, "name": name,
+            "parts": [
+                {"node_id": int(mesh_id), "joint_node_id": int(joint_id)}
+                for mesh_id, joint_id in parts
+            ],
+        }
+        if parent_node_id is not None:
+            args["parent_node_id"] = int(parent_node_id)
+        if material is not None:
+            args["material"] = material
+        return self.mutate("create_skin", args)
 
     def anchor(self, name, parent_node_id, position):
         """Empty child node at a world position, used as a joint pivot."""

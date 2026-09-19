@@ -243,6 +243,31 @@ creations up beyond single showcase scenes.
 
 ## The creations
 
+### 22 - Skin Test (three boxes)
+
+![Skin Test (three boxes)](../images/creations/22_skin_test_boxes.png)
+
+A deliberately plain rigged test asset, and the first creation to build a
+skin: a three metre column of three separate closed boxes, each one metre
+tall, merged into ONE skinned mesh with ONE primitive and driven by a
+three-bone chain. The weights are rigid - every vertex of box k belongs to
+bone k with weight 1 - which is what makes the asset worth having, because
+every check on it is a closed-form number instead of something to eyeball:
+rotate the middle bone ninety degrees about Z and the top two boxes swing
+out exactly two metres along -X while the bottom box does not move at all,
+and the script prints the posed bounds before and after to prove it. The
+boxes keep their own end caps, so the merged mesh has interior faces at the
+seams and the joints open into visible wedges when they bend - a skinning
+test wants to see that, not hide it.
+
+The scene is built with the `create_skin` MCP tool added for it, which
+merges mesh prims that are already in the scene into one skinned mesh with
+the skinned vertex format, takes the inverse bind matrices from the joint
+world transforms at the time of the call, and removes the part meshes. The
+asset is exported to `res/editor/assets/skin_test/skin_test_3_boxes.glb`,
+and reimporting it gives back the same three joints, the same single
+primitive and the same posed bounds.
+
 ### 21 - Newton's Cradle
 
 ![Newton's Cradle](../images/creations/21_newtons_cradle.png)
