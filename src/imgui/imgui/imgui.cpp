@@ -4298,6 +4298,7 @@ static const ImGuiLocEntry GLocalizationEntriesEnUS[] =
     { ImGuiLocKey_OpenLink_s,           "Open '%s'"                             },
     { ImGuiLocKey_CopyLink,             "Copy Link###CopyLink"                  },
     { ImGuiLocKey_DockingHideTabBar,            "Hide tab bar###HideTabBar"             },
+    { ImGuiLocKey_DockingCrossSplitter,         "Cross splitter###CrossSplitter"        },
     { ImGuiLocKey_DockingHoldShiftToDock,       "Hold SHIFT to enable Docking window."  },
     { ImGuiLocKey_DockingDragToUndockOrMoveNode,"Click and drag to move or undock whole node."    },
 };
@@ -18134,6 +18135,8 @@ namespace ImGui
     static void             DockNodeTreeMerge(ImGuiContext* ctx, ImGuiDockNode* parent_node, ImGuiDockNode* merge_lead_child);
     static void             DockNodeTreeUpdatePosSize(ImGuiDockNode* node, ImVec2 pos, ImVec2 size, ImGuiDockNode* only_write_to_single_node = NULL);
     static void             DockNodeTreeUpdateSplitter(ImGuiDockNode* node);
+    static void             DockNodeTreeUpdateCrossSplitter(ImGuiDockNode* node);
+    static bool             DockNodeIsCrossSplitShape(const ImGuiDockNode* node);
     static ImGuiDockNode*   DockNodeTreeFindVisibleNodeByPos(ImGuiDockNode* node, ImVec2 pos);
     static ImGuiDockNode*   DockNodeTreeFindFallbackLeafNode(ImGuiDockNode* node);
 
@@ -19043,6 +19046,10 @@ static void ImGui::DockNodeMoveChildNodes(ImGuiDockNode* dst_node, ImGuiDockNode
     dst_node->SplitAxis = src_node->SplitAxis;
     dst_node->SizeRef = src_node->SizeRef;
     src_node->ChildNodes[0] = src_node->ChildNodes[1] = NULL;
+
+    // The cross splitter flag describes the shape of the child nodes: it follows them.
+    dst_node->SetLocalFlags((dst_node->LocalFlags & ~ImGuiDockNodeFlags_CrossSplit) | (src_node->LocalFlags & ImGuiDockNodeFlags_CrossSplit));
+    src_node->SetLocalFlags(src_node->LocalFlags & ~ImGuiDockNodeFlags_CrossSplit);
 }
 
 static void ImGui::DockNodeMoveWindows(ImGuiDockNode* dst_node, ImGuiDockNode* src_node)
@@ -19663,6 +19670,18 @@ void ImGui::DockNodeWindowMenuHandler_Default(ImGuiContext* ctx, ImGuiDockNode* 
                 TabBarQueueFocus(tab_bar, tab);
             SameLine();
             Text("   ");
+        }
+    }
+
+    // "Cross splitter" option, offered to the four leaves of a 2x2 grid. The flag lives in the node holding the grid.
+    ImGuiDockNode* cross_node = (node->ParentNode != NULL) ? node->ParentNode->ParentNode : NULL;
+    if (cross_node != NULL && DockNodeIsCrossSplitShape(cross_node))
+    {
+        Separator();
+        if (MenuItem(LocalizeGetMsg(ImGuiLocKey_DockingCrossSplitter), NULL, (cross_node->LocalFlags & ImGuiDockNodeFlags_CrossSplit) != 0))
+        {
+            cross_node->SetLocalFlags(cross_node->LocalFlags ^ ImGuiDockNodeFlags_CrossSplit);
+            MarkIniSettingsDirty();
         }
     }
 }
@@ -20596,6 +20615,22 @@ void ImGui::DockNodeTreeUpdatePosSize(ImGuiDockNode* node, ImVec2 pos, ImVec2 si
     const bool child_1_recurse = only_write_to_single_node ? child_1_is_toward_single_node : child_1->IsVisible;
     if (child_0_recurse)
         DockNodeTreeUpdatePosSize(child_0, child_0_pos, child_0_size);
+
+    // Cross splitter: the inner splitter of child_1 follows the one of child_0, so both stay aligned.
+    // Locking the size of the first grand-child makes child_1 take the "locked absolute size" path above,
+    // regardless of where a central node may be.
+    if (only_write_to_single_node == NULL && node->IsCrossSplitEngaged())
+    {
+        const ImGuiAxis inner_axis = (ImGuiAxis)child_0->SplitAxis;
+        const float inner_size_0 = child_0->ChildNodes[0]->Size[inner_axis];
+        const float inner_size_avail = child_1_size[inner_axis] - g.Style.DockingSeparatorSize;
+        if (inner_size_0 >= 1.0f && inner_size_0 <= inner_size_avail - 1.0f)
+        {
+            child_1->ChildNodes[0]->Size[inner_axis] = inner_size_0;
+            child_1->ChildNodes[0]->WantLockSizeOnce = true;
+            child_1->ChildNodes[1]->WantLockSizeOnce = false;
+        }
+    }
     if (child_1_recurse)
         DockNodeTreeUpdatePosSize(child_1, child_1_pos, child_1_size);
 }
@@ -20615,11 +20650,264 @@ static void DockNodeTreeUpdateSplitterFindTouchingNode(ImGuiDockNode* node, ImGu
             DockNodeTreeUpdateSplitterFindTouchingNode(node->ChildNodes[1], axis, side, touching_nodes);
 }
 
+//-----------------------------------------------------------------------------
+// Cross splitter (ImGuiDockNodeFlags_CrossSplit)
+//-----------------------------------------------------------------------------
+// A node split on one axis whose two children are both split on the other axis lays out four areas as a 2x2 grid.
+// With the flag set on that node, its splitter (the "outer" bar) and the splitters of its two children (the two
+// "inner" segments) act as one cross-bar splitter:
+// - the inner segments are kept aligned (child 1 follows child 0, see DockNodeTreeUpdatePosSize()) and move together,
+// - the outer bar moves alone,
+// - the crossing is a handle moving all of them at once.
+// The grid is "engaged" only while all four areas are visible, otherwise the nodes behave as regular nodes.
+//-----------------------------------------------------------------------------
+
+static bool ImGui::DockNodeIsCrossSplitShape(const ImGuiDockNode* node)
+{
+    if (!node->IsSplitNode())
+        return false;
+    for (int child_n = 0; child_n < 2; child_n++)
+    {
+        const ImGuiDockNode* child = node->ChildNodes[child_n];
+        if (!child->IsVisible || !child->IsSplitNode() || child->SplitAxis == node->SplitAxis)
+            return false;
+        if (!child->ChildNodes[0]->IsVisible || !child->ChildNodes[1]->IsVisible)
+            return false;
+    }
+    return true;
+}
+
+bool ImGuiDockNode::IsCrossSplitEngaged() const
+{
+    return (LocalFlags & ImGuiDockNodeFlags_CrossSplit) != 0 && ImGui::DockNodeIsCrossSplitShape(this);
+}
+
+static ImRect DockNodeSplitterGetRect(const ImGuiDockNode* node)
+{
+    const ImGuiDockNode* child_0 = node->ChildNodes[0];
+    const ImGuiDockNode* child_1 = node->ChildNodes[1];
+    const ImGuiAxis axis = (ImGuiAxis)node->SplitAxis;
+    ImRect bb(child_0->Pos, child_1->Pos);
+    bb.Min[axis] += child_0->Size[axis];
+    bb.Max[axis ^ 1] += child_1->Size[axis ^ 1];
+    return bb;
+}
+
+static ImGuiID DockNodeSplitterGetID(const ImGuiDockNode* node)
+{
+    ImGui::PushID(node->ID);
+    const ImGuiID id = ImGui::GetID("##Splitter"); // Same ID as the regular splitter of the node
+    ImGui::PopID();
+    return id;
+}
+
+// Minimum size of each child along the split axis. Gathering touching nodes is only needed while resizing.
+static void DockNodeSplitterGetMinSizes(ImGuiDockNode* node, bool gather_touching_nodes, ImVector<ImGuiDockNode*>* touching_nodes, float out_min_sizes[2])
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiDockNode* child_0 = node->ChildNodes[0];
+    ImGuiDockNode* child_1 = node->ChildNodes[1];
+    const ImGuiAxis axis = (ImGuiAxis)node->SplitAxis;
+    const float min_size = g.Style.WindowMinSize[axis];
+    float resize_limits[2];
+    resize_limits[0] = child_0->Pos[axis] + min_size;
+    resize_limits[1] = child_1->Pos[axis] + child_1->Size[axis] - min_size;
+    if (gather_touching_nodes)
+    {
+        DockNodeTreeUpdateSplitterFindTouchingNode(child_0, axis, 1, &touching_nodes[0]);
+        DockNodeTreeUpdateSplitterFindTouchingNode(child_1, axis, 0, &touching_nodes[1]);
+        for (int n = 0; n < touching_nodes[0].Size; n++)
+            resize_limits[0] = ImMax(resize_limits[0], touching_nodes[0][n]->Rect().Min[axis] + min_size);
+        for (int n = 0; n < touching_nodes[1].Size; n++)
+            resize_limits[1] = ImMin(resize_limits[1], touching_nodes[1][n]->Rect().Max[axis] - min_size);
+    }
+    out_min_sizes[0] = resize_limits[0] - child_0->Pos[axis];
+    out_min_sizes[1] = child_1->Pos[axis] + child_1->Size[axis] - resize_limits[1];
+}
+
+// Move the splitter of a node by 'delta'. Same effect as the resize in DockNodeTreeUpdateSplitter().
+static void DockNodeSplitterApplyDelta(ImGuiDockNode* node, ImVector<ImGuiDockNode*>* touching_nodes, float delta)
+{
+    if (delta == 0.0f || touching_nodes[0].Size == 0 || touching_nodes[1].Size == 0)
+        return;
+    ImGuiDockNode* child_0 = node->ChildNodes[0];
+    ImGuiDockNode* child_1 = node->ChildNodes[1];
+    const ImGuiAxis axis = (ImGuiAxis)node->SplitAxis;
+    child_0->Size[axis] = child_0->SizeRef[axis] = child_0->Size[axis] + delta;
+    child_1->Pos[axis] += delta;
+    child_1->Size[axis] = child_1->SizeRef[axis] = child_1->Size[axis] - delta;
+
+    // Lock the size of every node that is a sibling of the node we are touching
+    for (int side_n = 0; side_n < 2; side_n++)
+        for (int touching_node_n = 0; touching_node_n < touching_nodes[side_n].Size; touching_node_n++)
+        {
+            ImGuiDockNode* touching_node = touching_nodes[side_n][touching_node_n];
+            while (touching_node->ParentNode != node)
+            {
+                if (touching_node->ParentNode->SplitAxis == axis)
+                    touching_node->ParentNode->ChildNodes[side_n]->WantLockSizeOnce = true;
+                touching_node = touching_node->ParentNode;
+            }
+        }
+    ImGui::MarkIniSettingsDirty();
+}
+
+static float DockNodeSplitterClampDelta(float delta, float size_0, float size_1, float min_size_0, float min_size_1)
+{
+    const float delta_min = -ImMax(0.0f, size_0 - min_size_0);
+    const float delta_max = +ImMax(0.0f, size_1 - min_size_1);
+    return ImClamp(delta, delta_min, delta_max);
+}
+
+// Splitters of an engaged cross node: bar 0 = outer bar (node), bar 1 and 2 = inner segments (child 0 and child 1)
+static void ImGui::DockNodeTreeUpdateCrossSplitter(ImGuiDockNode* node)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiWindow* window = g.CurrentWindow;
+    ImGuiDockNode* bar_nodes[3] = { node, node->ChildNodes[0], node->ChildNodes[1] };
+    const ImGuiAxis outer_axis = (ImGuiAxis)node->SplitAxis;
+    const ImGuiAxis inner_axis = (ImGuiAxis)(outer_axis ^ 1);
+    const ImGuiAxis bar_axes[3] = { outer_axis, inner_axis, inner_axis };
+
+    // Resizable axes
+    bool axis_resizable[2] = { true, true };
+    for (int bar_n = 0; bar_n < 3; bar_n++)
+    {
+        const ImGuiDockNodeFlags merged_flags = bar_nodes[bar_n]->ChildNodes[0]->MergedFlags | bar_nodes[bar_n]->ChildNodes[1]->MergedFlags;
+        const ImGuiDockNodeFlags no_resize_axis_flag = (bar_axes[bar_n] == ImGuiAxis_X) ? ImGuiDockNodeFlags_NoResizeX : ImGuiDockNodeFlags_NoResizeY;
+        if ((merged_flags & ImGuiDockNodeFlags_NoResize) || (merged_flags & no_resize_axis_flag))
+            axis_resizable[bar_axes[bar_n]] = false;
+    }
+
+    // Identifiers. Bars use the ID of the regular splitter of their node, so engaging or disengaging keeps a resize going.
+    ImRect bar_bb[3];
+    ImGuiID bar_ids[3];
+    for (int bar_n = 0; bar_n < 3; bar_n++)
+    {
+        bar_bb[bar_n] = DockNodeSplitterGetRect(bar_nodes[bar_n]);
+        bar_ids[bar_n] = DockNodeSplitterGetID(bar_nodes[bar_n]);
+    }
+    PushID(node->ID);
+    const ImGuiID center_id = GetID("##CrossCenter");
+    PopID();
+
+    // Limits. The inner segments move together so they share the most restrictive limits.
+    const bool any_active = (g.ActiveId != 0) && (g.ActiveId == center_id || g.ActiveId == bar_ids[0] || g.ActiveId == bar_ids[1] || g.ActiveId == bar_ids[2]);
+    ImVector<ImGuiDockNode*> touching_nodes[3][2];
+    float min_sizes[3][2];
+    for (int bar_n = 0; bar_n < 3; bar_n++)
+        DockNodeSplitterGetMinSizes(bar_nodes[bar_n], any_active, touching_nodes[bar_n], min_sizes[bar_n]);
+
+    // Crossing handle. Submitted first so it takes precedence over the bars.
+    const float hover_extend = g.WindowsBorderHoverPadding;
+    const float hover_visibility_delay = WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER;
+    const ImGuiButtonFlags button_flags = ImGuiButtonFlags_FlattenChildren;
+    ImRect center_bb;
+    center_bb.Min[outer_axis] = bar_bb[0].Min[outer_axis];
+    center_bb.Max[outer_axis] = bar_bb[0].Max[outer_axis];
+    center_bb.Min[inner_axis] = bar_bb[1].Min[inner_axis];
+    center_bb.Max[inner_axis] = bar_bb[1].Max[inner_axis];
+    center_bb.Expand(hover_extend);
+    ImVec2 delta(0.0f, 0.0f);
+    bool bar_hovered[3] = { false, false, false };
+    bool bar_held[3] = { false, false, false };
+    if ((axis_resizable[0] || axis_resizable[1]) && ItemAdd(center_bb, center_id, NULL, ImGuiItemFlags_NoNav))
+    {
+        bool hovered, held;
+        ButtonBehavior(center_bb, center_id, &hovered, &held, button_flags);
+        const bool hovered_visible = hovered && g.HoveredIdPreviousFrame == center_id && g.HoveredIdTimer >= hover_visibility_delay;
+        if (held || hovered_visible)
+            SetMouseCursor((axis_resizable[0] && axis_resizable[1]) ? ImGuiMouseCursor_ResizeAll : axis_resizable[0] ? ImGuiMouseCursor_ResizeEW : ImGuiMouseCursor_ResizeNS);
+        if (held)
+            delta = g.IO.MousePos - g.ActiveIdClickOffset - center_bb.Min;
+        for (int bar_n = 0; bar_n < 3; bar_n++)
+            if (axis_resizable[bar_axes[bar_n]])
+            {
+                bar_hovered[bar_n] = hovered_visible;
+                bar_held[bar_n] = held;
+            }
+    }
+
+    // Bars
+    for (int bar_n = 0; bar_n < 3; bar_n++)
+    {
+        const ImGuiAxis axis = bar_axes[bar_n];
+        if (!axis_resizable[axis] || !ItemAdd(bar_bb[bar_n], bar_ids[bar_n], NULL, ImGuiItemFlags_NoNav))
+            continue;
+        bool hovered, held;
+        ImRect bb_interact = bar_bb[bar_n];
+        bb_interact.Expand(axis == ImGuiAxis_Y ? ImVec2(0.0f, hover_extend) : ImVec2(hover_extend, 0.0f));
+        ButtonBehavior(bb_interact, bar_ids[bar_n], &hovered, &held, button_flags);
+        if (hovered)
+            g.LastItemData.StatusFlags |= ImGuiItemStatusFlags_HoveredRect;
+        const bool hovered_visible = hovered && g.HoveredIdPreviousFrame == bar_ids[bar_n] && g.HoveredIdTimer >= hover_visibility_delay;
+        if (held || hovered_visible)
+            SetMouseCursor(axis == ImGuiAxis_Y ? ImGuiMouseCursor_ResizeNS : ImGuiMouseCursor_ResizeEW);
+        if (held)
+            delta[axis] = (g.IO.MousePos - g.ActiveIdClickOffset - bb_interact.Min)[axis];
+
+        // The inner segments highlight together
+        const int partner_n = (bar_n == 1) ? 2 : (bar_n == 2) ? 1 : -1;
+        bar_hovered[bar_n] |= hovered_visible;
+        bar_held[bar_n] |= held;
+        if (partner_n != -1)
+        {
+            bar_hovered[partner_n] |= hovered_visible;
+            bar_held[partner_n] |= held;
+        }
+    }
+
+    // Apply resize
+    if (any_active)
+    {
+        ImGuiDockNode* master = bar_nodes[1];
+        const float inner_min_size_0 = ImMax(min_sizes[1][0], min_sizes[2][0]);
+        const float inner_min_size_1 = ImMax(min_sizes[1][1], min_sizes[2][1]);
+        const float delta_outer = DockNodeSplitterClampDelta(delta[outer_axis], node->ChildNodes[0]->Size[outer_axis], node->ChildNodes[1]->Size[outer_axis], min_sizes[0][0], min_sizes[0][1]);
+        const float delta_inner = DockNodeSplitterClampDelta(delta[inner_axis], master->ChildNodes[0]->Size[inner_axis], master->ChildNodes[1]->Size[inner_axis], inner_min_size_0, inner_min_size_1);
+        DockNodeSplitterApplyDelta(bar_nodes[1], touching_nodes[1], delta_inner);
+        DockNodeSplitterApplyDelta(bar_nodes[2], touching_nodes[2], delta_inner);
+        DockNodeSplitterApplyDelta(bar_nodes[0], touching_nodes[0], delta_outer);
+        if (delta_outer != 0.0f || delta_inner != 0.0f)
+        {
+            // Layout from the node holding the grid: its own position and size are unchanged.
+            DockNodeTreeUpdatePosSize(node, node->Pos, node->Size);
+            for (int bar_n = 0; bar_n < 3; bar_n++)
+                bar_bb[bar_n] = DockNodeSplitterGetRect(bar_nodes[bar_n]);
+        }
+    }
+
+    // Render (at new position)
+    const ImU32 bg_col = GetColorU32(ImGuiCol_WindowBg);
+    for (int bar_n = 0; bar_n < 3; bar_n++)
+    {
+        if (!axis_resizable[bar_axes[bar_n]])
+        {
+            window->DrawList->AddRectFilled(bar_bb[bar_n].Min, bar_bb[bar_n].Max, GetColorU32(ImGuiCol_Separator), g.Style.FrameRounding);
+            continue;
+        }
+        if (bg_col & IM_COL32_A_MASK)
+            window->DrawList->AddRectFilled(bar_bb[bar_n].Min, bar_bb[bar_n].Max, bg_col, 0.0f);
+        const ImU32 col = GetColorU32(bar_held[bar_n] ? ImGuiCol_SeparatorActive : bar_hovered[bar_n] ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
+        window->DrawList->AddRectFilled(bar_bb[bar_n].Min, bar_bb[bar_n].Max, col, 0.0f);
+    }
+
+    // Recurse into the four areas
+    for (int bar_n = 1; bar_n < 3; bar_n++)
+        for (int child_n = 0; child_n < 2; child_n++)
+            DockNodeTreeUpdateSplitter(bar_nodes[bar_n]->ChildNodes[child_n]);
+}
+
 // (Depth-First, Pre-Order)
 void ImGui::DockNodeTreeUpdateSplitter(ImGuiDockNode* node)
 {
     if (node->IsLeafNode())
         return;
+    if (node->IsCrossSplitEngaged())
+    {
+        DockNodeTreeUpdateCrossSplitter(node);
+        return;
+    }
 
     ImGuiContext& g = *GImGui;
 
@@ -21197,6 +21485,38 @@ void ImGui::DockBuilderRemoveNodeDockedWindows(ImGuiID root_id, bool clear_setti
 }
 
 // If 'out_id_at_dir' or 'out_id_at_opposite_dir' are non NULL, the function will write out the ID of the two new nodes created.
+// Split a node into a 2x2 grid sharing one cross-bar splitter (see ImGuiDockNodeFlags_CrossSplit).
+// - outer_axis == ImGuiAxis_X: the node is split left/right first, then both sides are split up/down. ImGuiAxis_Y: the opposite.
+// - ratio_outer/ratio_inner are the size ratios of the left/top areas along the outer/inner axis.
+// - out_ids[] receives the four leaves in row-major order: top-left, top-right, bottom-left, bottom-right.
+ImGuiID ImGui::DockBuilderSplitNodeCross(ImGuiID id, ImGuiAxis outer_axis, float ratio_outer, float ratio_inner, ImGuiID out_ids[4])
+{
+    IM_ASSERT(outer_axis == ImGuiAxis_X || outer_axis == ImGuiAxis_Y);
+    const ImGuiDir outer_dir = (outer_axis == ImGuiAxis_X) ? ImGuiDir_Left : ImGuiDir_Up;
+    const ImGuiDir inner_dir = (outer_axis == ImGuiAxis_X) ? ImGuiDir_Up : ImGuiDir_Left;
+    ImGuiID outer_ids[2];
+    ImGuiID leaf_ids[2][2]; // [outer][inner]
+    DockBuilderSplitNode(id, outer_dir, ratio_outer, &outer_ids[0], &outer_ids[1]);
+    DockBuilderSplitNode(outer_ids[0], inner_dir, ratio_inner, &leaf_ids[0][0], &leaf_ids[0][1]);
+    DockBuilderSplitNode(outer_ids[1], inner_dir, ratio_inner, &leaf_ids[1][0], &leaf_ids[1][1]);
+    DockBuilderSetNodeCrossSplit(id, true);
+    if (out_ids != NULL)
+        for (int row = 0; row < 2; row++)
+            for (int col = 0; col < 2; col++)
+                out_ids[row * 2 + col] = (outer_axis == ImGuiAxis_X) ? leaf_ids[col][row] : leaf_ids[row][col];
+    return id;
+}
+
+void ImGui::DockBuilderSetNodeCrossSplit(ImGuiID node_id, bool enabled)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiDockNode* node = DockContextFindNodeByID(&g, node_id);
+    if (node == NULL)
+        return;
+    node->SetLocalFlags(enabled ? (node->LocalFlags | ImGuiDockNodeFlags_CrossSplit) : (node->LocalFlags & ~ImGuiDockNodeFlags_CrossSplit));
+    MarkIniSettingsDirty();
+}
+
 // Return value is ID of the node at the specified direction, so same as (*out_id_at_dir) if that pointer is set.
 // FIXME-DOCK: We are not exposing nor using split_outer.
 ImGuiID ImGui::DockBuilderSplitNode(ImGuiID id, ImGuiDir split_dir, float size_ratio_for_node_at_dir, ImGuiID* out_id_at_dir, ImGuiID* out_id_at_opposite_dir)
@@ -21829,6 +22149,7 @@ static void ImGui::DockSettingsHandler_ReadLine(ImGuiContext* ctx, ImGuiSettings
     if (sscanf(line, " HiddenTabBar=%d%n", &x, &r) == 1)            { line += r; if (x != 0) node.Flags |= ImGuiDockNodeFlags_HiddenTabBar; }
     if (sscanf(line, " NoWindowMenuButton=%d%n", &x, &r) == 1)      { line += r; if (x != 0) node.Flags |= ImGuiDockNodeFlags_NoWindowMenuButton; }
     if (sscanf(line, " NoCloseButton=%d%n", &x, &r) == 1)           { line += r; if (x != 0) node.Flags |= ImGuiDockNodeFlags_NoCloseButton; }
+    if (sscanf(line, " Cross=%d%n", &x, &r) == 1)                   { line += r; if (x != 0) node.Flags |= ImGuiDockNodeFlags_CrossSplit; }
     if (sscanf(line, " Selected=0x%08X%n", &node.SelectedTabId,&r) == 1) { line += r; }
     if (node.ParentNodeId != 0)
         if (ImGuiDockNodeSettings* parent_settings = DockSettingsFindNodeSettings(ctx, node.ParentNodeId))
@@ -21909,6 +22230,8 @@ static void ImGui::DockSettingsHandler_WriteAll(ImGuiContext* ctx, ImGuiSettings
             buf->appendf(" NoWindowMenuButton=1");
         if (node_settings->Flags & ImGuiDockNodeFlags_NoCloseButton)
             buf->appendf(" NoCloseButton=1");
+        if (node_settings->Flags & ImGuiDockNodeFlags_CrossSplit)
+            buf->appendf(" Cross=1");
         if (node_settings->SelectedTabId)
             buf->appendf(" Selected=0x%08X", node_settings->SelectedTabId);
 
@@ -23420,6 +23743,7 @@ static void DebugNodeDockNodeFlags(ImGuiDockNodeFlags* p_flags, const char* labe
     CheckboxFlags("HiddenTabBar", p_flags, ImGuiDockNodeFlags_HiddenTabBar);
     CheckboxFlags("NoWindowMenuButton", p_flags, ImGuiDockNodeFlags_NoWindowMenuButton);
     CheckboxFlags("NoCloseButton", p_flags, ImGuiDockNodeFlags_NoCloseButton);
+    CheckboxFlags("CrossSplit", p_flags, ImGuiDockNodeFlags_CrossSplit);
     CheckboxFlags("DockedWindowsInFocusRoute", p_flags, ImGuiDockNodeFlags_DockedWindowsInFocusRoute);
     CheckboxFlags("NoDocking", p_flags, ImGuiDockNodeFlags_NoDocking); // Multiple flags
     CheckboxFlags("NoDockingSplit", p_flags, ImGuiDockNodeFlags_NoDockingSplit);

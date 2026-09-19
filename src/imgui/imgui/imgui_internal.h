@@ -2062,6 +2062,7 @@ enum ImGuiDockNodeFlagsPrivate_
     ImGuiDockNodeFlags_NoDockingOverMe          = 1 << 20,  //       // Disable other windows/nodes from being docked over this node.
     ImGuiDockNodeFlags_NoDockingOverOther       = 1 << 21,  //       // Disable this node from being docked over another window or non-empty node.
     ImGuiDockNodeFlags_NoDockingOverEmpty       = 1 << 22,  //       // Disable this node from being docked over an empty node (e.g. DockSpace with no other windows)
+    ImGuiDockNodeFlags_CrossSplit               = 1 << 23,  // Saved // [Split node only] When both child nodes are split on the other axis (a 2x2 grid), the three splitters act as one cross-bar splitter: the two inner splitters stay aligned and move together, and the crossing can be dragged to resize on both axes.
     ImGuiDockNodeFlags_NoDocking                = ImGuiDockNodeFlags_NoDockingOverMe | ImGuiDockNodeFlags_NoDockingOverOther | ImGuiDockNodeFlags_NoDockingOverEmpty | ImGuiDockNodeFlags_NoDockingSplit | ImGuiDockNodeFlags_NoDockingSplitOther,
 
     // Masks
@@ -2070,7 +2071,7 @@ enum ImGuiDockNodeFlagsPrivate_
 
     // When splitting, those local flags are moved to the inheriting child, never duplicated
     ImGuiDockNodeFlags_LocalFlagsTransferMask_  = (int)ImGuiDockNodeFlags_NoDockingSplit | ImGuiDockNodeFlags_NoResizeFlagsMask_ | (int)ImGuiDockNodeFlags_AutoHideTabBar | ImGuiDockNodeFlags_CentralNode | ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_HiddenTabBar | ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton,
-    ImGuiDockNodeFlags_SavedFlagsMask_          = ImGuiDockNodeFlags_NoResizeFlagsMask_ | ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_CentralNode | ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_HiddenTabBar | ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton,
+    ImGuiDockNodeFlags_SavedFlagsMask_          = ImGuiDockNodeFlags_NoResizeFlagsMask_ | ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_CentralNode | ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_HiddenTabBar | ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton | ImGuiDockNodeFlags_CrossSplit,
 };
 
 // Store the source authority (dock node vs window) of a field
@@ -2145,6 +2146,7 @@ struct IMGUI_API ImGuiDockNode
     bool                    IsHiddenTabBar() const  { return (MergedFlags & ImGuiDockNodeFlags_HiddenTabBar) != 0; } // Hidden tab bar can be shown back by clicking the small triangle
     bool                    IsNoTabBar() const      { return (MergedFlags & ImGuiDockNodeFlags_NoTabBar) != 0; }     // Never show a tab bar
     bool                    IsSplitNode() const     { return ChildNodes[0] != NULL; }
+    IMGUI_API bool          IsCrossSplitEngaged() const; // ImGuiDockNodeFlags_CrossSplit is set and the node currently is a visible 2x2 grid
     bool                    IsLeafNode() const      { return ChildNodes[0] == NULL; }
     bool                    IsEmpty() const         { return ChildNodes[0] == NULL && Windows.Size == 0; }
     ImRect                  Rect() const            { return ImRect(Pos.x, Pos.y, Pos.x + Size.x, Pos.y + Size.y); }
@@ -2315,6 +2317,7 @@ enum ImGuiLocKey : int
     ImGuiLocKey_OpenLink_s,
     ImGuiLocKey_CopyLink,
     ImGuiLocKey_DockingHideTabBar,
+    ImGuiLocKey_DockingCrossSplitter,
     ImGuiLocKey_DockingHoldShiftToDock,
     ImGuiLocKey_DockingDragToUndockOrMoveNode,
     ImGuiLocKey_COUNT
@@ -3963,6 +3966,8 @@ namespace ImGui
     IMGUI_API void          DockBuilderRemoveNodeChildNodes(ImGuiID node_id);       // Remove all split/hierarchy. All remaining docked windows will be re-docked to the remaining root node (node_id).
     IMGUI_API void          DockBuilderSetNodePos(ImGuiID node_id, ImVec2 pos);
     IMGUI_API void          DockBuilderSetNodeSize(ImGuiID node_id, ImVec2 size);
+    IMGUI_API ImGuiID       DockBuilderSplitNodeCross(ImGuiID node_id, ImGuiAxis outer_axis, float ratio_outer, float ratio_inner, ImGuiID out_ids[4]); // Split into a 2x2 grid sharing one cross-bar splitter. out_ids[] = top-left, top-right, bottom-left, bottom-right. Returns node_id.
+    IMGUI_API void          DockBuilderSetNodeCrossSplit(ImGuiID node_id, bool enabled); // Set/clear ImGuiDockNodeFlags_CrossSplit on an existing split node.
     IMGUI_API ImGuiID       DockBuilderSplitNode(ImGuiID node_id, ImGuiDir split_dir, float size_ratio_for_node_at_dir, ImGuiID* out_id_at_dir, ImGuiID* out_id_at_opposite_dir); // Create 2 child nodes in this parent node.
     IMGUI_API void          DockBuilderCopyDockSpace(ImGuiID src_dockspace_id, ImGuiID dst_dockspace_id, ImVector<const char*>* in_window_remap_pairs);
     IMGUI_API void          DockBuilderCopyNode(ImGuiID src_node_id, ImGuiID dst_node_id, ImVector<ImGuiID>* out_node_remap_pairs);
