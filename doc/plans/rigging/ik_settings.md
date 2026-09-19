@@ -78,13 +78,15 @@ window and persist with the scene.
     Y), so *which* rest-local axis is the bend axis of an elbow depends on
     how the rig was authored. The twist axis is derived per joint (section 4);
     the UI and docs must not pretend a universal convention exists.
-  - Twist caveat: the solver produces shortest-arc rotations with roll
-    preserved (Phase 1 section 4), so IK never *generates* twist about the
-    segment axis. A lock or limit on the twist axis is therefore a no-op
-    during the solve - and it must NOT cause pre-existing twist to be
-    clamped at drag start (see section 4's no-teleport rule). This mirrors
-    Blender, where twist is a distinct solver DOF rather than an Euler
-    component.
+  - Twist: each solver step is a twist-free shortest arc in WORLD space,
+    but composed onto a bent parent chain it turns the joint about its own
+    twist axis relative to the rest frame (measured: a three-bone chain
+    locked on Y and Z and dragged out of its plane ended with a 0.25
+    quaternion Y component on the middle bone, which also leaked into Z
+    through swing o twist). A lock or limit on the twist axis is therefore
+    enforced in the solve (section 4); pre-existing twist is kept at drag
+    start by the no-teleport rule. Twist is a distinct solver DOF, as in
+    Blender, rather than an Euler component.
   - `Ik.rest_rotation` has a per-object default (D31 `compute_default`, no
     creation-time capture): the orthonormalized rotation of
     `inverse(world_from_bind(parent)) * world_from_bind(joint)` when the
@@ -146,8 +148,7 @@ window and persist with the scene.
     matching Blender's Auto-IK, which turns `protectflag` rotation locks
     into temporary IK DOF locks across the chain). Frame note: inside the
     IK solve, OR-ed locks operate in the limits frame and map onto the
-    joint's swing/twist axes per section 4 (a lock on the twist axis is a solve
-    no-op; a joint constrained by channel-lock flags alone takes its
+    joint's swing/twist axes per section 4 (a joint constrained by channel-lock flags alone takes its
     drag-start local rotation as the rest, per the rest-frame rule of
     section 3), while the Transform-tool masking
     above uses the plain local Euler XYZ frame by design.
@@ -242,8 +243,13 @@ formulation adapted to swing/twist limits:
   **swing  o  twist** (twist = the rotation component about the twist
   axis; swing = the remaining rotation moving the twist axis itself  - 
   the standard swing-twist decomposition). Then:
-  - **Twist** is left untouched: the solver never generates it (section 1), so
-    twist locks/limits do not participate in the solve.
+  - **Twist** is parameterized by its sin(theta/2) component about the
+    twist axis (canonical w >= 0). A twist-axis lock pins it to the
+    drag-start value; a twist-axis limit clamps it to the mapped interval,
+    extended to contain the drag-start value (no teleport); otherwise it
+    is left as solved. Twist turns about the child direction, so clamping
+    it leaves this joint's child in place and changes only the frame the
+    descendants are solved in.
   - **Swing** is parameterized in Blender's clamp space, adopted here
     normatively: the two swing-quaternion components along the swing
     axes - sin(theta/2)-scaled, per `SphericalRangeParameters` /
@@ -257,7 +263,7 @@ formulation adapted to swing/twist limits:
     radii from the mapped limits, asymmetric limits handled per quadrant
     as Blender's `EllipseClamp` does; exactly one swing axis limited ->
     plain 1-D interval clamp of that component alone, the other free;
-    only the twist axis limited -> solve no-op (section 1).
+    only the twist axis limited -> the swing is left as solved.
   - **Locks**: a locked swing axis pins its component to the drag-start
     value, and the clamp NEVER modifies a pinned component. With one
     component pinned, the free component is clamped to the ellipse's
@@ -265,7 +271,8 @@ formulation adapted to swing/twist limits:
     intersects the quadrant ellipse); if the cross-section is empty, the
     free component goes to the nearest boundary point of the extended
     region (next bullet). Both swing axes locked -> the swing is fully
-    pinned; only twist would remain, and the solver never generates it.
+    pinned; only twist remains. A swing-axis lock together with a
+    twist-axis lock is a hinge about the remaining axis.
   - Recompose clamped-swing  o  twist, and reposition the child onto the
     direction the clamped rotation actually allows (at unchanged segment
     length) before the pass continues. Positions and orientations
@@ -397,7 +404,7 @@ formulation adapted to swing/twist limits:
    the elbow past straight, and bending stops at 150 deg; clearing the
    bone's local `Ik.*` values restores Phase 1 behavior exactly.
 2. Set a knee to hinge on the same rig (lock the non-bend swing axis and
-   limit the bend axis - the twist axis needs no lock, IK never twists):
+   the twist axis, limit the bend axis):
    dragging the foot bends the knee only about the bend axis within its
    limits, reaching targets in the hinge plane on the current bend side;
    targets the heuristic cannot reach (including bend-sign flips  - 
@@ -407,7 +414,7 @@ formulation adapted to swing/twist limits:
    joins move as one rigid link; the rest of the chain still solves.
 4. `lock_rotation_x` (channel lock, no local `Ik.*` value) on a chain
    bone whose derived twist axis is NOT X (i.e. X is a swing axis on the
-   test rig - a lock on the twist axis is a solve no-op per section 4) behaves
+   test rig) behaves
    in IK like an X DOF lock; the same flag also prevents the Rotate tool
    and the Transform window's X rotation field from changing that axis,
    while Y/Z still work.
@@ -443,7 +450,7 @@ formulation adapted to swing/twist limits:
    enforcement and UI wait until the constrained solver is proven.
 5. **Limit parameterization**: swing/twist (Blender-solver style -
    per-joint derived twist axis, swing ellipse with per-quadrant radii
-   from the per-axis limits, twist untouched by the solve), NOT
+   from the per-axis limits, twist interval from the twist-axis limit), NOT
    independent Euler clamps. See section 1 and section 4. The authored data
    stays per-axis min/max, so this choice affects enforcement only.
 6. **Sharing a limit set**: a Style holding the `Ik.*` values (section 1),
@@ -476,9 +483,8 @@ formulation adapted to swing/twist limits:
 - IK integration - `Ik_drag::begin` resolves per-joint constraints
   (`resolve_constraint`: the node's `Ik.*` values OR its channel-lock
   flags, the rest-frame rule of section 3, twist axis via
-  `derive_twist_axis`; a twist-axis-only constraint does NOT route the
-  chain into the constrained solver - it would be a no-op that changed
-  unreachable-target behavior); constrained write-back sets
+  `derive_twist_axis`; any lock or limit, the twist axis included, routes
+  the chain into the constrained solver); constrained write-back sets
   solver-produced local rotations directly.
 - Properties UI - the generic rows of group "IK" plus
   `Properties::ik_actions` (`properties.cpp`). Property tests:

@@ -101,8 +101,34 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
         lo[k] = std::min(lo[k], s0[k]);
         hi[k] = std::max(hi[k], s0[k]);
     }
-    // Locks and limits on the twist axis are solve no-ops (the solver never
-    // generates twist; pre-existing twist must not be clamped).
+    // Twist. Each backward-pass delta is a twist-free shortest arc in world
+    // space, but composed onto a bent parent chain it does carry twist about
+    // this joint's own twist axis relative to the rest frame, so a lock or a
+    // limit on the twist axis has to be enforced here. A lock pins the twist
+    // to its drag-start value; a limit clamps sin(half-angle) to the authored
+    // interval, extended to contain the drag-start twist (no teleport).
+    // Twist turns about the child direction, so clamping it never moves
+    // this joint's child - only the frame the descendants are solved in.
+    const bool twist_locked  = constraint.lock [constraint.twist_axis];
+    const bool twist_limited = constraint.limit[constraint.twist_axis];
+    if (twist_locked || twist_limited) {
+        const auto canonical_twist_component = [&constraint](const quat& q) -> float {
+            const float t = (constraint.twist_axis == 0) ? q.x : (constraint.twist_axis == 1) ? q.y : q.z;
+            return (q.w < 0.0f) ? -t : t;
+        };
+        const float t0 = canonical_twist_component(twist_0);
+        float       t  = canonical_twist_component(twist);
+        if (twist_locked) {
+            t = t0;
+        } else {
+            const float twist_lo = std::min(std::sin(0.5f * constraint.limit_min[constraint.twist_axis]), t0);
+            const float twist_hi = std::max(std::sin(0.5f * constraint.limit_max[constraint.twist_axis]), t0);
+            t = std::clamp(t, twist_lo, twist_hi);
+        }
+        vec3 twist_vector{0.0f};
+        twist_vector[constraint.twist_axis] = t;
+        twist = quat{std::sqrt(std::max(0.0f, 1.0f - (t * t))), twist_vector.x, twist_vector.y, twist_vector.z};
+    }
 
     if (locked[0] && locked[1]) {
         s[0] = s0[0];
@@ -177,8 +203,8 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
         s[0] = std::clamp(s[0], lo[0], hi[0]);
     } else if (limited[1]) {
         s[1] = std::clamp(s[1], lo[1], hi[1]);
-    } else {
-        return candidate_local; // twist-only constraint: no-op
+    } else if (!twist_locked && !twist_limited) {
+        return candidate_local; // nothing constrains this joint
     }
 
     // Rebuild the clamped swing; w from the unit constraint (canonical

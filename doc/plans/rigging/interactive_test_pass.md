@@ -66,8 +66,8 @@ visualization style settings.
 ## 3. Per-bone IK settings - PASS
 
 1. Select `arm_joint_L_2` and find its "IK" group in Properties.
-2. One Lock axis on: the elbow stops rotating about that axis (a lock on
-   the bone's own twist axis has no effect, by design).
+2. One Lock axis on: the elbow stops rotating about that axis (the bone's
+   own twist axis included; two locks leave a hinge about the third axis).
 3. One Limit axis on with a narrow range (for example -10 to +45 degrees):
    the elbow stops at the limit without snapping or oscillating.
 4. Ctrl+Z after each edit: one step per edit, a slider drag is one step.

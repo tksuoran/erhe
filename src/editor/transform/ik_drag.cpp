@@ -90,20 +90,16 @@ constexpr int   c_max_iterations  = 16;
     // alone, which is the section 2 frame note's case.
     constraint.rest_rotation = any_ik_constraint ? data.rest_rotation : local_rotation_before;
 
-    // A constraint on only the twist axis is a solve no-op (the solver
-    // never generates twist), so it must not route the chain into the
-    // constrained solver - that would silently change unconstrained
-    // behavior (e.g. lose the Phase 1 unreachable-target straight layout).
-    bool any_swing_constraint = false;
+    // Any lock or limit routes the chain into the constrained solver, the
+    // twist axis included: world-space shortest arcs composed onto a bent
+    // parent chain do turn a joint about its own twist axis.
+    bool any_constraint = false;
     for (int axis = 0; axis < 3; ++axis) {
-        if (axis == twist_axis) {
-            continue;
-        }
         if (constraint.lock[axis] || constraint.limit[axis]) {
-            any_swing_constraint = true;
+            any_constraint = true;
         }
     }
-    constraint.enabled = (twist_axis >= 0) && any_swing_constraint;
+    constraint.enabled = (twist_axis >= 0) && any_constraint;
     return constraint;
 }
 

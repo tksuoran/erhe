@@ -460,13 +460,13 @@ TEST(Ik_solver, zero_length_segment_with_constraints_is_safe)
     }
 }
 
-TEST(Ik_solver, twist_only_constraint_is_a_no_op)
+TEST(Ik_solver, twist_only_constraint_still_reaches_the_target)
 {
     editor::Ik_chain constrained = make_straight_chain();
     constrained.constraints[1].enabled    = true;
     constrained.constraints[1].twist_axis = 1;
-    constrained.constraints[1].lock[1]    = true;  // twist axis lock: solve no-op
-    constrained.constraints[1].limit[1]   = true;  // twist axis limit: solve no-op
+    constrained.constraints[1].lock[1]    = true;  // twist axis lock
+    constrained.constraints[1].limit[1]   = true;  // twist axis limit
     constrained.constraints[1].limit_min  = vec3{-c_pi, -0.01f, -c_pi};
     constrained.constraints[1].limit_max  = vec3{c_pi, 0.01f, c_pi};
     constrained.target = vec3{0.4f, 1.3f, 0.5f};
@@ -475,8 +475,43 @@ TEST(Ik_solver, twist_only_constraint_is_a_no_op)
     solver.solve(constrained);
 
     // The effector still reaches the target: a twist-axis constraint never
-    // restricts the solve (the solver does not generate twist).
+    // moves the joint's own child (twist turns about the child direction).
     EXPECT_LT(distance(constrained.positions[2], constrained.target), 0.02f);
+}
+
+// A joint locked on its twist axis and on one swing axis is a hinge: with
+// every joint a hinge about X, an out-of-plane target leaves each local
+// rotation a pure X rotation. World-space shortest arcs composed onto a bent
+// parent chain carry twist, so this holds only while the twist lock is
+// enforced.
+TEST(Ik_solver, twist_and_swing_lock_make_a_hinge)
+{
+    editor::Ik_chain chain;
+    chain.positions       = { vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f}, vec3{0.0f, 3.0f, 0.0f} };
+    chain.lengths         = { 1.0f, 1.0f, 1.0f };
+    chain.local_rotations.assign(4, quat{1.0f, 0.0f, 0.0f, 0.0f});
+    chain.child_dir_local.assign(3, vec3{0.0f, 1.0f, 0.0f});
+    chain.constraints.resize(4);
+    for (std::size_t j = 0; j < 3; ++j) {
+        chain.constraints[j].enabled    = true;
+        chain.constraints[j].twist_axis = 1;
+        chain.constraints[j].lock[1]    = true;
+        chain.constraints[j].lock[2]    = true;
+    }
+    chain.target = vec3{1.2f, 1.8f, 0.6f};
+
+    editor::Fabrik_solver solver;
+    solver.solve(chain);
+
+    bool any_bend = false;
+    for (std::size_t j = 0; j < 3; ++j) {
+        const quat& q = chain.local_rotations[j];
+        EXPECT_NEAR(q.y, 0.0f, 1.0e-5f) << "joint " << j;
+        EXPECT_NEAR(q.z, 0.0f, 1.0e-5f) << "joint " << j;
+        any_bend = any_bend || (std::abs(q.x) > 1.0e-3f);
+        EXPECT_NEAR(chain.positions[j + 1].x, 0.0f, 1.0e-4f) << "joint " << j;
+    }
+    EXPECT_TRUE(any_bend) << "the hinge axis stays free";
 }
 
 // Chain visualization line list (doc/plans/rigging/ik_drag_options.md R16,

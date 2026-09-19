@@ -52,7 +52,7 @@ constexpr std::string_view c_ik_group = "IK";
 
 constexpr const char* c_lock_tooltip =
     "IK DOF lock: a locked axis does not rotate under IK. Locks win over limits on the same axis. "
-    "A lock on the bone's twist axis has no effect (IK never generates twist).";
+    "Two locked axes leave a hinge about the third.";
 constexpr const char* c_limit_tooltip =
     "Enable the rotation limit about this local axis, relative to the rest orientation (range from Limit Min / Limit Max)";
 
