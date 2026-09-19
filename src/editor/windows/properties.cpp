@@ -1086,6 +1086,13 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
         !erhe::is<Rendertarget_mesh>(item);
 }
 
+// A Frame_controller attachment is editor machinery (camera fly controls),
+// so its section is shown in developer mode only.
+[[nodiscard]] auto show_attachment(const erhe::Item_base* const attachment, const bool developer_mode) -> bool
+{
+    return developer_mode || !erhe::is<Frame_controller>(attachment);
+}
+
 // The per-item part of the window (R3 / R5 of
 // doc/editor/properties_window.md): the read-only diagnostics of the
 // item's class, the actions, and the list editors that have no property
@@ -1159,6 +1166,9 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (node) {
         for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            if (!show_attachment(attachment.get(), m_context.developer_mode)) {
+                continue;
+            }
             item_properties(attachment);
             // Undoable remove (pure detach) for this attachment. Queuing to the
             // operation stack runs on the next frame, so node->get_attachments()
@@ -1337,6 +1347,9 @@ void Properties::imgui()
             const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (node) {
                 for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+                    if (!show_attachment(attachment.get(), m_context.developer_mode)) {
+                        continue;
+                    }
                     add_to_group(attachment);
                 }
             }
