@@ -620,13 +620,12 @@ private:
 
 // Cameras offered for user camera selection (the "Scene and Camera" dialog
 // combos, default camera picks for new viewport views, persisted-selection
-// restore): cameras authored directly in the scene. Cameras that arrived
-// embedded in content -- inside a sealed prefab instance or under a glTF
-// import wrapper (Item_flags::import_root) -- are skipped, so a scene full of
-// instanced or imported assets does not offer every asset's cameras. When the
-// scene has no authoring cameras at all (e.g. a scene opened directly from a
-// glTF file, where every camera lives under the import wrapper), all cameras
-// are offered instead so such scenes remain viewable.
+// restore): the scene's own cameras, including cameras brought in by a glTF
+// import (they sit under the Item_flags::import_root wrapper as ordinary
+// scene content). Cameras inside a prefab instance are skipped, so a scene
+// full of instanced assets does not offer every instance's cameras. When the
+// scene has no other camera at all, all cameras are offered instead so such
+// scenes remain viewable.
 [[nodiscard]] auto get_selectable_cameras(const erhe::scene::Scene& scene) -> std::vector<std::shared_ptr<erhe::scene::Camera>>;
 
 // Resolves the Scene_root hosting the given item: a content-library item's

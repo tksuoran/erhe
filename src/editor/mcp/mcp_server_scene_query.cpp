@@ -832,7 +832,7 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
     }
 
     // "selectable": offered in camera-selection UI (see get_selectable_cameras);
-    // false for cameras embedded in content (prefab instances, import wrappers).
+    // false for cameras inside prefab instances.
     const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(sr->get_scene());
     json cameras = json::array();
     for (const auto& camera : sr->get_scene().get_cameras()) {

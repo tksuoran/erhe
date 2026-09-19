@@ -2331,15 +2331,13 @@ auto Scene_root::get_scene_id() -> const std::string&
 
 namespace {
 
-// True when the camera reached the scene embedded in content -- under a
-// sealed prefab instance or a glTF import wrapper -- rather than being
-// authored in the scene itself.
+// True when the camera reached the scene as the interior of a prefab
+// instance rather than being scene content of its own. A camera under a
+// glTF import wrapper is scene content: the import placed it in this
+// scene, where it is edited, saved and undone like any other node.
 auto is_content_embedded_camera(const erhe::scene::Camera& camera) -> bool
 {
     for (const erhe::scene::Node* node = &camera; node != nullptr; node = node->get_parent_node().get()) {
-        if ((node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
-            return true;
-        }
         if (erhe::scene::get_attachment<Prefab_instance>(node)) {
             return true;
         }
