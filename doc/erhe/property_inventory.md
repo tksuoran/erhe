@@ -188,16 +188,19 @@ change touches the settings store from on_property_changed.
 | joint_settings | entry | object reference to a Physics_joint_settings; inherits (D30) |
 | enable_collision | entry | inherits; the mirror follows and the constraint rebuilds |
 
-### Ik_settings (`src/editor/scene/node_ik_settings.cpp`, section 4.19)
+### Ik, attached (`src/editor/scene/ik_properties.cpp`, section 4.19)
+
+Attached to `erhe::scene::Node`, set on the bone node; none of them inherits,
+and each is listed on a node carrying `Item_flags::bone`.
 
 | Property | Storage | Notes |
 |---|---|---|
-| lock_x, lock_y, lock_z, limit_x, limit_y, limit_z | entry | inherits (D30); the Ik_settings_data mirror follows |
-| limit_min, limit_max | entry | inherits; radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
-| stiffness | entry | inherits; developer-only (inert); coerced to [0, 0.99] |
-| rest_rotation | entry | not inherited (a per-bone pose); captured at attach, "Set rest from current pose" writes it |
-| pole_target | bridged (D18) | weak `std::weak_ptr<erhe::scene::Node>` member, not inherited; any node is accepted and admissibility is decided per drag |
-| pole_angle | entry | inherits; radians shown in degrees, not coerced (the angle is periodic) |
+| Ik.lock_x, Ik.lock_y, Ik.lock_z, Ik.limit_x, Ik.limit_y, Ik.limit_z | attached | read into the Ik_settings_data record by read_ik_settings |
+| Ik.limit_min, Ik.limit_max | attached | radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
+| Ik.stiffness | attached | developer-only (inert); coerced to [0, 0.99] |
+| Ik.rest_rotation | attached | computed default (D31): the bone's bind-pose local rotation, identity without one; "Set rest from current pose" writes the local value |
+| Ik.pole_target | attached | weak object reference (D28), Item_type::xformable; any node is accepted and admissibility is decided per drag |
+| Ik.pole_angle | attached | radians shown in degrees, not coerced (the angle is periodic) |
 
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 

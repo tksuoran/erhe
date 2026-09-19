@@ -53,13 +53,13 @@ level: the last segment is the parent joint's child segment, the solver aimed
 that segment at the effector's solved position, and the effector turns with
 it.
 
-**R5.** The effector's own `Ik_settings` locks and limits take no part under
-either mode. A joint's constraint is enforced through its child segment
+**R5.** The effector's own `Ik.lock_*` and `Ik.limit_*` values take no part
+under either mode. A joint's constraint is enforced through its child segment
 (`ik_settings.md` section 4) and the effector has none in the chain, so
 `Ik_drag::begin` pushes an unused constraint entry for it on both solver paths
-and neither mode consults it. An `Ik_settings` attachment on the effector
-still governs the drag in the one way `pole_target.md` R5 gives it: it is the
-first attachment the pole scan reads.
+and neither mode consults it. The effector node still governs the drag in the
+one way `pole_target.md` R5 gives it: its `Ik.pole_target` is the first the
+pole scan reads.
 
 **R6.** A non-bone drag handle effector (`fabrik_ik.md` section 1: a node
 parented under a bone) follows R3 and R4 with no special case. Under

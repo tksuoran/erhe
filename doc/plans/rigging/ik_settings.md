@@ -2,23 +2,16 @@
 
 Status: in progress
 
-Reviewed (fact-check + quality review passed, 2026-08-23);
-implemented 2026-08-25 (see Implementation status at the end); awaiting
-live-editor testing.
+Implemented; awaiting live-editor testing (`interactive_test_pass.md`).
 This document covers Phase 2 of the rigging roadmap in `rigging_tools.md`,
 building directly on Phase 1 (`fabrik_ik.md`, implemented).
 
-Decisions already made with the user (2026-08-23):
-
-- Per-bone IK settings serialize through a **new `ERHE_rig` glTF extension**
-  (not `extras`, not a widening of `ERHE_node`).
-- Implementation order within Phase 2: **(1) this document** - per-bone IK
-  settings data model + Properties UI + serialization, with general transform
-  channel locks riding along, and the solver refactor they force - then
-  (2) pole target / swivel, then (3) effector orientation option and chain
-  visualization. Items 2-3 get their requirements appended here (or in a
-  companion doc) when their turn comes; they appear below only as scope
-  markers.
+Implementation order within Phase 2: **(1) this document** - per-bone IK
+settings data model + Properties UI + serialization, with general transform
+channel locks riding along, and the solver refactor they force - then
+(2) pole target / swivel (`pole_target.md`), then (3) effector orientation
+option and chain visualization (`ik_drag_options.md`). Items 2-3 appear
+below only as scope markers (section 7).
 
 ## Motivation
 
@@ -33,12 +26,22 @@ window and persist with the scene.
 
 ### 1. Per-bone IK settings - data model
 
-- New node attachment `Ik_settings` (working name; editor domain,
-  `src/editor/scene/node_ik_settings.{hpp,cpp}` next to `Node_physics`),
-  a pure data attachment: no runtime behavior, custom clone constructor
-  only. The fields below are registered properties (entry-stored, UI group
-  "IK", `doc/erhe/property_system.md` section 4.19); `Ik_settings_data` is the
-  mirror of their effective values the solver reads through `get_data()`.
+- The per-bone IK values are attached properties of the bone node itself,
+  registered by the holder class `Ik`
+  (`src/editor/scene/ik_properties.{hpp,cpp}`) with owner type `Ik`, holder
+  type `erhe::scene::Node` and UI group "IK"
+  (`doc/erhe/property_system.md` section 4.19). Their qualified names are
+  `Ik.lock_x`, `Ik.lock_y`, `Ik.lock_z`, `Ik.limit_x`, `Ik.limit_y`,
+  `Ik.limit_z`, `Ik.limit_min`, `Ik.limit_max`, `Ik.stiffness`,
+  `Ik.rest_rotation`, `Ik.pole_target` and `Ik.pole_angle`; each is
+  entry-stored and registered with `inherits = false`. A bone holding no
+  local `Ik.*` value is unconstrained. `Ik_settings_data` is the record of
+  one node's effective values, filled by
+  `read_ik_settings(const erhe::scene::Node&)`, which the solver reads.
+- A limit set shared by several bones is a Style holding the `Ik.*` values:
+  a Style holds every class's properties (D30 of
+  `doc/erhe/property_system.md`) and the style layer supplies the value to
+  every bone assigned that style.
 - Fields, per rotation axis X/Y/Z (all following Blender's `bPoseChannel`
   `ikflag` / `limitmin` / `limitmax` / `ikstiffness` shape):
   - `lock[3]` (bool, default false) - the axis does not rotate under IK at
@@ -50,7 +53,7 @@ window and persist with the scene.
     [0, pi] (default pi), so the rest angle 0 is always inside the limits by
     construction - UI clamps, import validation, and the JSON schema all
     state this. `lock` wins over `limit` on the same axis.
-  - Enforcement semantics (decided with the user, 2026-08-23): limits and
+  - Enforcement semantics: limits and
     locks are authored per local axis but **enforced via swing/twist
     decomposition**, following Blender's solver segments
     (`IK_QSphericalSegment` / `IK_QElbowSegment` and their `EllipseClamp`)
@@ -59,11 +62,11 @@ window and persist with the scene.
     twist range from the twist-axis limits).
   - `stiffness[3]` (float 0..0.99, default 0) - resistance to rotation
     about the axis; 0 = free. Capped below 1 (as Blender caps it at 0.99)
-    so stiffness can never alias a hard DOF lock. **Inert in this slice**
-    (decided with the user): the field exists and serializes so the
-    `ERHE_rig` schema is stable from day one, but its property row is
-    developer-only and the solver ignores it until the constrained solver is proven stable;
-    enforcement (per-iteration scale-down, see section 4) is a later slice.
+    so stiffness can never alias a hard DOF lock. **Inert in this slice**:
+    the value exists and serializes, but its
+    property row is developer-only and the solver ignores it until the
+    constrained solver is proven stable; enforcement (per-iteration
+    scale-down, see section 4) is a later slice.
 - `rest_rotation` (quaternion): the reference orientation that defines the
   zero of the limits. The limited quantity is
   `rel = inverse(rest_rotation) * parent_from_node_rotation`, decomposed
@@ -82,22 +85,29 @@ window and persist with the scene.
     clamped at drag start (see section 4's no-teleport rule). This mirrors
     Blender, where twist is a distinct solver DOF rather than an Euler
     component.
-  - Captured automatically when the attachment is created: from the bind
-    pose when the node is a joint of an `erhe::scene::Skin` whose parent
-    node is a joint of the same skin - the local bind rotation is the
-    rotation of `world_from_bind(parent)^-1 * world_from_bind(joint)`;
-    if the node belongs to several skins, the first skin found is used,
-    deterministically. Otherwise (parent not a joint of the same skin, or
-    no skin), the node's current `parent_from_node` rotation is captured.
-  - Re-capturable from the Properties section ("Set rest from current
-    pose" button) - needed because there is no rest-pose store on nodes
-    yet (that is Phase 3's rest pose model, which can later supersede this
-    field).
-- The attachment is meaningful only on bone nodes (`Item_flags::bone`); the
-  add-attachment gate (see section 5) restricts creation accordingly. If one ends
-  up on a non-bone node (e.g. after flag changes), it is inert but harmless.
+  - `Ik.rest_rotation` has a per-object default (D31 `compute_default`, no
+    creation-time capture): the orthonormalized rotation of
+    `inverse(world_from_bind(parent)) * world_from_bind(joint)` when the
+    node and its parent node are joints of the same `erhe::scene::Skin`,
+    and identity otherwise. The first skin in `Scene::get_skins()` order
+    that lists both is used, so a node several skins list has one
+    deterministic answer. The lookup is
+    `erhe::scene::get_bind_pose_local_rotation(const Node&) ->
+    std::optional<glm::quat>` (`erhe_scene/skin.{hpp,cpp}`). A local value
+    overrides the default, so the bone tracks its bind pose until a rest
+    orientation is authored.
+  - Authored from Properties with the "Set rest from current pose" button
+    (section 5), which writes the bone's current local rotation as the
+    local value - needed because there is no rest-pose store on nodes yet
+    (that is Phase 3's rest pose model, which can later supersede this
+    value).
+- Each `Ik.*` property's `visible_when` is "the object is a Node carrying
+  `Item_flags::bone`", so the D12 listing rule offers the rows on bones. A
+  non-bone node holding a local `Ik.*` value still lists it, and the value
+  is inert there.
 - Interaction with `Item_flags::ik_lock` (Phase 1): unchanged. `ik_lock`
-  terminates the chain; `Ik_settings` constrains a joint *inside* the chain.
+  terminates the chain; the `Ik.*` values constrain a joint *inside* the
+  chain.
   Locking all three axes is not the same as `ik_lock` - a fully DOF-locked
   joint still transmits the chain through itself rigidly rather than ending
   it.
@@ -108,8 +118,8 @@ window and persist with the scene.
   `lock_scale_x/y/z` in `erhe::Item_flags` (`src/erhe/item/erhe_item/
   item.hpp`: bits, `c_bit_labels`, `count`), each registered in the
   persistent-flag allowlist (`src/erhe/gltf/erhe_gltf/gltf_item_flags.cpp`)
-  so they ride the existing `ERHE_node.flags` serialization - no `ERHE_rig`
-  involvement, and they work on **any** item, not just bones.
+  so they ride the existing `ERHE_node.flags` serialization, and they work on
+  **any** item, not just bones.
 - Semantics: a locked component of the node's **local** (parent-from-node)
   transform does not change through interactive editing:
   - Transform tool: all four delta-application choke points
@@ -132,13 +142,14 @@ window and persist with the scene.
     and refuse locked-component changes at commit time (the commit-side
     check also covers MCP callers).
   - IK: a `lock_rotation_*` bit on a chain joint acts as an IK DOF lock on
-    that axis, exactly as `Ik_settings::lock` does (the two OR together  - 
+    that axis, exactly as `Ik.lock_x` .. `Ik.lock_z` do (the two OR together  - 
     matching Blender's Auto-IK, which turns `protectflag` rotation locks
     into temporary IK DOF locks across the chain). Frame note: inside the
     IK solve, OR-ed locks operate in the limits frame and map onto the
     joint's swing/twist axes per section 4 (a lock on the twist axis is a solve
-    no-op; when the joint has no `Ik_settings` attachment, its drag-start
-    local rotation serves as the rest), while the Transform-tool masking
+    no-op; a joint constrained by channel-lock flags alone takes its
+    drag-start local rotation as the rest, per the rest-frame rule of
+    section 3), while the Transform-tool masking
     above uses the plain local Euler XYZ frame by design.
     `lock_translation_*` needs no IK handling at all: IK never changes
     any chain joint's local translation, the effector's included (Phase 1
@@ -174,13 +185,20 @@ plan:
   damped-least-squares Jacobian solver can be swapped in later if
   constrained FABRIK proves unstable (the plan's stated fallback,
   matching Blender's SDLS solver).
-- `Ik_drag` keeps chain discovery, drag-start capture (now also capturing
-  constraint data and rest frames from `Ik_settings` + channel-lock flags,
-  in `Ik_drag::begin`), write-back, and effector-orientation restore; it
+- `Ik_drag` keeps chain discovery, drag-start capture (now also resolving
+  each joint's constraint and rest frame from the node's `Ik.*` values plus
+  its channel-lock flags, in `Ik_drag::begin` ->
+  `resolve_constraint`), write-back, and effector-orientation restore; it
   calls the solver through the interface.
-- The unconstrained path must behave bit-for-bit as Phase 1 (a chain with
-  no settings attachment and no lock flags takes the constraint-free code
-  path - no behavior or performance regression).
+- Rest-frame rule (`resolve_constraint`, `ik_drag.cpp`): a joint with any
+  `Ik.lock_*` or `Ik.limit_*` on takes the effective `Ik.rest_rotation` as
+  the zero of its limits - a fixed frame, so the limits do not drift with
+  the pose. A joint constrained by channel-lock flags alone takes its
+  drag-start local rotation instead, because a channel lock states only
+  that an axis must not move.
+- The unconstrained path must behave bit-for-bit as Phase 1 (a chain whose
+  joints hold no lock or limit, from either source, takes the
+  constraint-free code path - no behavior or performance regression).
 - Unit tests: the solver factoring makes the constrained solve testable
   headlessly; add tests next to the code covering: unconstrained
   equivalence with Phase 1 expectations, the swing-twist decomposition
@@ -297,82 +315,58 @@ formulation adapted to swing/twist limits:
 
 ### 5. Properties UI
 
-- `Ik_settings` registered in the attachment-type catalog
-  (`src/editor/scene/attachment_types.cpp`): key `ik_settings`, display
-  name "IK Settings", `can_add` gate = node has `Item_flags::bone`. This
-  makes it appear in the Properties "Add Attachment" popup, the Hierarchy
-  window, and the MCP scene actions for free.
-- Properties section: the generic registered-property rows (group "IK",
-  `doc/erhe/property_system.md` section 4.19) - Lock X/Y/Z and Limit X/Y/Z
-  checkboxes, Limit Min / Limit Max as vec3 rows edited in degrees and
-  stored in radians (coerced per component to [-180 deg, 0 deg] and
-  [0 deg, 180 deg] per section 1), Stiffness developer-only (the field is
-  inert - section 1), Rest Rotation as Euler degrees. The "Set rest from
-  current pose" button (section 1) stays an action in
-  `Properties::ik_settings_actions` (`src/editor/windows/properties.cpp`,
-  called from `item_diagnostics`).
-- Undo: attachment add/remove already routes through
-  `Node_attach_operation`. Field edits, the rest re-capture button and the
-  MCP `set_item_property` tool all record one `Property_set_operation`
-  (the local state before and after), so one completed edit = one undo
-  step. Channel-lock toggles are registered `Node` properties and record
-  the same operation (section 2).
-- Being properties, the IK fields (all but `rest_rotation`) inherit from
-  the node chain (D30 of `doc/erhe/property_system.md`): a node or a style can
-  hold `Ik_settings.limit_x` for the IK settings attachments below it.
+- The rows are the generic registered-property rows of the bone node
+  itself, in group "IK" (`doc/erhe/property_system.md` section 4.19) -
+  Lock X/Y/Z and Limit X/Y/Z checkboxes, Limit Min / Limit Max as vec3 rows
+  edited in degrees and stored in radians (coerced per component to
+  [-180 deg, 0 deg] and [0 deg, 180 deg] per section 1), Stiffness
+  developer-only (the value is inert - section 1), Rest Rotation as Euler
+  degrees, and the pole rows of `pole_target.md` R17. The `visible_when` of
+  section 1 decides which nodes show them, so there is nothing to add and
+  nothing to gate.
+- The "Set rest from current pose" button (section 1) is an action in
+  `Properties::ik_actions` (`src/editor/windows/properties.cpp`), called
+  from `item_diagnostics` for every selected node that is a bone, so it is
+  drawn in the bone node's own section under the row label "Rest".
+- Undo: every row edit, the "Set rest from current pose" button and the MCP
+  `set_item_property` tool record one `Property_set_operation` (the local
+  state before and after), so one completed edit = one undo step.
+  Channel-lock toggles are registered `Node` properties and record the same
+  operation (section 2).
+- A limit set shared by several bones is a Style holding the `Ik.*` values
+  (section 1); the values themselves do not inherit down the node chain, so
+  a bone's limits are its own unless a style supplies them.
 
-### 6. Serialization - `ERHE_rig`
+### 6. Serialization
 
-- New editor-domain per-node glTF extension `ERHE_rig`, written and read in
-  `src/editor/parsers/gltf_extensions_export.cpp` /
-  `gltf_extensions_import.cpp` exactly on the `ERHE_layout` pattern
-  (payload string via `append_members` into
-  `extension_payloads.nodes[node]`, manual `extensions_used` declaration;
-  import via `find_extension` / `parse_extension_object` in a new
-  `import_rigs()` called from `import_gltf_editor_state()`). The generic
-  `ERHE_*` capture callback in `erhe::gltf` needs no changes.
-- Emitted for every node that carries an `Ik_settings` attachment  - 
-  including an all-default one, since the attachment's presence is itself
-  user intent; a node without the attachment writes nothing.
-- Payload shape (one `ik` object now; room for future rig data - pole
-  targets, per-chain settings - as sibling keys in later slices/phases):
-
-  ```json
-  "ERHE_rig": {
-      "ik": {
-          "lock":          [false, false, true],
-          "limit":         [true,  false, false],
-          "min":           [-2.62, -3.14159274, -3.14159274],
-          "max":           [0.0,    3.14159274,  3.14159274],
-          "stiffness":     [0.0, 0.0, 0.0],
-          "rest_rotation": [0.0, 0.0, 0.0, 1.0],
-          "properties":    {"limit_x": "true", "limit_min": "-2.62 -3.1415927 -3.1415927", "lock_z": "true", "rest_rotation": "0 0 0 1"}
-      }
-  }
-  ```
-
-  Angles in radians; `rest_rotation` as glTF-order quaternion [x, y, z, w].
-  The explicit fields carry the effective values; `properties` is the
-  attachment's local values, and on import it is the complete local set
-  (a field it does not name is cleared, so a value inherited from the node
-  chain stays inherited after a reload).
-  Absent fields take defaults on import (forward compatibility); unknown
-  fields are ignored with a log warning.
-- Documentation set, mirroring `ERHE_layout`: an `ERHE_rig` spec page and
-  schema under `doc/gltf_extensions/`, a table row in
-  `doc/gltf_extensions/README.md`, and the extension inventory tables in
-  `doc/editor/scene_serialization.md`.
+- The `Ik.*` local values ride the bone node's `ERHE_node` `properties` map
+  by their qualified names (D14 of `doc/erhe/property_system.md`), the
+  carriage every attached property uses. A node holding no local `Ik.*`
+  value writes nothing.
+- `Ik.pole_target` is an object reference, so it additionally rides
+  `property_node_refs` beside the map: the glTF node index of the pole in
+  this file's own node table, which is what the reader resolves. The
+  reference's path form in `properties` stays the readable form and the
+  fallback for a target the file has no node for.
+  `doc/gltf_extensions/ERHE_node.md` owns both keys' specification -
+  written form, read order, and what an unresolvable index or path does.
+- On import the `properties` map is the node's complete local set, so a
+  value the map does not name is cleared and a bone whose values come from
+  a style keeps reading the style after a reload.
 - Channel-lock flags serialize as flag names through the existing
-  `ERHE_node.flags` allowlist (section 2), not through `ERHE_rig`.
-- Prefabs / clone: the attachment clones with the node like other
-  attachments (custom clone constructor), so instantiated prefabs keep
-  their IK settings.
+  `ERHE_node.flags` allowlist (section 2).
+- Prefabs / clone: entry-stored values copy with the node (D10 of
+  `doc/erhe/property_system.md`), so a cloned or prefab-instantiated bone
+  keeps its `Ik.*` values and names the same pole node.
+- USD has no form for rig data: `save_scene_usd` counts the nodes holding a
+  local `Ik.*` value and logs one warning per save naming that count
+  (`pole_target.md` R26). A USD form is Phase 4 work.
 
 ### 7. Scope markers for the rest of Phase 2 (not in this slice)
 
 - **Pole target / swivel control** - implemented, specified in
-  `pole_target.md` (a pole node reference and an angle on `Ik_settings`,
-  carried by `ERHE_rig`).
+  `pole_target.md` (the `Ik.pole_target` reference and the `Ik.pole_angle`
+  value of a joint node, carried as in section 6).
 - **Effector orientation option** (keep world orientation vs follow last
   segment) - Transform tool setting; implemented, specified in
   `ik_drag_options.md` section 1.
@@ -386,8 +380,8 @@ formulation adapted to swing/twist limits:
 
 - Persistent IK constraints (target node stored in the scene; chains here
   are still discovered per drag) - Phase 4.
-- A real rest-pose model on nodes (Phase 3); `rest_rotation` in the
-  attachment is the stopgap and migrates there later.
+- A real rest-pose model on nodes (Phase 3); `Ik.rest_rotation` is the
+  stopgap and migrates there later.
 - Enforcing channel locks against animation, physics, or programmatic
   transform writes.
 - Stiffness UI and solver enforcement (deferred wholesale to a later
@@ -398,11 +392,10 @@ formulation adapted to swing/twist limits:
 ## Acceptance criteria
 
 1. On a test rig with a known bend axis (e.g. the checked-in test asset;
-   "X" below means that rig's bend axis), add an IK Settings attachment to
-   an elbow bone and set the bend-axis limit to [-150 deg, 0 deg]: dragging the
-   hand can no longer hyperextend the elbow past straight, and bending
-   stops at 150 deg; removing the attachment restores Phase 1 behavior
-   exactly.
+   "X" below means that rig's bend axis), set an elbow bone's bend-axis
+   limit to [-150 deg, 0 deg]: dragging the hand can no longer hyperextend
+   the elbow past straight, and bending stops at 150 deg; clearing the
+   bone's local `Ik.*` values restores Phase 1 behavior exactly.
 2. Set a knee to hinge on the same rig (lock the non-bend swing axis and
    limit the bend axis - the twist axis needs no lock, IK never twists):
    dragging the foot bends the knee only about the bend axis within its
@@ -412,7 +405,7 @@ formulation adapted to swing/twist limits:
    stably at a best-effort pose with no visible oscillation.
 3. Lock all three rotation axes on a mid-chain bone: the two segments it
    joins move as one rigid link; the rest of the chain still solves.
-4. `lock_rotation_x` (channel lock, no IK Settings attachment) on a chain
+4. `lock_rotation_x` (channel lock, no local `Ik.*` value) on a chain
    bone whose derived twist axis is NOT X (i.e. X is a swing axis on the
    test rig - a lock on the twist axis is a solve no-op per section 4) behaves
    in IK like an X DOF lock; the same flag also prevents the Rotate tool
@@ -425,54 +418,54 @@ formulation adapted to swing/twist limits:
    IK settings is one undo step; toggling a Locks-row checkbox is one undo
    step.
 7. IK settings and channel locks survive a glTF save/load round trip
-   (`ERHE_rig` and `ERHE_node.flags` respectively); a file saved without
-   them loads unchanged in behavior; a third-party glTF viewer ignores
-   `ERHE_rig` without error (extension, not required).
+   (`ERHE_node` `properties` / `property_node_refs` and `ERHE_node.flags`
+   respectively); a file saved without them loads unchanged in behavior; a
+   third-party glTF viewer ignores `ERHE_node` without error (extension,
+   not required).
 8. Solver unit tests (section 3) pass; a chain with no constraints follows the
    identical code path and produces identical results to Phase 1.
 9. Zero-length segments, limits excluding the current pose, and
    180 deg-swing (antiparallel) configurations produce no NaNs, crashes, or
    frame-to-frame pose jumps.
 
-## Resolved design decisions (with the user, 2026-08-23)
+## Resolved design decisions
 
-1. **Attachment name**: `Ik_settings` / "IK Settings". Pole/chain data in
-   later slices goes elsewhere (chain/effector), not this per-joint blob.
-2. **Limit frame default**: bind pose when available, else current local
-   rotation at attachment creation (section 1), re-capturable from Properties.
-3. **Channel locks**: 9 new `Item_flags` bits (bits 42-50), chosen for
+1. **Where the data lives**: attached properties of the bone node itself,
+   group "IK" (section 1). Pole and chain data of later slices goes with
+   the chain or the effector, not into a per-joint blob.
+2. **Limit frame default**: the bind pose when the bone and its parent are
+   joints of one skin, identity otherwise, as a computed default
+   (section 1), authorable from Properties.
+3. **Channel locks**: 9 `Item_flags` bits (bits 42-50), chosen for
    zero-cost persistence through `ERHE_node.flags` and any-item
-   applicability; 17 bits remain free.
-4. **Stiffness**: field serialized but inert in this slice (section 1); solver
-   enforcement and UI deferred until the constrained solver is proven.
-5. **Limit parameterization**: swing/twist (Blender-solver style  - 
+   applicability.
+4. **Stiffness**: serialized but inert in this slice (section 1); solver
+   enforcement and UI wait until the constrained solver is proven.
+5. **Limit parameterization**: swing/twist (Blender-solver style -
    per-joint derived twist axis, swing ellipse with per-quadrant radii
    from the per-axis limits, twist untouched by the solve), NOT
-   independent Euler clamps. See section 1 and section 4. The authored data stays
-   per-axis min/max, so this choice affects enforcement only, not the
-   `ERHE_rig` schema.
+   independent Euler clamps. See section 1 and section 4. The authored data
+   stays per-axis min/max, so this choice affects enforcement only.
+6. **Sharing a limit set**: a Style holding the `Ik.*` values (section 1),
+   rather than inheritance down the node chain - a bone's limits belong to
+   that bone, and a chain of bones has no shared limit by construction.
 
-## Implementation status (2026-08-25)
+## Key locations
 
-Implemented as specified. Key locations:
-
-- `Ik_settings` attachment - `src/editor/scene/node_ik_settings.{hpp,cpp}`
-  (registered properties since 2026-09-17, `Ik_settings_data` the mirror
-  of their effective values; `doc/erhe/property_system.md` section 4.19); created
-  via `Scene_commands::attach_new_ik_settings` (bind-pose rest capture in
-  `capture_ik_rest_rotation`, `scene_commands.cpp`); registered in the
-  attachment catalog (`attachment_types.cpp`, bone-gated).
+- Values - `editor::Ik` (`src/editor/scene/ik_properties.{hpp,cpp}`): the
+  registrations, `read_ik_settings`, `get_ik_pole_target` /
+  `set_ik_pole_target`, and `has_local_ik_value`, which a writer with no
+  form for IK data counts. The bind-pose lookup behind the rest default is
+  `erhe::scene::get_bind_pose_local_rotation` (`erhe_scene/skin.{hpp,cpp}`).
 - Channel locks - `Item_flags::lock_translation_x` .. `lock_scale_z`
   (bits 42-50, `item.hpp`, with `lock_*_mask` composites), persisted via
   `gltf_item_flags.cpp`; enforced by `enforce_channel_locks`
-  (`transform_tool.cpp`, declared in `transform_tool.hpp`) at every
-  Transform tool delta path, the `apply_*_edit` commit paths, and the MCP
-  direct set-transform action; per-component toggles are the registered
-  `Node` properties `lock_translation_x` .. `lock_scale_z` (bridged flag
-  bits, Properties group "Channel Locks", undoable via
-  `Property_set_operation`);
-  locked widgets greyed out in the Transform window (local single-node
-  mode; rotation relies on commit-side masking).
+  (`transform_tool.cpp`) at every Transform tool delta path, the
+  `apply_*_edit` commit paths, and the MCP direct set-transform action;
+  per-component toggles are the registered `Node` properties
+  `lock_translation_x` .. `lock_scale_z` (bridged flag bits, Properties
+  group "Channel Locks"); locked widgets are greyed out in the Transform
+  window (local single-node mode; rotation relies on commit-side masking).
 - Solver - `src/editor/transform/ik_solver.{hpp,cpp}`: `Ik_chain` /
   `Ik_solver` / `Fabrik_solver`; constrained enforcement in
   `constrain_local_rotation` (swing/twist decomposition, sin(half-angle)
@@ -481,30 +474,24 @@ Implemented as specified. Key locations:
   Unit tests: `src/editor/transform/test/test_ik_solver.cpp`
   (`editor_ik_solver_tests` target, `ERHE_BUILD_TESTS=ON` trees).
 - IK integration - `Ik_drag::begin` resolves per-joint constraints
-  (`resolve_constraint`: attachment fields OR channel-lock flags; twist
-  axis via `derive_twist_axis`; a twist-axis-only constraint does NOT
-  route the chain into the constrained solver - it would be a no-op that
-  changed unreachable-target behavior); constrained write-back sets
+  (`resolve_constraint`: the node's `Ik.*` values OR its channel-lock
+  flags, the rest-frame rule of section 3, twist axis via
+  `derive_twist_axis`; a twist-axis-only constraint does NOT route the
+  chain into the constrained solver - it would be a no-op that changed
+  unreachable-target behavior); constrained write-back sets
   solver-produced local rotations directly.
-- Serialization - `ERHE_rig` (its spec page and schema under
-  `doc/gltf_extensions/`); export in
-  `gltf_extensions_export.cpp`, import in `gltf_extensions_import.cpp`
-  (`import_rigs`, per-element JSON type guards, range clamps).
-- Properties UI - generic registered-property rows (group "IK"); the
-  "Set rest from current pose" action is `Properties::ik_settings_actions`
-  (`properties.cpp`). Every edit records one `Property_set_operation`; the
-  former whole-struct `Ik_settings_change_operation` and its drag latch
-  are gone (2026-09-17). Property tests:
-  `src/editor/transform/test/test_ik_settings_properties.cpp`.
+- Properties UI - the generic rows of group "IK" plus
+  `Properties::ik_actions` (`properties.cpp`). Property tests:
+  `src/editor/transform/test/test_ik_properties.cpp`.
 
-Notes from the implementation review (all confirmed findings fixed):
+## Standing traps
 
 - Euler-component channel-lock masking must pick the Euler branch of the
   new rotation nearest the reference decomposition before masking -
-  glm::eulerAngles jumps branches past ~90 degrees and cross-branch
+  `glm::eulerAngles` jumps branches past ~90 degrees and cross-branch
   masking snaps the node to a wrong orientation.
 - The constrained solver models chains as pure rotations with world
   segment lengths: correct under uniform scale, best-effort under
   non-uniform scale (same policy as Phase 1's write-back).
 - Programmatic transform writes outside the covered paths (animation,
-  physics) still bypass channel locks by design (section 2).
+  physics) bypass channel locks by design (section 2).

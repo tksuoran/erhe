@@ -28,13 +28,13 @@ Progress: sections 0-3 pass. Testing continues at section 4.
   the Transform window, below the translation / rotation / scale / skew
   fields, in a "Move tool" group. The group appears once a gizmo handle has
   been hovered or dragged (finding F1).
-- **IK Settings attachment**: Hierarchy, right-click a bone, Add
-  Attachment, IK Settings.
-- **Lock / Limit / Pole Target / Pole Angle rows**: Properties, group "IK"
-  of the attachment.
-- **Set rest from current pose**: Properties, in the attachment's own framed
-  section (headed by its type and name), row "Rest" - apart from the "IK"
-  group. Greyed out while the bone has `lock_edit`.
+- **Lock / Limit / Stiffness / Rest Rotation / Pole Target / Pole Angle
+  rows**: Properties, group "IK" of the bone node itself. They appear on any
+  node the rig marks as a bone; nothing has to be added first.
+- **Set rest from current pose**: Properties, in the bone node's own framed
+  section (headed by its type and name), row "Rest", above the node's
+  property groups and so above the "IK" group whose Rest Rotation row it
+  writes. Greyed out while the bone has `lock_edit`.
 - **Channel locks**: Properties of a node, group "Channel Locks".
 - **ik_lock**: Properties of a bone, among the flag / lock rows.
 - **Add Bone Tip Nodes**: Hierarchy, right-click the rig root.
@@ -65,7 +65,7 @@ visualization style settings.
 
 ## 3. Per-bone IK settings - PASS
 
-1. Add IK Settings to `arm_joint_L_2`.
+1. Select `arm_joint_L_2` and find its "IK" group in Properties.
 2. One Lock axis on: the elbow stops rotating about that axis (a lock on
    the bone's own twist axis has no effect, by design).
 3. One Limit axis on with a narrow range (for example -10 to +45 degrees):
@@ -75,6 +75,14 @@ visualization style settings.
    that pose; one Ctrl+Z undoes it.
 
 ## 4. Channel locks - NEXT
+
+Sections 0-3 above were run while these same values lived on an "IK
+Settings" node attachment; they now live on the bone node itself, so the
+solver behavior they recorded is unchanged but the place to edit them is
+not. Worth one spot-check before continuing: that the "IK" group appears on
+a bone with nothing added first, and that Set rest from current pose still
+takes one Ctrl+Z (section 3 steps 1 and 5).
+
 
 1. On any node, tick for example translation X and rotation Y in "Channel
    Locks". Move and rotate it with the gizmo: the locked components do not
@@ -89,9 +97,9 @@ visualization style settings.
 
 1. Create an empty node and place it clearly in front of or behind the
    elbow, off the shoulder-to-hand line.
-2. On the IK Settings attachment set Pole Target to that node with the
-   picker: the picker offers nodes and the row shows the chosen one. With
-   several attachments on a chain, the pole nearest the hand governs.
+2. On the elbow bone set Pole Target to that node with the picker: the
+   picker offers nodes and the row shows the chosen one. With several bones
+   of a chain naming a pole, the one nearest the hand governs.
 3. Drag the hand: the elbow swings to point at the pole; the visualization
    adds a magenta line from the pole to the root and a magenta cross at the
    pole. On the first small movement the elbow may jump toward the pole -
@@ -135,9 +143,9 @@ visualization style settings.
 - **F1.** The Transform window shows no tool parameter group until a gizmo
   handle has been used once. Queued in `prompt_queue.txt`, to fix after
   this pass.
-- **F2.** "Set rest from current pose" sits in the attachment's own section,
-  apart from the "IK" group that holds the rows it relates to - hard to
-  find. Candidate: move it next to the Rest Rotation row.
+- **F2.** "Set rest from current pose" sits above the bone node's property
+  groups, apart from the "IK" group that holds the Rest Rotation row it
+  writes - hard to find. Candidate: move it next to that row.
 
 ## Reporting a problem
 

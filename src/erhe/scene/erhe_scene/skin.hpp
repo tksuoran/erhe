@@ -79,7 +79,7 @@ public:
 // node, belongs to no scene, or no skin lists both the node and its parent.
 //
 // It is what a rest orientation of a joint is taken from (the IK limits'
-// zero angle, doc/plans/rigging/ik_properties.md P5).
+// zero angle, doc/plans/rigging/ik_settings.md section 1).
 [[nodiscard]] auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>;
 
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;

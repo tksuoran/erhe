@@ -1,5 +1,5 @@
 // Per-bone IK settings as attached erhe::property properties of the bone
-// node (doc/plans/rigging/ik_properties.md P2 to P6): the values live on the
+// node (doc/plans/rigging/ik_settings.md section 1): the values live on the
 // node, none of them inherits, a Style can supply a shared limit set, and
 // Ik.rest_rotation's per-object default is the node's bind-pose local
 // rotation.

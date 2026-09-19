@@ -970,8 +970,9 @@ def section_build_scene():
 
     def block_rig():
         # Per-bone IK values as attached properties of the bone node itself
-        # (doc/plans/rigging/ik_properties.md P2): a pole target, a pole angle
-        # and one limit. They ride ERHE_node.properties (P8).
+        # (doc/plans/rigging/ik_settings.md section 1): a pole target, a pole
+        # angle and one limit. They ride ERHE_node.properties and
+        # property_node_refs (ik_settings.md section 6).
         mutate("create_node", {"scene_name": scene, "name": "P6 IK Pole", "position": [0.0, 1.0, 2.0]})
         check(S, "IK pole node created", wait_for_scene_node(scene, "P6 IK Pole"))
         details = call("get_node_details", {"scene_name": scene, "node_name": IK_BONE})
@@ -1210,7 +1211,7 @@ def ik_bone_state(scene_name):
 
     `pole_is_own_pole` is what matters for the pole: the reference must name
     THIS scene's copy of the pole node, not a same-named node of another
-    open scene (doc/plans/rigging/ik_properties.md P8).
+    open scene (doc/plans/rigging/pole_target.md R24, R25).
     """
     details = call("get_node_details", {"scene_name": scene_name, "node_name": IK_BONE})
     bone_item_id = details.get("id")

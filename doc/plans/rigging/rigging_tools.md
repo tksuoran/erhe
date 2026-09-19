@@ -127,9 +127,11 @@ Notable Blender facts that shaped this plan:
 
 - **Serialization**: erhe scenes are saved as erhe-authored glTF files with
   `ERHE_*` extensions. Rig data beyond skins (constraints, IK settings,
-  per-bone limits) has no core glTF home. Decide once - extension (e.g.
-  `ERHE_constraints`) vs `extras` - by the first phase that adds non-flag rig
-  data, which is Phase 2 (per-bone IK limits/locks), not Phase 4. Item flags
+  per-bone limits) has no core glTF home. Per-node rig data rides the node's
+  `ERHE_node` `properties` map by qualified property name, with
+  `property_node_refs` for a value naming another node
+  (`doc/gltf_extensions/ERHE_node.md`); Phase 2's per-bone IK settings are
+  the first user and Phase 4's constraints follow the same carriage. Item flags
   serialize by name through an explicit persistent-flag allowlist
   (`erhe_gltf/gltf_item_flags.cpp`); `ik_lock` needs one new table entry
   there (plus the flag bit, `c_bit_labels` entry, and `count` bump in
@@ -193,11 +195,10 @@ Builds directly on Phase 1's solver and drag UX.
 - **Pole target / swivel control**: designate a pole node to control chain
   bend direction (elbow/knee). Implemented; requirements: `pole_target.md`.
 - **Per-bone IK settings**: DOF locks per axis and joint rotation limits
-  (min/max per axis), stored per node (new small POD on bone nodes or a node
-  attachment), edited in Properties. Solver enforces them via constrained
-  FABRIK (per-iteration reprojection). Stiffness if it falls out naturally.
-  This is the first non-flag rig data that must persist, so the serialization
-  decision (see cross-cutting) lands in this phase.
+  (min/max per axis), held as `Ik.*` attached properties of the bone node and
+  edited in Properties. Solver enforces them via constrained FABRIK
+  (per-iteration reprojection). Stiffness if it falls out naturally.
+  Implemented; requirements: `ik_settings.md`.
 - **Solver interface**: factor the solver behind an interface (chain in /
   posed chain out) so a damped-least-squares Jacobian solver can replace or
   complement FABRIK if constrained FABRIK proves unstable.
@@ -281,7 +282,7 @@ the scene update. Modeled on Blender's proven shape (see survey).
 - **UI**: constraint list per node in Properties (add/remove/reorder/enable/
   influence), constraint editing, target picking; item tree indication that a
   node is constrained.
-- **Serialization**: extend the Phase 2 extension/extras scheme (see
+- **Serialization**: extend the Phase 2 `ERHE_node` property carriage (see
   cross-cutting) to cover constraint data.
 - **Undo**: add/remove/reorder/edit constraint operations.
 
@@ -388,7 +389,7 @@ Collected from the survey; explicitly not scheduled:
 | Phase | Title | Depends on | Rough size |
 |---|---|---|---|
 | 1 | FABRIK IK on drag - DONE | - | S-M |
-| 2 | IK quality of life (pole, limits, locks) | 1; serialization decision | M |
+| 2 | IK quality of life (pole, limits, locks) | 1 | M |
 | 3 | Skeleton editing + posing basics | - (1 for testing) | M-L |
 | 4 | Constraint system foundation | 1-2 (solver), scene update rework | L |
 | 5 | Skinning: weights authoring | 3 (for full value) | L |

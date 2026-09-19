@@ -409,8 +409,8 @@ def main():
         after_state = pole_state(client, bone_id(client, reopened, args.effector))
         # Both ride the node's ERHE_node payload: the angle as a property
         # value, the pole as a property value plus the node index that names
-        # the file's own copy of the pole (P8 of
-        # doc/plans/rigging/ik_properties.md).
+        # the file's own copy of the pole (doc/plans/rigging/pole_target.md
+        # R24).
         check_true(
             "9a pole_angle survives save and re-open",
             after_state.get("pole_angle") == before_state["pole_angle"],

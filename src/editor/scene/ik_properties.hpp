@@ -16,7 +16,7 @@ namespace erhe::scene { class Xformable; using Node = Xformable; }
 namespace editor {
 
 // Effective IK values of one bone node, as the IK solver reads them
-// (doc/plans/rigging/ik_properties.md P6: read with read_ik_settings()).
+// (doc/plans/rigging/ik_settings.md section 1: read with read_ik_settings()).
 //
 // Parameters are per local axis x = 0, y = 1, z = 2. lock wins over limit
 // on the same axis. Limits are radians with min in [-pi, 0] and max in
@@ -38,14 +38,15 @@ public:
 
     // Reference orientation defining the zero of the limits: the limited
     // quantity is inverse(rest_rotation) * parent_from_node_rotation. Its
-    // per-object default is the node's bind-pose local rotation (P5).
+    // per-object default is the node's bind-pose local rotation
+    // (doc/plans/rigging/ik_settings.md section 1).
     glm::quat           rest_rotation{1.0f, 0.0f, 0.0f, 0.0f};
 
     auto operator==(const Ik_settings_data&) const -> bool = default;
 };
 
 // Per-bone IK settings as attached properties of the bone node itself
-// (doc/plans/rigging/ik_properties.md P2): per-axis DOF locks and joint
+// (doc/plans/rigging/ik_settings.md section 1): per-axis DOF locks and joint
 // rotation limits enforced by the constrained IK solver via swing/twist
 // decomposition relative to rest_rotation, plus the pole target and angle.
 //
@@ -63,7 +64,7 @@ public:
     [[nodiscard]] static auto property_owner_type() -> erhe::property::Owner_type;
 
     // Attached to erhe::scene::Node, UI group "IK", none of them inheriting
-    // (P3: a shared limit set is a Style holding the Ik.* values). limit_min
+    // (a shared limit set is a Style holding the Ik.* values). limit_min
     // / limit_max are radians shown in degrees, coerced per component to
     // [-pi, 0] and [0, pi]; stiffness is coerced to [0, 0.99] and
     // developer-only (inert).
@@ -76,11 +77,11 @@ public:
     static const erhe::property::Property<glm::vec3> limit_min_property;
     static const erhe::property::Property<glm::vec3> limit_max_property;
     static const erhe::property::Property<glm::vec3> stiffness_property;
-    // P5: per-object default from the bind pose, identity when the node is
-    // not a joint whose parent is a joint of the same skin.
+    // Per-object default from the bind pose, identity when the node is not
+    // a joint whose parent is a joint of the same skin.
     static const erhe::property::Property<glm::quat> rest_rotation_property;
-    // P1 / P2: a weak object reference, so a pole is never an ownership
-    // edge. Any node is accepted, including the bone itself and nodes of
+    // A weak object reference, so a pole is never an ownership edge.
+    // Any node is accepted, including the bone itself and nodes of
     // other scenes; admissibility is decided once per drag by
     // Ik_drag::discover_pole (doc/plans/rigging/pole_target.md R4, R8).
     static const erhe::property::Property<erhe::property::Weak_object_reference> pole_target_property;
@@ -93,7 +94,7 @@ public:
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
 
-// P6: the effective Ik.* values of one node, read once per chain joint at
+// The effective Ik.* values of one node, read once per chain joint at
 // drag begin.
 [[nodiscard]] auto read_ik_settings(const erhe::scene::Node& node) -> Ik_settings_data;
 
@@ -103,7 +104,8 @@ public:
 void set_ik_pole_target(erhe::scene::Node& node, const std::shared_ptr<erhe::scene::Node>& pole);
 
 // True when the node holds a local value of any Ik.* property - what a
-// writer that has no form for IK data counts (P7).
+// writer that has no form for IK data counts
+// (doc/plans/rigging/ik_settings.md section 6).
 [[nodiscard]] auto has_local_ik_value(const erhe::scene::Node& node) -> bool;
 
 } // namespace editor

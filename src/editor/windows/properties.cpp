@@ -1041,9 +1041,9 @@ void Properties::ik_actions(const std::shared_ptr<erhe::scene::Node>& bone)
 
     // The locks, limits, stiffness, rest rotation and pole are generic
     // property rows of the bone node (group "IK",
-    // doc/plans/rigging/ik_properties.md P2); the action remains here. It
-    // records the same undoable write the generic rows and the MCP
-    // set_item_property tool record (P5).
+    // doc/plans/rigging/ik_settings.md section 5); the action remains here.
+    // It records the same undoable write the generic rows and the MCP
+    // set_item_property tool record.
     add_entry(
         "Rest",
         [this, bone]() {

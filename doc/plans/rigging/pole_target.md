@@ -2,15 +2,14 @@
 
 Status: in progress
 
-Implemented (see Implementation status at the end); awaiting live-editor
-testing.
+Implemented; awaiting live-editor testing (`interactive_test_pass.md`).
 
 This document specifies the pole target slice of Phase 2 of the rigging
 roadmap in `rigging_tools.md`. It builds on `fabrik_ik.md` (Phase 1,
 implemented: chain discovery, FABRIK, rotation-only write-back) and on
-`ik_settings.md` (Phase 2 slice 1, implemented: the `Ik_settings`
-attachment, channel locks, the `Ik_solver` / `Ik_chain` interface, the
-constrained backward pass, the `ERHE_rig` extension).
+`ik_settings.md` (Phase 2 slice 1, implemented: the bone node's `Ik.*`
+properties, channel locks, the `Ik_solver` / `Ik_chain` interface, the
+constrained backward pass).
 
 Terms used throughout:
 
@@ -40,66 +39,63 @@ it is what makes dragging a hand or a foot produce a believable limb.
 
 ### 1. Data model
 
-**R1.** `Ik_settings` (`src/editor/scene/node_ik_settings.{hpp,cpp}`) gains
-two registered properties in its existing UI group "IK"
-(`doc/erhe/property_system.md` section 4.19):
+**R1.** Two of the `Ik.*` attached properties of a joint node
+(`ik_settings.md` section 1, `doc/erhe/property_system.md` section 4.19)
+carry the pole, in the same UI group "IK":
 
-- `pole_target` - `erhe::property::Property<erhe::property::Object_reference>`,
+- `Ik.pole_target` - `erhe::property::Property<erhe::property::Weak_object_reference>`,
   label "Pole Target", `reference_item_types = erhe::Item_type::xformable`,
-  `inherits = false`. **Bridged** (D18) over a
-  `std::weak_ptr<erhe::scene::Node> m_pole_target` member, exactly as
-  `Node_joint::connected_node_property` is bridged over
-  `Node_joint::m_connected_node`: `get` returns
-  `Member_value_traits<std::shared_ptr<erhe::scene::Node>>::to_value(get_pole_target())`,
-  `set` calls `set_pole_target(...)`, and `set_pole_target` calls
-  `invalidate_dependents(pole_target_property.get())` because it writes the
-  bridged storage outside `set_value` (D22). `validate` is
-  `Member_value_traits<std::shared_ptr<erhe::scene::Node>>::validate`, so a
-  non-`Node` item is refused with the property's own error.
-- `pole_angle` - `erhe::property::Property<float>`, label "Pole Angle",
-  entry stored, `inherits = true`, default `0.0f`, stored in radians.
+  `inherits = false`. The weak reference kind (D28) is what keeps a pole
+  from being an ownership edge: the property stores a
+  `std::weak_ptr<Dependency_object>`, a target that has gone away reads as
+  an empty reference, and its `validate` is
+  `Member_value_traits<std::weak_ptr<erhe::scene::Node>>::validate`, so a
+  non-`Node` item is refused with the property's own error. It is read and
+  written through `get_ik_pole_target` / `set_ik_pole_target`
+  (`scene/ik_properties.hpp`).
+- `Ik.pole_angle` - `erhe::property::Property<float>`, label "Pole Angle",
+  entry stored, `inherits = false`, default `0.0f`, stored in radians.
 
-**R2.** The weak reference of R1 is what keeps a pole from being a strong
-node-to-node reference; there is no ownership edge and no cycle. The
-attachment's copy and clone constructors carry `m_pole_target` across as
-`Node_joint` carries `m_connected_node`, so a cloned or prefab-instantiated
-bone keeps naming the same pole node.
+**R2.** Being weak (R1), a pole is a reference and never a cycle. Entry
+storage copies with the node (D10), so a cloned or prefab-instantiated bone
+keeps naming the same pole node.
 
-**R3.** `Ik_settings_data` gains `float pole_angle{0.0f}`, refreshed by
-`refresh_mirror` like every other mirrored field. The pole node itself is
-**not** mirrored into `Ik_settings_data`: the mirror is a plain value record,
-and the reference is read through `get_pole_target()`.
+**R3.** `Ik_settings_data` carries `float pole_angle{0.0f}`, filled by
+`read_ik_settings` like every other value. The pole node itself is **not**
+in that record: the record is plain values, and the reference is read
+through `get_ik_pole_target()`.
 
-**R4.** `set_pole_target(const std::shared_ptr<erhe::scene::Node>&)` accepts
-any node, including the attachment's own node and nodes of other scenes. All
-admissibility rules live at solve time (R8), stated once, so no edit is
-silently discarded and the Properties row always shows what was authored.
+**R4.** `set_ik_pole_target(erhe::scene::Node&, const
+std::shared_ptr<erhe::scene::Node>&)` accepts any node, including the
+joint's own node and nodes of other scenes. All admissibility rules live at
+solve time (R8), stated once, so no edit is silently discarded and the
+Properties row always shows what was authored.
 
 ### 2. Which pole governs a drag
 
 **R5.** Chains stay discovered per drag (`fabrik_ik.md` section 1); a pole
 does not create, extend or terminate a chain. The pole that governs one drag
 is found by scanning the chain from the effector toward the root - indices
-`n, n-1, ... 0` - and taking the first admissible pole (R8) an `Ik_settings`
-attachment on a scanned joint names. The scan reads every chain joint's
-attachment whatever the joint's flags, so a pole authored on the effector
-(the Blender-equivalent place, where the IK constraint itself lives) wins
-over a pole authored higher up. The scan continues past a joint that carries
-no attachment, whose attachment names no pole, whose `pole_target` no longer
-resolves, or whose pole is not admissible, so a pole authored nearer the root
-governs the drag in each of those cases. The solve is unpoled when the scan
-reaches the root having found no admissible pole.
+`n, n-1, ... 0` - and taking the first admissible pole (R8) a scanned joint
+node's `Ik.pole_target` names. The scan reads every chain joint's value
+whatever the joint's flags, so a pole authored on the effector (the
+Blender-equivalent place, where the IK constraint itself lives) wins over a
+pole authored higher up. The scan continues past a joint that names no pole,
+whose `Ik.pole_target` no longer resolves, or whose pole is not admissible,
+so a pole authored nearer the root governs the drag in each of those cases.
+The solve is unpoled when the scan reaches the root having found no
+admissible pole.
 
-**R6.** `pole_angle` is the effective value of the same attachment R5
-selected. Angles of other attachments on the chain take no part; there is no
+**R6.** `Ik.pole_angle` is the effective value of the same joint node R5
+selected. Angles of the other joints on the chain take no part; there is no
 summing.
 
 **R7.** The governing pole applies to the whole chain: every intermediate
 joint of the chain is swivelled by the single rotation of R11 step 7,
 whatever the chain length.
 
-**R8.** A `pole_target` **resolves** when its weak reference locks to a live
-`erhe::scene::Node`; one that does not - expired, or never authored - counts
+**R8.** An `Ik.pole_target` **resolves** when its weak reference locks to a
+live `erhe::scene::Node`; one that does not - expired, or never authored - counts
 as not authored, so the scan of R5 passes it by in silence. A resolved
 `pole_target` is **admissible** when all of the following hold, evaluated
 once per drag in `Ik_drag::begin`:
@@ -175,7 +171,7 @@ divisions, so the function never produces NaN.
 **R12.** `Ik_chain` gains `bool has_pole{false}`, `glm::vec3
 pole_position{0.0f}` (world space, the same space as `positions` and
 `target`) and `float pole_angle{0.0f}`. `Ik_drag::begin` fills them from the
-governing attachment (R5, R6) and the admissible pole's world position (R8,
+governing joint node (R5, R6) and the admissible pole's world position (R8,
 R9); `Ik_drag::apply` copies them into the chain like the other drag-start
 data. When `has_pole` is false the solver runs unchanged.
 
@@ -237,16 +233,16 @@ no scene involved, covering:
 ### 4. Properties UI and undo
 
 **R17.** Both properties of R1 draw as generic registered-property rows in
-group "IK": `pole_target` as the object-reference row (the picker the
-`reference_item_types` mask drives, as `Node_joint`'s Connected Node row
-does) and `pole_angle` as a float row edited in degrees and stored in
-radians, the way `Ik_settings`' limit rows are, with a drag range of -180 to
-+180 degrees and no coercion - the angle is periodic, so a value outside the
-range is legal and means the same pose.
+group "IK" of the joint node: `Ik.pole_target` as the object-reference row
+(the picker the `reference_item_types` mask drives, as `Node_joint`'s
+Connected Node row does) and `Ik.pole_angle` as a float row edited in degrees
+and stored in radians, the way the limit rows of `ik_settings.md` section 5
+are, with a drag range of -180 to +180 degrees and no coercion - the angle is
+periodic, so a value outside the range is legal and means the same pose.
 
 **R18.** Every completed edit of either property - picking a pole, clearing
 it, dragging the angle - records exactly one `Property_set_operation` through
-the generic Properties path, like every other `Ik_settings` field
+the generic Properties path, like every other `Ik.*` value
 (`ik_settings.md` section 5). This slice adds no operation type.
 
 **R19.** One drag gesture that solves with a pole still produces exactly one
@@ -263,12 +259,9 @@ value to clear the local value, or `reference_id` as an item id;
 `get_item_properties` reports the reference as its `get_reference_path()`
 string plus `reference_id` / `reference_type` / `reference_item_types`.
 
-**R21.** `config/editor/mcp_tools.json` must list `ik_settings` in the
-`add_node_attachment` `type` enum and name it in that tool's description. The
-attachment catalog (`src/editor/scene/attachment_types.cpp`) already holds
-the `ik_settings` entry with its bone gate and the handler already accepts
-the key, but a schema-validating MCP client cannot reach it while the
-advertised enum omits it - which also blocks R23.
+**R21.** Authoring a pole over MCP is `set_item_property` of
+`Ik.pole_target` addressed to the bone node, with no preparation step: the
+values live on the node the drag already names (R1).
 
 **R22.** A new MCP tool `ik_drag` performs one complete IK drag gesture, so
 the solver, its constraints and the pole are exercisable headlessly (a gizmo
@@ -286,61 +279,36 @@ into `config/editor/mcp_tools.json` beside the other scene actions.
 
 ### 6. Serialization
 
-**R23.** `ERHE_rig`'s `ik` object (its spec page under
-`doc/gltf_extensions/`) gains
-two optional keys, written by `gltf_extensions_export.cpp` next to the
-existing explicit fields, which carry effective values:
+**R23.** `Ik.pole_angle` rides the joint node's `ERHE_node` `properties` map
+by its qualified name, like every other local `Ik.*` value
+(`ik_settings.md` section 6).
 
-- `"pole_target"`: integer, the pole node's **glTF node index** - the form
-  `KHR_physics_rigid_bodies` uses for a joint's `connectedNode`, so the pole
-  is named by position in the file's own node table and no name, path or
-  import wrapper takes part. Written only when the attachment holds a pole
-  that the export numbered; absent means no pole. A node index exists only
-  once the export has numbered the nodes, so the payload is written from
-  `Gltf_export_arguments::node_extensions_builder`, the per-node counterpart
-  of `asset_extensions_builder`, which runs with the
-  `Gltf_export_index_lookup`. A pole outside the exported asset is named by
-  no index: the file then says the attachment has no pole, with a warning at
-  save time, rather than naming something the file does not hold.
-- `"pole_angle"`: number, radians. Written only when it is not `0`; absent
-  means `0`.
+**R24.** `Ik.pole_target` rides that map as the pole's reference path and
+`ERHE_node` `property_node_refs` as the pole's **glTF node index** - the form
+`KHR_physics_rigid_bodies` uses for a joint's `connectedNode`, so the pole is
+named by position in the file's own node table. The index is what the reader
+resolves, so the pole binds to the copy of the pole node this file carries,
+whatever the import wraps the file's nodes in and whatever the scene already
+holds under that name; the path is the readable form and the fallback for a
+target the file has no node for.
+`doc/gltf_extensions/ERHE_node.md` owns the specification of both keys -
+which references get an index, the order the reader applies them in, and what
+an unresolvable index or path does.
 
-The `properties` map keeps its existing meaning - the attachment's complete
-local set - and picks `pole_angle` up automatically when it holds a local
-value. `pole_target` is bridged (R1), so the map never carries it and the
-key above is its only carrier.
-
-**R24.** Import (`gltf_extensions_import.cpp`, `import_rigs`):
-
-- `pole_angle` is read when the value is a finite number; a non-finite or
-  non-numeric value is ignored with a warning naming the node.
-- `pole_target` is read as an index into `Gltf_data::nodes`, the parse's own
-  node table, and `set_pole_target` is called with that node right where the
-  attachment is built. The index is a position in the file, so it lands on
-  the imported copy of the pole whatever the import wraps the file's nodes
-  in and whatever the scene already holds under that name; the pole needs no
-  resolution pass after the nodes enter the scene. A value that is not an
-  unsigned number, is out of range, or names a node the parse did not build
-  leaves the attachment without a pole, with a warning naming the node.
-
-**R25.** The `ERHE_rig` schema gains
-`"pole_target": {"type": "integer", "minimum": 0}` and
-`"pole_angle": {"type": "number"}` under `ik`. Neither is required;
-`required` stays `["ik"]`.
-The `ERHE_rig` spec page gains both rows in its field list and both
-keys in its JSON example.
+**R25.** The pole therefore survives both reload forms: save + open of the
+scene, and `import_gltf` of the saved file into another scene, which places
+the file's nodes under an import root. `scripts/scene_roundtrip_verify.py`
+checks both.
 
 **R26.** USD save carries the pole exactly as far as it carries the rest of
-`Ik_settings`, which is not at all. The USD writer collects the attachment
-kinds it has a form for - `Node_physics` and `Node_joint` through the physics
-description, `Prefab_instance` through composition arcs, `Draw_mode` through
-`GeomModelAPI`, `Geometry_graph_mesh` through the `erhe:scene` block - and
-`Ik_settings` is in none of them, nor is it named in any save-time warning.
-This slice keeps the pole consistent with the field it joins and makes the
-existing silent gap visible: `save_scene_usd` counts the nodes carrying an
-`Ik_settings` attachment and logs one warning per save naming that count,
-stating that USD has no form for IK settings and that they are not written,
-in the shape of the glTF draw-mode warning in `gltf_extensions_export.cpp`.
+the rest of the `Ik.*` values, which is not at all: the USD writer has a
+form for `Node_physics` and `Node_joint` (through the physics description),
+`Prefab_instance` (composition arcs), `Draw_mode` (`GeomModelAPI`) and
+`Geometry_graph_mesh` (the `erhe:scene` block), and none for rig data.
+`save_scene_usd` (`parsers/usd.cpp`) counts the nodes holding a local `Ik.*`
+value (`count_ik_value_holders` over `has_local_ik_value`) and logs one
+warning per save naming that count, stating that USD has no form for IK
+settings and that they are not written.
 A USD form for rig data is Phase 4 work, with the persistent constraint
 model.
 
@@ -354,7 +322,7 @@ model.
   between the effector keeping its world orientation and following the last
   segment. Implemented; requirements: `ik_drag_options.md` section 1.
 - **Stiffness** owns the solver enforcement and the UI of the
-  `Ik_settings::stiffness` field, which stays inert here
+  `Ik.stiffness` value, which stays inert here
   (`ik_settings.md` section 1).
 - **Phase 4** owns persistent IK constraints, where a pole becomes a field of
   a stored constraint on a stored chain, and owns the USD form of rig data
@@ -391,16 +359,17 @@ against.
    of its left arm; the chain `ik_drag` reports is the one the run measures,
    whatever its length, and the measured quantity is the chain's bend
    direction of R11 step 3, computed from the reported joint positions.
-2. `add_node_attachment` with `type: "ik_settings"` on the effector bone
-   succeeds and `get_node_details` reports the attachment (proves R21).
+2. `get_item_properties` on the effector bone lists `Ik.pole_target`,
+   `Ik.pole_angle` and `Ik.limit_x`, so a pole is authorable with no
+   preparation step (proves R21).
 3. `ik_drag` on the effector bone toward a reachable target returns a joint
    list whose consecutive distances equal the pre-drag segment lengths to
    within 1e-3, and reports `pole` as null. Record `b`, the bend direction of
    R11 step 3, and the effector's distance to the target.
 4. `create_node` a pole node, place it clear of the chain's current bend
-   direction, then `set_item_property` `pole_target` on the attachment to
-   that node's reference path and repeat the `ik_drag` of step 3 with the
-   same target. The signed angle about `a = normalize(p_effector - p_root)`
+   direction, then `set_item_property` `Ik.pole_target` on the effector bone
+   naming that node (its `reference_id` or its reference path) and repeat the
+   `ik_drag` of step 3 with the same target. The signed angle about `a = normalize(p_effector - p_root)`
    from the new `b` to `perp(p_pole)` (R11 steps 2 and 6) is **0 degrees,
    tolerance 2 degrees**, and the effector's distance to the target is
    unchanged from step 3 to within 1e-3.
@@ -408,54 +377,30 @@ against.
    10 degrees, proving the pole, not the start pose, chose the bend. The pole
    node of step 4 is placed to make this so: at least 30 degrees about `a`
    away from step 3's `b`.
-6. `set_item_property` `pole_angle` to `1.5707963` and repeat the drag: the
+6. `set_item_property` `Ik.pole_angle` to `1.5707963` and repeat the drag: the
    angle measured in step 4 becomes **90 degrees, tolerance 2 degrees**, with
    the sign of R11 step 5.
-7. `set_item_property` `pole_target` with `value: null` and repeat the drag:
-   the result equals step 3's to within 1e-3 per joint.
-8. Each of steps 2, 4, 6 and 7 is exactly one undo step: `get_undo_redo_stack`
-   grows by one entry per call, and each `ik_drag` adds exactly one more
-   (R18, R19, R22).
+7. `set_item_property` `Ik.pole_target` with `value: null` and repeat the
+   drag: the result equals step 3's to within 1e-3 per joint.
+8. Each `set_item_property` of steps 4, 6 and 7 is exactly one undo step:
+   `get_undo_redo_stack` grows by one entry per call, and each `ik_drag` adds
+   exactly one more (R18, R19, R22).
 9. With the pole parented below another node, so that it is not a top-level
-   name: `save_scene` and re-open. `get_item_properties` on the attachment
-   reports a `pole_target` resolving to the re-opened pole at the same
-   reference path and the same `pole_angle`; a save of the re-opened scene
-   writes the same `ik` object (R23, R24). The same file imported into
-   another scene with `import_gltf`, which places the file's nodes under an
-   import root, binds the pole to the **imported copy** of the pole node. A
-   file whose `ERHE_rig.ik` carries a `pole_target` the file has no node for
-   loads with a warning and no pole, and every other field intact.
+   name: `save_scene` and re-open. `get_item_properties` on the re-opened
+   effector bone reports an `Ik.pole_target` at the same reference path whose
+   `reference_id` is the re-opened pole node, and the same `Ik.pole_angle`
+   (R23, R24). The same file imported into another scene with `import_gltf`,
+   which places the file's nodes under an import root, binds the pole to the
+   **imported copy** of the pole node (R25).
 10. `editor_ik_solver_tests` passes, including every case of R16, and the
     pre-existing cases of `ik_settings.md` still pass unchanged.
 11. A chain with neither constraints nor a pole produces the same solved
     positions as before this slice (R15), checked by the unconstrained
     equivalence test of `ik_settings.md` section 3.
-12. Saving a scene that holds an `Ik_settings` attachment as USD logs the
+12. Saving a scene whose bones hold local `Ik.*` values as USD logs the
     warning of R26 and completes.
 
-## Implementation split
-
-Each commit builds, carries its own verification, and leaves the tree
-consistent.
-
-**Commit 1 - solver.** R11, R12, R13, R14 and the tests of R16, plus the
-`Ik_drag::apply` routing of R15. No attachment field and no UI yet:
-`Ik_chain::has_pole` is simply never set by `Ik_drag` at this point.
-Verification: `editor_ik_solver_tests` green, including the new cases; the
-editor builds and an IK drag on an imported rig behaves as before.
-
-**Commit 2 - attachment, drag integration, MCP.** R1 through R10, R17
-through R19, and the MCP work of R21 and R22. Verification: acceptance
-criteria 1 through 8, plus `Mcp_test` and the editor build.
-
-**Commit 3 - serialization and documentation.** R23, R24, R25, R26, the
-`ERHE_rig` spec page and schema, and this document's status. Verification: acceptance criteria 9 and 12,
-`scripts/scene_roundtrip_verify.py` at its current baseline, and
-`py -3 scripts/check_doc_links.py` reporting 0 problems.
-
-## Implementation status
-
-Implemented as specified. Key locations:
+## Key locations
 
 - Solver step - `ik_apply_pole` in `src/editor/transform/ik_solver.{hpp,cpp}`,
   beside `fabrik_solve`; `Ik_chain::has_pole` / `pole_position` /
@@ -464,27 +409,24 @@ Implemented as specified. Key locations:
   between the forward and backward passes of every iteration. Unit tests:
   `src/editor/transform/test/test_ik_solver.cpp` (`editor_ik_solver_tests`
   target, `ERHE_BUILD_TESTS=ON` trees).
-- Attachment fields - `Ik_settings::pole_target_property` (bridged over the
-  weak `m_pole_target`) and `Ik_settings::pole_angle_property`, with
-  `Ik_settings_data::pole_angle` the mirror
-  (`src/editor/scene/node_ik_settings.{hpp,cpp}`); both draw as generic
-  registered-property rows in Properties group "IK".
+- Values - `Ik::pole_target_property` and `Ik::pole_angle_property`
+  (`src/editor/scene/ik_properties.{hpp,cpp}`), read with
+  `get_ik_pole_target` and through `Ik_settings_data::pole_angle`; both draw
+  as generic registered-property rows in Properties group "IK".
 - Drag integration - `Ik_drag::discover_pole` (`ik_drag.cpp`) performs the
   scan of R5 and the admissibility tests of R8 once per drag and captures
   the pole's world position there.
 - MCP - the `ik_drag` tool (`mcp_server_scene_action.cpp`, schema in
-  `config/editor/mcp_tools.json`), which also lists `ik_settings` in the
-  `add_node_attachment` type enum.
-- Serialization - the `ik` object's `pole_target` and `pole_angle` keys
-  (the `ERHE_rig` spec page and schema under `doc/gltf_extensions/`);
-  written in
-  `gltf_extensions_export.cpp` from the `node_extensions_builder` this slice
-  adds to `erhe::gltf` (`gltf_fastgltf.{hpp,cpp}`), read in
-  `gltf_extensions_import.cpp` (`import_rigs`) through the parse's node
-  table. `save_scene_usd` (`parsers/usd.cpp`) logs the
-  count of nodes carrying IK settings, which USD has no form for.
+  `config/editor/mcp_tools.json`).
+- Serialization - `ERHE_node` `properties` and `property_node_refs`
+  (`doc/gltf_extensions/ERHE_node.md`), written in
+  `gltf_extensions_export.cpp` and `erhe::gltf`
+  (`gltf_fastgltf.{hpp,cpp}`, `gltf_item_flags.{hpp,cpp}`) and read in
+  `gltf_extensions_import.cpp`. `save_scene_usd` (`parsers/usd.cpp`) logs
+  the count of nodes holding IK values, which USD has no form for.
 - Acceptance verification - `scripts/ik_pole_verify.py`, criteria 1 to 9
-  and 12.
+  and 12; the reload legs also run in
+  `scripts/scene_roundtrip_verify.py`.
 
 Outstanding: interactive (windowed) verification of the Properties pole
 target picker and of a live gizmo drag with a pole.

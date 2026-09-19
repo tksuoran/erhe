@@ -446,12 +446,16 @@ table, see D2a), and references to other objects (D28).
   lights (`ERHE_light` `properties`) and cameras (`ERHE_camera`
   `properties`); materials still export field-by-field through their
   native glTF fields plus the `ERHE_material` extension (section 6). An
-  object value (D28) rides its native glTF carrier - a primitive's
-  material index, a material's `textureInfo` - and never the extras:
-  the primitive's is member-backed (D18), which the extras writer skips,
-  and materials write no extras (section 6). A content-library folder's
-  texture slot value (D30) rides `library_folders` by the referenced
-  item's name.
+  object value (D28) an owner maps natively rides that carrier - a
+  primitive's material index, a material's `textureInfo` - and not the
+  extras: the primitive's is member-backed (D18), which the extras writer
+  skips, and materials write no extras (section 6). A node-held object
+  reference rides the `properties` map as the referenced item's path, and a
+  reference naming a node of the same file additionally rides `ERHE_node`
+  `property_node_refs` as that node's glTF index, which is what the reader
+  resolves (`doc/gltf_extensions/ERHE_node.md`; `Ik.pole_target` is the
+  first user). A content-library folder's texture slot value (D30) rides
+  `library_folders` by the referenced item's name.
 - D15 Observers (R16). `Dependency_object::add_observer(property, callback)
   -> Observer_token` and `remove_observer(Observer_token)`; the token is a
   move-only RAII object that unsubscribes on destruction, and an object
@@ -1088,8 +1092,9 @@ table, see D2a), and references to other objects (D28).
   - Weak kind. `Weak_object_reference` (`Property_type::weak_object`,
     spelled `weak object` in text) holds a
     `std::weak_ptr<Dependency_object>` instead, for a reference whose
-    target outlives it or is owned elsewhere: reading it yields the
-    locked target, and an expired target reads as an empty reference.
+    target outlives it or is owned elsewhere (`Ik.pole_target`,
+    section 4.19): reading it yields the locked target, and an expired
+    target reads as an empty reference.
     Everything else of D28 is shared by the two kinds - the text form,
     the context parse, the row, the MCP get and set forms, the late glTF
     resolution, the editor write funnel - and generic code tells them
@@ -2069,56 +2074,61 @@ every migration:
   is the headless editor launched with stderr redirected to a file (the
   crash handler prints a symbolized backtrace there).
 
-### 4.19 Ik_settings
+### 4.19 Ik (attached to Node)
 
-`Ik_settings` (the editor's per-bone IK attachment,
-`doc/plans/rigging/ik_settings.md`) registers its fields as entry-stored
-properties, owner type `Ik_settings::property_owner_type()`, UI group
-`IK`: `lock_x`, `lock_y`, `lock_z`, `limit_x`, `limit_y`, `limit_z`
-(bool), `limit_min` and `limit_max` (vec3 radians, `angle_degrees`
-presentation, coerced per component to [-pi, 0] and [0, pi]), `stiffness`
-(vec3, coerced to [0, 0.99], `developer_only` because the solver does not
-read it yet), `rest_rotation` (quat) and `pole_angle` (float radians,
-`angle_degrees` presentation over a -180 to +180 drag range and no
-coercion, because the swivel angle is periodic). `pole_target`
-(`Object_reference`, `reference_item_types = erhe::Item_type::xformable`)
-is the one bridged field (D18), over a
-`std::weak_ptr<erhe::scene::Node>` member exactly as
-`Node_joint::connected_node` is: a pole is a reference, never an ownership
-edge, so it can name any node - a node of a closed scene simply stops
-locking, and `Ik_drag::begin` decides admissibility once per drag
-(`doc/plans/rigging/pole_target.md` R8). `set_pole_target` calls
-`invalidate_dependents` because it writes the bridged storage outside
-`set_value` (D22). Every field inherits (D30), so a
-node or a style holds `Ik_settings.limit_x` for the attachments below it,
-except `rest_rotation` and `pole_target`: the reference orientation of one
-bone and the pole of one chain have no meaning shared down a chain. The D30 rule does not look at `inherits`, so
-a holder still offers and stores `Ik_settings.rest_rotation`; the value
-stays on the holder and no attachment reads it (covered by the property
-test). The defaults are the `Ik_settings_data` initializers.
-`Ik_settings_data` is the mirror of the effective values, refreshed by
-`Ik_settings::on_property_changed`; readers (the IK drag's
-`resolve_constraint`) take `get_data()`, and
-writers go through `set_lock(axis)`, `set_limit(axis)`, `set_limit_min`,
-`set_limit_max`, `set_stiffness`, `set_rest_rotation` and
-`set_pole_angle`, which write
-local values (`Scene_commands::attach_new_ik_settings` captures the rest
-rotation through the setter before the attach). The pole node is not in
-the mirror - that record is plain values - so `Ik_drag::discover_pole`
-reads it through `get_pole_target()` while `pole_angle` comes from
-`get_data()`. The clone constructor copies the mirror and the weak pole
-reference, so a cloned or prefab-instantiated bone keeps naming the same
-pole node; the entries copy through D10. The generic section
-draws every row; the whole-struct `Ik_settings_change_operation` and the
-hand-written rows with their drag latch are gone, and
-`Properties::ik_settings_actions` keeps only "Set rest from current
-pose", which records a `Property_set_operation` of `rest_rotation`, the
-operation the generic rows and MCP `set_item_property` record.
-The values ride the node's `ERHE_node` `properties` map by their qualified
-names, and the pole reference rides `property_node_refs` beside it
-(`doc/gltf_extensions/ERHE_node.md`). Tests: `src/editor/transform/test/
-test_ik_settings_properties.cpp` (target `editor_ik_solver_tests`, which
-compiles `node_ik_settings.cpp` and links `erhe::scene`).
+`editor::Ik` (`src/editor/scene/ik_properties.{hpp,cpp}`) registers the
+per-bone IK values as attached properties (R7, D3), owner type `Ik`, holder
+type `erhe::scene::Node`, UI group `IK`, qualified `Ik.lock_x` ..
+`Ik.pole_angle`: `lock_x`, `lock_y`, `lock_z`, `limit_x`, `limit_y`,
+`limit_z` (bool), `limit_min` and `limit_max` (vec3 radians,
+`angle_degrees` presentation, coerced per component to [-pi, 0] and
+[0, pi]), `stiffness` (vec3, coerced to [0, 0.99], `developer_only`
+because the solver does not read it yet), `rest_rotation` (quat),
+`pole_target` and `pole_angle` (float radians, `angle_degrees`
+presentation over a -180 to +180 drag range and no coercion, because the
+swivel angle is periodic). `Ik` is a registration holder with static
+members only, not a `Dependency_object`, so its owner type sits directly
+under the root and serves only to qualify the names; `erhe::scene` names
+nothing of IK.
+
+Every one of them is registered with `inherits = false`: a bone's limits
+are its own, and a limit set shared by several bones is a Style holding the
+`Ik.*` values, which D30 makes possible on any item. Each carries the same
+`visible_when` - "the object is a Node carrying `Item_flags::bone`" - so
+the D12 listing rule offers the rows on bones, and a node that holds a
+local value still lists it. There is no attachment class, no catalog entry
+and no `can_add` gate.
+
+`pole_target` is the weak reference kind (D28,
+`reference_item_types = erhe::Item_type::xformable`), so a pole is a
+reference and never an ownership edge: it accepts any node, a node of a
+closed scene simply stops locking, and `Ik_drag::begin` decides
+admissibility once per drag (`doc/plans/rigging/pole_target.md` R8).
+`rest_rotation` has a per-object default (D31): the bone's bind-pose local
+rotation from `erhe::scene::get_bind_pose_local_rotation`, identity when
+the node and its parent are not joints of one skin - so the value is
+correct without any creation-time capture, and a local value overrides it.
+
+Readers go through `read_ik_settings(const erhe::scene::Node&) ->
+Ik_settings_data`, a plain record of one node's effective values that the
+IK drag's `resolve_constraint` fills once per chain joint, and through
+`get_ik_pole_target` / `set_ik_pole_target` for the reference, which the
+record does not hold. `has_local_ik_value` answers "does this node hold
+any local `Ik.*` value", which the USD writer counts because USD has no
+form for rig data.
+
+The generic section draws every row.
+`Properties::ik_actions` (`properties.cpp`, called from
+`item_diagnostics` for a bone node) adds the single "Set rest from current
+pose" action, which records a `Property_set_operation` of
+`Ik.rest_rotation` - the operation the generic rows and MCP
+`set_item_property` record. The values ride the node's `ERHE_node`
+`properties` map by their qualified names (D14), and the pole reference
+rides `property_node_refs` beside it
+(`doc/gltf_extensions/ERHE_node.md`). Tests:
+`src/editor/transform/test/test_ik_properties.cpp` (target
+`editor_ik_solver_tests`, which compiles `ik_properties.cpp` and links
+`erhe::scene`).
 
 ## 5. Out of scope
 
@@ -2138,6 +2148,8 @@ style layer is D25 and the reference layer is D33.
   parameters; shader graph parameters; editor per-item attached properties.
 - [plans/gltf_properties_extension.md](../plans/gltf_properties_extension.md) -
   the draft `ERHE_*_properties` extensions the serialization work needs.
+- [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
+  retiring the node attachments in favor of attached properties of the node.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

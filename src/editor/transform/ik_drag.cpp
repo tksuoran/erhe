@@ -55,9 +55,9 @@ constexpr int   c_max_iterations  = 16;
 
 // Per-joint constraint from the node's Ik.* values OR-ed with its
 // lock_rotation_* channel-lock flags. A joint whose locks and limits are
-// all off is unconstrained (doc/plans/rigging/ik_properties.md P6); a joint
-// constrained by channel locks alone takes the drag-start local rotation as
-// its rest orientation (doc section 2 frame note).
+// all off is unconstrained; a joint constrained by channel locks alone takes
+// the drag-start local rotation as its rest orientation (the rest-frame rule
+// of doc/plans/rigging/ik_settings.md section 3).
 [[nodiscard]] auto resolve_constraint(
     const erhe::scene::Node& joint,
     const quat&              local_rotation_before,
@@ -84,7 +84,7 @@ constexpr int   c_max_iterations  = 16;
 
     // The limits frame. A joint with any Ik lock or limit on takes the
     // effective Ik.rest_rotation - a local value, a style, or the per-object
-    // default, which is the bind pose and otherwise identity (P5): a fixed
+    // default, which is the bind pose and otherwise identity: a fixed
     // zero, so the limits do not drift with the pose. The drag-start local
     // rotation is the rest only for a joint constrained by channel-lock flags
     // alone, which is the section 2 frame note's case.
