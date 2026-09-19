@@ -759,13 +759,16 @@ auto Scene_views::open_four_view() -> Four_view*
             source_window = viewport_window;
         }
     }
-    if (!scene_root || !source_window) {
-        log_scene_view->warn("Four view: there is no viewport showing a scene to start from");
+    const std::shared_ptr<erhe::scene::Camera> source_camera = source ? source->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
+    if (!scene_root || !source_window || !source_camera) {
+        log_scene_view->warn("Four view: there is no viewport showing a scene through a camera to start from");
         return nullptr;
     }
 
-    // Frame the scene content: focus on the center of the mesh bounds, with
-    // the cameras outside the bounding sphere.
+    // Frame the scene content: the focus is the point ahead of the source
+    // camera at the distance of the mesh bounds center, the orthogonal views
+    // are sized to the bounds and their cameras sit outside the bounding
+    // sphere.
     erhe::math::Aabb bounds{};
     scene_root->get_scene().get_root_node()->for_each<erhe::scene::Mesh>(
         [&bounds](erhe::scene::Mesh& mesh) -> bool {
@@ -777,12 +780,13 @@ auto Scene_views::open_four_view() -> Four_view*
             return true;
         }
     );
-    const glm::vec3 focus       = bounds.is_valid() ? bounds.center() : glm::vec3{0.0f, 0.0f, 0.0f};
-    const float     radius      = bounds.is_valid() ? glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-3f) : 5.0f;
-    const float     view_height = 2.2f * radius;
-    const float     distance    = (4.0f * radius) + 1.0f;
+    const glm::vec3 center         = bounds.is_valid() ? bounds.center() : glm::vec3{0.0f, 0.0f, 0.0f};
+    const float     radius         = bounds.is_valid() ? glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-3f) : 5.0f;
+    const float     view_height    = 2.2f * radius;
+    const float     distance       = (4.0f * radius) + 1.0f;
+    const float     focus_distance = glm::max(glm::length(center - glm::vec3{source_camera->position_in_world()}), 0.1f * radius);
 
-    std::unique_ptr<Four_view> four_view = std::make_unique<Four_view>(scene_root, focus, view_height, distance);
+    std::unique_ptr<Four_view> four_view = std::make_unique<Four_view>(scene_root, source_camera, focus_distance, view_height, distance);
 
     const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
     std::array<std::string, Four_view::axis_count> window_titles;

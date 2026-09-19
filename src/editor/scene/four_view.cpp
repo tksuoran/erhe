@@ -59,13 +59,38 @@ void Four_view_link::unlink()
     m_four_view = nullptr;
 }
 
-Four_view::Four_view(const std::shared_ptr<Scene_root>& scene_root, const glm::vec3 focus, const float view_height, const float distance)
-    : m_scene_root {scene_root}
-    , m_focus      {focus}
-    , m_view_height{view_height}
-    , m_distance   {distance}
+namespace {
+
+// The point focus_distance ahead of the camera, along its view direction (-Z).
+[[nodiscard]] auto get_point_ahead(const erhe::scene::Camera& camera, const float focus_distance) -> glm::vec3
+{
+    const glm::mat4 world_from_node = camera.world_from_node();
+    const glm::vec3 position        = glm::vec3{world_from_node[3]};
+    const glm::vec3 forward         = -glm::normalize(glm::vec3{world_from_node[2]});
+    return position + (focus_distance * forward);
+}
+
+} // anonymous namespace
+
+Four_view::Four_view(
+    const std::shared_ptr<Scene_root>&          scene_root,
+    const std::shared_ptr<erhe::scene::Camera>& perspective_camera,
+    const float                                 focus_distance,
+    const float                                 view_height,
+    const float                                 distance
+)
+    : m_scene_root        {scene_root}
+    , m_perspective_camera{perspective_camera}
+    , m_focus_distance    {focus_distance}
+    , m_view_height       {view_height}
+    , m_distance          {distance}
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+    if (perspective_camera) {
+        m_focus            = get_point_ahead(*perspective_camera, m_focus_distance);
+        m_perspective_link = std::make_shared<Four_view_link>(*this, Four_view_axis::perspective);
+        perspective_camera->attach(m_perspective_link);
+    }
     for (std::size_t i = 0; i < axis_count; ++i) {
         const Four_view_axis axis = static_cast<Four_view_axis>(i);
         std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(c_camera_names[i]);
@@ -98,6 +123,20 @@ Four_view::~Four_view() noexcept
             link->unlink();
         }
     }
+    // The perspective camera is the user's own camera and outlives the four
+    // view: take the link off it again.
+    if (m_perspective_link) {
+        m_perspective_link->unlink();
+        const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
+        if (perspective_camera) {
+            perspective_camera->detach(m_perspective_link.get());
+        }
+    }
+}
+
+auto Four_view::get_perspective_camera() const -> std::shared_ptr<erhe::scene::Camera>
+{
+    return m_perspective_camera.lock();
 }
 
 auto Four_view::get_scene_root() const -> std::shared_ptr<Scene_root>
@@ -107,6 +146,9 @@ auto Four_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 
 auto Four_view::get_camera(const Four_view_axis axis) const -> std::shared_ptr<erhe::scene::Camera>
 {
+    if (axis == Four_view_axis::perspective) {
+        return m_perspective_camera.lock();
+    }
     return m_cameras[static_cast<std::size_t>(axis)].lock();
 }
 
@@ -146,9 +188,41 @@ void Four_view::place_camera(const Four_view_axis axis)
     camera->set_world_from_node(world_from_node);
 }
 
+void Four_view::place_orthogonal_cameras(const Four_view_axis except)
+{
+    for (std::size_t i = 0; i < axis_count; ++i) {
+        const Four_view_axis axis = static_cast<Four_view_axis>(i);
+        if (axis != except) {
+            place_camera(axis);
+        }
+    }
+}
+
+void Four_view::on_perspective_camera_moved()
+{
+    const std::shared_ptr<erhe::scene::Camera> camera = m_perspective_camera.lock();
+    if (!camera || (camera->get_scene() == nullptr)) {
+        return;
+    }
+    const glm::vec3 focus     = get_point_ahead(*camera, m_focus_distance);
+    const glm::vec3 offset    = focus - m_focus;
+    const float     tolerance = 1.0e-6f * glm::max(1.0f, m_view_height);
+    if (glm::dot(offset, offset) <= (tolerance * tolerance)) {
+        return;
+    }
+    m_focus = focus;
+    m_placing = true;
+    place_orthogonal_cameras(Four_view_axis::perspective);
+    m_placing = false;
+}
+
 void Four_view::on_camera_moved(const Four_view_axis axis)
 {
     if (m_placing) {
+        return;
+    }
+    if (axis == Four_view_axis::perspective) {
+        on_perspective_camera_moved();
         return;
     }
     const std::shared_ptr<erhe::scene::Camera> camera = get_camera(axis);
@@ -167,11 +241,14 @@ void Four_view::on_camera_moved(const Four_view_axis axis)
     }
     m_focus += offset;
     m_placing = true;
-    for (std::size_t i = 0; i < axis_count; ++i) {
-        const Four_view_axis other = static_cast<Four_view_axis>(i);
-        if (other != axis) {
-            place_camera(other);
-        }
+    place_orthogonal_cameras(axis);
+    // The perspective camera keeps looking at the focus from where it did:
+    // it moves by the same offset, orientation unchanged.
+    const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
+    if (perspective_camera && (perspective_camera->get_scene() != nullptr)) {
+        glm::mat4 world_from_node = perspective_camera->world_from_node();
+        world_from_node[3] += glm::vec4{offset, 0.0f};
+        perspective_camera->set_world_from_node(world_from_node);
     }
     m_placing = false;
 }
@@ -189,10 +266,15 @@ void Four_view::set_view_height(const float view_height)
 
 void Four_view::set_focus(const glm::vec3 focus)
 {
+    const glm::vec3 offset = focus - m_focus;
     m_focus = focus;
     m_placing = true;
-    for (std::size_t i = 0; i < axis_count; ++i) {
-        place_camera(static_cast<Four_view_axis>(i));
+    place_orthogonal_cameras(Four_view_axis::perspective);
+    const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
+    if (perspective_camera && (perspective_camera->get_scene() != nullptr)) {
+        glm::mat4 world_from_node = perspective_camera->world_from_node();
+        world_from_node[3] += glm::vec4{offset, 0.0f};
+        perspective_camera->set_world_from_node(world_from_node);
     }
     m_placing = false;
 }

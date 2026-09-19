@@ -461,11 +461,11 @@ namespace {
 
 [[nodiscard]] auto describe_four_view(const Four_view& four_view) -> json
 {
-    static constexpr const char* c_axis_names[Four_view::axis_count] = { "top", "front", "right" };
+    static constexpr const char* c_axis_names[Four_view::axis_count + 1] = { "top", "front", "right", "perspective" };
     const std::shared_ptr<Scene_root> scene_root = four_view.get_scene_root();
     const glm::vec3 focus = four_view.get_focus();
     json cameras = json::array();
-    for (std::size_t i = 0; i < Four_view::axis_count; ++i) {
+    for (std::size_t i = 0; i < (Four_view::axis_count + 1); ++i) {
         const std::shared_ptr<erhe::scene::Camera> camera = four_view.get_camera(static_cast<Four_view_axis>(i));
         if (!camera) {
             continue;

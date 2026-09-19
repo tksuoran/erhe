@@ -6962,7 +6962,7 @@
     "name": "debug_imgui_mouse"
   },
   {
-    "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The orthogonal views share one focus point and one zoom: moving one camera in its view plane moves the other two, and zooming one zooms all three; their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
+    "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -6971,7 +6971,7 @@
     "name": "open_four_view"
   },
   {
-    "description": "List the four views (see open_four_view): scene name, shared focus point, shared view_height (orthogonal view height in world units) and the three orthogonal cameras with axis (top / front / right), node id, name, world position and ortho_height.",
+    "description": "List the four views (see open_four_view): scene name, shared focus point, shared view_height (orthogonal view height in world units) and the cameras with axis (top / front / right / perspective), node id, name, world position and ortho_height.",
     "inputSchema": {
       "properties": {},
       "required": [],

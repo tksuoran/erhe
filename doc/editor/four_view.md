@@ -18,15 +18,17 @@ and the perspective viewport it was opened from.
 `Scene_views::open_four_view()` is reached from Window > Open Four View, the
 command `Scene_views.open_four_view` and the MCP tool `open_four_view`. The
 source viewport is the last hovered viewport, else the only viewport; it has
-to show a scene.
+to show a scene through a camera. That camera is the four view's perspective
+camera.
 
 Opening creates three cameras named Top, Front and Right under the scene's
 root node. They are orthogonal (`orthogonal_vertical`), flagged `content |
 show_in_ui | exclude_from_prefab | session_only` like the default camera
 injected on open: they appear in the Hierarchy and are left out of every save.
-The focus point is the center of the active meshes' world bounds, the view
-height 2.2 bounding-sphere radii, and each camera sits 4 radii + 1 from the
-focus along its axis. A `Viewport_scene_view` and a `Viewport_window` are
+The focus point lies ahead of the perspective camera at the distance of the
+center of the active meshes' world bounds (the focus distance, fixed for the
+life of the four view), the view height is 2.2 bounding-sphere radii, and
+each orthogonal camera sits 4 radii + 1 from the focus along its axis. A `Viewport_scene_view` and a `Viewport_window` are
 created per camera.
 
 ## Docking
@@ -45,23 +47,31 @@ window leaves the new windows undocked. The cross splitter is described in
 ## Linking
 
 `Four_view` (`src/editor/scene/four_view.hpp`) holds the shared state: focus
-point, view height (the zoom) and camera distance. Each orthogonal camera
-sits at `focus + axis * distance` looking at the focus.
+point, focus distance, view height (the zoom) and orthogonal camera distance.
+The focus is the point `focus distance` ahead of the perspective camera; each
+orthogonal camera sits at `focus + axis * distance` looking at the focus.
 
-- Focus. Each camera carries a `Four_view_link` node attachment whose
-  `handle_node_transform_update()` reports every transform write of the
-  camera - fly camera, gizmo, Properties, undo - to
-  `Four_view::on_camera_moved()`. The part of the camera's offset that lies
-  in its view plane moves the focus, and the other two cameras are placed for
-  the new focus. Movement along the view axis changes nothing an orthogonal
-  view shows and leaves the focus alone.
+- Change notification. Each of the four cameras carries a `Four_view_link`
+  node attachment whose `handle_node_transform_update()` reports every
+  transform write of the camera - fly camera, gizmo, Properties, undo - to
+  `Four_view::on_camera_moved()`. The link on the perspective camera (the
+  user's own camera) is detached again by `~Four_view`.
+- Perspective camera moved or turned. The focus becomes the point ahead of
+  it and the three orthogonal cameras are placed for the new focus.
+- Orthogonal camera moved. The part of its offset that lies in its view
+  plane moves the focus; the other two orthogonal cameras are placed for the
+  new focus and the perspective camera is translated by the same offset,
+  orientation unchanged. Movement along the view axis changes nothing an
+  orthogonal view shows and leaves the focus alone.
 - Zoom. `Fly_camera_tool::zoom()` scales the size of the view volume for an
   orthogonal camera (`0.9 ^ delta`). For a four view camera it calls
   `Four_view::set_view_height()`, which sets `ortho_height` on all three
   cameras.
 - Rotation. `Fly_camera_tool::is_rotation_locked()` makes turn, tumble and
   the rotation axes no-ops for a four view camera.
-- The perspective viewport is outside the link and navigates freely.
+- The perspective camera keeps its full navigation (fly, turn, tumble, zoom);
+  the link follows the camera the source viewport showed when the four view
+  was opened.
 
 ## Lifetime
 
@@ -77,7 +87,8 @@ by placement until an undo returns it.
 
 Headless, over MCP: `open_four_view`, `capture_screenshot` for the layout;
 `select_items` a four view camera by name and `transform_selection` it, then
-`get_four_views` shows the focus and the other two cameras following, and
-`undo` returns all three; `close_scene` logs a clean `scene-close check`.
+`get_four_views` shows the focus and the other cameras following, and
+`undo` returns them - once for an orthogonal camera, once for the perspective
+camera; `close_scene` logs a clean `scene-close check`.
 Wheel zoom, middle-drag pan and the rotation lock run through window input
 events and are verified interactively.
