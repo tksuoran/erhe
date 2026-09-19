@@ -1,5 +1,7 @@
 §MBEL:5.0
 
+[TASK::ortho-camera-gizmo]{DONE+USER-VERIFIED-2026-09-19;4-commits;detail=activeContext}
+
 [TASK::style-library]{DONE-2026-09-04}
 ✓style-source-generalization{9132674f2}+Style-item+style-property{a88dd405c}+persistence+docs
 ✓node-holds-attachment-values+Light-inherits+Create-Style/create_style+node-style-persistence{ff0f28de6..8d1b12a57}
