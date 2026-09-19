@@ -38,3 +38,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - The renderer uses indirect draw calls with a ring buffer strategy for vertex/index/draw-parameter data.
 - Font atlas is shared across all hosts.
 - The `windows/` subdirectory has reusable utility windows (performance, log, pipeline inspector, graph plotter, framebuffer viewer).
+
+## Future work
+
+- [Cross splitter for four docked windows](../plans/cross_splitter.md)

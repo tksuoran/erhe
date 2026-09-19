@@ -260,6 +260,7 @@ Every document states its standing in its first ten lines:
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
+- [plans/cross_splitter.md](plans/cross_splitter.md) (proposed): Cross splitter for four docked windows (generic Dear ImGui docking feature)
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (proposed): Positive crash signal for harness-run apps
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
