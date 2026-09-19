@@ -237,6 +237,7 @@ private:
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
     auto action_create_node     (const nlohmann::json& args) -> std::string;
     auto action_create_light    (const nlohmann::json& args) -> std::string;
+    auto action_create_skin     (const nlohmann::json& args) -> std::string;
     auto action_edit_light      (const nlohmann::json& args) -> std::string;
     auto action_edit_camera     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;

@@ -579,6 +579,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "create_shape",                   &Mcp_server::action_create_shape                  },
         { "create_node",                    &Mcp_server::action_create_node                   },
         { "create_light",                   &Mcp_server::action_create_light                  },
+        { "create_skin",                    &Mcp_server::action_create_skin                   },
         { "edit_light",                     &Mcp_server::action_edit_light                    },
         { "edit_camera",                    &Mcp_server::action_edit_camera                   },
         { "toggle_physics",                 &Mcp_server::action_toggle_physics                },

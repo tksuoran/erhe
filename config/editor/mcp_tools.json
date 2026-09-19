@@ -1392,6 +1392,60 @@
     "name": "create_light"
   },
   {
+    "description": "Build one rigidly skinned mesh from mesh prims already in the scene (undoable, executes on the next editor frame). Each entry of 'parts' names a mesh prim and the joint node that drives every vertex of that mesh: the part geometries are merged into a single Geometry with their world transforms baked in, and each part's vertices get joint_indices_0 = (joint, 0, 0, 0) and joint_weights_0 = (1, 0, 0, 0). The skin's joints are the distinct joint nodes in order of first appearance in 'parts'. The result is one new Mesh prim with one primitive, built with the skinned vertex format, carrying a Skin whose inverse bind matrices are the inverses of the joint world transforms at the time of the call; the part mesh prims are removed from the scene. Rigid weights only - the weight paint tool authors smooth weights. Refuses a part that carries no mesh, a part that is already skinned, an empty 'parts' array, and a joint in another scene.",
+    "inputSchema": {
+      "properties": {
+        "material": {
+          "description": "Name of the material for the new mesh (default: the first part's material, else the first material of the scene's content library)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name for the new skinned mesh prim; the skin is named '<name> skin' (default 'skinned mesh')",
+          "type": "string"
+        },
+        "parent_node_id": {
+          "description": "Parent prim ID for the new mesh (default: scene root)",
+          "type": "integer"
+        },
+        "parent_node_name": {
+          "description": "Parent prim name (alternative to parent_node_id)",
+          "type": "string"
+        },
+        "parts": {
+          "description": "Mesh prim / joint node pairs, at least one",
+          "items": {
+            "properties": {
+              "joint_node_id": {
+                "description": "ID of the node that drives every vertex of this part",
+                "type": "integer"
+              },
+              "node_id": {
+                "description": "ID of the mesh prim contributing its geometry",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "joint_node_id",
+              "node_id"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parts",
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "create_skin"
+  },
+  {
     "description": "Edit an existing light in place (by light_id or light_name). Changing 'type' re-buckets the light for shadow rendering. 'position' moves the light's node. Only the provided fields change.",
     "inputSchema": {
       "properties": {

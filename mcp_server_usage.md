@@ -358,6 +358,42 @@ Parameters:
 
 Returns: `{node_name, node_id, brush, material, position, scale}`
 
+### create_skin
+
+Build ONE rigidly skinned mesh out of mesh prims that are already in the scene
+(undoable; the compound operation executes on the next editor frame). Each
+entry of `parts` names a mesh prim and the joint node that drives every vertex
+of that mesh: the part geometries are merged into a single `Geometry` with
+their world transforms baked in, and each part's vertices get
+`joint_indices_0 = (joint, 0, 0, 0)` and `joint_weights_0 = (1, 0, 0, 0)`. The
+skin's joints are the distinct joint nodes in order of first appearance in
+`parts`, its inverse bind matrices are the inverses of the joint world
+transforms at the time of the call, and it names no skeleton (the transform
+root is computed from the joints). The new mesh is built with the skinned
+vertex format, so the GPU buffer carries the joint streams; the part mesh
+prims are removed from the scene.
+
+Rigid weights only - the weight paint tool authors smooth weights. Refuses a
+part that carries no mesh, a part that is already skinned, an empty `parts`
+array, an unknown id and a joint in another scene.
+
+```bash
+py -3 scripts/mcp_call.py create_skin b64:<base64 of {"scene_name":"Scene 1","name":"arm","parent_node_id":5535,"parts":[{"node_id":5540,"joint_node_id":5536},{"node_id":5545,"joint_node_id":5537}]}>
+```
+
+Parameters:
+- `scene_name` (required) - target scene
+- `parts` (required) - `[{node_id, joint_node_id}, ...]`, at least one
+- `name` (optional) - name of the new mesh prim; the skin is `"<name> skin"`
+- `parent_node_id` / `parent_node_name` (optional) - parent prim, default scene root
+- `material` (optional) - material name, default the first part's material
+
+Returns: `{node_name, node_id, skin_name, skin_id, joint_count, vertex_count,
+material, joints: [{joint_index, node_name, node_id, vertex_count}], queued}`.
+
+`get_node_details` reports `skinned`, and for a skinned mesh also `skin_name`,
+`skin_id`, `joint_count` and the `joints` list.
+
 ### select_variant
 
 Select one variant of one variant set: the chosen variant's material bindings

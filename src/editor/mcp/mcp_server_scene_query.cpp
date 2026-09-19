@@ -71,6 +71,7 @@
 #include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -551,7 +552,28 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 {"min", json::array({aabb_world.min.x, aabb_world.min.y, aabb_world.min.z})},
                 {"max", json::array({aabb_world.max.x, aabb_world.max.y, aabb_world.max.z})}
             };
-            mesh_json["skinned"] = static_cast<bool>(mesh->skin);
+        }
+        // Reported whether or not the bounds are valid: whether a mesh is
+        // skinned is a property of the mesh, not of its posed bounds.
+        mesh_json["skinned"] = static_cast<bool>(mesh->skin);
+        if (mesh->skin) {
+            const erhe::scene::Skin_data& skin_data = mesh->skin->skin_data;
+            mesh_json["skin_name"]   = mesh->skin->get_name();
+            mesh_json["skin_id"]     = mesh->skin->get_id();
+            mesh_json["joint_count"] = skin_data.joints.size();
+            json joints_json = json::array();
+            for (const std::shared_ptr<erhe::scene::Node>& joint : skin_data.joints) {
+                if (joint) {
+                    joints_json.push_back({{"node_name", joint->get_name()}, {"node_id", joint->get_id()}});
+                } else {
+                    joints_json.push_back(json::object());
+                }
+            }
+            mesh_json["joints"] = joints_json;
+            if (skin_data.skeleton) {
+                mesh_json["skeleton_node_name"] = skin_data.skeleton->get_name();
+                mesh_json["skeleton_node_id"]   = skin_data.skeleton->get_id();
+            }
         }
         // Layer diagnostics: layer_id is the mesh's target layer;
         // in_layer_id is the layer that actually contains it (they
