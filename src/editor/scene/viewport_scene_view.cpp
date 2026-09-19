@@ -266,6 +266,15 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             m_context.content_wide_line_renderer->begin_frame();
         }
 
+        // Sent before the tools record their geometry: subscribers refresh
+        // per-view state (the transform gizmo's view scale) that
+        // render_viewport_tools() reads.
+        m_context.app_message_bus->render_scene_view.send_message(
+            Render_scene_view_message{
+                .scene_view = this
+            }
+        );
+
         m_context.tools        ->render_viewport_tools(context);
         m_context.app_rendering->render_viewport_renderables(context);
 
@@ -510,12 +519,6 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
 
     // TODO This would be? needed for basic (non-ImGui) viewports?
     // encoder.set_scissor_rect(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
-
-    m_context.app_message_bus->render_scene_view.send_message(
-        Render_scene_view_message{
-            .scene_view = this
-        }
-    );
 
     // When post-processing is enabled the overlay (tool / rendertarget) meshes
     // are drawn later by Viewport_overlay_node, after post-processing, sharing
