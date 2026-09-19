@@ -814,10 +814,20 @@ void Hotbar::update_node_transform()
             const erhe::scene::Projection::Fov_sides fov = projection->get_fov_sides(viewport);
             const float depth = -m_z; // m_z < 0 (forward along -Z); depth is the forward distance
 
+            // View volume extents at the hotbar depth, in meters from the
+            // camera axis. A perspective projection gives its sides as angles;
+            // an orthogonal projection gives them as the extents themselves,
+            // the same at every depth.
+            const bool  orthogonal = projection->is_orthogonal();
+            const float extent_left  = orthogonal ? fov.left  : (depth * std::tan(fov.left ));
+            const float extent_right = orthogonal ? fov.right : (depth * std::tan(fov.right));
+            const float extent_up    = orthogonal ? fov.up    : (depth * std::tan(fov.up   ));
+            const float extent_down  = orthogonal ? fov.down  : (depth * std::tan(fov.down ));
+
             // Vertical extent of the frustum at the hotbar depth, in meters. Both
             // the constant-size scaling and the padding are expressed as fractions
             // of this, so they stay a constant on-screen size regardless of FOV.
-            const float frustum_full_height = depth * (std::tan(fov.up) - std::tan(fov.down));
+            const float frustum_full_height = extent_up - extent_down;
             const float padding_offset      = m_padding * frustum_full_height;
 
             float half_height = 0.0f;
@@ -836,8 +846,8 @@ void Hotbar::update_node_transform()
                 const float base_width  = (m_quad_view != nullptr) ? m_quad_view->get_local_width()  : 0.0f;
                 const float base_height = (m_quad_view != nullptr) ? m_quad_view->get_local_height() : 0.0f;
                 if ((base_width > 0.0f) && (base_height > 0.0f)) {
-                    const float space_right = depth * std::tan(fov.right) - m_x;
-                    const float space_left  = m_x - depth * std::tan(fov.left);
+                    const float space_right = extent_right - m_x;
+                    const float space_left  = m_x - extent_left;
                     const float max_width   = 2.0f * std::min(space_left, space_right);
                     const float max_height  = std::max(max_width, 0.0f) * (base_height / base_width);
                     physical_height = std::min(physical_height, max_height);
@@ -848,8 +858,8 @@ void Hotbar::update_node_transform()
                 }
             }
             m_y = (m_anchor == Hotbar_anchor::top)
-                ? (depth * std::tan(fov.up)   - half_height - padding_offset)
-                : (depth * std::tan(fov.down) + half_height + padding_offset);
+                ? (extent_up   - half_height - padding_offset)
+                : (extent_down + half_height + padding_offset);
         }
 
         // Lookat creates transform which looks along negative Z.
