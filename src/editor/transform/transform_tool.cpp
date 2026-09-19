@@ -1214,6 +1214,11 @@ void Transform_tool::clear_analytic_hover(Scene_view& scene_view)
     }
 }
 
+void Transform_tool::debug_set_hover_handle(const Handle handle)
+{
+    m_hover_handle = handle;
+}
+
 void Transform_tool::clear_hover_state()
 {
     m_hover_state_scene_view = nullptr;

@@ -251,6 +251,9 @@ public:
     // For Handle_visualizations
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;
+    // Verification hook (MCP debug_set_transform_hover): handle hover comes
+    // from the pointer, which a headless run does not have.
+    void debug_set_hover_handle(Handle handle);
     // World-space point on the hovered gizmo handle (analytic pick or
     // box-face hit), or nullopt when no handle is hovered. Richer than the
     // gizmo's tool_slot entry: the XR controller ray stops here, which

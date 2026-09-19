@@ -39,6 +39,8 @@
 #include "texture_graph/graph_texture.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/selection_tool.hpp"
+#include "transform/handle_enums.hpp"
+#include "transform/transform_tool.hpp"
 #include "windows/editor_windows.hpp"
 #include "windows/item_tree_window.hpp"
 #include "windows/properties.hpp"
@@ -397,6 +399,24 @@ auto Mcp_server::action_debug_set_item_tree_hover(const json& args) -> std::stri
         {"hovered", found_item->get_name()},
         {"uid",     found_item->get_id()}
     }).dump();
+}
+
+// debug_set_transform_hover - forces the transform gizmo's hovered handle,
+// which otherwise only the pointer sets, so a headless run can capture the
+// hover highlight.
+auto Mcp_server::action_debug_set_transform_hover(const json& args) -> std::string
+{
+    Transform_tool* transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return make_error_content("Transform tool is not available");
+    }
+    const int handle_value = args.value("handle", 0);
+    if ((handle_value < 0) || (handle_value > static_cast<int>(Handle::e_handle_rotate_free))) {
+        return make_error_content("handle is out of range");
+    }
+    const Handle handle = static_cast<Handle>(handle_value);
+    transform_tool->debug_set_hover_handle(handle);
+    return make_json_content({{"handle", handle_value}, {"name", c_str(handle)}}).dump();
 }
 
 }
