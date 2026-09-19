@@ -297,3 +297,10 @@ verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-
 ?left::stiffness+Phase-1-feel-questions{need-user-hands-on}->Phase-3
 ?user-interactive-deferred{ik_settings-slice;pole-picker+angle-rows;live-drag-with-pole;Move-tool-Effector-Orientation-combo;chain/root/pole-visualization-during-drag}
 ⚡interactive-pass{doc/plans/rigging/interactive_test_pass.md;0-3-PASS;next=section-4;user-resumes-2026-09-19}
+
+[TASK::ik-as-node-properties]{DONE-2026-09-19;via-harness;4-coders+1-scout}
+✓commit-1{7f4739a90:erhe::property-Weak_object_reference;property-tests-140}
+✓commit-2{82b9db1be:Ik.*-attached-properties-on-Node+bind-pose-rest-default+Ik_settings/ERHE_rig-code-removed;ik-solver-tests-29}
+✓commit-3{2beea77db:ERHE_node.property_node_refs+by-name-resolution-after-node-inserts;roundtrip-426/429}
+✓commit-4{5387c7e30:docs+plans/node_attachments_to_properties.md}
+?user-interactive{interactive_test_pass.md-resume-note-at-section-4}
