@@ -612,6 +612,41 @@ void apply_persistent_flags_and_properties(
     }
 }
 
+// The "property_node_refs" map of an ERHE_node payload
+// (doc/gltf_extensions/ERHE_node.md): qualified property name -> the glTF
+// node index of the item that node-held object reference names. The index
+// names the copy this file carries, so it is the form that survives an
+// import below an import root; the reference path in "properties" is the
+// readable form and the fallback for a target outside the file's nodes.
+// Applied before the "properties" map and the "flags" list, so a seal the
+// flags carry lands after it; `out_resolved_names` collects the names, for
+// which the path form's late by-name resolution is then dropped.
+void apply_node_reference_properties(
+    erhe::Item_base&                                item,
+    const simdjson::dom::object&                    extension_object,
+    const std::vector<std::shared_ptr<erhe::Typed>>& prims,
+    std::vector<std::string>&                       out_resolved_names
+)
+{
+    simdjson::dom::object references_object;
+    if (extension_object.at_key("property_node_refs").get_object().get(references_object) != simdjson::SUCCESS) {
+        return;
+    }
+    for (const simdjson::dom::key_value_pair member : references_object) {
+        uint64_t node_index{0};
+        if (member.value.get_uint64().get(node_index) != simdjson::SUCCESS) {
+            continue;
+        }
+        if ((node_index >= prims.size()) || !prims[node_index]) {
+            log_gltf->warn("'{}': property '{}' names glTF node {}, which the file does not hold", item.get_name(), member.key, node_index);
+            continue;
+        }
+        if (apply_item_node_reference_property(item, member.key, prims[static_cast<std::size_t>(node_index)])) {
+            out_resolved_names.emplace_back(member.key);
+        }
+    }
+}
+
 // A "properties" object is the item's complete local set: every registered
 // value property of the item's own chain that holds a local value the map
 // does not name is cleared, so a value the core glTF fields carried (a
@@ -4196,6 +4231,11 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                             result.node_instance_overrides.emplace(i, std::move(overrides));
                         }
                     }
+                    // The object references the payload resolves by glTF
+                    // node index, before the halves below: the "properties"
+                    // map's path form for the same name is then dropped.
+                    std::vector<std::string> index_resolved_properties;
+                    apply_node_reference_properties(*prim, extension_object, result.prims, index_resolved_properties);
                     // A Mesh prim is the node AND the mesh of the payload, so
                     // both halves reach it in one call and the seal lands last.
                     const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node.get()) : nullptr;
@@ -4211,6 +4251,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                             apply_persistent_flags_and_properties(*mesh, extension_object, {Item_payload_half{"mesh_flags", "mesh_properties"}}, result.unresolved_object_properties);
                         }
                     }
+                    drop_unresolved_object_properties(result.unresolved_object_properties, *prim, index_resolved_properties);
                 } else if ((extension_name == "ERHE_light") && node) {
                     const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_light(node.get());
                     if (light) {
@@ -6212,7 +6253,23 @@ private:
     // hooks inside KHR_lights_punctual would need extra fork surface; erhe
     // lights are 1:1 with their node). Replaces the legacy erhe_flags node
     // extras writer; the extras are still parsed for older files.
-    std::unordered_map<std::size_t, std::string> m_internal_node_extensions;
+    //
+    // The members are assembled here but closed in the finalization pass:
+    // an object-reference local value of the node names another item of the
+    // same file, and the glTF node index of that item is only known once
+    // every node is emitted. The index is written beside the reference path
+    // as "property_node_refs" (doc/gltf_extensions/ERHE_node.md) and is what
+    // the reader resolves: the path names the item in the scene the file was
+    // saved from, which is not where the item sits once the file is imported
+    // below an import root.
+    class Node_extension_payload
+    {
+    public:
+        std::string                                    erhe_node_members; // inside ERHE_node's braces
+        std::string                                    trailing_members;  // ",\"ERHE_light\":{...}"
+        std::vector<Item_object_reference_value>       node_references;
+    };
+    std::unordered_map<std::size_t, Node_extension_payload> m_internal_node_extensions;
     void record_node_extensions(
         const erhe::Typed&                         erhe_node,
         const std::size_t                          gltf_node_index,
@@ -6222,7 +6279,7 @@ private:
     )
     {
         std::string members = fmt::format(
-            "\"ERHE_node\":{{\"flags\":{},\"properties\":{}",
+            "\"flags\":{},\"properties\":{}",
             persistent_item_flags_to_json(erhe_node.get_flag_bits()),
             item_local_properties_to_json(erhe_node)
         );
@@ -6257,9 +6314,9 @@ private:
             );
         }
         members += extra_erhe_node_members;
-        members += "}";
+        std::string trailing;
         if (erhe_light) {
-            members += fmt::format(
+            trailing = fmt::format(
                 ",\"ERHE_light\":{{\"cast_shadow\":{},\"infinite_range\":{},\"flags\":{},\"properties\":{}}}",
                 erhe_light->get_cast_shadow() ? "true" : "false",
                 (erhe_light->get_range() <= 0.0f) ? "true" : "false",
@@ -6267,7 +6324,14 @@ private:
                 item_local_properties_to_json(*erhe_light)
             );
         }
-        m_internal_node_extensions.emplace(gltf_node_index, std::move(members));
+        m_internal_node_extensions.emplace(
+            gltf_node_index,
+            Node_extension_payload{
+                .erhe_node_members = std::move(members),
+                .trailing_members  = std::move(trailing),
+                .node_references   = item_local_object_references(erhe_node)
+            }
+        );
     }
 
     auto process_light(const erhe::scene::Light* erhe_light) -> std::size_t
@@ -7225,7 +7289,36 @@ auto Gltf_exporter::export_gltf() -> std::string
         for (const auto& [key, extension_members] : m_geometry_primitive_extensions) {
             merge_extension_members(export_extras_context.mesh_primitive_extensions[key], extension_members);
         }
-        for (const auto& [index, extension_members] : m_internal_node_extensions) {
+        for (const auto& [index, payload] : m_internal_node_extensions) {
+            // The node indices of the items the node's object-reference
+            // values name, now that every node is emitted. A target outside
+            // this export has no index: the reference path alone travels,
+            // and the reader falls back to resolving it by name.
+            std::string node_reference_members;
+            const char* node_reference_separator = "";
+            for (const Item_object_reference_value& reference : payload.node_references) {
+                const erhe::scene::Node* const target_node = dynamic_cast<const erhe::scene::Node*>(reference.target.get());
+                if (target_node == nullptr) {
+                    continue; // a content-library item: resolved by name
+                }
+                const auto target_it = m_erhe_node_to_gltf_node_index.find(target_node);
+                if (target_it == m_erhe_node_to_gltf_node_index.end()) {
+                    log_gltf->warn(
+                        "glTF export: property '{}' names node '{}', which is outside the exported asset - written by path only",
+                        reference.name, target_node->get_name()
+                    );
+                    continue;
+                }
+                node_reference_members += node_reference_separator;
+                node_reference_members += fmt::format("\"{}\":{}", reference.name, target_it->second);
+                node_reference_separator = ",";
+            }
+            std::string extension_members = fmt::format("\"ERHE_node\":{{{}", payload.erhe_node_members);
+            if (!node_reference_members.empty()) {
+                extension_members += fmt::format(",\"property_node_refs\":{{{}}}", node_reference_members);
+            }
+            extension_members += "}";
+            extension_members += payload.trailing_members;
             merge_extension_members(export_extras_context.node_extensions[index], extension_members);
         }
         for (const auto& [index, extension_members] : m_internal_camera_extensions) {

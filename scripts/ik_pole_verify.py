@@ -407,18 +407,22 @@ def main():
         reopened = load_scene_file(client, first_path)
         opened.append(reopened)
         after_state = pole_state(client, bone_id(client, reopened, args.effector))
-        # The angle rides ERHE_node.properties and comes back; making the
-        # pole REFERENCE resolve through the same map is the commit that
-        # owns P8 of doc/plans/rigging/ik_properties.md, so this is reported
-        # rather than checked until then.
+        # Both ride the node's ERHE_node payload: the angle as a property
+        # value, the pole as a property value plus the node index that names
+        # the file's own copy of the pole (P8 of
+        # doc/plans/rigging/ik_properties.md).
         check_true(
             "9a pole_angle survives save and re-open",
             after_state.get("pole_angle") == before_state["pole_angle"],
             f"before={before_state} after={after_state}",
         )
-        print(
-            "  [PENDING P8] 9a pole_target after save and re-open: "
-            f"{after_state.get('pole_target')!r} (before {before_state['pole_target']!r})"
+        reopened_pole_id = client.call("get_node_details", {"scene_name": reopened, "node_name": "ik_pole"})["id"]
+        check_true(
+            "9a pole_target survives save and re-open",
+            (after_state.get("pole_target") == before_state["pole_target"])
+            and (after_state.get("reference_id") == reopened_pole_id),
+            f"path={after_state.get('pole_target')!r} (before {before_state['pole_target']!r}), "
+            f"reference_id={after_state.get('reference_id')} (re-opened pole id={reopened_pole_id})",
         )
 
         # The same file IMPORTED into another scene: import_gltf places the
@@ -438,10 +442,13 @@ def main():
             imported_state.get("pole_angle") == before_state["pole_angle"],
             f"pole_angle={imported_state.get('pole_angle')!r}",
         )
-        print(
-            "  [PENDING P8] 9e imported pole reference_id="
-            f"{imported_state.get('reference_id')} (imported pole id={imported_pole_id}) "
-            f"path={imported_state.get('pole_target')!r}"
+        # The imported COPY of the pole, not a same-named node of another
+        # scene: the reference is resolved by the file's own node index.
+        check_true(
+            "9e an imported file's pole names the imported pole node",
+            imported_state.get("reference_id") == imported_pole_id,
+            f"reference_id={imported_state.get('reference_id')} (imported pole id={imported_pole_id}), "
+            f"path={imported_state.get('pole_target')!r}",
         )
 
         # --- criterion 12: a USD save names the IK settings it drops (R26) ---

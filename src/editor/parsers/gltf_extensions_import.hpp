@@ -101,6 +101,19 @@ void import_gltf_editor_state(
     std::vector<std::shared_ptr<Operation>>& operations
 );
 
+// The object-reference local values of a "properties" map that named an
+// item by path and did not resolve during the parse
+// (Gltf_data::unresolved_object_properties): resolved by name in the scene.
+// Runs AFTER the imported nodes enter the scene - separately from
+// import_gltf_editor_state, whose operations all run before that - so a
+// name that belongs to a node of the file is found. A reference an
+// ERHE_node "property_node_refs" index already resolved is not here.
+void append_unresolved_object_property_operations(
+    const erhe::gltf::Gltf_data&             gltf_data,
+    const std::shared_ptr<Scene_root>&       scene_root,
+    std::vector<std::shared_ptr<Operation>>& operations
+);
+
 // ERHE_scene library_folders: the tree position of every resource the file
 // places somewhere other than its kind scope (doc/editor/content_library_folders.md
 // D5/D6). A saved path may name any prim of the scene tree (C5), so this runs

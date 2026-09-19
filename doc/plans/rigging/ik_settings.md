@@ -358,9 +358,8 @@ formulation adapted to swing/twist limits:
   chain stays inherited after a reload).
   Absent fields take defaults on import (forward compatibility); unknown
   fields are ignored with a log warning.
-- Documentation set, mirroring `ERHE_layout`: spec page
-  `doc/gltf_extensions/ERHE_rig.md`, schema
-  `doc/gltf_extensions/schema/ERHE_rig.schema.json`, a table row in
+- Documentation set, mirroring `ERHE_layout`: an `ERHE_rig` spec page and
+  schema under `doc/gltf_extensions/`, a table row in
   `doc/gltf_extensions/README.md`, and the extension inventory tables in
   `doc/editor/scene_serialization.md`.
 - Channel-lock flags serialize as flag names through the existing
@@ -487,8 +486,8 @@ Implemented as specified. Key locations:
   route the chain into the constrained solver - it would be a no-op that
   changed unreachable-target behavior); constrained write-back sets
   solver-produced local rotations directly.
-- Serialization - `ERHE_rig` (spec `doc/gltf_extensions/ERHE_rig.md`,
-  schema `doc/gltf_extensions/schema/ERHE_rig.schema.json`); export in
+- Serialization - `ERHE_rig` (its spec page and schema under
+  `doc/gltf_extensions/`); export in
   `gltf_extensions_export.cpp`, import in `gltf_extensions_import.cpp`
   (`import_rigs`, per-element JSON type guards, range clamps).
 - Properties UI - generic registered-property rows (group "IK"); the

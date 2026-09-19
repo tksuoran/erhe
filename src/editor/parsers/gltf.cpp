@@ -1298,7 +1298,10 @@ auto make_import_gltf_operation(
     }
 
     // After the node inserts: a saved library_folders path may name any prim
-    // of the scene tree (C5), which only exists from here on.
+    // of the scene tree (C5), which only exists from here on. An object
+    // reference written as a path names an item of the scene by the same
+    // rule.
+    append_unresolved_object_property_operations(gltf_data, scene_root, operations);
     append_library_folders_operation(gltf_data, scene_root, operations);
 
     operations.push_back(
@@ -1685,9 +1688,11 @@ auto finish_open_scene_gltf(
     scene_root->apply_variant_selections(context);
 
     // After the nodes are in the scene: a saved library_folders path may name
-    // any prim of the tree (C5).
+    // any prim of the tree (C5), and so may an object reference written as a
+    // path. Same ordering as the import compound.
     {
         std::vector<std::shared_ptr<Operation>> folder_operations;
+        append_unresolved_object_property_operations(gltf_data, scene_root, folder_operations);
         append_library_folders_operation(gltf_data, scene_root, folder_operations);
         for (const std::shared_ptr<Operation>& operation : folder_operations) {
             operation->execute(context);

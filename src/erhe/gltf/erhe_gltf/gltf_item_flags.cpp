@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <cstdio>
 
 namespace erhe::gltf {
@@ -220,6 +221,85 @@ auto apply_item_local_property(erhe::Item_base& item, const std::string_view nam
     }
     item.set_value(*property, parsed.value());
     return true;
+}
+
+auto item_local_object_references(const erhe::Item_base& item) -> std::vector<Item_object_reference_value>
+{
+    std::vector<Item_object_reference_value> references;
+    const erhe::property::Owner_type owner_type = item.get_property_owner_type();
+    item.for_each_local_value(
+        [&](const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) {
+            // The same filters item_local_properties_to_json applies: what
+            // is not written has nothing to resolve.
+            const erhe::property::Property_metadata& metadata = property.get_metadata(owner_type);
+            if ((metadata.flags & erhe::property::Property_flags::serialize) == 0u) {
+                return;
+            }
+            if (metadata.bridge.is_bound()) {
+                return;
+            }
+            if (item.get_expression(property).has_value()) {
+                return;
+            }
+            if (!erhe::property::is_object_reference_type(property.get_type())) {
+                return;
+            }
+            const std::shared_ptr<erhe::property::Dependency_object> object = erhe::property::get_referenced_object(value);
+            std::shared_ptr<erhe::Item_base> referenced_item = std::dynamic_pointer_cast<erhe::Item_base>(object);
+            if (!referenced_item) {
+                return;
+            }
+            references.push_back(
+                Item_object_reference_value{
+                    .name   = erhe::property::Property_registry::get().qualified_name(item, property),
+                    .target = std::move(referenced_item)
+                }
+            );
+        }
+    );
+    return references;
+}
+
+auto apply_item_node_reference_property(erhe::Item_base& item, const std::string_view name, const std::shared_ptr<erhe::Item_base>& target) -> bool
+{
+    const erhe::property::Dependency_property* property = erhe::property::Property_registry::get().find_for_object(item, name);
+    if (property == nullptr) {
+        log_gltf->warn("'{}': no property '{}' on {}", item.get_name(), name, item.get_type_name());
+        return false;
+    }
+    if (!erhe::property::is_object_reference_type(property->get_type())) {
+        log_gltf->warn("'{}': property '{}' is not an object reference", item.get_name(), name);
+        return false;
+    }
+    if (!item.set_value(*property, erhe::property::make_object_reference(property->get_type(), target))) {
+        log_gltf->warn("'{}': property '{}' does not accept '{}'", item.get_name(), name, target ? target->get_name() : std::string{});
+        return false;
+    }
+    return true;
+}
+
+void drop_unresolved_object_properties(
+    std::vector<Unresolved_object_property>& unresolved,
+    const erhe::Item_base&                   item,
+    const std::vector<std::string>&          names
+)
+{
+    if (names.empty()) {
+        return;
+    }
+    unresolved.erase(
+        std::remove_if(
+            unresolved.begin(),
+            unresolved.end(),
+            [&item, &names](const Unresolved_object_property& entry) {
+                if (entry.item.get() != &item) {
+                    return false;
+                }
+                return std::find(names.begin(), names.end(), entry.property_name) != names.end();
+            }
+        ),
+        unresolved.end()
+    );
 }
 
 auto apply_item_local_property(erhe::Item_base& item, const std::string_view name, const std::string_view value, std::vector<Unresolved_object_property>& unresolved) -> bool

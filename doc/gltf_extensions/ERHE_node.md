@@ -33,6 +33,19 @@ Carries the erhe Item state of a node that core glTF cannot express:
   and dims the row in the item tree. The subtree effect is derived from
   the values of the node and its ancestors, so it is never written; only
   the node's own value is.
+- `property_node_refs` (optional): the glTF node index of the item each
+  node-naming object-reference value of `properties` names, by the same
+  qualified property name, e.g. `{"Ik.pole_target": 12}`. An object
+  reference travels in `properties` as a path, which names the item in the
+  scene the file was saved from; the index names the copy this file
+  carries, so it is what the reader resolves - the path alone resolves
+  against a different tree once the file is imported below an import root,
+  or once a node of the path is renamed. Written for a reference whose
+  target is a node of this file (a target elsewhere, such as a content
+  library item, travels by path alone); an index the file has no node for
+  is logged and resolves nothing. The reader applies these before
+  `properties` and `flags`, so a seal the flags carry lands after them, and
+  then leaves the path form of the same name unresolved.
 - `style` (optional): the name of the style item the node uses
   (`doc/editor/style_library.md` D4), one of the scene's `ERHE_scene` `styles`;
   emitted only when the node has a style. Assigned on load once the
@@ -82,7 +95,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
 ```json
 {
     "flags": ["content", "visible", "show_in_ui"],
-    "properties": {"active": "false", "Layout.align_y": "Stretch", "Light.color": "1 0.9 0.8"},
+    "properties": {"active": "false", "Layout.align_y": "Stretch", "Light.color": "1 0.9 0.8", "Ik.pole_target": "rig/pole"},
+    "property_node_refs": {"Ik.pole_target": 12},
     "prim_class": "Typed",
     "prim_type_name": "Cube",
     "style": "Warm lights",

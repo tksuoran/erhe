@@ -74,6 +74,43 @@ auto apply_item_local_property(erhe::Item_base& item, std::string_view name, std
 // does not parse.
 auto apply_item_local_property(erhe::Item_base& item, std::string_view name, std::string_view value, std::vector<Unresolved_object_property>& unresolved) -> bool;
 
+// One local object-reference value an item writes into its "properties"
+// map, paired with the item it names. The writer of a payload that can name
+// another node of the same file uses these to write the target's glTF node
+// index beside the path (doc/gltf_extensions/ERHE_node.md
+// "property_node_refs"): the index names the copy this file carries, which
+// a path cannot do once the file is imported below an import root or its
+// nodes are renamed.
+class Item_object_reference_value
+{
+public:
+    std::string                      name;   // qualified property name (D3)
+    std::shared_ptr<erhe::Item_base> target; // the referenced item
+};
+
+// The object-reference local values item_local_properties_to_json writes
+// for `item`, with each reference resolved to the item it names. An
+// expired weak reference and an empty reference are left out, as they are
+// there.
+[[nodiscard]] auto item_local_object_references(const erhe::Item_base& item) -> std::vector<Item_object_reference_value>;
+
+// Sets one object-reference local value to `target` directly, by-passing
+// the by-name resolution of apply_item_local_property: for a reference the
+// payload resolves by glTF index. False (logged) when the name is unknown,
+// names a property that is not an object reference, or the value is
+// refused (a target of a type the property does not accept).
+auto apply_item_node_reference_property(erhe::Item_base& item, std::string_view name, const std::shared_ptr<erhe::Item_base>& target) -> bool;
+
+// Forgets the pending by-name resolutions of `item` for the named
+// properties: the index form has already set them, and letting the path
+// form run again would resolve the same name a second time, in a scene
+// where it may name a different item.
+void drop_unresolved_object_properties(
+    std::vector<Unresolved_object_property>& unresolved,
+    const erhe::Item_base&                   item,
+    const std::vector<std::string>&          names
+);
+
 // The "properties" object is the item's complete local set: every stored
 // (not bridged, not computed, not read-only) value property of the item's
 // own chain that holds a local value `is_listed` does not accept is

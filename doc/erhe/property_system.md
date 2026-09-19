@@ -2098,7 +2098,7 @@ stays on the holder and no attachment reads it (covered by the property
 test). The defaults are the `Ik_settings_data` initializers.
 `Ik_settings_data` is the mirror of the effective values, refreshed by
 `Ik_settings::on_property_changed`; readers (the IK drag's
-`resolve_constraint`, the `ERHE_rig` export) take `get_data()`, and
+`resolve_constraint`) take `get_data()`, and
 writers go through `set_lock(axis)`, `set_limit(axis)`, `set_limit_min`,
 `set_limit_max`, `set_stiffness`, `set_rest_rotation` and
 `set_pole_angle`, which write
@@ -2114,10 +2114,9 @@ hand-written rows with their drag latch are gone, and
 `Properties::ik_settings_actions` keeps only "Set rest from current
 pose", which records a `Property_set_operation` of `rest_rotation`, the
 operation the generic rows and MCP `set_item_property` record.
-`ERHE_rig` keeps writing the explicit effective fields and adds the
-`properties` map of local values; on load the map is the attachment's
-complete local set (`clear_local_properties_not_listed`, the
-`ERHE_layout` rule). Tests: `src/editor/transform/test/
+The values ride the node's `ERHE_node` `properties` map by their qualified
+names, and the pole reference rides `property_node_refs` beside it
+(`doc/gltf_extensions/ERHE_node.md`). Tests: `src/editor/transform/test/
 test_ik_settings_properties.cpp` (target `editor_ik_solver_tests`, which
 compiles `node_ik_settings.cpp` and links `erhe::scene`).
 

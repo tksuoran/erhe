@@ -81,7 +81,7 @@ attachment count, which counts nodes holding a local `Ik.*` value instead.
 through the late by-name resolution that node-held object references use.
 `ERHE_rig` is removed: writer, reader (`import_rigs`), the
 `Gltf_export_arguments::node_extensions_builder` use that carried the pole
-node index, `doc/gltf_extensions/ERHE_rig.md`, its schema, and its rows in
+node index, the `ERHE_rig` spec page, its schema, and its rows in
 `doc/gltf_extensions/README.md` and `doc/editor/scene_serialization.md`.
 Files saved with `ERHE_rig` load without IK values (decided with the user:
 no migration).

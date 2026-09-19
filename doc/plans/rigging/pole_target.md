@@ -286,7 +286,8 @@ into `config/editor/mcp_tools.json` beside the other scene actions.
 
 ### 6. Serialization
 
-**R23.** `ERHE_rig`'s `ik` object (`doc/gltf_extensions/ERHE_rig.md`) gains
+**R23.** `ERHE_rig`'s `ik` object (its spec page under
+`doc/gltf_extensions/`) gains
 two optional keys, written by `gltf_extensions_export.cpp` next to the
 existing explicit fields, which carry effective values:
 
@@ -322,11 +323,11 @@ key above is its only carrier.
   unsigned number, is out of range, or names a node the parse did not build
   leaves the attachment without a pole, with a warning naming the node.
 
-**R25.** `doc/gltf_extensions/schema/ERHE_rig.schema.json` gains
+**R25.** The `ERHE_rig` schema gains
 `"pole_target": {"type": "integer", "minimum": 0}` and
 `"pole_angle": {"type": "number"}` under `ik`. Neither is required;
 `required` stays `["ik"]`.
-`doc/gltf_extensions/ERHE_rig.md` gains both rows in its field list and both
+The `ERHE_rig` spec page gains both rows in its field list and both
 keys in its JSON example.
 
 **R26.** USD save carries the pole exactly as far as it carries the rest of
@@ -475,8 +476,8 @@ Implemented as specified. Key locations:
   `config/editor/mcp_tools.json`), which also lists `ik_settings` in the
   `add_node_attachment` type enum.
 - Serialization - the `ik` object's `pole_target` and `pole_angle` keys
-  (spec `doc/gltf_extensions/ERHE_rig.md`, schema
-  `doc/gltf_extensions/schema/ERHE_rig.schema.json`); written in
+  (the `ERHE_rig` spec page and schema under `doc/gltf_extensions/`);
+  written in
   `gltf_extensions_export.cpp` from the `node_extensions_builder` this slice
   adds to `erhe::gltf` (`gltf_fastgltf.{hpp,cpp}`), read in
   `gltf_extensions_import.cpp` (`import_rigs`) through the parse's node

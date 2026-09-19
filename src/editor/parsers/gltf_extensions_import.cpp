@@ -1092,9 +1092,11 @@ void import_styles(
 
 // An object-reference local value of a "properties" map that named an
 // item the parse could not resolve (Gltf_data::unresolved_object_properties):
-// resolved in the scene at execute time, when the items the import's
-// earlier operations create (physics materials, filters, styles) exist
-// and the node has its host; the local value set is undoable.
+// resolved by name in the scene at execute time, when the items the import's
+// earlier operations create (physics materials, filters, styles) exist and
+// the imported nodes are in the scene; the local value set is undoable. A
+// reference the file also carries as an ERHE_node "property_node_refs" glTF
+// node index is resolved by the parse instead and never reaches here.
 class Item_object_property_by_name_operation : public Operation
 {
 public:
@@ -1136,19 +1138,6 @@ private:
     const erhe::property::Dependency_property*   m_property{nullptr};
     std::optional<erhe::property::Local_state>   m_before;
 };
-
-void import_unresolved_object_properties(
-    const erhe::gltf::Gltf_data&             gltf_data,
-    const std::shared_ptr<Scene_root>&       scene_root,
-    std::vector<std::shared_ptr<Operation>>& operations
-)
-{
-    for (const erhe::gltf::Unresolved_object_property& entry : gltf_data.unresolved_object_properties) {
-        if (entry.item) {
-            operations.push_back(std::make_shared<Item_object_property_by_name_operation>(scene_root, entry));
-        }
-    }
-}
 
 void import_material_styles(
     const erhe::gltf::Gltf_data&             gltf_data,
@@ -1219,9 +1208,19 @@ void import_gltf_editor_state(
     import_node_graphs(context, gltf_data, content_library, gltf_path_str, operations);
     import_material_styles(gltf_data, content_library, operations);
     import_node_styles(gltf_data, content_library, operations);
-    // Object references by name (a node-held Node_physics.physics_material):
-    // after every operation that creates the items they may name.
-    import_unresolved_object_properties(gltf_data, scene_root, operations);
+}
+
+void append_unresolved_object_property_operations(
+    const erhe::gltf::Gltf_data&             gltf_data,
+    const std::shared_ptr<Scene_root>&       scene_root,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    for (const erhe::gltf::Unresolved_object_property& entry : gltf_data.unresolved_object_properties) {
+        if (entry.item) {
+            operations.push_back(std::make_shared<Item_object_property_by_name_operation>(scene_root, entry));
+        }
+    }
 }
 
 }

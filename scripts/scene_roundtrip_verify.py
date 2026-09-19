@@ -1205,6 +1205,83 @@ def section_reload_and_diff():
     compare_screenshots(S, "logs/phase6_before.png", "logs/phase6_after.png")
 
 
+def ik_bone_state(scene_name):
+    """The bone's Ik.* values, with the pole reference resolved in `scene_name`.
+
+    `pole_is_own_pole` is what matters for the pole: the reference must name
+    THIS scene's copy of the pole node, not a same-named node of another
+    open scene (doc/plans/rigging/ik_properties.md P8).
+    """
+    details = call("get_node_details", {"scene_name": scene_name, "node_name": IK_BONE})
+    bone_item_id = details.get("id")
+    if bone_item_id is None:
+        return None
+    by_name = {
+        entry.get("name"): entry
+        for entry in call("get_item_properties", {"item_id": bone_item_id}).get("properties", [])
+    }
+    pole = call("get_node_details", {"scene_name": scene_name, "node_name": "P6 IK Pole"})
+    reference_id = by_name.get("Ik.pole_target", {}).get("reference_id")
+    return {
+        "pole_is_own_pole": (reference_id is not None) and (reference_id == pole.get("id")),
+        "pole_reference":   reference_id,
+        "own_pole":         pole.get("id"),
+        # get_item_properties reports values in their D16 text form.
+        "pole_angle":       by_name.get("Ik.pole_angle", {}).get("value"),
+        "limit_x":          by_name.get("Ik.limit_x", {}).get("value"),
+    }
+
+
+def ik_values_kept(state):
+    """The Ik.* values the rig block authored, read back from their text."""
+    try:
+        angle_kept = abs(float(state["pole_angle"]) - 0.5) < 1.0e-6
+    except (TypeError, ValueError):
+        angle_kept = False
+    return {"limit_x": str(state["limit_x"]).lower() == "true", "pole_angle": angle_kept}
+
+
+def section_rig_reload():
+    """P8: the bone's Ik.* values and its pole survive both reload forms.
+
+    (a) save + load_scene, where the file's nodes sit in the scene root's
+    place, and (b) import of the same file into another scene, where they
+    sit below an import root - the pole reference has to land on the
+    imported copy either way.
+    """
+    S = "rig-reload"
+    if not E2E_GLB.is_file():
+        check(S, "prerequisites available", False, "save-validate failed")
+        return
+    loaded_scene = E2E_GLB.stem
+    if not wait_for_scene(loaded_scene):
+        check(S, "re-opened scene available", False, loaded_scene)
+        return
+
+    opened = ik_bone_state(loaded_scene)
+    check(S, "re-opened bone found", opened is not None, str(opened))
+    if opened is not None:
+        kept = ik_values_kept(opened)
+        check(S, "re-opened bone keeps Ik.limit_x", kept["limit_x"], str(opened))
+        check(S, "re-opened bone keeps Ik.pole_angle", kept["pole_angle"], str(opened))
+        check(S, "re-opened bone's pole names the re-opened pole node", opened["pole_is_own_pole"], str(opened))
+
+    importing = create_fresh_scene(S)
+    if importing is None:
+        return
+    imported = mutate("import_gltf", {"scene_name": importing, "path": str(E2E_GLB)})
+    check(S, "import_gltf of the saved scene", bool(imported) and imported.get("imported"), str(imported))
+    check(S, "imported bone appears", wait_for_scene_node(importing, IK_BONE, tries=300))
+    state = ik_bone_state(importing)
+    check(S, "imported bone found", state is not None, str(state))
+    if state is not None:
+        kept = ik_values_kept(state)
+        check(S, "imported bone keeps Ik.limit_x", kept["limit_x"], str(state))
+        check(S, "imported bone keeps Ik.pole_angle", kept["pole_angle"], str(state))
+        check(S, "imported bone's pole names the imported pole node", state["pole_is_own_pole"], str(state))
+    mutate("close_scene", {"scene_name": importing})
+
+
 # --------------------------------------------------------------------------
 # Section 3b: R6 asset references (ERHE_asset_reference wire format)
 # --------------------------------------------------------------------------
@@ -2575,6 +2652,7 @@ def main():
         section_save_and_validate,
         section_definitions_full_data,
         section_reload_and_diff,
+        section_rig_reload,
         section_asset_references,
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
