@@ -349,6 +349,12 @@ private:
     void on_close_scene     (Close_scene_message& message);
     void on_items_removed   (Items_removed_message& message);
     void update_for_view    (Scene_view* scene_view);
+    // The handle visualizations hold ONE view-dependent state (view distance,
+    // view scale), which every rendered viewport rewrites for itself. Picking
+    // and dragging happen in the hovered view, so they evaluate the handles
+    // for that view first; otherwise they would use whichever viewport was
+    // rendered last (wrong handle sizes with several viewports open).
+    void evaluate_handles_for(Scene_view& scene_view);
     // True when scene_view shows the active scene (the scene the gizmo
     // targets); the gizmo is visible, hoverable and draggable only there.
     [[nodiscard]] auto is_scene_view_of_active_scene(Scene_view* scene_view) const -> bool;

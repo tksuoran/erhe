@@ -1255,6 +1255,7 @@ void Transform_tool::update_hover(Scene_view& scene_view, const glm::vec3 ray_or
     Handle new_handle = Handle::e_handle_none;
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
+        evaluate_handles_for(scene_view);
         // View-dependent shown/hidden choices are made from the camera
         // (in XR the head - one mono decision both eyes share), matching
         // render(); only the intersection uses the control ray, which in
@@ -1388,6 +1389,7 @@ auto Transform_tool::on_drag() -> bool
         return false;
     }
 
+    evaluate_handles_for(*scene_view);
     return m_active_tool->update(scene_view);
 }
 
@@ -1464,6 +1466,7 @@ auto Transform_tool::on_drag_ready() -> bool
     // subtool begin() can fail (e.g. the rotate ring hit edge-on), in which case
     // end_drag() never runs and a prematurely-begun component edit would be left
     // stuck active, freezing the gizmo anchor.
+    evaluate_handles_for(*scene_view);
     const bool started = m_active_tool->begin_drag(axis_mask, scene_view);
     if (started) {
         m_drag_scene_view = scene_view;
@@ -2428,6 +2431,15 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
         visualizations->update_for_view(scene_view);
     }
     update_transforms();
+}
+
+void Transform_tool::evaluate_handles_for(Scene_view& scene_view)
+{
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->update_for_view(&scene_view);
+        visualizations->update_transforms();
+    }
 }
 
 auto Transform_tool::is_scene_view_of_active_scene(Scene_view* scene_view) const -> bool
