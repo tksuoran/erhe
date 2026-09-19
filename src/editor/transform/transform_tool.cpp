@@ -1464,7 +1464,7 @@ auto Transform_tool::on_drag_ready() -> bool
     // subtool begin() can fail (e.g. the rotate ring hit edge-on), in which case
     // end_drag() never runs and a prematurely-begun component edit would be left
     // stuck active, freezing the gizmo anchor.
-    const bool started = m_active_tool->begin(axis_mask, scene_view);
+    const bool started = m_active_tool->begin_drag(axis_mask, scene_view);
     if (started) {
         m_drag_scene_view = scene_view;
     }

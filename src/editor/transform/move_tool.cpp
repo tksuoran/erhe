@@ -106,7 +106,6 @@ auto Move_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     static_cast<void>(scene_view);
     m_axis_mask = axis_mask;
-    m_active    = true;
     return (axis_mask != 0) && (scene_view != nullptr);
 }
 

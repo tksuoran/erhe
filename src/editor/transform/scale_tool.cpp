@@ -88,7 +88,6 @@ void Scale_tool::handle_priority_update(const int old_priority, const int new_pr
 auto Scale_tool::begin(const unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     m_axis_mask = axis_mask;
-    m_active    = true;
     m_box_mode  = false;
     m_uniform_need_initial_point = true;
 

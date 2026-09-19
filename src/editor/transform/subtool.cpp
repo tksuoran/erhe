@@ -27,6 +27,12 @@ void Subtool::imgui(Property_editor&)
 {
 }
 
+auto Subtool::begin_drag(const unsigned int axis_mask, Scene_view* scene_view) -> bool
+{
+    m_active = begin(axis_mask, scene_view);
+    return m_active;
+}
+
 auto Subtool::is_active() const -> bool
 {
     return m_active;

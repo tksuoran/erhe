@@ -24,6 +24,12 @@ public:
     Subtool(App_context& app_context, Tools& tools, uint64_t flags);
     ~Subtool() noexcept override;
 
+    // Starts a drag: calls begin() and makes the subtool active exactly when
+    // begin() succeeded. A drag that did not start is never ended (end() is
+    // not called for it), so a failed begin() leaves the subtool inactive -
+    // render() and update() only ever see state a successful begin() set up.
+    [[nodiscard]] auto begin_drag(unsigned int axis_mask, Scene_view* scene_view) -> bool;
+
     [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;
     [[nodiscard]] virtual auto update(Scene_view* scene_view) -> bool = 0;
 

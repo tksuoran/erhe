@@ -92,7 +92,6 @@ void Rotate_tool::imgui(Property_editor& property_editor)
 auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     m_axis_mask     = axis_mask;
-    m_active        = true;
     m_current_angle = 0.0f;
     m_view_mode     = (axis_mask == Axis_mask::view);
     m_free_mode     = (axis_mask == Axis_mask::free);
