@@ -12,6 +12,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/viewport_overlay_node.hpp"
+#include "scene/four_view.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
@@ -32,10 +33,12 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 #include <algorithm>
 #include <cfloat>
@@ -52,6 +55,56 @@ using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
+namespace {
+
+// Docks the four view windows as a 2 x 2 grid sharing one cross splitter
+// (ImGuiDockNodeFlags_CrossSplit): top | front over right | source. The source
+// window's dock node is split; the source window and its tab siblings are
+// carried into the bottom-right cell by the splits, so only the three new
+// windows are docked explicitly. Runs where the dock tree may be rebuilt
+// (Window_imgui_host dock operation) and waits until ImGui knows all the
+// windows - each has been submitted once - so they bind to the new dock nodes
+// on their next Begin().
+void queue_four_view_dock_operation(
+    erhe::imgui::Window_imgui_host&                       window_imgui_host,
+    const std::string&                                    source_title,
+    const std::array<std::string, Four_view::axis_count>& window_titles,
+    const int                                             attempt
+)
+{
+    window_imgui_host.queue_dock_operation(
+        [source_title, window_titles, attempt](erhe::imgui::Window_imgui_host& host) {
+            constexpr int c_max_attempts = 30;
+            bool windows_known = true;
+            for (const std::string& title : window_titles) {
+                if (ImGui::FindWindowByName(title.c_str()) == nullptr) {
+                    windows_known = false;
+                }
+            }
+            if (!windows_known) {
+                if (attempt < c_max_attempts) {
+                    queue_four_view_dock_operation(host, source_title, window_titles, attempt + 1);
+                } else {
+                    log_scene_view->warn("Four view: the new viewport windows were never submitted; they stay undocked");
+                }
+                return;
+            }
+            const ImGuiWindow* const source_window = ImGui::FindWindowByName(source_title.c_str());
+            if ((source_window == nullptr) || (source_window->DockNode == nullptr) || !source_window->DockNode->IsLeafNode()) {
+                log_scene_view->warn("Four view: the source viewport window is not docked; the new viewport windows stay undocked");
+                return;
+            }
+            ImGuiID cell_node_ids[4] = { 0, 0, 0, 0 };
+            ImGui::DockBuilderSplitNodeCross(source_window->DockNode->ID, ImGuiAxis_X, 0.5f, 0.5f, cell_node_ids);
+            for (std::size_t i = 0; i < Four_view::axis_count; ++i) {
+                ImGui::DockBuilderDockWindow(window_titles[i].c_str(), cell_node_ids[i]);
+            }
+        }
+    );
+}
+
+} // anonymous namespace
+
 #pragma region Commands
 Open_new_viewport_scene_view_command::Open_new_viewport_scene_view_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Scene_views.open_new_viewport_scene_view"}
@@ -62,6 +115,24 @@ Open_new_viewport_scene_view_command::Open_new_viewport_scene_view_command(erhe:
 auto Open_new_viewport_scene_view_command::try_call() -> bool
 {
     m_context.scene_views->open_new_viewport_scene_view_node();
+    return true;
+}
+
+Open_four_view_command::Open_four_view_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Scene_views.open_four_view"}
+    , m_context{context}
+{
+}
+
+auto Open_four_view_command::try_call() -> bool
+{
+    // Viewport creation constructs Imgui_windows and rendergraph nodes, so it
+    // is deferred out of ImGui iteration (the command can come from a menu).
+    m_context.imgui_windows->queue(
+        [this]() {
+            m_context.scene_views->open_four_view();
+        }
+    );
     return true;
 }
 #pragma endregion Commands
@@ -75,6 +146,7 @@ Scene_views::Scene_views(
     : m_app_context                         {app_context}
     , m_viewport_config_data                {viewport_config_data}
     , m_open_new_viewport_scene_view_command{commands, app_context}
+    , m_open_four_view_command              {commands, app_context}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -82,6 +154,7 @@ Scene_views::Scene_views(
 
     commands.register_command   (&m_open_new_viewport_scene_view_command);
     commands.bind_command_to_key(&m_open_new_viewport_scene_view_command, erhe::window::Key_f1, true);
+    commands.register_command   (&m_open_four_view_command);
 
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
         [&](Graphics_settings_message& message) {
@@ -96,6 +169,7 @@ Scene_views::Scene_views(
     );
 
     m_open_new_viewport_scene_view_command.set_host(this);
+    m_open_four_view_command.set_host(this);
 }
 
 Scene_views::~Scene_views() noexcept
@@ -250,6 +324,15 @@ void Scene_views::unbind_views_from_scene(const std::shared_ptr<Scene_root>& sce
         return;
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    // The four views of the closing scene end with it; their windows stay as
+    // empty viewports like every other viewport of the scene.
+    std::erase_if(
+        m_four_views,
+        [&scene_root](const std::unique_ptr<Four_view>& four_view) {
+            const std::shared_ptr<Scene_root> four_view_scene_root = four_view->get_scene_root();
+            return !four_view_scene_root || (four_view_scene_root == scene_root);
+        }
+    );
     for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_viewport_scene_views) {
         if (scene_view->get_scene_root() == scene_root) {
             // Clear both bindings: the camera is held by shared_ptr and would
@@ -645,6 +728,99 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
     );
     apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
     viewport_window->request_window_focus();
+}
+
+auto Scene_views::find_four_view(const erhe::scene::Camera* const camera) const -> Four_view*
+{
+    for (const std::unique_ptr<Four_view>& four_view : m_four_views) {
+        if (four_view->contains(camera)) {
+            return four_view.get();
+        }
+    }
+    return nullptr;
+}
+
+auto Scene_views::get_four_views() const -> const std::vector<std::unique_ptr<Four_view>>&
+{
+    return m_four_views;
+}
+
+auto Scene_views::open_four_view() -> Four_view*
+{
+    // Source viewport: same rule as open_new_viewport_scene_view_node().
+    std::shared_ptr<Viewport_scene_view> source = m_last_scene_view.lock();
+    if (!source && (m_viewport_scene_views.size() == 1)) {
+        source = m_viewport_scene_views.front();
+    }
+    const std::shared_ptr<Scene_root> scene_root = source ? source->get_scene_root() : std::shared_ptr<Scene_root>{};
+    std::shared_ptr<Viewport_window> source_window;
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
+        if (source && (viewport_window->viewport_scene_view() == source)) {
+            source_window = viewport_window;
+        }
+    }
+    if (!scene_root || !source_window) {
+        log_scene_view->warn("Four view: there is no viewport showing a scene to start from");
+        return nullptr;
+    }
+
+    // Frame the scene content: focus on the center of the mesh bounds, with
+    // the cameras outside the bounding sphere.
+    erhe::math::Aabb bounds{};
+    scene_root->get_scene().get_root_node()->for_each<erhe::scene::Mesh>(
+        [&bounds](erhe::scene::Mesh& mesh) -> bool {
+            const erhe::math::Aabb mesh_bounds = mesh.get_aabb_world();
+            if (mesh.is_active() && mesh_bounds.is_valid()) {
+                bounds.include(mesh_bounds.min);
+                bounds.include(mesh_bounds.max);
+            }
+            return true;
+        }
+    );
+    const glm::vec3 focus       = bounds.is_valid() ? bounds.center() : glm::vec3{0.0f, 0.0f, 0.0f};
+    const float     radius      = bounds.is_valid() ? glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-3f) : 5.0f;
+    const float     view_height = 2.2f * radius;
+    const float     distance    = (4.0f * radius) + 1.0f;
+
+    std::unique_ptr<Four_view> four_view = std::make_unique<Four_view>(scene_root, focus, view_height, distance);
+
+    const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
+    std::array<std::string, Four_view::axis_count> window_titles;
+    for (std::size_t i = 0; i < Four_view::axis_count; ++i) {
+        const std::string name = fmt::format("Viewport_scene_view {}", m_viewport_scene_views.size());
+        std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
+        std::shared_ptr<Viewport_scene_view> viewport_scene_view = create_viewport_scene_view(
+            m_viewport_config_data,
+            *m_app_context.graphics_device,
+            *m_app_context.rendergraph,
+            *m_app_context.imgui_windows,
+            *m_app_context.app_rendering,
+            *m_app_context.app_settings,
+            *m_app_context.post_processing,
+            name,
+            scene_root,
+            four_view->get_camera(static_cast<Four_view_axis>(i)),
+            msaa_sample_count,
+            rendergraph_output_node
+        );
+        std::shared_ptr<Viewport_window> viewport_window = create_viewport_window(
+            *m_app_context.imgui_renderer,
+            *m_app_context.imgui_windows,
+            viewport_scene_view,
+            rendergraph_output_node,
+            "Viewport"
+        );
+        window_titles[i] = viewport_window->get_title();
+    }
+
+    // Dock the four windows as a 2 x 2 grid with a cross splitter.
+    const std::shared_ptr<erhe::imgui::Window_imgui_host> window_imgui_host = m_app_context.imgui_windows->get_window_imgui_host();
+    if (window_imgui_host) {
+        queue_four_view_dock_operation(*window_imgui_host, source_window->get_title(), window_titles, 0);
+    }
+
+    m_four_views.push_back(std::move(four_view));
+    return m_four_views.back().get();
 }
 
 void Scene_views::debug_imgui()

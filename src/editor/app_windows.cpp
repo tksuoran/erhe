@@ -2,6 +2,7 @@
 #include "app_context.hpp"
 #include "app_rendering.hpp"
 #include "operations/operations_window.hpp"
+#include "scene/viewport_scene_views.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -149,6 +150,17 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
             ImGui::Separator();
 
             builtin_imgui_window_menu();
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Open Four View")) {
+                // Deferred out of ImGui iteration: creates windows.
+                m_context.imgui_windows->queue(
+                    [this]() {
+                        m_context.scene_views->open_four_view();
+                    }
+                );
+            }
 
             ImGui::Separator();
 

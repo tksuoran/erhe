@@ -28,6 +28,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class App_rendering;
+class Four_view;
 class App_settings;
 class Post_processing;
 class Post_processing_node;
@@ -49,6 +50,15 @@ private:
     App_context& m_context;
 };
 
+class Open_four_view_command : public erhe::commands::Command
+{
+public:
+    Open_four_view_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
 
 // Manages set of Viewport_scene_view instances
 //
@@ -123,6 +133,18 @@ public:
     // scene "Open Editor" entry), instead of cloning the current view.
     void open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root);
 
+    // Turns the source viewport (the last hovered one, else the only one) into
+    // a four view: three linked orthogonal viewports (top, front, right) of
+    // the same scene are created and the four windows are docked as a 2 x 2
+    // grid sharing one cross splitter, the source viewport bottom-right.
+    // Returns the new Four_view, or nullptr when there is no source viewport
+    // showing a scene. See doc/editor/four_view.md.
+    auto open_four_view() -> Four_view*;
+
+    // The four view whose orthogonal cameras include the camera, if any.
+    [[nodiscard]] auto find_four_view(const erhe::scene::Camera* camera) const -> Four_view*;
+    [[nodiscard]] auto get_four_views() const -> const std::vector<std::unique_ptr<Four_view>>&;
+
     // Tear-down API for Scene_builder_viewport_resources_operation::undo.
     // Removes the viewport (and its matching post_processing_node, if
     // any) from the tracked collections; once the caller releases its
@@ -188,10 +210,12 @@ private:
 
     // Commands
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;
+    Open_four_view_command               m_open_four_view_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,                      m_mutex);
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::shared_ptr<Viewport_scene_view>>   m_viewport_scene_views;
+    std::vector<std::unique_ptr<Four_view>>             m_four_views;
     std::vector<std::shared_ptr<Post_processing_node>>  m_post_processing_nodes;
     // Overlay nodes for post-processing viewports (issue #230). One per viewport
     // that has post-processing enabled; owns the after-post-processing overlay

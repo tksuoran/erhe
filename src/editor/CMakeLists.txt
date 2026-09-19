@@ -514,6 +514,8 @@ erhe_target_sources_grouped(
     scene/collision_shape_from_mesh.hpp
     scene/debug_draw.cpp
     scene/debug_draw.hpp
+    scene/four_view.cpp
+    scene/four_view.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
     scene/ik_properties.cpp

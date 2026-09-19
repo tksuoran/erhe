@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/four_view.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -937,6 +938,10 @@ void Fly_camera_tool::rotation(int64_t timestamp_ns, const int rx, const int ry,
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
+    if (is_rotation_locked()) {
+        return;
+    }
+
     constexpr float scale = 65536.0f;
     m_camera_controller->rotate_x.adjust(m_sensitivity * static_cast<float>(rx) / scale);
     m_camera_controller->rotate_y.adjust(m_sensitivity * static_cast<float>(ry) / scale);
@@ -1058,20 +1063,45 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
     static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
-    if (delta != 0.0f) {
-        glm::vec3 position = m_camera_controller->get_position();
-        const float l = glm::length(position);
-        const float k = (-1.0f / 32.0f) * l * delta;
-        m_camera_controller->get_variable(Variable::translate_z).adjust(k);
+    if (delta == 0.0f) {
+        return true;
     }
 
+    // Moving an orthogonal camera along its view axis changes nothing it
+    // shows: zoom is the size of the view volume. The cameras of a four view
+    // share one zoom.
+    if ((m_camera != nullptr) && m_camera->projection()->is_orthogonal()) {
+        const float       scale     = std::pow(0.9f, delta);
+        Four_view* const  four_view = m_context.scene_views->find_four_view(m_camera);
+        if (four_view != nullptr) {
+            four_view->set_view_height(four_view->get_view_height() * scale);
+        } else {
+            m_camera->set_ortho_width (m_camera->projection()->ortho_width  * scale);
+            m_camera->set_ortho_height(m_camera->projection()->ortho_height * scale);
+        }
+        return true;
+    }
+
+    glm::vec3 position = m_camera_controller->get_position();
+    const float l = glm::length(position);
+    const float k = (-1.0f / 32.0f) * l * delta;
+    m_camera_controller->get_variable(Variable::translate_z).adjust(k);
     return true;
+}
+
+auto Fly_camera_tool::is_rotation_locked() const -> bool
+{
+    return (m_camera != nullptr) && (m_context.scene_views->find_four_view(m_camera) != nullptr);
 }
 
 auto Fly_camera_tool::turn_relative(int64_t timestamp_ns, const float dx, const float dy) -> bool
 {
     static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
+
+    if (is_rotation_locked()) {
+        return false;
+    }
 
     const float rx = m_sensitivity * dy * m_rotate_scale_y;
     const float ry = m_sensitivity * dx * m_rotate_scale_x;
@@ -1137,7 +1167,7 @@ auto Fly_camera_tool::tumble_relative(int64_t timestamp_ns, float dx, float dy) 
         return false;
     }
 
-    if (!m_tumble_pivot.has_value()) {
+    if (!m_tumble_pivot.has_value() || is_rotation_locked()) {
         return false;
     }
 

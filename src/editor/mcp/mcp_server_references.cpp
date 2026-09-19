@@ -32,8 +32,11 @@
 #include "operations/operations_window.hpp"
 #include "physics/physics_tool.hpp"
 #include "preview/material_preview.hpp"
+#include "scene/four_view.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_views.hpp"
 
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -452,6 +455,63 @@ auto Mcp_server::action_debug_imgui_mouse(const json& args) -> std::string
         io.AddMouseButtonEvent(button, pressed);
     }
     return make_json_content({{"x", x}, {"y", y}}).dump();
+}
+
+namespace {
+
+[[nodiscard]] auto describe_four_view(const Four_view& four_view) -> json
+{
+    static constexpr const char* c_axis_names[Four_view::axis_count] = { "top", "front", "right" };
+    const std::shared_ptr<Scene_root> scene_root = four_view.get_scene_root();
+    const glm::vec3 focus = four_view.get_focus();
+    json cameras = json::array();
+    for (std::size_t i = 0; i < Four_view::axis_count; ++i) {
+        const std::shared_ptr<erhe::scene::Camera> camera = four_view.get_camera(static_cast<Four_view_axis>(i));
+        if (!camera) {
+            continue;
+        }
+        const glm::vec3 position = glm::vec3{camera->position_in_world()};
+        cameras.push_back({
+            {"axis",         c_axis_names[i]},
+            {"id",           camera->get_id()},
+            {"name",         camera->get_name()},
+            {"position",     {position.x, position.y, position.z}},
+            {"ortho_height", camera->projection()->ortho_height}
+        });
+    }
+    return json{
+        {"scene",       scene_root ? scene_root->get_name() : std::string{}},
+        {"focus",       {focus.x, focus.y, focus.z}},
+        {"view_height", four_view.get_view_height()},
+        {"cameras",     cameras}
+    };
+}
+
+} // anonymous namespace
+
+// open_four_view - Scene_views::open_four_view() (see doc/editor/four_view.md)
+auto Mcp_server::action_open_four_view(const json&) -> std::string
+{
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("Scene views are not available");
+    }
+    const Four_view* const four_view = m_context.scene_views->open_four_view();
+    if (four_view == nullptr) {
+        return make_error_content("There is no viewport showing a scene to start the four view from");
+    }
+    return make_json_content(describe_four_view(*four_view)).dump();
+}
+
+auto Mcp_server::query_four_views(const json&) -> std::string
+{
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("Scene views are not available");
+    }
+    json four_views = json::array();
+    for (const std::unique_ptr<Four_view>& four_view : m_context.scene_views->get_four_views()) {
+        four_views.push_back(describe_four_view(*four_view));
+    }
+    return make_json_content({{"four_views", four_views}}).dump();
 }
 
 }

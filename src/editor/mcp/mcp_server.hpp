@@ -353,6 +353,8 @@ private:
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_set_transform_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_imgui_mouse             (const nlohmann::json& args) -> std::string;
+    auto action_open_four_view                (const nlohmann::json& args) -> std::string;
+    auto query_four_views                     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
     auto action_set_geometry_graph_target     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_add_node       (const nlohmann::json& args) -> std::string;
