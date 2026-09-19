@@ -53,7 +53,7 @@ public:
 
     // Implements Scene_view
     auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>           override;
-    auto get_perspective_scale() const -> float                                          override;
+    auto get_projection_scale(float view_distance) const -> float                                          override;
     auto get_rendergraph_node ()       -> erhe::rendergraph::Rendergraph_node*           override;
     auto get_light_projections() const -> const erhe::scene_renderer::Light_projections* override;
     auto get_shadow_texture   () const -> erhe::graphics::Texture*                       override;

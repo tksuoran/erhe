@@ -62,6 +62,7 @@
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include <glm/gtx/matrix_operation.hpp>
 
@@ -783,11 +784,11 @@ auto Viewport_scene_view::get_camera() const -> std::shared_ptr<erhe::scene::Cam
     return m_camera.lock();
 }
 
-auto Viewport_scene_view::get_perspective_scale() const -> float
+auto Viewport_scene_view::get_projection_scale(const float view_distance) const -> float
 {
     const auto camera = m_camera.lock();
     if (!camera) {
-        return 1.0f;
+        return view_distance;
     }
     const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_conventions());
     const glm::mat4 clip_from_view = camera_projection_transforms_.clip_from_camera.get_matrix();
@@ -798,7 +799,11 @@ auto Viewport_scene_view::get_perspective_scale() const -> float
     const float w = static_cast<float>(m_projection_viewport.width);
     const float h = static_cast<float>(m_projection_viewport.height);
     const float vp_scale = 1000.0f / std::min(w, h);
-    return std::min(x, y) * vp_scale;
+    // Clip space w at view_distance: the distance itself under a perspective
+    // projection, 1 under an orthogonal projection - where x and y already
+    // are the projection half extents and distance has no effect on size.
+    const float clip_w = (std::abs(clip_from_view[2][3]) * view_distance) + clip_from_view[3][3];
+    return std::min(x, y) * vp_scale * clip_w;
 }
 
 auto Viewport_scene_view::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
