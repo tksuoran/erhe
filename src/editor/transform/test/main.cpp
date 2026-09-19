@@ -6,7 +6,7 @@
 #include <spdlog/spdlog.h>
 
 // Item, property and scene code log unconditionally (node attach, sanity
-// checks); without this the loggers are null and the Ik_settings property
+// checks); without this the loggers are null and the Ik property
 // tests dereference null.
 void initialize_test_logging()
 {

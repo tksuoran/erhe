@@ -57,7 +57,6 @@ class Graph_mesh;
 class Graph_texture;
 class Grid;
 class Headset_view;
-class Ik_settings;
 class Mesh_rendertarget_view;
 class Node_joint;
 class Node_physics;
@@ -358,7 +357,6 @@ public:
     auto attach_new_grid            (erhe::scene::Node& node) -> std::shared_ptr<Grid>;
     auto attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>;
     auto attach_new_draw_mode       (erhe::scene::Node& node) -> std::shared_ptr<Draw_mode>;
-    auto attach_new_ik_settings     (erhe::scene::Node& node) -> std::shared_ptr<Ik_settings>;
 
     // Queues an undoable pure detach of the attachment from its current node
     // (Node_attach_operation with an empty host node). No-op on a null pointer.

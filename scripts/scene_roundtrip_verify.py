@@ -502,10 +502,6 @@ NODE_PHYSICS_FIELDS = ["motion_mode", "friction", "restitution", "mass", "gravit
 # joint_settings is intentionally NOT compared: a settings-less (free
 # six-dof) joint materializes a Physics_joint_settings item on reload.
 NODE_JOINT_FIELDS = ["connected_node", "enable_collision"]
-# The Ik_settings fields ERHE_rig carries outside the "properties" map
-# (doc/plans/rigging/pole_target.md R23); read through get_item_properties,
-# which get_node_details does not repeat.
-IK_SETTINGS_PROPERTIES = ["pole_target", "pole_angle"]
 
 
 def norm_attachment_details(details):
@@ -523,10 +519,6 @@ def norm_attachment_details(details):
                 record.pop("mass", None)
         elif a_type == "Node_joint":
             record = {k: attachment.get(k) for k in NODE_JOINT_FIELDS}
-        elif a_type == "Ik_settings":
-            entries = call("get_item_properties", {"item_id": attachment.get("id")}).get("properties", [])
-            values = {entry.get("name"): entry.get("value") for entry in entries}
-            record = {name: values.get(name) for name in IK_SETTINGS_PROPERTIES}
         elif a_type == "Mesh":
             record = {"name": attachment.get("name")}
         else:
@@ -730,7 +722,7 @@ R6_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference.glb")
 R6_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference_resave.glb")
 DECCER_GLB = "res/editor/assets/SM_Deccer_Cubes_Textured.glb"
 RIGGED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
-# The bone of RIGGED_GLB that carries the Ik_settings attachment (ERHE_rig).
+# The bone of RIGGED_GLB that carries the Ik.* values.
 IK_BONE = "arm_joint_L_3"
 
 E2E_STATE = {}
@@ -977,24 +969,22 @@ def section_build_scene():
         }
 
     def block_rig():
-        # ERHE_rig: an Ik_settings attachment on an imported bone, carrying a
-        # pole target and a pole angle (doc/plans/rigging/pole_target.md R23).
+        # Per-bone IK values as attached properties of the bone node itself
+        # (doc/plans/rigging/ik_properties.md P2): a pole target, a pole angle
+        # and one limit. They ride ERHE_node.properties (P8).
         mutate("create_node", {"scene_name": scene, "name": "P6 IK Pole", "position": [0.0, 1.0, 2.0]})
         check(S, "IK pole node created", wait_for_scene_node(scene, "P6 IK Pole"))
-        attached = mutate("add_node_attachment", {"scene_name": scene, "node_name": IK_BONE, "type": "ik_settings"})
-        check(S, "add ik_settings attachment", bool(attached) and attached.get("added"), str(attached))
         details = call("get_node_details", {"scene_name": scene, "node_name": IK_BONE})
-        attachment_id = None
-        for attachment in details.get("attachments", []):
-            if attachment.get("type") == "Ik_settings":
-                attachment_id = attachment.get("id")
-        check(S, "ik_settings attachment found", attachment_id is not None, str(details.get("attachments")))
-        if attachment_id is None:
+        bone_item_id = details.get("id")
+        check(S, "IK bone found", bone_item_id is not None, str(details))
+        if bone_item_id is None:
             return
-        poled = mutate("set_item_property", {"item_id": attachment_id, "property": "pole_target", "value": "P6 IK Pole"})
-        check(S, "set pole_target on the bone", bool(poled), str(poled))
-        angled = mutate("set_item_property", {"item_id": attachment_id, "property": "pole_angle", "value": 0.5})
-        check(S, "set pole_angle on the bone", bool(angled), str(angled))
+        poled = mutate("set_item_property", {"item_id": bone_item_id, "property": "Ik.pole_target", "value": "P6 IK Pole"})
+        check(S, "set Ik.pole_target on the bone", bool(poled), str(poled))
+        angled = mutate("set_item_property", {"item_id": bone_item_id, "property": "Ik.pole_angle", "value": 0.5})
+        check(S, "set Ik.pole_angle on the bone", bool(angled), str(angled))
+        limited = mutate("set_item_property", {"item_id": bone_item_id, "property": "Ik.limit_x", "value": True})
+        check(S, "set Ik.limit_x on the bone", bool(limited), str(limited))
 
     guarded(S, "shapes block", block_shapes)
     guarded(S, "imports block", block_imports)

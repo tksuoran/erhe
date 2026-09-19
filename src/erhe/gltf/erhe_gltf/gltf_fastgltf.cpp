@@ -7239,8 +7239,7 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         // Asset-root and per-node extension payloads built against the
         // now-known glTF indices (doc/editor/gltf_scene_roundtrip.md phase 3:
-        // ERHE_brushes, ERHE_node_graphs, ERHE_collections; ERHE_rig, whose
-        // pole target is a node index).
+        // ERHE_brushes, ERHE_node_graphs, ERHE_collections).
         if (m_arguments.asset_extensions_builder || m_arguments.node_extensions_builder) {
             Gltf_export_index_lookup index_lookup{};
             index_lookup.node_indices       = m_erhe_node_to_gltf_node_index;

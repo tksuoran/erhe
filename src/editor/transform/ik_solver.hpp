@@ -56,8 +56,8 @@ void ik_apply_pole(std::vector<glm::vec3>& positions, glm::vec3 pole_position, f
 // doc/plans/rigging/fabrik_ik.md).
 [[nodiscard]] auto ik_shortest_arc(glm::vec3 a, glm::vec3 b, const glm::quat& reference_orientation) -> glm::quat;
 
-// Per-joint constraint, resolved at drag start: Ik_settings attachment
-// fields OR-ed with the node's lock_rotation_* channel-lock flags, plus the
+// Per-joint constraint, resolved at drag start: the joint node's Ik.*
+// values OR-ed with its lock_rotation_* channel-lock flags, plus the
 // derived twist axis. Enforcement is swing/twist relative to rest_rotation
 // (doc section 4): the twist component is never generated nor clamped by the
 // solver; swing is clamped in sin(half-angle) quaternion-component space

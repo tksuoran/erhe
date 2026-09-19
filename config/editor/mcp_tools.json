@@ -1238,7 +1238,7 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. Per-bone Ik_settings attachments supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled) and the effective effector_orientation.",
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled) and the effective effector_orientation.",
     "inputSchema": {
       "properties": {
         "effector_orientation": {
@@ -1600,7 +1600,7 @@
     "name": "advance_time"
   },
   {
-    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, layout, grid, frame_controller, draw_mode and ik_settings apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). ik_settings additionally applies only to a bone node. Verify with get_node_details / get_scene_nodes.",
+    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, layout, grid, frame_controller and draw_mode apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1626,8 +1626,7 @@
             "layout",
             "grid",
             "frame_controller",
-            "draw_mode",
-            "ik_settings"
+            "draw_mode"
           ],
           "type": "string"
         }

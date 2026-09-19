@@ -24,6 +24,7 @@
 #include "preview/material_preview.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/frame_controller.hpp"
+#include "scene/ik_properties.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/physics_edits.hpp"
@@ -1034,31 +1035,29 @@ void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::p
     pop_group();
 }
 
-void Properties::ik_settings_actions(const std::shared_ptr<Ik_settings>& ik_settings)
+void Properties::ik_actions(const std::shared_ptr<erhe::scene::Node>& bone)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // The locks, limits, stiffness and rest rotation are generic property
-    // rows (doc/erhe/property_system.md section 4.19); the action remains here.
-    // It records the same undoable write the generic rows and the MCP
-    // set_item_property tool record.
+    // The locks, limits, stiffness, rest rotation and pole are generic
+    // property rows of the bone node (group "IK",
+    // doc/plans/rigging/ik_properties.md P2); the action remains here. It
+    // records the same undoable write the generic rows and the MCP
+    // set_item_property tool record (P5).
     add_entry(
         "Rest",
-        [this, ik_settings]() {
+        [this, bone]() {
             if (ImGui::Button("Set rest from current pose", ImVec2{-FLT_MIN, 0.0f})) {
-                const erhe::scene::Node* const node = ik_settings->get_node();
-                if (node != nullptr) {
-                    const erhe::property::Dependency_property& property = Ik_settings::rest_rotation_property.get();
-                    const erhe::property::Property_value       after{node->parent_from_node_transform().get_rotation()};
-                    m_context.operation_stack->queue(
-                        std::make_shared<Property_set_operation>(
-                            ik_settings,
-                            property,
-                            ik_settings->read_local_state(property),
-                            to_local_state(after)
-                        )
-                    );
-                }
+                const erhe::property::Dependency_property& property = Ik::rest_rotation_property.get();
+                const erhe::property::Property_value       after{bone->parent_from_node_transform().get_rotation()};
+                m_context.operation_stack->queue(
+                    std::make_shared<Property_set_operation>(
+                        bone,
+                        property,
+                        bone->read_local_state(property),
+                        to_local_state(after)
+                    )
+                );
             }
         },
         "Re-capture the reference orientation that defines the zero angle of the limits from the bone's current local rotation"
@@ -1103,7 +1102,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& node_physics     = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint       = std::dynamic_pointer_cast<Node_joint             >(item);
-    const auto& ik_settings      = std::dynamic_pointer_cast<Ik_settings            >(item);
+    const auto& node             = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& layout           = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
@@ -1119,7 +1118,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     }
     if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
-    if (ik_settings)      { ik_settings_actions(ik_settings); }
+    if (node && erhe::scene::is_bone(node.get())) { ik_actions(node); }
     if (collision_filter) { collision_filter_properties(collision_filter); }
     if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }

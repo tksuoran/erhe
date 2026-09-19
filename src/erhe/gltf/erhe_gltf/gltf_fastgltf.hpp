@@ -544,7 +544,7 @@ public:
     // name is declared in extensionsUsed automatically.
     std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder{};
     // Called in the same place as asset_extensions_builder, for per-node
-    // payloads that name a glTF index (an ERHE_rig pole target naming another
+    // payloads that name a glTF index (an extension field naming another
     // node): returns (node, extension members) pairs, in the "member" form
     // extension_payloads uses, merged into that node's payload. A node
     // outside the export is skipped with a warning. The caller lists the

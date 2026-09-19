@@ -1,7 +1,6 @@
 #pragma once
 
 #include "app_message.hpp"
-#include "scene/node_ik_settings.hpp"
 #include "windows/property_editor.hpp"
 #include "windows/dependency_property_rows.hpp"
 
@@ -128,7 +127,7 @@ private:
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
-    void ik_settings_actions          (const std::shared_ptr<Ik_settings>& ik_settings);
+    void ik_actions                   (const std::shared_ptr<erhe::scene::Node>& bone);
     void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
     void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);

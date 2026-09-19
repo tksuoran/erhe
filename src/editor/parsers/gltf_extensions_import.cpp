@@ -13,7 +13,6 @@
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation.hpp"
 #include "scene/item_lookup.hpp"
-#include "scene/node_ik_settings.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/graph_texture_serialization.hpp"
@@ -307,112 +306,6 @@ void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
             node->set_value(erhe::scene::Layout::grid_cell_property,      to_ivec3(ij.value("grid_cell", nlohmann::json{}), node->get_value(erhe::scene::Layout::grid_cell_property)));
             node->set_value(erhe::scene::Layout::grid_span_property,      to_ivec3(ij.value("grid_span", nlohmann::json{}), node->get_value(erhe::scene::Layout::grid_span_property)));
         }
-    }
-}
-
-// ERHE_rig: per-bone IK settings -> Ik_settings attachment properties
-// (doc/plans/rigging/ik_settings.md section 6). Absent fields keep defaults;
-// out-of-range limits and stiffness are clamped to their valid ranges
-// (min in [-pi, 0], max in [0, pi], stiffness in [0, 0.99]).
-void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
-{
-    for (std::size_t i = 0, end = gltf_data.node_extensions.size(); i < end; ++i) {
-        if ((i >= gltf_data.nodes.size()) || !gltf_data.nodes[i]) {
-            continue;
-        }
-        const std::shared_ptr<erhe::scene::Node>& node = gltf_data.nodes[i];
-        const std::string* extension_json = find_extension(gltf_data.node_extensions[i], "ERHE_rig");
-        if (extension_json == nullptr) {
-            continue;
-        }
-        const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_rig", node->get_name());
-        if (payload.is_null()) {
-            continue;
-        }
-        const auto ik_it = payload.find("ik");
-        if ((ik_it == payload.end()) || !ik_it->is_object()) {
-            continue;
-        }
-        const nlohmann::json& ij = *ik_it;
-        auto ik_settings = std::make_shared<Ik_settings>(ij.value("name", std::string{"IK settings"}));
-        const Ik_settings_data defaults{};
-        const auto read_bool3 = [&ij](const char* key, std::array<bool, 3>& out_values) {
-            const auto it = ij.find(key);
-            if ((it == ij.end()) || !it->is_array() || (it->size() < 3)) {
-                return;
-            }
-            for (std::size_t axis = 0; axis < 3; ++axis) {
-                if ((*it)[axis].is_boolean()) {
-                    out_values[axis] = (*it)[axis].get<bool>();
-                }
-            }
-        };
-        std::array<bool, 3> lock  = defaults.lock;
-        std::array<bool, 3> limit = defaults.limit;
-        read_bool3("lock",  lock);
-        read_bool3("limit", limit);
-        for (int axis = 0; axis < 3; ++axis) {
-            ik_settings->set_lock (axis, lock [static_cast<std::size_t>(axis)]);
-            ik_settings->set_limit(axis, limit[static_cast<std::size_t>(axis)]);
-        }
-        ik_settings->set_limit_min(glm::clamp(to_vec3(ij.value("min",       nlohmann::json{}), defaults.limit_min), glm::vec3{-glm::pi<float>()}, glm::vec3{0.0f}));
-        ik_settings->set_limit_max(glm::clamp(to_vec3(ij.value("max",       nlohmann::json{}), defaults.limit_max), glm::vec3{0.0f},             glm::vec3{glm::pi<float>()}));
-        ik_settings->set_stiffness(glm::clamp(to_vec3(ij.value("stiffness", nlohmann::json{}), defaults.stiffness), glm::vec3{0.0f},             glm::vec3{0.99f}));
-        // The pole (doc/plans/rigging/pole_target.md R24). The angle is read
-        // when it is a finite number; the pole node is a glTF node index into
-        // the parse's own node table, the form KHR_physics_rigid_bodies uses
-        // for a joint's connectedNode, so it survives renames and lands on the
-        // imported copy whatever the import wraps the file's nodes in.
-        const auto pole_angle_it = ij.find("pole_angle");
-        if (pole_angle_it != ij.end()) {
-            if (pole_angle_it->is_number() && std::isfinite(pole_angle_it->get<float>())) {
-                ik_settings->set_pole_angle(pole_angle_it->get<float>());
-            } else {
-                log_parsers->warn("ERHE_rig: node '{}' 'pole_angle' is not a finite number - the value is ignored", node->get_name());
-            }
-        }
-        const auto pole_target_it = ij.find("pole_target");
-        if (pole_target_it != ij.end()) {
-            const bool is_index = pole_target_it->is_number_unsigned();
-            const std::size_t pole_index = is_index ? pole_target_it->get<std::size_t>() : 0;
-            if (is_index && (pole_index < gltf_data.nodes.size()) && gltf_data.nodes[pole_index]) {
-                ik_settings->set_pole_target(gltf_data.nodes[pole_index]);
-            } else {
-                log_parsers->warn("ERHE_rig: node '{}' 'pole_target' is not a node index of this file - no pole is set", node->get_name());
-            }
-        }
-        const auto rest_it = ij.find("rest_rotation");
-        if (
-            (rest_it != ij.end()) && rest_it->is_array() && (rest_it->size() >= 4) &&
-            (*rest_it)[0].is_number() && (*rest_it)[1].is_number() &&
-            (*rest_it)[2].is_number() && (*rest_it)[3].is_number()
-        ) {
-            const glm::quat rest{
-                (*rest_it)[3].get<float>(), // w
-                (*rest_it)[0].get<float>(), // x
-                (*rest_it)[1].get<float>(), // y
-                (*rest_it)[2].get<float>()  // z
-            };
-            if (glm::length(rest) > 1.0e-6f) {
-                ik_settings->set_rest_rotation(glm::normalize(rest));
-            }
-        }
-        ik_settings->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-        apply_flags(*ik_settings, ij);
-        // The explicit fields above wrote local values; the properties map
-        // is the attachment's complete local set (the ERHE_layout /
-        // ERHE_light rule), so a field it does not name is cleared again
-        // and a value held by the node above inherits after the reload.
-        const auto properties_it = ij.find("properties");
-        if ((properties_it != ij.end()) && properties_it->is_object()) {
-            erhe::gltf::clear_local_properties_not_listed(
-                *ik_settings,
-                [properties_it](const std::string_view property_name) -> bool {
-                    return properties_it->contains(std::string{property_name});
-                }
-            );
-        }
-        node->attach(ik_settings);
     }
 }
 
@@ -1319,7 +1212,6 @@ void import_gltf_editor_state(
     const std::string gltf_path_str = path.generic_string();
 
     import_layouts(gltf_data);
-    import_rigs(gltf_data);
     import_collections(gltf_data);
     // Styles first: the material and folder assignments below name them.
     import_styles(context, gltf_data, content_library, gltf_path_str, operations);

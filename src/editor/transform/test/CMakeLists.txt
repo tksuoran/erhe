@@ -14,10 +14,10 @@ add_executable(${_target}
     # The editor sources under test are compiled directly into the test
     # executable: the editor itself is an executable, so there is no editor
     # library to link against. ik_solver.cpp is pure (glm + std only);
-    # node_ik_settings.cpp needs erhe::scene (its registered properties).
+    # ik_properties.cpp needs erhe::scene (its registered properties).
     ${CMAKE_CURRENT_SOURCE_DIR}/../ik_solver.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/node_ik_settings.cpp
-    test_ik_settings_properties.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/ik_properties.cpp
+    test_ik_properties.cpp
     test_ik_solver.cpp
 )
 
@@ -33,6 +33,8 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe/tests")
+
+add_dependencies(erhe_tests ${_target})
 
 include(GoogleTest)
 gtest_discover_tests(${_target})

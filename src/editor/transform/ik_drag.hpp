@@ -42,7 +42,7 @@ static constexpr const char* c_ik_effector_orientation_strings[] = {
 // Interactive IK state for one translate drag of a bone (see
 // doc/plans/rigging/fabrik_ik.md and doc/plans/rigging/ik_settings.md).
 // Captures the chain, its drag-start pose, and the per-joint constraints
-// (Ik_settings attachments OR-ed with lock_rotation_* channel-lock flags)
+// (the joints' Ik.* values OR-ed with lock_rotation_* channel-lock flags)
 // in begin(); each apply() re-solves from that pose against an absolute
 // world-space target through the Ik_solver interface and writes
 // rotation-only changes back to the joint nodes (local translations never
@@ -101,7 +101,8 @@ public:
     [[nodiscard]] auto make_transform_operation() const -> std::shared_ptr<Operation>;
 
 private:
-    // Fills the pole members from the chain's Ik_settings attachments. Called
+    // Fills the pole members from the chain joints' Ik.pole_target and
+    // Ik.pole_angle values. Called
     // by begin() while every joint still sits at its drag-start transform, so
     // the pole's world position is a drag-start capture (R9, R12).
     void discover_pole();

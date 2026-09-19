@@ -1,5 +1,6 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 namespace erhe::scene {
@@ -93,6 +94,47 @@ auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>
         }
     }
     return root;
+}
+
+auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>
+{
+    const std::shared_ptr<Node> parent = node.get_parent_node();
+    const Scene* const          scene  = node.get_scene();
+    if (!parent || (scene == nullptr)) {
+        return std::nullopt;
+    }
+    for (const std::shared_ptr<Skin>& skin : scene->get_skins()) {
+        if (!skin) {
+            continue;
+        }
+        const std::vector<std::shared_ptr<Node>>& joints = skin->skin_data.joints;
+        std::size_t node_index  {joints.size()};
+        std::size_t parent_index{joints.size()};
+        for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
+            if (joints[i].get() == &node) {
+                node_index = i;
+            }
+            if (joints[i] == parent) {
+                parent_index = i;
+            }
+        }
+        if ((node_index == joints.size()) || (parent_index == joints.size())) {
+            continue;
+        }
+        const std::optional<glm::mat4> world_from_bind_joint  = skin->skin_data.get_world_from_bind(node_index);
+        const std::optional<glm::mat4> world_from_bind_parent = skin->skin_data.get_world_from_bind(parent_index);
+        if (!world_from_bind_joint.has_value() || !world_from_bind_parent.has_value()) {
+            continue;
+        }
+        const glm::mat4 parent_from_joint_bind = glm::inverse(world_from_bind_parent.value()) * world_from_bind_joint.value();
+        const glm::mat3 basis{
+            glm::normalize(glm::vec3{parent_from_joint_bind[0]}),
+            glm::normalize(glm::vec3{parent_from_joint_bind[1]}),
+            glm::normalize(glm::vec3{parent_from_joint_bind[2]})
+        };
+        return glm::normalize(glm::quat_cast(basis));
+    }
+    return std::nullopt;
 }
 
 using namespace erhe::utility;

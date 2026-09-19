@@ -3,7 +3,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/node_transform_operation.hpp"
-#include "scene/node_ik_settings.hpp"
+#include "scene/ik_properties.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_scene/node.hpp"
@@ -53,36 +53,42 @@ constexpr int   c_max_iterations  = 16;
     return axis;
 }
 
-// Per-joint constraint from the Ik_settings attachment OR-ed with the
-// node's lock_rotation_* channel-lock flags. When only channel locks are
-// present (no attachment), the drag-start local rotation serves as the
-// rest orientation (doc section 2 frame note).
+// Per-joint constraint from the node's Ik.* values OR-ed with its
+// lock_rotation_* channel-lock flags. A joint whose locks and limits are
+// all off is unconstrained (doc/plans/rigging/ik_properties.md P6); a joint
+// constrained by channel locks alone takes the drag-start local rotation as
+// its rest orientation (doc section 2 frame note).
 [[nodiscard]] auto resolve_constraint(
     const erhe::scene::Node& joint,
     const quat&              local_rotation_before,
     const int                twist_axis
 ) -> Ik_joint_constraint
 {
+    const Ik_settings_data data = read_ik_settings(joint);
+
     Ik_joint_constraint constraint;
-    constraint.twist_axis    = twist_axis;
-    constraint.rest_rotation = local_rotation_before;
+    constraint.twist_axis = twist_axis;
 
     const uint64_t flags = joint.get_flag_bits();
     constraint.lock[0] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_x);
     constraint.lock[1] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_y);
     constraint.lock[2] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_z);
-
-    const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(&joint);
-    if (ik_settings) {
-        const Ik_settings_data& data = ik_settings->get_data();
-        for (int axis = 0; axis < 3; ++axis) {
-            constraint.lock [axis] = constraint.lock[axis] || data.lock[axis];
-            constraint.limit[axis] = data.limit[axis];
-        }
-        constraint.limit_min     = data.limit_min;
-        constraint.limit_max     = data.limit_max;
-        constraint.rest_rotation = data.rest_rotation;
+    bool any_ik_constraint = false;
+    for (int axis = 0; axis < 3; ++axis) {
+        constraint.lock [axis] = constraint.lock[axis] || data.lock[axis];
+        constraint.limit[axis] = data.limit[axis];
+        any_ik_constraint = any_ik_constraint || data.lock[axis] || data.limit[axis];
     }
+    constraint.limit_min = data.limit_min;
+    constraint.limit_max = data.limit_max;
+
+    // The limits frame. A joint with any Ik lock or limit on takes the
+    // effective Ik.rest_rotation - a local value, a style, or the per-object
+    // default, which is the bind pose and otherwise identity (P5): a fixed
+    // zero, so the limits do not drift with the pose. The drag-start local
+    // rotation is the rest only for a joint constrained by channel-lock flags
+    // alone, which is the section 2 frame note's case.
+    constraint.rest_rotation = any_ik_constraint ? data.rest_rotation : local_rotation_before;
 
     // A constraint on only the twist axis is a solve no-op (the solver
     // never generates twist), so it must not route the chain into the
@@ -208,15 +214,11 @@ void Ik_drag::discover_pole()
     const erhe::scene::Node*  rejected_pole      = nullptr;
     const char*               rejected_reason    = nullptr;
 
-    // R5: scan effector toward the root and take the first attachment whose
-    // pole_target resolves to an admissible pole, so a pole authored on the
-    // effector - where Blender's IK constraint itself lives - wins.
+    // R5: scan effector toward the root and take the first joint node whose
+    // Ik.pole_target resolves to an admissible pole, so a pole authored on
+    // the effector - where Blender's IK constraint itself lives - wins.
     for (std::size_t i = m_joints.size(); i-- > 0;) {
-        const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(m_joints[i].get());
-        if (!ik_settings) {
-            continue;
-        }
-        const std::shared_ptr<erhe::scene::Node> pole = ik_settings->get_pole_target();
+        const std::shared_ptr<erhe::scene::Node> pole = get_ik_pole_target(*m_joints[i]);
         if (!pole) {
             continue; // nothing authored here (or the reference died): keep scanning
         }
@@ -246,7 +248,7 @@ void Ik_drag::discover_pole()
         m_has_pole      = true;
         m_pole_node     = pole;
         m_pole_position = vec3{pole->position_in_world()}; // R9: captured once, at drag start
-        m_pole_angle    = ik_settings->get_data().pole_angle; // R6: the same attachment's effective angle
+        m_pole_angle    = m_joints[i]->get_value(Ik::pole_angle_property); // R6: the same node's effective angle
         return;
     }
 

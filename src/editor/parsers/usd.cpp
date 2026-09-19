@@ -53,7 +53,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "parsers/physics_export.hpp"
 #include "parsers/physics_import.hpp"
 #include "scene/draw_mode.hpp"
-#include "scene/node_ik_settings.hpp"
+#include "scene/ik_properties.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -2619,15 +2619,15 @@ void collect_usd_draw_modes(
     );
 }
 
-// The nodes of the tree carrying an Ik_settings attachment
+// The nodes of the tree holding a local Ik.* value
 // (doc/plans/rigging/pole_target.md R26). USD has no form for rig data, so the
 // save names the count and writes none of it.
-[[nodiscard]] auto count_ik_settings(erhe::scene::Node& root_node) -> std::size_t
+[[nodiscard]] auto count_ik_value_holders(erhe::scene::Node& root_node) -> std::size_t
 {
     std::size_t count = 0;
     root_node.for_each<erhe::scene::Xformable>(
         [&count](erhe::scene::Xformable& prim) -> bool {
-            if (erhe::scene::get_attachment<Ik_settings>(&prim)) {
+            if (has_local_ik_value(prim)) {
                 ++count;
             }
             return true;
@@ -3844,10 +3844,10 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     collect_usd_draw_modes(*root_node.get(), save_arguments.draw_modes);
 
     // IK settings (doc/plans/rigging/pole_target.md R26): USD has no form for
-    // rig data, so the attachments - locks, limits, stiffness, rest
+    // rig data, so the bones' Ik.* values - locks, limits, stiffness, rest
     // orientation, pole target and pole angle - are not written. A USD form is
     // Phase 4 work (doc/plans/rigging/rigging_tools.md).
-    const std::size_t ik_settings_count = count_ik_settings(*root_node.get());
+    const std::size_t ik_settings_count = count_ik_value_holders(*root_node.get());
     if (ik_settings_count > 0) {
         log_parsers->warn(
             "save_scene_usd '{}': {} node(s) carry IK settings, which USD has no form for - the IK settings are not written",

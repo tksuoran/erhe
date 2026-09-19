@@ -4,6 +4,7 @@
 #include "erhe_item/typed.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cstddef>
 #include <optional>
@@ -69,6 +70,17 @@ public:
 // Not cached: the walk is O(joints * depth) and callers are selection / gizmo
 // updates, not per-primitive render code.
 [[nodiscard]] auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>;
+
+// The node's local rotation in the bind pose, when the node and its parent
+// node are joints of the same skin: the orthonormalized rotation of
+// inverse(world_from_bind(parent)) * world_from_bind(joint), using the first
+// such skin in Scene::get_skins() order so the answer is deterministic for a
+// node that several skins list. Returns nullopt when the node has no parent
+// node, belongs to no scene, or no skin lists both the node and its parent.
+//
+// It is what a rest orientation of a joint is taken from (the IK limits'
+// zero angle, doc/plans/rigging/ik_properties.md P5).
+[[nodiscard]] auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>;
 
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;

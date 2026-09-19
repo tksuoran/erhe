@@ -516,6 +516,8 @@ erhe_target_sources_grouped(
     scene/debug_draw.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
+    scene/ik_properties.cpp
+    scene/ik_properties.hpp
     scene/mesh_intersect.cpp
     scene/mesh_intersect.hpp
     scene/draw_mode.cpp
@@ -526,8 +528,6 @@ erhe_target_sources_grouped(
     scene/draw_mode_renderer.hpp
     scene/node_joint.cpp
     scene/node_joint.hpp
-    scene/node_ik_settings.cpp
-    scene/node_ik_settings.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
     scene/node_raytrace.cpp
