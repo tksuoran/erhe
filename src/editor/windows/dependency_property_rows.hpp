@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,10 +37,27 @@ class Property_editor;
 // "Remove Property" in its context menu, and an "x" after its widget when
 // the local value is the only reason it is listed; both clear the local
 // value (doc/erhe/property_system.md D12).
+// An action offered as a button row directly below one property's row, in
+// that property's group - for a write that belongs with the value it writes
+// but is not a plain edit of it (capture a value from elsewhere). The row is
+// listed exactly when the property's row is, and disabled while the property
+// is write-sealed.
+class Property_row_action
+{
+public:
+    const erhe::property::Dependency_property*                                   property{nullptr};
+    std::string                                                                  label;       // row label
+    std::string                                                                  button_text;
+    std::string                                                                  tooltip;
+    std::function<void(const std::vector<std::shared_ptr<erhe::Item_base>>&)>    execute;     // the row's items
+};
+
 class Dependency_property_rows
 {
 public:
     explicit Dependency_property_rows(App_context& context);
+
+    void add_row_action(Property_row_action action);
 
     // Adds rows to `editor` for the properties every item's type has, in
     // registration order, grouped by Property_ui::group. Call between the
@@ -110,6 +128,8 @@ private:
     void clear_style              ();
 
     App_context& m_context;
+
+    std::vector<Property_row_action> m_row_actions;
 
     // Items the currently executing code operates on, bound only while
     // add_rows() / add_sub_object_rows() build the rows and while a row

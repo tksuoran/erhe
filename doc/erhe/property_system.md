@@ -2118,9 +2118,11 @@ any local `Ik.*` value", which the USD writer counts because USD has no
 form for rig data.
 
 The generic section draws every row.
-`Properties::ik_actions` (`properties.cpp`, called from
-`item_diagnostics` for a bone node) adds the single "Set rest from current
-pose" action, which records a `Property_set_operation` of
+A `Property_row_action` registered by `Properties` on
+`Ik.rest_rotation` (`Dependency_property_rows::add_row_action`: a button
+row drawn directly below a property's row, listed exactly when that row is
+and disabled while it is write-sealed) adds the single "Set rest from
+current pose" action, which records a `Property_set_operation` of
 `Ik.rest_rotation` - the operation the generic rows and MCP
 `set_item_property` record. The values ride the node's `ERHE_node`
 `properties` map by their qualified names (D14), and the pole reference

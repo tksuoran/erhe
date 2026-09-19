@@ -687,18 +687,39 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     // content of a closed scene alive. A sub-object row (D29) reads the
     // sub-object's own layers, which no file spells as a prim of its own, so
     // it gets no origin.
-    if (m_sub_object.has_value()) {
-        return;
-    }
-    editor.set_entry_tooltip_extra(
-        [this, item = std::weak_ptr<erhe::Item_base>{m_items->front()}, &property]() -> std::string {
-            const std::shared_ptr<erhe::Item_base> locked = item.lock();
-            if (!locked) {
-                return {};
+    if (!m_sub_object.has_value()) {
+        editor.set_entry_tooltip_extra(
+            [this, item = std::weak_ptr<erhe::Item_base>{m_items->front()}, &property]() -> std::string {
+                const std::shared_ptr<erhe::Item_base> locked = item.lock();
+                if (!locked) {
+                    return {};
+                }
+                return property_origin_tooltip(describe_property_origin(m_context, *locked.get(), property));
             }
-            return property_origin_tooltip(describe_property_origin(m_context, *locked.get(), property));
+        );
+    }
+
+    for (const Property_row_action& action : m_row_actions) {
+        if (action.property != &property) {
+            continue;
         }
-    );
+        editor.add_entry(
+            std::string{action.label},
+            [items = m_items, &action, sealed]() {
+                ImGui::BeginDisabled(sealed);
+                if (ImGui::Button(action.button_text.c_str(), ImVec2{-FLT_MIN, 0.0f})) {
+                    action.execute(*items);
+                }
+                ImGui::EndDisabled();
+            },
+            std::string{action.tooltip}
+        );
+    }
+}
+
+void Dependency_property_rows::add_row_action(Property_row_action action)
+{
+    m_row_actions.push_back(std::move(action));
 }
 
 auto Dependency_property_rows::inline_remove_offered(const Dependency_property& property, const Property_metadata& metadata) const -> bool

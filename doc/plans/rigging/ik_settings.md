@@ -331,10 +331,11 @@ formulation adapted to swing/twist limits:
   degrees, and the pole rows of `pole_target.md` R17. The `visible_when` of
   section 1 decides which nodes show them, so there is nothing to add and
   nothing to gate.
-- The "Set rest from current pose" button (section 1) is an action in
-  `Properties::ik_actions` (`src/editor/windows/properties.cpp`), called
-  from `item_diagnostics` for every selected node that is a bone, so it is
-  drawn in the bone node's own section under the row label "Rest".
+- The "Set rest from current pose" button (section 1) is a
+  `Property_row_action` on `Ik.rest_rotation`, registered by the
+  `Properties` constructor (`src/editor/windows/properties.cpp`): the row
+  "Set Rest" directly below Rest Rotation in the "IK" group. With several
+  bones selected one press writes every bone's rest as one undo step.
 - Undo: every row edit, the "Set rest from current pose" button and the MCP
   `set_item_property` tool record one `Property_set_operation` (the local
   state before and after), so one completed edit = one undo step.
@@ -486,8 +487,8 @@ formulation adapted to swing/twist limits:
   `derive_twist_axis`; any lock or limit, the twist axis included, routes
   the chain into the constrained solver); constrained write-back sets
   solver-produced local rotations directly.
-- Properties UI - the generic rows of group "IK" plus
-  `Properties::ik_actions` (`properties.cpp`). Property tests:
+- Properties UI - the generic rows of group "IK" plus the "Set Rest" row
+  action (`properties.cpp`). Property tests:
   `src/editor/transform/test/test_ik_properties.cpp`.
 
 ## Standing traps

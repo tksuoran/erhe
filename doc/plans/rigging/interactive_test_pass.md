@@ -40,10 +40,9 @@ Progress: sections 0-2 pass. Section 3 is re-run on the test rig below
 - **Lock / Limit / Stiffness / Rest Rotation / Pole Target / Pole Angle
   rows**: Properties, group "IK" of the bone node itself. They appear on any
   node the rig marks as a bone; nothing has to be added first.
-- **Set rest from current pose**: Properties, in the bone node's own framed
-  section (headed by its type and name), row "Rest", above the node's
-  property groups and so above the "IK" group whose Rest Rotation row it
-  writes. Greyed out while the bone has `lock_edit`.
+- **Set rest from current pose**: Properties, group "IK", the row "Set
+  Rest" directly below Rest Rotation. Greyed out while the bone has
+  `lock_edit`.
 - **Channel locks**: Properties of a node, group "Channel Locks".
 - **ik_lock**: Properties of a bone, the "IK Lock" row of the "IK" group
   (ends the chain at that bone; not an axis lock).
@@ -113,7 +112,7 @@ values set, unless the step says otherwise. "Drag" means: select
    each IK drag is one step for the whole chain.
 9. **Rest.** Clear everything. Rotate `bone_1` to about 30 degrees about X
    with the Rotate tool. Press "Set rest from current pose" (Properties, the
-   "Rest" row in the bone's framed section at the top): Rest Rotation in the
+   "Set Rest" row below Rest Rotation in the IK group): Rest Rotation in the
    IK group now holds that rotation. Set Limit X to -10 .. 45 again and drag:
    `bone_1` now stops at 30 - 10 = 20 and 30 + 45 = 75 degrees, the limits
    being measured from the rest pose. One Ctrl+Z undoes the Set rest press.
@@ -208,9 +207,6 @@ for a pole to aim.
 - **F1.** The Transform window shows no tool parameter group until a gizmo
   handle has been used once. Queued in `prompt_queue.txt`, to fix after
   this pass.
-- **F2.** "Set rest from current pose" sits above the bone node's property
-  groups, apart from the "IK" group that holds the Rest Rotation row it
-  writes - hard to find. Candidate: move it next to that row.
 
 ## Reporting a problem
 

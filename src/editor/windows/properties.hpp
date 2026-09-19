@@ -127,7 +127,6 @@ private:
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
-    void ik_actions                   (const std::shared_ptr<erhe::scene::Node>& bone);
     void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
     void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);

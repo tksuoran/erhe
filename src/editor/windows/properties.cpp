@@ -14,6 +14,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include <algorithm>
+#include "operations/compound_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -106,6 +107,38 @@ Properties::Properties(
     , m_context   {app_context}
     , m_dependency_rows{app_context}
 {
+    // Below the Rest Rotation row of a bone's "IK" group
+    // (doc/plans/rigging/ik_settings.md section 5): the same undoable write the
+    // generic rows and the MCP set_item_property tool record, one undo step
+    // for the whole selection.
+    m_dependency_rows.add_row_action(
+        Property_row_action{
+            .property    = Ik::rest_rotation_property.get_ptr(),
+            .label       = "Set Rest",
+            .button_text = "Set rest from current pose",
+            .tooltip     = "Re-capture the reference orientation that defines the zero angle of the limits from the bone's current local rotation",
+            .execute     = [this](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                const erhe::property::Dependency_property& property = Ik::rest_rotation_property.get();
+                Compound_operation::Parameters parameters;
+                for (const std::shared_ptr<erhe::Item_base>& item : items) {
+                    const std::shared_ptr<erhe::scene::Node> bone = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                    if (!bone) {
+                        continue;
+                    }
+                    const erhe::property::Property_value after{bone->parent_from_node_transform().get_rotation()};
+                    parameters.operations.push_back(
+                        std::make_shared<Property_set_operation>(bone, property, bone->read_local_state(property), to_local_state(after))
+                    );
+                }
+                if (parameters.operations.size() == 1) {
+                    m_context.operation_stack->queue(parameters.operations.front());
+                } else if (!parameters.operations.empty()) {
+                    m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+                }
+            }
+        }
+    );
+
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) {
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
@@ -1035,35 +1068,6 @@ void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::p
     pop_group();
 }
 
-void Properties::ik_actions(const std::shared_ptr<erhe::scene::Node>& bone)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // The locks, limits, stiffness, rest rotation and pole are generic
-    // property rows of the bone node (group "IK",
-    // doc/plans/rigging/ik_settings.md section 5); the action remains here.
-    // It records the same undoable write the generic rows and the MCP
-    // set_item_property tool record.
-    add_entry(
-        "Rest",
-        [this, bone]() {
-            if (ImGui::Button("Set rest from current pose", ImVec2{-FLT_MIN, 0.0f})) {
-                const erhe::property::Dependency_property& property = Ik::rest_rotation_property.get();
-                const erhe::property::Property_value       after{bone->parent_from_node_transform().get_rotation()};
-                m_context.operation_stack->queue(
-                    std::make_shared<Property_set_operation>(
-                        bone,
-                        property,
-                        bone->read_local_state(property),
-                        to_local_state(after)
-                    )
-                );
-            }
-        },
-        "Re-capture the reference orientation that defines the zero angle of the limits from the bone's current local rotation"
-    );
-}
-
 // Developer diagnostics (R3 of doc/editor/properties_window.md): the
 // whole flag word as text. The authored bits are property rows
 // (Item_base::lock_edit_property and the other flag bridges); the rest are
@@ -1102,7 +1106,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& node_physics     = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint       = std::dynamic_pointer_cast<Node_joint             >(item);
-    const auto& node             = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& layout           = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
@@ -1118,7 +1121,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     }
     if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
-    if (node && erhe::scene::is_bone(node.get())) { ik_actions(node); }
     if (collision_filter) { collision_filter_properties(collision_filter); }
     if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }
