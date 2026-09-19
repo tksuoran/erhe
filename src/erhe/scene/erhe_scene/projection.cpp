@@ -117,7 +117,7 @@ auto Projection::get_projection_matrix(
                 return glm::mat4{1.0f};
             }
             result = erhe::math::create_orthographic(
-                -0.5f * ortho_height / aspect_ratio, 0.5f * ortho_height / aspect_ratio,
+                -0.5f * ortho_height * aspect_ratio, 0.5f * ortho_height * aspect_ratio,
                 -0.5f * ortho_height,                0.5f * ortho_height,
                 clip_range.z_near, clip_range.z_far, depth_range
             );
@@ -219,8 +219,8 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
 
         case Projection::Type::orthogonal_vertical: {
             return Fov_sides{
-                -0.5f * ortho_height / viewport.aspect_ratio(),
-                 0.5f * ortho_height / viewport.aspect_ratio(),
+                -0.5f * ortho_height * viewport.aspect_ratio(),
+                 0.5f * ortho_height * viewport.aspect_ratio(),
                  0.5f * ortho_height,
                 -0.5f * ortho_height
             };
