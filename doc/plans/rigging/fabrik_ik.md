@@ -172,8 +172,8 @@ reach, without changing any bone lengths.
   participating in the active chain during the drag, and mark the chain root
   (e.g. via `erhe::renderer::Primitive_renderer`, which draws the translate
   drag guides today).
-- The Properties window flag list showing `ik_lock` doubles as the way to see
-  and edit lock state; a distinct item tree icon or badge for locked bones is
+- The "IK Lock" row of the Properties window's "IK" group, offered on bones,
+  is the way to see and edit lock state; a distinct item tree icon or badge for locked bones is
   a follow-up, not required.
 
 ## Out of scope for Phase 1 - scheduled in later phases

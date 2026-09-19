@@ -36,7 +36,7 @@ Progress: sections 0-3 pass. Testing continues at section 4.
   property groups and so above the "IK" group whose Rest Rotation row it
   writes. Greyed out while the bone has `lock_edit`.
 - **Channel locks**: Properties of a node, group "Channel Locks".
-- **ik_lock**: Properties of a bone, among the flag / lock rows.
+- **ik_lock**: Properties of a bone, the "IK Lock" row of the "IK" group.
 - **Add Bone Tip Nodes**: Hierarchy, right-click the rig root.
 
 ## 0. Setup - PASS

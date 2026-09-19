@@ -366,8 +366,18 @@ const erhe::property::Property<bool> Item_base::transform_world_normative_proper
 const erhe::property::Property<bool> Item_base::show_in_developer_ui_property = register_flag_property(
     "show_in_developer_ui", Item_flags::show_in_developer_ui, "Show In Developer UI", "", "", true
 );
-const erhe::property::Property<bool> Item_base::ik_lock_property = register_flag_property(
-    "ik_lock", Item_flags::ik_lock, "IK Lock", "", "", true
+// Offered on bones, in the same "IK" group as the editor's Ik.* rows.
+const erhe::property::Property<bool> Item_base::ik_lock_property = Item_base::register_flag_bit_property(
+    "ik_lock", Item_base::property_owner_type(), Item_flags::ik_lock,
+    erhe::property::Property_ui{
+        .group        = "IK",
+        .tooltip      = "Ends the IK chain: an IK drag of a descendant bone solves up to this bone, which keeps its position as the chain root, and leaves its ancestors alone. Dragging this bone itself moves it without IK",
+        .label        = "IK Lock",
+        .visible_when = [](const erhe::property::Dependency_object& object) -> bool {
+            return erhe::utility::test_bit_set(static_cast<const Item_base&>(object).get_flag_bits(), Item_flags::bone);
+        }
+    },
+    erhe::property::Property_flags::none
 );
 
 auto Item_base::style_applies(const erhe::property::Dependency_object& source, const erhe::property::Dependency_object& object) -> bool
