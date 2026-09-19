@@ -26,6 +26,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/debug_visualizations.hpp"
+#include "tools/hotbar.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/weight_display.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -651,8 +652,37 @@ App_rendering::App_rendering(
             .filter{
                 .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::rendertarget,
                 .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = 0
+                .require_all_bits_clear       = Item_flags::view_anchored
             }
+        },
+        not_selected
+    );
+
+    // View anchored rendertarget meshes (the hotbar quad) are drawn only in
+    // the view they are anchored to. The decision is made here, per rendered
+    // view, and not by toggling the mesh visibility from inside the
+    // rendergraph: the draw lists mirror item flags once per frame (in
+    // flush_pending()), so with several views a per-view toggle leaves only
+    // the last toggle of the frame in effect for every view of the next one.
+    rendertarget_view_anchored = make_composition_pass(
+        "Rendertarget view anchored",
+        Composition_pass_data{
+            .ignore_exposure     {true},
+            .overlay             {true},
+            .mesh_layers         {Mesh_layer_id::rendertarget},
+            .blending_mode_policy{Blending_mode_policy::allow_all},
+            .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
+            .filter{
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::rendertarget | Item_flags::view_anchored,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            },
+            .is_enabled{
+                [](const Render_context& context) -> bool {
+                    const Hotbar* const hotbar = context.app_context.hotbar;
+                    return (hotbar != nullptr) && (hotbar->get_hover_scene_view() == &context.scene_view);
+                }
+            },
         },
         not_selected
     );

@@ -25,6 +25,7 @@
 #include "operations/operations_window.hpp"
 #include "quad_view.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "rendertarget_mesh.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -462,6 +463,15 @@ void Hotbar::init_hotbar()
         false
     );
 
+    // The quad follows the hovered view's camera and is drawn only in that
+    // view: the "Rendertarget view anchored" composition pass selects it by
+    // this flag and runs only for get_hover_scene_view(). (With an OpenXR quad
+    // composition layer there is no scene mesh.)
+    Rendertarget_mesh* const rendertarget_mesh = m_quad_view->get_rendertarget_mesh();
+    if (rendertarget_mesh != nullptr) {
+        rendertarget_mesh->enable_flag_bits(erhe::Item_flags::view_anchored);
+    }
+
     Rendertarget_imgui_host* imgui_host = m_quad_view->get_imgui_host();
 
     ImGuiStyle& style = imgui_host->get_mutable_style();
@@ -635,6 +645,7 @@ void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
 
     if (message.scene_view != old_scene_view) {
         if (m_use_radial) {
+            set_mesh_visibility(message.scene_view != nullptr);
             update_node_transform();
         } else {
             erhe::rendergraph::Rendergraph_node* new_node =
@@ -669,20 +680,17 @@ void Hotbar::on_tool_select_message(Tool_select_message&)
     update_slot_from_tool(m_context.tools->get_priority_tool());
 }
 
-// Show the hotbar only in the view it is anchored to: this runs once per
-// rendered view, from inside that view's rendergraph node, so toggling the
-// mesh here scopes it to the hovered view's render.
+// Which view draws the hotbar is decided by the "Rendertarget view anchored"
+// composition pass (App_rendering), not here: the mesh visibility is frame
+// state, set when the hovered view changes (on_hover_scene_view_message()).
 //
 // The node transform is NOT updated here on desktop -- see
 // update_once_per_frame().
-void Hotbar::on_render_scene_view_message(Render_scene_view_message& message)
+void Hotbar::on_render_scene_view_message(Render_scene_view_message&)
 {
     if (!m_enabled || !m_show) {
         return;
     }
-
-    bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
-    set_mesh_visibility(visible);
 
     // Under OpenXR the eye poses only become known when
     // Headset_view::render_frame() locates the views, which happens inside the

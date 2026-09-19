@@ -209,6 +209,9 @@ public:
     // Overlay pass that draws rendertarget meshes (e.g. the hotbar), ignoring
     // camera exposure and rendered after post-processing when enabled (#230).
     std::shared_ptr<Composition_pass> rendertarget;
+    // Same, for the meshes flagged Item_flags::view_anchored: runs only in the
+    // view the hotbar is anchored to.
+    std::shared_ptr<Composition_pass> rendertarget_view_anchored;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);

@@ -176,7 +176,13 @@ public:
     static constexpr uint64_t lock_scale_x              = (uint64_t{1} << 48);
     static constexpr uint64_t lock_scale_y              = (uint64_t{1} << 49);
     static constexpr uint64_t lock_scale_z              = (uint64_t{1} << 50);
-    static constexpr uint64_t count                     = 51;
+    // The item is anchored to one scene view and drawn only in that view
+    // (the editor hotbar quad follows the hovered view's camera). The mesh
+    // keeps one visible state for the whole frame; the render pass that
+    // draws view anchored items decides per view whether it runs. Session
+    // state of editor furniture, never serialized.
+    static constexpr uint64_t view_anchored             = (uint64_t{1} << 51);
+    static constexpr uint64_t count                     = 52;
 
     static constexpr uint64_t lock_translation_mask     = lock_translation_x | lock_translation_y | lock_translation_z;
     static constexpr uint64_t lock_rotation_mask        = lock_rotation_x    | lock_rotation_y    | lock_rotation_z;
@@ -262,6 +268,7 @@ public:
         "Lock Scale X",
         "Lock Scale Y",
         "Lock Scale Z",
+        "View Anchored",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
