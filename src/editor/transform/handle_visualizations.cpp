@@ -240,6 +240,7 @@ constexpr vec4 box_outline_color{1.00f, 0.70f, 0.1f, 1.0f};
 //   4 = single-axis translate arrows, scale-axis shafts and cubes
 //   3 = plane translate quads, plane-scale outline squares
 //   2 = rotate rings, center cube, everything else
+//   1 = rotate ring hover band (Transform_tool::render_hover_preview)
 constexpr erhe::renderer::Debug_renderer_config handle_line_config{
     .primitive_type    = erhe::graphics::Primitive_type::line,
     .stencil_reference = 2,

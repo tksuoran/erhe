@@ -2362,10 +2362,15 @@ void Transform_tool::render_hover_preview(const Render_context& context)
             band_indices.push_back(outer_1);
             band_indices.push_back(inner_1);
         }
+        // Stencil reference 1, below the rings' 2 (see the layering table in
+        // handle_visualizations.cpp): the band overlaps the ring it
+        // highlights, and buckets of one reference layer first-drawn-wins in
+        // bucket creation order, which is not defined between this triangle
+        // bucket and the ring line bucket.
         erhe::renderer::Primitive_renderer triangle_renderer = context.get(
             erhe::renderer::Debug_renderer_config{
                 .primitive_type    = erhe::graphics::Primitive_type::triangle,
-                .stencil_reference = 2,
+                .stencil_reference = 1,
                 .draw_visible      = true,
                 .draw_hidden       = true,
                 .xray              = true
