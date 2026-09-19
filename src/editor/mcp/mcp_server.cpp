@@ -683,6 +683,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "free_undone_loads",              &Mcp_server::action_free_undone_loads             },
         { "debug_set_item_tree_hover",      &Mcp_server::action_debug_set_item_tree_hover     },
         { "debug_set_transform_hover",      &Mcp_server::action_debug_set_transform_hover     },
+        { "debug_imgui_mouse",              &Mcp_server::action_debug_imgui_mouse             },
         { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
         { "set_geometry_graph_target",      &Mcp_server::action_set_geometry_graph_target     },
         { "geometry_graph_add_node",        &Mcp_server::action_geometry_graph_add_node       },

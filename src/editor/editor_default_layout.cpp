@@ -106,6 +106,52 @@ void build_default_layout(
     node_root_fraction[root_dock_id] = ImVec2{1.0f, 1.0f};
 
     for (const Dock_placement& placement : placements) {
+        if (!placement.cross_windows.empty()) {
+            // 2 x 2 grid sharing one cross splitter (ImGuiDockNodeFlags_CrossSplit)
+            if (placement.cross_windows.size() != 4) {
+                log_startup->warn("Default layout: cross_windows needs exactly four window titles, got {}", placement.cross_windows.size());
+                continue;
+            }
+            ImGuiID target_node_id = root_dock_id;
+            if (!placement.target.empty()) {
+                const auto it = window_dock_node.find(placement.target);
+                if (it == window_dock_node.end()) {
+                    log_startup->warn("Default layout: cross target '{}' has not been placed", placement.target);
+                    continue;
+                }
+                target_node_id = it->second;
+            }
+            std::size_t kept_cell = 0;
+            for (std::size_t cell = 0; cell < 4; ++cell) {
+                if (placement.cross_windows[cell] == placement.target) {
+                    kept_cell = cell;
+                }
+            }
+            ImGuiID cell_node_ids[4] = { 0, 0, 0, 0 };
+            ImGui::DockBuilderSplitNodeCross(target_node_id, ImGuiAxis_X, 0.5f, 0.5f, cell_node_ids);
+            const ImVec2 target_fraction = node_root_fraction[target_node_id];
+            node_root_fraction.erase(target_node_id);
+            for (std::size_t cell = 0; cell < 4; ++cell) {
+                node_root_fraction[cell_node_ids[cell]] = ImVec2{0.5f * target_fraction.x, 0.5f * target_fraction.y};
+            }
+            // Windows already docked in the target node were carried into one
+            // of the new leaves by the splits; dock them into the kept cell.
+            for (auto& [title, node_id] : window_dock_node) {
+                if (node_id == target_node_id) {
+                    ImGui::DockBuilderDockWindow(title.c_str(), cell_node_ids[kept_cell]);
+                    node_id = cell_node_ids[kept_cell];
+                }
+            }
+            for (std::size_t cell = 0; cell < 4; ++cell) {
+                const std::string& title = placement.cross_windows[cell];
+                if (title.empty() || (window_dock_node.find(title) != window_dock_node.end())) {
+                    continue;
+                }
+                ImGui::DockBuilderDockWindow(title.c_str(), cell_node_ids[cell]);
+                window_dock_node[title] = cell_node_ids[cell];
+            }
+            continue;
+        }
         if (placement.window.empty()) {
             continue;
         }
@@ -215,6 +261,11 @@ void install_default_layout(
                 }
                 if (placement.target == c_primary_viewport_substitution) {
                     placement.target = viewport_title;
+                }
+                for (std::string& cross_window : placement.cross_windows) {
+                    if (cross_window == c_primary_viewport_substitution) {
+                        cross_window = viewport_title;
+                    }
                 }
                 erhe::imgui::Imgui_window* window = find_window_by_title(context, placement.window);
                 if ((window != nullptr) && !window->is_window_visible()) {

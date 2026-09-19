@@ -5,7 +5,7 @@ from erhe_codegen import *
 # earlier entry (or relative to the root dockspace when target is empty).
 # See editor_default_layout.cpp.
 struct("Dock_placement",
-    version=1,
+    version=2,
     short_desc="Procedural default layout entry",
     long_desc="",
     developer=False,
@@ -38,6 +38,13 @@ struct("Dock_placement",
             added_in=1,
             default="0.0f",
             short_desc="Fraction of the ROOT dockspace size (width for left/right, height for up/down) the window takes",
+        ),
+        field(
+            "cross_windows",
+            Vector(String),
+            added_in=2,
+            short_desc="Four ImGui window titles (top-left, top-right, bottom-left, bottom-right); when set, the target's dock node is split into a 2 x 2 grid sharing one cross splitter",
+            long_desc="window, direction and fraction are unused by such an entry. The windows already docked in the target's node go to the cell that names the target, else to the top-left cell",
         ),
     ],
 )

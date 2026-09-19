@@ -39,6 +39,44 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - Font atlas is shared across all hosts.
 - The `windows/` subdirectory has reusable utility windows (performance, log, pipeline inspector, graph plotter, framebuffer viewer).
 
-## Future work
+## Cross splitter (Dear ImGui fork feature)
 
-- [Cross splitter for four docked windows](../plans/cross_splitter.md)
+erhe's Dear ImGui (the in-tree copy `src/imgui/imgui/`, file-identical to the
+`erhe` branch of the `tksuoran/imgui` fork, where ImGui changes are made
+first) adds a cross-bar splitter for four windows docked as a 2 x 2 grid. It
+is generic docking code, independent of erhe.
+
+- The grid is one dock split node whose two children are both split on the
+  other axis. `ImGuiDockNodeFlags_CrossSplit` on that node turns its splitter
+  (the outer bar) and its children's splitters (the two inner segments) into
+  one cross: child 1's split follows child 0's in `DockNodeTreeUpdatePosSize`,
+  so the inner segments stay collinear through host resizes and with a
+  central node in any cell.
+- `DockNodeTreeUpdateCrossSplitter` drives the cross. Dragging an inner
+  segment moves both inner segments within the intersection of their limits;
+  dragging the outer bar moves it alone; the crossing (grown by
+  `WindowsBorderHoverPadding`) is a handle that moves both axes, with the
+  ResizeAll cursor. The inner segments highlight together, the handle
+  highlights all three bars. `NoResize` / `NoResizeX` / `NoResizeY` disable
+  the matching axis.
+- The cross is engaged only while all four cells are visible
+  (`ImGuiDockNode::IsCrossSplitEngaged()`); otherwise the nodes are plain dock
+  nodes and the flag stays set, so reopening a closed window re-engages it.
+  The flag follows the child nodes through tree merges
+  (`DockNodeMoveChildNodes`).
+- The flag is saved in the docking ini as ` Cross=1`.
+- API (`imgui_internal.h`): `DockBuilderSplitNodeCross(node_id, outer_axis,
+  ratio_outer, ratio_inner, out_ids[4])` builds the grid (leaf ids in
+  row-major order) and `DockBuilderSetNodeCrossSplit(node_id, enabled)` sets
+  the flag on an existing split node.
+- User control: the dock node window menu of the four cells offers "Cross
+  splitter"; Metrics > Docking shows a `CrossSplit` checkbox per node.
+- Editor default layout: a `Dock_placement` entry (`"_version": 2`) with
+  `cross_windows` (four titles: top-left, top-right, bottom-left,
+  bottom-right) splits the target's dock node into the grid; see
+  `src/editor/editor_default_layout.cpp`.
+- Headless verification: the MCP tool `debug_imgui_mouse` queues pointer
+  events into the desktop ImGui context. Hide the floating windows that cover
+  the bars (`set_window_visibility`), drag a bar or the crossing, then
+  `capture_screenshot`; after `request_exit` the ini's `SizeRef` values of the
+  four cells show equal inner sizes on both sides.
