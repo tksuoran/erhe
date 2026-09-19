@@ -2846,7 +2846,7 @@ private:
                 log_usd->warn("USD prim '{}': erhe property '{}' is read-only", absolute_path, qualified_name);
                 continue;
             }
-            if (property->get_type() == erhe::property::Property_type::object) {
+            if (erhe::property::is_object_reference_type(property->get_type())) {
                 log_usd->warn("USD prim '{}': erhe property '{}' is an object reference, which a custom attribute cannot name", absolute_path, qualified_name);
                 continue;
             }

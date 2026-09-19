@@ -1225,7 +1225,7 @@ public:
             log_parsers->warn("glTF: {} '{}' property '{}' names '{}', which the scene does not hold", m_entry.item->get_type_name(), m_entry.item->get_name(), m_entry.property_name, m_entry.text);
             return;
         }
-        if (!m_entry.item->set_value(*property, erhe::property::Object_reference{referenced})) {
+        if (!m_entry.item->set_value(*property, erhe::property::make_object_reference(property->get_type(), referenced))) {
             log_parsers->warn("glTF: {} '{}' property '{}' cannot reference '{}'", m_entry.item->get_type_name(), m_entry.item->get_name(), m_entry.property_name, m_entry.text);
         }
     }

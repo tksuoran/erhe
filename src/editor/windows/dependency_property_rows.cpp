@@ -876,12 +876,14 @@ auto Dependency_property_rows::draw_widget(
             }
             return changed;
         }
-        case Property_type::object: {
+        case Property_type::object:
+        case Property_type::weak_object: {
             // D28: a drop target / picker for an item; commits on selection.
+            // Both reference kinds take the same row.
             immediate = true;
             std::shared_ptr<erhe::Item_base> current = any_mixed
                 ? std::shared_ptr<erhe::Item_base>{}
-                : std::dynamic_pointer_cast<erhe::Item_base>(std::get<erhe::property::Object_reference>(value).object);
+                : std::dynamic_pointer_cast<erhe::Item_base>(erhe::property::get_referenced_object(value));
             const uint64_t allowed_types = (ui.reference_item_types != 0) ? ui.reference_item_types : ~uint64_t{0};
             collect_reference_candidates(m_context, *m_items->front(), allowed_types, m_reference_candidates);
             Item_reference_options options;
@@ -893,7 +895,7 @@ auto Dependency_property_rows::draw_widget(
             const bool changed = item_reference_imgui(m_context, "##", current, allowed_types, options);
             m_reference_candidates.clear(); // strong references must not outlive the draw
             if (changed) {
-                value = erhe::property::Object_reference{std::move(current)};
+                value = erhe::property::make_object_reference(property.get_type(), std::move(current));
             }
             return changed;
         }
@@ -1216,6 +1218,7 @@ void Dependency_property_rows::edit_as_expression(const Dependency_property& pro
         case Property_type::double_floating: text = erhe::property::to_string(Property_value{std::get<double>(value)}); break;
         case Property_type::string:      return;
         case Property_type::object:      return;
+        case Property_type::weak_object: return;
         case Property_type::mat4:        return; // 16 components: not an expression target
         case Property_type::asset_path:  return;
         case Property_type::float_array: return; // any component count: not an expression target

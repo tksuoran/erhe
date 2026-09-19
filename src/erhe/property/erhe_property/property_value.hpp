@@ -34,6 +34,19 @@ struct Object_reference
     [[nodiscard]] auto operator==(const Object_reference&) const -> bool = default;
 };
 
+// A weak reference to another object (doc/erhe/property_system.md D28): the
+// same reference in every respect but ownership - reading it yields the
+// locked target, and an expired target reads as an empty reference. Two weak
+// references are equal when they name the same control block.
+struct Weak_object_reference
+{
+    std::weak_ptr<Dependency_object> object{};
+    [[nodiscard]] auto operator==(const Weak_object_reference& other) const -> bool
+    {
+        return !object.owner_before(other.object) && !other.object.owner_before(object);
+    }
+};
+
 // A path to an asset (doc/erhe/usd_compatibility_design.md M6): the USD form of a
 // texture's `inputs:file`. Kept distinct from `string` so generic code can
 // tell a path from free text; its text form is the path verbatim.
@@ -68,7 +81,8 @@ using Property_value = std::variant<
     // "Run-time Memory Allocation Discipline"): one is built at an edit, an
     // import or an export.
     std::vector<float>,
-    std::vector<int>
+    std::vector<int>,
+    Weak_object_reference
 >;
 
 // Enumerators are the Property_value variant indices.
@@ -94,7 +108,11 @@ enum class Property_type : uint8_t {
     mat4            = 14,
     asset_path      = 15,
     float_array     = 16,
-    int_array       = 17
+    int_array       = 17,
+
+    // A reference that does not own its target
+    // (doc/erhe/property_system.md D28).
+    weak_object     = 18
 };
 
 [[nodiscard]] constexpr auto c_str(const Property_type type) -> const char*
@@ -118,8 +136,15 @@ enum class Property_type : uint8_t {
         case Property_type::asset_path:      return "asset";
         case Property_type::float_array:     return "float[]";
         case Property_type::int_array:       return "int[]";
+        case Property_type::weak_object:     return "weak object";
     }
     return "?";
+}
+
+// Both reference kinds (D28): the value names another object.
+[[nodiscard]] constexpr auto is_object_reference_type(const Property_type type) -> bool
+{
+    return (type == Property_type::object) || (type == Property_type::weak_object);
 }
 
 [[nodiscard]] inline auto type_of(const Property_value& value) -> Property_type
@@ -142,6 +167,7 @@ concept Property_value_type =
     std::is_same_v<T, glm::ivec3>  ||
     std::is_same_v<T, glm::ivec4>  ||
     std::is_same_v<T, Object_reference> ||
+    std::is_same_v<T, Weak_object_reference> ||
     std::is_same_v<T, double>      ||
     std::is_same_v<T, glm::mat4>   ||
     std::is_same_v<T, Asset_path>  ||
@@ -182,6 +208,7 @@ template <Property_storable T>
     if constexpr (std::is_same_v<S, glm::ivec3>)  { return Property_type::ivec3;       }
     if constexpr (std::is_same_v<S, glm::ivec4>)  { return Property_type::ivec4;       }
     if constexpr (std::is_same_v<S, Object_reference>) { return Property_type::object; }
+    if constexpr (std::is_same_v<S, Weak_object_reference>) { return Property_type::weak_object; }
     if constexpr (std::is_same_v<S, double>)      { return Property_type::double_floating; }
     if constexpr (std::is_same_v<S, glm::mat4>)   { return Property_type::mat4;            }
     if constexpr (std::is_same_v<S, Asset_path>)  { return Property_type::asset_path;      }
@@ -244,8 +271,32 @@ template <Property_storable T>
         case Property_type::asset_path:      return Asset_path{};
         case Property_type::float_array:     return std::vector<float>{};
         case Property_type::int_array:       return std::vector<int>{};
+        case Property_type::weak_object:     return Weak_object_reference{};
     }
     return false;
+}
+
+// The object an object-reference value of either kind names, or null: a null
+// or expired reference, or a value that is not a reference at all.
+[[nodiscard]] inline auto get_referenced_object(const Property_value& value) -> std::shared_ptr<Dependency_object>
+{
+    if (const Object_reference* const strong = std::get_if<Object_reference>(&value); strong != nullptr) {
+        return strong->object;
+    }
+    if (const Weak_object_reference* const weak = std::get_if<Weak_object_reference>(&value); weak != nullptr) {
+        return weak->object.lock();
+    }
+    return {};
+}
+
+// A reference value of the given kind naming `object`. The caller guarantees
+// the type is one of the two reference kinds.
+[[nodiscard]] inline auto make_object_reference(const Property_type type, std::shared_ptr<Dependency_object> object) -> Property_value
+{
+    if (type == Property_type::weak_object) {
+        return Weak_object_reference{std::move(object)};
+    }
+    return Object_reference{std::move(object)};
 }
 
 } // namespace erhe::property

@@ -788,8 +788,8 @@ public:
             break;
         }
         default: {
-            // string, and object: the D16 text form, which for an object
-            // reference is the pointee's get_reference_path().
+            // string, and both object reference kinds: the D16 text form,
+            // which for a reference is the pointee's get_reference_path().
             var.set_value(erhe::property::to_string(property, value));
             break;
         }

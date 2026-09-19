@@ -348,7 +348,7 @@ void apply_record_properties(
     for (const std::pair<std::string, std::string>& property : properties) {
         if (object_property_handling == Object_property_handling::keep) {
             const erhe::property::Dependency_property* const registered = find_record_property(item, property.first);
-            if ((registered != nullptr) && (registered->get_type() == erhe::property::Property_type::object)) {
+            if ((registered != nullptr) && erhe::property::is_object_reference_type(registered->get_type())) {
                 continue;
             }
         }

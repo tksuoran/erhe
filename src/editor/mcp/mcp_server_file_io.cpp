@@ -784,7 +784,7 @@ auto Mcp_server::action_set_prefab_template_property(const json& args) -> std::s
     } else {
         return make_error_content("value must be a string, number, bool, array of numbers, or null (clear the template's local value)");
     }
-    if (property->get_type() == erhe::property::Property_type::object) {
+    if (erhe::property::is_object_reference_type(property->get_type())) {
         return make_error_content("Object reference properties are not settable on a template through this tool");
     }
     const std::optional<erhe::property::Property_value> value = erhe::property::parse_value(*property, text);

@@ -146,9 +146,9 @@ table, see D2a), and references to other objects (D28).
   `Property_value = std::variant<bool, int, float, glm::vec2, glm::vec3,
   glm::vec4, glm::quat, std::string, Enum_value, glm::ivec2, glm::ivec3,
   glm::ivec4, Object_reference, double, glm::mat4, Asset_path,
-  std::vector<float>, std::vector<int>>` (each addition appended
+  std::vector<float>, std::vector<int>, Weak_object_reference>` (each addition appended
   so the variant indices of the earlier types are stable;
-  `Object_reference` is D28, the five after it are the USD value
+  `Object_reference` and `Weak_object_reference` are D28, the five between them are the USD value
   types of `doc/erhe/usd_compatibility_design.md` M6 - `Property_type::double_floating`,
   `mat4`, `asset_path`, `float_array` and `int_array`, spelled `double`,
   `mat4`, `asset`, `float[]` and `int[]` in text. A `double`
@@ -1085,6 +1085,24 @@ table, see D2a), and references to other objects (D28).
     (`collect_reference_candidates`, a caller-owned scratch cleared after
     the draw) - and a clear button when `show_clear_button` holds; it
     commits on selection like the enumeration combo.
+  - Weak kind. `Weak_object_reference` (`Property_type::weak_object`,
+    spelled `weak object` in text) holds a
+    `std::weak_ptr<Dependency_object>` instead, for a reference whose
+    target outlives it or is owned elsewhere: reading it yields the
+    locked target, and an expired target reads as an empty reference.
+    Everything else of D28 is shared by the two kinds - the text form,
+    the context parse, the row, the MCP get and set forms, the late glTF
+    resolution, the editor write funnel - and generic code tells them
+    apart with `is_object_reference_type(Property_type)`, reads either
+    with `get_referenced_object(const Property_value&)` and builds the
+    kind a property asks for with `make_object_reference(type, object)`.
+    Two weak references are equal when they name the same control block
+    (`owner_before` both ways), so an expired reference stays distinct
+    from a null one. `Member_value_traits<std::weak_ptr<U>>` backs a
+    `std::weak_ptr` member the way the strong traits back a
+    `std::shared_ptr` one. Like the strong kind it is neither an
+    expression source nor an expression target, and it carries no
+    animatable value.
   - Everything else applies as to any type: inheritance, styles, coerce,
     computed and read-only, `Property_set` bags (a pasted bag shares the
     pointee), and `operator==` of items.

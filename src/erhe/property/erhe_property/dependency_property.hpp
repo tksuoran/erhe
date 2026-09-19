@@ -246,6 +246,28 @@ struct Member_value_traits<std::shared_ptr<U>>
     }
 };
 
+// The weak counterpart: a std::weak_ptr<U> member is stored as a
+// Weak_object_reference, read as the locked U (an expired target reads as
+// null), and its validate rejects a live pointee that is not a U.
+template <typename U>
+struct Member_value_traits<std::weak_ptr<U>>
+{
+    using stored_type = Weak_object_reference;
+    [[nodiscard]] static auto to_value(const std::weak_ptr<U>& member) -> Property_value
+    {
+        return Weak_object_reference{std::dynamic_pointer_cast<Dependency_object>(member.lock())};
+    }
+    [[nodiscard]] static auto from_value(const Property_value& value) -> std::weak_ptr<U>
+    {
+        return std::dynamic_pointer_cast<U>(std::get<Weak_object_reference>(value).object.lock());
+    }
+    [[nodiscard]] static auto validate(const Property_value& value) -> bool
+    {
+        const std::shared_ptr<Dependency_object> object = std::get<Weak_object_reference>(value).object.lock();
+        return (!object) || (dynamic_cast<const U*>(object.get()) != nullptr);
+    }
+};
+
 // Typed handle to a registered property. Copyable, trivially cheap.
 template <Property_storable T>
 class Property

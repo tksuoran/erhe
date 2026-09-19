@@ -2312,7 +2312,7 @@ void collect_usd_physics_properties(
                 return; // formulas are session state (D14)
             }
             const erhe::property::Property_type type = erhe::property::type_of(value);
-            if (type == erhe::property::Property_type::object) {
+            if (erhe::property::is_object_reference_type(type)) {
                 return; // an object reference travels as the schema's own relationship
             }
             for (const std::string_view field : description_fields) {

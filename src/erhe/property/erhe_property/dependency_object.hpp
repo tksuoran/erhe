@@ -109,9 +109,9 @@ public:
     // Object references (D28). get_reference_path() is the text form of a
     // reference to this object, the inverse of resolve_expression_object
     // on the referencing object (Hierarchy: the item's path; Item_base:
-    // the item name; the library default is empty, "no path"). get_shared_reference() is the owning
-    // pointer an Object_reference stores (Item_base: shared_from_this;
-    // the default is null, "not shareable").
+    // the item name; the library default is empty, "no path"). get_shared_reference() is the
+    // pointer an Object_reference stores and a Weak_object_reference is made
+    // from (Item_base: shared_from_this; the default is null, "not shareable").
     [[nodiscard]] virtual auto get_reference_path  () const -> std::string                        { return {}; }
     [[nodiscard]] virtual auto get_shared_reference() const -> std::shared_ptr<Dependency_object> { return {}; }
 

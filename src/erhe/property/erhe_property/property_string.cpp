@@ -177,9 +177,10 @@ auto to_string(const Property_value& value, const Enum_info* enum_info) -> std::
             const glm::ivec4 v = std::get<glm::ivec4>(value);
             return std::to_string(v.x) + " " + std::to_string(v.y) + " " + std::to_string(v.z) + " " + std::to_string(v.w);
         }
-        case Property_type::object: {
-            const Object_reference& reference = std::get<Object_reference>(value);
-            return reference.object ? reference.object->get_reference_path() : std::string{};
+        case Property_type::object:
+        case Property_type::weak_object: {
+            const std::shared_ptr<Dependency_object> object = get_referenced_object(value);
+            return object ? object->get_reference_path() : std::string{};
         }
         case Property_type::double_floating: return double_to_string(std::get<double>(value));
         case Property_type::asset_path: return std::get<Asset_path>(value).path;
@@ -325,7 +326,8 @@ auto parse_value(const Property_type type, const std::string_view text_in, const
             }
             return glm::ivec4{v->at(0), v->at(1), v->at(2), v->at(3)};
         }
-        case Property_type::object: {
+        case Property_type::object:
+        case Property_type::weak_object: {
             // Needs the referencing object; see the context overload.
             return std::nullopt;
         }
@@ -390,12 +392,13 @@ auto parse_value(const Dependency_property& property, const std::string_view tex
 
 auto parse_value(const Dependency_object& context, const Dependency_property& property, const std::string_view text_in) -> std::optional<Property_value>
 {
-    if (property.get_type() != Property_type::object) {
-        return parse_value(property.get_type(), text_in, property.get_enum_info());
+    const Property_type type = property.get_type();
+    if (!is_object_reference_type(type)) {
+        return parse_value(type, text_in, property.get_enum_info());
     }
     const std::string_view text = trim(text_in);
     if (text.empty()) {
-        return Object_reference{};
+        return make_object_reference(type, {});
     }
     const Dependency_object* const resolved = context.resolve_expression_object(text);
     if (resolved == nullptr) {
@@ -405,7 +408,7 @@ auto parse_value(const Dependency_object& context, const Dependency_property& pr
     if (!shared) {
         return std::nullopt;
     }
-    return Object_reference{std::move(shared)};
+    return make_object_reference(type, std::move(shared));
 }
 
 } // namespace erhe::property

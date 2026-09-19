@@ -27,11 +27,7 @@ auto referenced_item(const std::optional<erhe::property::Local_state>& state) ->
     if (value == nullptr) {
         return {};
     }
-    const erhe::property::Object_reference* reference = std::get_if<erhe::property::Object_reference>(value);
-    if ((reference == nullptr) || !reference->object) {
-        return {};
-    }
-    return std::dynamic_pointer_cast<erhe::Item_base>(reference->object);
+    return std::dynamic_pointer_cast<erhe::Item_base>(erhe::property::get_referenced_object(*value));
 }
 
 auto referenced_item(const std::optional<erhe::property::Property_value>& value) -> std::shared_ptr<erhe::Item_base>

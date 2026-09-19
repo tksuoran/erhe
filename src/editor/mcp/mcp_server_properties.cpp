@@ -143,10 +143,10 @@ auto property_json(
             // D26: a set of this property writes that stored property.
             entry["writes"] = std::string{metadata.compute_writes->get_name()};
         }
-        if (property.get_type() == erhe::property::Property_type::object) {
+        if (erhe::property::is_object_reference_type(property.get_type())) {
             // D28: the referenced item's session id and type next to its name.
             const erhe::property::Property_value        value      = object.get_value(property);
-            const std::shared_ptr<erhe::Item_base>      referenced = std::dynamic_pointer_cast<erhe::Item_base>(std::get<erhe::property::Object_reference>(value).object);
+            const std::shared_ptr<erhe::Item_base>      referenced = std::dynamic_pointer_cast<erhe::Item_base>(erhe::property::get_referenced_object(value));
             entry["reference_id"]   = referenced ? json(referenced->get_id()) : json(nullptr);
             entry["reference_type"] = referenced ? json(std::string{referenced->get_type_name()}) : json(nullptr);
             entry["reference_item_types"] = metadata.ui.reference_item_types;
@@ -360,7 +360,7 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
     if (has_reference_id) {
         // D28: an object reference by the referenced item's session id,
         // which disambiguates same-named items.
-        if (property->get_type() != erhe::property::Property_type::object) {
+        if (!erhe::property::is_object_reference_type(property->get_type())) {
             return make_error_content("reference_id applies to object properties only; '" + property_name + "' is " + erhe::property::c_str(property->get_type()));
         }
         if (!reference_id_it->is_number_unsigned()) {
@@ -372,7 +372,7 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
         if (!referenced) {
             return make_error_content("reference_id: " + error);
         }
-        after = erhe::property::Object_reference{referenced};
+        after = erhe::property::make_object_reference(property->get_type(), referenced);
         std::string validation_error;
         if (!target->validate_value(*property, after.value(), validation_error)) {
             return make_error_content("'" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + ") was rejected by property '" + property_name + "': " + validation_error);
@@ -400,16 +400,16 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
         } else {
             return make_error_content("value must be a string, number, bool, array of numbers, or null (reset to default)");
         }
-        if (property->get_type() == erhe::property::Property_type::object) {
+        if (erhe::property::is_object_reference_type(property->get_type())) {
             // D28: a name resolved in the item's scene; empty clears.
             if (text.empty()) {
-                after = erhe::property::Object_reference{};
+                after = erhe::property::make_object_reference(property->get_type(), {});
             } else {
                 const std::shared_ptr<erhe::Item_base> referenced = resolve_reference_by_name(m_context, *item, text);
                 if (!referenced) {
                     return make_error_content("'" + text + "' does not name an item of the scene of '" + item->get_name() + "' (use reference_id for an item id)");
                 }
-                after = erhe::property::Object_reference{referenced};
+                after = erhe::property::make_object_reference(property->get_type(), referenced);
             }
         } else {
             after = erhe::property::parse_value(*property, text);
