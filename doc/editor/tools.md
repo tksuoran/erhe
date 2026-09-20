@@ -28,7 +28,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
   - Pipeline render states for tool mesh rendering (stencil-based hidden/visible)
   - `update_transforms()` and `render_viewport_tools()` called each frame
 
-- **`Fly_camera_tool`** -- Camera navigation (WASD + mouse turn/tumble/track/zoom). Has many command objects for each input axis. Uses `Frame_controller` for 6DOF control. Supports recording input samples for debugging.
+- **`Fly_camera_tool`** -- Camera navigation (WASD + mouse turn/tumble/track/zoom). Has many command objects for each input axis. Uses `Frame_controller` for 6DOF control. Supports recording input samples for debugging. The mouse wheel drives its own `Frame_controller::zoom` axis, separate from `translate_z` (W / S keys, controller axis): `Frame_controller::update_fixed_step()` sums the two terms, so key motion along the view axis and a wheel glide run at the same time. For a perspective camera `Camera_controls_config::perspective_zoom_mode` selects the wheel direction at each wheel step - the view axis, or the pointer ray (the axis towards the hovered point; the default) - with a step proportional to the hover hit distance, bounded below by the near clip distance. `Camera_controls_config::zoom_glide_direction` selects whether the glide keeps that direction in world space or relative to the view (turning with the camera; the default). Orthogonal camera zoom is described in `doc/editor/four_view.md`.
 
 - **`Selection_tool`** -- Click-to-select in viewport. Delegates to `Selection` (a `Command_host` that manages the selection set).
 
@@ -78,7 +78,3 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - erhe::commands, erhe::imgui, erhe::scene
 - editor: App_context, App_message_bus, Icon_set, Mesh_memory, Scene_view
-
-## Future work
-
-- [Fly camera: mouse-wheel motion towards the hovered point](../plans/fly_camera_zoom_toward_hover.md)
