@@ -29,6 +29,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/layout.hpp"
@@ -388,10 +389,10 @@ void collect_gltf_material_variants(
 } // anonymous namespace
 
 void add_gltf_editor_state(
-    erhe::gltf::Gltf_export_arguments&                                   arguments,
-    Scene_root&                                                          scene_root,
-    const std::filesystem::path&                                         export_path,
-    const std::vector<std::shared_ptr<erhe::physics::Physics_material>>& physics_material_items
+    erhe::gltf::Gltf_export_arguments& arguments,
+    Scene_root&                        scene_root,
+    const std::filesystem::path&       export_path,
+    const Physics_description_items&   physics_items
 )
 {
     add_material_asset_references(arguments, scene_root, scene_root.get_content_library(), export_path);
@@ -595,24 +596,37 @@ void add_gltf_editor_state(
                 scene_json["styles"] = std::move(styles);
             }
         }
-        // physics_materials / collision_filter_names: the KHR_physics_rigid_bodies
-        // entries by index (the KHR entries carry no name), so the library
-        // items keep their names across a reload; a physics material entry
-        // also carries the material's local property values (the KHR entry
-        // has no carrier for damping, wind receptivity and density, and the
-        // map is the material's complete local set on reload).
+        // physics_materials / physics_joints / collision_filter_names: the
+        // KHR_physics_rigid_bodies entries by index (the KHR entries carry no
+        // name), so the library items keep their names across a reload; a
+        // physics material and a joint-settings entry also carry the item's
+        // local property values, which is the item's complete local set on
+        // reload - the KHR entries state effective values, so this is what
+        // lets a value a folder or a style supplies stay supplied by it.
         if (arguments.physics_data != nullptr) {
             if (!arguments.physics_data->materials.empty()) {
                 nlohmann::json materials = nlohmann::json::array();
                 const std::vector<erhe::scene::Physics_material_description>& descriptions = arguments.physics_data->materials;
                 for (std::size_t i = 0; i < descriptions.size(); ++i) {
                     nlohmann::json entry{{"name", descriptions[i].name}};
-                    if ((i < physics_material_items.size()) && physics_material_items[i]) {
-                        entry["properties"] = json_properties(*physics_material_items[i]);
+                    if ((i < physics_items.materials.size()) && physics_items.materials[i]) {
+                        entry["properties"] = json_properties(*physics_items.materials[i]);
                     }
                     materials.push_back(std::move(entry));
                 }
                 scene_json["physics_materials"] = std::move(materials);
+            }
+            if (!arguments.physics_data->joints.empty()) {
+                nlohmann::json joints = nlohmann::json::array();
+                const std::vector<erhe::scene::Physics_joint_description>& descriptions = arguments.physics_data->joints;
+                for (std::size_t i = 0; i < descriptions.size(); ++i) {
+                    nlohmann::json entry{{"name", descriptions[i].name}};
+                    if ((i < physics_items.joint_settings.size()) && physics_items.joint_settings[i]) {
+                        entry["properties"] = json_properties(*physics_items.joint_settings[i]);
+                    }
+                    joints.push_back(std::move(entry));
+                }
+                scene_json["physics_joints"] = std::move(joints);
             }
             if (!arguments.physics_data->collision_filters.empty()) {
                 nlohmann::json names = nlohmann::json::array();

@@ -84,12 +84,12 @@ void apply_scene_item_style(
     const std::string&                      style_name
 );
 
-// ERHE_scene physics_materials / collision_filter_names: the
-// KHR_physics_rigid_bodies physicsMaterials / collisionFilters entries by
-// index (the KHR entries carry no name). A physics material entry carries
-// the name and the material's local property values (name -> text), the
-// material's complete local set. Empty vectors when absent.
-class Gltf_physics_material_record
+// ERHE_scene physics_materials / physics_joints / collision_filter_names: the
+// KHR_physics_rigid_bodies physicsMaterials / physicsJoints / collisionFilters
+// entries by index (the KHR entries carry no name). A physics material and a
+// joint-settings entry carry the name and the item's local property values
+// (name -> text), the item's complete local set. Empty vectors when absent.
+class Gltf_physics_item_record
 {
 public:
     std::string                                      name;
@@ -100,8 +100,9 @@ public:
 class Gltf_physics_item_names
 {
 public:
-    std::vector<Gltf_physics_material_record> physics_materials;
-    std::vector<std::string>                  collision_filters;
+    std::vector<Gltf_physics_item_record> physics_materials;
+    std::vector<Gltf_physics_item_record> physics_joints;
+    std::vector<std::string>              collision_filters;
 };
 
 [[nodiscard]] auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gltf_physics_item_names;

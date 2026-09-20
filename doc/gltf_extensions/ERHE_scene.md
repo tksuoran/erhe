@@ -56,6 +56,17 @@ plain interchange exports never do.
   combine mode) that the map does not name is cleared again, so a
   material that inherits it from its folder or style still does after a
   reload. Omitted when the file has no physics materials.
+- `physics_joints` (optional): one entry per `KHR_physics_rigid_bodies`
+  `physicsJoints` entry, by index (a `PhysicsJoint` carries no name):
+  `name` and `properties` (the joint-settings item's local property values
+  as a name to text map, the form of `ERHE_node` `properties`; the
+  registered properties of `Physics_joint_settings` by name, the eleven
+  per-axis limit and drive values of each of the six degrees of freedom).
+  The map is the item's complete local set: on load, a value the KHR entry
+  carried that the map does not name is cleared again, so an axis value the
+  item inherits from its folder or takes from a style still does after a
+  reload. This is also where a joint-settings item's name lives, since the
+  KHR entry has no name field. Omitted when the file has no joints.
 - `collision_filter_names` (optional): the names of the
   `KHR_physics_rigid_bodies` `collisionFilters` entries, by index, so the
   content library's collision filters keep their names across a save and
@@ -94,6 +105,9 @@ plain interchange exports never do.
     ],
     "physics_materials": [
         {"name": "Rubber", "properties": {"restitution": "0.8", "linear_damping": "0.1"}}
+    ],
+    "physics_joints": [
+        {"name": "Hinge", "properties": {"rot_z_limit": "limited", "rot_z_limit_min": "-0.785398"}}
     ],
     "collision_filter_names": ["Debris"],
     "library_folders": [

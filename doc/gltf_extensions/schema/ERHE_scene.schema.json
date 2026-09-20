@@ -44,6 +44,18 @@
                 "required": ["name"]
             }
         },
+        "physics_joints": {
+            "type": "array",
+            "description": "The KHR_physics_rigid_bodies physicsJoints entries by index: name and the joint-settings item's local property values (name -> text)",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "properties": {"type": "object", "additionalProperties": {"type": "string"}}
+                },
+                "required": ["name"]
+            }
+        },
         "collision_filter_names": {"type": "array", "items": {"type": "string"}, "description": "Names of the KHR_physics_rigid_bodies collisionFilters entries, by index"},
         "library_folders": {
             "type": "array",

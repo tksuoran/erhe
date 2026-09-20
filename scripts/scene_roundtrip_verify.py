@@ -725,6 +725,10 @@ DECCER_GLB = "res/editor/assets/SM_Deccer_Cubes_Textured.glb"
 RIGGED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 # The bone of RIGGED_GLB that carries the Ik.* values.
 IK_BONE = "arm_joint_L_3"
+# The joint-settings item whose name and folder-supplied axis value ride the
+# ERHE_scene physics_joints entry, and the folder that supplies the value.
+JOINT_SETTINGS_NAME = "P6 Hinge Settings"
+JOINT_SETTINGS_FOLDER = "Physics Joints/P6 Hinges"
 
 E2E_STATE = {}
 
@@ -805,6 +809,30 @@ def section_build_scene():
             "scene_name": scene, "node_name": "P6 Sphere", "connected_node_name": "P6 Box",
         })
         check(S, "create_physics_joint", bool(joint) and joint.get("created"), str(joint))
+        # A named joint-settings item under a folder that supplies one of its
+        # axis values: what the ERHE_scene physics_joints entry carries
+        # (doc/gltf_extensions/ERHE_scene.md). The KHR physicsJoints entry has
+        # no name field and states effective values, so without that entry the
+        # reload renames the item and bakes the folder's value in as a local.
+        settings = mutate("create_physics_joint_settings", {"scene_name": scene, "name": JOINT_SETTINGS_NAME})
+        check(S, "create_physics_joint_settings", bool(settings) and settings.get("created"), str(settings))
+        E2E_STATE["joint_settings_id"] = settings.get("id") if settings else None
+        scope = mutate("create_scope", {"scene_name": scene, "path": JOINT_SETTINGS_FOLDER})
+        check(S, "joint settings folder created", bool(scope) and scope.get("scope_id") is not None, str(scope))
+        moved = mutate("reparent_item", {
+            "scene_name": scene, "item_id": E2E_STATE["joint_settings_id"], "parent_name": "P6 Hinges",
+        })
+        check(S, "joint settings moved into the folder", bool(moved) and moved.get("queued"), str(moved))
+        supplied = mutate("set_item_property", {
+            "scene_name": scene, "item_name": "P6 Hinges",
+            "property": "Physics_joint_settings.rot_z_limit_max", "value": "0.5",
+        })
+        check(S, "the folder supplies rot_z_limit_max", bool(supplied) and supplied.get("after") == "0.5", str(supplied))
+        limited = mutate("set_item_property", {
+            "scene_name": scene, "item_id": E2E_STATE["joint_settings_id"],
+            "property": "rot_z_limit", "value": "Limited",
+        })
+        check(S, "the settings item limits rot_z", bool(limited) and limited.get("after") == "Limited", str(limited))
 
     def block_brush_placement():
         placed = mutate("place_brush", {
@@ -1202,6 +1230,27 @@ def section_reload_and_diff():
         bound_materials = json.dumps(bound_box)
         check(S, "the mesh-bound resource is still bound after reload",
               "P6 Mesh Material" in bound_materials, bound_materials[:200])
+
+    # The ERHE_scene physics_joints entry (J14 of the property system's
+    # section 4.22): the joint-settings item comes back under its own name
+    # instead of "Physics joint <i>", and the axis value its folder supplies
+    # is supplied by the folder again rather than baked in as a local value.
+    settings = [
+        entry for entry in call("get_physics_items", {"scene_name": loaded_scene}).get("physics_joint_settings", [])
+        if entry.get("name") == JOINT_SETTINGS_NAME
+    ]
+    check(S, "the joint-settings item keeps its name across the reload", len(settings) == 1, str(settings))
+    if len(settings) == 1:
+        properties = {
+            entry.get("name"): entry
+            for entry in call("get_item_properties", {"scene_name": loaded_scene, "item_id": settings[0]["id"]}).get("properties", [])
+        }
+        own = properties.get("rot_z_limit", {})
+        check(S, "the settings item's own rot_z_limit is local after the reload",
+              (own.get("value") == "Limited") and (own.get("source") == "local"), str(own))
+        supplied = properties.get("rot_z_limit_max", {})
+        check(S, "the folder still supplies rot_z_limit_max after the reload",
+              (supplied.get("value") == "0.5") and (supplied.get("source") == "inherited"), str(supplied))
 
     screenshot("logs/phase6_after.png")
     compare_screenshots(S, "logs/phase6_before.png", "logs/phase6_after.png")
@@ -2675,8 +2724,8 @@ def hold_ambient_in_a_style(section, scene_name, style_name, text):
 
 
 def section_scene_ambient_light():
-    """ERHE_scene / `erhe:scene` `properties` and `style` (H3 of
-    doc/plans/hand_written_rows_to_properties.md): the scene item's ambient
+    """ERHE_scene / `erhe:scene` `properties` and `style`
+    (doc/erhe/property_system.md section 4.20): the scene item's ambient
     color comes back as the layer it was written from - local as local, and
     style-held as style-held - in both file formats, and a file written
     before the map existed reads its `ambient_light` field as a local

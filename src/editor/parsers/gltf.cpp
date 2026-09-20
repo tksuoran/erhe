@@ -1513,7 +1513,7 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
-    add_gltf_editor_state(export_arguments, scene_root, path, physics_items.materials);
+    add_gltf_editor_state(export_arguments, scene_root, path, physics_items);
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     if (!erhe::file::write_file(path, gltf)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));

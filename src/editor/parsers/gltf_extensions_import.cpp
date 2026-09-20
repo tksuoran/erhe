@@ -241,10 +241,15 @@ auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gl
             out.push_back(entry.is_string() ? entry.get<std::string>() : std::string{});
         }
     };
-    const auto materials_it = payload.find("physics_materials");
-    if ((materials_it != payload.end()) && materials_it->is_array()) {
-        for (const nlohmann::json& entry : *materials_it) {
-            Gltf_physics_material_record record{};
+    // The two item arrays of the same shape: `{"name", "properties"}` per
+    // KHR entry index, the properties being the item's complete local set.
+    const auto read_records = [&payload](const char* key, std::vector<Gltf_physics_item_record>& out) {
+        const auto array_it = payload.find(key);
+        if ((array_it == payload.end()) || !array_it->is_array()) {
+            return;
+        }
+        for (const nlohmann::json& entry : *array_it) {
+            Gltf_physics_item_record record{};
             if (entry.is_object()) {
                 record.name = entry.value("name", std::string{});
                 const auto properties_it = entry.find("properties");
@@ -257,9 +262,11 @@ auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gl
                     }
                 }
             }
-            names.physics_materials.push_back(std::move(record));
+            out.push_back(std::move(record));
         }
-    }
+    };
+    read_records("physics_materials", names.physics_materials);
+    read_records("physics_joints",    names.physics_joints);
     read_names("collision_filter_names", names.collision_filters);
     return names;
 }

@@ -407,54 +407,27 @@ public:
     float                damping{0.0f};
 };
 
-[[nodiscard]] auto same_limit_values(const Limit_entry& lhs, const Limit_entry& rhs) -> bool
+// One limit instance as the description entry it is. Each instance names one
+// degree of freedom and sets the properties of that axis alone, so the entry
+// names exactly the axis of the instance - the `distance` instance is the one
+// exception the schema has, and it states the same values for all three
+// translation axes.
+[[nodiscard]] auto to_joint_limit(const Limit_entry& entry) -> erhe::scene::Physics_joint_limit
 {
-    return
-        (lhs.min       == rhs.min      ) &&
-        (lhs.max       == rhs.max      ) &&
-        (lhs.stiffness == rhs.stiffness) &&
-        (lhs.damping   == rhs.damping  );
-}
-
-// The limits the reader read, with the instances of identical value joined
-// into one erhe limit - the inverse of the writer's one instance per axis.
-[[nodiscard]] auto join_limits(const std::vector<Limit_entry>& entries) -> std::vector<erhe::scene::Physics_joint_limit>
-{
-    std::vector<erhe::scene::Physics_joint_limit> limits;
-    std::vector<Limit_entry>                      joined;
-    for (const Limit_entry& entry : entries) {
-        std::size_t index = 0;
-        bool        found = false;
-        for (std::size_t i = 0, end = joined.size(); i < end; ++i) {
-            if (same_limit_values(joined[i], entry)) {
-                index = i;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            joined.push_back(entry);
-            limits.push_back(
-                erhe::scene::Physics_joint_limit{
-                    .min       = entry.min,
-                    .max       = entry.max,
-                    .stiffness = entry.stiffness,
-                    .damping   = entry.damping
-                }
-            );
-            index = limits.size() - 1;
-        }
-        erhe::scene::Physics_joint_limit& limit = limits[index];
-        if (entry.dof.is_distance) {
-            limit.linear_axes = std::vector<int>{0, 1, 2};
-            continue;
-        }
-        std::vector<int>& axes = entry.dof.is_linear ? limit.linear_axes : limit.angular_axes;
-        if (std::find(axes.begin(), axes.end(), entry.dof.axis) == axes.end()) {
-            axes.push_back(entry.dof.axis);
-        }
+    erhe::scene::Physics_joint_limit limit{
+        .min       = entry.min,
+        .max       = entry.max,
+        .stiffness = entry.stiffness,
+        .damping   = entry.damping
+    };
+    if (entry.dof.is_distance) {
+        limit.linear_axes = std::vector<int>{0, 1, 2};
+    } else if (entry.dof.is_linear) {
+        limit.linear_axes = std::vector<int>{entry.dof.axis};
+    } else {
+        limit.angular_axes = std::vector<int>{entry.dof.axis};
     }
-    return limits;
+    return limit;
 }
 
 // Which of the six degrees of freedom a subclass joint's own limit attributes
@@ -1146,8 +1119,7 @@ private:
     // `PhysicsLimitAPI:<axis>` and `PhysicsDriveAPI:<axis>` schemas.
     void read_limits_and_drives(const Prim_entry& entry, erhe::scene::Physics_joint_description& joint) const
     {
-        const Property_map*      props = prim_props(*entry.prim);
-        std::vector<Limit_entry> limits;
+        const Property_map* props = prim_props(*entry.prim);
         for (const std::string& instance : api_schema_instances(*entry.prim, lightusd::APISchemas::APIName::PhysicsLimitAPI)) {
             const std::string prefix = std::string{c_physics_limit_prefix} + instance + ":";
             Limit_entry       limit{};
@@ -1166,9 +1138,8 @@ private:
             if (read_float(props, erhe_prefix + std::string{c_physics_limit_damping_suffix}, value)) {
                 limit.damping = value;
             }
-            limits.push_back(limit);
+            joint.limits.push_back(to_joint_limit(limit));
         }
-        joint.limits = join_limits(limits);
 
         for (const std::string& instance : api_schema_instances(*entry.prim, lightusd::APISchemas::APIName::PhysicsDriveAPI)) {
             const std::string                prefix = std::string{c_physics_drive_prefix} + instance + ":";

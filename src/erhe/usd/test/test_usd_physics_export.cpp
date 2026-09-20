@@ -486,18 +486,21 @@ TEST_F(Physics_export, the_shared_joint_settings_survive)
 {
     const erhe::scene::Physics_joint_description* settings = joint_named(trip->reloaded.data, "Hinge_settings");
     ASSERT_NE(settings, nullptr);
-    ASSERT_EQ(settings->limits.size(), 1u);
-    const erhe::scene::Physics_joint_limit& limit = settings->limits.front();
-    EXPECT_TRUE(limit.linear_axes.empty());
-    ASSERT_EQ(limit.angular_axes.size(), 2u);
-    EXPECT_EQ(limit.angular_axes[0], 0);
-    EXPECT_EQ(limit.angular_axes[1], 1);
-    ASSERT_TRUE(limit.min.has_value());
-    EXPECT_NEAR(limit.min.value(), -0.785398f, c_tolerance);
-    EXPECT_NEAR(limit.max.value(),  0.785398f, c_tolerance);
-    ASSERT_TRUE(limit.stiffness.has_value());
-    EXPECT_NEAR(limit.stiffness.value(), 120.0f, c_tolerance);
-    EXPECT_NEAR(limit.damping, 3.0f, c_tolerance);
+    // One instance per limited degree of freedom, on the way out as on the
+    // way in.
+    ASSERT_EQ(settings->limits.size(), 2u);
+    for (std::size_t i = 0; i < 2u; ++i) {
+        const erhe::scene::Physics_joint_limit& limit = settings->limits[i];
+        EXPECT_TRUE(limit.linear_axes.empty());
+        ASSERT_EQ(limit.angular_axes.size(), 1u);
+        EXPECT_EQ(limit.angular_axes.front(), static_cast<int>(i));
+        ASSERT_TRUE(limit.min.has_value());
+        EXPECT_NEAR(limit.min.value(), -0.785398f, c_tolerance);
+        EXPECT_NEAR(limit.max.value(),  0.785398f, c_tolerance);
+        ASSERT_TRUE(limit.stiffness.has_value());
+        EXPECT_NEAR(limit.stiffness.value(), 120.0f, c_tolerance);
+        EXPECT_NEAR(limit.damping, 3.0f, c_tolerance);
+    }
 
     ASSERT_EQ(settings->drives.size(), 1u);
     const erhe::scene::Physics_joint_drive& drive = settings->drives.front();
@@ -534,8 +537,8 @@ TEST_F(Physics_export, the_joints_survive)
     );
 
     // A revolute joint is a six-dof joint with one rotational limit, and a
-    // fixed joint one limit at zero over all six axes; both are written back
-    // as the instances they read as.
+    // fixed joint one limit at zero on each of the six axes; both are written
+    // back as the instances they read as, one per axis.
     const erhe::scene::Physics_node_description* ball = body_at(trip->reloaded.data, "/World/Ball");
     ASSERT_NE(ball, nullptr);
     ASSERT_TRUE(ball->joint.has_value());
@@ -551,12 +554,18 @@ TEST_F(Physics_export, the_joints_survive)
     ASSERT_NE(rock, nullptr);
     ASSERT_TRUE(rock->joint.has_value());
     const erhe::scene::Physics_joint_description& weld = trip->reloaded.data.physics.joints[rock->joint.value().joint_index];
-    ASSERT_EQ(weld.limits.size(), 1u);
-    EXPECT_EQ(weld.limits.front().linear_axes.size(),  3u);
-    EXPECT_EQ(weld.limits.front().angular_axes.size(), 3u);
-    ASSERT_TRUE(weld.limits.front().min.has_value());
-    EXPECT_NEAR(weld.limits.front().min.value(), 0.0f, c_tolerance);
-    EXPECT_NEAR(weld.limits.front().max.value(), 0.0f, c_tolerance);
+    ASSERT_EQ(weld.limits.size(), 6u);
+    std::size_t weld_linear  = 0;
+    std::size_t weld_angular = 0;
+    for (const erhe::scene::Physics_joint_limit& limit : weld.limits) {
+        weld_linear  += limit.linear_axes.size();
+        weld_angular += limit.angular_axes.size();
+        ASSERT_TRUE(limit.min.has_value());
+        EXPECT_NEAR(limit.min.value(), 0.0f, c_tolerance);
+        EXPECT_NEAR(limit.max.value(), 0.0f, c_tolerance);
+    }
+    EXPECT_EQ(weld_linear,  3u);
+    EXPECT_EQ(weld_angular, 3u);
 }
 
 // A joint sitting on a frame node below its body is written as the body it

@@ -580,6 +580,40 @@ public:
     }
 };
 
+// One per-axis value of a joint-settings item as the USD attribute of its
+// axis instance, `<axis>` standing for the `transX`..`rotZ` instance name the
+// axis token gives. Empty for a name that is no per-axis value.
+[[nodiscard]] auto usd_joint_axis_attribute_of_value_name(const std::string_view name) -> std::string_view
+{
+    // The six degree-of-freedom tokens every per-axis property name starts
+    // with; `axis_instance_name` below spells the same six as USD instance
+    // names. erhe::usd names no erhe::physics type, so the tokens are stated
+    // here the way the owner name above them is.
+    constexpr std::string_view c_axis_tokens[6] = {
+        std::string_view{"trans_x"}, std::string_view{"trans_y"}, std::string_view{"trans_z"},
+        std::string_view{"rot_x"},   std::string_view{"rot_y"},   std::string_view{"rot_z"}
+    };
+    for (const std::string_view token : c_axis_tokens) {
+        if ((name.size() <= token.size()) || (name.substr(0, token.size()) != token) || (name[token.size()] != '_')) {
+            continue;
+        }
+        const std::string_view suffix = name.substr(token.size() + 1);
+        if (suffix == "limit"                ) { return "physics:limit:<axis> (the applied instance)"; }
+        if (suffix == "limit_min"            ) { return "physics:limit:<axis>:low"; }
+        if (suffix == "limit_max"            ) { return "physics:limit:<axis>:high"; }
+        if (suffix == "limit_stiffness"      ) { return "erhe:limit:<axis>:stiffness"; }
+        if (suffix == "limit_damping"        ) { return "erhe:limit:<axis>:damping"; }
+        if (suffix == "drive"                ) { return "physics:drive:<axis>:type"; }
+        if (suffix == "drive_max_force"      ) { return "physics:drive:<axis>:maxForce"; }
+        if (suffix == "drive_position_target") { return "physics:drive:<axis>:targetPosition"; }
+        if (suffix == "drive_velocity_target") { return "physics:drive:<axis>:targetVelocity"; }
+        if (suffix == "drive_stiffness"      ) { return "physics:drive:<axis>:stiffness"; }
+        if (suffix == "drive_damping"        ) { return "physics:drive:<axis>:damping"; }
+        return {};
+    }
+    return {};
+}
+
 // The erhe properties this writer carries in a USD attribute of the schema -
 // the exact inverse of what the importer reads back
 // (doc/erhe/usd_compatibility_design.md I2, and the per-domain tables of
@@ -602,6 +636,15 @@ public:
         if (name == "purpose") { return "purpose"; }
         if (name == "active" ) { return "active (prim metadata)"; }
         return {};
+    }
+    if (owner == "Physics_joint_settings") {
+        // Every one of the eleven per-axis values is a schema attribute of
+        // the axis's own `PhysicsLimitAPI:<axis>` / `PhysicsDriveAPI:<axis>`
+        // instance, which `write_joint_limits_and_drives` authors from the
+        // description; the two spring constants of a limit are the `erhe:`
+        // attributes of that same instance. A joint-settings prim is written
+        // in the custom-attribute form, so the answer holds in both forms.
+        return usd_joint_axis_attribute_of_value_name(name);
     }
     if ((owner == "Gprim") && (name == "display_color")) {
         // A primvar, not a schema attribute: a typeless `over` carries it as
@@ -7108,10 +7151,11 @@ private:
     }
 
     // The limits and drives of one joint-settings item, as the multi-apply
-    // instances they are: one `PhysicsLimitAPI:<axis>` instance per axis of a
-    // limit - a limit over several axes is several instances of one value,
-    // which the reader joins back - and one `PhysicsDriveAPI:<axis>` instance
-    // per drive.
+    // instances they are: one `PhysicsLimitAPI:<axis>` instance and one
+    // `PhysicsDriveAPI:<axis>` instance per degree of freedom the item limits
+    // or drives, which is what a settings item states. The description a
+    // reader fills can name several axes in one entry (a `distance` limit,
+    // a fixed joint), and each of those axes is an instance of its own too.
     void write_joint_limits_and_drives(
         std::map<std::string, lightusd::Property>&    props,
         lightusd::PrimMeta&                           meta,

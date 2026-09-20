@@ -294,21 +294,23 @@ TEST_F(Physics_import, shared_joint_settings_prim)
     ASSERT_LT(index, result.data.physics.joints.size());
     const erhe::scene::Physics_joint_description& joint = result.data.physics.joints[index];
 
-    // The two limit instances say the same thing, so they join into one
-    // limit over both angular axes.
-    ASSERT_EQ(joint.limits.size(), 1u);
-    const erhe::scene::Physics_joint_limit& limit = joint.limits.front();
-    EXPECT_TRUE(limit.linear_axes.empty());
-    ASSERT_EQ(limit.angular_axes.size(), 2u);
-    EXPECT_EQ(limit.angular_axes[0], 0);
-    EXPECT_EQ(limit.angular_axes[1], 1);
-    ASSERT_TRUE(limit.min.has_value());
-    ASSERT_TRUE(limit.max.has_value());
-    EXPECT_NEAR(limit.min.value(), -0.785398f, 1e-3f);
-    EXPECT_NEAR(limit.max.value(),  0.785398f, 1e-3f);
-    ASSERT_TRUE(limit.stiffness.has_value());
-    EXPECT_NEAR(limit.stiffness.value(), 120.0f, c_tolerance);
-    EXPECT_NEAR(limit.damping, 3.0f, c_tolerance);
+    // One entry per limit instance, naming the one axis of the instance: the
+    // settings item states one limit per degree of freedom, so two instances
+    // of equal value stay two entries.
+    ASSERT_EQ(joint.limits.size(), 2u);
+    for (std::size_t i = 0; i < 2u; ++i) {
+        const erhe::scene::Physics_joint_limit& limit = joint.limits[i];
+        EXPECT_TRUE(limit.linear_axes.empty());
+        ASSERT_EQ(limit.angular_axes.size(), 1u);
+        EXPECT_EQ(limit.angular_axes.front(), static_cast<int>(i));
+        ASSERT_TRUE(limit.min.has_value());
+        ASSERT_TRUE(limit.max.has_value());
+        EXPECT_NEAR(limit.min.value(), -0.785398f, 1e-3f);
+        EXPECT_NEAR(limit.max.value(),  0.785398f, 1e-3f);
+        ASSERT_TRUE(limit.stiffness.has_value());
+        EXPECT_NEAR(limit.stiffness.value(), 120.0f, c_tolerance);
+        EXPECT_NEAR(limit.damping, 3.0f, c_tolerance);
+    }
 
     ASSERT_EQ(joint.drives.size(), 1u);
     const erhe::scene::Physics_joint_drive& drive = joint.drives.front();

@@ -387,7 +387,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         // Full scene persistence: editor-domain ERHE_* extensions + baked
         // graph-mesh exclusion (doc/editor/gltf_scene_roundtrip.md phase 3).
         // The default export stays plain interchange.
-        add_gltf_editor_state(export_arguments, *sr, export_path, physics_items.materials);
+        add_gltf_editor_state(export_arguments, *sr, export_path, physics_items);
     }
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
