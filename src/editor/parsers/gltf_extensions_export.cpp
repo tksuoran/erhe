@@ -527,6 +527,19 @@ void add_gltf_editor_state(
             {"ambient_light",  json_vec4(glm::vec4{scene.get_ambient_light(), 0.0f})},
             {"enable_physics", scene_root.has_physics_world()},
         };
+        // The scene item's own local values next to the explicit field, and
+        // the style it uses (doc/erhe/property_system.md section 4.20): the
+        // map is the item's complete local set, so an ambient color a style
+        // holds is still style-held after a reload.
+        {
+            const nlohmann::json scene_properties = json_properties(scene);
+            if (scene_properties.is_object()) {
+                scene_json["properties"] = scene_properties;
+            }
+            if (scene.get_style()) {
+                scene_json["style"] = scene.get_style()->get_reference_path();
+            }
+        }
         // A COPY: the file records the selection of the set it writes, under
         // the path the reloaded scene carries that set on - the file's own
         // root, whose path is empty. Selections of sets this file does not

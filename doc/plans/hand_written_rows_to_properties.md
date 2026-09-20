@@ -1,13 +1,13 @@
 # Remaining hand-written item state as properties
 
-Status: proposed
+Status: in progress
 
 Extends `doc/erhe/property_system.md` (the design record of `erhe::property`),
 whose section 6 links here. `doc/erhe/property_inventory.md` owns the per-field
 status and its "Not yet migrated" table is the work list of this plan; each
 phase below removes its row from that table in the commit that lands it.
 
-Decision labels of this plan are `H1`..; `D<n>`, `R<n>` and section numbers
+Decision labels of this plan are `H4`..; `D<n>`, `R<n>` and section numbers
 without a document name refer to the design record.
 
 ## 1. Goal
@@ -26,7 +26,6 @@ The closed list of state this plan migrates, in phase order:
 
 | Phase | Owner | State | Property form |
 |---|---|---|---|
-| 1 | `erhe::scene::Scene` | `ambient_light` | `vec3`, entry store |
 | 2 | `erhe::scene::Layout` | grid track extents, one list per axis | three `float_array`, entry store |
 | 3 | `erhe::physics::Collision_filter` | `collision_systems`, `collide_with_systems`, `not_collide_with_systems` | three `string_array`, entry store (new value type) |
 | 4 | `erhe::physics::Physics_joint_settings` | `limits`, `drives` | child items with scalar properties (H6) |
@@ -41,24 +40,6 @@ operation.
 
 ## 3. Decisions
 
-- H1 `Scene.ambient_light` is a `vec3` with the `color` presentation, default
-  `(0, 0, 0)`, `inherits = false` (a scene has no holder above it; a Style
-  holds the value for a shared lighting preset, D30). Every reader takes
-  `glm::vec3` already (`Light_buffer::update`, the composition pass, the DDGI
-  sky radiance, the ray trace renderer), so the fourth component carries
-  nothing.
-- H2 `Scene` keeps a private `glm::vec3 m_ambient_light` as a MIRROR of the
-  effective value, refreshed in `Scene::on_property_changed`, read through
-  `get_ambient_light()` - the bridged-owner recipe of section 4.18. The
-  per-frame readers read the member and never the store. `set_ambient_light()`
-  is the one writer entry point and writes the local value.
-- H3 The file forms keep their field: `ERHE_scene.ambient_light` and the USD
-  `erhe:scene` block write the effective color as four numbers with the fourth
-  `0`, and read the first three. `ERHE_scene` gains `properties` (the scene
-  item's complete local set, the `ERHE_light` rule of section 4.18) and
-  `style`, so a style-held ambient color stays style-held across a reload; on
-  load a file without `properties` makes `ambient_light` a local value.
-  `doc/gltf_extensions/ERHE_scene.md` and its schema change in the same commit.
 - H4 A list of scalars is one array property: the whole list is the value, an
   edit of one element is a set of the whole list, and the generic row gains a
   per-element editor for the array types (today it shows a read-only summary,
@@ -88,13 +69,8 @@ verified by the section 4.18 verification loop plus the checks named here.
 
 ### Phase 1: Scene.ambient_light
 
-The property, its mirror, the readers and writers, the generic row and the
-test are in place (design record section 4.20). What remains:
-
-1. H3 file forms: `ERHE_scene` `properties` and `style`, with
-   `doc/gltf_extensions/ERHE_scene.md` and its schema.
-2. Extend the `ERHE_scene` section of `scripts/scene_roundtrip_verify.py` with
-   a local and a style-held ambient color.
+Landed; `doc/erhe/property_system.md` section 4.20 states what the scene's
+ambient color and its two file forms now are.
 
 ### Phase 2: Layout grid track extents
 

@@ -10,6 +10,12 @@
             "minItems": 4,
             "maxItems": 4
         },
+        "properties": {
+            "type": "object",
+            "description": "The scene item's local property values (name -> text): its complete local set, so ambient_light stays style-held across a reload",
+            "additionalProperties": {"type": "string"}
+        },
+        "style": {"type": "string", "description": "Name of the style item the scene uses"},
         "enable_physics": {"type": "boolean"},
         "settings": {
             "type": "object",

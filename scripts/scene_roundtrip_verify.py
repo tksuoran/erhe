@@ -51,6 +51,7 @@ import glob
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -2636,6 +2637,151 @@ def section_gltf_variants():
     check(S, f"scene '{reloaded_name}' closed", wait_for_scene_gone(reloaded_name))
 
 
+# --------------------------------------------------------------------------
+# ERHE_scene: the scene item's own property values
+# --------------------------------------------------------------------------
+
+AMBIENT_LOCAL_GLB = pathlib.Path("res/editor/scenes/phase6_ambient_local.glb")
+AMBIENT_STYLE_GLB = pathlib.Path("res/editor/scenes/phase6_ambient_style.glb")
+AMBIENT_USDA      = pathlib.Path("res/editor/scenes/phase6_ambient.usda")
+AMBIENT_LEGACY_USDA = pathlib.Path("res/editor/scenes/phase6_ambient_legacy.usda")
+
+
+def scene_ambient_state(scene_name):
+    """(source, effective value, local value, style) of the scene item's
+    ambient_light, read the way the Properties window reads it."""
+    properties = call("get_item_properties", {"scene_name": scene_name, "item_name": scene_name})
+    entry = next((p for p in properties.get("properties", []) if p.get("name") == "ambient_light"), None)
+    if entry is None:
+        return (None, None, None, None)
+    return (entry.get("source"), entry.get("value"), entry.get("local"),
+            properties.get("item", {}).get("style"))
+
+
+def hold_ambient_in_a_style(section, scene_name, style_name, text):
+    """Moves the scene's ambient color out of its local value and into a
+    style: the H3 case the `properties` map exists for."""
+    answer = call("create_style", {"scene_name": scene_name, "name": style_name})
+    check(section, f"created style '{style_name}'", isinstance(answer, dict) and ("style" in answer), str(answer))
+    mutate("set_item_property", {"scene_name": scene_name, "item_name": style_name,
+                                 "property": "Scene.ambient_light", "value": text})
+    mutate("set_item_property", {"scene_name": scene_name, "item_name": scene_name,
+                                 "property": "ambient_light", "value": None})
+    mutate("set_item_property", {"scene_name": scene_name, "item_name": scene_name,
+                                 "property": "style", "value": style_name})
+    state = scene_ambient_state(scene_name)
+    check(section, "the style holds the ambient color before the save",
+          (state[0] == "style") and (state[1] == text) and (state[2] is None), str(state))
+
+
+def section_scene_ambient_light():
+    """ERHE_scene / `erhe:scene` `properties` and `style` (H3 of
+    doc/plans/hand_written_rows_to_properties.md): the scene item's ambient
+    color comes back as the layer it was written from - local as local, and
+    style-held as style-held - in both file formats, and a file written
+    before the map existed reads its `ambient_light` field as a local
+    value."""
+    S = "scene-ambient"
+    local_text = "0.5 0.1 0.1"
+    style_text = "0.2 0.2 0.6"
+
+    # glTF leg: a fresh erhe scene saved as .glb and loaded back as a scene.
+    scene_name = create_fresh_scene(S)
+    if scene_name is None:
+        return
+    mutate("set_scene_settings", {"scene_name": scene_name, "ambient_light": [0.5, 0.1, 0.1]})
+    state = scene_ambient_state(scene_name)
+    check(S, "set_scene_settings writes the scene's LOCAL ambient value",
+          (state[0] == "local") and (state[1] == local_text), str(state))
+
+    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(AMBIENT_LOCAL_GLB)})
+    check(S, "save_scene wrote the .glb", AMBIENT_LOCAL_GLB.is_file() and bool(answer) and answer.get("saved"), str(answer))
+    mutate("close_scene", {"scene_name": scene_name})
+    check(S, f"scene '{scene_name}' closed", wait_for_scene_gone(scene_name))
+
+    reloaded = AMBIENT_LOCAL_GLB.stem
+    mutate("load_scene", {"path": str(AMBIENT_LOCAL_GLB)})
+    if not check(S, f"scene '{reloaded}' appears in list_scenes", wait_for_scene(reloaded)):
+        return
+    state = scene_ambient_state(reloaded)
+    check(S, "glTF: a local ambient color reloads as a LOCAL value",
+          (state[0] == "local") and (state[1] == local_text) and (state[2] == local_text), str(state))
+
+    # The same scene with the color held by a style: the map is the item's
+    # complete local set, so nothing is local after the reload.
+    hold_ambient_in_a_style(S, reloaded, "Ambience", style_text)
+    answer = mutate("save_scene", {"scene_name": reloaded, "path": str(AMBIENT_STYLE_GLB)})
+    check(S, "save_scene wrote the style .glb", AMBIENT_STYLE_GLB.is_file() and bool(answer) and answer.get("saved"), str(answer))
+    mutate("close_scene", {"scene_name": reloaded})
+    check(S, f"scene '{reloaded}' closed", wait_for_scene_gone(reloaded))
+
+    styled = AMBIENT_STYLE_GLB.stem
+    mutate("load_scene", {"path": str(AMBIENT_STYLE_GLB)})
+    if not check(S, f"scene '{styled}' appears in list_scenes", wait_for_scene(styled)):
+        return
+    state = scene_ambient_state(styled)
+    check(S, "glTF: a style-held ambient color reloads as STYLE-held, with no local value",
+          (state[0] == "style") and (state[1] == style_text) and (state[2] is None) and bool(state[3]), str(state))
+    settings = call("get_scene_settings", {"scene_name": styled})
+    ambient = [round(c, 4) for c in settings.get("ambient_light", [])[:3]]
+    check(S, "glTF: the reloaded scene renders with the style's color",
+          ambient == [0.2, 0.2, 0.6], str(ambient))
+    mutate("close_scene", {"scene_name": styled})
+    check(S, f"scene '{styled}' closed", wait_for_scene_gone(styled))
+
+    # USD leg: the same two cases through the `erhe:scene` customLayerData
+    # block, which carries the same JSON object.
+    if not usd_support_available():
+        skip(S, "USD leg", "editor built with ERHE_USD_LIBRARY=none")
+        return
+    if not usd_open_scene(S, USD_DATA_DIR / "cube.usda", "cube"):
+        return
+    mutate("set_scene_settings", {"scene_name": "cube", "ambient_light": [0.5, 0.1, 0.1]})
+    if not usd_save_scene(S, "cube", AMBIENT_USDA):
+        return
+    usd_close_scene(S, "cube")
+
+    usd_name = AMBIENT_USDA.stem
+    mutate("load_scene", {"path": str(AMBIENT_USDA)})
+    if not check(S, f"scene '{usd_name}' appears in list_scenes", wait_for_scene(usd_name)):
+        return
+    state = scene_ambient_state(usd_name)
+    check(S, "USD: a local ambient color reloads as a LOCAL value",
+          (state[0] == "local") and (state[1] == local_text) and (state[2] == local_text), str(state))
+
+    hold_ambient_in_a_style(S, usd_name, "Ambience", style_text)
+    if not usd_save_scene(S, usd_name, AMBIENT_USDA):
+        return
+    usd_close_scene(S, usd_name)
+    mutate("load_scene", {"path": str(AMBIENT_USDA)})
+    if not check(S, f"scene '{usd_name}' appears in list_scenes again", wait_for_scene(usd_name)):
+        return
+    state = scene_ambient_state(usd_name)
+    check(S, "USD: a style-held ambient color reloads as STYLE-held, with no local value",
+          (state[0] == "style") and (state[1] == style_text) and (state[2] is None) and bool(state[3]), str(state))
+
+    # A file written before the map existed: its `ambient_light` field alone
+    # is the scene's local value. Written from the saved USDA with the two
+    # members removed from the scene block.
+    text = AMBIENT_USDA.read_text(encoding="utf-8")
+    stripped = re.sub(r',"properties":\{[^}]*\}', "", text)
+    stripped = re.sub(r',"style":"[^"]*"', "", stripped)
+    check(S, "the legacy form drops both members from the scene block",
+          ("properties" not in stripped.split("erhe:scene")[1].split("\n")[0]), "rewrite did not take")
+    AMBIENT_LEGACY_USDA.write_text(stripped, encoding="utf-8")
+    USD_ARTIFACTS.append(AMBIENT_LEGACY_USDA)
+    usd_close_scene(S, usd_name)
+
+    legacy_name = AMBIENT_LEGACY_USDA.stem
+    mutate("load_scene", {"path": str(AMBIENT_LEGACY_USDA)})
+    if not check(S, f"scene '{legacy_name}' appears in list_scenes", wait_for_scene(legacy_name)):
+        return
+    state = scene_ambient_state(legacy_name)
+    check(S, "a file without `properties` reads `ambient_light` as a LOCAL value",
+          (state[0] == "local") and (state[1] == style_text), str(state))
+    usd_close_scene(S, legacy_name)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=3743, help="MCP server port (default 3743)")
@@ -2659,6 +2805,7 @@ def main():
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
         lambda: section_usd_round_trip(arguments.usdchecker),
         section_gltf_variants,
+        section_scene_ambient_light,
     ]
     for section in sections:
         name = getattr(section, "__name__", "lambda section")
@@ -2676,7 +2823,7 @@ def main():
 
     if not failed and not arguments.keep_files:
         for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
-                         GLTF_VARIANTS_SAVE] + USD_ARTIFACTS:
+                         GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB] + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
         print(f"(kept {E2E_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")

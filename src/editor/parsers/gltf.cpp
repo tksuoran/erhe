@@ -1616,6 +1616,12 @@ auto finish_open_scene_gltf(
     // target scene's settings).
     erhe::scene::Scene& scene = scene_root->get_scene();
     scene.set_ambient_light(scene_state->ambient_light);
+    // The scene item's own local values: the explicit field above wrote one,
+    // and the map is the item's complete local set (section 4.20), so a
+    // style-held ambient color is not local after the reload either. The
+    // style the map's owner uses is assigned further below, once the file's
+    // style items exist.
+    apply_scene_item_properties(scene, scene_state->properties);
     if (!scene_state->settings_json.empty()) {
         simdjson::ondemand::parser settings_parser;
         simdjson::padded_string    settings_padded{scene_state->settings_json};
@@ -1667,6 +1673,9 @@ auto finish_open_scene_gltf(
     for (const std::shared_ptr<Operation>& operation : operations) {
         operation->execute(context);
     }
+    // ERHE_scene `style`: by name, so it waits for the style items the
+    // operations above attached to the content library.
+    apply_scene_item_style(content_library, scene, scene_state->style_name);
 
     // Move the parsed top-level nodes directly under the new scene's root:
     // the saved file carries the scene's children in place (import_root

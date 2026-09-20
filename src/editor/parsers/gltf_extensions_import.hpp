@@ -11,12 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
+namespace erhe        { class Item_base; }
 namespace erhe::gltf  { class Gltf_data; }
 namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 
 class App_context;
+class Content_library;
 class Operation;
 class Scene_root;
 
@@ -53,9 +55,34 @@ public:
     // Minified Scene_settings JSON for the codegen deserializer; empty =
     // no per-scene overrides.
     std::string settings_json;
+    // The scene item's local property values (name -> text) and the name of
+    // the style it uses (doc/erhe/property_system.md section 4.20). The map
+    // is present exactly when the file carries it, and is then the item's
+    // complete local set; a file without it leaves `ambient_light` local.
+    std::optional<std::vector<std::pair<std::string, std::string>>> properties;
+    std::string                                                     style_name;
 };
 
 [[nodiscard]] auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::optional<Gltf_scene_state>;
+
+// The `properties` map of an ERHE_scene / `erhe:scene` block onto the scene
+// item, after the explicit `ambient_light` field wrote its local value: the
+// map is the item's complete local set, so a value it does not name is
+// cleared and an ambient color a style holds stays style-held (the
+// `ERHE_light` rule of doc/erhe/property_system.md section 4.18). Shared by
+// the glTF and USD open-scene paths, which carry the same JSON object.
+void apply_scene_item_properties(
+    erhe::Item_base&                                                       scene_item,
+    const std::optional<std::vector<std::pair<std::string, std::string>>>& properties
+);
+
+// The `style` member of the same block: the style item is looked up by name,
+// so this runs once the file's styles exist. An empty name does nothing.
+void apply_scene_item_style(
+    const std::shared_ptr<Content_library>& content_library,
+    erhe::Item_base&                        scene_item,
+    const std::string&                      style_name
+);
 
 // ERHE_scene physics_materials / collision_filter_names: the
 // KHR_physics_rigid_bodies physicsMaterials / collisionFilters entries by

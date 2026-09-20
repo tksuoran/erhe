@@ -2156,7 +2156,17 @@ compound. The generic section of the Properties window draws the row;
 
 The file forms keep the field they had: `ERHE_scene.ambient_light` and the USD
 `erhe:scene` block write four numbers with the fourth `0` and read the first
-three. Test: `src/erhe/scene/test/test_scene_properties.cpp` (default, setter
+three, which the load makes the scene item's local value. Both blocks also
+carry the scene item's `properties` map and its `style`, the same two members
+`ERHE_node` carries: the map is the item's complete local set (the rule of
+section 4.18), so a value the `ambient_light` field made local that the map
+does not name is cleared again and a style-held ambient color is still
+style-held after a reload. The map is written even when empty, which is what
+tells the load that the file carries it; a file without it leaves
+`ambient_light` local. The `style` name is resolved once the file's style
+items exist - after the glTF import operations run, and after the USD class
+prims have become Style items of the scene.
+Test: `src/erhe/scene/test/test_scene_properties.cpp` (default, setter
 to mirror, untyped access, style-held value reaching the mirror). `Scene` has
 no clone case: its copy constructor is `ERHE_FATAL`, a scene is never copied.
 

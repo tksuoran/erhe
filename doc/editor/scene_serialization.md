@@ -36,7 +36,7 @@ JSON, erhe state attaches at three levels:
 | Level | Extensions |
 |---|---|
 | per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry`, `ERHE_physics`, `ERHE_layout` |
-| the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
+| the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, the scene item's local property values and style, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
 A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
@@ -131,7 +131,8 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    - per node: `ERHE_physics` (erhe rigid-body state the Khronos extension
      cannot express), `ERHE_layout` (Layout / Layout_item attachments),
      node bindings for graph meshes;
-   - scene level: `ERHE_scene` - ambient light, `enable_physics`, and the
+   - scene level: `ERHE_scene` - ambient light, the scene item's own
+     `properties` map and `style`, `enable_physics`, and the
      per-scene `Scene_settings` overrides, serialized through
      the codegen struct (`scene/definitions/scene_settings.py`). One field
      of it is scene content rather than a setting override:
@@ -230,8 +231,11 @@ JSON-only, no buffer decode) and branches on
   2. Construct the `Scene_root` with a **fresh, empty `Content_library`** -
      the file carries the scene's own brushes / materials / textures /
      animations / graphs; nothing leaks in from other scenes.
-  3. Apply the rest of the `ERHE_scene` payload: ambient light and the
-     per-scene `Scene_settings` overrides (codegen deserialize).
+  3. Apply the rest of the `ERHE_scene` payload: ambient light, the scene
+     item's `properties` map (its complete local set, so a style-held
+     ambient color does not become local) and the per-scene
+     `Scene_settings` overrides (codegen deserialize). The `style` member
+     is assigned further down, once the file's style items exist.
   4. `finalize_imported_meshes()` - build GPU vertex/index buffers
      (skinned variant when needed), build edges for wireframe rendering
      when the geometry arrived without them (geometry restored from
@@ -358,7 +362,7 @@ as string entries of the root layer's `customLayerData`:
 
 | key | value |
 |---|---|
-| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd_node_graphs.md`](../erhe/usd_node_graphs.md) section 4) |
+| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, the scene item's `properties` map and `style`, `enable_physics`, the codegen-serialized per-scene `settings` and the `graph_meshes` entries a geometry node graph's prim has no form for ([`usd_node_graphs.md`](../erhe/usd_node_graphs.md) section 4) |
 | `erhe:version` | the writer's revision, `"1"` |
 
 An opened file that has no `erhe:scene` entry keeps the editor defaults, so a

@@ -13,7 +13,21 @@ Its presence in `extensionsUsed` is the discriminator between "open as a
 full erhe scene" and "import as an asset": scene saves always write it,
 plain interchange exports never do.
 
-- `ambient_light`: scene ambient light color (RGBA; erhe #237).
+- `ambient_light`: the effective scene ambient light color as four numbers,
+  the fourth `0` (erhe #237). The load reads the first three and makes them
+  the scene item's local value.
+- `properties`: the scene item's local property values as a name to text
+  map, the form of `ERHE_node` `properties` (the registered properties of
+  `erhe::scene::Scene` by name, `doc/erhe/property_system.md` section 4.20).
+  The map is the item's COMPLETE local set: on load a value the
+  `ambient_light` field above made local that the map does not name is
+  cleared again, so an ambient color held by a style is still style-held
+  after a reload. Written even when empty, which is what tells a reader
+  that the file carries the map; a file without it (written before the map
+  existed) leaves `ambient_light` local.
+- `style` (optional): the name of the style item the scene uses
+  (`doc/editor/style_library.md` D3), assigned after `styles` below has
+  created every style of the file. Omitted when the scene uses none.
 - `enable_physics`: whether the scene owns a physics world.
 - `settings` (optional): per-scene overrides of editor-global settings
   (erhe #239) as a `Scene_settings` JSON object (the erhe_codegen schema in
@@ -66,7 +80,9 @@ plain interchange exports never do.
 
 ```json
 {
-    "ambient_light": [0.1, 0.1, 0.12, 1],
+    "ambient_light": [0.1, 0.1, 0.12, 0],
+    "properties": {"ambient_light": "0.1 0.1 0.12"},
+    "style": "Ambience",
     "enable_physics": true,
     "settings": {
         "post_processing": false,

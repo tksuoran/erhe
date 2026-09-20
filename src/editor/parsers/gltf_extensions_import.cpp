@@ -178,7 +178,47 @@ auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::opti
     if (payload.contains("settings") && payload["settings"].is_object()) {
         state.settings_json = payload["settings"].dump();
     }
+    const auto properties_it = payload.find("properties");
+    if ((properties_it != payload.end()) && properties_it->is_object()) {
+        std::vector<std::pair<std::string, std::string>> properties;
+        for (const auto& [name, value] : properties_it->items()) {
+            if (value.is_string()) {
+                properties.emplace_back(name, value.get<std::string>());
+            }
+        }
+        state.properties = std::move(properties);
+    }
+    if (payload.contains("style") && payload["style"].is_string()) {
+        state.style_name = payload["style"].get<std::string>();
+    }
     return state;
+}
+
+void apply_scene_item_properties(
+    erhe::Item_base&                                                       scene_item,
+    const std::optional<std::vector<std::pair<std::string, std::string>>>& properties
+)
+{
+    if (!properties.has_value()) {
+        // A file written before the map existed: the explicit `ambient_light`
+        // field is the scene's local value, as it was.
+        return;
+    }
+    const std::vector<std::pair<std::string, std::string>>& entries = properties.value();
+    for (const std::pair<std::string, std::string>& entry : entries) {
+        erhe::gltf::apply_item_local_property(scene_item, entry.first, entry.second);
+    }
+    erhe::gltf::clear_local_properties_not_listed(
+        scene_item,
+        [&entries](const std::string_view property_name) -> bool {
+            for (const std::pair<std::string, std::string>& entry : entries) {
+                if (entry.first == property_name) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    );
 }
 
 auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gltf_physics_item_names
@@ -972,6 +1012,25 @@ void append_library_folders_operation(
         return;
     }
     operations.push_back(std::make_shared<Content_library_folders_operation>(scene_root, std::move(records)));
+}
+
+void apply_scene_item_style(
+    const std::shared_ptr<Content_library>& content_library,
+    erhe::Item_base&                        scene_item,
+    const std::string&                      style_name
+)
+{
+    if (style_name.empty() || !content_library) {
+        return;
+    }
+    const std::shared_ptr<Style> style = find_style_by_name(*content_library, style_name);
+    if (!style) {
+        log_parsers->warn("scene state: the scene names style '{}', which the scene does not hold", style_name);
+        return;
+    }
+    if (!scene_item.set_style(style)) {
+        log_parsers->warn("scene state: the scene cannot use style '{}'", style_name);
+    }
 }
 
 namespace {

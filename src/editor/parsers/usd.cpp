@@ -49,6 +49,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/gltf_extensions_import.hpp"
 #include "parsers/gltf_extensions_names.hpp"
 #include "parsers/physics_export.hpp"
 #include "parsers/physics_import.hpp"
@@ -74,6 +75,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_gltf/gltf_item_flags.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
@@ -2734,6 +2736,12 @@ public:
     // The state of the file's geometry graphs a `NodeGraph` prim has no form
     // for: which prims are bound to a graph, and the graph's designations.
     std::vector<Usd_graph_mesh_state> graph_meshes;
+    // The scene item's local property values (name -> text) and the name of
+    // the style it uses (doc/erhe/property_system.md section 4.20), the same
+    // members the glTF ERHE_scene block carries. The map is present exactly
+    // when the file carries it, and is then the item's complete local set.
+    std::optional<std::vector<std::pair<std::string, std::string>>> properties;
+    std::string                                                     style_name;
 };
 
 [[nodiscard]] auto parse_usd_scene_state(const erhe::usd::Usd_data& usd_data) -> Usd_scene_state
@@ -2758,6 +2766,18 @@ public:
     }
     if (payload.contains("settings") && payload["settings"].is_object()) {
         state.settings_json = payload["settings"].dump();
+    }
+    if (payload.contains("properties") && payload["properties"].is_object()) {
+        std::vector<std::pair<std::string, std::string>> properties;
+        for (const auto& [name, value] : payload["properties"].items()) {
+            if (value.is_string()) {
+                properties.emplace_back(name, value.get<std::string>());
+            }
+        }
+        state.properties = std::move(properties);
+    }
+    if (payload.contains("style") && payload["style"].is_string()) {
+        state.style_name = payload["style"].get<std::string>();
     }
     if (payload.contains("graph_meshes") && payload["graph_meshes"].is_array()) {
         for (const nlohmann::json& entry : payload["graph_meshes"]) {
@@ -3194,6 +3214,12 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 
     erhe::scene::Scene& scene = scene_root->get_scene();
     scene.set_ambient_light(scene_state.ambient_light);
+    // The scene item's own local values: the explicit field above wrote one,
+    // and the map is the item's complete local set (doc/erhe/property_system.md
+    // section 4.20), so a style-held ambient color is not local after the
+    // reload either. The style the map's owner uses is assigned once the
+    // file's class prims have become Style items of the scene, further below.
+    apply_scene_item_properties(scene, scene_state.properties);
     // A `DomeLight` is erhe's ambient light and it is what the file itself
     // authored, so it wins over the scene block an erhe save may have left in
     // `customLayerData`. The prims are kept so a save writes them back.
@@ -3330,6 +3356,11 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         child->set_parent(scene_root_node);
     }
     container_node->set_parent({});
+
+    // The `erhe:scene` `style`: by name, so it waits for the Style items the
+    // file's class prims became to reach the content library, which is what
+    // the prims entering the scene above does.
+    apply_scene_item_style(content_library, scene, scene_state.style_name);
 
     // A file that authors no camera is looked at through the editor's own
     // default camera, fitted to the content the way a foreign glTF scene is
@@ -3867,6 +3898,20 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
             {"ambient_light",  {scene.get_ambient_light().x, scene.get_ambient_light().y, scene.get_ambient_light().z, 0.0f}},
             {"enable_physics", scene_root.has_physics_world()}
         };
+        // The scene item's own local values next to the explicit field, and
+        // the style it uses (doc/erhe/property_system.md section 4.20), in the
+        // form the glTF ERHE_scene block writes them.
+        {
+            const nlohmann::json scene_properties = nlohmann::json::parse(
+                erhe::gltf::item_local_properties_to_json(scene), nullptr, false
+            );
+            if (scene_properties.is_object()) {
+                scene_json["properties"] = scene_properties;
+            }
+            if (scene.get_style()) {
+                scene_json["style"] = scene.get_style()->get_reference_path();
+            }
+        }
         if (content_library) {
             const nlohmann::json graph_meshes = collect_usd_graph_mesh_states(
                 *content_library.get(), *root_node.get(), planned_paths, path
