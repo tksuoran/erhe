@@ -46,8 +46,9 @@ are therefore static or kinematic only.
 and `scene.create_new_joint` commands, the Create menu, and the item-tree
 context menu ("Attach > Rigid Body / Joint"; a joint auto-connects to another
 selected node). The Create menu also creates Physics Material, Collision Filter
-and Joint Settings content-library items. `scene/physics_edits.{hpp,cpp}` holds
-the shared reapply / rebuild helpers. The MCP tools are `get_physics_items`,
+and Joint Settings content-library items. An edit of a shared item reaches
+the live simulation through the observers `Node_physics` and `Node_joint`
+subscribe to it. The MCP tools are `get_physics_items`,
 `create_physics_body` / `edit_physics_body`, `create_physics_joint` /
 `edit_physics_joint`, `create_physics_material` / `edit_physics_material`,
 `create_collision_filter` / `edit_collision_filter`,

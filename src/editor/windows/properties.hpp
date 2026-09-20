@@ -34,9 +34,6 @@ namespace erhe::scene {
 namespace erhe::geometry {
     class Geometry;
 }
-namespace erhe::physics {
-    class Physics_joint_settings;
-}
 namespace erhe::primitive {
     class Buffer_mesh;
     class Primitive_raytrace;
@@ -125,7 +122,6 @@ private:
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
-    void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
     void item_diagnostics             (const std::shared_ptr<erhe::Item_base>& item);

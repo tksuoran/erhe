@@ -29,6 +29,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <array>
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -412,6 +414,80 @@ void place_library_item(
     return description_name.empty() ? fmt::format("{} {}", fallback, index) : description_name;
 }
 
+// Each limit entry sets the properties of every axis it names and each drive
+// entry those of the axis it names (doc/erhe/property_system.md section
+// 4.22). When two entries name one axis the later one wins, which is what the
+// per-axis model does with a file that grouped axes; the overwrite is logged.
+void apply_joint_description_to_item(
+    const erhe::scene::Physics_joint_description& description,
+    const std::string&                            joint_name,
+    erhe::physics::Physics_joint_settings&        item
+)
+{
+    using erhe::physics::Joint_axis_drive;
+    using erhe::physics::Joint_axis_limit;
+
+    std::array<bool, erhe::physics::c_joint_axis_count> axis_limited{};
+    std::array<bool, erhe::physics::c_joint_axis_count> axis_driven{};
+
+    const auto apply_limit = [&](const std::size_t axis, const erhe::scene::Physics_joint_limit& limit) {
+        if (axis_limited[axis]) {
+            log_physics->warn(
+                "Joint '{}': more than one limit names axis '{}'; the later entry wins",
+                joint_name, erhe::physics::joint_axis_token(axis)
+            );
+        }
+        axis_limited[axis] = true;
+        item.set_axis_limit(axis, Joint_axis_limit::limited);
+        if (limit.min.has_value()) { item.set_axis_limit_min(axis, limit.min.value()); }
+        if (limit.max.has_value()) { item.set_axis_limit_max(axis, limit.max.value()); }
+        if (limit.stiffness.has_value()) { item.set_axis_limit_stiffness(axis, limit.stiffness.value()); }
+        item.set_axis_limit_damping(axis, limit.damping);
+    };
+
+    for (const erhe::scene::Physics_joint_limit& limit : description.limits) {
+        for (const int axis : limit.linear_axes) {
+            if ((axis >= 0) && (axis < 3)) {
+                apply_limit(static_cast<std::size_t>(axis), limit);
+            }
+        }
+        for (const int axis : limit.angular_axes) {
+            if ((axis >= 0) && (axis < 3)) {
+                apply_limit(static_cast<std::size_t>(axis) + 3, limit);
+            }
+        }
+    }
+
+    for (const erhe::scene::Physics_joint_drive& drive : description.drives) {
+        if ((drive.axis < 0) || (drive.axis > 2)) {
+            log_physics->warn("Joint '{}': drive axis {} is outside 0..2; the drive is dropped", joint_name, drive.axis);
+            continue;
+        }
+        const std::size_t axis = static_cast<std::size_t>(drive.axis) +
+            ((drive.type == erhe::scene::Physics_drive_type::e_angular) ? std::size_t{3} : std::size_t{0});
+        if (axis_driven[axis]) {
+            log_physics->warn(
+                "Joint '{}': more than one drive names axis '{}'; the later entry wins",
+                joint_name, erhe::physics::joint_axis_token(axis)
+            );
+        }
+        axis_driven[axis] = true;
+        item.set_axis_drive(
+            axis,
+            (drive.mode == erhe::scene::Physics_drive_mode::e_acceleration) ? Joint_axis_drive::acceleration : Joint_axis_drive::force
+        );
+        // A file that states no maximum force leaves the property unset, and
+        // zero is the unlimited force the mirror substitutes infinity for.
+        if (std::isfinite(drive.max_force)) {
+            item.set_axis_drive_max_force(axis, drive.max_force);
+        }
+        item.set_axis_drive_position_target(axis, drive.position_target);
+        item.set_axis_drive_velocity_target(axis, drive.velocity_target);
+        item.set_axis_drive_stiffness      (axis, drive.stiffness);
+        item.set_axis_drive_damping        (axis, drive.damping);
+    }
+}
+
 } // anonymous namespace
 
 void import_physics(
@@ -517,42 +593,7 @@ void import_physics(
         const Physics_import_item* record = record_of(arguments.joint_settings, i);
         const std::string name = record_name(record, description.name, "Physics joint", i);
         auto item = std::make_shared<erhe::physics::Physics_joint_settings>(name);
-        item->limits.reserve(description.limits.size());
-        for (const erhe::scene::Physics_joint_limit& limit : description.limits) {
-            erhe::physics::Joint_limit out_limit{};
-            for (const int axis : limit.linear_axes) {
-                if ((axis >= 0) && (axis < 3)) {
-                    out_limit.linear_axes[axis] = true;
-                }
-            }
-            for (const int axis : limit.angular_axes) {
-                if ((axis >= 0) && (axis < 3)) {
-                    out_limit.angular_axes[axis] = true;
-                }
-            }
-            out_limit.min       = limit.min;
-            out_limit.max       = limit.max;
-            out_limit.stiffness = limit.stiffness;
-            out_limit.damping   = limit.damping;
-            item->limits.push_back(out_limit);
-        }
-        item->drives.reserve(description.drives.size());
-        for (const erhe::scene::Physics_joint_drive& drive : description.drives) {
-            erhe::physics::Joint_drive out_drive{};
-            out_drive.type = (drive.type == erhe::scene::Physics_drive_type::e_angular)
-                ? erhe::physics::Drive_type::e_angular
-                : erhe::physics::Drive_type::e_linear;
-            out_drive.mode = (drive.mode == erhe::scene::Physics_drive_mode::e_acceleration)
-                ? erhe::physics::Drive_mode::e_acceleration
-                : erhe::physics::Drive_mode::e_force;
-            out_drive.axis            = drive.axis;
-            out_drive.max_force       = drive.max_force;
-            out_drive.position_target = drive.position_target;
-            out_drive.velocity_target = drive.velocity_target;
-            out_drive.stiffness       = drive.stiffness;
-            out_drive.damping         = drive.damping;
-            item->drives.push_back(out_drive);
-        }
+        apply_joint_description_to_item(description, name, *item.get());
         if (record != nullptr) {
             apply_record_properties(*item, record->properties, record->property_set, Object_property_handling::apply);
         }

@@ -1757,8 +1757,8 @@ a body without a material behaves like one with the material defaults;
 `reapply_physics_material()` / `reapply_collision_filter()` push the
 current one again after the referenced item itself was edited, because a
 write of the pointer the mirror already holds is a no-op (R4): the
-material observer of section 4.12 calls the first, and
-`scene/physics_edits` walks the scenes for the second.
+material observer of section 4.12 calls the first, and the filter
+observer of section 4.21 the second.
 
 The typed accessors (`set_motion_mode()`, `set_trigger()`, `set_mass()`,
 `set_gravity_factor()`, ... `set_collision_filter()`) write through the

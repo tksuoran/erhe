@@ -55,7 +55,6 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
-#include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -816,200 +815,8 @@ void Properties::node_joint_properties(Node_joint& node_joint)
                 node_joint.rebuild();
             }
         },
-        "Recreates the constraint, re-capturing the joint frames; use after editing the shared joint settings or moving the nodes"
+        "Recreates the constraint, re-capturing the joint frames; use after moving the nodes"
     );
-}
-
-namespace {
-
-constexpr const char* c_drive_type_names  [] = { "Linear", "Angular" };
-constexpr const char* c_drive_mode_names  [] = { "Force", "Acceleration" };
-
-// Checkbox toggling presence + drag editing the value of an optional float.
-void optional_float_editor(std::optional<float>& value, const float default_value)
-{
-    bool has_value = value.has_value();
-    if (ImGui::Checkbox("##has", &has_value)) {
-        if (has_value) {
-            value = default_value;
-        } else {
-            value.reset();
-        }
-    }
-    if (value.has_value()) {
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        float editable_value = value.value();
-        if (ImGui::DragFloat("##value", &editable_value, 0.01f)) {
-            value = editable_value;
-        }
-    }
-}
-
-} // anonymous namespace
-
-void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // Changes take effect on a joint when its constraint is recreated; press
-    // "Rebuild Joint" on the Node_joint(s) using these settings.
-    push_group("Limits", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-    for (std::size_t i = 0, end = settings->limits.size(); i < end; ++i) {
-        push_group(fmt::format("Limit {}", i), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry(
-            "Linear Axes",
-            [settings, i]() {
-                if (i >= settings->limits.size()) {
-                    return;
-                }
-                erhe::physics::Joint_limit& limit = settings->limits[i];
-                ImGui::Checkbox("X##l", &limit.linear_axes[0]); ImGui::SameLine();
-                ImGui::Checkbox("Y##l", &limit.linear_axes[1]); ImGui::SameLine();
-                ImGui::Checkbox("Z##l", &limit.linear_axes[2]);
-            },
-            "Translation axes this limit applies to"
-        );
-        add_entry(
-            "Angular Axes",
-            [settings, i]() {
-                if (i >= settings->limits.size()) {
-                    return;
-                }
-                erhe::physics::Joint_limit& limit = settings->limits[i];
-                ImGui::Checkbox("X##a", &limit.angular_axes[0]); ImGui::SameLine();
-                ImGui::Checkbox("Y##a", &limit.angular_axes[1]); ImGui::SameLine();
-                ImGui::Checkbox("Z##a", &limit.angular_axes[2]);
-            },
-            "Rotation axes this limit applies to"
-        );
-        add_entry("Min", [settings, i]() {
-            if (i >= settings->limits.size()) {
-                return;
-            }
-            optional_float_editor(settings->limits[i].min, 0.0f);
-        }, "Absent = unbounded below");
-        add_entry("Max", [settings, i]() {
-            if (i >= settings->limits.size()) {
-                return;
-            }
-            optional_float_editor(settings->limits[i].max, 0.0f);
-        }, "Absent = unbounded above");
-        add_entry("Stiffness", [settings, i]() {
-            if (i >= settings->limits.size()) {
-                return;
-            }
-            optional_float_editor(settings->limits[i].stiffness, 0.0f);
-        }, "Soft limit spring stiffness; absent = hard limit");
-        add_entry("Damping", [settings, i]() {
-            if (i >= settings->limits.size()) {
-                return;
-            }
-            ImGui::DragFloat("##", &settings->limits[i].damping, 0.01f, 0.0f, FLT_MAX);
-        });
-        add_entry("Remove", [settings, i]() {
-            if (i >= settings->limits.size()) {
-                return;
-            }
-            if (ImGui::Button("Remove Limit", ImVec2{-FLT_MIN, 0.0f})) {
-                settings->limits.erase(settings->limits.begin() + static_cast<std::ptrdiff_t>(i));
-            }
-        });
-        pop_group();
-    }
-    add_entry("Add", [settings]() {
-        if (ImGui::Button("Add Limit", ImVec2{-FLT_MIN, 0.0f})) {
-            settings->limits.emplace_back();
-        }
-    });
-    pop_group();
-
-    push_group("Drives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-    for (std::size_t i = 0, end = settings->drives.size(); i < end; ++i) {
-        push_group(fmt::format("Drive {}", i), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry("Type", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            int current = static_cast<int>(settings->drives[i].type);
-            if (ImGui::Combo("##", &current, c_drive_type_names, IM_ARRAYSIZE(c_drive_type_names))) {
-                settings->drives[i].type = static_cast<erhe::physics::Drive_type>(current);
-            }
-        });
-        add_entry("Mode", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            int current = static_cast<int>(settings->drives[i].mode);
-            if (ImGui::Combo("##", &current, c_drive_mode_names, IM_ARRAYSIZE(c_drive_mode_names))) {
-                settings->drives[i].mode = static_cast<erhe::physics::Drive_mode>(current);
-            }
-        }, "Acceleration mode is approximated as force mode");
-        add_entry("Axis", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            ImGui::SliderInt("##", &settings->drives[i].axis, 0, 2);
-        });
-        add_entry(
-            "Max Force",
-            [settings, i]() {
-                if (i >= settings->drives.size()) {
-                    return;
-                }
-                erhe::physics::Joint_drive& drive = settings->drives[i];
-                bool limited = std::isfinite(drive.max_force);
-                if (ImGui::Checkbox("##has", &limited)) {
-                    drive.max_force = limited ? 0.0f : std::numeric_limits<float>::infinity();
-                }
-                if (std::isfinite(drive.max_force)) {
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ImGui::DragFloat("##value", &drive.max_force, 0.1f, 0.0f, FLT_MAX);
-                }
-            },
-            "Unchecked = unlimited force"
-        );
-        add_entry("Position Target", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            ImGui::DragFloat("##", &settings->drives[i].position_target, 0.01f);
-        });
-        add_entry("Velocity Target", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            ImGui::DragFloat("##", &settings->drives[i].velocity_target, 0.01f);
-        });
-        add_entry("Stiffness", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            ImGui::DragFloat("##", &settings->drives[i].stiffness, 0.01f, 0.0f, FLT_MAX);
-        }, "> 0 selects a position motor, 0 a velocity motor");
-        add_entry("Damping", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            ImGui::DragFloat("##", &settings->drives[i].damping, 0.01f, 0.0f, FLT_MAX);
-        });
-        add_entry("Remove", [settings, i]() {
-            if (i >= settings->drives.size()) {
-                return;
-            }
-            if (ImGui::Button("Remove Drive", ImVec2{-FLT_MIN, 0.0f})) {
-                settings->drives.erase(settings->drives.begin() + static_cast<std::ptrdiff_t>(i));
-            }
-        });
-        pop_group();
-    }
-    add_entry("Add", [settings]() {
-        if (ImGui::Button("Add Drive", ImVec2{-FLT_MIN, 0.0f})) {
-            settings->drives.emplace_back();
-        }
-    });
-    pop_group();
 }
 
 // Developer diagnostics (R3 of doc/editor/properties_window.md): the
@@ -1055,7 +862,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
     const auto& brush_placement  = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture          = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
-    const auto& physics_joint    = std::dynamic_pointer_cast<erhe::physics::Physics_joint_settings>(item);
 
     const bool edit_disabled = item->is_lock_edit();
     if (edit_disabled) {
@@ -1063,7 +869,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     }
     if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
-    if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }

@@ -67,6 +67,10 @@ behavior; these are the registrations that have it:
   `collisionFilters` entry states all three, and the USD
   `PhysicsCollisionGroup` prim carries them under the same attribute
   names a resource prim's local value would use.
+- `Physics_joint_settings`: all 66 per-axis limit and drive properties - the
+  `KHR_physics_rigid_bodies` `physicsJoints` entry states them as its limits
+  and drives, and the USD `PhysicsLimitAPI` / `PhysicsDriveAPI` instances
+  spell the same axes.
 
 The Properties window tints a row's label by its value source (D12):
 member and bridge rows are blue, entry rows green / gray / cyan / orange /
@@ -185,6 +189,24 @@ change touches the settings store from on_property_changed.
 |---|---|---|
 | collision_systems, collide_with_systems, not_collide_with_systems | entry | `string[]`, `Array_size::editable`, `native_gltf`; does not inherit; bodies recompile through the Node_physics observer |
 
+### Physics_joint_settings (`src/erhe/physics/erhe_physics/physics_joint_settings.cpp`, section 4.22)
+
+Eleven properties for each of the six degrees of freedom `trans_x`,
+`trans_y`, `trans_z`, `rot_x`, `rot_y`, `rot_z` (66 in all), registered by a
+table walk; the axis token is the prefix of the name and names the UI group.
+All of them are `native_gltf` and inherit, and all of them refresh the two
+`Constraint_axis_*` mirrors the constraint is built from.
+
+| Property | Storage | Notes |
+|---|---|---|
+| &lt;axis&gt;_limit | entry | `Joint_axis_limit` (Free / Limited) |
+| &lt;axis&gt;_limit_min, &lt;axis&gt;_limit_max | entry | shown while the axis is Limited, in degrees on a rotation axis; value source `default` is the unbounded side |
+| &lt;axis&gt;_limit_stiffness, &lt;axis&gt;_limit_damping | entry | shown while the axis is Limited; zero stiffness is a hard limit |
+| &lt;axis&gt;_drive | entry | `Joint_axis_drive` (Off / Force / Acceleration); acceleration is mirrored as force with one warning per item |
+| &lt;axis&gt;_drive_max_force | entry | shown while the axis is driven; zero is the unlimited force |
+| &lt;axis&gt;_drive_position_target, &lt;axis&gt;_drive_velocity_target | entry | shown while the axis is driven, in degrees on a rotation axis |
+| &lt;axis&gt;_drive_stiffness, &lt;axis&gt;_drive_damping | entry | shown while the axis is driven; stiffness greater than zero selects a position motor |
+
 ### Rendertarget_mesh (`src/editor/rendertarget_mesh.cpp`, section 4.15)
 
 | Property | Storage | Notes |
@@ -298,13 +320,10 @@ seeded descriptor. Gradient and curve parameters are not properties.
 
 ## Not yet migrated
 
-Hand-written rows of the Properties window that are authored state, in
-migration order. `doc/plans/hand_written_rows_to_properties.md` owns the
-property form and the phase of each row.
-
-| Owner | Fields | Notes |
-|---|---|---|
-| Physics_joint_settings | limits, drives | phase 4; per-axis properties, [plans/joint_limits_as_properties.md](../plans/joint_limits_as_properties.md) |
+Nothing is left: every hand-written row of the Properties window that was
+authored state is a registered property.
+`doc/plans/hand_written_rows_to_properties.md` owns the property form and the
+phase each row was migrated in.
 
 Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,

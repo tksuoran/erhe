@@ -12,7 +12,6 @@
 #include "operations/operation_stack.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/physics_edits.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 
@@ -777,10 +776,16 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
 
     auto item = std::make_shared<erhe::physics::Physics_joint_settings>(name);
     if (args.contains("limits")) {
-        parse_joint_limits(args["limits"], item->limits);
+        const std::optional<std::string> error = parse_joint_limits(args["limits"], *item.get());
+        if (error.has_value()) {
+            return make_error_content(error.value());
+        }
     }
     if (args.contains("drives")) {
-        parse_joint_drives(args["drives"], item->drives);
+        const std::optional<std::string> error = parse_joint_drives(args["drives"], *item.get());
+        if (error.has_value()) {
+            return make_error_content(error.value());
+        }
     }
 
     m_context.operation_stack->queue(
@@ -821,16 +826,21 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
         applied.push_back("new_name");
     }
     if (args.contains("limits")) {
-        parse_joint_limits(args["limits"], item->limits);
+        const std::optional<std::string> error = parse_joint_limits(args["limits"], *item.get());
+        if (error.has_value()) {
+            return make_error_content(error.value());
+        }
         applied.push_back("limits");
     }
     if (args.contains("drives")) {
-        parse_joint_drives(args["drives"], item->drives);
+        const std::optional<std::string> error = parse_joint_drives(args["drives"], *item.get());
+        if (error.has_value()) {
+            return make_error_content(error.value());
+        }
         applied.push_back("drives");
     }
-    // Joints using these settings only pick up changes when their constraint
-    // is recreated; rebuild them all.
-    rebuild_joints_using_settings(m_context, item);
+    // Every write above goes through the property store, so the joints using
+    // these settings rebuild their constraints on their own (J8).
 
     json result = joint_settings_to_json(*item);
     result["applied"] = applied;

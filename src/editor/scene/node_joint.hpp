@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/node_attachment.hpp"
+#include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_physics/iconstraint.hpp"
 
@@ -106,8 +107,9 @@ public:
     [[nodiscard]] auto get_constraint_state () const -> const Node_joint_constraint_state*;
 
     // Tears down and recreates the constraint, re-capturing the joint frames
-    // from the current node transforms. Call after editing the shared
-    // settings or moving the joint / connected nodes.
+    // from the current node transforms. Call after moving the joint or the
+    // connected node; an edit of the shared settings rebuilds on its own
+    // (the observer below).
     void rebuild();
 
     void set_physics_world(erhe::physics::IWorld* value);
@@ -125,10 +127,16 @@ public:
 private:
     void destroy_constraint();
     void refresh_mirror();
+    // Subscribes an any-property observer (D21) to the resolved settings item,
+    // with the constraint rebuild as its callback, so an edit of the shared
+    // settings from any writer reaches the live constraint
+    // (doc/erhe/property_system.md section 4.22).
+    void observe_settings();
 
     std::weak_ptr<erhe::scene::Node>                       m_connected_node;
     std::shared_ptr<erhe::physics::Physics_joint_settings> m_settings;
     bool                                                   m_enable_collision{false};
+    erhe::property::Observer_token                         m_settings_observer;
 
     erhe::physics::IWorld*                       m_physics_world{nullptr};
     std::shared_ptr<erhe::physics::IConstraint>  m_constraint;

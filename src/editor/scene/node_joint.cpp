@@ -11,10 +11,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
 #include <glm/gtx/quaternion.hpp>
-
-#include <limits>
 
 namespace editor {
 
@@ -47,24 +44,6 @@ namespace {
         glm::mat3_cast(world_from_node.get_rotation()),
         world_from_node.get_translation()
     };
-}
-
-void apply_limit_to_axis(
-    erhe::physics::Constraint_axis_limit& out,
-    const erhe::physics::Joint_limit&     limit,
-    const bool                            is_translation
-)
-{
-    // Absent min / max leave that side unbounded. Jolt treats translation
-    // limits of -FLT_MAX .. FLT_MAX as a free axis; rotation limits are
-    // clamped by Jolt to [-pi, pi].
-    const float unbounded_min = is_translation ? std::numeric_limits<float>::lowest() : -glm::pi<float>();
-    const float unbounded_max = is_translation ? std::numeric_limits<float>::max  () :  glm::pi<float>();
-    out.limited   = true;
-    out.min       = limit.min.value_or(unbounded_min);
-    out.max       = limit.max.value_or(unbounded_max);
-    out.stiffness = limit.stiffness; // angular soft limits warn + hard limit in the backend
-    out.damping   = limit.damping;
 }
 
 using erhe::property::Object_reference;
@@ -114,9 +93,40 @@ const Property<bool> Node_joint::enable_collision_property = Property<bool>::reg
     Property_metadata{.default_value = false, .inherits = true, .ui = Property_ui{.group = c_joint_group, .tooltip = "Let the two connected bodies collide with each other", .label = "Enable Collision"}}
 );
 
-Node_joint::Node_joint()                             = default;
-Node_joint::Node_joint(const Node_joint&)            = default;
-Node_joint& Node_joint::operator=(const Node_joint&) = default;
+Node_joint::Node_joint() = default;
+
+// Hand-written: the observer token is not copyable, and a copy observes the
+// settings item it has just taken over.
+Node_joint::Node_joint(const Node_joint& src)
+    : Item              {src}
+    , m_connected_node  {src.m_connected_node}
+    , m_settings        {src.m_settings}
+    , m_enable_collision{src.m_enable_collision}
+    , m_physics_world   {src.m_physics_world}
+    , m_constraint      {src.m_constraint}
+    , m_rigid_body_a    {src.m_rigid_body_a}
+    , m_rigid_body_b    {src.m_rigid_body_b}
+    , m_collision_pair_disabled{src.m_collision_pair_disabled}
+    , m_constraint_state{src.m_constraint_state}
+{
+    observe_settings();
+}
+
+Node_joint& Node_joint::operator=(const Node_joint& src)
+{
+    Item::operator=(src);
+    m_connected_node   = src.m_connected_node;
+    m_settings         = src.m_settings;
+    m_enable_collision = src.m_enable_collision;
+    m_physics_world    = src.m_physics_world;
+    m_constraint       = src.m_constraint;
+    m_rigid_body_a     = src.m_rigid_body_a;
+    m_rigid_body_b     = src.m_rigid_body_b;
+    m_collision_pair_disabled = src.m_collision_pair_disabled;
+    m_constraint_state = src.m_constraint_state;
+    observe_settings();
+    return *this;
+}
 
 Node_joint::Node_joint(
     const std::shared_ptr<erhe::scene::Node>&                     connected_node,
@@ -133,6 +143,7 @@ Node_joint::Node_joint(
     // no-op while detached).
     if (settings)         { set_value(joint_settings_property, Settings_traits::to_value(settings)); }
     if (enable_collision) { set_value(enable_collision_property, true); }
+    observe_settings();
 }
 
 Node_joint::Node_joint(const Node_joint& src, erhe::for_clone)
@@ -143,6 +154,7 @@ Node_joint::Node_joint(const Node_joint& src, erhe::for_clone)
     , m_physics_world   {nullptr} // clone is initially detached
     , m_constraint      {}        // clone constraint is not initially created
 {
+    observe_settings();
 }
 
 Node_joint::~Node_joint() noexcept
@@ -198,6 +210,7 @@ void Node_joint::on_property_changed(const erhe::property::Property_changed_args
         return;
     }
     refresh_mirror();
+    observe_settings();
     rebuild();
 }
 
@@ -205,6 +218,28 @@ void Node_joint::refresh_mirror()
 {
     m_settings         = Settings_traits::from_value(get_value(joint_settings_property));
     m_enable_collision = get_value(enable_collision_property);
+}
+
+void Node_joint::observe_settings()
+{
+    m_settings_observer.release();
+    if (!m_settings) {
+        return;
+    }
+    // Only the six axes of the settings item shape the constraint. Its
+    // Item_base properties (visible, active, name, ...) belong to an ancestor
+    // owner type, and a rebuild re-captures the joint frames from the current
+    // node poses and teleports both bodies to rest: a visibility toggle would
+    // otherwise stop a swinging body dead.
+    const erhe::property::Owner_type settings_owner = erhe::physics::Physics_joint_settings::property_owner_type();
+    m_settings_observer = m_settings->add_observer(
+        [this, settings_owner](erhe::property::Dependency_object&, const erhe::property::Property_changed_args& args) {
+            if (!erhe::property::is_owner_type_or_descendant(settings_owner, args.property.get_owner_type())) {
+                return;
+            }
+            rebuild();
+        }
+    );
 }
 
 auto Node_joint::get_settings() const -> const std::shared_ptr<erhe::physics::Physics_joint_settings>&
@@ -338,62 +373,12 @@ auto Node_joint::try_create_constraint() -> bool
         constraint_settings.frame_in_b = world_from_joint;
     }
 
+    // The settings item states one limit and one drive per degree of freedom
+    // in the layout Six_dof_constraint_settings is made of, so the mirrors
+    // copy whole (doc/erhe/property_system.md section 4.22).
     if (m_settings) {
-        for (const erhe::physics::Joint_limit& limit : m_settings->limits) {
-            int listed_axis_count = 0;
-            for (std::size_t i = 0; i < 3; ++i) {
-                if (limit.linear_axes [i]) ++listed_axis_count;
-                if (limit.angular_axes[i]) ++listed_axis_count;
-            }
-            if (listed_axis_count > 1) {
-                static bool warned_multi_axis_limit{false};
-                if (!warned_multi_axis_limit) {
-                    warned_multi_axis_limit = true;
-                    log_physics->warn(
-                        "Joint settings '{}' on node '{}': limit entry lists {} axes; radial limits are approximated per-axis",
-                        m_settings->get_name(), node->get_name(), listed_axis_count
-                    );
-                }
-            }
-            for (std::size_t i = 0; i < 3; ++i) {
-                if (limit.linear_axes[i]) {
-                    apply_limit_to_axis(constraint_settings.limits[i], limit, true);
-                }
-                if (limit.angular_axes[i]) {
-                    apply_limit_to_axis(constraint_settings.limits[3 + i], limit, false);
-                }
-            }
-        }
-        for (const erhe::physics::Joint_drive& drive : m_settings->drives) {
-            if ((drive.axis < 0) || (drive.axis > 2)) {
-                log_physics->warn(
-                    "Joint settings '{}' on node '{}': drive axis {} out of range, drive ignored",
-                    m_settings->get_name(), node->get_name(), drive.axis
-                );
-                continue;
-            }
-            const std::size_t axis_index =
-                static_cast<std::size_t>(drive.axis) +
-                ((drive.type == erhe::physics::Drive_type::e_angular) ? std::size_t{3} : std::size_t{0});
-            if (drive.mode == erhe::physics::Drive_mode::e_acceleration) {
-                static bool warned_acceleration_mode{false};
-                if (!warned_acceleration_mode) {
-                    warned_acceleration_mode = true;
-                    log_physics->warn(
-                        "Joint settings '{}' on node '{}': acceleration mode drives are not supported; treating as force mode",
-                        m_settings->get_name(), node->get_name()
-                    );
-                }
-            }
-            erhe::physics::Constraint_axis_drive& out = constraint_settings.drives[axis_index];
-            out.enabled             = true;
-            out.use_position_target = drive.stiffness > 0.0f;
-            out.position_target     = drive.position_target;
-            out.velocity_target     = drive.velocity_target;
-            out.stiffness           = drive.stiffness;
-            out.damping             = drive.damping;
-            out.max_force           = drive.max_force;
-        }
+        constraint_settings.limits = m_settings->get_axis_limits();
+        constraint_settings.drives = m_settings->get_axis_drives();
     }
 
     // Joint enableCollision = false: exclude the body pair before the

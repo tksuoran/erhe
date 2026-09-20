@@ -181,39 +181,53 @@ public:
         joint_index_map.emplace(settings.get(), index);
         erhe::scene::Physics_joint_description description{};
         description.name = settings->get_name();
-        description.limits.reserve(settings->limits.size());
-        for (const erhe::physics::Joint_limit& limit : settings->limits) {
-            erhe::scene::Physics_joint_limit out_limit{};
-            for (int axis = 0; axis < 3; ++axis) {
-                if (limit.linear_axes[static_cast<std::size_t>(axis)]) {
-                    out_limit.linear_axes.push_back(axis);
+        // One entry per axis the settings item limits, and one per axis it
+        // drives: the item states one limit and one drive per degree of
+        // freedom, and that is what erhe simulates either way. `min` and
+        // `max` travel only where the item supplies a value; the unwritten
+        // side is the unbounded one.
+        using erhe::physics::Physics_joint_settings;
+        const std::array<erhe::physics::Constraint_axis_limit, erhe::physics::c_joint_axis_count>& limits = settings->get_axis_limits();
+        const std::array<erhe::physics::Constraint_axis_drive, erhe::physics::c_joint_axis_count>& drives = settings->get_axis_drives();
+        for (std::size_t axis = 0; axis < erhe::physics::c_joint_axis_count; ++axis) {
+            const bool rotation   = erhe::physics::is_joint_rotation_axis(axis);
+            const int  axis_index = static_cast<int>(rotation ? (axis - 3) : axis);
+            if (limits[axis].limited) {
+                erhe::scene::Physics_joint_limit out_limit{};
+                if (rotation) {
+                    out_limit.angular_axes.push_back(axis_index);
+                } else {
+                    out_limit.linear_axes.push_back(axis_index);
                 }
-                if (limit.angular_axes[static_cast<std::size_t>(axis)]) {
-                    out_limit.angular_axes.push_back(axis);
+                if (settings->get_value_source(Physics_joint_settings::limit_min_property[axis].get()) != erhe::property::Value_source::default_value) {
+                    out_limit.min = limits[axis].min;
                 }
+                if (settings->get_value_source(Physics_joint_settings::limit_max_property[axis].get()) != erhe::property::Value_source::default_value) {
+                    out_limit.max = limits[axis].max;
+                }
+                out_limit.stiffness = limits[axis].stiffness;
+                out_limit.damping   = limits[axis].damping;
+                description.limits.push_back(std::move(out_limit));
             }
-            out_limit.min       = limit.min;
-            out_limit.max       = limit.max;
-            out_limit.stiffness = limit.stiffness;
-            out_limit.damping   = limit.damping;
-            description.limits.push_back(std::move(out_limit));
-        }
-        description.drives.reserve(settings->drives.size());
-        for (const erhe::physics::Joint_drive& drive : settings->drives) {
-            erhe::scene::Physics_joint_drive out_drive{};
-            out_drive.type = (drive.type == erhe::physics::Drive_type::e_angular)
-                ? erhe::scene::Physics_drive_type::e_angular
-                : erhe::scene::Physics_drive_type::e_linear;
-            out_drive.mode = (drive.mode == erhe::physics::Drive_mode::e_acceleration)
-                ? erhe::scene::Physics_drive_mode::e_acceleration
-                : erhe::scene::Physics_drive_mode::e_force;
-            out_drive.axis            = drive.axis;
-            out_drive.max_force       = drive.max_force;
-            out_drive.position_target = drive.position_target;
-            out_drive.velocity_target = drive.velocity_target;
-            out_drive.stiffness       = drive.stiffness;
-            out_drive.damping         = drive.damping;
-            description.drives.push_back(out_drive);
+            const erhe::physics::Joint_axis_drive drive_mode = settings->get_value(Physics_joint_settings::drive_property[axis]);
+            if (drive_mode != erhe::physics::Joint_axis_drive::off) {
+                erhe::scene::Physics_joint_drive out_drive{};
+                out_drive.type = rotation
+                    ? erhe::scene::Physics_drive_type::e_angular
+                    : erhe::scene::Physics_drive_type::e_linear;
+                out_drive.mode = (drive_mode == erhe::physics::Joint_axis_drive::acceleration)
+                    ? erhe::scene::Physics_drive_mode::e_acceleration
+                    : erhe::scene::Physics_drive_mode::e_force;
+                out_drive.axis            = axis_index;
+                // Zero is the unlimited drive force, and it is a JSON number
+                // where the previous infinity was not.
+                out_drive.max_force       = settings->get_value(Physics_joint_settings::drive_max_force_property[axis]);
+                out_drive.position_target = drives[axis].position_target;
+                out_drive.velocity_target = drives[axis].velocity_target;
+                out_drive.stiffness       = drives[axis].stiffness;
+                out_drive.damping         = drives[axis].damping;
+                description.drives.push_back(out_drive);
+            }
         }
         data.joints.push_back(std::move(description));
         items.joint_settings.push_back(settings);

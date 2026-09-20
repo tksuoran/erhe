@@ -289,11 +289,17 @@ auto combine_mode_to_string(const erhe::physics::Combine_mode combine_mode) -> c
 // failure.
 auto build_collision_shape_from_args(const json& args, const erhe::scene::Node* node, std::string& error) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
-// Replaces out with limits parsed from a JSON array of limit objects.
-void parse_joint_limits(const json& limits_json, std::vector<erhe::physics::Joint_limit>& out);
+// Applies a JSON array of KHR-shaped limit objects to the per-axis limit
+// properties of the settings item: an entry sets the properties of every axis
+// it names, a later entry naming one axis wins over an earlier one with a
+// warning. Returns an error message naming the entry index when an entry
+// names no axis at all.
+auto parse_joint_limits(const json& limits_json, erhe::physics::Physics_joint_settings& item) -> std::optional<std::string>;
 
-// Replaces out with drives parsed from a JSON array of drive objects.
-void parse_joint_drives(const json& drives_json, std::vector<erhe::physics::Joint_drive>& out);
+// The same for a JSON array of KHR-shaped drive objects: one entry names one
+// axis. Returns an error message naming the entry index when `axis` is
+// outside 0..2.
+auto parse_joint_drives(const json& drives_json, erhe::physics::Physics_joint_settings& item) -> std::optional<std::string>;
 
 auto joint_settings_to_json(const erhe::physics::Physics_joint_settings& settings) -> json;
 

@@ -465,79 +465,131 @@ auto build_collision_shape_from_args(const json& args, const erhe::scene::Node* 
     return {};
 }
 
-void parse_joint_limits(const json& limits_json, std::vector<erhe::physics::Joint_limit>& out)
+auto parse_joint_limits(const json& limits_json, erhe::physics::Physics_joint_settings& item) -> std::optional<std::string>
 {
-    out.clear();
+    std::array<bool, erhe::physics::c_joint_axis_count> axis_limited{};
+    std::size_t entry_index = 0;
     for (const json& limit_json : limits_json) {
-        erhe::physics::Joint_limit limit{};
         const json linear_axes  = limit_json.value("linear_axes", json::array());
         const json angular_axes = limit_json.value("angular_axes", json::array());
+        std::vector<std::size_t> axes;
         for (std::size_t i = 0; (i < 3) && (i < linear_axes.size()); ++i) {
-            limit.linear_axes[i] = linear_axes[i].get<bool>();
+            if (linear_axes[i].get<bool>()) {
+                axes.push_back(i);
+            }
         }
         for (std::size_t i = 0; (i < 3) && (i < angular_axes.size()); ++i) {
-            limit.angular_axes[i] = angular_axes[i].get<bool>();
+            if (angular_axes[i].get<bool>()) {
+                axes.push_back(i + 3);
+            }
         }
-        if (limit_json.contains("min"))       { limit.min       = limit_json["min"].get<float>(); }
-        if (limit_json.contains("max"))       { limit.max       = limit_json["max"].get<float>(); }
-        if (limit_json.contains("stiffness")) { limit.stiffness = limit_json["stiffness"].get<float>(); }
-        limit.damping = limit_json.value("damping", 0.0f);
-        out.push_back(limit);
+        if (axes.empty()) {
+            return "limits[" + std::to_string(entry_index) + "] names no axis";
+        }
+        for (const std::size_t axis : axes) {
+            if (axis_limited[axis]) {
+                log_mcp->warn(
+                    "joint settings '{}': more than one limit names axis '{}'; the later entry wins",
+                    item.get_name(), erhe::physics::joint_axis_token(axis)
+                );
+            }
+            axis_limited[axis] = true;
+            item.set_axis_limit(axis, erhe::physics::Joint_axis_limit::limited);
+            if (limit_json.contains("min"))       { item.set_axis_limit_min      (axis, limit_json["min"].get<float>()); }
+            if (limit_json.contains("max"))       { item.set_axis_limit_max      (axis, limit_json["max"].get<float>()); }
+            if (limit_json.contains("stiffness")) { item.set_axis_limit_stiffness(axis, limit_json["stiffness"].get<float>()); }
+            item.set_axis_limit_damping(axis, limit_json.value("damping", 0.0f));
+        }
+        ++entry_index;
     }
+    return {};
 }
 
-void parse_joint_drives(const json& drives_json, std::vector<erhe::physics::Joint_drive>& out)
+auto parse_joint_drives(const json& drives_json, erhe::physics::Physics_joint_settings& item) -> std::optional<std::string>
 {
-    out.clear();
+    std::array<bool, erhe::physics::c_joint_axis_count> axis_driven{};
+    std::size_t entry_index = 0;
     for (const json& drive_json : drives_json) {
-        erhe::physics::Joint_drive drive{};
-        drive.type = (drive_json.value("type", "linear") == "angular")
-            ? erhe::physics::Drive_type::e_angular
-            : erhe::physics::Drive_type::e_linear;
-        drive.mode = (drive_json.value("mode", "force") == "acceleration")
-            ? erhe::physics::Drive_mode::e_acceleration
-            : erhe::physics::Drive_mode::e_force;
-        drive.axis = drive_json.value("axis", 0);
-        if (drive_json.contains("max_force")) {
-            drive.max_force = drive_json["max_force"].get<float>();
+        const int axis_argument = drive_json.value("axis", 0);
+        if ((axis_argument < 0) || (axis_argument > 2)) {
+            return "drives[" + std::to_string(entry_index) + "] names axis " + std::to_string(axis_argument) + ", which is outside 0..2";
         }
-        drive.position_target = drive_json.value("position_target", 0.0f);
-        drive.velocity_target = drive_json.value("velocity_target", 0.0f);
-        drive.stiffness       = drive_json.value("stiffness", 0.0f);
-        drive.damping         = drive_json.value("damping", 0.0f);
-        out.push_back(drive);
+        const bool        angular = (drive_json.value("type", "linear") == "angular");
+        const std::size_t axis    = static_cast<std::size_t>(axis_argument) + (angular ? std::size_t{3} : std::size_t{0});
+        if (axis_driven[axis]) {
+            log_mcp->warn(
+                "joint settings '{}': more than one drive names axis '{}'; the later entry wins",
+                item.get_name(), erhe::physics::joint_axis_token(axis)
+            );
+        }
+        axis_driven[axis] = true;
+        item.set_axis_drive(
+            axis,
+            (drive_json.value("mode", "force") == "acceleration")
+                ? erhe::physics::Joint_axis_drive::acceleration
+                : erhe::physics::Joint_axis_drive::force
+        );
+        // Zero is the unlimited drive force; an entry without `max_force`
+        // leaves the property at that default.
+        if (drive_json.contains("max_force")) {
+            const float max_force = drive_json["max_force"].get<float>();
+            if (std::isfinite(max_force)) {
+                item.set_axis_drive_max_force(axis, max_force);
+            }
+        }
+        item.set_axis_drive_position_target(axis, drive_json.value("position_target", 0.0f));
+        item.set_axis_drive_velocity_target(axis, drive_json.value("velocity_target", 0.0f));
+        item.set_axis_drive_stiffness      (axis, drive_json.value("stiffness", 0.0f));
+        item.set_axis_drive_damping        (axis, drive_json.value("damping", 0.0f));
+        ++entry_index;
     }
+    return {};
 }
 
 auto joint_settings_to_json(const erhe::physics::Physics_joint_settings& settings) -> json
 {
+    // One entry per limited axis and one per driven axis, in the KHR shape a
+    // caller writes.
     json limits = json::array();
-    for (const erhe::physics::Joint_limit& limit : settings.limits) {
-        json limit_json = {
-            {"linear_axes",  {limit.linear_axes[0], limit.linear_axes[1], limit.linear_axes[2]}},
-            {"angular_axes", {limit.angular_axes[0], limit.angular_axes[1], limit.angular_axes[2]}},
-            {"damping",      limit.damping}
-        };
-        if (limit.min.has_value())       { limit_json["min"]       = limit.min.value(); }
-        if (limit.max.has_value())       { limit_json["max"]       = limit.max.value(); }
-        if (limit.stiffness.has_value()) { limit_json["stiffness"] = limit.stiffness.value(); }
-        limits.push_back(limit_json);
-    }
     json drives = json::array();
-    for (const erhe::physics::Joint_drive& drive : settings.drives) {
-        json drive_json = {
-            {"type",            (drive.type == erhe::physics::Drive_type::e_angular) ? "angular" : "linear"},
-            {"mode",            (drive.mode == erhe::physics::Drive_mode::e_acceleration) ? "acceleration" : "force"},
-            {"axis",            drive.axis},
-            {"position_target", drive.position_target},
-            {"velocity_target", drive.velocity_target},
-            {"stiffness",       drive.stiffness},
-            {"damping",         drive.damping}
-        };
-        if (std::isfinite(drive.max_force)) {
-            drive_json["max_force"] = drive.max_force;
+    const std::array<erhe::physics::Constraint_axis_limit, erhe::physics::c_joint_axis_count>& axis_limits = settings.get_axis_limits();
+    const std::array<erhe::physics::Constraint_axis_drive, erhe::physics::c_joint_axis_count>& axis_drives = settings.get_axis_drives();
+    for (std::size_t axis = 0; axis < erhe::physics::c_joint_axis_count; ++axis) {
+        const bool rotation   = erhe::physics::is_joint_rotation_axis(axis);
+        const std::size_t axis_index = rotation ? (axis - 3) : axis;
+        if (axis_limits[axis].limited) {
+            json limit_json = {
+                {"linear_axes",  {!rotation && (axis_index == 0), !rotation && (axis_index == 1), !rotation && (axis_index == 2)}},
+                {"angular_axes", { rotation && (axis_index == 0),  rotation && (axis_index == 1),  rotation && (axis_index == 2)}},
+                {"damping",      axis_limits[axis].damping}
+            };
+            if (settings.get_value_source(erhe::physics::Physics_joint_settings::limit_min_property[axis].get()) != erhe::property::Value_source::default_value) {
+                limit_json["min"] = axis_limits[axis].min;
+            }
+            if (settings.get_value_source(erhe::physics::Physics_joint_settings::limit_max_property[axis].get()) != erhe::property::Value_source::default_value) {
+                limit_json["max"] = axis_limits[axis].max;
+            }
+            if (axis_limits[axis].stiffness.has_value()) {
+                limit_json["stiffness"] = axis_limits[axis].stiffness.value();
+            }
+            limits.push_back(limit_json);
         }
-        drives.push_back(drive_json);
+        const erhe::physics::Joint_axis_drive drive_mode = settings.get_value(erhe::physics::Physics_joint_settings::drive_property[axis]);
+        if (drive_mode != erhe::physics::Joint_axis_drive::off) {
+            json drive_json = {
+                {"type",            rotation ? "angular" : "linear"},
+                {"mode",            (drive_mode == erhe::physics::Joint_axis_drive::acceleration) ? "acceleration" : "force"},
+                {"axis",            static_cast<int>(axis_index)},
+                {"position_target", axis_drives[axis].position_target},
+                {"velocity_target", axis_drives[axis].velocity_target},
+                {"stiffness",       axis_drives[axis].stiffness},
+                {"damping",         axis_drives[axis].damping}
+            };
+            if (std::isfinite(axis_drives[axis].max_force)) {
+                drive_json["max_force"] = axis_drives[axis].max_force;
+            }
+            drives.push_back(drive_json);
+        }
     }
     return {
         {"name",   settings.get_name()},

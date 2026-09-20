@@ -139,11 +139,19 @@ J8 A live constraint follows every source of a change, the way a collision
 filter's assignment does (section 4.21): `Node_joint` subscribes an
 any-property observer (D21) to the `Physics_joint_settings` it resolves,
 whenever its `joint_settings` property is set and in its constructors, with
-its constraint rebuild as the callback. `Properties::node_joint_properties`
-keeps the "Connect to Selected Node" action and the constraint-state
-diagnostic; the "Rebuild Joint" button and the scene-scanning
-`rebuild_joints_using_settings` (`src/editor/scene/physics_edits.{hpp,cpp}`)
-are removed, as `reapply_collision_filter`'s scanning helper was.
+its constraint rebuild as the callback. The observer rebuilds only for a
+change of a property owned by `Physics_joint_settings`
+(`is_owner_type_or_descendant` on the changed property's owner type): a
+rebuild re-captures the joint frames and teleports both bodies to rest, so a
+toggle of the settings item's `visible` would stop a swinging body dead.
+`Properties::node_joint_properties` keeps the "Connect to Selected Node"
+action, the constraint-state diagnostic and the "Rebuild Joint" button -
+which is an action, not state: a rebuild re-captures the joint frames after
+the user has moved the nodes, which no property change announces. What goes
+away is the need to press it after editing the shared settings, and the
+scene-scanning `rebuild_joints_using_settings`
+(`src/editor/scene/physics_edits.{hpp,cpp}`), as `reapply_collision_filter`'s
+scanning helper was.
 
 ## 6. The Properties window
 
@@ -264,7 +272,9 @@ Files: `src/erhe/physics/erhe_physics/physics_joint_settings.{hpp,cpp}`
 `test_collision_filter_properties.cpp`: defaults, setter to mirror, untyped
 access with enum labels, an inherited value reaching the mirror, clone),
 `src/editor/scene/node_joint.{hpp,cpp}` (mirror copy, J8 observer),
-`src/editor/scene/physics_edits.{hpp,cpp}` (helper removed),
+`src/editor/scene/physics_edits.{hpp,cpp}` (the file is removed with its one
+helper; the "Rebuild Joint" button stays, with its tooltip reworded to name
+moving the nodes),
 `src/editor/operations/operations_window.cpp` (`is_hinge_settings`, the hinge /
 ball creation at `create_joint_settings`'s caller),
 `src/editor/scene/scene_commands.cpp` (joint creation),
@@ -312,8 +322,8 @@ a save of the `physics.usda` fixture is byte-identical on the second save;
 
 Files: `doc/erhe/property_system.md` (a new section 4.22 stating the six axes,
 the 66 properties, the mirrors and the observer path; section 4.17's
-"Rebuild Joint" sentence), `doc/erhe/property_inventory.md` (the row moves out
-of "Not yet migrated"), `doc/erhe/physics.md`,
+"Rebuild Joint" sentence, which now names moving the nodes),
+`doc/erhe/physics.md`,
 `doc/editor/properties_window.md`, `doc/gltf_extensions/` (the `ERHE_scene`
 `physics_joints` array), `doc/erhe/usd_compatibility.md` (the Physics table's
 limit and drive rows), `doc/plans/hand_written_rows_to_properties.md` (phase 4
@@ -327,7 +337,9 @@ Verification: `py -3 scripts/check_doc_links.py` reports 0 problems.
   setting an axis limit to `limited` reveals its four value rows and hides them
   again on `free`.
 - Dragging a rotation limit's Min or Max shows degrees and moves a jointed body
-  in the viewport while the simulation runs, with no "Rebuild Joint".
+  in the viewport while the simulation runs, with no "Rebuild Joint"; the
+  button is still there, and pressing it after moving the joint's nodes
+  re-captures the joint frames.
 - Ctrl+Z restores the previous value, once per completed drag.
 - A Style holding `Physics_joint_settings.rot_z_limit_max` drives a settings
   item that has no local value for it, and clearing the item's local value

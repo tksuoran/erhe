@@ -393,29 +393,23 @@ public:
     return erhe::physics::Transform{glm::mat3{rigid}, glm::vec3{rigid[3]}};
 }
 
-// True when the joint settings describe a hinge: the X angular axis is free while
-// the Y and Z angular axes are locked (a limit entry flags them with min == max).
-// Matches how Add Joint builds a hinge (two off-axis angular locks) versus a ball
-// joint (no angular locks); a ranged (min != max) limit does not count as locked,
-// so a limited hinge still reads as a hinge.
+// True when the joint settings describe a hinge: the three translation axes are
+// fixed, the two angular axes other than X are fixed, and the X angular axis is
+// not. Matches how Add Joint builds a hinge (two off-axis angular locks) versus
+// a ball joint (no angular locks); a ranged (min != max) limit does not count as
+// fixed, so a limited hinge still reads as a hinge.
 [[nodiscard]] auto is_hinge_settings(const erhe::physics::Physics_joint_settings* settings) -> bool
 {
     if (settings == nullptr) {
         return false;
     }
-    bool angular_locked[3] = { false, false, false };
-    for (const erhe::physics::Joint_limit& limit : settings->limits) {
-        const bool fixed = limit.min.has_value() && limit.max.has_value() && (limit.min.value() == limit.max.value());
-        if (!fixed) {
-            continue;
-        }
-        for (std::size_t i = 0; i < 3; ++i) {
-            if (limit.angular_axes[i]) {
-                angular_locked[i] = true;
-            }
-        }
-    }
-    return (!angular_locked[0]) && angular_locked[1] && angular_locked[2];
+    return
+        settings->is_axis_fixed(0) &&
+        settings->is_axis_fixed(1) &&
+        settings->is_axis_fixed(2) &&
+        !settings->is_axis_fixed(3) &&
+        settings->is_axis_fixed(4) &&
+        settings->is_axis_fixed(5);
 }
 
 // One hinge joint the selected node is a rigid-body party of, resolved for Flip
@@ -435,8 +429,7 @@ public:
 };
 
 // Scan the scene for the first hinge joint that the selected node is a rigid-body
-// party of (both parties must be live rigid bodies). Mirrors the joint walk in
-// rebuild_joints_using_settings (physics_edits.cpp). The selected node resolves to
+// party of (both parties must be live rigid bodies). The selected node resolves to
 // its nearest rigid-body node, so selecting the body, a child mesh, or the joint
 // frame node all pick the same party.
 [[nodiscard]] auto find_flip_joint_target(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& selected_node) -> Flip_joint_target
@@ -1802,27 +1795,20 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     // Joint settings: lock the contact (all 3 translations) for every mode; for
     // hinges also lock the two off-axis rotations, leaving rotation about frame X
     // (the hinge axis) free; vertex joints leave all rotations free (ball joint).
-    // One single-axis limit entry per locked axis avoids Node_joint's multi-axis
-    // limit warning. min == max == 0 makes the axis fixed.
+    // min == max == 0 makes the axis fixed.
     const bool is_hinge = (alignment.mode != Mesh_component_mode::vertex);
     auto settings = std::make_shared<erhe::physics::Physics_joint_settings>(is_hinge ? "Hinge joint" : "Ball joint");
-    const auto lock_axis = [&settings](const bool linear, const std::size_t axis) {
-        erhe::physics::Joint_limit limit{};
-        if (linear) {
-            limit.linear_axes[axis] = true;
-        } else {
-            limit.angular_axes[axis] = true;
-        }
-        limit.min = 0.0f;
-        limit.max = 0.0f;
-        settings->limits.push_back(limit);
+    const auto lock_axis = [&settings](const std::size_t axis) {
+        settings->set_axis_limit    (axis, erhe::physics::Joint_axis_limit::limited);
+        settings->set_axis_limit_min(axis, 0.0f);
+        settings->set_axis_limit_max(axis, 0.0f);
     };
-    lock_axis(true, 0);
-    lock_axis(true, 1);
-    lock_axis(true, 2);
+    lock_axis(0);
+    lock_axis(1);
+    lock_axis(2);
     if (is_hinge) {
-        lock_axis(false, 1); // lock rotation about frame Y
-        lock_axis(false, 2); // lock rotation about frame Z
+        lock_axis(4); // lock rotation about frame Y
+        lock_axis(5); // lock rotation about frame Z
     }
 
     // The joint frame is represented by two nodes (so the transform lives on nodes,
