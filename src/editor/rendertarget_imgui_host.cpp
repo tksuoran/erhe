@@ -468,6 +468,8 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
     io.DeltaTime = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
+    begin_item_recording();
+
     ImGui::NewFrame();
     ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
     ImFont* font = m_imgui_renderer.primary_font();
@@ -508,6 +510,7 @@ void Rendertarget_imgui_host::end_imgui_frame()
     ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();
+    end_item_recording();
 
     m_this_frame_dt_s = 0.0f;
 }

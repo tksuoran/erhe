@@ -23,6 +23,21 @@
 //
 // Only Context_window::inject_input_event() is used (B1); the single
 // synthesizer callback slot stays with Fly_camera_tool (F4).
+//
+// The same file holds part A, the ImGui introspection the gestures aim with:
+//
+//   get_imgui_hosts       - the ImGui contexts the editor runs, their size and
+//                           whether they hold a recorded frame.
+//   get_imgui_windows     - the windows of one host with their rectangles and
+//                           docking / focus state.
+//   get_imgui_items       - every item Dear ImGui submitted in one recorded
+//                           frame, with its rectangle and status flags.
+//   get_imgui_item_rect   - one item by window plus label (or by id), with the
+//                           center to aim a click at.
+//
+// The last two need Dear ImGui to report its items, which erhe::imgui::
+// Imgui_item_recorder receives; recording is armed for exactly the frame a
+// query asks for (A3).
 
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
@@ -38,11 +53,17 @@
 #include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "erhe_imgui/imgui_host.hpp"
+#include "erhe_imgui/imgui_item_recorder.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
 #include <glm/glm.hpp>
+#include <imgui/imgui_internal.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -51,6 +72,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace editor {
@@ -1297,6 +1319,403 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         }},
         {"handles", handles}
     }).dump();
+}
+
+// Part A: ImGui introspection ------------------------------------------------
+//
+// get_imgui_hosts / get_imgui_windows read live ImGui state and answer in the
+// pass they are called in. get_imgui_items / get_imgui_item_rect need a frame
+// in which Dear ImGui reported its items, so their first pass calls
+// Imgui_host::request_item_recording() and defers; the MCP queue is drained
+// before Imgui_windows::begin_frame() in the same tick, so the frame that
+// records is the one right after the request, and the second pass reads it.
+//
+// Rectangles are in the host context's screen pixels. For the desktop host
+// that is the editor window's pixel space - the same space mouse_click takes -
+// so an item's center is directly a click target.
+
+namespace {
+
+[[nodiscard]] auto imgui_host_name(const erhe::imgui::Imgui_host& host) -> std::string
+{
+    return std::string{host.get_debug_label().string_view()};
+}
+
+// "Open Four View##menu_item" -> "Open Four View". ImGui hides the id part of
+// a label from the user, so it is hidden from label matching too; the raw
+// label is reported beside it for an item that needs the exact spelling.
+[[nodiscard]] auto strip_imgui_id_suffix(const std::string_view label) -> std::string
+{
+    const std::size_t hash = label.find("##");
+    return std::string{(hash == std::string_view::npos) ? label : label.substr(0, hash)};
+}
+
+[[nodiscard]] auto label_matches(const std::string_view label, const std::string& wanted) -> bool
+{
+    return (label == wanted) || (strip_imgui_id_suffix(label) == wanted);
+}
+
+// A window matches by its own name, by that name without its "##id" part, or
+// by being a child region of it ("Scene Hierarchy [1]/##tree_ABCD"): the items
+// of a scrolling region belong to the child window, and a caller naming the
+// window they see means those too.
+[[nodiscard]] auto window_matches(const char* window_name, const std::string& wanted) -> bool
+{
+    if (window_name == nullptr) {
+        return false;
+    }
+    const std::string_view name{window_name};
+    if (label_matches(name, wanted)) {
+        return true;
+    }
+    return (name.size() > wanted.size()) &&
+           (name.compare(0, wanted.size(), wanted) == 0) &&
+           (name[wanted.size()] == '/');
+}
+
+[[nodiscard]] auto find_imgui_window_name(const ImGuiContext* context, const ImGuiID id) -> const char*
+{
+    for (int i = 0; i < context->Windows.Size; ++i) {
+        if (context->Windows[i]->ID == id) {
+            return context->Windows[i]->Name;
+        }
+    }
+    return nullptr;
+}
+
+// R1's status set. HoveredId / ActiveId are this frame's values rather than
+// the recorded frame's, which is what a caller about to click wants to know.
+[[nodiscard]] auto item_status_to_json(const ImGuiContext* context, const erhe::imgui::Item_record& record) -> nlohmann::json
+{
+    return nlohmann::json{
+        {"visible",   (record.status_flags & ImGuiItemStatusFlags_Visible     ) != 0},
+        {"hovered",   ((record.status_flags & ImGuiItemStatusFlags_HoveredRect) != 0) || (context->HoveredId == record.id)},
+        {"active",    context->ActiveId == record.id},
+        {"edited",    (record.status_flags & ImGuiItemStatusFlags_Edited      ) != 0},
+        {"checkable", (record.status_flags & ImGuiItemStatusFlags_Checkable   ) != 0},
+        {"checked",   (record.status_flags & ImGuiItemStatusFlags_Checked     ) != 0},
+        {"openable",  (record.status_flags & ImGuiItemStatusFlags_Openable    ) != 0},
+        {"opened",    (record.status_flags & ImGuiItemStatusFlags_Opened      ) != 0},
+        {"inputable", (record.status_flags & ImGuiItemStatusFlags_Inputable   ) != 0},
+        {"disabled",  (record.item_flags   & ImGuiItemFlags_Disabled          ) != 0}
+    };
+}
+
+[[nodiscard]] auto item_record_to_json(
+    const ImGuiContext*             context,
+    const erhe::imgui::Item_record& record,
+    const std::string_view          label,
+    const int                       index
+) -> nlohmann::json
+{
+    const char* const window_name = find_imgui_window_name(context, record.window_id);
+    nlohmann::json entry = {
+        {"id",            static_cast<unsigned int>(record.id)},
+        {"window",        (window_name != nullptr) ? std::string{window_name} : std::string{}},
+        {"x",             record.x0},
+        {"y",             record.y0},
+        {"width",         record.x1 - record.x0},
+        {"height",        record.y1 - record.y0},
+        {"center_x",      0.5f * (record.x0 + record.x1)},
+        {"center_y",      0.5f * (record.y0 + record.y1)},
+        {"index",         index},
+        {"status",        item_status_to_json(context, record)}
+    };
+    if (!label.empty()) {
+        entry["label"]         = std::string{label};
+        entry["display_label"] = strip_imgui_id_suffix(label);
+    }
+    return entry;
+}
+
+// An item a query reports by default: one Dear ImGui did not clip away. The
+// window's own record (imgui.cpp registers every window as an item) carries no
+// ImGuiLastItemData and therefore no Visible bit, so it is kept as well.
+[[nodiscard]] auto is_item_visible(const erhe::imgui::Item_record& record) -> bool
+{
+    if (!record.has_item_data) {
+        return true;
+    }
+    return (record.status_flags & ImGuiItemStatusFlags_Visible) != 0;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::resolve_imgui_host(const nlohmann::json& args, std::string& out_error) -> erhe::imgui::Imgui_host*
+{
+    if ((m_context.imgui_renderer == nullptr) || (m_context.imgui_windows == nullptr)) {
+        out_error = "This build has no ImGui renderer or window manager";
+        return nullptr;
+    }
+    const std::string wanted = args.value("host", std::string{});
+    if (wanted.empty()) {
+        erhe::imgui::Imgui_host* const host = m_context.imgui_windows->get_window_imgui_host().get();
+        if (host == nullptr) {
+            out_error = "There is no desktop ImGui host in this build";
+            return nullptr;
+        }
+        return host;
+    }
+    const std::vector<erhe::imgui::Imgui_host*>& hosts = m_context.imgui_renderer->get_imgui_hosts();
+    for (erhe::imgui::Imgui_host* const host : hosts) {
+        if (imgui_host_name(*host) == wanted) {
+            return host;
+        }
+    }
+    for (erhe::imgui::Imgui_host* const host : hosts) {
+        if (imgui_host_name(*host).find(wanted) != std::string::npos) {
+            return host;
+        }
+    }
+    out_error = "There is no ImGui host named '" + wanted + "' (get_imgui_hosts lists them)";
+    return nullptr;
+}
+
+auto Mcp_server::request_recorded_imgui_frame(erhe::imgui::Imgui_host& host, std::string& out_error) -> bool
+{
+    if (m_imgui_recording_request != m_current_request) {
+        if (!host.is_visible()) {
+            out_error = "ImGui host '" + imgui_host_name(host) + "' is not rendering frames, so it cannot record its items";
+            return false;
+        }
+        m_imgui_recording_request = m_current_request;
+        host.request_item_recording();
+        m_defer_current_request = true;
+        return true;
+    }
+    m_imgui_recording_request = nullptr;
+    if (!host.get_item_recorder().has_records()) {
+        out_error = "ImGui host '" + imgui_host_name(host) + "' did not record a frame (it rendered nothing)";
+        return false;
+    }
+    return false;
+}
+
+// get_imgui_hosts - doc/plans/mcp_ui_driving.md A6.
+auto Mcp_server::query_imgui_hosts(const nlohmann::json& args) -> std::string
+{
+    static_cast<void>(args);
+    if ((m_context.imgui_renderer == nullptr) || (m_context.imgui_windows == nullptr)) {
+        return make_error_content("This build has no ImGui renderer or window manager");
+    }
+    const erhe::imgui::Imgui_host* const default_host = m_context.imgui_windows->get_window_imgui_host().get();
+
+    nlohmann::json hosts = nlohmann::json::array();
+    for (const erhe::imgui::Imgui_host* const host : m_context.imgui_renderer->get_imgui_hosts()) {
+        const ImGuiContext* const context = host->imgui_context();
+        hosts.push_back({
+            {"name",             imgui_host_name(*host)},
+            {"default",          host == default_host},
+            {"visible",          host->is_visible()},
+            {"width",            (context != nullptr) ? context->IO.DisplaySize.x : 0.0f},
+            {"height",           (context != nullptr) ? context->IO.DisplaySize.y : 0.0f},
+            {"window_count",     (context != nullptr) ? context->Windows.Size : 0},
+            {"has_records",      host->get_item_recorder().has_records()},
+            // Item recording is armed for one frame at a time; this counter
+            // only moves in a frame a request armed, so an idle editor keeps
+            // it at the same value (R6 verification).
+            {"hook_calls_total", host->get_item_recorder().get_hook_call_count()}
+        });
+    }
+    return make_json_content({{"hosts", hosts}}).dump();
+}
+
+// get_imgui_windows - doc/plans/mcp_ui_driving.md A4.
+auto Mcp_server::query_imgui_windows(const nlohmann::json& args) -> std::string
+{
+    std::string error;
+    erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, error);
+    if (host == nullptr) {
+        return make_error_content(error);
+    }
+    const ImGuiContext* const context = host->imgui_context();
+    if (context == nullptr) {
+        return make_error_content("ImGui host '" + imgui_host_name(*host) + "' has no ImGui context");
+    }
+
+    nlohmann::json windows = nlohmann::json::array();
+    for (int i = 0; i < context->Windows.Size; ++i) {
+        const ImGuiWindow* const window = context->Windows[i];
+        windows.push_back({
+            {"name",          std::string{window->Name}},
+            {"display_name",  strip_imgui_id_suffix(window->Name)},
+            {"id",            static_cast<unsigned int>(window->ID)},
+            {"x",             window->Pos.x},
+            {"y",             window->Pos.y},
+            {"width",         window->Size.x},
+            {"height",        window->Size.y},
+            {"active",        window->Active},
+            {"hidden",        window->Hidden},
+            {"collapsed",     window->Collapsed},
+            {"child",         (window->Flags & ImGuiWindowFlags_ChildWindow) != 0},
+            {"docked",        window->DockIsActive},
+            {"dock_id",       static_cast<unsigned int>(window->DockId)},
+            {"focused",       context->NavWindow == window}
+        });
+    }
+    return make_json_content({
+        {"host",    imgui_host_name(*host)},
+        {"windows", windows}
+    }).dump();
+}
+
+// get_imgui_items - doc/plans/mcp_ui_driving.md A7.
+auto Mcp_server::query_imgui_items(const nlohmann::json& args) -> std::string
+{
+    std::string error;
+    erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, error);
+    if (host == nullptr) {
+        return make_error_content(error);
+    }
+    if (request_recorded_imgui_frame(*host, error)) {
+        return {};
+    }
+    if (!error.empty()) {
+        return make_error_content(error);
+    }
+
+    const ImGuiContext* const context = host->imgui_context();
+    const std::string window_filter = args.value("window",         std::string{});
+    const std::string label_filter  = args.value("label_contains", std::string{});
+    const bool        visible_only  = args.value("visible_only",   true);
+    // A frame of the editor submits thousands of items, so a query reports a
+    // page of them and the total it matched.
+    const int limit = args.value("limit", 200);
+    if (limit < 1) {
+        return make_error_content("limit must be at least 1");
+    }
+
+    const erhe::imgui::Imgui_item_recorder& recorder = host->get_item_recorder();
+    nlohmann::json items = nlohmann::json::array();
+    int total = 0;
+    // 'index' is what get_imgui_item_rect takes to pick between items sharing
+    // a label: the item's position, in submission order, among the frame's
+    // items with the same display label in the same window. It is counted
+    // over every record the visibility rule keeps, so the window and label
+    // filters do not shift it.
+    std::unordered_map<std::string, int> duplicate_index;
+    for (const erhe::imgui::Item_record& record : recorder.get_records()) {
+        const std::string_view label = recorder.get_label(record);
+        if (visible_only && !is_item_visible(record)) {
+            continue;
+        }
+        const std::string key   = std::to_string(record.window_id) + "\n" + strip_imgui_id_suffix(label);
+        const int         index = duplicate_index[key]++;
+        if (!window_filter.empty() && !window_matches(find_imgui_window_name(context, record.window_id), window_filter)) {
+            continue;
+        }
+        if (!label_filter.empty()) {
+            if (label.empty() || (strip_imgui_id_suffix(label).find(label_filter) == std::string::npos)) {
+                continue;
+            }
+        }
+        ++total;
+        if (static_cast<int>(items.size()) < limit) {
+            items.push_back(item_record_to_json(context, record, label, index));
+        }
+    }
+
+    return make_json_content({
+        {"host",      imgui_host_name(*host)},
+        {"total",     total},
+        {"returned",  static_cast<int>(items.size())},
+        {"truncated", total > static_cast<int>(items.size())},
+        {"items",     items}
+    }).dump();
+}
+
+// get_imgui_item_rect - doc/plans/mcp_ui_driving.md A5.
+auto Mcp_server::query_imgui_item_rect(const nlohmann::json& args) -> std::string
+{
+    std::string error;
+    erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, error);
+    if (host == nullptr) {
+        return make_error_content(error);
+    }
+    const bool        has_id = args.contains("id") && args.at("id").is_number_integer();
+    const std::string label  = args.value("label", std::string{});
+    if (!has_id && label.empty()) {
+        return make_error_content("label (or id) is required");
+    }
+    if (request_recorded_imgui_frame(*host, error)) {
+        return {};
+    }
+    if (!error.empty()) {
+        return make_error_content(error);
+    }
+
+    const ImGuiContext* const context       = host->imgui_context();
+    const std::string         window_filter = args.value("window", std::string{});
+    const bool                visible_only  = args.value("visible_only", true);
+    const ImGuiID             wanted_id     = has_id ? args.at("id").get<ImGuiID>() : 0;
+    const int                 wanted_index  = args.value("index", 0);
+
+    const erhe::imgui::Imgui_item_recorder& recorder = host->get_item_recorder();
+    int                             match_count = 0;
+    const erhe::imgui::Item_record* found       = nullptr;
+    std::string_view                found_label;
+
+    // Window_match::exact first: the window name get_imgui_items reports picks
+    // out that one window, so an index taken from get_imgui_items means the
+    // same item here. Only when no item of that exact window matches does the
+    // search widen to its child regions, which is what a caller naming the
+    // window they see on screen means.
+    enum class Window_match { exact, with_children };
+    const auto collect = [&](const Window_match window_match) {
+        match_count = 0;
+        found       = nullptr;
+        found_label = std::string_view{};
+        for (const erhe::imgui::Item_record& record : recorder.get_records()) {
+            const std::string_view record_label = recorder.get_label(record);
+            if (visible_only && !is_item_visible(record)) {
+                continue;
+            }
+            if (has_id) {
+                if (record.id != wanted_id) {
+                    continue;
+                }
+            } else if (!label_matches(record_label, label)) {
+                continue;
+            }
+            if (!window_filter.empty()) {
+                const char* const window_name = find_imgui_window_name(context, record.window_id);
+                const bool matched = (window_match == Window_match::exact)
+                    ? ((window_name != nullptr) && label_matches(window_name, window_filter))
+                    : window_matches(window_name, window_filter);
+                if (!matched) {
+                    continue;
+                }
+            }
+            if (match_count == wanted_index) {
+                found       = &record;
+                found_label = record_label;
+            }
+            ++match_count;
+        }
+    };
+    collect(Window_match::exact);
+    if ((match_count == 0) && !window_filter.empty()) {
+        collect(Window_match::with_children);
+    }
+
+    if (found == nullptr) {
+        if (match_count == 0) {
+            return make_error_content(
+                has_id
+                    ? ("No item with id " + std::to_string(wanted_id) + " was submitted in the recorded frame")
+                    : ("No item labelled '" + label + "' was submitted in the recorded frame (get_imgui_items lists them)")
+            );
+        }
+        return make_error_content(
+            "index " + std::to_string(wanted_index) + " is beyond the " +
+            std::to_string(match_count) + " matching item(s)"
+        );
+    }
+
+    nlohmann::json entry = item_record_to_json(context, *found, found_label, wanted_index);
+    entry["match_count"] = match_count;
+    entry["host"]        = imgui_host_name(*host);
+    return make_json_content(entry).dump();
 }
 
 } // namespace editor

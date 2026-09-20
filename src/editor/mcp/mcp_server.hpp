@@ -34,6 +34,9 @@ namespace erhe {
     class Hierarchy;
     class Item_base;
 }
+namespace erhe::imgui {
+    class Imgui_host;
+}
 namespace erhe::primitive {
     class Material;
 }
@@ -376,6 +379,25 @@ private:
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
     auto query_transform_handles              (const nlohmann::json& args) -> std::string;
 
+    // doc/plans/mcp_ui_driving.md part A (src/editor/mcp/mcp_server_ui.cpp).
+    // get_imgui_items and get_imgui_item_rect need a recorded frame, so they
+    // request one on their first pass and defer; get_imgui_hosts and
+    // get_imgui_windows read live ImGui state and answer at once.
+    auto query_imgui_hosts                    (const nlohmann::json& args) -> std::string;
+    auto query_imgui_windows                  (const nlohmann::json& args) -> std::string;
+    auto query_imgui_items                    (const nlohmann::json& args) -> std::string;
+    auto query_imgui_item_rect                (const nlohmann::json& args) -> std::string;
+
+    // Arms item recording on the host and defers, or reports that the
+    // requested frame has been recorded. Returns true when the caller must
+    // return an empty string (the request is deferred); out_error holds a
+    // message when the host cannot record.
+    auto request_recorded_imgui_frame(erhe::imgui::Imgui_host& host, std::string& out_error) -> bool;
+
+    // The host the args name ("host"), or the desktop host when they name
+    // none. Returns nullptr with out_error filled.
+    auto resolve_imgui_host(const nlohmann::json& args, std::string& out_error) -> erhe::imgui::Imgui_host*;
+
     // The three stages every gesture tool shares.
     //
     // input_gesture_preamble() answers with the string the handler must
@@ -594,6 +616,11 @@ private:
         bool     entered       {false};
     };
     Input_pointer_state                              m_input_pointer_state;
+
+    // get_imgui_items / get_imgui_item_rect: the request that asked the host
+    // for a recorded frame and is deferring until that frame is done (main
+    // thread only). doc/plans/mcp_ui_driving.md A7.
+    const Queued_request*                            m_imgui_recording_request{nullptr};
 
     // reset_editor_state has queued the close of every open scene and is
     // deferring itself until the scene list is empty (main thread only).

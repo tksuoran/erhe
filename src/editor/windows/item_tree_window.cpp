@@ -36,6 +36,7 @@
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
@@ -1698,6 +1699,10 @@ void Item_tree::imgui_row(const Flat_row& row)
         if (accent_header) {
             ImGui::PopStyleColor();
         }
+        // The row's visible text is drawn below with the draw list, so ImGui
+        // was handed an empty label; name the item for the item recorder so
+        // the get_imgui_* MCP queries can address the row by what it shows.
+        erhe::imgui::set_item_debug_label(row.label_text);
     }
 
     bool consumed = false;

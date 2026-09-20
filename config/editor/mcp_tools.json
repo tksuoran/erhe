@@ -7300,6 +7300,93 @@
     "name": "get_transform_handles"
   },
   {
+    "description": "List the ImGui hosts the editor runs (one ImGui context each): the desktop window host and every rendertarget host (an ImGui surface drawn into the scene, e.g. the hotbar). Reports the host name the other get_imgui_* tools take, whether it is the default (desktop) host, whether it renders frames, its display size in pixels, its window count, whether it holds a recorded item frame, and hook_calls_total - the number of Dear ImGui item-hook calls that host has received since startup. Item recording is armed for one frame at a time, so hook_calls_total stays put across frames in which no get_imgui_items / get_imgui_item_rect call asked for a recording.",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_imgui_hosts"
+  },
+  {
+    "description": "List the windows of one ImGui host: name (and display_name, the name without its '##id' part), ImGui id, position and size in window pixels (the space mouse_click takes), and whether the window is active, hidden, collapsed, a child region, docked (with its dock id) and focused. Reads live ImGui state, so it answers at once.",
+    "inputSchema": {
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_imgui_windows"
+  },
+  {
+    "description": "List the items Dear ImGui submitted in one frame of an ImGui host: id, label (and display_label, the label without its '##id' part), the window it belongs to, its rectangle and center in window pixels (the space mouse_click takes), its 'index' among items with the same display label in the same window (pass it to get_imgui_item_rect), and its status (visible, hovered, active, edited, checkable, checked, openable, opened, inputable, disabled). The call arms item recording for the next editor frame and returns once that frame has been recorded, so it costs one frame. A frame submits thousands of items: 'total' is the number that matched and 'items' holds the first 'limit' of them.",
+    "inputSchema": {
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host)",
+          "type": "string"
+        },
+        "window": {
+          "description": "Report only items of this window, by the name or display_name get_imgui_windows reports, or of one of its child regions",
+          "type": "string"
+        },
+        "label_contains": {
+          "description": "Report only items whose display label holds this text",
+          "type": "string"
+        },
+        "visible_only": {
+          "description": "Report only items Dear ImGui did not clip away (default true)",
+          "type": "boolean"
+        },
+        "limit": {
+          "description": "Maximum number of items to return (default 200); 'total' reports how many matched",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_imgui_items"
+  },
+  {
+    "description": "Where one ImGui item is: give its label (as shown, or with its '##id' part) or its ImGui id, optionally the window it is in, and get back its rectangle and center in window pixels - the coordinate space mouse_click and mouse_drag take, so the center is directly a click target. 'index' picks between items sharing a label, numbered the way get_imgui_items numbers them; 'match_count' reports how many matched. The call arms item recording for the next editor frame and returns once that frame has been recorded, so it costs one frame.",
+    "inputSchema": {
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host)",
+          "type": "string"
+        },
+        "window": {
+          "description": "The window the item is in, by the name or display_name get_imgui_windows reports. Items of the window's child regions are searched when the window itself holds no match.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Item label as shown, or with its '##id' part. Required unless id is given.",
+          "type": "string"
+        },
+        "id": {
+          "description": "ImGui item id, as get_imgui_items reports it. Use instead of label.",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Which of several items sharing the label to report (default 0)",
+          "type": "integer"
+        },
+        "visible_only": {
+          "description": "Consider only items Dear ImGui did not clip away (default true)",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_imgui_item_rect"
+  },
+  {
     "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},

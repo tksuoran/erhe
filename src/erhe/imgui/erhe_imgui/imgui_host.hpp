@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
@@ -101,7 +102,24 @@ public:
     // across two files).
     void set_imgui_ini_path(const std::string& path);
 
+    // Item recording (doc/plans/mcp_ui_driving.md A3). A request arms
+    // ImGuiContext::TestEngineHookItems for exactly the next NewFrame ..
+    // Render of this host; the frame's records stay readable until the next
+    // request. Recording is off in every other frame, so an unrequested frame
+    // calls no hook at all - get_item_recorder().get_hook_call_count() is the
+    // measurement of that.
+    void request_item_recording();
+
+    [[nodiscard]] auto get_item_recorder          () -> Imgui_item_recorder&;
+    [[nodiscard]] auto get_item_recorder          () const -> const Imgui_item_recorder&;
+    [[nodiscard]] auto is_item_recording_requested() const -> bool;
+
 protected:
+    // Called by the derived host around its ImGui::NewFrame() ..
+    // ImGui::Render() pair.
+    void begin_item_recording();
+    void end_item_recording  ();
+
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;
     bool            m_has_cursor                  {false};
@@ -111,6 +129,10 @@ protected:
     Imgui_renderer& m_imgui_renderer;
     ImGuiContext*   m_imgui_context{nullptr};
     ImGuiID         m_root_dock_id {0};
+
+    Imgui_item_recorder m_item_recorder;
+    bool                m_item_recording_requested{false};
+    bool                m_item_recording_active   {false};
 };
 
 } // namespace erhe::imgui

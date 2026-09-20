@@ -162,11 +162,14 @@ Imgui_host::Imgui_host(
     ImGuiIO& io = m_imgui_context->IO;
     io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
 
+    m_item_recorder.set_context(m_imgui_context);
+
     imgui_renderer.register_imgui_host(this);
 }
 
 Imgui_host::~Imgui_host() noexcept
 {
+    m_item_recorder.set_context(nullptr);
     m_imgui_renderer.unregister_imgui_host(this);
 
     Scoped_imgui_context imgui_context{*this}; // Needed for DestroyPlatformWindows()
@@ -236,6 +239,47 @@ void Imgui_host::set_imgui_ini_path(const std::string& path)
     m_imgui_ini_path = path;
     ImGuiIO& io = m_imgui_context->IO;
     io.IniFilename = m_imgui_ini_path.empty() ? nullptr : m_imgui_ini_path.c_str();
+}
+
+void Imgui_host::request_item_recording()
+{
+    m_item_recording_requested = true;
+}
+
+auto Imgui_host::get_item_recorder() -> Imgui_item_recorder&
+{
+    return m_item_recorder;
+}
+
+auto Imgui_host::get_item_recorder() const -> const Imgui_item_recorder&
+{
+    return m_item_recorder;
+}
+
+auto Imgui_host::is_item_recording_requested() const -> bool
+{
+    return m_item_recording_requested;
+}
+
+void Imgui_host::begin_item_recording()
+{
+    if (!m_item_recording_requested) {
+        return;
+    }
+    m_item_recording_requested        = false;
+    m_item_recording_active           = true;
+    m_imgui_context->TestEngineHookItems = true;
+    m_item_recorder.begin_frame();
+}
+
+void Imgui_host::end_item_recording()
+{
+    if (!m_item_recording_active) {
+        return;
+    }
+    m_item_recording_active              = false;
+    m_imgui_context->TestEngineHookItems = false;
+    m_item_recorder.end_frame();
 }
 
 auto Imgui_host::want_capture_keyboard() const -> bool

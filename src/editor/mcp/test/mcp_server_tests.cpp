@@ -2642,3 +2642,177 @@ TEST_F(Mcp_test, type_text_splits_into_text_events)
     Mcp_client::Tool_result empty = client.call_tool("type_text", json{{"text", ""}});
     EXPECT_TRUE(empty.is_error) << "an empty string was accepted";
 }
+
+// Part A: ImGui introspection ------------------------------------------------
+
+namespace {
+
+// The Hierarchy window of the scene the test prepared, by the title
+// Scene_root::make_browser_window() gives it ("Scene Hierarchy [N]").
+[[nodiscard]] auto find_hierarchy_window(Mcp_client& client, std::string& out_title) -> bool
+{
+    Mcp_client::Tool_result windows = client.call_tool("get_imgui_windows", json::object());
+    if (windows.is_error || !windows.payload.contains("windows")) {
+        return false;
+    }
+    for (const json& window : windows.payload["windows"]) {
+        const std::string name = window.value("name", "");
+        if ((name.rfind("Scene Hierarchy", 0) == 0) && window.value("active", false)) {
+            out_title = name;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+// get_imgui_hosts reports the desktop host, and a frame in which nothing asked
+// for a recording calls no item hook at all (R6): hook_calls_total stands
+// still over a run of frames.
+TEST_F(Mcp_test, get_imgui_hosts_reports_the_desktop_host_and_records_nothing_unasked)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result hosts = client.call_tool("get_imgui_hosts", json::object());
+    ASSERT_FALSE(hosts.is_error) << hosts.text;
+    ASSERT_TRUE(hosts.payload.contains("hosts"));
+    const json& host_list = hosts.payload["hosts"];
+    ASSERT_FALSE(host_list.empty()) << "no ImGui hosts reported";
+
+    std::string default_host;
+    uint64_t    hook_calls_before = 0;
+    for (const json& host : host_list) {
+        EXPECT_GT(host.value("width",  0.0f), 0.0f) << host.dump();
+        EXPECT_GT(host.value("height", 0.0f), 0.0f) << host.dump();
+        if (host.value("default", false)) {
+            default_host      = host.value("name", "");
+            hook_calls_before = host.value("hook_calls_total", static_cast<uint64_t>(0));
+        }
+    }
+    ASSERT_FALSE(default_host.empty()) << "no default ImGui host: " << host_list.dump();
+
+    advance_frames(client, 10);
+
+    Mcp_client::Tool_result after = client.call_tool("get_imgui_hosts", json::object());
+    ASSERT_FALSE(after.is_error) << after.text;
+    uint64_t hook_calls_after = 0;
+    bool     found            = false;
+    for (const json& host : after.payload["hosts"]) {
+        if (host.value("name", "") == default_host) {
+            hook_calls_after = host.value("hook_calls_total", static_cast<uint64_t>(0));
+            found            = true;
+        }
+    }
+    ASSERT_TRUE(found);
+    EXPECT_EQ(hook_calls_after, hook_calls_before)
+        << "item hooks ran in frames no query asked to record";
+
+    Mcp_client::Tool_result unknown = client.call_tool("get_imgui_windows", json{{"host", "no such host"}});
+    EXPECT_TRUE(unknown.is_error) << "an unknown host name was accepted";
+}
+
+// get_imgui_items on the Hierarchy window lists the scene's node rows. The
+// rows draw their own text, so they are named for the recorder explicitly
+// (erhe::imgui::set_item_debug_label) - this is what checks that.
+TEST_F(Mcp_test, get_imgui_items_lists_the_hierarchy_rows)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    std::string hierarchy_title;
+    ASSERT_TRUE(find_hierarchy_window(client, hierarchy_title)) << "no Scene Hierarchy window is open";
+
+    const std::string box_name = "imgui items test box";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        box_name},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    Mcp_client::Tool_result items = client.call_tool("get_imgui_items", json{
+        {"window", hierarchy_title},
+        {"limit",  500}
+    });
+    ASSERT_FALSE(items.is_error) << items.text;
+    ASSERT_TRUE(items.payload.contains("items"));
+    EXPECT_GT(items.payload.value("total", 0), 1) << items.payload.dump();
+
+    bool found_box = false;
+    for (const json& item : items.payload["items"]) {
+        EXPECT_EQ(item.value("window", ""), hierarchy_title);
+        if (item.value("display_label", "") == box_name) {
+            found_box = true;
+            EXPECT_GT(item.value("width",  0.0f), 0.0f) << item.dump();
+            EXPECT_GT(item.value("height", 0.0f), 0.0f) << item.dump();
+        }
+    }
+    EXPECT_TRUE(found_box) << "the Hierarchy row of '" << box_name << "' was not listed";
+
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
+// R2 end to end: get_imgui_item_rect resolves a Hierarchy row to a rectangle,
+// and a mouse_click at its center selects that node - the rectangles are in
+// the same window pixels the input gestures take.
+TEST_F(Mcp_test, imgui_item_rect_center_is_a_click_target)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    std::string hierarchy_title;
+    ASSERT_TRUE(find_hierarchy_window(client, hierarchy_title)) << "no Scene Hierarchy window is open";
+
+    const std::string box_name = "imgui click test box";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        box_name},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    advance_frames(client, 2);
+
+    Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
+        {"window", hierarchy_title},
+        {"label",  box_name}
+    });
+    ASSERT_FALSE(rect.is_error) << rect.text;
+    EXPECT_EQ(rect.payload.value("match_count", 0), 1) << rect.payload.dump();
+    const float center_x = rect.payload.value("center_x", 0.0f);
+    const float center_y = rect.payload.value("center_y", 0.0f);
+    ASSERT_GT(center_x, 0.0f) << rect.payload.dump();
+    ASSERT_GT(center_y, 0.0f) << rect.payload.dump();
+
+    Mcp_client::Tool_result click = client.call_tool("mouse_click", json{{"x", center_x}, {"y", center_y}});
+    ASSERT_FALSE(click.is_error) << click.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection.is_error) << selection.text;
+    const json& selected = selection.payload["items"];
+    ASSERT_TRUE(selected.is_array());
+    bool found = false;
+    for (const json& item : selected) {
+        if (item.value("name", "") == box_name) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "clicking the reported row rectangle did not select it: " << selected.dump();
+
+    Mcp_client::Tool_result missing = client.call_tool("get_imgui_item_rect", json{
+        {"window", hierarchy_title},
+        {"label",  "no such item"}
+    });
+    EXPECT_TRUE(missing.is_error) << "an unknown label was accepted";
+
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}

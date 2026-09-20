@@ -13,6 +13,8 @@ erhe_target_sources_grouped(
     erhe_imgui/imgui_renderer.hpp
     erhe_imgui/imgui_host.cpp
     erhe_imgui/imgui_host.hpp
+    erhe_imgui/imgui_item_recorder.cpp
+    erhe_imgui/imgui_item_recorder.hpp
     erhe_imgui/imgui_window.cpp
     erhe_imgui/imgui_window.hpp
     erhe_imgui/imgui_windows.cpp
