@@ -32,6 +32,7 @@ add_executable(${_target}
     test_optimized_variant_invalidation.cpp
     test_prim_levels.cpp
     test_resource_prim_tokens.cpp
+    test_scene_properties.cpp
     test_scope_prims.cpp
     test_shared_skin_registration.cpp
     test_xform_op_stack.cpp

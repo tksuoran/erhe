@@ -48,7 +48,7 @@ public:
 class Gltf_scene_state
 {
 public:
-    glm::vec4   ambient_light {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3   ambient_light {0.0f, 0.0f, 0.0f};
     bool        enable_physics{true};
     // Minified Scene_settings JSON for the codegen deserializer; empty =
     // no per-scene overrides.

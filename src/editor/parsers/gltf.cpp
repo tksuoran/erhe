@@ -1615,7 +1615,7 @@ auto finish_open_scene_gltf(
     // deliberately leaves alone (importing an asset must not clobber the
     // target scene's settings).
     erhe::scene::Scene& scene = scene_root->get_scene();
-    scene.ambient_light = scene_state->ambient_light;
+    scene.set_ambient_light(scene_state->ambient_light);
     if (!scene_state->settings_json.empty()) {
         simdjson::ondemand::parser settings_parser;
         simdjson::padded_string    settings_padded{scene_state->settings_json};

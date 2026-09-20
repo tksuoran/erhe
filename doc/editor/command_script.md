@@ -188,7 +188,7 @@ before calling `try_call()`. Both code paths produce the same undoable
 5. Each `try_call()` queues a `Compound_operation` on
    `m_app_context.operation_stack`. The actual scene-graph mutations
    (`Item_insert_remove_operation::execute` and
-   `Ambient_light_operation::execute`) run later when
+   `Property_set_operation::execute`) run later when
    `Operation_stack::update()` drains the queue on the first tick. By
    then the per-frame command buffer is open, but the operation
    `execute` paths only touch CPU-side scene state, so they do not need
@@ -206,8 +206,9 @@ Every `scene.add_*` command queues exactly one `Compound_operation`. A
 single Undo therefore reverses one whole batch (the entire torus chain,
 all five Platonic solids, every default light + ambient, etc.). Mesh
 commands wrap one `Item_insert_remove_operation` per node;
-`scene.add_lights` additionally prepends an `Ambient_light_operation`
-(`src/editor/operations/ambient_light_operation.{hpp,cpp}`) so the
+`scene.add_lights` additionally prepends a `Property_set_operation` of
+the scene item's `ambient_light` property
+(`src/editor/operations/property_set_operation.{hpp,cpp}`) so the
 ambient color change rides on the same compound and is restored on
 undo, re-applied on redo.
 
@@ -229,8 +230,9 @@ Mirror the existing `scene.add_room` end-to-end:
    more `Operation` subclasses and queue it via
    `m_context.operation_stack->queue(...)`. Any node insertion belongs
    in `Item_insert_remove_operation` with `Mode::insert`. State-bag
-   mutations get a dedicated `Operation` subclass (see
-   `Ambient_light_operation` for a 30-line template).
+   mutations get a dedicated `Operation` subclass; an authored value of
+   an item is a `Property_set_operation`
+   (`src/editor/operations/property_set_operation.{hpp,cpp}`) instead.
 3. Construct, register, and expose the command in `Scene_commands`:
    member-init, `commands.register_command(&m_my_command);`, and a
    `get_my_command()` accessor if needed.

@@ -2,6 +2,7 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_item/unique_id.hpp"
+#include "erhe_property/dependency_property.hpp"
 
 #include <glm/glm.hpp>
 
@@ -246,16 +247,33 @@ public:
     // before update_node_transforms(). No-op when no layouts are hosted.
     void update_layouts();
 
-    // Scene-wide ambient light color (issues #237 / #240). Fed to the forward
-    // renderer as the ambient term and serialized with the scene (scene file
-    // v5). Moved here from Light_layer so it is an intrinsic scene property.
-    glm::vec4 ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
+    // Scene-wide ambient light color (issues #237 / #240), a registered
+    // property (doc/erhe/property_system.md section 4.20). Fed to the forward
+    // renderer as the ambient term and serialized with the scene. It does not
+    // inherit: a scene has no holder above it, and a Style holds the value for
+    // a shared lighting preset (D30).
+    static const erhe::property::Property<glm::vec3> ambient_light_property;
+
+    // Overrides Dependency_object: refreshes the m_ambient_light mirror for
+    // every source of a change - local, style, expression.
+    void on_property_changed(const erhe::property::Property_changed_args& args) override;
+
+    // The effective ambient color. Per-frame readers (the composition pass,
+    // the DDGI sky radiance, the ray trace renderer) read this mirror, never
+    // the property store.
+    [[nodiscard]] auto get_ambient_light() const -> const glm::vec3& { return m_ambient_light; }
+
+    // The one writer entry point: writes the local value.
+    void set_ambient_light(const glm::vec3& value) { set_value(ambient_light_property, value); }
 
 private:
     // Recomputes the world transform of every Xformable below `prim`,
     // recursing THROUGH the prims that have no transform of their own.
     void update_subtree_transforms(erhe::Hierarchy& prim, bool carry_body_driven);
 
+    // Mirror of the effective value of ambient_light_property, refreshed in
+    // on_property_changed().
+    glm::vec3                                 m_ambient_light{0.0f, 0.0f, 0.0f};
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
     std::vector<std::shared_ptr<Node>>        m_transform_update_nodes;

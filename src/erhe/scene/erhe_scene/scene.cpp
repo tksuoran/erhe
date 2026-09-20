@@ -15,6 +15,26 @@
 
 namespace erhe::scene {
 
+const erhe::property::Property<glm::vec3> Scene::ambient_light_property = erhe::property::Property<glm::vec3>::register_property(
+    "ambient_light", Scene::property_owner_type(),
+    erhe::property::Property_metadata{
+        .default_value = glm::vec3{0.0f, 0.0f, 0.0f},
+        .inherits      = false,
+        .ui            = erhe::property::Property_ui{
+            .presentation = erhe::property::Property_ui::Presentation::color,
+            .tooltip      = "Scene-wide ambient light color",
+            .label        = "Ambient Light"
+        }
+    }
+);
+
+void Scene::on_property_changed(const erhe::property::Property_changed_args& args)
+{
+    if (erhe::property::is_owner_type_or_descendant(Scene::property_owner_type(), args.property.get_owner_type())) {
+        m_ambient_light = get_value(ambient_light_property);
+    }
+}
+
 #pragma region Layers
 Mesh_layer::Mesh_layer(const std::string_view name, const uint64_t flags, const Layer_id id)
     : name {name}

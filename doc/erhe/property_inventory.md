@@ -125,6 +125,12 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | flux | computed | writes intensity (intensity times the emission solid angle); point and spot lights |
 | blackbody | computed | read-only chromaticity of temperature; shown while temperature is positive |
 
+### Scene (`src/erhe/scene/erhe_scene/scene.cpp`, section 4.20)
+
+| Property | Storage | Notes |
+|---|---|---|
+| ambient_light | entry | does not inherit (a scene has no holder above it); mirrored into `m_ambient_light` by `on_property_changed`; color row |
+
 ### Camera (`src/erhe/scene/erhe_scene/camera.cpp`, section 4.4)
 
 | Property | Storage | Notes |
@@ -288,7 +294,6 @@ property form and the phase of each row.
 
 | Owner | Fields | Notes |
 |---|---|---|
-| Scene | ambient light | phase 1; the per-scene overrides stay a settings block |
 | Layout | grid track extents | phase 2; per-axis float lists |
 | Collision_filter | collision_systems, collide_with_systems, not_collide_with_systems | phase 3; string lists |
 | Physics_joint_settings | limits, drives | phase 4; lists of records |

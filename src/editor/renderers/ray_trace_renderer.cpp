@@ -441,7 +441,7 @@ void Ray_trace_renderer::render(
     // for lights present in light_projections (their world/texture
     // transforms come from there), so with no projections available pass no
     // lights - ambient still applies.
-    const glm::vec3 ambient_light = glm::vec3{scene_root.get_scene().ambient_light};
+    const glm::vec3 ambient_light = scene_root.get_scene().get_ambient_light();
     Ring_buffer_range light_range = m_light_buffer->update(light_projections, ambient_light);
 
     // Runtime knobs from Ray_trace_config, clamped to sane / compile-time

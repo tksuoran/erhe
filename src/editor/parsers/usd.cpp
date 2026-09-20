@@ -2728,7 +2728,7 @@ constexpr const char* c_usd_version_value   = "1";
 class Usd_scene_state
 {
 public:
-    glm::vec4                         ambient_light {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                         ambient_light {0.0f, 0.0f, 0.0f};
     bool                              enable_physics{true};
     std::string                       settings_json;
     // The state of the file's geometry graphs a `NodeGraph` prim has no form
@@ -2748,8 +2748,8 @@ public:
         log_parsers->error("open_scene_usd: customLayerData '{}' is not a JSON object - editor defaults are used", c_usd_scene_state_key);
         return state;
     }
-    if (payload.contains("ambient_light") && payload["ambient_light"].is_array() && (payload["ambient_light"].size() == 4)) {
-        for (int component = 0; component < 4; ++component) {
+    if (payload.contains("ambient_light") && payload["ambient_light"].is_array() && (payload["ambient_light"].size() >= 3)) {
+        for (int component = 0; component < 3; ++component) {
             state.ambient_light[component] = payload["ambient_light"][static_cast<std::size_t>(component)].get<float>();
         }
     }
@@ -3193,12 +3193,12 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     }
 
     erhe::scene::Scene& scene = scene_root->get_scene();
-    scene.ambient_light = scene_state.ambient_light;
+    scene.set_ambient_light(scene_state.ambient_light);
     // A `DomeLight` is erhe's ambient light and it is what the file itself
     // authored, so it wins over the scene block an erhe save may have left in
     // `customLayerData`. The prims are kept so a save writes them back.
     if (!usd_data.dome_lights.empty()) {
-        scene.ambient_light = glm::vec4{usd_data.ambient_light, scene_state.ambient_light.w};
+        scene.set_ambient_light(usd_data.ambient_light);
         std::vector<Usd_dome_light_record> dome_records;
         dome_records.reserve(usd_data.dome_lights.size());
         for (const erhe::usd::Usd_dome_light& dome : usd_data.dome_lights) {
@@ -3864,7 +3864,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         const std::map<const erhe::Item_base*, std::string> planned_paths =
             erhe::usd::plan_usd_prim_paths(save_arguments);
         nlohmann::json scene_json{
-            {"ambient_light",  {scene.ambient_light.x, scene.ambient_light.y, scene.ambient_light.z, scene.ambient_light.w}},
+            {"ambient_light",  {scene.get_ambient_light().x, scene.get_ambient_light().y, scene.get_ambient_light().z, 0.0f}},
             {"enable_physics", scene_root.has_physics_world()}
         };
         if (content_library) {

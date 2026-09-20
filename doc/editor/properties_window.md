@@ -69,10 +69,10 @@ migrated" table lists the hand-written rows that are authored state; section
   BRDF slice for a selected material.
 - R5 List-valued state with no `Property_value` form
   (`Physics_joint_settings` limits and drives, `Collision_filter`'s three
-  system lists, `Layout`'s per-axis grid track extents, the scene's
-  ambient light and settings-override block) keeps its hand-written
-  editor, drawn per item, and is the documented exception; the
-  inventory's "Not yet migrated" table lists them.
+  system lists, `Layout`'s per-axis grid track extents) and the scene's
+  settings-override block keep their hand-written editor, drawn per item,
+  and are the documented exception; the inventory's "Not yet migrated"
+  table lists them.
 
 ## 3. Item-level rows
 

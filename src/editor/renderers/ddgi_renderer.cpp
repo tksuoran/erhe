@@ -966,7 +966,7 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         info.coordinate_conventions
     );
 
-    m_sky_radiance = glm::vec3{scene_root.get_scene().ambient_light};
+    m_sky_radiance = scene_root.get_scene().get_ambient_light();
 
     Scene_tlas::Frame tlas_frame     = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
     ERHE_VERIFY(tlas_frame.is_valid());

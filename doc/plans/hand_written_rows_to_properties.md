@@ -88,35 +88,13 @@ verified by the section 4.18 verification loop plus the checks named here.
 
 ### Phase 1: Scene.ambient_light
 
-1. `scene.{hpp,cpp}`: register `Scene::ambient_light_property` (H1), add the
-   mirror, `get_ambient_light()`, `set_ambient_light()` and the
-   `on_property_changed` override (H2); the public `ambient_light` member goes
-   away. The copy constructor and `operator=` copy the local value through the
-   store.
-2. Readers move to `get_ambient_light()`: `composition_pass.cpp` (2 sites),
-   `ddgi_renderer.cpp`, `ray_trace_renderer.cpp`, `example.cpp`,
-   `mcp_server_scene_query.cpp`, the two exporters.
-3. Writers move to `set_ambient_light()`: `brush_preview.cpp`, `gltf.cpp`,
-   `usd.cpp` (scene state, then the DomeLight product, which stays a local
-   value), and MCP `set_scene_settings.ambient_light`, which records a
-   `Property_set_operation` so it becomes undoable like `set_item_property`.
-4. `scene_builder.cpp` records `Property_set_operation` in its compound;
-   `operations/ambient_light_operation.{hpp,cpp}` is deleted (CMakeLists, then
-   `scripts\configure_ninja_win_clang.bat`).
-5. `Properties::scene_properties` loses its "Ambient Light" row; the generic
-   section draws it.
-6. H3 file forms; extend the `ERHE_scene` section of
-   `scripts/scene_roundtrip_verify.py` with a local and a style-held ambient
-   color.
-7. Test: `src/erhe/scene/test/test_scene_properties.cpp` (default, setter to
-   mirror, untyped access, style-held value reaches the mirror, clone).
-8. Docs: a "Scene" subsection in section 4 of the design record, the inventory
-   row moves to the migrated tables, R5 of
-   `doc/editor/properties_window.md` names the settings-override block only.
+The property, its mirror, the readers and writers, the generic row and the
+test are in place (design record section 4.20). What remains:
 
-Headless check beyond the loop: `set_item_property` of `ambient_light` on the
-scene item, `capture_screenshot` shows the ambient term, `undo` restores it,
-`get_undo_redo_stack` shows one entry.
+1. H3 file forms: `ERHE_scene` `properties` and `style`, with
+   `doc/gltf_extensions/ERHE_scene.md` and its schema.
+2. Extend the `ERHE_scene` section of `scripts/scene_roundtrip_verify.py` with
+   a local and a style-held ambient color.
 
 ### Phase 2: Layout grid track extents
 

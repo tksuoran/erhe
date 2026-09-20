@@ -226,12 +226,6 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
         return;
     }
 
-    // Ambient light color is a scene property now (issues #237 / #240). Direct
-    // edit, matching the other color properties in this window.
-    add_entry("Ambient Light", [&scene]() {
-        ImGui::ColorEdit3("##", &scene.ambient_light.x, ImGuiColorEditFlags_Float);
-    }, "Scene-wide ambient light color.");
-
     // Per-scene setting overrides (issues #239 / #240). Each group can override
     // the matching editor-global setting; an unchecked override falls back to
     // the editor default, a checked one edits the scene's own copy (saved with

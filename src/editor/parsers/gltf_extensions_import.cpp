@@ -166,11 +166,10 @@ auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::opti
     Gltf_scene_state state{};
     const auto ambient_it = payload.find("ambient_light");
     if ((ambient_it != payload.end()) && ambient_it->is_array() && (ambient_it->size() >= 3)) {
-        state.ambient_light = glm::vec4{
+        state.ambient_light = glm::vec3{
             (*ambient_it)[0].get<float>(),
             (*ambient_it)[1].get<float>(),
-            (*ambient_it)[2].get<float>(),
-            (ambient_it->size() >= 4) ? (*ambient_it)[3].get<float>() : 0.0f
+            (*ambient_it)[2].get<float>()
         };
     }
     if (payload.contains("enable_physics") && payload["enable_physics"].is_boolean()) {

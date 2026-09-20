@@ -5,7 +5,7 @@
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
-#include "operations/ambient_light_operation.hpp"
+#include "operations/property_set_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -1374,7 +1374,7 @@ auto Scene_builder::add_lights(const Add_lights_args& args) -> bool
     if (!resolve_scene_target("scene.add_lights")) {
         return false;
     }
-    const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
+    const glm::vec3           target_ambient   {0.04f, 0.04f, 0.04f};
 
     const float directional_light_intensity         = args.directional_light_intensity;
     const float directional_light_radius            = args.directional_light_radius;
@@ -1536,14 +1536,22 @@ auto Scene_builder::add_lights(const Add_lights_args& args) -> bool
     }
 
     erhe::scene::Scene& scene = m_scene_root->get_scene();
-    if (light_nodes.empty() && (scene.ambient_light == target_ambient)) {
+    if (light_nodes.empty() && (scene.get_ambient_light() == target_ambient)) {
         return true;
     }
 
     const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
     std::vector<std::shared_ptr<Operation>> operations;
     operations.reserve(light_nodes.size() + 1);
-    operations.push_back(std::make_shared<Ambient_light_operation>(&scene, target_ambient));
+    const erhe::property::Dependency_property& ambient_property = *erhe::scene::Scene::ambient_light_property.get_ptr();
+    operations.push_back(
+        std::make_shared<Property_set_operation>(
+            m_scene_root->get_scene_item(),
+            ambient_property,
+            scene.read_local_state(ambient_property),
+            erhe::property::Local_state{erhe::property::Property_value{target_ambient}}
+        )
+    );
     for (const std::shared_ptr<erhe::scene::Node>& light_node : light_nodes) {
         operations.push_back(
             std::make_shared<Item_insert_remove_operation>(

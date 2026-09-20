@@ -1135,7 +1135,7 @@ auto Mcp_server::query_scene_settings(const json& args) -> std::string
     }
     return make_json_content({
         {"scene_name",     sr->get_name()},
-        {"ambient_light",  {scene.ambient_light.x, scene.ambient_light.y, scene.ambient_light.z, scene.ambient_light.w}},
+        {"ambient_light",  {scene.get_ambient_light().x, scene.get_ambient_light().y, scene.get_ambient_light().z, 0.0f}},
         {"enable_physics", sr->has_physics_world()},
         {"settings",       settings_json}
     }).dump();

@@ -2132,6 +2132,34 @@ rides `property_node_refs` beside it
 `editor_ik_solver_tests`, which compiles `ik_properties.cpp` and links
 `erhe::scene`).
 
+### 4.20 Scene
+
+`erhe::scene::Scene::ambient_light_property` (`ambient_light`, vec3, `color`
+presentation, default `(0, 0, 0)`) is the scene-wide ambient color the
+forward renderer, the DDGI sky radiance and the ray trace renderer take as
+their ambient term. It is registered with `inherits = false`: a scene has no
+holder above it, and a Style holds the value for a shared lighting preset
+(D30).
+
+`Scene` keeps a private `glm::vec3 m_ambient_light` as the MIRROR of the
+effective value, refreshed in the `on_property_changed` hook (the bridged-owner
+recipe of section 4.18), so every source of a change - a local value, a style,
+an expression - reaches it. The per-frame readers call `get_ambient_light()`
+and never the store; `set_ambient_light()` is the one writer entry point and
+writes the local value. Writers are the scene-open paths of both file formats,
+the brush preview's own scene, MCP `set_scene_settings` (which records a
+`Property_set_operation`, so it is undoable like `set_item_property`) and the
+`scene.add_lights` command script step, which records the same operation in its
+compound. The generic section of the Properties window draws the row;
+`Properties::scene_properties` keeps only the per-scene settings-override block
+(`doc/editor/properties_window.md` R5).
+
+The file forms keep the field they had: `ERHE_scene.ambient_light` and the USD
+`erhe:scene` block write four numbers with the fourth `0` and read the first
+three. Test: `src/erhe/scene/test/test_scene_properties.cpp` (default, setter
+to mirror, untyped access, style-held value reaching the mirror). `Scene` has
+no clone case: its copy constructor is `ERHE_FATAL`, a scene is never copied.
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather
@@ -2153,8 +2181,8 @@ style layer is D25 and the reference layer is D33.
 - [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
   retiring the node attachments in favor of attached properties of the node.
 - [plans/hand_written_rows_to_properties.md](../plans/hand_written_rows_to_properties.md) -
-  the scene ambient light, layout track extents, collision filter lists and
-  joint limits / drives as properties.
+  layout track extents, collision filter lists and joint limits / drives as
+  properties.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

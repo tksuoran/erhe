@@ -524,7 +524,7 @@ void add_gltf_editor_state(
     // the file as an erhe-authored scene.
     {
         nlohmann::json scene_json{
-            {"ambient_light",  json_vec4(scene.ambient_light)},
+            {"ambient_light",  json_vec4(glm::vec4{scene.get_ambient_light(), 0.0f})},
             {"enable_physics", scene_root.has_physics_world()},
         };
         // A COPY: the file records the selection of the set it writes, under

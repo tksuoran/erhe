@@ -138,7 +138,7 @@ void Brush_preview::make_preview_scene()
     m_camera->set_z_far (12.0f);
     m_camera->set_parent(paremt);
 
-    m_scene_root_shared->get_scene().ambient_light = glm::vec4{0.1f, 0.1f, 0.1f, 0.0f};
+    m_scene_root_shared->get_scene().set_ambient_light(glm::vec3{0.1f, 0.1f, 0.1f});
     
     m_key_light      = std::make_shared<erhe::scene::Light>("Key Light");
     m_key_light->enable_flag_bits(erhe::Item_flags::content);

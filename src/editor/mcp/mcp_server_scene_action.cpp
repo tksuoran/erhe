@@ -26,6 +26,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
+#include "operations/property_set_operation.hpp"
 #include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "time.hpp"
@@ -152,12 +153,23 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        sr->get_scene().ambient_light = glm::vec4{
-            value[0].get<float>(),
-            value[1].get<float>(),
-            value[2].get<float>(),
-            (value.size() >= 4) ? value[3].get<float>() : 0.0f
-        };
+        // The ambient color is a registered property of the scene item, so
+        // the write is recorded like set_item_property and is undoable. A
+        // fourth number is accepted for the file form and ignored.
+        const erhe::property::Dependency_property& ambient_property = *erhe::scene::Scene::ambient_light_property.get_ptr();
+        erhe::scene::Scene& scene = sr->get_scene();
+        m_context.operation_stack->queue(
+            std::make_shared<Property_set_operation>(
+                sr->get_scene_item(),
+                ambient_property,
+                scene.read_local_state(ambient_property),
+                erhe::property::Local_state{
+                    erhe::property::Property_value{
+                        glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()}
+                    }
+                }
+            )
+        );
         changed = true;
     }
     if (args.contains("settings")) {

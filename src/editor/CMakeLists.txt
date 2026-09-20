@@ -340,8 +340,6 @@ erhe_target_sources_grouped(
     mcp/mcp_server_shared.hpp
     mcp/mcp_server_skinning.cpp
     mcp/mcp_server_tool_list.cpp
-    operations/ambient_light_operation.cpp
-    operations/ambient_light_operation.hpp
     operations/animation_edit_operation.cpp
     operations/animation_edit_operation.hpp
     operations/async_raytrace_kickoff_operation.cpp
