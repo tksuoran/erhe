@@ -1,4 +1,5 @@
 #include "app_rendering.hpp"
+#include "grid/grid_frame.hpp"
 
 #include "app_context.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -1503,6 +1504,19 @@ void App_rendering::set_grid_visibility(bool visible)
     // TODO Consider using Item visibility flag and removing enabled
     if (m_grid_composition_pass != nullptr) {
         m_grid_composition_pass->data.enabled = visible;
+    }
+}
+
+void App_rendering::set_grid_frame(const Grid_frame& frame, const Grid_depth_mode depth_mode)
+{
+    if (m_grid_composition_pass != nullptr) {
+        m_grid_composition_pass->data.grid_parameters.world_from_grid = frame.world_from_grid;
+        m_grid_composition_pass->data.grid_parameters.grid_flags      = glm::vec4{
+            frame.label_sign.x,
+            frame.label_sign.y,
+            (depth_mode == Grid_depth_mode::behind_content) ? 1.0f : 0.0f,
+            0.0f
+        };
     }
 }
 

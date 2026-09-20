@@ -15,6 +15,7 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
@@ -85,6 +86,7 @@ const Property<float> Grid::rotation_property = Property<float>::register_proper
 );
 const Property<bool>      Grid::intersect_enable_property    = ERHE_GRID_PROPERTY(bool,      intersect_enable,    (true), (Property_ui{.tooltip = "The grid takes part in hover and placement ray tests", .label = "Intersect Enable"}));
 const Property<bool>      Grid::snap_enabled_property        = ERHE_GRID_PROPERTY(bool,      snap_enabled,        (true), (Property_ui{.label = "Snap Enable"}));
+const Property<bool>      Grid::behind_content_property      = ERHE_GRID_PROPERTY(bool,      behind_content,      (false), (Property_ui{.tooltip = "Draw the grid behind all scene content instead of depth testing it at its plane", .label = "Behind Content"}));
 const Property<float>     Grid::cell_size_property           = ERHE_GRID_PROPERTY(float,     cell_size,           (1.0f), (slider(0.01f, 10.0f, "Cell Size", {}, true)));
 const Property<int>       Grid::cell_div_property            = ERHE_GRID_PROPERTY(int,       cell_div,            (2), (slider(1.0f, 10.0f, "Cell Div", "Minor cells per major cell")));
 const Property<int>       Grid::cell_count_property          = ERHE_GRID_PROPERTY(int,       cell_count,          (100), (Property_ui{.min = 1.0f, .max = 10000.0f, .tooltip = "Cells per axis that bound the ray intersection (snap) region; the rendered grid is infinite", .label = "Cell Count"}));
@@ -124,6 +126,7 @@ void Grid::refresh_mirror()
     m_rotation            = get_value(rotation_property);
     m_intersect_enable    = get_value(intersect_enable_property);
     m_snap_enabled        = get_value(snap_enabled_property);
+    m_behind_content      = get_value(behind_content_property);
     m_cell_size           = get_value(cell_size_property);
     m_cell_div            = get_value(cell_div_property);
     m_cell_count          = get_value(cell_count_property);
@@ -169,6 +172,7 @@ Grid::Grid(const Grid& src, erhe::for_clone)
     , m_plane_type         {src.m_plane_type         }
     , m_intersect_enable   {src.m_intersect_enable   }
     , m_snap_enabled       {src.m_snap_enabled       }
+    , m_behind_content     {src.m_behind_content     }
     , m_rotation           {src.m_rotation           }
     , m_center             {src.m_center             }
     , m_cell_size          {src.m_cell_size          }
@@ -193,6 +197,7 @@ void Grid::read_config(const Grid_config& config)
     set_visible(config.visible);
     const Dependency_object::Change_batch batch{*this};
     set_value(snap_enabled_property,        config.snap_enabled);
+    set_value(behind_content_property,      config.behind_content);
     set_value(cell_size_property,           config.cell_size);
     set_value(cell_div_property,            config.cell_div);
     set_value(cell_count_property,          config.cell_count);
@@ -215,6 +220,7 @@ void Grid::write_config(Grid_config& config) const
 {
     config.visible             = is_visible();
     config.snap_enabled        = m_snap_enabled;
+    config.behind_content      = m_behind_content;
     config.cell_size           = m_cell_size;
     config.cell_div            = m_cell_div;
     config.cell_count          = m_cell_count;
@@ -235,11 +241,16 @@ void Grid::write_config(Grid_config& config) const
 
 auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3
 {
+    return snap_world_position(get_frame(), position_in_world);
+}
+
+auto Grid::snap_world_position(const Grid_frame& frame, const glm::vec3& position_in_world) const -> glm::vec3
+{
     if (!m_snap_enabled) {
         return position_in_world;
     }
     const float     snap_size        = m_cell_size / static_cast<float>(std::max(1, m_cell_div));
-    const glm::vec3 position_in_grid = glm::vec3{grid_from_world() * glm::vec4{position_in_world, 1.0}};
+    const glm::vec3 position_in_grid = glm::vec3{frame.grid_from_world * glm::vec4{position_in_world, 1.0}};
     const glm::vec3 snapped_position_in_grid{
         std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
         std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
@@ -247,7 +258,7 @@ auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm:
     };
 
     return glm::vec3{
-        world_from_grid() * glm::vec4{snapped_position_in_grid, 1.0}
+        frame.world_from_grid * glm::vec4{snapped_position_in_grid, 1.0}
     };
 }
 
@@ -310,6 +321,7 @@ void Grid::render(const Render_context& context)
     const bool  session_grid  = (app_context.app_settings == nullptr) || app_context.app_settings->graphics.grid_visible;
     const bool  visible       = session_grid && ((cfg != nullptr) ? cfg->visible : is_visible());
     const bool  label_enable  = (cfg != nullptr) ? cfg->label_enable        : m_label_enable;
+    const bool  behind        = (cfg != nullptr) ? cfg->behind_content      : m_behind_content;
     const float label_text_fr = (cfg != nullptr) ? cfg->label_text_fraction : m_label_text_fraction;
     const float label_spacing = (cfg != nullptr) ? cfg->label_spacing       : m_label_spacing;
     const float label_fade    = (cfg != nullptr) ? cfg->label_fade          : m_label_fade;
@@ -327,6 +339,10 @@ void Grid::render(const Render_context& context)
     //      If Gr\id overrided handle_flag_bits_update(), it could handle visibility
     //      changes more directly, but it would then need access to App_rendering.
     context.app_context.app_rendering->set_grid_visibility(visible);
+    context.app_context.app_rendering->set_grid_frame(
+        get_view_frame(context.camera),
+        behind ? Grid_depth_mode::behind_content : Grid_depth_mode::depth_tested
+    );
     context.app_context.app_rendering->set_grid_label(
         glm::vec4{
             label_enable ? 1.0f : 0.0f,
@@ -432,12 +448,17 @@ auto Grid::get_cell_size() const -> float
 
 auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>
 {
+    return intersect_ray(get_frame(), ray_origin_in_world, ray_direction_in_world);
+}
+
+auto Grid::intersect_ray(const Grid_frame& frame, const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) const -> std::optional<glm::vec3>
+{
     if (!m_intersect_enable) {
         return {};
     }
 
-    const glm::vec3 ray_origin_in_grid    = glm::vec3{grid_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
-    const glm::vec3 ray_direction_in_grid = glm::vec3{grid_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
+    const glm::vec3 ray_origin_in_grid    = glm::vec3{frame.grid_from_world * glm::vec4{ray_origin_in_world,    1.0f}};
+    const glm::vec3 ray_direction_in_grid = glm::vec3{frame.grid_from_world * glm::vec4{ray_direction_in_world, 0.0f}};
     const auto intersection = erhe::math::intersect_plane<float>(
         glm::vec3{0.0f, 1.0f, 0.0f},
         glm::vec3{0.0f, 0.0f, 0.0f},
@@ -459,7 +480,59 @@ auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& 
     }
 
     return glm::vec3{
-        world_from_grid() * glm::vec4{position_in_grid, 1.0}
+        frame.world_from_grid * glm::vec4{position_in_grid, 1.0}
+    };
+}
+
+auto Grid::get_frame() const -> Grid_frame
+{
+    return Grid_frame{.world_from_grid = world_from_grid(), .grid_from_world = grid_from_world()};
+}
+
+namespace {
+
+// The signed world axis v runs along, when it does (zero vector otherwise).
+auto get_world_axis(const glm::vec3& v) -> glm::vec3
+{
+    const glm::vec3 unit = glm::normalize(v);
+    for (int i = 0; i < 3; ++i) {
+        if (std::abs(unit[i]) > (1.0f - 1.0e-4f)) {
+            glm::vec3 axis{0.0f};
+            axis[i] = (unit[i] > 0.0f) ? 1.0f : -1.0f;
+            return axis;
+        }
+    }
+    return glm::vec3{0.0f};
+}
+
+}
+
+auto Grid::get_view_frame(const erhe::scene::Camera* const camera) const -> Grid_frame
+{
+    if ((camera == nullptr) || (m_plane_type == Grid_plane_type::Node)) {
+        return get_frame();
+    }
+    const erhe::scene::Projection* const projection = camera->projection();
+    if ((projection == nullptr) || !projection->is_orthogonal()) {
+        return get_frame();
+    }
+    const glm::mat4 world_from_camera = camera->world_from_node();
+    const glm::vec3 right = get_world_axis(glm::vec3{world_from_camera[0]});
+    const glm::vec3 up    = get_world_axis(glm::vec3{world_from_camera[1]});
+    const glm::vec3 back  = get_world_axis(glm::vec3{world_from_camera[2]});
+    const glm::vec3 zero{0.0f};
+    if ((right == zero) || (up == zero) || (back == zero)) {
+        return get_frame();
+    }
+    const glm::vec3 grid_x = right;
+    const glm::vec3 grid_y = back; // normal, towards the camera
+    const glm::vec3 grid_z = -up;  // labels draw glyph up along grid -z
+    const glm::vec4 origin = world_from_grid() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    const glm::mat4 view_world_from_grid{glm::vec4{grid_x, 0.0f}, glm::vec4{grid_y, 0.0f}, glm::vec4{grid_z, 0.0f}, origin};
+    return Grid_frame{
+        .world_from_grid = view_world_from_grid,
+        .grid_from_world = glm::inverse(view_world_from_grid),
+        .label_sign      = glm::vec2{grid_x.x + grid_x.y + grid_x.z, grid_z.x + grid_z.y + grid_z.z}
     };
 }
 

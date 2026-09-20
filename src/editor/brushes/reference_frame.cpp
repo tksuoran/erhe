@@ -62,14 +62,14 @@ Reference_frame::Reference_frame(
     m_T = GEO::normalize(GEO::cross(m_B, m_N));
 }
 
-Reference_frame::Reference_frame(const Grid& grid, const GEO::vec3f& position)
+Reference_frame::Reference_frame(const Grid& grid, const Grid_frame& grid_frame, const GEO::vec3f& position)
     : m_frame_orientation{Frame_orientation::out}
     , m_frame_source     {Frame_source::derived_from_surface_points}
 {
-    const glm::vec3 snapped_grid_position = grid.snap_world_position(to_glm_vec3(position));
-    const glm::vec3 grid_normal           = grid.normal_in_world();
-    const glm::vec3 grid_tangent          = grid.tangent_in_world();
-    const glm::vec3 grid_bitangent        = grid.bitangent_in_world();
+    const glm::vec3 snapped_grid_position = grid.snap_world_position(grid_frame, to_glm_vec3(position));
+    const glm::vec3 grid_normal           = grid_frame.normal_in_world();
+    const glm::vec3 grid_tangent          = grid_frame.tangent_in_world();
+    const glm::vec3 grid_bitangent        = grid_frame.bitangent_in_world();
 
     m_centroid = to_geo_vec3f(snapped_grid_position);
     m_scale    = grid.get_cell_size(); // * grid.cell_div();

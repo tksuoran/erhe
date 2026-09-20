@@ -87,15 +87,16 @@ int grid_label_slot(int value, int char_count, int cell)
 
 void main()
 {
-    // v_position is in wrapped world space: world minus the camera XZ
-    // position snapped to the level-0 grid (grid_offset, see grid.vert).
-    // grid_view_position is the camera position in that same wrapped
-    // space, computed in double on the CPU, so the whole ray setup and
-    // all grid line math below run on small exact coordinates; fp32
-    // precision at large distances from the origin would otherwise make
-    // the lines jitter. The grid plane (y = 0) is unaffected by the
-    // wrap: grid_offset.y = 0.
+    // v_position is in wrapped world space: world minus the camera's
+    // in-plane grid position snapped to the level-0 grid (grid_offset,
+    // given in grid space). grid_view_position is the camera position in
+    // that same wrapped space, computed in double on the CPU, so the whole
+    // ray setup and all grid line math below run on small exact
+    // coordinates; fp32 precision at large distances from the origin would
+    // otherwise make the lines jitter. The grid plane (grid y = 0) is
+    // unaffected by the wrap: grid_offset.y = 0.
     vec3  grid_offset            = camera.cameras[c_view_index].grid_offset.xyz;
+    vec2  label_sign             = camera.cameras[c_view_index].grid_flags.xy;
     vec3  view_position_in_world = camera.cameras[c_view_index].grid_view_position.xyz;
     vec3  fragment_position = v_position.xyz / v_position.w;
     vec3  ro                = view_position_in_world;
@@ -105,7 +106,7 @@ void main()
     float t;
     bool  intersects_plane  = intersect_plane(grid_plane_normal, grid_plane_point, ro, rd, t);
     vec3  pos               = ro + t * rd;
-    vec2  uv                = pos.xz;
+    vec2  uv                = (camera.cameras[c_view_index].grid_from_world * vec4(pos, 1.0)).xz;
 
     // Derivatives must be computed in uniform control flow, before any
     // divergent branching below.
@@ -166,7 +167,7 @@ void main()
         float cell_w  = glyph.glyphs[0].advance * text_h; // monospace: every slot has the same advance
         float margin  = 0.25 * text_h;
 
-        // Labels show world coordinates and sit on the world axes: undo
+        // Labels show world coordinates and sit on the grid axes: undo
         // the wrap (uv is in wrapped world space, see grid.vert). uvw is
         // a stable function of the exact wrapped uv plus an offset that
         // is constant until the camera crosses a level-0 cell, so labels
@@ -184,7 +185,7 @@ void main()
             float k    = round(uvw.x / spacing);
             float tick = k * spacing;
             if (abs(tick) < 100000.0) {
-                int   value      = int(round(tick));
+                int   value      = int(round(tick * label_sign.x));
                 int   char_count = grid_label_char_count(value);
                 float width      = float(char_count) * cell_w;
                 float x_start    = tick - (0.5 * width);
@@ -205,7 +206,7 @@ void main()
             float k    = round(uvw.y / spacing);
             float tick = k * spacing;
             if ((k != 0.0) && (abs(tick) < 100000.0)) {
-                int   value      = int(round(tick));
+                int   value      = int(round(tick * label_sign.y));
                 int   char_count = grid_label_char_count(value);
                 float x_start    = margin;
                 float z_base     = tick + (0.35 * text_h);

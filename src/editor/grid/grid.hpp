@@ -1,5 +1,6 @@
 #pragma once
 
+#include "grid/grid_frame.hpp"
 #include "renderers/render_context.hpp"
 
 #include "erhe_scene/node_attachment.hpp"
@@ -12,6 +13,7 @@
 struct Grid_config;
 
 namespace erhe::renderer { class Line_renderer_set; }
+namespace erhe::scene    { class Camera; }
 
 namespace editor {
 
@@ -58,6 +60,7 @@ public:
     static const erhe::property::Property<float>           rotation_property;
     static const erhe::property::Property<bool>            intersect_enable_property;
     static const erhe::property::Property<bool>            snap_enabled_property;
+    static const erhe::property::Property<bool>            behind_content_property;
     static const erhe::property::Property<float>           cell_size_property;
     static const erhe::property::Property<int>             cell_div_property;
     static const erhe::property::Property<int>             cell_count_property;
@@ -86,6 +89,17 @@ public:
     [[nodiscard]] auto tangent_in_world   () const -> glm::vec3;
     [[nodiscard]] auto bitangent_in_world () const -> glm::vec3;
     [[nodiscard]] auto get_cell_size      () const -> float;
+
+    // The grid's own plane.
+    [[nodiscard]] auto get_frame          () const -> Grid_frame;
+    // The plane a view through camera shows and hovers: for a free-plane
+    // grid seen through an axis-aligned orthogonal camera, the axis plane
+    // facing the camera through the grid origin, with grid x along the
+    // camera's right and grid z along its down (upright, unmirrored
+    // labels); the grid's own plane otherwise.
+    [[nodiscard]] auto get_view_frame     (const erhe::scene::Camera* camera) const -> Grid_frame;
+    [[nodiscard]] auto snap_world_position(const Grid_frame& frame, const glm::vec3& position_in_world) const -> glm::vec3;
+    [[nodiscard]] auto intersect_ray      (const Grid_frame& frame, const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) const -> std::optional<glm::vec3>;
 
     void render          (const Render_context& context);
     // The rows that are not properties: the name, and the host node
@@ -121,6 +135,7 @@ private:
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
     bool            m_intersect_enable{true};
     bool            m_snap_enabled    {true};
+    bool            m_behind_content  {false};
     float           m_rotation        {0.0f}; // Used only if plane type != node
     glm::vec3       m_center          {0.0f}; // Used only if plane type != node
     float           m_cell_size       {1.0f};

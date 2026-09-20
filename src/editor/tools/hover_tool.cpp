@@ -398,7 +398,7 @@ void Hover_tool::tool_render(const Render_context& context)
         );
         std::shared_ptr<Grid> grid = entry->grid_weak.lock();
         if (m_show_snapped_grid_position && grid) {
-            const auto sp0 = grid->snap_world_position(p0);
+            const auto sp0 = grid->snap_world_position(entry->grid_frame, p0);
             const auto sp1 = sp0 + normal_length * entry->normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},

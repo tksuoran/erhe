@@ -1,5 +1,7 @@
 #pragma once
 
+#include "grid/grid_frame.hpp"
+
 #include "tools/tool.hpp"
 #include "tools/tool_window.hpp"
 #include "windows/dependency_property_rows.hpp"
@@ -10,6 +12,7 @@
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
+namespace erhe::scene { class Camera; }
 
 struct Grid_config;
 
@@ -25,6 +28,7 @@ class Grid_hover_position
 public:
     glm::vec3             position{0.0f};
     std::shared_ptr<Grid> grid    {};
+    Grid_frame            frame   {}; // the plane that was hit: the grid as the hovering camera sees it
 };
 
 class Grid_tool : public Tool
@@ -46,7 +50,7 @@ public:
     // Public API
     //void viewport_toolbar(bool& hovered);
 
-    auto update_hover(glm::vec3 ray_origin, glm::vec3 ray_direction) const -> Grid_hover_position;
+    auto update_hover(const erhe::scene::Camera* camera, glm::vec3 ray_origin, glm::vec3 ray_direction) const -> Grid_hover_position;
 
     // Copies the currently selected grid's settings into config.
     // Persistence is owned by Editor_settings_store, which calls this

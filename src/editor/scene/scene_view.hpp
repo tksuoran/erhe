@@ -1,5 +1,6 @@
 #pragma once
 
+#include "grid/grid_frame.hpp"
 #include "renderers/viewport_config.hpp"
 #include "config/generated/scene_and_camera_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
@@ -91,6 +92,7 @@ public:
     // For now, these are weak pointers to avoid dangling pointers
     std::weak_ptr<erhe::scene::Mesh>          scene_mesh_weak           {};
     std::weak_ptr<Grid>                       grid_weak                 {};
+    Grid_frame                                grid_frame                {}; // the plane of the view the grid was hit in
     // Set for entries from an analytic hover source (no mesh); names it.
     Analytic_hover_provider*                  analytic_provider         {nullptr};
 

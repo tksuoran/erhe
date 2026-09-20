@@ -27,6 +27,7 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .world_from_node_for_grid = camera_struct.add_mat4 ("world_from_node_for_grid")->get_offset_in_parent(),
         .world_from_clip_for_grid = camera_struct.add_mat4 ("world_from_clip_for_grid")->get_offset_in_parent(),
         .clip_from_world_for_grid = camera_struct.add_mat4 ("clip_from_world_for_grid")->get_offset_in_parent(),
+        .grid_from_world          = camera_struct.add_mat4 ("grid_from_world"         )->get_offset_in_parent(),
         .world_from_grid          = camera_struct.add_mat4 ("world_from_grid"         )->get_offset_in_parent(),
         .viewport                 = camera_struct.add_vec4 ("viewport"                )->get_offset_in_parent(),
         .fov                      = camera_struct.add_vec4 ("fov"                     )->get_offset_in_parent(),
@@ -40,6 +41,7 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .grid_color               = camera_struct.add_vec4 ("grid_color", 4           )->get_offset_in_parent(),
         .grid_label_color         = camera_struct.add_vec4 ("grid_label_color"        )->get_offset_in_parent(),
         .grid_offset              = camera_struct.add_vec4 ("grid_offset"             )->get_offset_in_parent(),
+        .grid_flags               = camera_struct.add_vec4 ("grid_flags"              )->get_offset_in_parent(),
         .grid_view_position       = camera_struct.add_vec4 ("grid_view_position"      )->get_offset_in_parent(),
         .sky_checker              = camera_struct.add_vec4 ("sky_checker"             )->get_offset_in_parent(),
         .sky_horizon_color        = camera_struct.add_vec4 ("sky_horizon_color"       )->get_offset_in_parent(),
@@ -103,15 +105,16 @@ void write_camera_entry(
     const float     view_depth_near      = camera_projection.z_near;
     const float     view_depth_far       = camera_projection.z_far;
 
-    const glm::mat4 grid_from_world       = glm::mat4{1.0f}; // TODO
-    const glm::mat4 world_from_grid       = glm::mat4{1.0f}; // TODO
+    const glm::mat4 world_from_grid       = grid_parameters.world_from_grid;
+    const glm::mat4 grid_from_world       = glm::inverse(world_from_grid);
     const glm::vec4 camera_in_world       = glm::vec4{world_from_camera.get_translation(), 1.0f};
     const glm::vec4 camera_in_grid        = grid_from_world * camera_in_world;
     const double    level0_cell_size      = static_cast<double>(grid_parameters.grid_size.x);
     const double    grid_offset_x_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.x) / level0_cell_size);
     //const double    grid_offset_y_in_grid = level0_cell_size * std::floor(static_cast<double>(camera_in_grid.y) / level0_cell_size);
     const double    grid_offset_z_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.z) / level0_cell_size);
-    const glm::vec3 grid_offset_in_world  = glm::vec3{world_from_grid * glm::vec4{static_cast<float>(grid_offset_x_in_grid), 0.0f, static_cast<float>(grid_offset_z_in_grid), 0.0f}};
+    const glm::vec4 grid_offset_in_grid   = glm::vec4{static_cast<float>(grid_offset_x_in_grid), 0.0f, static_cast<float>(grid_offset_z_in_grid), 0.0f};
+    const glm::vec3 grid_offset_in_world  = glm::vec3{world_from_grid * grid_offset_in_grid};
     const erhe::scene::Trs_transform world_from_camera_node_transform_for_grid{
         world_from_camera.get_translation() - grid_offset_in_world,
         world_from_camera.get_rotation()
@@ -130,6 +133,7 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.world_from_clip_for_grid, as_span(world_from_clip_matrix_for_grid));
     write(gpu_data, write_offset + offsets.clip_from_world_for_grid, as_span(clip_from_world_for_grid       ));
     write(gpu_data, write_offset + offsets.world_from_grid,          as_span(world_from_grid                ));
+    write(gpu_data, write_offset + offsets.grid_from_world,          as_span(grid_from_world                ));
     write(gpu_data, write_offset + offsets.viewport,                 as_span(viewport_floats                ));
     write(gpu_data, write_offset + offsets.fov,                      as_span(fov_floats                     ));
     write(gpu_data, write_offset + offsets.clip_depth_direction,     as_span(clip_depth_direction           ));
@@ -144,7 +148,8 @@ void write_camera_entry(
         write(gpu_data, write_offset + offsets.grid_color + (i * sizeof(glm::vec4)), as_span(grid_parameters.grid_color[i]));
     }
     write(gpu_data, write_offset + offsets.grid_label_color,     as_span(grid_parameters.grid_label_color    ));
-    write(gpu_data, write_offset + offsets.grid_offset,          as_span(grid_offset_in_world                ));
+    write(gpu_data, write_offset + offsets.grid_offset,          as_span(grid_offset_in_grid                 ));
+    write(gpu_data, write_offset + offsets.grid_flags,           as_span(grid_parameters.grid_flags          ));
     write(gpu_data, write_offset + offsets.grid_view_position,   as_span(grid_view_position                  ));
     write(gpu_data, write_offset + offsets.sky_checker,          as_span(sky_parameters.sky_checker          ));
     write(gpu_data, write_offset + offsets.sky_horizon_color,    as_span(sky_parameters.sky_horizon_color    ));

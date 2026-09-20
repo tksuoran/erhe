@@ -28,6 +28,16 @@ struct("Grid_config",
             developer=False
         ),
         field(
+            "behind_content",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Draw Behind Content",
+            long_desc="Draw the grid behind all scene content instead of depth testing it at its plane",
+            visible=True,
+            developer=False
+        ),
+        field(
             "cell_size",
             Float,
             added_in=1,

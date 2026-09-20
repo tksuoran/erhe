@@ -313,6 +313,7 @@ erhe_target_sources_grouped(
     graphics/thumbnails.hpp
     grid/grid.cpp
     grid/grid.hpp
+    grid/grid_frame.hpp
     grid/grid_tool.cpp
     grid/grid_tool.hpp
     input_state.cpp

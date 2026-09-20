@@ -19,6 +19,7 @@ enum class Frame_source : unsigned int
 };
 
 class Grid;
+class Grid_frame;
 
 class Reference_frame
 {
@@ -28,7 +29,7 @@ public:
     Reference_frame(const GEO::Mesh& mesh, GEO::index_t facet, GEO::index_t face_offset, GEO::index_t corner_offset,
         Frame_orientation frame_orientation);
 
-    Reference_frame(const Grid& grid, const GEO::vec3f& position);
+    Reference_frame(const Grid& grid, const Grid_frame& grid_frame, const GEO::vec3f& position);
 
     void transform_by(const GEO::mat4f& m);
 

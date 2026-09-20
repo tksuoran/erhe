@@ -479,14 +479,14 @@ void Scene_view::update_grid_hover()
     const glm::vec3 ray_origin    = origin_opt.value();
     const glm::vec3 ray_direction = direction_opt.value();
 
-    const Grid_hover_position hover_position = m_context.grid_tool->update_hover(ray_origin, ray_direction);
+    const Grid_hover_position hover_position = m_context.grid_tool->update_hover(get_camera().get(), ray_origin, ray_direction);
     Hover_entry entry;
     entry.valid = (hover_position.grid != nullptr);
     if (entry.valid) {
-        const glm::vec3 unit_normal_in_world = hover_position.grid->normal_in_world();
-        entry.position  = hover_position.position;
-        entry.normal    = unit_normal_in_world;
-        entry.grid_weak = hover_position.grid;
+        entry.position   = hover_position.position;
+        entry.normal     = hover_position.frame.normal_in_world();
+        entry.grid_weak  = hover_position.grid;
+        entry.grid_frame = hover_position.frame;
     }
 
     set_hover(Hover_entry::grid_slot, entry);

@@ -29,6 +29,8 @@ class App_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
+class Grid_frame;
+enum class Grid_depth_mode : unsigned int;
 class Programs;
 class Render_context;
 class Renderable;
@@ -144,6 +146,7 @@ public:
     void process_start_capture      ();
     void process_end_capture        ();
     void set_grid_visibility        (bool visible);
+    void set_grid_frame             (const Grid_frame& frame, Grid_depth_mode depth_mode);
     void set_grid_label             (const glm::vec4& grid_label);
     void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
     void set_grid_line_widths       (const glm::vec4& level_widths);

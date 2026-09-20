@@ -27,6 +27,7 @@ public:
     std::size_t world_from_node_for_grid; // mat4
     std::size_t world_from_clip_for_grid; // mat4
     std::size_t clip_from_world_for_grid; // mat4
+    std::size_t grid_from_world;          // mat4
     std::size_t world_from_grid;          // mat4
     std::size_t viewport;                 // vec4
     std::size_t fov;                      // vec4
@@ -48,7 +49,8 @@ public:
     // world coordinates. A multiple of the level-0 cell size keeps
     // every LOD level's line pattern invariant under the shift
     // (level k cell size = level0 / div^k).
-    std::size_t grid_offset;          // vec4
+    std::size_t grid_offset;          // vec4, in grid space
+    std::size_t grid_flags;           // vec4
     // Camera position in wrapped world space (xyz = camera position
     // minus grid_offset, w unused), computed in double on the CPU so
     // the grid shader gets a small, exact ray origin without doing the
@@ -92,6 +94,12 @@ public:
     };
     // Axis label color (rgb, a = opacity).
     glm::vec4                grid_label_color{0.0f, 0.0f, 0.0f, 1.0f};
+    // Placement of the grid plane (grid y = 0) for this view.
+    glm::mat4                world_from_grid{1.0f};
+    // x, y = sign of the world axis that grid x / grid z run along (the
+    // labels print world coordinates), z = 1 draws the grid at far depth
+    // (behind all content) instead of depth tested at its plane.
+    glm::vec4                grid_flags{1.0f, 1.0f, 0.0f, 0.0f};
 };
 
 // Sky rendering parameters written to the camera UBO; read by the

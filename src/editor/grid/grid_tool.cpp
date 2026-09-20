@@ -178,7 +178,7 @@ void Grid_tool::window_imgui()
     }
 }
 
-auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec3 ray_direction_in_world) const -> Grid_hover_position
+auto Grid_tool::update_hover(const erhe::scene::Camera* const camera, const glm::vec3 ray_origin_in_world, const glm::vec3 ray_direction_in_world) const -> Grid_hover_position
 {
     Grid_hover_position result{
         .grid = nullptr
@@ -190,7 +190,8 @@ auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec
     //}
 
     for (auto& grid : m_grids) {
-        const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
+        const Grid_frame frame                 = grid->get_view_frame(camera);
+        const auto       position_in_world_opt = grid->intersect_ray(frame, ray_origin_in_world, ray_direction_in_world);
         if (!position_in_world_opt.has_value()) {
             continue;
         }
@@ -200,6 +201,7 @@ auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec
             min_distance    = distance;
             result.position = position_in_world;
             result.grid     = grid;
+            result.frame    = frame;
         }
     }
     return result;

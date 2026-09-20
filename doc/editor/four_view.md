@@ -93,6 +93,7 @@ camera; `close_scene` logs a clean `scene-close check`.
 Wheel zoom, middle-drag pan and the rotation lock run through window input
 events and are verified interactively.
 
-## Future work
+## Grid
 
-- [Grid in orthogonal views](../plans/ortho_view_grids.md)
+Each orthogonal cell shows and hovers the grid on the axis plane it faces
+(`grid.md`, View frame).
