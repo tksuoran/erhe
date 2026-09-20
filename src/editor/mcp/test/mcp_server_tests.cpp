@@ -2816,3 +2816,235 @@ TEST_F(Mcp_test, imgui_item_rect_center_is_a_click_target)
     client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
     advance_frames(client, 3);
 }
+
+// Part A actions --------------------------------------------------------------
+
+// The menu path a user takes, by label only. A menu item exists only while its
+// menu is open, so it is two clicks, and the item of the popup is reached
+// without naming the window: ImGui names a menu's popup itself ("Window###
+// Menu_00"), so the resolver searches every window and reports the one the
+// match was found in.
+//
+// The item used is a window toggle, which the test puts back; Window > Open
+// Four View is the same path and is verified by hand (the four view's own
+// viewport windows would outlive this test and the editor saves the windows
+// it has when it exits).
+TEST_F(Mcp_test, imgui_click_opens_a_menu_item_by_label)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const auto animation_window_active = [&]() -> bool {
+        Mcp_client::Tool_result windows = client.call_tool("get_imgui_windows", json::object());
+        EXPECT_FALSE(windows.is_error) << windows.text;
+        for (const json& window : windows.payload["windows"]) {
+            if (window.value("name", "") == "Animation") {
+                return window.value("active", false);
+            }
+        }
+        return false;
+    };
+
+    client.call_tool("set_window_visibility", json{{"title", "Animation"}, {"visible", false}});
+    advance_frames(client, 3);
+    ASSERT_FALSE(animation_window_active()) << "the Animation window was open before the menu was used";
+
+    Mcp_client::Tool_result menu = client.call_tool("imgui_click", json{{"label", "Window"}});
+    ASSERT_FALSE(menu.is_error) << menu.text;
+    EXPECT_EQ(menu.payload["target"].value("display_label", ""), "Window") << menu.payload.dump();
+
+    Mcp_client::Tool_result item = client.call_tool("imgui_click", json{{"label", "Animation"}});
+    ASSERT_FALSE(item.is_error) << item.text;
+    // The popup ImGui opened for the menu, found without the caller naming it.
+    EXPECT_NE(item.payload["target"].value("window", "").find("Window"), std::string::npos)
+        << "the menu item was not found in the Window menu's popup: " << item.payload["target"].dump();
+    advance_frames(client, 3);
+
+    EXPECT_TRUE(animation_window_active()) << "clicking the menu item by label did not open its window";
+
+    client.call_tool("set_window_visibility", json{{"title", "Animation"}, {"visible", false}});
+    advance_frames(client, 2);
+}
+
+// imgui_click focuses a text field and type_text edits it: the Operations
+// window's filter narrows the operation list to what was typed, and Escape
+// (which ImGui reverts an edit with) restores it.
+TEST_F(Mcp_test, imgui_click_focuses_a_text_field_that_type_text_edits)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const auto operations_item_count = [&]() -> int {
+        Mcp_client::Tool_result items = client.call_tool("get_imgui_items", json{
+            {"window", "Operations"},
+            {"limit",  1}
+        });
+        EXPECT_FALSE(items.is_error) << items.text;
+        return items.is_error ? -1 : items.payload.value("total", -1);
+    };
+
+    const int unfiltered = operations_item_count();
+    ASSERT_GT(unfiltered, 5) << "the Operations window is not showing its operations";
+
+    Mcp_client::Tool_result focus = client.call_tool("imgui_click", json{
+        {"window", "Operations"},
+        {"label",  "Filter"}
+    });
+    ASSERT_FALSE(focus.is_error) << focus.text;
+    EXPECT_TRUE(focus.payload["target"]["status"].value("inputable", false))
+        << "the item clicked is not a text field: " << focus.payload["target"].dump();
+
+    Mcp_client::Tool_result typed = client.call_tool("type_text", json{{"text", "Ambo"}});
+    ASSERT_FALSE(typed.is_error) << typed.text;
+
+    const int filtered = operations_item_count();
+    EXPECT_GT(filtered, 0);
+    EXPECT_LT(filtered, unfiltered) << "typing into the filter did not narrow the Operations window";
+
+    Mcp_client::Tool_result match = client.call_tool("get_imgui_item_rect", json{
+        {"window", "Operations"},
+        {"label",  "Ambo"}
+    });
+    EXPECT_FALSE(match.is_error) << "the operation the filter was typed for is not listed: " << match.text;
+
+    Mcp_client::Tool_result escape = client.call_tool("key_press", json{{"key", "escape"}});
+    ASSERT_FALSE(escape.is_error) << escape.text;
+    EXPECT_EQ(operations_item_count(), unfiltered) << "Escape did not revert the filter edit";
+}
+
+// The two press/release pairs a double click is built of register as one.
+// The probe is a tree node carrying ImGuiTreeNodeFlags_OpenOnDoubleClick (the
+// Operation Stack window's stacks): Dear ImGui itself opens it on a double
+// click and on nothing else, so a single click of the same shape leaving it
+// closed is the control.
+TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result shown = client.call_tool("set_window_visibility", json{
+        {"title",   "Operation Stack"},
+        {"visible", true}
+    });
+    ASSERT_FALSE(shown.is_error) << shown.text;
+    advance_frames(client, 3);
+
+    const auto is_opened = [&]() -> bool {
+        Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
+            {"window", "Operation Stack"},
+            {"label",  "Executed"}
+        });
+        EXPECT_FALSE(rect.is_error) << rect.text;
+        return !rect.is_error && rect.payload["status"].value("opened", false);
+    };
+    ASSERT_FALSE(is_opened()) << "the tree node was already open";
+
+    Mcp_client::Tool_result single = client.call_tool("imgui_click", json{
+        {"window", "Operation Stack"},
+        {"label",  "Executed"}
+    });
+    ASSERT_FALSE(single.is_error) << single.text;
+    advance_frames(client, 3);
+    EXPECT_FALSE(is_opened()) << "a single click opened a node that only opens on a double click";
+
+    Mcp_client::Tool_result double_click = client.call_tool("imgui_click", json{
+        {"window", "Operation Stack"},
+        {"label",  "Executed"},
+        {"double", true}
+    });
+    ASSERT_FALSE(double_click.is_error) << double_click.text;
+    advance_frames(client, 3);
+    EXPECT_TRUE(is_opened()) << "the two press/release pairs were not read as a double click";
+
+    client.call_tool("set_window_visibility", json{{"title", "Operation Stack"}, {"visible", false}});
+    advance_frames(client, 2);
+}
+
+// imgui_hover leaves the pointer on the item, and imgui_scroll turns the wheel
+// over a window, which scrolls it.
+TEST_F(Mcp_test, imgui_hover_and_scroll_act_on_the_resolved_target)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result hover = client.call_tool("imgui_hover", json{
+        {"window", "Operations"},
+        {"label",  "Merge"}
+    });
+    ASSERT_FALSE(hover.is_error) << hover.text;
+    const float center_x = hover.payload["target"].value("center_x", 0.0f);
+    const float center_y = hover.payload["target"].value("center_y", 0.0f);
+    ASSERT_GT(center_x, 0.0f) << hover.payload.dump();
+
+    Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(state.is_error) << state.text;
+    EXPECT_FLOAT_EQ(state.payload["pointer"].value("x", 0.0f), center_x);
+    EXPECT_FLOAT_EQ(state.payload["pointer"].value("y", 0.0f), center_y);
+
+    Mcp_client::Tool_result hovered = client.call_tool("get_imgui_item_rect", json{
+        {"window", "Operations"},
+        {"label",  "Merge"}
+    });
+    ASSERT_FALSE(hovered.is_error) << hovered.text;
+    EXPECT_TRUE(hovered.payload["status"].value("hovered", false)) << "the item was not left hovered";
+    const float y_before = hovered.payload.value("y", 0.0f);
+
+    Mcp_client::Tool_result scroll = client.call_tool("imgui_scroll", json{
+        {"window", "Operations"},
+        {"dy",     -5.0f}
+    });
+    ASSERT_FALSE(scroll.is_error) << scroll.text;
+    EXPECT_EQ(scroll.payload["target"].value("window", ""), "Operations") << scroll.payload.dump();
+
+    Mcp_client::Tool_result after = client.call_tool("get_imgui_item_rect", json{
+        {"window", "Operations"},
+        {"label",  "Merge"}
+    });
+    ASSERT_FALSE(after.is_error) << after.text;
+    EXPECT_LT(after.payload.value("y", 0.0f), y_before) << "the wheel did not scroll the window";
+
+    // A rendertarget host is inspected, not driven, by these actions.
+    Mcp_client::Tool_result rendertarget = client.call_tool("imgui_click", json{
+        {"host",  "Rendertarget"},
+        {"label", "Merge"}
+    });
+    EXPECT_TRUE(rendertarget.is_error) << "a non-desktop host was accepted by imgui_click";
+}
+
+// capture_screenshot.annotate_imgui_items reports the number -> item table and
+// draws the same numbered rectangles into the PNG.
+TEST_F(Mcp_test, capture_screenshot_annotates_imgui_items)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result plain = client.call_tool("capture_screenshot", json{
+        {"path", "logs/mcp_test_screenshot.png"}
+    });
+    ASSERT_FALSE(plain.is_error) << plain.text;
+    EXPECT_FALSE(plain.payload.contains("annotations")) << "an unannotated capture reported annotations";
+    const int width  = plain.payload.value("width",  0);
+    const int height = plain.payload.value("height", 0);
+    ASSERT_GT(width,  0);
+    ASSERT_GT(height, 0);
+
+    Mcp_client::Tool_result annotated = client.call_tool("capture_screenshot", json{
+        {"path",                 "logs/mcp_test_screenshot_annotated.png"},
+        {"annotate_imgui_items", true},
+        {"annotate_window",      "Operations"},
+        {"annotate_limit",       12}
+    });
+    ASSERT_FALSE(annotated.is_error) << annotated.text;
+    ASSERT_TRUE(annotated.payload.contains("annotations"));
+    const json& table = annotated.payload["annotations"];
+    ASSERT_FALSE(table.empty()) << "nothing was annotated";
+    EXPECT_LE(table.size(), 12u);
+    EXPECT_EQ(annotated.payload.value("annotation_count", 0), static_cast<int>(table.size()));
+
+    int expected_number = 1;
+    for (const json& entry : table) {
+        EXPECT_EQ(entry.value("number", 0), expected_number) << entry.dump();
+        ++expected_number;
+        EXPECT_EQ(entry.value("window", ""), "Operations") << entry.dump();
+        EXPECT_GT(entry.value("width",  0.0f), 0.0f) << entry.dump();
+        EXPECT_GT(entry.value("height", 0.0f), 0.0f) << entry.dump();
+        EXPECT_GE(entry.value("x", -1.0f), 0.0f) << entry.dump();
+        EXPECT_LE(entry.value("x", 0.0f) + entry.value("width", 0.0f), static_cast<float>(width)) << entry.dump();
+        EXPECT_LE(entry.value("y", 0.0f) + entry.value("height", 0.0f), static_cast<float>(height)) << entry.dump();
+    }
+}

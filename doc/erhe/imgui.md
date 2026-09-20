@@ -75,11 +75,16 @@ is generic docking code, independent of erhe.
   `cross_windows` (four titles: top-left, top-right, bottom-left,
   bottom-right) splits the target's dock node into the grid; see
   `src/editor/editor_default_layout.cpp`.
-- Headless verification: the MCP tool `debug_imgui_mouse` queues pointer
-  events into the desktop ImGui context. Hide the floating windows that cover
-  the bars (`set_window_visibility`), drag a bar or the crossing, then
-  `capture_screenshot`; after `request_exit` the ini's `SizeRef` values of the
-  four cells show equal inner sizes on both sides.
+- Headless verification: the MCP tool `mouse_drag` injects the pointer gesture
+  into the editor's window, so the cross is driven the way a user drives it.
+  Open a 2 x 2 grid (the editor's four view is one: Window > Open Four View),
+  read the four cells' rectangles with `get_imgui_windows`, hide any floating
+  window covering the bars (`set_window_visibility`), then
+  `mouse_drag {from: [crossing], to: [elsewhere], frames: 12}` and read the
+  rectangles again: both columns and both rows change together, the cells of
+  one column keep one width and the cells of one row keep one height, which is
+  the inner segments staying collinear. `capture_screenshot` shows the same
+  thing as pixels.
 
 ## Future work
 

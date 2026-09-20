@@ -71,6 +71,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -514,6 +515,9 @@ auto Mcp_server::input_gesture_preamble() -> std::optional<std::string>
     if (m_context.context_window == nullptr) {
         return make_error_content("No context window to inject input events into");
     }
+    // A fresh recording: whatever the previous gesture reported beside its
+    // event counts is gone.
+    m_input_gesture_extra = nlohmann::json::object();
     return std::nullopt;
 }
 
@@ -614,7 +618,7 @@ auto Mcp_server::step_input_gesture() -> std::string
     const int frames   = steps.last_frame + 1;
     steps.clear();
 
-    return make_json_content({
+    nlohmann::json result = {
         {"injected", injected},
         {"frames",   frames},
         {"pointer",  {
@@ -624,7 +628,15 @@ auto Mcp_server::step_input_gesture() -> std::string
         }},
         {"buttons",   buttons_to_json  (m_input_pointer_state.button_mask)},
         {"modifiers", modifiers_to_json(m_input_pointer_state.modifier_mask)}
-    }).dump();
+    };
+    // What the tool resolved before it recorded the gesture (the item rectangle
+    // an imgui_* action aimed at), so the caller sees what was acted on.
+    for (const auto& [key, value] : m_input_gesture_extra.items()) {
+        result[key] = value;
+    }
+    m_input_gesture_extra = nlohmann::json::object();
+
+    return make_json_content(result).dump();
 }
 
 // inject_input_events - doc/plans/mcp_ui_driving.md B2 / B3 / B4.
@@ -821,6 +833,59 @@ public:
     return true;
 }
 
+enum class Click_kind { single, double_click };
+
+// The click gesture itself, shared by mouse_click and imgui_click: the two
+// differ only in where the point comes from.
+void record_click_gesture(
+    Input_gesture_builder&           builder,
+    const glm::vec2                  position,
+    const erhe::window::Mouse_button button,
+    const uint32_t                   modifier_mask,
+    const Click_kind                 kind
+)
+{
+    builder.press_modifier_keys(modifier_mask);
+    builder.move_to(position.x, position.y);
+    builder.advance_frames(c_pointer_settle_frames);
+    builder.mouse_button(button, Input_gesture_builder::Press_state::pressed);
+    builder.advance_frames(c_click_hold_frames);
+    builder.mouse_button(button, Input_gesture_builder::Press_state::released);
+    if (kind == Click_kind::double_click) {
+        // ImGui is the only consumer that knows a double click; it pairs two
+        // clicks that land within io.MouseDoubleClickTime (0.30 s) and
+        // io.MouseDoubleClickMaxDist (6 px) of each other. The second pair
+        // follows in the next frames at the same position, which satisfies
+        // both at any frame rate the editor runs at.
+        builder.advance_frames(1);
+        builder.mouse_button(button, Input_gesture_builder::Press_state::pressed);
+        builder.advance_frames(1);
+        builder.mouse_button(button, Input_gesture_builder::Press_state::released);
+    }
+    builder.advance_frames(1);
+    builder.release_modifier_keys(modifier_mask);
+}
+
+// The wheel gesture, shared by mouse_wheel and imgui_scroll.
+void record_wheel_gesture(
+    Input_gesture_builder& builder,
+    const glm::vec2        position,
+    const float            dx,
+    const float            dy,
+    const uint32_t         modifier_mask
+)
+{
+    builder.press_modifier_keys(modifier_mask);
+    builder.move_to(position.x, position.y);
+    // The fly camera's zoom step is proportional to the distance of what the
+    // pointer hovers, so the hover under the new pointer position has to have
+    // settled before the wheel event arrives.
+    builder.advance_frames(c_pointer_settle_frames);
+    builder.mouse_wheel(dx, dy);
+    builder.advance_frames(1);
+    builder.release_modifier_keys(modifier_mask);
+}
+
 } // anonymous namespace
 
 // mouse_click - move, press, release; optionally twice for a double click.
@@ -836,28 +901,10 @@ auto Mcp_server::action_mouse_click(const nlohmann::json& args) -> std::string
     if (!parse_pointer_arguments(args, pointer, error)) {
         return make_error_content(error);
     }
-    const bool double_click = args.value("double", false);
+    const Click_kind kind = args.value("double", false) ? Click_kind::double_click : Click_kind::single;
 
     Input_gesture_builder builder{m_input_gesture_steps, m_input_pointer_state};
-    builder.press_modifier_keys(pointer.modifier_mask);
-    builder.move_to(pointer.position.x, pointer.position.y);
-    builder.advance_frames(c_pointer_settle_frames);
-    builder.mouse_button(pointer.button, Input_gesture_builder::Press_state::pressed);
-    builder.advance_frames(c_click_hold_frames);
-    builder.mouse_button(pointer.button, Input_gesture_builder::Press_state::released);
-    if (double_click) {
-        // ImGui is the only consumer that knows a double click; it pairs two
-        // clicks that land within io.MouseDoubleClickTime (0.30 s) and
-        // io.MouseDoubleClickMaxDist (6 px) of each other. The second pair
-        // follows in the next frames at the same position, which satisfies
-        // both at any frame rate the editor runs at.
-        builder.advance_frames(1);
-        builder.mouse_button(pointer.button, Input_gesture_builder::Press_state::pressed);
-        builder.advance_frames(1);
-        builder.mouse_button(pointer.button, Input_gesture_builder::Press_state::released);
-    }
-    builder.advance_frames(1);
-    builder.release_modifier_keys(pointer.modifier_mask);
+    record_click_gesture(builder, pointer.position, pointer.button, pointer.modifier_mask, kind);
 
     return commit_input_gesture();
 }
@@ -965,15 +1012,7 @@ auto Mcp_server::action_mouse_wheel(const nlohmann::json& args) -> std::string
     const float dy = args.value("dy", 0.0f);
 
     Input_gesture_builder builder{m_input_gesture_steps, m_input_pointer_state};
-    builder.press_modifier_keys(pointer.modifier_mask);
-    builder.move_to(pointer.position.x, pointer.position.y);
-    // The fly camera's zoom step is proportional to the distance of what the
-    // pointer hovers, so the hover under the new pointer position has to have
-    // settled before the wheel event arrives.
-    builder.advance_frames(c_pointer_settle_frames);
-    builder.mouse_wheel(dx, dy);
-    builder.advance_frames(1);
-    builder.release_modifier_keys(pointer.modifier_mask);
+    record_wheel_gesture(builder, pointer.position, dx, dy, pointer.modifier_mask);
 
     return commit_input_gesture();
 }
@@ -1624,6 +1663,174 @@ auto Mcp_server::query_imgui_items(const nlohmann::json& args) -> std::string
     }).dump();
 }
 
+// Addressing one recorded item ----------------------------------------------
+//
+// get_imgui_item_rect and the part A pointer actions address an item the same
+// way, so they share one selector and one resolver. A tool that acts on the
+// item (imgui_click, imgui_hover) reports the rectangle the resolver found, so
+// the caller sees exactly what was aimed at.
+
+namespace {
+
+class Imgui_item_selector
+{
+public:
+    bool        has_id      {false};
+    ImGuiID     id          {0};
+    std::string label;
+    std::string window;      // empty: every window of the host
+    int         index       {0};
+    bool        has_index   {false};
+    bool        visible_only{true};
+};
+
+[[nodiscard]] auto parse_imgui_item_selector(
+    const nlohmann::json& args,
+    Imgui_item_selector&  out_selector,
+    std::string&          out_error
+) -> bool
+{
+    out_selector.has_id = args.contains("id") && args.at("id").is_number_integer();
+    out_selector.id     = out_selector.has_id ? args.at("id").get<ImGuiID>() : 0;
+    out_selector.label  = args.value("label", std::string{});
+    if (!out_selector.has_id && out_selector.label.empty()) {
+        out_error = "label (or id) is required";
+        return false;
+    }
+    out_selector.window       = args.value("window", std::string{});
+    out_selector.has_index    = args.contains("index");
+    out_selector.index        = args.value("index", 0);
+    out_selector.visible_only = args.value("visible_only", true);
+    return true;
+}
+
+class Imgui_item_match
+{
+public:
+    const erhe::imgui::Item_record* record     {nullptr};
+    std::string_view                label;
+    std::string                     window;      // the window the match was found in
+    int                             match_count {0};
+};
+
+// Resolves one selector against a recorded frame.
+//
+// Window_match::exact first: the window name get_imgui_items reports picks out
+// that one window, so an index taken from get_imgui_items means the same item
+// here. Only when no item of that exact window matches does the search widen
+// to its child regions, which is what a caller naming the window they see on
+// screen means.
+//
+// With no window named the search covers every window of the host, which is
+// how a menu item is reached: a menu's items are submitted into a popup window
+// of ImGui's own naming ("##Menu_00") that no caller can be expected to know.
+// A label that then matches in more than one window is reported as an error
+// listing those windows, so a click never lands on a guess; naming the window,
+// or an explicit index, picks one.
+[[nodiscard]] auto resolve_imgui_item(
+    const ImGuiContext*                     context,
+    const erhe::imgui::Imgui_item_recorder& recorder,
+    const Imgui_item_selector&              selector,
+    Imgui_item_match&                       out_match,
+    std::string&                            out_error
+) -> bool
+{
+    enum class Window_match { exact, with_children };
+
+    std::vector<const erhe::imgui::Item_record*> matches;
+    std::vector<std::string>                     match_windows;
+    const auto collect = [&](const Window_match window_match) {
+        matches.clear();
+        match_windows.clear();
+        for (const erhe::imgui::Item_record& record : recorder.get_records()) {
+            const std::string_view record_label = recorder.get_label(record);
+            if (selector.visible_only && !is_item_visible(record)) {
+                continue;
+            }
+            if (selector.has_id) {
+                if (record.id != selector.id) {
+                    continue;
+                }
+            } else if (!label_matches(record_label, selector.label)) {
+                continue;
+            }
+            const char* const window_name = find_imgui_window_name(context, record.window_id);
+            if (!selector.window.empty()) {
+                const bool matched = (window_match == Window_match::exact)
+                    ? ((window_name != nullptr) && label_matches(window_name, selector.window))
+                    : window_matches(window_name, selector.window);
+                if (!matched) {
+                    continue;
+                }
+            }
+            matches.push_back(&record);
+            match_windows.push_back((window_name != nullptr) ? std::string{window_name} : std::string{});
+        }
+    };
+    collect(Window_match::exact);
+    if (matches.empty() && !selector.window.empty()) {
+        collect(Window_match::with_children);
+    }
+
+    if (matches.empty()) {
+        out_error = selector.has_id
+            ? ("No item with id " + std::to_string(selector.id) + " was submitted in the recorded frame")
+            : ("No item labelled '" + selector.label + "' was submitted in the recorded frame (get_imgui_items lists them)");
+        return false;
+    }
+
+    if (selector.window.empty() && !selector.has_index) {
+        std::vector<std::string> distinct;
+        for (const std::string& window : match_windows) {
+            if (std::find(distinct.begin(), distinct.end(), window) == distinct.end()) {
+                distinct.push_back(window);
+            }
+        }
+        if (distinct.size() > 1) {
+            std::string list;
+            for (const std::string& window : distinct) {
+                if (!list.empty()) {
+                    list += ", ";
+                }
+                list += "'" + window + "'";
+            }
+            out_error =
+                "'" + (selector.has_id ? std::to_string(selector.id) : selector.label) +
+                "' matches items in " + std::to_string(distinct.size()) +
+                " windows (" + list + "); name one in 'window', or pick one with 'index'";
+            return false;
+        }
+    }
+
+    if ((selector.index < 0) || (selector.index >= static_cast<int>(matches.size()))) {
+        out_error =
+            "index " + std::to_string(selector.index) + " is beyond the " +
+            std::to_string(matches.size()) + " matching item(s)";
+        return false;
+    }
+
+    out_match.record      = matches[static_cast<std::size_t>(selector.index)];
+    out_match.label       = recorder.get_label(*out_match.record);
+    out_match.window      = match_windows[static_cast<std::size_t>(selector.index)];
+    out_match.match_count = static_cast<int>(matches.size());
+    return true;
+}
+
+[[nodiscard]] auto item_match_to_json(
+    const ImGuiContext*        context,
+    const Imgui_item_match&    match,
+    const Imgui_item_selector& selector,
+    const std::string&         host_name
+) -> nlohmann::json
+{
+    nlohmann::json entry = item_record_to_json(context, *match.record, match.label, selector.index);
+    entry["match_count"] = match.match_count;
+    entry["host"]        = host_name;
+    return entry;
+}
+
+} // anonymous namespace
+
 // get_imgui_item_rect - doc/plans/mcp_ui_driving.md A5.
 auto Mcp_server::query_imgui_item_rect(const nlohmann::json& args) -> std::string
 {
@@ -1632,10 +1839,9 @@ auto Mcp_server::query_imgui_item_rect(const nlohmann::json& args) -> std::strin
     if (host == nullptr) {
         return make_error_content(error);
     }
-    const bool        has_id = args.contains("id") && args.at("id").is_number_integer();
-    const std::string label  = args.value("label", std::string{});
-    if (!has_id && label.empty()) {
-        return make_error_content("label (or id) is required");
+    Imgui_item_selector selector;
+    if (!parse_imgui_item_selector(args, selector, error)) {
+        return make_error_content(error);
     }
     if (request_recorded_imgui_frame(*host, error)) {
         return {};
@@ -1644,78 +1850,412 @@ auto Mcp_server::query_imgui_item_rect(const nlohmann::json& args) -> std::strin
         return make_error_content(error);
     }
 
-    const ImGuiContext* const context       = host->imgui_context();
-    const std::string         window_filter = args.value("window", std::string{});
-    const bool                visible_only  = args.value("visible_only", true);
-    const ImGuiID             wanted_id     = has_id ? args.at("id").get<ImGuiID>() : 0;
-    const int                 wanted_index  = args.value("index", 0);
+    Imgui_item_match match;
+    if (!resolve_imgui_item(host->imgui_context(), host->get_item_recorder(), selector, match, error)) {
+        return make_error_content(error);
+    }
+    return make_json_content(item_match_to_json(host->imgui_context(), match, selector, imgui_host_name(*host))).dump();
+}
 
-    const erhe::imgui::Imgui_item_recorder& recorder = host->get_item_recorder();
-    int                             match_count = 0;
-    const erhe::imgui::Item_record* found       = nullptr;
-    std::string_view                found_label;
+// Part A actions: imgui_click / imgui_hover / imgui_scroll -------------------
+//
+// One handler for the three (A7): each resolves its target through the same
+// resolver get_imgui_item_rect uses, then records a part B gesture at the
+// target's center through Input_gesture_builder and hands it to the shared
+// stepping path. A call therefore spans a recording frame plus the gesture's
+// own frames, and its result carries the resolved target beside the event
+// counts.
 
-    // Window_match::exact first: the window name get_imgui_items reports picks
-    // out that one window, so an index taken from get_imgui_items means the
-    // same item here. Only when no item of that exact window matches does the
-    // search widen to its child regions, which is what a caller naming the
-    // window they see on screen means.
-    enum class Window_match { exact, with_children };
-    const auto collect = [&](const Window_match window_match) {
-        match_count = 0;
-        found       = nullptr;
-        found_label = std::string_view{};
-        for (const erhe::imgui::Item_record& record : recorder.get_records()) {
-            const std::string_view record_label = recorder.get_label(record);
-            if (visible_only && !is_item_visible(record)) {
-                continue;
-            }
-            if (has_id) {
-                if (record.id != wanted_id) {
-                    continue;
-                }
-            } else if (!label_matches(record_label, label)) {
-                continue;
-            }
-            if (!window_filter.empty()) {
-                const char* const window_name = find_imgui_window_name(context, record.window_id);
-                const bool matched = (window_match == Window_match::exact)
-                    ? ((window_name != nullptr) && label_matches(window_name, window_filter))
-                    : window_matches(window_name, window_filter);
-                if (!matched) {
-                    continue;
-                }
-            }
-            if (match_count == wanted_index) {
-                found       = &record;
-                found_label = record_label;
-            }
-            ++match_count;
+namespace {
+
+[[nodiscard]] auto find_imgui_window(const ImGuiContext* context, const std::string& name) -> const ImGuiWindow*
+{
+    for (int i = 0; i < context->Windows.Size; ++i) {
+        if (label_matches(context->Windows[i]->Name, name)) {
+            return context->Windows[i];
         }
-    };
-    collect(Window_match::exact);
-    if ((match_count == 0) && !window_filter.empty()) {
-        collect(Window_match::with_children);
+    }
+    for (int i = 0; i < context->Windows.Size; ++i) {
+        if (window_matches(context->Windows[i]->Name, name)) {
+            return context->Windows[i];
+        }
+    }
+    return nullptr;
+}
+
+} // anonymous namespace
+
+// The desktop host, refused for any other host: a rendertarget host's pixels
+// are somewhere in a 3D viewport, so it is inspected here but driven with the
+// part B tools at the viewport pixel that shows it (A6).
+auto Mcp_server::resolve_imgui_pointer_host(const nlohmann::json& args, std::string& out_error) -> erhe::imgui::Imgui_host*
+{
+    erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, out_error);
+    if (host == nullptr) {
+        return nullptr;
+    }
+    const erhe::imgui::Imgui_host* const desktop = m_context.imgui_windows->get_window_imgui_host().get();
+    if (host != desktop) {
+        out_error =
+            "imgui_click / imgui_hover / imgui_scroll drive the desktop window host only; ImGui host '" +
+            imgui_host_name(*host) +
+            "' is drawn into a 3D viewport, so reach it with mouse_click / mouse_wheel at the viewport pixel that shows it";
+        return nullptr;
+    }
+    return host;
+}
+
+auto Mcp_server::run_imgui_pointer_action(const nlohmann::json& args, const Imgui_pointer_action action) -> std::string
+{
+    const std::optional<std::string> early = input_gesture_preamble();
+    if (early.has_value()) {
+        return early.value();
     }
 
-    if (found == nullptr) {
-        if (match_count == 0) {
-            return make_error_content(
-                has_id
-                    ? ("No item with id " + std::to_string(wanted_id) + " was submitted in the recorded frame")
-                    : ("No item labelled '" + label + "' was submitted in the recorded frame (get_imgui_items lists them)")
-            );
-        }
-        return make_error_content(
-            "index " + std::to_string(wanted_index) + " is beyond the " +
-            std::to_string(match_count) + " matching item(s)"
-        );
+    std::string                    error;
+    erhe::imgui::Imgui_host* const host = resolve_imgui_pointer_host(args, error);
+    if (host == nullptr) {
+        return make_error_content(error);
     }
 
-    nlohmann::json entry = item_record_to_json(context, *found, found_label, wanted_index);
-    entry["match_count"] = match_count;
-    entry["host"]        = imgui_host_name(*host);
-    return make_json_content(entry).dump();
+    // Everything the arguments say is parsed before a frame is spent on
+    // recording, so a malformed call is refused at once.
+    erhe::window::Mouse_button button{erhe::window::Mouse_button_left};
+    if (args.contains("button") && !parse_mouse_button(args.at("button"), button)) {
+        return make_error_content("button is not a known mouse button name or index");
+    }
+    uint32_t modifier_mask = 0;
+    if (args.contains("modifiers") && !parse_modifiers(args.at("modifiers"), modifier_mask, error)) {
+        return make_error_content(error);
+    }
+    const std::string window_name = args.value("window", std::string{});
+    const bool        names_item  = args.contains("label") || args.contains("id");
+    float             dx          = 0.0f;
+    float             dy          = 0.0f;
+    if (action == Imgui_pointer_action::scroll) {
+        if (!args.contains("dy") && !args.contains("dx")) {
+            return make_error_content("dy (or dx) is required - the wheel delta");
+        }
+        dx = args.value("dx", 0.0f);
+        dy = args.value("dy", 0.0f);
+        if (!names_item && window_name.empty()) {
+            return make_error_content("window is required (or label / id, to scroll with the pointer over one item)");
+        }
+    }
+    // A scroll without a label scrolls the window itself, at its center;
+    // everything else aims at one item.
+    const bool          aim_at_item = (action != Imgui_pointer_action::scroll) || names_item;
+    Imgui_item_selector selector;
+    if (aim_at_item && !parse_imgui_item_selector(args, selector, error)) {
+        return make_error_content(error);
+    }
+
+    if (request_recorded_imgui_frame(*host, error)) {
+        return {};
+    }
+    if (!error.empty()) {
+        return make_error_content(error);
+    }
+
+    const ImGuiContext* const context = host->imgui_context();
+    glm::vec2                 point{0.0f};
+    nlohmann::json            target;
+    if (aim_at_item) {
+        Imgui_item_match match;
+        if (!resolve_imgui_item(context, host->get_item_recorder(), selector, match, error)) {
+            return make_error_content(error);
+        }
+        point  = glm::vec2{0.5f * (match.record->x0 + match.record->x1), 0.5f * (match.record->y0 + match.record->y1)};
+        target = item_match_to_json(context, match, selector, imgui_host_name(*host));
+    } else {
+        const ImGuiWindow* const window = find_imgui_window(context, window_name);
+        if (window == nullptr) {
+            return make_error_content("There is no ImGui window named '" + window_name + "' (get_imgui_windows lists them)");
+        }
+        point  = glm::vec2{window->Pos.x + (0.5f * window->Size.x), window->Pos.y + (0.5f * window->Size.y)};
+        target = nlohmann::json{
+            {"window",   std::string{window->Name}},
+            {"x",        window->Pos.x},
+            {"y",        window->Pos.y},
+            {"width",    window->Size.x},
+            {"height",   window->Size.y},
+            {"center_x", point.x},
+            {"center_y", point.y},
+            {"host",     imgui_host_name(*host)}
+        };
+    }
+    m_input_gesture_extra["target"] = target;
+
+    Input_gesture_builder builder{m_input_gesture_steps, m_input_pointer_state};
+    switch (action) {
+        case Imgui_pointer_action::click: {
+            const Click_kind kind = args.value("double", false) ? Click_kind::double_click : Click_kind::single;
+            record_click_gesture(builder, point, button, modifier_mask, kind);
+            break;
+        }
+        case Imgui_pointer_action::hover: {
+            builder.press_modifier_keys(modifier_mask);
+            // move_step, not move_to: a hover of a point the pointer already
+            // sits on must still be a gesture, and re-sending the position is
+            // what a real session does while it rests there.
+            builder.move_step(point.x, point.y);
+            builder.advance_frames(c_pointer_settle_frames);
+            builder.release_modifier_keys(modifier_mask);
+            break;
+        }
+        case Imgui_pointer_action::scroll: {
+            record_wheel_gesture(builder, point, dx, dy, modifier_mask);
+            break;
+        }
+    }
+
+    return commit_input_gesture();
+}
+
+auto Mcp_server::action_imgui_click(const nlohmann::json& args) -> std::string
+{
+    return run_imgui_pointer_action(args, Imgui_pointer_action::click);
+}
+
+auto Mcp_server::action_imgui_hover(const nlohmann::json& args) -> std::string
+{
+    return run_imgui_pointer_action(args, Imgui_pointer_action::hover);
+}
+
+auto Mcp_server::action_imgui_scroll(const nlohmann::json& args) -> std::string
+{
+    return run_imgui_pointer_action(args, Imgui_pointer_action::scroll);
+}
+
+// capture_screenshot annotation (A7) ------------------------------------------
+//
+// The recorded items of the desktop host are drawn over the captured pixels as
+// numbered rectangles, and the same numbers are reported with their window,
+// label and rectangle, so a screenshot names what can be clicked.
+//
+// Which frame is annotated: capture_screenshot arms item recording and defers,
+// so the frame that records is the frame right after the request. In the
+// headless build capture_last_frame() then reads back exactly that frame. In
+// the windowed build the readback needs a frame of its own, so the recorded
+// frame is the one right before the captured one. That is acceptable because
+// the rectangles come from ImGui's layout, which only moves when something
+// drives it; nothing drives it between two frames of one MCP call, and a
+// gesture that does move it is a separate call that has already returned.
+
+namespace {
+
+// 3 x 5 digits, one bit per pixel, most significant of three bits leftmost. A
+// tiny font of its own rather than a dependency or a font atlas readback: the
+// numbers only have to be legible over a screenshot.
+constexpr uint8_t c_digit_font[10][5] = {
+    {0b111, 0b101, 0b101, 0b101, 0b111}, // 0
+    {0b010, 0b110, 0b010, 0b010, 0b111}, // 1
+    {0b111, 0b001, 0b111, 0b100, 0b111}, // 2
+    {0b111, 0b001, 0b111, 0b001, 0b111}, // 3
+    {0b101, 0b101, 0b111, 0b001, 0b001}, // 4
+    {0b111, 0b100, 0b111, 0b001, 0b111}, // 5
+    {0b111, 0b100, 0b111, 0b101, 0b111}, // 6
+    {0b111, 0b001, 0b001, 0b001, 0b001}, // 7
+    {0b111, 0b101, 0b111, 0b101, 0b111}, // 8
+    {0b111, 0b101, 0b111, 0b001, 0b111}  // 9
+};
+constexpr int c_digit_scale   = 3;
+constexpr int c_digit_width   = 3 * c_digit_scale;
+constexpr int c_digit_height  = 5 * c_digit_scale;
+constexpr int c_digit_spacing = c_digit_scale;
+constexpr int c_annotation_border = 2;
+
+class Annotation_color
+{
+public:
+    uint8_t r{0};
+    uint8_t g{0};
+    uint8_t b{0};
+};
+
+// Magenta: no editor surface uses it, so it reads as an overlay everywhere.
+constexpr Annotation_color c_annotation_color{255, 0, 255};
+constexpr Annotation_color c_annotation_background{0, 0, 0};
+
+class Annotation_canvas
+{
+public:
+    Annotation_canvas(const int width, const int height, const std::span<std::byte> pixels)
+        : m_width {width}
+        , m_height{height}
+        , m_pixels{pixels}
+    {
+    }
+
+    void put(const int x, const int y, const Annotation_color color)
+    {
+        if ((x < 0) || (y < 0) || (x >= m_width) || (y >= m_height)) {
+            return;
+        }
+        const std::size_t offset = ((static_cast<std::size_t>(y) * static_cast<std::size_t>(m_width)) + static_cast<std::size_t>(x)) * 4u;
+        if ((offset + 3u) >= m_pixels.size()) {
+            return;
+        }
+        m_pixels[offset + 0u] = static_cast<std::byte>(color.r);
+        m_pixels[offset + 1u] = static_cast<std::byte>(color.g);
+        m_pixels[offset + 2u] = static_cast<std::byte>(color.b);
+        m_pixels[offset + 3u] = static_cast<std::byte>(255);
+    }
+
+    void fill(const int x0, const int y0, const int x1, const int y1, const Annotation_color color)
+    {
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                put(x, y, color);
+            }
+        }
+    }
+
+    void outline(const int x0, const int y0, const int x1, const int y1, const int thickness, const Annotation_color color)
+    {
+        fill(x0, y0, x1, y0 + thickness, color);
+        fill(x0, y1 - thickness, x1, y1, color);
+        fill(x0, y0, x0 + thickness, y1, color);
+        fill(x1 - thickness, y0, x1, y1, color);
+    }
+
+    void digits(const int x, const int y, const int number, const Annotation_color color)
+    {
+        std::string text = std::to_string(number);
+        int         at_x = x;
+        for (const char c : text) {
+            const int digit = c - '0';
+            for (int row = 0; row < 5; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    if ((c_digit_font[digit][row] & (1u << (2 - column))) == 0) {
+                        continue;
+                    }
+                    fill(
+                        at_x + (column * c_digit_scale),
+                        y    + (row    * c_digit_scale),
+                        at_x + ((column + 1) * c_digit_scale),
+                        y    + ((row    + 1) * c_digit_scale),
+                        color
+                    );
+                }
+            }
+            at_x += c_digit_width + c_digit_spacing;
+        }
+    }
+
+    [[nodiscard]] static auto text_width(const int number) -> int
+    {
+        const int digit_count = static_cast<int>(std::to_string(number).size());
+        return (digit_count * c_digit_width) + ((digit_count - 1) * c_digit_spacing);
+    }
+
+private:
+    int                   m_width;
+    int                   m_height;
+    std::span<std::byte>  m_pixels;
+};
+
+} // anonymous namespace
+
+auto Mcp_server::collect_imgui_annotations(erhe::imgui::Imgui_host& host, const nlohmann::json& args) -> nlohmann::json
+{
+    const ImGuiContext* const context = host.imgui_context();
+    m_imgui_annotations.clear(); // capacity kept
+    m_imgui_annotation_display_width  = (context != nullptr) ? context->IO.DisplaySize.x : 0.0f;
+    m_imgui_annotation_display_height = (context != nullptr) ? context->IO.DisplaySize.y : 0.0f;
+
+    const std::string window_filter = args.value("annotate_window", std::string{});
+    // A frame submits thousands of items and numbered boxes stop being legible
+    // long before that, so an unfiltered annotation stops at this many.
+    const int limit = args.value("annotate_limit", 60);
+
+    nlohmann::json table = nlohmann::json::array();
+    if (context == nullptr) {
+        return table;
+    }
+    const erhe::imgui::Imgui_item_recorder& recorder = host.get_item_recorder();
+    for (const erhe::imgui::Item_record& record : recorder.get_records()) {
+        if (static_cast<int>(m_imgui_annotations.size()) >= limit) {
+            break;
+        }
+        if (!record.has_item_data || !is_item_visible(record)) {
+            continue;
+        }
+        const std::string_view label = recorder.get_label(record);
+        if (label.empty()) {
+            continue;
+        }
+        if ((record.x1 - record.x0) < 1.0f) {
+            continue;
+        }
+        if ((record.y1 - record.y0) < 1.0f) {
+            continue;
+        }
+        const char* const window_name = find_imgui_window_name(context, record.window_id);
+        if (!window_filter.empty() && !window_matches(window_name, window_filter)) {
+            continue;
+        }
+        // An item scrolled out of its window is clipped away entirely, so a
+        // box over it would point at nothing.
+        const ImGuiWindow* const window = (window_name != nullptr) ? find_imgui_window(context, std::string{window_name}) : nullptr;
+        if (window != nullptr) {
+            const bool outside =
+                (record.x1 <= window->Pos.x) ||
+                (record.y1 <= window->Pos.y) ||
+                (record.x0 >= (window->Pos.x + window->Size.x)) ||
+                (record.y0 >= (window->Pos.y + window->Size.y));
+            if (outside) {
+                continue;
+            }
+        }
+
+        Imgui_annotation annotation;
+        annotation.number = static_cast<int>(m_imgui_annotations.size()) + 1;
+        annotation.x0     = record.x0;
+        annotation.y0     = record.y0;
+        annotation.x1     = record.x1;
+        annotation.y1     = record.y1;
+        m_imgui_annotations.push_back(annotation);
+
+        table.push_back({
+            {"number",   annotation.number},
+            {"window",   (window_name != nullptr) ? std::string{window_name} : std::string{}},
+            {"label",    strip_imgui_id_suffix(label)},
+            {"id",       static_cast<unsigned int>(record.id)},
+            {"x",        record.x0},
+            {"y",        record.y0},
+            {"width",    record.x1 - record.x0},
+            {"height",   record.y1 - record.y0},
+            {"center_x", 0.5f * (record.x0 + record.x1)},
+            {"center_y", 0.5f * (record.y0 + record.y1)}
+        });
+    }
+    return table;
+}
+
+void Mcp_server::draw_imgui_annotations(const int width, const int height, const std::span<std::byte> pixels) const
+{
+    // The captured image may not be the ImGui display size (a windowed build
+    // whose swapchain is a different scale), so the rectangles are mapped.
+    const float scale_x = (m_imgui_annotation_display_width  > 0.0f) ? (static_cast<float>(width)  / m_imgui_annotation_display_width ) : 1.0f;
+    const float scale_y = (m_imgui_annotation_display_height > 0.0f) ? (static_cast<float>(height) / m_imgui_annotation_display_height) : 1.0f;
+
+    Annotation_canvas canvas{width, height, pixels};
+    for (const Imgui_annotation& annotation : m_imgui_annotations) {
+        const int x0 = static_cast<int>(std::floor(annotation.x0 * scale_x));
+        const int y0 = static_cast<int>(std::floor(annotation.y0 * scale_y));
+        const int x1 = static_cast<int>(std::ceil (annotation.x1 * scale_x));
+        const int y1 = static_cast<int>(std::ceil (annotation.y1 * scale_y));
+        canvas.outline(x0, y0, x1, y1, c_annotation_border, c_annotation_color);
+
+        // The number sits inside the top left corner, on a filled background
+        // so it reads over any content.
+        const int text_w = Annotation_canvas::text_width(annotation.number);
+        const int box_x0 = x0 + c_annotation_border;
+        const int box_y0 = y0 + c_annotation_border;
+        canvas.fill(box_x0, box_y0, box_x0 + text_w + (2 * c_digit_scale), box_y0 + c_digit_height + (2 * c_digit_scale), c_annotation_background);
+        canvas.digits(box_x0 + c_digit_scale, box_y0 + c_digit_scale, annotation.number, c_annotation_color);
+    }
 }
 
 } // namespace editor

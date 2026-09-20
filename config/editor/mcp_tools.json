@@ -3414,12 +3414,24 @@
     "name": "get_prefabs"
   },
   {
-    "description": "Capture the current rendered frame to a PNG file and return its path. Currently supported only in the headless Vulkan configuration (emulated swapchain).",
+    "description": "Capture the current rendered frame to a PNG file and return its path. Works in the headless build (the emulated swapchain is read back at once) and in the windowed build (the capture is armed and collected one frame later). With annotate_imgui_items the recorded ImGui items of the desktop host are drawn over the pixels as numbered magenta rectangles and reported as a number -> item table, so the screenshot names what can be clicked.",
     "inputSchema": {
       "properties": {
         "path": {
           "description": "Output PNG path (default logs/mcp_screenshot.png)",
           "type": "string"
+        },
+        "annotate_imgui_items": {
+          "description": "Draw a numbered rectangle over every recorded visible labelled item of the desktop ImGui host and report the number -> {window, label, rect} table (default false). Costs one extra frame, the one the items are recorded in.",
+          "type": "boolean"
+        },
+        "annotate_window": {
+          "description": "With annotate_imgui_items: annotate only items of this window (by the name or display_name get_imgui_windows reports) or of its child regions",
+          "type": "string"
+        },
+        "annotate_limit": {
+          "description": "With annotate_imgui_items: at most this many rectangles (default 60), so the numbers stay legible",
+          "type": "integer"
         }
       },
       "type": "object"
@@ -6933,35 +6945,6 @@
     "name": "debug_set_transform_hover"
   },
   {
-    "description": "Verification hook: queue pointer events into the desktop window's ImGui context, so a headless run can exercise ImGui interactions that only the pointer drives (docking splitters, window resize grips). x / y are pixels in the editor window. Each call queues one position event and, when pressed is given, one button event; calls are served one per frame, so a drag is: move + pressed true, a few moves, move + pressed false. ImGui shows splitter hover feedback only after a short hover delay.",
-    "inputSchema": {
-      "properties": {
-        "x": {
-          "description": "Pointer x in editor window pixels",
-          "type": "number"
-        },
-        "y": {
-          "description": "Pointer y in editor window pixels",
-          "type": "number"
-        },
-        "button": {
-          "description": "Mouse button index for the button event (0 left, 1 right, 2 middle; default 0)",
-          "type": "integer"
-        },
-        "pressed": {
-          "description": "When present, also queue a button event with this state",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "x",
-        "y"
-      ],
-      "type": "object"
-    },
-    "name": "debug_imgui_mouse"
-  },
-  {
     "description": "Inject erhe::window::Input_event values into the editor's window, the way real keyboard, mouse and controller input arrives: the events travel get_input_events() -> Editor::dispatch_input_event -> the ImGui hosts and erhe::commands, so every consumer of real input sees them (ImGui widgets, viewport tools, the fly camera). This is the way to exercise the menu- and mouse-driven entry points headlessly; scene scripting keeps using the explicit-argument tools. Each event carries a 'frame' offset and the call spans that many editor frames, returning one frame after the last event was dispatched - so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build injected events interleave with the user's real input. Pointer coordinates are window pixels with the origin at the top left, the space get_viewports reports its rectangles in. See doc/plans/mcp_ui_driving.md.",
     "inputSchema": {
       "properties": {
@@ -7385,6 +7368,162 @@
       "type": "object"
     },
     "name": "get_imgui_item_rect"
+  },
+  {
+    "description": "Click an ImGui item by label: the item is resolved to its rectangle in the frame after the call (exactly as get_imgui_item_rect does), then the pointer is moved to its center, settles, and the button is pressed and released there. The result carries 'target', the resolved rectangle, beside the injected event counts. A menu item exists only while its menu is open, so 'Window > Open Four View' is two calls: one on the menu bar item, then one on the item in the popup. Desktop window host only; one gesture runs at a time. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host, the only host these actions drive)",
+          "type": "string"
+        },
+        "window": {
+          "description": "The window the item is in, by the name or display_name get_imgui_windows reports. Omit it to search every window of the host, which is how a menu item is reached (a menu's items live in a popup window of ImGui's own naming); the result reports the window the match was found in, and a label matching in several windows is an error listing them.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Item label as shown, or with its '##id' part. Required unless id is given.",
+          "type": "string"
+        },
+        "id": {
+          "description": "ImGui item id, as get_imgui_items reports it. Use instead of label.",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Which of several items sharing the label to act on (default 0), numbered the way get_imgui_items numbers them",
+          "type": "integer"
+        },
+        "visible_only": {
+          "description": "Consider only items Dear ImGui did not clip away (default true)",
+          "type": "boolean"
+        },
+        "button": {
+          "description": "Mouse button by name (left, right, middle) or index (default left)"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "double": {
+          "description": "Send two press/release pairs in consecutive frames, which ImGui reads as a double click (default false)",
+          "type": "boolean"
+        }
+      }
+    },
+    "name": "imgui_click"
+  },
+  {
+    "description": "Put the pointer on an ImGui item and leave it there: the item is resolved the way imgui_click resolves it, the pointer is moved to its center, and the call returns a few frames later so the hover has settled (tooltips, hover highlights, a splitter's feedback). The result carries 'target', the resolved rectangle. Desktop window host only.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host, the only host these actions drive)",
+          "type": "string"
+        },
+        "window": {
+          "description": "The window the item is in, by the name or display_name get_imgui_windows reports. Omit it to search every window of the host, which is how a menu item is reached (a menu's items live in a popup window of ImGui's own naming); the result reports the window the match was found in, and a label matching in several windows is an error listing them.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Item label as shown, or with its '##id' part. Required unless id is given.",
+          "type": "string"
+        },
+        "id": {
+          "description": "ImGui item id, as get_imgui_items reports it. Use instead of label.",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Which of several items sharing the label to act on (default 0), numbered the way get_imgui_items numbers them",
+          "type": "integer"
+        },
+        "visible_only": {
+          "description": "Consider only items Dear ImGui did not clip away (default true)",
+          "type": "boolean"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      }
+    },
+    "name": "imgui_hover"
+  },
+  {
+    "description": "Turn the mouse wheel over an ImGui window: the pointer is moved to the window's center (or to one item's center, when label or id is given), settles, and one wheel event is sent there. The result carries 'target', what the wheel was turned over. Desktop window host only.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "host": {
+          "description": "ImGui host name, or part of one, as get_imgui_hosts reports it (default: the desktop window host, the only host these actions drive)",
+          "type": "string"
+        },
+        "window": {
+          "description": "The window to scroll, by the name or display_name get_imgui_windows reports. Required unless label or id names an item.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Item label as shown, or with its '##id' part. Required unless id is given.",
+          "type": "string"
+        },
+        "id": {
+          "description": "ImGui item id, as get_imgui_items reports it. Use instead of label.",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Which of several items sharing the label to act on (default 0), numbered the way get_imgui_items numbers them",
+          "type": "integer"
+        },
+        "visible_only": {
+          "description": "Consider only items Dear ImGui did not clip away (default true)",
+          "type": "boolean"
+        },
+        "dx": {
+          "description": "Horizontal wheel delta (default 0)",
+          "type": "number"
+        },
+        "dy": {
+          "description": "Vertical wheel delta; positive scrolls up, as a real wheel reports it",
+          "type": "number"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      }
+    },
+    "name": "imgui_scroll"
   },
   {
     "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",

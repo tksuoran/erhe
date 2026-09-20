@@ -131,7 +131,12 @@ void Imgui_item_recorder::on_item_info(const ImGuiID id, const char* label, cons
         }
         record.status_flags = status_flags;
         record.has_status   = true;
-        if ((label != nullptr) && (record.label_offset == Item_record::c_no_label)) {
+        // The first non-empty label wins. A widget built out of another one
+        // reports twice: a menu is a Selectable("") that reports an empty
+        // label, and BeginMenu() then reports the menu's name for the same id
+        // - so an already recorded empty label must give way, and a name that
+        // is there must not.
+        if ((label != nullptr) && (label[0] != '\0') && get_label(record).empty()) {
             const std::size_t length = std::strlen(label);
             record.label_offset = static_cast<uint32_t>(m_labels.size());
             m_labels.insert(m_labels.end(), label, label + length);

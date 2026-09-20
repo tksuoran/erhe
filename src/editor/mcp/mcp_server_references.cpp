@@ -427,36 +427,6 @@ auto Mcp_server::action_debug_set_transform_hover(const json& args) -> std::stri
     return make_json_content({{"handle", handle_value}, {"name", c_str(handle)}}).dump();
 }
 
-// debug_imgui_mouse - queues pointer events into the desktop window's ImGui
-// context, so a headless run can exercise ImGui interactions that only the
-// pointer drives (docking splitters, window resize grips).
-auto Mcp_server::action_debug_imgui_mouse(const json& args) -> std::string
-{
-    if (m_context.imgui_windows == nullptr) {
-        return make_error_content("ImGui windows are not available");
-    }
-    const std::shared_ptr<erhe::imgui::Window_imgui_host> host = m_context.imgui_windows->get_window_imgui_host();
-    if (!host) {
-        return make_error_content("The desktop window ImGui host is not available");
-    }
-    if (!args.contains("x") || !args.contains("y")) {
-        return make_error_content("x and y are required");
-    }
-    const float x = args["x"].get<float>();
-    const float y = args["y"].get<float>();
-    ImGuiIO& io = host->get_imgui_context()->IO;
-    io.AddMousePosEvent(x, y);
-    if (args.contains("pressed")) {
-        const int  button  = args.value("button", 0);
-        const bool pressed = args["pressed"].get<bool>();
-        if ((button < 0) || (button >= ImGuiMouseButton_COUNT)) {
-            return make_error_content("button is out of range");
-        }
-        io.AddMouseButtonEvent(button, pressed);
-    }
-    return make_json_content({{"x", x}, {"y", y}}).dump();
-}
-
 namespace {
 
 [[nodiscard]] auto describe_four_view(const Four_view& four_view) -> json

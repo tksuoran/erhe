@@ -57,6 +57,15 @@ class Viewport_scene_view;
 // Builds the event list of one input gesture (src/editor/mcp/mcp_server_ui.cpp).
 class Input_gesture_builder;
 
+// What imgui_click / imgui_hover / imgui_scroll do once they have resolved
+// their target (doc/plans/mcp_ui_driving.md A7).
+enum class Imgui_pointer_action
+{
+    click,
+    hover,
+    scroll
+};
+
 // Represents a single MCP tool descriptor
 struct Mcp_tool_info
 {
@@ -363,7 +372,6 @@ private:
     auto action_free_undone_loads             (const nlohmann::json& args) -> std::string;
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_set_transform_hover     (const nlohmann::json& args) -> std::string;
-    auto action_debug_imgui_mouse             (const nlohmann::json& args) -> std::string;
 
     // doc/plans/mcp_ui_driving.md part B (src/editor/mcp/mcp_server_ui.cpp).
     // Every one of these builds its event list through Input_gesture_builder
@@ -387,6 +395,24 @@ private:
     auto query_imgui_windows                  (const nlohmann::json& args) -> std::string;
     auto query_imgui_items                    (const nlohmann::json& args) -> std::string;
     auto query_imgui_item_rect                (const nlohmann::json& args) -> std::string;
+
+    // The part A pointer actions: they resolve their target with the resolver
+    // get_imgui_item_rect uses, then record a part B gesture at its center.
+    auto action_imgui_click                   (const nlohmann::json& args) -> std::string;
+    auto action_imgui_hover                   (const nlohmann::json& args) -> std::string;
+    auto action_imgui_scroll                  (const nlohmann::json& args) -> std::string;
+    auto run_imgui_pointer_action(const nlohmann::json& args, Imgui_pointer_action action) -> std::string;
+
+    // The desktop host for a pointer action, refusing any other host (A6).
+    auto resolve_imgui_pointer_host(const nlohmann::json& args, std::string& out_error) -> erhe::imgui::Imgui_host*;
+
+    // capture_screenshot.annotate_imgui_items: collect_imgui_annotations fills
+    // m_imgui_annotations from the host's recorded frame and returns the
+    // number -> item table for the result; draw_imgui_annotations draws the
+    // numbered rectangles into the captured RGBA8 pixels before they are
+    // written.
+    auto collect_imgui_annotations(erhe::imgui::Imgui_host& host, const nlohmann::json& args) -> nlohmann::json;
+    void draw_imgui_annotations   (int width, int height, std::span<std::byte> pixels) const;
 
     // Arms item recording on the host and defers, or reports that the
     // requested frame has been recorded. Returns true when the caller must
@@ -621,6 +647,33 @@ private:
     // for a recorded frame and is deferring until that frame is done (main
     // thread only). doc/plans/mcp_ui_driving.md A7.
     const Queued_request*                            m_imgui_recording_request{nullptr};
+
+    // What a gesture tool resolved before it recorded its events (the item
+    // rectangle an imgui_* action aimed at). step_input_gesture() merges it
+    // into the result of the gesture it belongs to.
+    nlohmann::json                                   m_input_gesture_extra{nlohmann::json::object()};
+
+    // capture_screenshot with annotate_imgui_items: one numbered rectangle,
+    // in the ImGui host's pixels. Persistent scratch, cleared with capacity
+    // kept.
+    class Imgui_annotation
+    {
+    public:
+        float x0    {0.0f};
+        float y0    {0.0f};
+        float x1    {0.0f};
+        float y1    {0.0f};
+        int   number{0};
+    };
+    std::vector<Imgui_annotation>                    m_imgui_annotations;
+    float                                            m_imgui_annotation_display_width {0.0f};
+    float                                            m_imgui_annotation_display_height{0.0f};
+    // The capture_screenshot request whose annotations have been collected, so
+    // a windowed capture (which defers again to read the pixels back) does not
+    // ask for a second recorded frame.
+    const Queued_request*                            m_screenshot_annotation_request{nullptr};
+    // The number -> item table of that collection, reported in the result.
+    nlohmann::json                                   m_screenshot_annotations{nlohmann::json::array()};
 
     // reset_editor_state has queued the close of every open scene and is
     // deferring itself until the scene list is empty (main thread only).

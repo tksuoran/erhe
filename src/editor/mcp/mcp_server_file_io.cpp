@@ -28,6 +28,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/image_writer.hpp"
@@ -889,6 +890,39 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
 
     const std::string path_str = args.value("path", std::string{"logs/mcp_screenshot.png"});
 
+    // doc/plans/mcp_ui_driving.md A7: the recorded items of the desktop ImGui
+    // host are drawn over the captured pixels as numbered rectangles and
+    // reported as a number -> item table. Recording is asked for first,
+    // because the frame that records has to be the captured frame (headless)
+    // or the one right before it (windowed, where the readback costs a frame
+    // of its own) - see the note in mcp_server_ui.cpp.
+    json annotations = json::array();
+    const bool annotate = args.value("annotate_imgui_items", false);
+    if (annotate) {
+        if (m_screenshot_annotation_request != m_current_request) {
+            std::string                    error;
+            erhe::imgui::Imgui_host* const host = resolve_imgui_host(args, error);
+            if (host == nullptr) {
+                m_screenshot_annotation_request = nullptr;
+                json r = make_text_content(error);
+                r["isError"] = true;
+                return r.dump();
+            }
+            if (request_recorded_imgui_frame(*host, error)) {
+                return {};
+            }
+            if (!error.empty()) {
+                m_screenshot_annotation_request = nullptr;
+                json r = make_text_content(error);
+                r["isError"] = true;
+                return r.dump();
+            }
+            m_screenshot_annotations        = collect_imgui_annotations(*host, args);
+            m_screenshot_annotation_request = m_current_request;
+        }
+        annotations = m_screenshot_annotations;
+    }
+
     int                      width  = 0;
     int                      height = 0;
     erhe::dataformat::Format format = erhe::dataformat::Format::format_8_vec4_srgb;
@@ -903,12 +937,18 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
             m_defer_current_request = true;
             return {};
         }
+        m_screenshot_annotation_request = nullptr;
         json r = make_text_content(
             "Frame capture not available: the swapchain does not support reading its images back, "
             "and at least one rendered frame is required."
         );
         r["isError"] = true;
         return r.dump();
+    }
+    m_screenshot_annotation_request = nullptr;
+
+    if (annotate) {
+        draw_imgui_annotations(width, height, std::span<std::byte>{pixels});
     }
 
     std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
@@ -919,11 +959,16 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
         return r.dump();
     }
 
-    return make_json_content({
+    json result = {
         {"path",   path_str},
         {"width",  width},
         {"height", height}
-    }).dump();
+    };
+    if (annotate) {
+        result["annotations"]      = annotations;
+        result["annotation_count"] = static_cast<int>(annotations.size());
+    }
+    return make_json_content(result).dump();
 }
 
 
