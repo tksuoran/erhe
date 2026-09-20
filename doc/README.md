@@ -284,7 +284,7 @@ Every document states its standing in its first ten lines:
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
-- [plans/mcp_ui_driving.md](plans/mcp_ui_driving.md) (proposed): Driving the editor user interface over MCP: ImGui introspection and input event injection
+- [plans/mcp_ui_driving.md](plans/mcp_ui_driving.md) (in progress): Driving the editor user interface over MCP: ImGui introspection and input event injection
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work

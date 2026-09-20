@@ -1,6 +1,6 @@
 # Driving the editor user interface over MCP
 
-Status: proposed
+Status: in progress
 
 Extends [erhe/imgui.md](../erhe/imgui.md), [erhe/window.md](../erhe/window.md)
 and the editor MCP server (`src/editor/mcp/`, usage in `mcp_server_usage.md`
@@ -213,15 +213,10 @@ and verified on `build_vs2026_vulkan_headless` with the agent's own MCP port.
    server" tool-group list and the "routinely cannot exercise the menu- and
    mouse-driven entry points" statement; this plan is deleted.
 
-## 5. Open decisions
+## 5. Decisions
 
-- O1. A1 replaces "integrate imgui-mcp" with "adopt its vocabulary on ImGui's
-  own hooks" because of F1. If running imgui-mcp itself is also wanted (as a
-  separate UI prototyping tool for agents, unrelated to the live editor), that
-  is a `.mcp.json` registration plus a `doc/agents/` setup note and no erhe
-  code.
-- O2. Tool naming: the part A actions keep imgui-mcp's `imgui_` prefix so an
-  agent that knows that server recognizes them; part B tools are unprefixed
-  because they are not ImGui-specific.
-- O3. Quest / OpenXR input (`Xr_*_event`) is outside this plan; R3 lists the
-  supported types.
+- imgui-mcp itself is not run or registered; A1 is the whole integration.
+- Tool naming: the part A actions carry the `imgui_` prefix, part B tools are
+  unprefixed because they are not ImGui-specific.
+- Quest / OpenXR input (`Xr_*_event`) injection is future work after this
+  plan; R3 lists the supported types.
