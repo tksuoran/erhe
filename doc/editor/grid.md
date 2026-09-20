@@ -57,3 +57,7 @@ where the grid sits: `depth_tested` (default) at its plane, so content in
 front of the plane covers the lines; `behind_content` (the Behind Content
 property, `Grid_config::behind_content`) at far depth, where the
 `less_or_equal` test passes only on pixels no content has drawn.
+
+## Future work
+
+- [Screen-space label size in orthogonal views](../plans/editor.md)

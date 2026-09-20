@@ -1,5 +1,7 @@
 §MBEL:5.0
 
+[TASK::ortho-view-grids]{DONE+USER-VERIFIED-2026-09-20;33f67dfd9;detail=activeContext;left=screen-space-labels{doc/plans/editor.md}}
+
 [TASK::ortho-camera-gizmo]{DONE+USER-VERIFIED-2026-09-19;4-commits;detail=activeContext}
 
 [TASK::style-library]{DONE-2026-09-04}
