@@ -350,6 +350,40 @@ auto non_negative_cell(const Property_value& value) -> bool
     return (v.x >= 0) && (v.y >= 0) && (v.z >= 0);
 }
 
+// Coerce (D7) of a per-axis grid track extent list: an empty list means
+// uniform tracks and is left alone; a non-empty one carries exactly one
+// extent per track of that axis, padded with zero-size tracks. The rule
+// depends on another property (grid_track_count), so the list is sized
+// here - where the value is produced - and a change of the track count
+// re-runs it through Layout::on_property_changed.
+[[nodiscard]] auto coerce_track_extent(
+    const erhe::property::Dependency_object& object,
+    const Property_value&                    value,
+    const int                                axis
+) -> Property_value
+{
+    const std::vector<float>* const extents = std::get_if<std::vector<float>>(&value);
+    if ((extents == nullptr) || extents->empty()) {
+        return value;
+    }
+    // A node or a style may hold the list for the layouts below it (D30);
+    // such a holder has no track count of its own, so it keeps the list as
+    // authored and the reading layout coerces it.
+    const Layout* const layout = dynamic_cast<const Layout*>(&object);
+    if (layout == nullptr) {
+        return value;
+    }
+    const glm::ivec3  track_count = layout->get_value(Layout::grid_track_count_property);
+    const int         axis_count  = track_count[axis];
+    const std::size_t count       = static_cast<std::size_t>((axis_count > 1) ? axis_count : 1);
+    if (extents->size() == count) {
+        return value;
+    }
+    std::vector<float> sized = *extents;
+    sized.resize(count, 0.0f);
+    return Property_value{std::move(sized)};
+}
+
 } // anonymous namespace
 
 const erhe::property::Enum_info c_layout_type_enum_info     {"Layout_type",      c_layout_type_entries};
@@ -391,6 +425,43 @@ const Property<glm::ivec3> Layout::grid_track_count_property = Property<glm::ive
     Property_metadata{.default_value = glm::ivec3{1, 1, 1}, .inherits = true, .ui = Property_ui{.min = 1.0f, .max = 1000.0f, .step = 0.1f, .group = c_group, .tooltip = "Grid: cells per axis", .label = "Grid Tracks", .visible_when = is_grid}},
     positive_tracks
 );
+
+const Property<std::vector<float>> Layout::grid_track_extent_x_property = Property<std::vector<float>>::register_property(
+    "grid_track_extent_x", Layout::property_owner_type(),
+    Property_metadata{
+        .default_value = Property_value{std::vector<float>{}},
+        .coerce        = [](const erhe::property::Dependency_object& object, const Property_value& value) -> Property_value { return coerce_track_extent(object, value, 0); },
+        .inherits      = true,
+        .ui            = Property_ui{.min = 0.0f, .max = 10000.0f, .step = 0.01f, .group = c_group, .tooltip = "Grid: size of each track along X; empty = uniform tracks", .label = "Sizes X", .visible_when = is_grid}
+    }
+);
+const Property<std::vector<float>> Layout::grid_track_extent_y_property = Property<std::vector<float>>::register_property(
+    "grid_track_extent_y", Layout::property_owner_type(),
+    Property_metadata{
+        .default_value = Property_value{std::vector<float>{}},
+        .coerce        = [](const erhe::property::Dependency_object& object, const Property_value& value) -> Property_value { return coerce_track_extent(object, value, 1); },
+        .inherits      = true,
+        .ui            = Property_ui{.min = 0.0f, .max = 10000.0f, .step = 0.01f, .group = c_group, .tooltip = "Grid: size of each track along Y; empty = uniform tracks", .label = "Sizes Y", .visible_when = is_grid}
+    }
+);
+const Property<std::vector<float>> Layout::grid_track_extent_z_property = Property<std::vector<float>>::register_property(
+    "grid_track_extent_z", Layout::property_owner_type(),
+    Property_metadata{
+        .default_value = Property_value{std::vector<float>{}},
+        .coerce        = [](const erhe::property::Dependency_object& object, const Property_value& value) -> Property_value { return coerce_track_extent(object, value, 2); },
+        .inherits      = true,
+        .ui            = Property_ui{.min = 0.0f, .max = 10000.0f, .step = 0.01f, .group = c_group, .tooltip = "Grid: size of each track along Z; empty = uniform tracks", .label = "Sizes Z", .visible_when = is_grid}
+    }
+);
+
+auto Layout::grid_track_extent_property(const int axis) -> const Property<std::vector<float>>&
+{
+    switch (axis) {
+        case 1:  return grid_track_extent_y_property;
+        case 2:  return grid_track_extent_z_property;
+        default: return grid_track_extent_x_property;
+    }
+}
 
 const Property<Layout_alignment> Layout::align_x_property = Property<Layout_alignment>::register_attached(
     "align_x", Layout::property_owner_type(), Node::property_owner_type(), c_layout_alignment_enum_info,
@@ -436,6 +507,11 @@ void Layout::set_tertiary        (const Axis_direction value) { set_value(tertia
 void Layout::set_gap             (const glm::vec3& value)     { set_value(gap_property, value); }
 void Layout::set_grid_track_count(const glm::ivec3& value)    { set_value(grid_track_count_property, value); }
 
+void Layout::set_grid_track_extent(const int axis, const std::vector<float>& value)
+{
+    set_value(grid_track_extent_property(axis), value);
+}
+
 Layout::Layout(const Layout&) = default;
 Layout::~Layout() noexcept    = default;
 
@@ -459,9 +535,18 @@ Layout::Layout(const Layout& src, erhe::for_clone)
 
 void Layout::on_property_changed(const erhe::property::Property_changed_args& args)
 {
-    if (erhe::property::is_owner_type_or_descendant(Layout::property_owner_type(), args.property.get_owner_type())) {
-        refresh_mirror();
+    if (!erhe::property::is_owner_type_or_descendant(Layout::property_owner_type(), args.property.get_owner_type())) {
+        return;
     }
+    if (&args.property == grid_track_count_property.get_ptr()) {
+        // The track count is what sizes a non-empty extent list, so a list
+        // already stored in its coerced form is re-coerced here: change
+        // driven, and never from the draw code.
+        for (int axis = 0; axis < 3; ++axis) {
+            coerce_value(grid_track_extent_property(axis));
+        }
+    }
+    refresh_mirror();
 }
 
 void Layout::refresh_mirror()
@@ -474,6 +559,9 @@ void Layout::refresh_mirror()
     m_tertiary         = get_value(tertiary_property);
     m_gap              = get_value(gap_property);
     m_grid_track_count = get_value(grid_track_count_property);
+    for (int axis = 0; axis < 3; ++axis) {
+        m_grid_track_extent[static_cast<std::size_t>(axis)] = get_value(grid_track_extent_property(axis));
+    }
 }
 
 void Layout::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)

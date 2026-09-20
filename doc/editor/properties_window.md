@@ -49,7 +49,14 @@ migrated" table lists the hand-written rows that are authored state; section
   color channels each on their own); editing a component sets that
   component on every item and leaves the others as they were, after
   which the shared value shows. A quaternion, a string, an enumeration
-  and an object reference are mixed as a whole.
+  and an object reference are mixed as a whole. An array
+  (`float_array`, `int_array`) draws a summary line - the element count
+  and the head of the list - and below it one drag field per element, up
+  to sixteen; each element mixes on its own, and an edit of one element
+  is a set of the whole list
+  (`doc/plans/hand_written_rows_to_properties.md` H4). A longer list, a
+  read-only one and a selection whose lists differ in length stay the
+  summary line alone.
 - R2 Authored state is a property, or a bridge (D18) where the storage must
   stay a member: the name (a bridged string property over
   `Item_base::get_name` / `set_name`), the authored persistent flags
@@ -69,7 +76,7 @@ migrated" table lists the hand-written rows that are authored state; section
   BRDF slice for a selected material.
 - R5 List-valued state with no `Property_value` form
   (`Physics_joint_settings` limits and drives, `Collision_filter`'s three
-  system lists, `Layout`'s per-axis grid track extents) and the scene's
+  system lists) and the scene's
   settings-override block keep their hand-written editor, drawn per item,
   and are the documented exception; the inventory's "Not yet migrated"
   table lists them.

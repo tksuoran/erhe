@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <vector>
 
 using namespace erhe::property;
 using erhe::scene::Axis_direction;
@@ -104,7 +105,8 @@ TEST(Layout_properties, clone_copies_the_store_and_the_mirror)
     auto layout = std::make_shared<Layout>("l");
     layout->set_layout_type(Layout_type::flow);
     layout->set_gap(glm::vec3{1.0f});
-    layout->get_grid_track_extent(0) = {1.0f, 2.0f};
+    layout->set_grid_track_count(glm::ivec3{2, 1, 1});
+    layout->set_grid_track_extent(0, std::vector<float>{1.0f, 2.0f});
     const std::shared_ptr<erhe::Item_base> clone_item = layout->clone();
     const std::shared_ptr<Layout> clone = std::dynamic_pointer_cast<Layout>(clone_item);
     ASSERT_TRUE(clone);
@@ -113,4 +115,63 @@ TEST(Layout_properties, clone_copies_the_store_and_the_mirror)
     EXPECT_EQ(clone->get_value_source(Layout::gap_property), Value_source::local);
     EXPECT_EQ(clone->get_grid_track_extent(0).size(), std::size_t{2});
     EXPECT_EQ(Property_set::read_local_values(*clone), Property_set::read_local_values(*layout));
+}
+
+TEST(Layout_properties, grid_track_extent_is_coerced_to_the_track_count)
+{
+    auto layout = std::make_shared<Layout>("l");
+    layout->set_layout_type(Layout_type::grid);
+    layout->set_grid_track_count(glm::ivec3{3, 1, 1});
+
+    // An empty list means uniform tracks and is left alone.
+    EXPECT_TRUE(layout->get_grid_track_extent(0).empty());
+    EXPECT_EQ(layout->get_value_source(Layout::grid_track_extent_x_property), Value_source::default_value);
+
+    // A longer list is cut to the track count, a shorter one padded.
+    layout->set_grid_track_extent(0, std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+    EXPECT_EQ(layout->get_grid_track_extent(0), (std::vector<float>{1.0f, 2.0f, 3.0f}));
+    EXPECT_TRUE(layout->is_coerced(Layout::grid_track_extent_x_property));
+
+    layout->set_grid_track_extent(0, std::vector<float>{1.0f});
+    EXPECT_EQ(layout->get_grid_track_extent(0), (std::vector<float>{1.0f, 0.0f, 0.0f}));
+
+    // A track count change re-coerces the stored list (change driven).
+    layout->set_grid_track_count(glm::ivec3{4, 1, 1});
+    EXPECT_EQ(layout->get_grid_track_extent(0).size(), std::size_t{4});
+    layout->set_grid_track_count(glm::ivec3{2, 1, 1});
+    EXPECT_EQ(layout->get_grid_track_extent(0), (std::vector<float>{1.0f, 0.0f}));
+
+    // Back to uniform tracks.
+    layout->set_grid_track_extent(0, std::vector<float>{});
+    EXPECT_TRUE(layout->get_grid_track_extent(0).empty());
+}
+
+TEST(Layout_properties, node_held_grid_track_extent_reaches_the_mirror)
+{
+    auto node   = std::make_shared<Xform>("n");
+    auto layout = std::make_shared<Layout>("l");
+    node->attach(layout);
+    layout->set_grid_track_count(glm::ivec3{2, 1, 1});
+
+    // The holder has no track count of its own, so it keeps the list as
+    // authored; the reading layout coerces it.
+    node->set_value(Layout::grid_track_extent_x_property, std::vector<float>{1.0f, 2.0f, 3.0f});
+    EXPECT_EQ(node->get_value(Layout::grid_track_extent_x_property), (std::vector<float>{1.0f, 2.0f, 3.0f}));
+    EXPECT_EQ(layout->get_value_source(Layout::grid_track_extent_x_property), Value_source::inherited);
+    EXPECT_EQ(layout->get_grid_track_extent(0), (std::vector<float>{1.0f, 2.0f}));
+
+    node->clear_value(Layout::grid_track_extent_x_property);
+    EXPECT_TRUE(layout->get_grid_track_extent(0).empty());
+}
+
+TEST(Layout_properties, grid_track_extent_round_trips_as_text)
+{
+    auto layout = std::make_shared<Layout>("l");
+    layout->set_grid_track_count(glm::ivec3{3, 1, 1});
+    const Dependency_property& property = Layout::grid_track_extent_x_property.get();
+    ASSERT_TRUE(layout->set_value(property, parse_value(property, "1 2 3").value()));
+    EXPECT_EQ(layout->get_grid_track_extent(0), (std::vector<float>{1.0f, 2.0f, 3.0f}));
+    EXPECT_EQ(to_string(property, layout->get_value(property)), "1 2 3");
+    ASSERT_TRUE(layout->set_value(property, parse_value(property, "").value()));
+    EXPECT_TRUE(layout->get_grid_track_extent(0).empty());
 }

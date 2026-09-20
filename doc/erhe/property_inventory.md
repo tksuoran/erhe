@@ -213,8 +213,7 @@ and each is listed on a node carrying `Item_flags::bone`.
 | Property | Storage | Notes |
 |---|---|---|
 | type, primary, secondary, tertiary, volume_min, volume_max, gap, grid_track_count | entry | inherits (D30, from the node chain); the members update() reads mirror the effective values; track count validated to at least 1 per axis, visible for grid |
-
-Not properties: the per-axis grid track extent lists.
+| grid_track_extent_x, grid_track_extent_y, grid_track_extent_z | entry | float_array, inherits, visible for grid; empty = uniform tracks, a non-empty list is coerced to the axis track count; a "Custom track sizes on / off" row action seeds it from the volume |
 
 Per-child hints, attached (section 4.14), set on the child Node:
 
@@ -294,7 +293,6 @@ property form and the phase of each row.
 
 | Owner | Fields | Notes |
 |---|---|---|
-| Layout | grid track extents | phase 2; per-axis float lists |
 | Collision_filter | collision_systems, collide_with_systems, not_collide_with_systems | phase 3; string lists |
 | Physics_joint_settings | limits, drives | phase 4; lists of records |
 

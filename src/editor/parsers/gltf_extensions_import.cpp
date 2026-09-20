@@ -297,11 +297,13 @@ void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
             for (int axis = 0; axis < 3; ++axis) {
                 const auto extent_it = lj.find(extent_keys[axis]);
                 if ((extent_it != lj.end()) && extent_it->is_array()) {
+                    std::vector<float> extents;
                     for (const nlohmann::json& extent : *extent_it) {
                         if (extent.is_number()) {
-                            layout->get_grid_track_extent(axis).push_back(extent.get<float>());
+                            extents.push_back(extent.get<float>());
                         }
                     }
+                    layout->set_grid_track_extent(axis, extents);
                 }
             }
             layout->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);

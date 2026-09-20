@@ -1862,6 +1862,9 @@ enumeration in `erhe_scene/layout.hpp`, defined in `layout.cpp`),
 (`Axis_direction`, `Enum_info` `c_axis_direction_enum_info`, signed axis
 labels `+X` .. `-Z`), `gap` (0..10000 per component) and
 `grid_track_count` (1..1000, validated to at least 1 per axis,
+`visible_when` the type is grid) and the three per-axis grid track extent
+lists `grid_track_extent_x`, `grid_track_extent_y` and
+`grid_track_extent_z` (`float_array`, 0..10000 per element, also
 `visible_when` the type is grid). The private members `Layout::update()`
 reads each frame are a mirror of the effective values:
 `Layout::on_property_changed` refreshes them on every change of a
@@ -1873,10 +1876,31 @@ editor writer notify. The accessor is named `get_layout_type()` because
 copies the mirror; the entries copy through D10. `ERHE_layout` keeps
 writing every field explicitly and the `properties` map of local values;
 on load the map is the layout's complete local set, the same rule as
-`ERHE_light` (`doc/gltf_extensions/ERHE_layout.md`). The per-track
-extent lists (`get_grid_track_extent(axis)`) are not properties: the
-Properties window keeps their custom / per-track rows and draws
-everything else as generic rows.
+`ERHE_light` (`doc/gltf_extensions/ERHE_layout.md`).
+
+An extent list holds one absolute track size per track of its axis, and
+an empty list means uniform tracks. The element count is the axis's own
+`grid_track_count`, which is another property, so it is a `coerce`
+callback (D7): a non-empty list is sized to the track count (cut, or
+padded with zero-size tracks) where the value is produced, and
+`Layout::on_property_changed` re-runs `coerce_value` on the three lists
+when the track count changes, so a stored coerced list follows it. An
+object that is not a `Layout` - a node or a style holding
+`Layout.grid_track_extent_x` for the layouts below it - has no track
+count of its own, so the coerce leaves its value as authored and the
+reading layout coerces it. `get_grid_track_extent(axis)` reads the mirror
+and `set_grid_track_extent(axis, list)` writes the store; there is no
+non-const accessor.
+
+The Properties window has no hand-written layout rows. The generic array
+row draws the list (one drag field per element,
+`doc/plans/hand_written_rows_to_properties.md` H4), and a
+`Property_row_action` registered by `Properties` below each of the three
+rows is the "Custom track sizes on / off" toggle: on an empty list it
+seeds one equal size per track from the layout's volume along that axis,
+on a non-empty one it sets the empty list, and either way it records the
+`Property_set_operation` the generic row and MCP `set_item_property`
+record.
 
 ### 4.14 Layout per-child hints (attached properties)
 

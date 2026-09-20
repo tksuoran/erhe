@@ -74,8 +74,9 @@ cell + span); a child without one uses default values.
   its own primary extent on the primary axis and the full volume extent on the two
   cross axes. Inter-child spacing on the primary axis is `gap[primary]`.
 - **Grid**: `build_track_edges` builds per-axis track boundaries - honoring
-  per-track extents (`grid_track_extent`, absolute sizes from the volume minimum,
-  clamped >= 0) or dividing the volume evenly into `grid_track_count` tracks.
+  per-track extents (`grid_track_extent_{x,y,z}`, absolute sizes from the volume
+  minimum, clamped >= 0, one per track by the coerce callback) or dividing the
+  volume evenly into `grid_track_count` tracks when the list is empty.
   Each child clamps its `grid_cell` / `grid_span` into range and gets the cell
   spanning those tracks.
 - **Flow** (two passes): pass 1 groups children into lines along primary (wrap on

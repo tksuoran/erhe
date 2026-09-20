@@ -94,12 +94,36 @@ template <typename V>
     return mask;
 }
 
+// The mixed mask of an array row whose items do not even agree on the
+// number of elements: no element of it lines up, so the row stays the
+// read-only summary. The per-element masks never reach this value, as the
+// row draws at most c_max_array_elements fields.
+constexpr uint32_t c_array_size_mismatch = 0xffffffffu;
+constexpr std::size_t c_max_array_elements = 16;
+
+template <typename T>
+[[nodiscard]] auto array_mixed_mask(const std::vector<T>& first, const std::vector<T>& other) -> uint32_t
+{
+    if (first.size() != other.size()) {
+        return c_array_size_mismatch;
+    }
+    uint32_t mask = 0u;
+    for (std::size_t k = 0, end = std::min(first.size(), c_max_array_elements); k < end; ++k) {
+        if (!(first[k] == other[k])) {
+            mask |= (1u << k);
+        }
+    }
+    return mask;
+}
+
 [[nodiscard]] auto mixed_mask(const Property_value& first, const Property_value& other) -> uint32_t
 {
     if (first.index() != other.index()) {
         return 1u;
     }
     switch (static_cast<Property_type>(first.index())) {
+        case Property_type::float_array: return array_mixed_mask(std::get<std::vector<float>>(first), std::get<std::vector<float>>(other));
+        case Property_type::int_array:   return array_mixed_mask(std::get<std::vector<int  >>(first), std::get<std::vector<int  >>(other));
         case Property_type::vec2:  return vector_mixed_mask(std::get<glm::vec2 >(first), std::get<glm::vec2 >(other));
         case Property_type::vec3:  return vector_mixed_mask(std::get<glm::vec3 >(first), std::get<glm::vec3 >(other));
         case Property_type::vec4:  return vector_mixed_mask(std::get<glm::vec4 >(first), std::get<glm::vec4 >(other));
@@ -126,6 +150,25 @@ template <typename V>
     return result;
 }
 
+// The array counterpart of merge_vector_components (H4): the whole list is
+// the value, so lists of different lengths across the selection take the
+// edited list as a whole; lists of the same length take only the elements
+// the user moved.
+template <typename T>
+[[nodiscard]] auto merge_array_elements(const std::vector<T>& item, const std::vector<T>& original, const std::vector<T>& edited) -> std::vector<T>
+{
+    if ((item.size() != original.size()) || (original.size() != edited.size())) {
+        return edited;
+    }
+    std::vector<T> result = item;
+    for (std::size_t k = 0, end = result.size(); k < end; ++k) {
+        if (!(edited[k] == original[k])) {
+            result[k] = edited[k];
+        }
+    }
+    return result;
+}
+
 [[nodiscard]] auto merge_components(const Property_value& item, const Property_value& original, const Property_value& edited) -> Property_value
 {
     if ((item.index() != edited.index()) || (original.index() != edited.index())) {
@@ -138,6 +181,8 @@ template <typename V>
         case Property_type::ivec2: return merge_vector_components(std::get<glm::ivec2>(item), std::get<glm::ivec2>(original), std::get<glm::ivec2>(edited));
         case Property_type::ivec3: return merge_vector_components(std::get<glm::ivec3>(item), std::get<glm::ivec3>(original), std::get<glm::ivec3>(edited));
         case Property_type::ivec4: return merge_vector_components(std::get<glm::ivec4>(item), std::get<glm::ivec4>(original), std::get<glm::ivec4>(edited));
+        case Property_type::float_array: return Property_value{merge_array_elements(std::get<std::vector<float>>(item), std::get<std::vector<float>>(original), std::get<std::vector<float>>(edited))};
+        case Property_type::int_array:   return Property_value{merge_array_elements(std::get<std::vector<int  >>(item), std::get<std::vector<int  >>(original), std::get<std::vector<int  >>(edited))};
         default:                   return edited;
     }
 }
@@ -218,6 +263,54 @@ constexpr ImVec4      c_mixed_frame_color{0.45f, 0.35f, 0.15f, 0.6f};
         }
         ImGui::PopID();
         if (component_mixed) {
+            ImGui::PopStyleColor();
+        }
+    }
+    ImGui::PopID();
+    ImGui::EndGroup();
+    return changed;
+}
+
+// One drag field per array element (H4), wrapped into lines of four so a
+// list of up to c_max_array_elements stays readable, all in one group so
+// the caller's IsItemActivated / IsItemDeactivatedAfterEdit see the whole
+// list as one edit session.
+[[nodiscard]] auto drag_array_elements(
+    const ImGuiDataType data_type,
+    void* const         values,
+    const int           count,
+    const uint32_t      mixed,
+    const float         speed,
+    const void* const   min,
+    const void* const   max,
+    const char* const   format
+) -> bool
+{
+    constexpr int     per_line = 4;
+    const std::size_t stride   = (data_type == ImGuiDataType_Float) ? sizeof(float) : sizeof(int);
+    const float       spacing  = ImGui::GetStyle().ItemInnerSpacing.x;
+    const int         columns  = std::min(count, per_line);
+    const float       width    = std::max(1.0f, (ImGui::CalcItemWidth() - (spacing * static_cast<float>(columns - 1))) / static_cast<float>(columns));
+    bool changed = false;
+    ImGui::BeginGroup();
+    ImGui::PushID("elements");
+    for (int k = 0; k < count; ++k) {
+        if ((k % per_line) != 0) {
+            ImGui::SameLine(0.0f, spacing);
+        }
+        const bool element_mixed = ((mixed & (1u << k)) != 0u);
+        if (element_mixed) {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, c_mixed_frame_color);
+        }
+        ImGui::PushID(k);
+        ImGui::SetNextItemWidth(width);
+        void* const value = static_cast<char*>(values) + (static_cast<std::size_t>(k) * stride);
+        changed = ImGui::DragScalar("##", data_type, value, speed, min, max, element_mixed ? c_mixed_format : format) || changed;
+        if (element_mixed && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Mixed values across the selection; editing sets this element on every item");
+        }
+        ImGui::PopID();
+        if (element_mixed) {
             ImGui::PopStyleColor();
         }
     }
@@ -996,13 +1089,56 @@ auto Dependency_property_rows::draw_widget(
         }
         case Property_type::float_array:
         case Property_type::int_array: {
-            // Read-only: how many values the array holds and the first few of
-            // them. Per-element editing is not part of the row.
-            const std::string text = any_mixed
-                ? std::string{c_mixed_format}
-                : array_summary(value);
+            // H4: the whole list is the value and an edit of one element is a
+            // set of the whole list. The summary line names the element count
+            // and the head of the list; below it one drag field per element,
+            // for a short, writable list whose length the selection agrees on
+            // (a long list, a read-only one and a length the items disagree on
+            // stay the summary alone).
+            const bool        is_float = (property.get_type() == Property_type::float_array);
+            const std::size_t count    = is_float
+                ? std::get<std::vector<float>>(value).size()
+                : std::get<std::vector<int>>(value).size();
+            const std::string text = any_mixed ? std::string{c_mixed_format} : array_summary(value);
+            const bool summary_only = property.is_read_only() ||
+                                      (mixed == c_array_size_mismatch) ||
+                                      (count == 0) ||
+                                      (count > c_max_array_elements);
+            if (summary_only) {
+                ImGui::TextUnformatted(text.c_str());
+                return false;
+            }
+            bool changed = false;
+            ImGui::BeginGroup();
             ImGui::TextUnformatted(text.c_str());
-            return false;
+            if (is_float) {
+                // A persistent scratch buffer the widgets write into: cleared
+                // and refilled per frame, so the capacity reaches its high
+                // water mark and the steady frame allocates nothing.
+                const std::vector<float>& current = std::get<std::vector<float>>(value);
+                m_float_array_scratch.clear();
+                m_float_array_scratch.insert(m_float_array_scratch.end(), current.begin(), current.end());
+                changed = drag_array_elements(
+                    ImGuiDataType_Float, m_float_array_scratch.data(), static_cast<int>(count), mixed,
+                    speed, has_range ? &min : nullptr, has_range ? &max : nullptr, "%.3f"
+                );
+                if (changed) {
+                    value = m_float_array_scratch;
+                }
+            } else {
+                const std::vector<int>& current = std::get<std::vector<int>>(value);
+                m_int_array_scratch.clear();
+                m_int_array_scratch.insert(m_int_array_scratch.end(), current.begin(), current.end());
+                changed = drag_array_elements(
+                    ImGuiDataType_S32, m_int_array_scratch.data(), static_cast<int>(count), mixed,
+                    static_cast<float>(ispeed), has_range ? &imin : nullptr, has_range ? &imax : nullptr, "%d"
+                );
+                if (changed) {
+                    value = m_int_array_scratch;
+                }
+            }
+            ImGui::EndGroup();
+            return changed;
         }
         case Property_type::enumeration: {
             immediate = true;

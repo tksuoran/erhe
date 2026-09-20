@@ -112,7 +112,6 @@ private:
     void scene_properties             (erhe::scene::Scene& scene);
     void variant_properties           (Scene_root& scene_root);
     void light_properties             (erhe::scene::Light& light);
-    void layout_properties            (erhe::scene::Layout& layout);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
     void geometry_properties          (erhe::geometry::Geometry& geometry);
     void buffer_mesh_properties       (const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh);

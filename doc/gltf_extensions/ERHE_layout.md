@@ -46,7 +46,9 @@ for them.
 - `layout.primary` / `secondary` / `tertiary`: signed axis names
   `pos_x` | `neg_x` | `pos_y` | `neg_y` | `pos_z` | `neg_z`.
 - `layout.grid_track_extent_{x,y,z}`: per-track extents; empty array =
-  uniform tracks.
+  uniform tracks. Each is a registered `float_array` property like the
+  fields above it, so it appears in `layout.properties` exactly when the
+  layout holds it locally.
 - `layout.properties`: the attachment's local property values by name
   (`doc/erhe/property_system.md` D23), the layout's complete local set: the
   explicit fields above are the effective values for readers without the

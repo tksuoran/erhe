@@ -26,7 +26,6 @@ The closed list of state this plan migrates, in phase order:
 
 | Phase | Owner | State | Property form |
 |---|---|---|---|
-| 2 | `erhe::scene::Layout` | grid track extents, one list per axis | three `float_array`, entry store |
 | 3 | `erhe::physics::Collision_filter` | `collision_systems`, `collide_with_systems`, `not_collide_with_systems` | three `string_array`, entry store (new value type) |
 | 4 | `erhe::physics::Physics_joint_settings` | `limits`, `drives` | child items with scalar properties (H6) |
 
@@ -74,18 +73,8 @@ ambient color and its two file forms now are.
 
 ### Phase 2: Layout grid track extents
 
-1. The array row editor of H4 in `dependency_property_rows.cpp`: one drag
-   field per element for `float_array` / `int_array`, mixed-value per element,
-   one `Property_set_operation` per completed edit.
-2. `Layout::grid_track_extent_x/y/z_property` (`float_array`, default empty =
-   uniform tracks, `visible_when` layout type is grid), `coerce` sizes a
-   non-empty list to the axis track count, `m_grid_track_extent` becomes the
-   mirror. A "Custom" toggle is a `Property_row_action` that seeds the list
-   from the volume (the action the hand-written row performs today).
-3. `Properties::layout_properties` is deleted; `ERHE_layout` keeps its
-   `grid_track_extent_x/y/z` fields, written from the mirror, and its
-   `properties` map decides whether the value stays local (section 4.13).
-4. `test_layout_properties.cpp` gains the coerce and mirror cases.
+Landed; `doc/erhe/property_system.md` section 4.13 states what the three
+per-axis extent lists now are and how the array row draws them.
 
 ### Phase 3: Collision_filter system lists
 

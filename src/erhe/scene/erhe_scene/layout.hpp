@@ -109,6 +109,17 @@ public:
     static const erhe::property::Property<glm::vec3>      gap_property;
     static const erhe::property::Property<glm::ivec3>     grid_track_count_property;
 
+    // Grid: per-track extents per axis, one float_array property per axis
+    // (doc/plans/hand_written_rows_to_properties.md H4). An empty list means
+    // uniform tracks; a non-empty list is coerced (D7) to the axis track
+    // count, so the list is sized where the value is produced.
+    static const erhe::property::Property<std::vector<float>> grid_track_extent_x_property;
+    static const erhe::property::Property<std::vector<float>> grid_track_extent_y_property;
+    static const erhe::property::Property<std::vector<float>> grid_track_extent_z_property;
+
+    // The extent property of axis 0, 1 or 2 (any other index gives axis 0).
+    [[nodiscard]] static auto grid_track_extent_property(int axis) -> const erhe::property::Property<std::vector<float>>&;
+
     // Per-child hints as attached properties (R7, doc/erhe/property_system.md
     // section 4.14; WPF Grid.Row): registered by Layout, set on the child
     // Node, qualified names "Layout.align_x" .. "Layout.grid_span". update()
@@ -139,10 +150,10 @@ public:
     void set_gap             (const glm::vec3& value);
     void set_grid_track_count(const glm::ivec3& value);
 
-    // Grid: per-track extents per axis; empty = uniform tracks. A list, not
-    // a property; edited in place.
-    [[nodiscard]] auto get_grid_track_extent(int axis) -> std::vector<float>&             { return m_grid_track_extent[static_cast<std::size_t>(axis)]; }
+    // Grid: per-track extents per axis; empty = uniform tracks. The vector
+    // is the mirror of the effective property value.
     [[nodiscard]] auto get_grid_track_extent(int axis) const -> const std::vector<float>& { return m_grid_track_extent[static_cast<std::size_t>(axis)]; }
+    void set_grid_track_extent(int axis, const std::vector<float>& value);
 
     // Implements erhe::property::Dependency_object: refreshes the mirror
     // on every change of a Layout property, whatever its source.

@@ -139,6 +139,49 @@ Properties::Properties(
         }
     );
 
+    // Below each "Sizes X/Y/Z" row of a grid layout: the toggle between
+    // uniform tracks (the empty list) and per-track sizes seeded from the
+    // layout's volume (doc/erhe/property_system.md section 4.13). It records
+    // the same Property_set_operation the generic row and MCP
+    // set_item_property record.
+    for (int axis = 0; axis < 3; ++axis) {
+        static const char* const c_axis_labels[3] = {"Custom Sizes X", "Custom Sizes Y", "Custom Sizes Z"};
+        m_dependency_rows.add_row_action(
+            Property_row_action{
+                .property    = erhe::scene::Layout::grid_track_extent_property(axis).get_ptr(),
+                .label       = c_axis_labels[axis],
+                .button_text = "Custom track sizes on / off",
+                .tooltip     = "Seed one size per track from the layout volume along this axis, or clear the list back to uniform tracks",
+                .execute     = [this, axis](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                    const erhe::property::Dependency_property& property = erhe::scene::Layout::grid_track_extent_property(axis).get();
+                    Compound_operation::Parameters parameters;
+                    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+                        const std::shared_ptr<erhe::scene::Layout> layout = std::dynamic_pointer_cast<erhe::scene::Layout>(item);
+                        if (!layout) {
+                            continue; // a node or a style holding the list has no volume to seed from
+                        }
+                        std::vector<float> after;
+                        if (layout->get_grid_track_extent(axis).empty()) {
+                            const int   track_count = layout->get_grid_track_count()[axis];
+                            const int   count       = (track_count > 1) ? track_count : 1;
+                            const float total       = layout->get_volume().max[axis] - layout->get_volume().min[axis];
+                            const float per         = (total > 0.0f) ? (total / static_cast<float>(count)) : 0.0f;
+                            after.assign(static_cast<std::size_t>(count), per);
+                        }
+                        parameters.operations.push_back(
+                            std::make_shared<Property_set_operation>(layout, property, layout->read_local_state(property), to_local_state(erhe::property::Property_value{after}))
+                        );
+                    }
+                    if (parameters.operations.size() == 1) {
+                        m_context.operation_stack->queue(parameters.operations.front());
+                    } else if (!parameters.operations.empty()) {
+                        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+                    }
+                }
+            }
+        );
+    }
+
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) {
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
@@ -378,47 +421,6 @@ void Properties::light_properties(erhe::scene::Light& light)
 
     // Ambient light color is a scene property now (issues #237 / #240); it is
     // shown in Scene properties (Properties::scene_properties), not per light.
-}
-
-void Properties::layout_properties(erhe::scene::Layout& layout)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // The authored layout parameters (type, volume, axes, gap, grid track
-    // count) are drawn by the generic property rows (Dependency_property_rows,
-    // doc/erhe/property_system.md section 4.13). Only the per-track extent lists
-    // remain here.
-    if (layout.get_layout_type() == erhe::scene::Layout_type::grid) {
-        static const char* const c_grid_size_labels[] = { "Sizes X", "Sizes Y", "Sizes Z" };
-        for (int axis = 0; axis < 3; ++axis) {
-            add_entry(c_grid_size_labels[axis], [&layout, axis]() {
-                std::vector<float>& extents = layout.get_grid_track_extent(axis);
-                const int track_count = layout.get_grid_track_count()[axis];
-                const int count = (track_count > 1) ? track_count : 1;
-                bool custom = !extents.empty();
-                if (ImGui::Checkbox("Custom", &custom)) {
-                    if (custom) {
-                        const erhe::math::Aabb& volume = layout.get_volume();
-                        const float total = volume.max[axis] - volume.min[axis];
-                        const float per   = (total > 0.0f) ? (total / static_cast<float>(count)) : 0.0f;
-                        extents.assign(static_cast<std::size_t>(count), per);
-                    } else {
-                        extents.clear();
-                    }
-                }
-                if (!extents.empty()) {
-                    extents.resize(static_cast<std::size_t>(count), 0.0f); // keep in sync with track count
-                    for (int k = 0; k < count; ++k) {
-                        ImGui::PushID(k);
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(48.0f);
-                        ImGui::DragFloat("##e", &extents[static_cast<std::size_t>(k)], 0.01f, 0.0f, 10000.0f);
-                        ImGui::PopID();
-                    }
-                }
-            });
-        }
-    }
 }
 
 void Properties::skin_properties(erhe::scene::Skin& skin)
@@ -1093,15 +1095,14 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 // The per-item part of the window (R3 / R5 of
 // doc/editor/properties_window.md): the read-only diagnostics of the
 // item's class, the actions, and the list editors that have no property
-// form (the scene's settings block, a layout's track extents, a collision
-// filter's system lists, joint limits and drives), all drawn per item and
+// form (the scene's settings block, a collision filter's system lists,
+// joint limits and drives), all drawn per item and
 // disabled while the item is sealed.
 void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& node_physics     = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint       = std::dynamic_pointer_cast<Node_joint             >(item);
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
-    const auto& layout           = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
     const auto& brush_placement  = std::dynamic_pointer_cast<Brush_placement        >(item);
@@ -1119,7 +1120,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
-    if (layout)           { layout_properties(*layout); }
     if (mesh)             { mesh_properties(*mesh); }
     if (brush_placement)  { brush_placement_properties(*brush_placement); }
     if (texture)          { texture_properties(texture); }
