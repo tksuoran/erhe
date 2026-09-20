@@ -783,6 +783,10 @@ public:
             var.set_value(std::vector<int32_t>{v.begin(), v.end()});
             break;
         }
+        case erhe::property::Property_type::string_array: {
+            var.set_value(std::get<std::vector<std::string>>(value));
+            break;
+        }
         case erhe::property::Property_type::enumeration: {
             var.set_value(lightusd::value::token{erhe::property::to_string(property, value)});
             break;

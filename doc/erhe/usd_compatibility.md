@@ -105,6 +105,7 @@ opinions).
 | asset path value type (`Property_type::asset_path`) | `asset` attribute (`@path@`) | one `std::string path`, kept apart from a plain string; its text form is the path verbatim, so the importer takes the text between the `@` (or `@@@`) delimiters as it stands |
 | `float[]` value type (`Property_type::float_array`) | `float[]` attribute | space-separated components in erhe text, `[1, 2, 3]` in USDA; the property's own type decides how the numbers are read back |
 | `int[]` value type (`Property_type::int_array`) | `int[]` attribute | same as `float[]`, with integer components |
+| `string[]` value type (`Property_type::string_array`) | `string[]` attribute | a quoted, space-separated list in erhe text (`"a" "b c"`), `["a", "b c"]` in USDA; the importer reads the attribute as the string array it is rather than through the literal text, which would lose the quoting and split an element that holds a space. The collision filter's three system lists are this type |
 | enumeration (D2a) | `token` attribute with `allowedTokens` | labels travel as tokens |
 | object reference (D28, material of a primitive, texture of a slot) | relationship (`material:binding`) or connection (`inputs:file`) | |
 | bridged property (D18, node TRS) | attribute whose value the schema computes from another representation (`xformOp:*`) | always local, never inherited: same as xformOps. A write through one of these goes on into the prim's authored stack the same way a matrix write does (the `Xform` row above) |

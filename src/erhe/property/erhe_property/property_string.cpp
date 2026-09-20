@@ -208,6 +208,27 @@ auto to_string(const Property_value& value, const Enum_info* enum_info) -> std::
             }
             return text;
         }
+        case Property_type::string_array: {
+            // A quoted, space-separated list: each element is double-quoted
+            // with `\"` and `\\` escapes, so an element may hold spaces,
+            // quotes or be empty. The empty list is the empty text.
+            const std::vector<std::string>& v = std::get<std::vector<std::string>>(value);
+            std::string text;
+            for (std::size_t i = 0, end = v.size(); i < end; ++i) {
+                if (i > 0) {
+                    text += ' ';
+                }
+                text += '"';
+                for (const char character : v[i]) {
+                    if ((character == '"') || (character == '\\')) {
+                        text += '\\';
+                    }
+                    text += character;
+                }
+                text += '"';
+            }
+            return text;
+        }
         case Property_type::mat4: {
             // 16 floats in glm's own storage order: column 0 first, each
             // column x y z w.
@@ -366,6 +387,49 @@ auto parse_value(const Property_type type, const std::string_view text_in, const
                     return std::nullopt;
                 }
                 values.push_back(component.value());
+            }
+            return values;
+        }
+        case Property_type::string_array: {
+            // The to_string form read back: double-quoted elements separated
+            // by whitespace, `\"` and `\\` escapes inside an element. Text
+            // that is not of that shape - an unterminated quote, an element
+            // that is not quoted - is not a value.
+            std::vector<std::string> values;
+            std::size_t              position = 0;
+            while (position < text.size()) {
+                const char character = text[position];
+                if ((character == ' ') || (character == '\t') || (character == '\n') || (character == '\r')) {
+                    ++position;
+                    continue;
+                }
+                if (character != '"') {
+                    return std::nullopt;
+                }
+                ++position;
+                std::string element;
+                bool        terminated = false;
+                while (position < text.size()) {
+                    const char inner = text[position];
+                    if (inner == '\\') {
+                        if ((position + 1) >= text.size()) {
+                            return std::nullopt;
+                        }
+                        element += text[position + 1];
+                        position += 2;
+                        continue;
+                    }
+                    ++position;
+                    if (inner == '"') {
+                        terminated = true;
+                        break;
+                    }
+                    element += inner;
+                }
+                if (!terminated) {
+                    return std::nullopt;
+                }
+                values.push_back(std::move(element));
             }
             return values;
         }

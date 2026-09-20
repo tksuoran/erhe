@@ -110,7 +110,7 @@ public:
     static const erhe::property::Property<glm::ivec3>     grid_track_count_property;
 
     // Grid: per-track extents per axis, one float_array property per axis
-    // (doc/plans/hand_written_rows_to_properties.md H4). An empty list means
+    // (doc/erhe/property_system.md D34). An empty list means
     // uniform tracks; a non-empty list is coerced (D7) to the axis track
     // count, so the list is sized where the value is produced.
     static const erhe::property::Property<std::vector<float>> grid_track_extent_x_property;

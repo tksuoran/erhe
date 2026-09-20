@@ -131,6 +131,7 @@ auto component_of(const Property_value& value, const int component, double& out)
         case Property_type::asset_path:  return false;
         case Property_type::float_array: return false; // any component count; not a formula target or source
         case Property_type::int_array:   return false;
+        case Property_type::string_array: return false;
     }
     return false;
 }
@@ -223,6 +224,7 @@ auto Expression::component_count(const Property_type type) -> int
         case Property_type::asset_path:  return 0; // not expressible: Expression::compile refuses it
         case Property_type::float_array: return 0; // not expressible: Expression::compile refuses it
         case Property_type::int_array:   return 0; // not expressible: Expression::compile refuses it
+        case Property_type::string_array: return 0; // not expressible: Expression::compile refuses it
     }
     return 0;
 }
@@ -380,7 +382,7 @@ auto Expression::evaluate(const Enum_info* enum_info) -> std::optional<Property_
                     ? fmt::format("{{{}}} is a matrix property", reference.describe())
                     : (type_of(source_value) == Property_type::asset_path)
                     ? fmt::format("{{{}}} is an asset path property", reference.describe())
-                    : ((type_of(source_value) == Property_type::float_array) || (type_of(source_value) == Property_type::int_array))
+                    : ((type_of(source_value) == Property_type::float_array) || (type_of(source_value) == Property_type::int_array) || (type_of(source_value) == Property_type::string_array))
                     ? fmt::format("{{{}}} is an array property", reference.describe())
                     : fmt::format("{{{}}} has no component {}", reference.describe(), component_letter(component));
                 return std::nullopt;
@@ -421,6 +423,7 @@ auto Expression::evaluate(const Enum_info* enum_info) -> std::optional<Property_
         case Property_type::asset_path:  return std::nullopt; // component_count() is 0, so compile() already refused
         case Property_type::float_array: return std::nullopt; // component_count() is 0, so compile() already refused
         case Property_type::int_array:   return std::nullopt; // component_count() is 0, so compile() already refused
+        case Property_type::string_array: return std::nullopt; // component_count() is 0, so compile() already refused
         case Property_type::ivec2: value = glm::ivec2{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1]))}; break;
         case Property_type::ivec3: value = glm::ivec3{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1])), static_cast<int>(std::lround(result[2]))}; break;
         case Property_type::ivec4: value = glm::ivec4{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1])), static_cast<int>(std::lround(result[2])), static_cast<int>(std::lround(result[3]))}; break;

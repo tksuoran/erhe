@@ -82,7 +82,10 @@ using Property_value = std::variant<
     // import or an export.
     std::vector<float>,
     std::vector<int>,
-    Weak_object_reference
+    Weak_object_reference,
+    // A list of free-form names, the same standing as the numeric arrays
+    // (doc/erhe/property_system.md D35).
+    std::vector<std::string>
 >;
 
 // Enumerators are the Property_value variant indices.
@@ -112,7 +115,12 @@ enum class Property_type : uint8_t {
 
     // A reference that does not own its target
     // (doc/erhe/property_system.md D28).
-    weak_object     = 18
+    weak_object     = 18,
+
+    // A list of free-form names (doc/erhe/property_system.md D35): the
+    // collision systems of a collision filter. Text form is a
+    // quoted, space-separated list, so an element may hold spaces.
+    string_array    = 19
 };
 
 [[nodiscard]] constexpr auto c_str(const Property_type type) -> const char*
@@ -137,6 +145,7 @@ enum class Property_type : uint8_t {
         case Property_type::float_array:     return "float[]";
         case Property_type::int_array:       return "int[]";
         case Property_type::weak_object:     return "weak object";
+        case Property_type::string_array:    return "string[]";
     }
     return "?";
 }
@@ -172,7 +181,8 @@ concept Property_value_type =
     std::is_same_v<T, glm::mat4>   ||
     std::is_same_v<T, Asset_path>  ||
     std::is_same_v<T, std::vector<float>> ||
-    std::is_same_v<T, std::vector<int>>;
+    std::is_same_v<T, std::vector<int>>   ||
+    std::is_same_v<T, std::vector<std::string>>;
 
 template <typename T>
 concept Property_enum_type = std::is_enum_v<T>;
@@ -214,6 +224,7 @@ template <Property_storable T>
     if constexpr (std::is_same_v<S, Asset_path>)  { return Property_type::asset_path;      }
     if constexpr (std::is_same_v<S, std::vector<float>>) { return Property_type::float_array; }
     if constexpr (std::is_same_v<S, std::vector<int>>)   { return Property_type::int_array;   }
+    if constexpr (std::is_same_v<S, std::vector<std::string>>) { return Property_type::string_array; }
 }
 
 // C++ value -> stored variant
@@ -272,6 +283,7 @@ template <Property_storable T>
         case Property_type::float_array:     return std::vector<float>{};
         case Property_type::int_array:       return std::vector<int>{};
         case Property_type::weak_object:     return Weak_object_reference{};
+        case Property_type::string_array:    return std::vector<std::string>{};
     }
     return false;
 }

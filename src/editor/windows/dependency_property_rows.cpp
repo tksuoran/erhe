@@ -124,6 +124,7 @@ template <typename T>
     switch (static_cast<Property_type>(first.index())) {
         case Property_type::float_array: return array_mixed_mask(std::get<std::vector<float>>(first), std::get<std::vector<float>>(other));
         case Property_type::int_array:   return array_mixed_mask(std::get<std::vector<int  >>(first), std::get<std::vector<int  >>(other));
+        case Property_type::string_array: return array_mixed_mask(std::get<std::vector<std::string>>(first), std::get<std::vector<std::string>>(other));
         case Property_type::vec2:  return vector_mixed_mask(std::get<glm::vec2 >(first), std::get<glm::vec2 >(other));
         case Property_type::vec3:  return vector_mixed_mask(std::get<glm::vec3 >(first), std::get<glm::vec3 >(other));
         case Property_type::vec4:  return vector_mixed_mask(std::get<glm::vec4 >(first), std::get<glm::vec4 >(other));
@@ -150,7 +151,7 @@ template <typename V>
     return result;
 }
 
-// The array counterpart of merge_vector_components (H4): the whole list is
+// The array counterpart of merge_vector_components (D34): the whole list is
 // the value, so lists of different lengths across the selection take the
 // edited list as a whole; lists of the same length take only the elements
 // the user moved.
@@ -183,8 +184,26 @@ template <typename T>
         case Property_type::ivec4: return merge_vector_components(std::get<glm::ivec4>(item), std::get<glm::ivec4>(original), std::get<glm::ivec4>(edited));
         case Property_type::float_array: return Property_value{merge_array_elements(std::get<std::vector<float>>(item), std::get<std::vector<float>>(original), std::get<std::vector<float>>(edited))};
         case Property_type::int_array:   return Property_value{merge_array_elements(std::get<std::vector<int  >>(item), std::get<std::vector<int  >>(original), std::get<std::vector<int  >>(edited))};
+        case Property_type::string_array: return Property_value{merge_array_elements(std::get<std::vector<std::string>>(item), std::get<std::vector<std::string>>(original), std::get<std::vector<std::string>>(edited))};
         default:                   return edited;
     }
+}
+
+[[nodiscard]] auto array_element_count(const Property_value& value) -> std::size_t
+{
+    switch (erhe::property::type_of(value)) {
+        case Property_type::float_array:  return std::get<std::vector<float>      >(value).size();
+        case Property_type::int_array:    return std::get<std::vector<int>        >(value).size();
+        case Property_type::string_array: return std::get<std::vector<std::string>>(value).size();
+        default:                          return 0;
+    }
+}
+
+template <typename T>
+[[nodiscard]] auto array_head(const Property_value& value, const std::size_t shown) -> Property_value
+{
+    const std::vector<T>& v = std::get<std::vector<T>>(value);
+    return Property_value{std::vector<T>{v.begin(), v.begin() + static_cast<std::ptrdiff_t>(shown)}};
 }
 
 // What an array row shows (M6): how many values the array holds, then the
@@ -192,28 +211,17 @@ template <typename T>
 [[nodiscard]] auto array_summary(const Property_value& value) -> std::string
 {
     constexpr std::size_t max_shown = 4;
-    const bool        is_float = (erhe::property::type_of(value) == Property_type::float_array);
-    const std::size_t count    = is_float
-        ? std::get<std::vector<float>>(value).size()
-        : std::get<std::vector<int>>(value).size();
+    const std::size_t count = array_element_count(value);
     std::string text = std::to_string(count) + ((count == 1) ? " value" : " values");
     if (count == 0) {
         return text;
     }
     const std::size_t shown = std::min(count, max_shown);
-    const Property_value head = is_float
-        ? Property_value{
-            std::vector<float>{
-                std::get<std::vector<float>>(value).begin(),
-                std::get<std::vector<float>>(value).begin() + static_cast<std::ptrdiff_t>(shown)
-            }
-        }
-        : Property_value{
-            std::vector<int>{
-                std::get<std::vector<int>>(value).begin(),
-                std::get<std::vector<int>>(value).begin() + static_cast<std::ptrdiff_t>(shown)
-            }
-        };
+    const Property_type  type = erhe::property::type_of(value);
+    const Property_value head =
+        (type == Property_type::float_array)  ? array_head<float>      (value, shown) :
+        (type == Property_type::int_array)    ? array_head<int>        (value, shown) :
+                                                array_head<std::string>(value, shown);
     text += ": " + erhe::property::to_string(head);
     if (shown < count) {
         text += " ...";
@@ -271,7 +279,7 @@ constexpr ImVec4      c_mixed_frame_color{0.45f, 0.35f, 0.15f, 0.6f};
     return changed;
 }
 
-// One drag field per array element (H4), wrapped into lines of four so a
+// One drag field per array element (D34), wrapped into lines of four so a
 // list of up to c_max_array_elements stays readable, all in one group so
 // the caller's IsItemActivated / IsItemDeactivatedAfterEdit see the whole
 // list as one edit session.
@@ -1089,16 +1097,14 @@ auto Dependency_property_rows::draw_widget(
         }
         case Property_type::float_array:
         case Property_type::int_array: {
-            // H4: the whole list is the value and an edit of one element is a
+            // D34: the whole list is the value and an edit of one element is a
             // set of the whole list. The summary line names the element count
             // and the head of the list; below it one drag field per element,
             // for a short, writable list whose length the selection agrees on
             // (a long list, a read-only one and a length the items disagree on
             // stay the summary alone).
             const bool        is_float = (property.get_type() == Property_type::float_array);
-            const std::size_t count    = is_float
-                ? std::get<std::vector<float>>(value).size()
-                : std::get<std::vector<int>>(value).size();
+            const std::size_t count    = array_element_count(value);
             const std::string text = any_mixed ? std::string{c_mixed_format} : array_summary(value);
             const bool summary_only = property.is_read_only() ||
                                       (mixed == c_array_size_mismatch) ||
@@ -1138,6 +1144,72 @@ auto Dependency_property_rows::draw_widget(
                 }
             }
             ImGui::EndGroup();
+            return changed;
+        }
+        case Property_type::string_array: {
+            // D34 / D35: the whole list is the value. One text field per
+            // element, committed when the field is deactivated after an
+            // edit, and - where the metadata says the count is the user's
+            // (Array_size::editable) - a "-" per element and an "Add"
+            // button, each of which is one completed set of the whole list.
+            // A read-only list, a long one and a selection whose lists
+            // differ stay the summary line alone.
+            const std::vector<std::string>& current  = std::get<std::vector<std::string>>(value);
+            const std::size_t               count    = current.size();
+            const bool                      editable = (ui.array_size == Property_ui::Array_size::editable);
+            const bool summary_only = property.is_read_only() ||
+                                      any_mixed ||
+                                      (count > c_max_array_elements) ||
+                                      (!editable && (count == 0));
+            if (summary_only) {
+                const std::string text = any_mixed ? std::string{c_mixed_format} : array_summary(value);
+                ImGui::TextUnformatted(text.c_str());
+                return false;
+            }
+            // A persistent scratch the fields write into, refilled from the
+            // row's value each frame so no steady frame allocates.
+            m_string_array_scratch.clear();
+            m_string_array_scratch.insert(m_string_array_scratch.end(), current.begin(), current.end());
+            bool        changed       = false;
+            bool        size_changed  = false;
+            std::size_t remove_index  = count; // count = nothing removed
+            ImGui::BeginGroup();
+            ImGui::PushID("elements");
+            const float button_width = ImGui::GetFrameHeight();
+            const float spacing      = ImGui::GetStyle().ItemInnerSpacing.x;
+            for (std::size_t k = 0; k < count; ++k) {
+                ImGui::PushID(static_cast<int>(k));
+                if (editable) {
+                    if (ImGui::Button("-", ImVec2{button_width, button_width})) {
+                        remove_index = k;
+                    }
+                    ImGui::SameLine(0.0f, spacing);
+                }
+                ImGui::SetNextItemWidth(std::max(1.0f, ImGui::CalcItemWidth() - (editable ? (button_width + spacing) : 0.0f)));
+                changed = ImGui::InputText("##", &m_string_array_scratch[k]) || changed;
+                ImGui::PopID();
+            }
+            if (editable && ImGui::Button("Add", ImVec2{-FLT_MIN, 0.0f})) {
+                m_string_array_scratch.emplace_back();
+                size_changed = true;
+            }
+            ImGui::PopID();
+            ImGui::EndGroup();
+            if (remove_index < count) {
+                m_string_array_scratch.erase(m_string_array_scratch.begin() + static_cast<std::ptrdiff_t>(remove_index));
+                size_changed = true;
+            }
+            if (size_changed) {
+                // Add and remove are complete edits of their own: they record
+                // one operation right away instead of waiting for a field to
+                // be deactivated.
+                immediate = true;
+                value     = m_string_array_scratch;
+                return true;
+            }
+            if (changed) {
+                value = m_string_array_scratch;
+            }
             return changed;
         }
         case Property_type::enumeration: {
@@ -1380,6 +1452,7 @@ void Dependency_property_rows::edit_as_expression(const Dependency_property& pro
         case Property_type::asset_path:  return;
         case Property_type::float_array: return; // any component count: not an expression target
         case Property_type::int_array:   return;
+        case Property_type::string_array: return;
     }
     begin_edit(property);
     queue_set(property, erhe::property::Local_state{erhe::property::Expression_text{std::move(text)}});

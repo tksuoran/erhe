@@ -597,10 +597,11 @@ TEST(Expressions, asset_path_and_arrays_are_refused_as_expression_targets)
     EXPECT_EQ(Expression::component_count(Property_type::asset_path), 0);
     EXPECT_EQ(Expression::component_count(Property_type::float_array), 0);
     EXPECT_EQ(Expression::component_count(Property_type::int_array), 0);
+    EXPECT_EQ(Expression::component_count(Property_type::string_array), 0);
 
-    const Property_type types[3] = {Property_type::asset_path, Property_type::float_array, Property_type::int_array};
-    const char* const  names[3] = {"asset", "float[]", "int[]"};
-    for (int index = 0; index < 3; ++index) {
+    const Property_type types[4] = {Property_type::asset_path, Property_type::float_array, Property_type::int_array, Property_type::string_array};
+    const char* const  names[4] = {"asset", "float[]", "int[]", "string[]"};
+    for (int index = 0; index < 4; ++index) {
         std::string error;
         EXPECT_EQ(Expression::compile("1", types[index], error), nullptr);
         EXPECT_NE(error.find(names[index]), std::string::npos);

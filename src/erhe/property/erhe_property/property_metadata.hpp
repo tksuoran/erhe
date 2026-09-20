@@ -102,6 +102,15 @@ public:
         slider          // float / int slider within min..max
     };
 
+    // Whether the generic array row lets the user add and remove elements
+    // (doc/erhe/property_system.md D34). `fixed`: the
+    // element count is produced elsewhere (a grid axis's track count, a
+    // primvar's element count), so the row edits elements only.
+    enum class Array_size : uint8_t {
+        fixed = 0,
+        editable
+    };
+
     // Row shown only while this returns true for the inspected object
     // (e.g. a material's alpha cutoff only in the alpha-test blending
     // mode); unset = always shown.
@@ -115,6 +124,7 @@ public:
     std::string_view     group         {};
     std::string_view     tooltip       {};
     bool                 developer_only{false};
+    Array_size           array_size    {Array_size::fixed}; // array rows: may the user add and remove elements
     std::string_view     label         {}; // row label; empty = the property name
     Visible_when         visible_when  {};
     // Object properties (D28): the item type mask the row accepts as a

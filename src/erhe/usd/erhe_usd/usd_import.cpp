@@ -2856,6 +2856,24 @@ private:
                 log_usd->warn("USD prim '{}': custom attribute '{}' has no value: {}", absolute_path, name, error);
                 continue;
             }
+            // A `string[]` carries its elements verbatim, quotes and spaces
+            // included, so it is read as the array it is rather than through
+            // the literal text (D35).
+            if (property->get_type() == erhe::property::Property_type::string_array) {
+                std::vector<std::string> strings;
+                if (!attribute.get_value(&strings)) {
+                    log_usd->warn("USD prim '{}': custom attribute '{}' is not a string array", absolute_path, name);
+                    continue;
+                }
+                const erhe::property::Property_value array_value{strings};
+                std::string                         array_error;
+                if (!target->validate_value(*property, array_value, array_error)) {
+                    log_usd->warn("USD prim '{}': custom attribute '{}' was rejected: {}", absolute_path, name, array_error);
+                    continue;
+                }
+                target->set_value(*property, array_value);
+                continue;
+            }
             const std::string                literal    = lightusd::value::pprint_value(attribute.get_var().value_raw());
             const std::optional<std::string> asset_path = usd_asset_literal_path(literal);
             const std::string                text       = asset_path.has_value() ? asset_path.value() : usd_literal_to_property_text(literal);

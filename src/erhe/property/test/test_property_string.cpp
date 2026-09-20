@@ -175,3 +175,29 @@ TEST(Property_string, int_array_is_space_separated)
     EXPECT_EQ(parse_value(Property_type::int_array, "1, -2, 3").value(), (Property_value{std::vector<int>{1, -2, 3}}));
     EXPECT_FALSE(parse_value(Property_type::int_array, "1 2.5").has_value());
 }
+
+// D35: a quoted, space-separated list, so an element may hold spaces, quotes,
+// backslashes, or be empty.
+TEST(Property_string, string_array_is_a_quoted_list)
+{
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{}}), "");
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{"props"}}), "\"props\"");
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{"a", "b c"}}), "\"a\" \"b c\"");
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{"say \"hi\""}}), "\"say \\\"hi\\\"\"");
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{"back\\slash"}}), "\"back\\\\slash\"");
+    EXPECT_EQ(to_string(Property_value{std::vector<std::string>{""}}), "\"\"");
+
+    EXPECT_TRUE(round_trips(Property_value{std::vector<std::string>{}}));
+    EXPECT_TRUE(round_trips(Property_value{std::vector<std::string>{""}}));
+    EXPECT_TRUE(round_trips(Property_value{std::vector<std::string>{"", "a b", "c\"d", "e\\f", "  padded  "}}));
+
+    EXPECT_EQ(parse_value(Property_type::string_array, "").value(), (Property_value{std::vector<std::string>{}}));
+    EXPECT_EQ(parse_value(Property_type::string_array, "   ").value(), (Property_value{std::vector<std::string>{}}));
+    EXPECT_EQ(parse_value(Property_type::string_array, "\"a\"   \"b\"").value(), (Property_value{std::vector<std::string>{"a", "b"}}));
+
+    // Not of that shape: an unquoted element, an unterminated quote, a
+    // trailing escape.
+    EXPECT_FALSE(parse_value(Property_type::string_array, "a b").has_value());
+    EXPECT_FALSE(parse_value(Property_type::string_array, "\"a").has_value());
+    EXPECT_FALSE(parse_value(Property_type::string_array, "\"a\\").has_value());
+}
