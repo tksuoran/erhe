@@ -63,6 +63,8 @@ Frame_controller::Frame_controller()
     translate_x   .set_max_delta(0.004f);
     translate_y   .set_max_delta(0.004f);
     translate_z   .set_max_delta(0.004f);
+    zoom          .set_damp     (0.92f);
+    zoom          .set_max_delta(0.004f);
     speed_modifier.set_max_value(3.0f);
     speed_modifier.set_damp     (0.92f);
     speed_modifier.set_max_delta(0.5f);
@@ -199,6 +201,7 @@ void Frame_controller::reset()
     translate_x.reset();
     translate_y.reset();
     translate_z.reset();
+    zoom.reset();
     rotate_x.reset();
     rotate_y.reset();
     rotate_z.reset();
@@ -254,6 +257,19 @@ auto Frame_controller::get_axis_z() const -> vec3
     return m_orientation * vec3{0.0f, 0.0f, 1.0f};
 }
 
+void Frame_controller::set_zoom_direction(const glm::vec3 direction_in_world, const Zoom_direction_space space)
+{
+    const float length = glm::length(direction_in_world);
+    if (length <= 0.0f) {
+        return;
+    }
+    const glm::vec3 unit_direction = direction_in_world / length;
+    m_zoom_direction_space = space;
+    m_zoom_direction = (space == Zoom_direction_space::view)
+        ? glm::vec3{glm::conjugate(m_orientation) * unit_direction}
+        : unit_direction;
+}
+
 void Frame_controller::set_active_control_value(const Variable variable, float value)
 {
     switch (variable) {
@@ -290,6 +306,7 @@ void Frame_controller::update_fixed_step()
     translate_x   .update();
     translate_y   .update();
     translate_z   .update();
+    zoom          .update();
     rotate_x      .update();
     rotate_y      .update();
     rotate_z      .update();
@@ -309,6 +326,17 @@ void Frame_controller::update_fixed_step()
     float tz = translate_z.current_value() + active_translate_z;
     if (tz != 0.0f) {
         m_position += get_axis_z() * tz * speed;
+    }
+
+    // The wheel channel is a second translation term: it is added to the
+    // translate_z term above, so key / controller motion along the view axis
+    // and wheel motion along the zoom direction sum into one velocity.
+    const float tzoom = zoom.current_value();
+    if (tzoom != 0.0f) {
+        const glm::vec3 zoom_direction = (m_zoom_direction_space == Zoom_direction_space::view)
+            ? glm::vec3{m_orientation * m_zoom_direction}
+            : m_zoom_direction;
+        m_position += zoom_direction * tzoom * speed;
     }
 
     float rx = rotate_x.current_value() + active_rotate_x;

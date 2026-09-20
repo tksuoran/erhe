@@ -894,6 +894,10 @@ set(_config_sources
     ${_config_out}/thumbnails_config.cpp
     ${_config_out}/ortho_zoom_mode.hpp
     ${_config_out}/ortho_zoom_mode.cpp
+    ${_config_out}/perspective_zoom_mode.hpp
+    ${_config_out}/perspective_zoom_mode.cpp
+    ${_config_out}/zoom_glide_direction.hpp
+    ${_config_out}/zoom_glide_direction.cpp
     ${_config_out}/rotate_sector_anchoring.hpp
     ${_config_out}/rotate_sector_anchoring.cpp
     ${_config_out}/transform_tool_config.hpp

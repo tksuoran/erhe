@@ -24,6 +24,15 @@ enum class Variable : unsigned int {
     rotate_z    = 5
 };
 
+// The space the zoom glide direction is held in. 'world' keeps the direction
+// captured at the wheel step, so turning the camera during a glide does not
+// change where the glide goes. 'view' keeps the direction relative to the
+// view, so it turns with the camera.
+enum class Zoom_direction_space : unsigned int {
+    world = 0,
+    view  = 1
+};
+
 class Frame_controller : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Frame_controller, erhe::Item_kind::not_clonable>
 {
 public:
@@ -53,6 +62,11 @@ public:
     // unless ERHE_CAMERA_ROLL_DIAGNOSTICS is on.
     void get_transform_from_node(erhe::scene::Node* node, const char* source = "Frame_controller::get_transform_from_node");
 
+    // Sets the axis the zoom channel moves the camera along. The vector is
+    // given in world space and is normalized here; it is stored in the given
+    // space and read back by update_fixed_step().
+    void set_zoom_direction      (glm::vec3 direction_in_world, Zoom_direction_space space);
+
     void apply_rotation          (float rx, float ry, float rz);
     void apply_tumble            (glm::vec3 pivot, float rx, float ry, float rz);
     void set_active_control_value(Variable variable, float value);
@@ -81,6 +95,10 @@ public:
     erhe::math::Input_axis translate_x;
     erhe::math::Input_axis translate_y;
     erhe::math::Input_axis translate_z;
+    // The mouse wheel channel. It is separate from translate_z so that key /
+    // controller motion along the view axis and wheel motion along the zoom
+    // direction run at the same time, each along its own axis.
+    erhe::math::Input_axis zoom;
     float                  active_rotate_x{0.0f};
     float                  active_rotate_y{0.0f};
     float                  active_rotate_z{0.0f};
@@ -104,6 +122,11 @@ private:
     // before the first node is attached.
     glm::vec3 m_position{0.0f, 0.0f, 0.0f};
     glm::quat m_orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    // Unit vector in the space named by m_zoom_direction_space. The default is
+    // the camera forward axis in view space, so a zoom before any
+    // set_zoom_direction() call moves the camera the way the view axis does.
+    glm::vec3 m_zoom_direction{0.0f, 0.0f, -1.0f};
+    Zoom_direction_space m_zoom_direction_space{Zoom_direction_space::view};
     bool      m_transform_update{false};
 #if ERHE_CAMERA_ROLL_DIAGNOSTICS
     Camera_roll_monitor m_roll_monitor;

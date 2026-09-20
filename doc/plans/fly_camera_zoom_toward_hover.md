@@ -51,7 +51,7 @@ setting this plan mirrors).
   view or the ray is absent (headset view, pointer outside a viewport),
   `zoom()` uses the view axis.
 - D3. A separate wheel channel in `Frame_controller`: a new
-  `erhe::math::Input_axis zoom` and a `glm::vec3 m_zoom_direction_in_world`
+  `erhe::math::Input_axis zoom` and a `glm::vec3 m_zoom_direction`
   (unit vector), with `set_zoom_direction(glm::vec3)`. `zoom` gets the same
   damp / max delta as `translate_z` (constructor, and both
   `set_damp_and_max_delta` sites in `fly_camera_tool.cpp`), and is reset
@@ -59,7 +59,7 @@ setting this plan mirrors).
   reset sites in `fly_camera_tool.cpp`). `translate_z` keeps serving keys and
   the controller axis only - this is what gives R4 and R5 by construction:
   `update_fixed_step()` adds
-  `m_zoom_direction_in_world * zoom.current_value() * speed` after the
+  `direction * zoom.current_value() * speed` after the
   `translate_z` term, so the two contributions sum.
 - D4. `zoom()` for a perspective camera, both modes, writes the wheel channel:
   it sets the direction (`-get_axis_z()` for `view_axis`, the D2 ray direction

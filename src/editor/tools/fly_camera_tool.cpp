@@ -760,6 +760,7 @@ Fly_camera_tool::Fly_camera_tool(
     m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    m_camera_controller->zoom                               .set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
 
     config.invert_x           = camera_controls_config.invert_x;
     config.invert_y           = camera_controls_config.invert_y;
@@ -982,6 +983,7 @@ void Fly_camera_tool::apply_camera_controls_from_scene()
         m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
         m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
         m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+        m_camera_controller->zoom                               .set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     }
 }
 
@@ -1008,6 +1010,7 @@ void Fly_camera_tool::on_hover_viewport_change()
     m_camera_controller->translate_x.reset();
     m_camera_controller->translate_y.reset();
     m_camera_controller->translate_z.reset();
+    m_camera_controller->zoom.reset();
 }
 
 auto Fly_camera_tool::adjust(int64_t timestamp_ns, Variable variable, float value) -> bool
@@ -1019,6 +1022,7 @@ auto Fly_camera_tool::adjust(int64_t timestamp_ns, Variable variable, float valu
         m_camera_controller->translate_x.reset();
         m_camera_controller->translate_y.reset();
         m_camera_controller->translate_z.reset();
+        m_camera_controller->zoom.reset();
         m_camera_controller->rotate_x.reset();
         m_camera_controller->rotate_y.reset();
         m_camera_controller->rotate_z.reset();
@@ -1047,6 +1051,7 @@ auto Fly_camera_tool::try_move(int64_t timestamp_ns, const Variable variable, co
         m_camera_controller->translate_x.reset();
         m_camera_controller->translate_y.reset();
         m_camera_controller->translate_z.reset();
+        m_camera_controller->zoom.reset();
         return false;
     }
 
@@ -1109,10 +1114,58 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
         return true;
     }
 
-    glm::vec3 position = m_camera_controller->get_position();
-    const float l = glm::length(position);
-    const float k = (-1.0f / 32.0f) * l * delta;
-    m_camera_controller->get_variable(Variable::translate_z).adjust(k);
+    // Perspective camera. The wheel drives the zoom channel of the controller,
+    // which is separate from translate_z: the keys and the controller axis keep
+    // moving the camera along the view axis while a wheel glide runs, and the
+    // two contributions sum.
+    const Camera_controls_config* const camera_controls = get_writable_camera_controls();
+    const bool hover_point_mode =
+        (camera_controls != nullptr) &&
+        (camera_controls->perspective_zoom_mode == Perspective_zoom_mode::hover_point);
+    const Zoom_direction_space direction_space =
+        ((camera_controls != nullptr) && (camera_controls->zoom_glide_direction == Zoom_glide_direction::keep_world))
+            ? Zoom_direction_space::world
+            : Zoom_direction_space::view;
+
+    const glm::vec3 position  = m_camera_controller->get_position();
+    glm::vec3       direction = -m_camera_controller->get_axis_z();
+    float           l         = glm::length(position);
+
+    if (hover_point_mode) {
+        // For a perspective camera the ray from the camera position through the
+        // pointer is the axis towards the hovered point at any hit distance, and
+        // it exists even when the pointer is over empty space. When there is no
+        // viewport scene view or no ray - a headset view, a pointer outside a
+        // viewport - the view axis is used instead.
+        Scene_view* const          scene_view          = get_hover_scene_view();
+        Viewport_scene_view* const viewport_scene_view = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+        if (viewport_scene_view != nullptr) {
+            viewport_scene_view->update_hover(true);
+            const std::optional<glm::vec3> ray_direction = scene_view->get_control_ray_direction_in_world();
+            if (ray_direction.has_value()) {
+                direction = ray_direction.value();
+                // A step is proportional to the distance of what is being
+                // approached, so that the approach slows down near a surface.
+                const Hover_entry* const hover = scene_view->get_nearest_hover(
+                    scene_view->get_pickable_slot_mask(Hover_entry::content_bit | Hover_entry::grid_bit)
+                );
+                if ((hover != nullptr) && hover->position.has_value()) {
+                    l = glm::distance(position, hover->position.value());
+                }
+            }
+        }
+    }
+
+    // Right at a surface the hit distance goes to zero, which would make the
+    // wheel stop responding: the near clip distance is the lower bound.
+    const float min_distance = (m_camera != nullptr) ? m_camera->projection()->z_near : 0.03f;
+    if (l < min_distance) {
+        l = min_distance;
+    }
+
+    const float k = (1.0f / 32.0f) * l * delta;
+    m_camera_controller->set_zoom_direction(direction, direction_space);
+    m_camera_controller->zoom.adjust(k);
     return true;
 }
 
@@ -1586,6 +1639,7 @@ void Fly_camera_tool::window_imgui()
         m_camera_controller->translate_x.set_max_delta(speed);
         m_camera_controller->translate_y.set_max_delta(speed);
         m_camera_controller->translate_z.set_max_delta(speed);
+        m_camera_controller->zoom.set_max_delta(speed);
     }
     ImGui::SliderFloat("Move Speed", &m_camera_controller->move_speed, 0.001f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderFloat("Turn Speed", &m_sensitivity, 0.2f, 2.0f);
@@ -1620,6 +1674,7 @@ void Fly_camera_tool::window_imgui()
             show_input_axis_ui("Tx", m_camera_controller->translate_x);
             show_input_axis_ui("Ty", m_camera_controller->translate_y);
             show_input_axis_ui("Tz", m_camera_controller->translate_z);
+            show_input_axis_ui("Zoom", m_camera_controller->zoom);
             show_input_axis_ui("Rx", m_camera_controller->rotate_x);
             show_input_axis_ui("Ry", m_camera_controller->rotate_y);
             show_input_axis_ui("Rz", m_camera_controller->rotate_z);

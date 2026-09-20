@@ -97,5 +97,25 @@ struct("Camera_controls_config",
             visible=True,
             developer=False
         ),
+        field(
+            "perspective_zoom_mode",
+            EnumRef("Perspective_zoom_mode"),
+            added_in=1,
+            default="Perspective_zoom_mode::hover_point",
+            short_desc="Perspective View Zoom",
+            long_desc="What zooming (mouse wheel) does in a view with a perspective camera: Along view axis moves the camera along its view axis; Towards hovered point moves the camera towards the point under the pointer, so that point stays under the pointer.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "zoom_glide_direction",
+            EnumRef("Zoom_glide_direction"),
+            added_in=1,
+            default="Zoom_glide_direction::follow_view",
+            short_desc="Zoom Glide Direction",
+            long_desc="What a zoom glide does when the camera turns while the glide runs: Keep world direction keeps the world direction captured at the wheel step; Follow view keeps the direction relative to the view, so it turns with the camera.",
+            visible=True,
+            developer=False
+        ),
     ],
 )
