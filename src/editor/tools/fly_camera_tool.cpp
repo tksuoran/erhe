@@ -1184,19 +1184,36 @@ auto Fly_camera_tool::try_start_track() -> bool
         return false;
     }
 
+    // The track anchor is the world space point under the pointer when the
+    // drag starts. The track plane goes through the anchor, facing the camera.
+    // Both stay fixed for the whole drag: track() moves the camera so that
+    // the pointer ray keeps going through the anchor.
+    const glm::vec3 plane_normal = m_camera_controller->get_axis_z();
+
     const Hover_entry* hover = scene_view->get_nearest_hover(
         scene_view->get_pickable_slot_mask(Hover_entry::content_bit | Hover_entry::grid_bit)
     );
-    if (hover == nullptr) {
-        return false;
+    if ((hover != nullptr) && hover->position.has_value()) {
+        m_track_plane_point  = hover->position;
+        m_track_plane_normal = plane_normal;
+        return true;
     }
 
-    if (!hover->position.has_value()) {
+    // Nothing under the pointer: anchor to the point of the pointer ray
+    // at the depth of the world origin, or a fixed distance ahead when
+    // the world origin is not in front of the camera.
+    const std::optional<glm::vec3> ray_origin    = scene_view->get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction = scene_view->get_control_ray_direction_in_world();
+    if (!ray_origin.has_value() || !ray_direction.has_value()) {
         return false;
     }
-
-    m_track_plane_point = hover->position;
-    m_track_plane_normal = m_camera_controller->get_axis_z();
+    constexpr float fallback_distance = 10.0f;
+    const std::optional<float> t = erhe::math::intersect_plane<float>(
+        plane_normal, glm::vec3{0.0f, 0.0f, 0.0f}, ray_origin.value(), ray_direction.value()
+    );
+    const float distance = (t.has_value() && (t.value() > 0.0f)) ? t.value() : fallback_distance;
+    m_track_plane_point  = ray_origin.value() + (distance * ray_direction.value());
+    m_track_plane_normal = plane_normal;
     return true;
 }
 
@@ -1234,23 +1251,28 @@ auto Fly_camera_tool::track() -> bool
         return ray_origin + t.value() * ray_direction;
     };
 
-    std::optional<glm::vec3> hover_position = get_track_position();
-    if (!hover_position.has_value()) {
+    // Pointer ray from the current camera pose: the camera may have been
+    // moved by others (linked four view cameras) since the last hover update.
+    viewport_scene_view->update_hover(true);
+
+    const std::optional<glm::vec3> pointer_position = get_track_position();
+    if (!pointer_position.has_value()) {
         return false;
     }
 
-    glm::vec3 translation = hover_position.value() - m_track_plane_point.value();
-    if (glm::length(translation) < 0.001f) {
+    // The translation is parallel to the track plane, so it keeps the anchor
+    // depth; moving the camera by its opposite puts the anchor exactly under
+    // the pointer, for perspective and orthogonal projections alike.
+    const glm::vec3 translation = pointer_position.value() - m_track_plane_point.value();
+    if (translation == glm::vec3{0.0f, 0.0f, 0.0f}) {
         return true;
     }
 
-    glm::vec3 old_position = m_camera_controller->get_position();
-    glm::vec3 new_position = old_position - translation;
+    const glm::vec3 old_position = m_camera_controller->get_position();
+    const glm::vec3 new_position = old_position - translation;
     m_camera_controller->set_position(new_position);
     m_camera_controller->get_node()->update_world_from_node();
     viewport_scene_view->update_hover(true);
-
-    m_track_plane_point = get_track_position();
     return true;
 }
 
