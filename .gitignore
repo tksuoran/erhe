@@ -14,10 +14,8 @@ claude.sh
 .clangd
 .mcp.json
 .lsai/
-build_ninja_win_vulkan
-build_ninja_win_vulkan_release
-build_ninja_win_vulkan_box3d
-build_ninja_win_clang
+# Every build tree (scripts/configure_* write to build_<name>/)
+/build_*/
 erhe_cmake_profiling.json
 **/__pycache__/
 *.pyc
@@ -32,36 +30,6 @@ src/editor/res/fonts/materialdesignicons.css
 !src/editor/cache/bvh/keep
 !src/editor/cache/tinybvh/keep
 build
-build_ninja
-build_ninja_linux
-build_ninja_linux_vulkan
-build_ninja_osx
-build_ninja_windows
-build_vs2022_opengl
-build_vs2026_opengl
-build_vs2026_opengl_no_tracy
-build_vs2026_opengl_asan
-build_vs2026_vulkan
-build_vs2026_vulkan_asan
-build_vs2026_vulkan_headless
-build_vs2026_vulkan_headless_asan
-build_vs2026_vulkan_headless_box3d
-build_vs2026_vulkan_box3d
-build_test_geometry
-build_android_soak
-build_test_raytrace_bvh
-build_test_raytrace_embree
-build_test_raytrace_none
-build_test_raytrace_tinybvh
-build_vs2026_headless
-build_tests_asan
-build_tests
-build_opengl
-build_xcode_metal
-build_xcode_metal_asan
-build_xcode_vulkan
-build_xcode_vulkan_minimal
-build_xcode_vulkan_asan
 cmake-build-*
 vscode-cmake-*
 logs/*
@@ -104,3 +72,15 @@ config/editor/openxr_user_state.json
 
 # Per-machine memory bank state (see memory-bank/README.md Machine-Scope Rule)
 memory-bank/local/
+
+# Local asset drops: only the listed assets are part of the repo. Anything
+# else placed under res/editor/assets/ stays out of git status, git add -A
+# and git stash -u. Add a ! line here when committing a new asset.
+res/editor/assets/*
+!res/editor/assets/RiggedFigure/
+!res/editor/assets/skin_test/
+!res/editor/assets/textures/
+!res/editor/assets/SM_Deccer_Cubes_Textured.glb
+!res/editor/assets/vertexcolor_test_grid.glb
+res/editor/scenes/
+vk_layer_settings.txt
