@@ -24,6 +24,11 @@ setting this plan mirrors).
   own axis; the camera velocity is their sum.
 - R6. The setting applies to perspective cameras. An orthogonal camera zooms
   as `doc/editor/four_view.md` states, under both values.
+- R7. Settings, Camera Control, gains "Zoom Glide Direction" with two values:
+  "Keep world direction" and "Follow view". The default is "Follow view". It
+  decides what a glide does when the camera turns while it runs: keep the
+  world direction captured at the wheel step, or keep the direction relative
+  to the view, so it turns with the camera.
 
 ## Design
 
@@ -76,40 +81,27 @@ setting this plan mirrors).
   keeps the wheel responsive right at a surface.
 - D6. Diagnostics. The Fly Camera window shows the new axis with
   `show_input_axis_ui("Zoom", ...)` next to "Tz".
-- D7. MCP. A `debug_camera_zoom` tool (`viewport` pointer position via the
-  existing `debug_imgui_mouse`, then `delta`) calls
-  `Fly_camera_tool::zoom()` so the headless build can exercise the wheel path;
-  window wheel events are not reachable by `debug_imgui_mouse` today
-  (`doc/editor/four_view.md` trap).
+- D7. Glide direction (R7). New codegen enum `Zoom_glide_direction`
+  (`zoom_glide_direction.py`: `keep_world` = 0, `follow_view` = 1) and field
+  `zoom_glide_direction` in `camera_controls_config.py`, default
+  `Zoom_glide_direction::follow_view`, after `perspective_zoom_mode`.
+  `Frame_controller::set_zoom_direction(direction_in_world, Zoom_direction_space)`
+  stores the vector as given for `world`, and as
+  `conjugate(m_orientation) * direction` for `view`; `update_fixed_step()`
+  uses the stored vector directly, or `m_orientation * vector`, by the stored
+  space. `zoom()` picks the space from the setting at the wheel step. The
+  "Turning the camera" sentence of D4 describes `keep_world`; R3's
+  point-stays-under-pointer holds under both values while the camera does not
+  turn.
 
 ## Phases
 
-1. D1: enum, field, CMake entry. Build `editor` twice (codegen definition
-   change). Verify the Settings row appears and
-   `config/editor/editor_settings.json` round-trips the value.
-2. D3: `Frame_controller` wheel channel, resets, damp wiring, D6 row.
-   `zoom()` writes the channel with the view axis (R2 in both modes at this
-   point). Verify W/S and wheel still move the camera as before.
-3. D2 + D4 + D5: `hover_point` branch in `zoom()`.
-4. D7, then the headless acceptance check below; then hand to the user for
-   the interactive check.
-5. Docs: `doc/editor/tools.md` `Fly_camera_tool` entry states the two wheel
-   modes and the separate wheel channel; this plan is deleted and its link
-   removed from the "Future work" section of
-   `doc/editor/tools.md` and from `doc/README.md`; `py -3 scripts/check_doc_links.py`.
-
-## Verification
-
-- Headless (`build_vs2026_vulkan_headless`, `ERHE_AI_DRIVER=1`, MCP port read
-  from the log): place the pointer off-center over a mesh, read the hover
-  position `P` and its viewport position, send wheel steps, wait for the glide
-  to end. Acceptance, worst over the run: `P` re-projects within 1 pixel of
-  the pointer; the camera position moved along `normalize(P - start)` with a
-  perpendicular residue under 1e-4 of the distance moved; camera orientation
-  unchanged. Repeat with `view_axis`: displacement is along the view axis.
-- R5: hold the forward key command active (`set_active_control_value` path
-  through MCP) while sending wheel steps; the displacement equals the sum of
-  the two single-input displacements within the fixed-step quantization.
-- Orthogonal camera: `Ortho_zoom_mode` behavior unchanged under both values.
-- User, windowed: wheel towards an off-center object with and without W held;
-  four view perspective cell; per-scene override of the new setting.
+1. D1 + D7 settings: enums, fields, CMake entries (build `editor` twice:
+   codegen definition change).
+2. D3 + D6 + D7: `Frame_controller` wheel channel.
+3. D2 + D4 + D5: `zoom()`.
+4. User verifies interactively. Then docs: `doc/editor/tools.md`
+   `Fly_camera_tool` entry states the wheel modes and the separate wheel
+   channel; this plan is deleted and its link removed from the "Future work"
+   section of `doc/editor/tools.md` and from `doc/README.md`;
+   `py -3 scripts/check_doc_links.py`.
