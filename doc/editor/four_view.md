@@ -68,9 +68,10 @@ orthogonal camera sits at `focus + axis * distance` looking at the focus.
   `Four_view::set_view_height()`, which sets `ortho_height` on all three
   cameras. The `Camera_controls_config::ortho_zoom_mode` setting (Settings,
   Camera Control, "Orthogonal View Zoom") selects what else zoom does:
-  `size_only` scales around the view center; `size_and_pan` also translates
-  the zoomed camera by the offset between the pointer ray origins before and
-  after the size change, which keeps the point under the pointer in place
+  `size_only` scales around the view center; `size_and_pan` (the default)
+  also translates the zoomed camera by the offset between the pointer ray
+  origins before and after the size change, which keeps the point under the
+  pointer in place
   (and, in a four view, moves the focus as any in-plane camera move does).
 - Rotation. `Fly_camera_tool::is_rotation_locked()` makes turn, tumble and
   the rotation axes no-ops for a four view camera.
