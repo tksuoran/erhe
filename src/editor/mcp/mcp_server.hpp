@@ -17,6 +17,8 @@
 
 #include <glm/glm.hpp>
 
+#include "erhe_window/window_event_handler.hpp"
+
 #include <optional>
 
 namespace httplib {
@@ -353,6 +355,10 @@ private:
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_set_transform_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_imgui_mouse             (const nlohmann::json& args) -> std::string;
+
+    // doc/plans/mcp_ui_driving.md part B (src/editor/mcp/mcp_server_ui.cpp)
+    auto action_inject_input_events           (const nlohmann::json& args) -> std::string;
+    auto query_input_state                    (const nlohmann::json& args) -> std::string;
     auto action_open_four_view                (const nlohmann::json& args) -> std::string;
     auto query_four_views                     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
@@ -505,6 +511,59 @@ private:
         bool                  release    {true};
     };
     std::optional<Physics_drag_steps>                m_physics_drag_steps;
+
+    // inject_input_events: one scripted input gesture, injecting the events of
+    // one frame offset per pass of its deferred request (main thread only).
+    // doc/plans/mcp_ui_driving.md B2: one gesture runs at a time, a second call
+    // while this one steps is refused. The vectors are persistent scratch
+    // (R6): a finished gesture clears them and keeps their capacity, so a
+    // repeated gesture of the same size allocates nothing.
+    class Input_gesture_steps
+    {
+    public:
+        // Nothing is stepping when this is nullptr; it also tells this
+        // request's own re-run from a new call of the tool.
+        const Queued_request*                  request    {nullptr};
+        std::vector<erhe::window::Input_event> events;       // injection order
+        std::vector<int>                       event_frames; // frame offset of events[i]
+        std::size_t                            next_event {0};
+        int                                    frame      {0}; // frame offset of this pass
+        int                                    last_frame {0}; // frame offset of the last event
+        int                                    injected   {0};
+        // The last event has been injected and the extra frame R4 promises is
+        // being waited out.
+        bool                                   tail_frame {false};
+
+        void clear()
+        {
+            request = nullptr;
+            events.clear();       // capacity kept (R6)
+            event_frames.clear(); // capacity kept (R6)
+            next_event = 0;
+            frame      = 0;
+            last_frame = 0;
+            injected   = 0;
+            tail_frame = false;
+        }
+    };
+    Input_gesture_steps                              m_input_gesture_steps;
+
+    // The pointer / modifier state the injected events have built up
+    // (doc/plans/mcp_ui_driving.md B3). null_window reports no cursor position
+    // and no modifiers of its own (F7), so this is the only record of where an
+    // injected pointer is; get_input_state reports it.
+    class Input_pointer_state
+    {
+    public:
+        float    x             {0.0f};
+        float    y             {0.0f};
+        bool     position_known{false};
+        uint32_t button_mask   {0};
+        uint32_t modifier_mask {0};
+        // cursor_enter + window_focus have been injected once (B3).
+        bool     entered       {false};
+    };
+    Input_pointer_state                              m_input_pointer_state;
 
     // reset_editor_state has queued the close of every open scene and is
     // deferring itself until the scene list is empty (main thread only).

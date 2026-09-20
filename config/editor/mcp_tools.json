@@ -6962,6 +6962,135 @@
     "name": "debug_imgui_mouse"
   },
   {
+    "description": "Inject erhe::window::Input_event values into the editor's window, the way real keyboard, mouse and controller input arrives: the events travel get_input_events() -> Editor::dispatch_input_event -> the ImGui hosts and erhe::commands, so every consumer of real input sees them (ImGui widgets, viewport tools, the fly camera). This is the way to exercise the menu- and mouse-driven entry points headlessly; scene scripting keeps using the explicit-argument tools. Each event carries a 'frame' offset and the call spans that many editor frames, returning one frame after the last event was dispatched - so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build injected events interleave with the user's real input. Pointer coordinates are window pixels with the origin at the top left, the space get_viewports reports its rectangles in. See doc/plans/mcp_ui_driving.md.",
+    "inputSchema": {
+      "properties": {
+        "events": {
+          "description": "Events to inject, in order. Field names are the erhe::window::*_event member names. A button or wheel event is preceded automatically by a move event to the pointer position when that differs from the last injected one, and the first pointer event of a session is preceded by cursor_enter and window_focus.",
+          "items": {
+            "properties": {
+              "type": {
+                "description": "Event type, with or without the '_event' suffix",
+                "enum": [
+                  "key",
+                  "text",
+                  "char",
+                  "window_focus",
+                  "cursor_enter",
+                  "mouse_move",
+                  "mouse_button",
+                  "mouse_wheel",
+                  "controller_axis",
+                  "controller_button"
+                ],
+                "type": "string"
+              },
+              "frame": {
+                "description": "Frame offset from the first pass (default: the previous event's frame). Must not go back, and must not exceed 120.",
+                "type": "integer"
+              },
+              "modifiers": {
+                "description": "Modifier keys held for this event and the events after it (default: what the previous event left)",
+                "items": {
+                  "enum": [
+                    "ctrl",
+                    "shift",
+                    "super",
+                    "menu"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "keycode": {
+                "description": "key event: the erhe::window::Keycode by name ('z', 'left shift', 'Key_f5' - case and '_' insensitive) or by numeric value"
+              },
+              "pressed": {
+                "description": "key / mouse_button event: press (default) or release",
+                "type": "boolean"
+              },
+              "utf8_text": {
+                "description": "text event: up to 31 bytes of UTF-8",
+                "type": "string"
+              },
+              "codepoint": {
+                "description": "char event: the Unicode code point",
+                "type": "integer"
+              },
+              "focused": {
+                "description": "window_focus event: focus gained (default true)",
+                "type": "boolean"
+              },
+              "entered": {
+                "description": "cursor_enter event: 1 when the cursor entered (default)",
+                "type": "integer"
+              },
+              "x": {
+                "description": "mouse_move event: pointer x in window pixels. mouse_wheel event: the horizontal scroll amount (the wheel event's own member).",
+                "type": "number"
+              },
+              "y": {
+                "description": "mouse_move event: pointer y in window pixels. mouse_wheel event: the vertical scroll amount.",
+                "type": "number"
+              },
+              "dx": {
+                "description": "mouse_move event: x delta (default: the step from the last position; relative-hold consumers such as the fly camera read this)",
+                "type": "number"
+              },
+              "dy": {
+                "description": "mouse_move event: y delta (default: the step from the last position)",
+                "type": "number"
+              },
+              "pointer_x": {
+                "description": "mouse_button / mouse_wheel event: the window pixel the event happens at, when it should move the pointer first",
+                "type": "number"
+              },
+              "pointer_y": {
+                "description": "mouse_button / mouse_wheel event: see pointer_x",
+                "type": "number"
+              },
+              "button": {
+                "description": "mouse_button event: 'left' (default), 'right', 'middle', 'x1', 'x2' or the index. controller_button event: the button index."
+              },
+              "controller": {
+                "description": "controller_axis / controller_button event: controller index",
+                "type": "integer"
+              },
+              "axis": {
+                "description": "controller_axis event: axis index",
+                "type": "integer"
+              },
+              "value": {
+                "description": "controller_axis event: the axis value. controller_button event: pressed."
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "type": "object"
+    },
+    "name": "inject_input_events"
+  },
+  {
+    "description": "Report the input state the injected events (inject_input_events) have built up: the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count and pending event count). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_input_state"
+  },
+  {
     "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},

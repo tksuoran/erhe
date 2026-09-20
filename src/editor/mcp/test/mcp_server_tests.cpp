@@ -2094,3 +2094,244 @@ TEST_F(Mcp_test, assign_mesh_material_is_undoable)
     client.call_tool("delete_nodes", json{{"scene_name", scene}, {"names", {"undo_assign_mesh"}}});
     advance_frames(client, 3);
 }
+
+// ---- Input event injection (doc/plans/mcp_ui_driving.md part B) ------------
+
+namespace {
+
+// The first viewport that shows a scene, as get_viewports reports it: its
+// rectangle is in window pixels with the origin at the top left, the space
+// inject_input_events pointer coordinates are in.
+class Viewport_rect
+{
+public:
+    bool  found {false};
+    float x     {0.0f};
+    float y     {0.0f};
+    float width {0.0f};
+    float height{0.0f};
+    // The camera's world_from_camera matrix, column-major.
+    std::array<float, 16> world_from_camera{};
+    bool                  has_camera{false};
+
+    [[nodiscard]] auto center_x() const -> float { return x + (width  * 0.5f); }
+    [[nodiscard]] auto center_y() const -> float { return y + (height * 0.5f); }
+};
+
+[[nodiscard]] auto first_viewport(Mcp_client& client) -> Viewport_rect
+{
+    Viewport_rect rect;
+    Mcp_client::Tool_result result = client.call_tool("get_viewports", json::object());
+    if (result.is_error || !result.payload.contains("viewports")) {
+        return rect;
+    }
+    const json& viewports = result.payload["viewports"];
+    if (!viewports.is_array()) {
+        return rect;
+    }
+    for (const json& entry : viewports) {
+        if ((entry.value("width", 0) <= 0) || (entry.value("height", 0) <= 0)) {
+            continue;
+        }
+        rect.found  = true;
+        rect.x      = static_cast<float>(entry.value("x", 0));
+        rect.y      = static_cast<float>(entry.value("y", 0));
+        rect.width  = static_cast<float>(entry.value("width", 0));
+        rect.height = static_cast<float>(entry.value("height", 0));
+        if (entry.contains("camera_world_from_camera") &&
+            entry["camera_world_from_camera"].is_array() &&
+            (entry["camera_world_from_camera"].size() == 16)) {
+            for (std::size_t i = 0; i < 16; ++i) {
+                rect.world_from_camera[i] = entry["camera_world_from_camera"][i].get<float>();
+            }
+            rect.has_camera = true;
+        }
+        break;
+    }
+    return rect;
+}
+
+// The event that puts the injected pointer at the center of `rect`.
+[[nodiscard]] auto pointer_into_viewport(const Viewport_rect& rect, const int frame) -> json
+{
+    return json{
+        {"type",  "mouse_move"},
+        {"frame", frame},
+        {"x",     rect.center_x()},
+        {"y",     rect.center_y()}
+    };
+}
+
+[[nodiscard]] auto undo_stack_sizes(Mcp_client& client, std::size_t& out_undo, std::size_t& out_redo) -> bool
+{
+    Mcp_client::Tool_result result = client.call_tool("get_undo_redo_stack", json::object());
+    if (result.is_error || !result.payload.contains("undo") || !result.payload.contains("redo")) {
+        return false;
+    }
+    out_undo = result.payload["undo"].size();
+    out_redo = result.payload["redo"].size();
+    return true;
+}
+
+} // anonymous namespace
+
+// A key event bound to a command (Ctrl+Z -> Edit.Undo) travels the ordinary
+// input path and undoes the last operation. The pointer is moved over the
+// viewport first because that is what makes the viewport window ask for
+// keyboard events, which is how a real Ctrl+Z reaches erhe::commands instead
+// of being captured by ImGui.
+TEST_F(Mcp_test, injected_key_event_runs_the_bound_undo_command)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to aim the pointer at";
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "input key test box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    std::size_t undo_before = 0;
+    std::size_t redo_before = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_before, redo_before));
+    ASSERT_GT(undo_before, 0u) << "nothing on the undo stack to undo";
+
+    Mcp_client::Tool_result injected = client.call_tool("inject_input_events", json{
+        {"events", json::array({
+            pointer_into_viewport(viewport, 0),
+            json{{"type", "key"}, {"frame", 3}, {"keycode", "left control"}, {"pressed", true},  {"modifiers", json::array({"ctrl"})}},
+            json{{"type", "key"}, {"frame", 4}, {"keycode", "z"},            {"pressed", true}},
+            json{{"type", "key"}, {"frame", 5}, {"keycode", "z"},            {"pressed", false}},
+            json{{"type", "key"}, {"frame", 6}, {"keycode", "left control"}, {"pressed", false}, {"modifiers", json::array()}}
+        })}
+    });
+    ASSERT_FALSE(injected.is_error) << injected.text;
+    // Four key events plus the move, preceded by the one-time cursor_enter
+    // and window_focus pair when this is the session's first pointer event.
+    EXPECT_GE(injected.payload.value("injected", 0), 5) << injected.payload.dump();
+    advance_frames(client, 3);
+
+    std::size_t undo_after = 0;
+    std::size_t redo_after = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_after, redo_after));
+    EXPECT_EQ(undo_after, undo_before - 1u) << "Ctrl+Z did not pop an undo entry";
+    EXPECT_EQ(redo_after, redo_before + 1u) << "Ctrl+Z did not push a redo entry";
+
+    client.call_tool("redo", json::object());
+    advance_frames(client, 2);
+}
+
+// A move / press / release over a viewport selects the mesh under the pointer,
+// the same way a user's click does: the box is placed right in front of the
+// viewport camera, so the viewport center is over it and nothing of the
+// imported test asset is in between. The move comes before the press because
+// that is what a click is - a move between press and release turns the gesture
+// into a drag and erhe::commands cancels the pending select
+// (Mouse_button_binding::on_motion).
+TEST_F(Mcp_test, injected_pointer_click_selects_the_mesh_under_it)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to click in";
+    ASSERT_TRUE(viewport.has_camera) << "the viewport has no camera to place the box in front of";
+
+    // Column-major world_from_camera: column 3 is the position, column 2 is
+    // the camera's +Z (back) axis, so the view direction is its negation.
+    const float position_x = viewport.world_from_camera[12];
+    const float position_y = viewport.world_from_camera[13];
+    const float position_z = viewport.world_from_camera[14];
+    const float forward_x  = -viewport.world_from_camera[8];
+    const float forward_y  = -viewport.world_from_camera[9];
+    const float forward_z  = -viewport.world_from_camera[10];
+    constexpr float c_distance = 1.5f; // nearer than the imported test asset
+
+    const std::string box_name = "input click test box";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        box_name},
+        {"motion_mode", "none"},
+        {"size",        json::array({0.5, 0.5, 0.5})},
+        {"position",    json::array({
+            position_x + (forward_x * c_distance),
+            position_y + (forward_y * c_distance),
+            position_z + (forward_z * c_distance)
+        })}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    advance_frames(client, 2);
+
+    Mcp_client::Tool_result injected = client.call_tool("inject_input_events", json{
+        {"events", json::array({
+            pointer_into_viewport(viewport, 0),
+            json{{"type", "mouse_button"}, {"frame", 4}, {"button", "left"}, {"pressed", true}},
+            json{{"type", "mouse_button"}, {"frame", 6}, {"button", "left"}, {"pressed", false}}
+        })}
+    });
+    ASSERT_FALSE(injected.is_error) << injected.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(state.is_error) << state.text;
+    EXPECT_TRUE(state.payload["buttons"].empty()) << "the left button was left held: " << state.payload.dump();
+    EXPECT_FALSE(state.payload["gesture"].value("active", true)) << "the gesture did not finish";
+
+    Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection.is_error) << selection.text;
+    const json& items = selection.payload["items"];
+    ASSERT_TRUE(items.is_array());
+    ASSERT_FALSE(items.empty()) << "the click selected nothing";
+    bool found = false;
+    for (const json& item : items) {
+        if (item.value("name", "") == box_name) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "the click selected something else: " << items.dump();
+
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
+// Argument validation and the state get_input_state reports.
+TEST_F(Mcp_test, inject_input_events_validates_arguments_and_tracks_pointer_state)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result empty = client.call_tool("inject_input_events", json{{"events", json::array()}});
+    EXPECT_TRUE(empty.is_error) << "an empty event list was accepted";
+
+    Mcp_client::Tool_result bad_type = client.call_tool("inject_input_events", json{
+        {"events", json::array({json{{"type", "not_an_event"}}})}
+    });
+    EXPECT_TRUE(bad_type.is_error) << "an unknown event type was accepted";
+
+    Mcp_client::Tool_result bad_key = client.call_tool("inject_input_events", json{
+        {"events", json::array({json{{"type", "key"}, {"keycode", "no such key"}}})}
+    });
+    EXPECT_TRUE(bad_key.is_error) << "an unknown keycode was accepted";
+
+    Mcp_client::Tool_result moved = client.call_tool("inject_input_events", json{
+        {"events", json::array({json{{"type", "mouse_move"}, {"x", 11.0}, {"y", 22.0}}})}
+    });
+    ASSERT_FALSE(moved.is_error) << moved.text;
+
+    Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(state.is_error) << state.text;
+    EXPECT_TRUE(state.payload["pointer"].value("known", false));
+    EXPECT_NEAR(state.payload["pointer"].value("x", 0.0), 11.0, 1e-3);
+    EXPECT_NEAR(state.payload["pointer"].value("y", 0.0), 22.0, 1e-3);
+    EXPECT_TRUE(state.payload.value("cursor_entered", false)) << "the first pointer event did not enter the cursor";
+    EXPECT_FALSE(state.payload["gesture"].value("active", true));
+}

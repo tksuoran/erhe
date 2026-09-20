@@ -466,6 +466,17 @@ auto Mcp_server::process_queued_requests() -> int
                 m_physics_drag_steps.reset();
                 log_mcp->warn("MCP server: physics_drag expired mid-drag; the drag is held - release it with action 'release'");
             }
+            if (m_input_gesture_steps.request == req.get()) {
+                // The remaining events are dropped; what was already injected
+                // has been dispatched, so a held button stays held until the
+                // caller injects its release.
+                log_mcp->warn(
+                    "MCP server: inject_input_events expired after {} of {} events; the rest are dropped",
+                    m_input_gesture_steps.injected,
+                    m_input_gesture_steps.events.size()
+                );
+                m_input_gesture_steps.clear();
+            }
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;
         }
@@ -684,6 +695,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "debug_set_item_tree_hover",      &Mcp_server::action_debug_set_item_tree_hover     },
         { "debug_set_transform_hover",      &Mcp_server::action_debug_set_transform_hover     },
         { "debug_imgui_mouse",              &Mcp_server::action_debug_imgui_mouse             },
+        { "inject_input_events",            &Mcp_server::action_inject_input_events           },
+        { "get_input_state",                &Mcp_server::query_input_state                    },
         { "open_four_view",                 &Mcp_server::action_open_four_view                },
         { "get_four_views",                 &Mcp_server::query_four_views                     },
         { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
