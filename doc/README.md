@@ -279,6 +279,7 @@ Every document states its standing in its first ten lines:
 - [plans/gltf_properties_extension.md](plans/gltf_properties_extension.md) (in progress): ERHE_*_properties glTF extensions (steps 2-5)
 - [plans/graph_editor.md](plans/graph_editor.md) (proposed): Graph editor: remaining shared-layer work
 - [plans/graphics_tests.md](plans/graphics_tests.md) (proposed): Graphics tests: outstanding work
+- [plans/hand_written_rows_to_properties.md](plans/hand_written_rows_to_properties.md) (proposed): Remaining hand-written item state as properties
 - [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups

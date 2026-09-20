@@ -283,15 +283,15 @@ seeded descriptor. Gradient and curve parameters are not properties.
 ## Not yet migrated
 
 Hand-written rows of the Properties window that are authored state, in
-migration priority order. Each migration follows the Material recipe
-(design record section 4.1).
+migration order. `doc/plans/hand_written_rows_to_properties.md` owns the
+property form and the phase of each row.
 
 | Owner | Fields | Notes |
 |---|---|---|
-| Physics_joint_settings | limits, drives | lists; no `Property_value` form, stay hand-written |
-| Collision_filter | collision_systems, collide_with_systems, not_collide_with_systems | string lists; stay hand-written |
-| Layout | grid track extents | per-axis float lists; stay hand-written |
-| Scene | ambient light | the per-scene overrides stay a settings block |
+| Scene | ambient light | phase 1; the per-scene overrides stay a settings block |
+| Layout | grid track extents | phase 2; per-axis float lists |
+| Collision_filter | collision_systems, collide_with_systems, not_collide_with_systems | phase 3; string lists |
+| Physics_joint_settings | limits, drives | phase 4; lists of records |
 
 Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,

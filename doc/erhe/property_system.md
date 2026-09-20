@@ -2152,6 +2152,9 @@ style layer is D25 and the reference layer is D33.
   the draft `ERHE_*_properties` extensions the serialization work needs.
 - [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
   retiring the node attachments in favor of attached properties of the node.
+- [plans/hand_written_rows_to_properties.md](../plans/hand_written_rows_to_properties.md) -
+  the scene ambient light, layout track extents, collision filter lists and
+  joint limits / drives as properties.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 
