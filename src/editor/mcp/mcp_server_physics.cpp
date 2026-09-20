@@ -840,7 +840,8 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
         applied.push_back("drives");
     }
     // Every write above goes through the property store, so the joints using
-    // these settings rebuild their constraints on their own (J8).
+    // these settings rebuild their constraints on their own
+    // (doc/erhe/property_system.md section 4.22).
 
     json result = joint_settings_to_json(*item);
     result["applied"] = applied;

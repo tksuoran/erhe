@@ -57,6 +57,3 @@ MCP cannot drive them.
 ## Editing gaps
 
 - Cone creation tool parity with the other shape creation tools.
-- A glTF exported from a scene with joints fails to re-import: the parse
-  rejects `KHR_physics_rigid_bodies.physicsJoints[].limits`. Colliders and
-  motions re-import correctly, so the defect is confined to the limits array.

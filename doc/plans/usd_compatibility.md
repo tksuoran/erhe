@@ -48,15 +48,6 @@ draw-mode color (the design record's C10). The borrowing is the per-face UV
 selection in `draw_mode_cards.cpp` `card_uvs` plus the texture lookup falling
 back to the opposite face.
 
-### Physics residue
-
-A glTF export of `physics.usda`'s scene does not re-import: fastgltf rejects
-the file ("missing something or has invalid data") on the
-`KHR_physics_rigid_bodies` `physicsJoints[].limits` the export writes, while
-the same file with the limits stripped parses (bisected on the written file;
-colliders and motions are fine). This is glTF-side; the limit spelling the
-export uses is the suspect.
-
 ### A writer finding of usdchecker
 
 A texture packed in a `.usdz` is written as a path that names no file

@@ -113,10 +113,10 @@ physics fields of `get_node_details`.
   spnda/fastgltf. CPM `PATCHES` is banned repo-wide (AGENTS.md), so the fork is
   how the fixes travel.
 - The fastgltf physics material, filter and joint types carry no name field.
-  Names, and a physics material's erhe-only property values, ride the
-  `ERHE_scene` `physics_materials` / `collision_filter_names` entries in
-  erhe-authored files; for a foreign file the importer synthesizes
-  "Physics material N" style names.
+  Names ride the `ERHE_scene` `physics_materials` / `physics_joints` /
+  `collision_filter_names` entries in erhe-authored files, as do the local
+  property values of a physics material and of a joint-settings item; for a
+  foreign file the importer synthesizes "Physics material N" style names.
 - Plane shapes are not representable in fastgltf (its `Shape` variant has no
   plane, and the fork does not add one).
 - Export skips a compound child that carries a convex hull or mesh shape, with

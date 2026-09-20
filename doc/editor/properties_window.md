@@ -30,7 +30,6 @@ migrated" table lists the hand-written rows that are authored state; section
    and Add buttons) around `item_diagnostics`, whose per-class functions
    (`scene_properties`, `light_properties`, `mesh_properties`,
    `node_physics_properties`, `node_joint_properties`,
-   `collision_filter_properties`, `physics_joint_settings_properties`,
    `texture_properties`, ...) add the read-only diagnostics, the actions
    and the R5 list editors per item. `material_properties` draws the
    material preview and the BRDF slice for a selected material.
@@ -78,15 +77,16 @@ migrated" table lists the hand-written rows that are authored state; section
   seven `<slot>_texture_*` sampler properties, section 4.1 of the design
   record); `material_properties` draws only the preview render and the
   BRDF slice for a selected material.
-- R5 List-valued state with no `Property_value` form
-  (`Physics_joint_settings` limits and drives, which are lists of records)
-  and the scene's
-  settings-override block keep their hand-written editor, drawn per item,
-  and are the documented exception; the inventory's "Not yet migrated"
-  table lists them. A list of scalars has a form: it is one array property
-  drawn by the generic row (`doc/erhe/property_system.md` D34 and D35 -
-  the layout grid track extents and the collision filter's three system
-  lists).
+- R5 List-valued state with no `Property_value` form (the record list
+  editors: attachments, samplers, animation channels and samplers) and the
+  scene's settings-override block keep their hand-written editor, drawn per
+  item, and are the documented exception. A list of scalars has a form: it
+  is one array property drawn by the generic row
+  (`doc/erhe/property_system.md` D34 and D35 - the layout grid track extents
+  and the collision filter's three system lists). A fixed set of records has
+  one too: it is the per-axis properties of the owner, grouped by axis
+  (section 4.22 - a joint-settings item's six degrees of freedom, eleven
+  rows each).
 
 ## 3. Item-level rows
 

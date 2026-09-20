@@ -2000,7 +2000,10 @@ joint carrier keeps writing the effective values and reading them back
 as local ones (it carries no `properties` map). `Properties::
 node_joint_properties` keeps the "Connect to Selected Node" and "Rebuild
 Joint" actions and the constraint state diagnostic; the generic section
-draws the three rows.
+draws the three rows. "Rebuild Joint" is an action, not state: it
+re-captures the joint frames after the user has moved the joint's nodes,
+which no property change announces. An edit of the shared settings item
+needs no such press, the observer of section 4.22 rebuilding on its own.
 
 ### 4.18 Migration recipe
 
@@ -2261,6 +2264,129 @@ way the physics material's schema fields are excluded.
 Test: `src/erhe/physics/test/test_collision_filter_properties.cpp` (defaults,
 setter to mirror, untyped access through the D16 text, clone, no inheritance).
 
+### 4.22 Physics_joint_settings
+
+`erhe::physics::Physics_joint_settings` (the shared settings item a
+`Node_joint` names, the content library's Physics Joints category) states its
+six degrees of freedom as registered properties.
+
+**The six axes.** The degrees of freedom are the closed set `trans_x`,
+`trans_y`, `trans_z`, `rot_x`, `rot_y`, `rot_z`, indices 0..5 - the order of
+`erhe::physics::Six_dof_constraint_settings::limits` and `::drives`, and the
+axis order of the USD `transX`..`rotZ` multi-apply instances. An axis token is
+the prefix of every property name of that axis, so a property name states
+which degree of freedom it belongs to. A settings item states at most one
+limit and at most one drive per axis, which is what both backends accept and
+what the USD schemas admit: two limits on one axis, a drive naming an axis
+that does not exist and a limit over several axes whose meaning the simulation
+does not implement are not representable.
+
+**The properties.** Eleven per axis, 66 in all, registered in the entry store
+on `Physics_joint_settings::property_owner_type()` by a table walk over the
+six axis tokens. All of them carry `Property_flags::serialize |
+Property_flags::native_gltf` and inherit (D30): each has a plain scalar
+default, so a value a Physics Joints folder or a Style supplies is an ordinary
+opinion the item's own local value overrides.
+
+| Name | Type | Default | UI |
+|---|---|---|---|
+| `<axis>_limit` | `Joint_axis_limit` (`free`, `limited`) | `free` | label "Limit" |
+| `<axis>_limit_min` | float | 0 | `visible_when` the limit is `limited`; `angle_degrees` on a rotation axis |
+| `<axis>_limit_max` | float | 0 | as `_limit_min` |
+| `<axis>_limit_stiffness` | float | 0 | `visible_when` the limit is `limited`; min 0 |
+| `<axis>_limit_damping` | float | 0 | `visible_when` the limit is `limited`; min 0 |
+| `<axis>_drive` | `Joint_axis_drive` (`off`, `force`, `acceleration`) | `off` | label "Drive" |
+| `<axis>_drive_max_force` | float | 0 | `visible_when` the drive is not `off`; min 0 |
+| `<axis>_drive_position_target` | float | 0 | `visible_when` the drive is not `off`; `angle_degrees` on a rotation axis |
+| `<axis>_drive_velocity_target` | float | 0 | as `_drive_position_target` |
+| `<axis>_drive_stiffness` | float | 0 | `visible_when` the drive is not `off`; min 0 |
+| `<axis>_drive_damping` | float | 0 | `visible_when` the drive is not `off`; min 0 |
+
+A fixed axis is `limited` with equal min and max, which is what both formats
+and both backends spell (`Joint_reach` calls an axis fixed when `max - min` is
+below `c_fixed_axis_epsilon`). Three values say through their value source
+what an unset optional used to say (the section 4.18 rule): `<axis>_limit_min`
+and `<axis>_limit_max` with source `default` are the unbounded side of the
+limit, for which the mirror substitutes the backend's unbounded value
+(`std::numeric_limits<float>::lowest()` / `::max()` on a translation axis,
+`-pi` / `+pi` on a rotation axis); `<axis>_limit_stiffness` of zero is a hard
+limit and a non-zero value the soft-limit spring; `<axis>_drive_max_force` of
+zero is an unlimited drive force, which zero is free to mean because a drive
+that applies no force is `off`, and which keeps the generic float row
+draggable.
+
+**Mirrors and consumers.** The item keeps `std::array<Constraint_axis_limit,
+6>` and `std::array<Constraint_axis_drive, 6>` as MIRRORS of the effective
+values, refreshed in `on_property_changed` (the bridged-owner recipe of
+section 4.18) and read through `get_axis_limits()` / `get_axis_drives()`.
+The mirror types are the ones `Six_dof_constraint_settings` is made of, so
+`Node_joint::build_constraint` copies the arrays whole; `Joint_reach` and
+`Physics_drag_constraint` read those settings and are untouched;
+`Operations::is_hinge_settings` reads the mirror; and
+`build_physics_description` / `import_physics` translate between the
+properties and `erhe::scene::Physics_joint_description`, which is also how the
+USD reader and writer reach the item. `Constraint_axis_drive` has no
+acceleration-mode field, so an axis drive of `acceleration` mirrors as `force`
+with one warning per item while the property keeps the authored value, so the
+file round trips.
+
+**The consequence of an edit.** A live constraint follows every source of a
+change the way a collision filter's assignment does (section 4.21):
+`Node_joint` subscribes an any-property observer (D21) to the settings item it
+resolves, whenever its `joint_settings` property is set and in its
+constructors, with its constraint rebuild as the callback. The observer
+rebuilds only for a change of a property `Physics_joint_settings` owns
+(`is_owner_type_or_descendant` on the changed property's owner type): a
+rebuild re-captures the joint frames and teleports both bodies to rest, so a
+toggle of the settings item's `visible` would otherwise stop a swinging body
+dead. No scan of the open scenes remains.
+
+**The Properties window.** The generic section draws all 66 rows, grouped by
+axis through `Property_ui::group` into `Translation X`, `Translation Y`,
+`Translation Z`, `Rotation X`, `Rotation Y`, `Rotation Z`, eleven rows each,
+of which the `visible_when` callbacks leave two while the axis is free and
+undriven. The axes are the six the joint has, so there is no add, remove or
+reorder, and undo is the `Property_set_operation` every generic row records.
+
+**Persistence.** The item has no child items, so no writer needs an exclusion
+for one. USD: each axis whose `<axis>_limit` is `limited` is one
+`PhysicsLimitAPI:<axis>` instance and each axis whose `<axis>_drive` is not
+`off` is one `PhysicsDriveAPI:<axis>` instance, which
+`write_joint_limits_and_drives` authors from the description; those attributes
+are the native USD form of all 66 properties
+(`native_usd_property_name` in `src/erhe/usd/erhe_usd/usd_export.cpp`), so
+`write_erhe_properties` states none of them a second time as an
+`erhe:Physics_joint_settings:` custom attribute. On read each instance sets
+the properties of the axis it names, and a `distance` instance sets the three
+translation axes to the same values. glTF: the `KHR_physics_rigid_bodies`
+`physicsJoints` entry is built from the mirror, one `Physics_joint_limit` per
+`limited` axis whose `linear_axes` or `angular_axes` names exactly that axis
+and whose `min` / `max` are set only where the property has a value source
+other than `default`, and one `Physics_joint_drive` per axis that is not
+`off`; on read, each entry of `physicsJoints[i].limits` sets the properties of
+every axis it names and each entry of `.drives` those of the axis it names,
+the later entry winning with one warning naming the joint and the axis.
+Beside that entry, `ERHE_scene` carries a `physics_joints` array of the same
+shape as `physics_materials` - one `{"name", "properties"}` entry per
+`physicsJoints` index, `properties` being the item's complete local set
+(`doc/gltf_extensions/ERHE_scene.md`). It is what keeps a value the item
+inherits from a folder or takes from a style supplied by that folder or style
+after a reload, since the KHR entry states effective values, and it is where a
+joint-settings item's name lives, `PhysicsJoint` having no name field.
+
+**MCP.** Every tool keeps its argument shape, the KHR-shaped `limits` and
+`drives` arrays being a facade over the properties:
+`create_physics_joint_settings` and `edit_physics_joint_settings` apply an
+entry per axis by the glTF read rule and refuse an entry that names no axis or
+an axis outside 0..2 with an error naming the entry index;
+`get_physics_items` rebuilds the arrays from the mirror, so a caller reads
+back the array it wrote; `get_item_properties` / `set_item_property` /
+`get_addable_item_properties` reach all 66 by qualified name.
+
+Test: `src/erhe/physics/test/test_joint_settings_properties.cpp` (defaults,
+setter to mirror, untyped access with enum labels, an inherited value reaching
+the mirror, clone).
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather
@@ -2281,9 +2407,6 @@ style layer is D25 and the reference layer is D33.
   the draft `ERHE_*_properties` extensions the serialization work needs.
 - [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
   retiring the node attachments in favor of attached properties of the node.
-- [plans/hand_written_rows_to_properties.md](../plans/hand_written_rows_to_properties.md) -
-  layout track extents, collision filter lists and joint limits / drives as
-  properties.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

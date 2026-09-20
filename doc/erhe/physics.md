@@ -46,8 +46,14 @@ a specific engine.
   section 4.21), read through `get_collision_systems()` and the two other getters; the
   editor's `Node_physics` observes the filter, so an edit from any writer recompiles the
   backend's snapshot
-- `Physics_joint_settings` -- shared joint settings item (`Joint_limit` / `Joint_drive` arrays,
-  1:1 with KHR_physics_rigid_bodies physicsJoints entries)
+- `Physics_joint_settings` -- shared joint settings item, 1:1 with
+  KHR_physics_rigid_bodies physicsJoints entries. It states one limit and one drive per degree
+  of freedom as eleven registered properties per axis over the closed axis set `trans_x`,
+  `trans_y`, `trans_z`, `rot_x`, `rot_y`, `rot_z` (66 in all,
+  `doc/erhe/property_system.md` section 4.22), read through `get_axis_limits()` and
+  `get_axis_drives()` as the `Constraint_axis_limit` / `Constraint_axis_drive` arrays
+  `Six_dof_constraint_settings` is made of; the editor's `Node_joint` observes the item, so
+  an edit from any writer rebuilds the live constraint
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
   (`erhe::Typed`, `doc/erhe/item.md` "Prim classes"), each with its erhe class name as
   its fixed `typeName` token

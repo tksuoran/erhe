@@ -320,10 +320,8 @@ seeded descriptor. Gradient and curve parameters are not properties.
 
 ## Not yet migrated
 
-Nothing is left: every hand-written row of the Properties window that was
+The table is empty: every hand-written row of the Properties window that was
 authored state is a registered property.
-`doc/plans/hand_written_rows_to_properties.md` owns the property form and the
-phase each row was migrated in.
 
 Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,
