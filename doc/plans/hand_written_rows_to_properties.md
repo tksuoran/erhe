@@ -26,7 +26,7 @@ The closed list of state this plan migrates, in phase order:
 
 | Phase | Owner | State | Property form |
 |---|---|---|---|
-| 4 | `erhe::physics::Physics_joint_settings` | `limits`, `drives` | child items with scalar properties (H6) |
+| 4 | `erhe::physics::Physics_joint_settings` | `limits`, `drives` | per-axis properties (H6) |
 
 The scene's settings-override block (`Scene_settings`, the codegen optionals
 drawn by `Properties::scene_properties`) is config state, and its route to
@@ -39,16 +39,9 @@ operation.
 ## 3. Decisions
 
 - H6 A list of RECORDS (`Physics_joint_settings::limits`, `::drives`) becomes
-  child items of the settings item, one `Joint_limit` / `Joint_drive` item per
-  element, each with scalar properties (`linear_axes` and `angular_axes` as
-  `ivec3` masks, `min`, `max`, `stiffness`, `damping`; drive `type`, `mode`,
-  `axis`, `max_force`, `position_target`, `velocity_target`, `stiffness`,
-  `damping`; an unset optional is source `default`, the section 4.18 rule).
-  Add and remove are `Item_insert_remove_operation`, order is child order, and
-  the resource tree already shows children (U4). This phase is designed in its
-  own requirements pass before any code: the KHR physics import/export and the
-  USD joint writer read the vectors today, and whether the vectors stay as a
-  mirror rebuilt from the children is the question that pass answers.
+  a fixed set of per-axis properties of the settings item itself, stated by
+  [joint_limits_as_properties.md](joint_limits_as_properties.md), which that phase's
+  requirements pass produced.
 
 ## 4. Phases
 
@@ -73,9 +66,8 @@ three system lists now are, and D34 and D35 state the array row and the
 
 ### Phase 4: Physics_joint_settings limits and drives
 
-The H6 requirements pass produces a plan document of its own under
-`doc/plans/`; this plan's phase ends when that document exists and the
-inventory row points at it.
+[joint_limits_as_properties.md](joint_limits_as_properties.md) owns this phase: its
+three commits, their verification and the user's interactive checklist.
 
 ## 5. Verification
 

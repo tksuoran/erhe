@@ -282,6 +282,7 @@ Every document states its standing in its first ten lines:
 - [plans/hand_written_rows_to_properties.md](plans/hand_written_rows_to_properties.md) (proposed): Remaining hand-written item state as properties
 - [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
+- [plans/joint_limits_as_properties.md](plans/joint_limits_as_properties.md) (proposed): Joint limits and drives as per-axis properties
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition

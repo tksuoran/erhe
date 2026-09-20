@@ -304,12 +304,12 @@ property form and the phase of each row.
 
 | Owner | Fields | Notes |
 |---|---|---|
-| Physics_joint_settings | limits, drives | phase 4; lists of records |
+| Physics_joint_settings | limits, drives | phase 4; per-axis properties, [plans/joint_limits_as_properties.md](../plans/joint_limits_as_properties.md) |
 
 Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,
 raytrace state, skin joints, rigid body label / position / activity /
 shape / inertia, brush polygon counts, the id and the flag word), and list
 editors of records (attachments, samplers, animation channels and
-samplers, joint limits and drives). A list of scalars is not one of them:
+samplers). A list of scalars is not one of them:
 it is an array property (D34).
