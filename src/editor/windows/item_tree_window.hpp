@@ -122,7 +122,7 @@ private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);
     void set_item_selection           (const std::shared_ptr<erhe::Item_base>& item, bool selected);
     void clear_selection              ();
-    void recursive_add_to_selection   (const std::shared_ptr<erhe::Item_base>& node);
+    void collect_items_recursive      (const std::shared_ptr<erhe::Item_base>& item, std::vector<std::shared_ptr<erhe::Item_base>>& out_items);
     void select_all                   ();
     void move_selection               (const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item, Placement placement);
     void attach_selection_to          (const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item);

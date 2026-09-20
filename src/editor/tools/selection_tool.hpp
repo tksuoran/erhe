@@ -13,6 +13,7 @@
 #include <memory>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe::commands {
@@ -343,6 +344,9 @@ private:
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     std::vector<std::shared_ptr<erhe::Item_base>> m_begin_selection_change_state;
     std::unordered_map<uint64_t, std::weak_ptr<erhe::Item_base>> m_last_selected_by_type;
+    // Scratch membership set of set_selection(); holds no ownership and is
+    // cleared after use so nothing is kept alive between calls.
+    std::unordered_set<const erhe::Item_base*>    m_set_selection_lookup;
 };
 
 template <typename T>

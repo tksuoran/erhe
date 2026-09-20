@@ -275,16 +275,19 @@ void Item_tree::clear_selection()
     m_context.selection->clear_selection(m_root ? m_root->get_item_host() : nullptr);
 }
 
-void Item_tree::recursive_add_to_selection(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::collect_items_recursive(
+    const std::shared_ptr<erhe::Item_base>&        item,
+    std::vector<std::shared_ptr<erhe::Item_base>>& out_items
+)
 {
-    m_context.selection->add_to_selection(item);
-    auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    out_items.push_back(item);
+    const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (!hierarchy) {
         return;
     }
 
-    for (const auto& child : hierarchy->get_children()) {
-        recursive_add_to_selection(child);
+    for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
+        collect_items_recursive(child, out_items);
     }
 }
 
@@ -297,10 +300,31 @@ void Item_tree::select_all()
     if (!m_root) {
         return;
     }
-    m_context.selection->clear_selection(m_root->get_item_host());
-    for (const auto& node : m_root->get_children()) {
-        recursive_add_to_selection(node);
+    erhe::Item_host* const item_host = m_root->get_item_host();
+
+    // The whole subtree enters the selection in ONE selection change. A
+    // Selection::add_to_selection() per item closes a selection change each
+    // time, and every close re-sorts and diffs the whole selection and
+    // publishes a Selection_message - quadratic in the subtree size, which on
+    // a large tree (the asset browser's thousands of entries) does not
+    // complete.
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        if (!m_context.selection->is_hosted_or_defined_by(*item, item_host)) {
+            items.push_back(item);
+        }
     }
+    const std::size_t other_host_count = items.size();
+    for (const std::shared_ptr<erhe::Hierarchy>& node : m_root->get_children()) {
+        collect_items_recursive(node, items);
+    }
+
+    // The last item of this tree becomes the active item, which is what an
+    // add per item left behind. An empty tree keeps the current active item.
+    const std::shared_ptr<erhe::Item_base> active = (items.size() > other_host_count)
+        ? items.back()
+        : std::shared_ptr<erhe::Item_base>{};
+    m_context.selection->set_selection(items, active);
 }
 
 template <typename T, typename U>
@@ -1357,15 +1381,6 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
         }
         m_last_focus_item = item;
     }
-
-    // CTRL-A to select all
-    if (ctrl_down) {
-        const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
-        if (a_pressed) {
-            SPDLOG_LOGGER_TRACE(log_tree, "ctrl a pressed - select all");
-            select_all();
-        }
-    }
 }
 
 void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
@@ -2090,6 +2105,17 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::SameLine();
     if (m_text_filter.Draw("##Filter", -FLT_MIN)) {
         m_flat_rows_dirty = true;
+    }
+
+    // Ctrl+A selects everything in this tree. ImGui::Shortcut() routes the
+    // chord to the focused window and lets the active item take it first, so
+    // this runs once per frame, for the one focused tree, and the filter
+    // input above keeps Ctrl+A as its own select-all while it is being
+    // edited. It also runs before the row loop, so select_all() never mutates
+    // the selection while the rows are being submitted.
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_A)) {
+        SPDLOG_LOGGER_TRACE(log_tree, "ctrl a pressed - select all");
+        select_all();
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});

@@ -795,11 +795,22 @@ void Selection::set_selection(
 {
     Scoped_selection_change selection_change{*this};
 
+    // Membership of the incoming selection by pointer: Item_tree::select_all()
+    // hands in every item of a tree, and a linear scan of `selection` per
+    // currently selected item makes deselection quadratic in the selection
+    // size.
+    m_set_selection_lookup.clear();
+    m_set_selection_lookup.reserve(selection.size());
+    for (const std::shared_ptr<erhe::Item_base>& item : selection) {
+        m_set_selection_lookup.insert(item.get());
+    }
+
     for (auto& item : m_selection) {
-        if (item->is_selected() && !is_in(item, selection)) {
+        if (item->is_selected() && (m_set_selection_lookup.count(item.get()) == 0)) {
             item->set_selected(false);
         }
     }
+    m_set_selection_lookup.clear();
     for (auto& item : selection) {
         item->set_selected(true);
         update_last_selected(item);

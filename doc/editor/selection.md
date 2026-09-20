@@ -44,7 +44,11 @@ reset, `forget_hosted` for a closing scene.
   is still possible - inspecting items of two scenes side by side is a
   supported use case.
 - Ctrl-A in a hierarchy window selects everything in that window's scene only.
-  A content-library tree scopes to its own root the same way.
+  A content-library tree scopes to its own root the same way. The chord is
+  routed by `ImGui::Shortcut()` once per frame to the focused tree window, and
+  the whole subtree enters the selection in one `set_selection()` call, so a
+  tree of thousands of items costs one selection change and one
+  `Selection_message`.
 - `Range_selection` (shift-range) is host-scoped: `reset(Item_host*)` collapses
   a range only when a terminator belongs to that host, and
   `reset_terminators_for_host()` drops the terminators without the

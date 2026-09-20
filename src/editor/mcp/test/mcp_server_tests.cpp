@@ -2817,6 +2817,77 @@ TEST_F(Mcp_test, imgui_item_rect_center_is_a_click_target)
     advance_frames(client, 3);
 }
 
+// Ctrl+A over an item tree selects that tree's whole subtree and the editor
+// answers the next call. The chord used to be tested per visible row of every
+// item tree, and each item entered the selection through its own selection
+// change, so one Ctrl+A ran select-all once per row and each select-all
+// re-sorted, diffed and published the whole selection once per item: the
+// editor never came back from it.
+TEST_F(Mcp_test, key_press_ctrl_a_selects_the_focused_tree)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    std::string hierarchy_title;
+    ASSERT_TRUE(find_hierarchy_window(client, hierarchy_title)) << "no Scene Hierarchy window is open";
+
+    const std::string box_name = "ctrl a test box";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        box_name},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    advance_frames(client, 2);
+
+    // Clicking the box's Hierarchy row focuses that tree's window, which is
+    // what routes the chord to it.
+    Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
+        {"window", hierarchy_title},
+        {"label",  box_name}
+    });
+    ASSERT_FALSE(rect.is_error) << rect.text;
+    Mcp_client::Tool_result click = client.call_tool("mouse_click", json{
+        {"x", rect.payload.value("center_x", 0.0f)},
+        {"y", rect.payload.value("center_y", 0.0f)}
+    });
+    ASSERT_FALSE(click.is_error) << click.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result before = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(before.is_error) << before.text;
+    const std::size_t selected_before = before.payload["items"].size();
+    ASSERT_GE(selected_before, 1u) << "clicking the row did not select it: " << before.payload["items"].dump();
+
+    Mcp_client::Tool_result key = client.call_tool("key_press", json{
+        {"key",       "a"},
+        {"modifiers", json::array({"ctrl"})}
+    });
+    ASSERT_FALSE(key.is_error) << key.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result after = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(after.is_error) << after.text;
+    const json& selected = after.payload["items"];
+    ASSERT_TRUE(selected.is_array());
+    EXPECT_GT(selected.size(), selected_before) << "Ctrl+A did not select the tree: " << selected.dump();
+    bool found = false;
+    for (const json& item : selected) {
+        if (item.value("name", "") == box_name) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "the focused tree's own item is not in the selection: " << selected.dump();
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
 // Part A actions --------------------------------------------------------------
 
 // The menu path a user takes, by label only. A menu item exists only while its
