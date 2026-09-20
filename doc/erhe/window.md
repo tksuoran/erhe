@@ -36,3 +36,7 @@ XR event types (`Xr_action_boolean`, etc.) are forward-declared in `window_event
 - Both SDL and GLFW backends provide the same `Context_window` API; `window.hpp` includes the appropriate header based on the configured backend.
 - Joystick scanning runs on a background thread to avoid blocking the main loop.
 - The SDL backend is the default and recommended choice.
+
+## Future work
+
+- [plans/mcp_ui_driving.md](../plans/mcp_ui_driving.md)

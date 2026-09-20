@@ -80,3 +80,7 @@ is generic docking code, independent of erhe.
   the bars (`set_window_visibility`), drag a bar or the crossing, then
   `capture_screenshot`; after `request_exit` the ini's `SizeRef` values of the
   four cells show equal inner sizes on both sides.
+
+## Future work
+
+- [plans/mcp_ui_driving.md](../plans/mcp_ui_driving.md)
