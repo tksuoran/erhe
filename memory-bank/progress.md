@@ -1,5 +1,7 @@
 §MBEL:5.0
 
+[TASK::hand-written-rows-to-properties]{IN-PROGRESS-2026-09-20;phase-1-DONE{f3385c682+1082d95c2};next=phase-2;detail=activeContext}
+
 [TASK::fly-camera-wheel-towards-hover]{DONE+USER-VERIFIED-2026-09-20;8125c035c;detail=activeContext}
 
 [TASK::ortho-view-grids]{DONE+USER-VERIFIED-2026-09-20;33f67dfd9;detail=activeContext;left=screen-space-labels{doc/plans/editor.md}}
