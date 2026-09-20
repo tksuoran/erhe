@@ -451,10 +451,14 @@ verification in a real interactive session, and continuing to headless-test in
 parallel only slows the work down (and re-dirties `logs/` and the ini state).
 Headless verification is valuable earlier -- while you are still iterating on
 your own before handing off -- but it is not a substitute for user
-verification, and it routinely cannot exercise the menu- and mouse-driven entry
-points that only a live windowed run reaches (precedent: the #258 headless run
-docked the MCP-created viewport correctly, but the menu-driven "Create Scene"
-viewport was still floating -- the user found that interactively). So: build,
+verification. The menu- and mouse-driven entry points are scriptable headlessly
+through the UI-driving tools ([`doc/agents/mcp_ui_driving.md`](doc/agents/mcp_ui_driving.md)),
+so reach for them while you iterate and drive the same path the user's hands
+would; the user's verdict in a live session still has the final word, because
+a headless run exercises the path you thought to script and nothing else
+(precedent: the #258 headless run docked the MCP-created viewport correctly,
+but the menu-driven "Create Scene" viewport was still floating -- the user
+found that interactively). So: build,
 hand off, and let the user drive; re-engage headless testing only when they ask
 or when you resume iterating on a fresh change.
 
@@ -481,6 +485,8 @@ inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
 **Use this to set up / inspect / mutate a scene for any debugging need**, rather than only poking at the UI by hand. Tools fall into:
 - **Queries**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_textures`, `get_scene_brushes`, `get_selection`, `get_undo_redo_stack`, `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
 - **Actions**: `create_shape`, `create_node`, `place_brush`, `select_items`, `transform_selection`, `reparent_item`, `create_scope`, `edit_material`, `lock_items`/`unlock_items`, `add_tags`/`remove_tags`, `toggle_physics` + the `*_physics_*` family, mesh-component editing (`set_mesh_component_mode`, `select_mesh_components`, `remesh`/`decimate`/`smooth`, ...), `save_scene`, `export_gltf`/`import_gltf`, and `capture_screenshot`.
+- **ImGui introspection**: `get_imgui_hosts`, `get_imgui_windows`, `get_imgui_items`, `get_imgui_item_rect`, plus `capture_screenshot.annotate_imgui_items` -- which windows and widgets the editor is showing and where they are, in editor window pixels.
+- **Input gestures**: `imgui_click`, `imgui_hover`, `imgui_scroll`, `mouse_click`, `mouse_drag`, `mouse_release`, `mouse_wheel`, `key_press`, `type_text`, `inject_input_events`, `get_input_state`, `get_transform_handles` -- real window input events, so menus, docking, property rows, gizmo drags and viewport gestures are driven the way a user drives them. Run-book: [`doc/agents/mcp_ui_driving.md`](doc/agents/mcp_ui_driving.md).
 
 **Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) work in BOTH builds** (windowed support added 2026-08-08). Headless: `Device::capture_last_frame` reads back the *emulated* swapchain synchronously. Windowed: the tool arms a one-shot swapchain capture (`Device::request_frame_capture`), the MCP server defers the request one frame while the swapchain render pass records a copy of the composited image, and the retry returns the pixels -- one extra frame of latency, invisible to the caller. The windowed path needs the surface to grant `TRANSFER_SRC` image usage (all desktop drivers do) and a supported 4x8-bit swapchain format; otherwise the tool errors. The macOS Metal build has the same windowed path (the layer hands out readable drawables and the swapchain render pass blits the composited drawable into a shared buffer). This is the preferred screenshot path in every build -- no OS-level window capture, no occlusion, no permission concerns; never use `screencapture` or other system capture tools, they trigger the endpoint security agent (Cortex XDR). For deeper GPU diagnostics (individual textures, pixel-debug shaders) use the RenderDoc fork ([`doc/agents/renderdoc_fork.md`](doc/agents/renderdoc_fork.md)).
 

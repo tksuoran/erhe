@@ -1,5 +1,5 @@
 // Mcp_server tools that drive the editor's user interface the way a user does
-// (doc/plans/mcp_ui_driving.md, part B):
+// (doc/agents/mcp_ui_driving.md), the input gesture half:
 //
 //   inject_input_events - the raw form: a JSON event list is turned into
 //                         erhe::window::Input_event values and injected into
@@ -21,8 +21,8 @@
 // (Mcp_server::step_input_gesture): a tool parses its arguments, fills the
 // builder, and hands the recorded list over. No tool calls another tool.
 //
-// Only Context_window::inject_input_event() is used (B1); the single
-// synthesizer callback slot stays with Fly_camera_tool (F4).
+// Only Context_window::inject_input_event() is used; the single synthesizer
+// callback slot stays with Fly_camera_tool (doc/erhe/window.md).
 //
 // The same file holds part A, the ImGui introspection the gestures aim with:
 //
@@ -37,7 +37,7 @@
 //
 // The last two need Dear ImGui to report its items, which erhe::imgui::
 // Imgui_item_recorder receives; recording is armed for exactly the frame a
-// query asks for (A3).
+// query asks for (doc/erhe/imgui.md).
 
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
@@ -346,7 +346,7 @@ public:
 
     // B3: a button or wheel event happens at a position, so the pointer is
     // moved there first and no consumer has to ask the window where the cursor
-    // is (F7). Already being there needs no event - and must not get one,
+    // is. Already being there needs no event - and must not get one,
     // because a move between a press and a release turns a click into a drag.
     void move_to(const float x, const float y)
     {
@@ -639,7 +639,7 @@ auto Mcp_server::step_input_gesture() -> std::string
     return make_json_content(result).dump();
 }
 
-// inject_input_events - doc/plans/mcp_ui_driving.md B2 / B3 / B4.
+// inject_input_events - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::action_inject_input_events(const nlohmann::json& args) -> std::string
 {
     const std::optional<std::string> early = input_gesture_preamble();
@@ -1087,7 +1087,7 @@ auto Mcp_server::action_type_text(const nlohmann::json& args) -> std::string
     return commit_input_gesture();
 }
 
-// get_input_state - doc/plans/mcp_ui_driving.md B3.
+// get_input_state - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
 {
     static_cast<void>(args);
@@ -1530,7 +1530,7 @@ auto Mcp_server::request_recorded_imgui_frame(erhe::imgui::Imgui_host& host, std
     return false;
 }
 
-// get_imgui_hosts - doc/plans/mcp_ui_driving.md A6.
+// get_imgui_hosts - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_imgui_hosts(const nlohmann::json& args) -> std::string
 {
     static_cast<void>(args);
@@ -1559,7 +1559,7 @@ auto Mcp_server::query_imgui_hosts(const nlohmann::json& args) -> std::string
     return make_json_content({{"hosts", hosts}}).dump();
 }
 
-// get_imgui_windows - doc/plans/mcp_ui_driving.md A4.
+// get_imgui_windows - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_imgui_windows(const nlohmann::json& args) -> std::string
 {
     std::string error;
@@ -1598,7 +1598,7 @@ auto Mcp_server::query_imgui_windows(const nlohmann::json& args) -> std::string
     }).dump();
 }
 
-// get_imgui_items - doc/plans/mcp_ui_driving.md A7.
+// get_imgui_items - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_imgui_items(const nlohmann::json& args) -> std::string
 {
     std::string error;
@@ -1831,7 +1831,7 @@ public:
 
 } // anonymous namespace
 
-// get_imgui_item_rect - doc/plans/mcp_ui_driving.md A5.
+// get_imgui_item_rect - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_imgui_item_rect(const nlohmann::json& args) -> std::string
 {
     std::string error;

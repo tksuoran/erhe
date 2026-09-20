@@ -219,6 +219,7 @@ Every document states its standing in its first ten lines:
 - [agents/creations.md](agents/creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
 - [agents/lsai_usage_playbook.md](agents/lsai_usage_playbook.md) (mostly stable): LSAI usage playbook (erhe, C++)
 - [agents/mcp_api_guidelines.md](agents/mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
+- [agents/mcp_ui_driving.md](agents/mcp_ui_driving.md) (mostly stable): Run-book for driving the editor user interface over MCP: ImGui introspection and input gestures
 - [agents/orchestration_harness.md](agents/orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
 - [agents/quest_renderdoc_capture.md](agents/quest_renderdoc_capture.md) (mostly stable): RenderDoc Meta Fork capture workflow on Quest
 - [agents/renderdoc_fork.md](agents/renderdoc_fork.md) (mostly stable): Desktop GPU-debugging workflow with the RenderDoc fork MCP server
@@ -284,7 +285,6 @@ Every document states its standing in its first ten lines:
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
-- [plans/mcp_ui_driving.md](plans/mcp_ui_driving.md) (in progress): Driving the editor user interface over MCP: ImGui introspection and input event injection
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work

@@ -890,7 +890,7 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
 
     const std::string path_str = args.value("path", std::string{"logs/mcp_screenshot.png"});
 
-    // doc/plans/mcp_ui_driving.md A7: the recorded items of the desktop ImGui
+    // doc/agents/mcp_ui_driving.md: the recorded items of the desktop ImGui
     // host are drawn over the captured pixels as numbered rectangles and
     // reported as a number -> item table. Recording is asked for first,
     // because the frame that records has to be the captured frame (headless)

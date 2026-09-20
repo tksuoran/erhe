@@ -587,6 +587,45 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"wake_physics_bodies","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
+## UI Driving Tools
+
+Tools that inspect the editor's ImGui content and inject window input events,
+so the menu- and mouse-driven entry points can be exercised headlessly. The
+run-book - the inspect / resolve / act loop, item addressing, the standing
+traps - is [doc/agents/mcp_ui_driving.md](doc/agents/mcp_ui_driving.md). All
+rectangles and all `x` / `y` arguments are editor window pixels with the
+origin at the top left, the space `get_viewports` and `capture_screenshot`
+use.
+
+| Tool | Arguments | Result |
+|------|-----------|--------|
+| `get_imgui_hosts` | - | The ImGui contexts: name, default flag, visibility, display size, window count, recorded-frame flag, `hook_calls_total` |
+| `get_imgui_windows` | `host` | Per window: `name`, `display_name`, `id`, rectangle, `active`, `hidden`, `collapsed`, `child`, `docked`, `dock_id`, `focused` |
+| `get_imgui_items` | `host`, `window`, `label_contains`, `visible_only`, `limit` | Items of one recorded frame: `id`, `label`, `display_label`, `window`, rectangle and center, `index`, `status` |
+| `get_imgui_item_rect` | `host`, `window`, `label` or `id`, `index`, `visible_only` | One item's rectangle, center, `status`, `match_count` |
+| `imgui_click` | item selector, `button`, `modifiers`, `double` | Clicks the resolved item's center; returns `target` |
+| `imgui_hover` | item selector, `modifiers` | Leaves the pointer on the item; returns `target` |
+| `imgui_scroll` | `window` or item selector, `dx`, `dy`, `modifiers` | Turns the wheel over it; returns `target` |
+| `mouse_click` | `x`, `y`, `button`, `modifiers`, `double` | Press and release without moving |
+| `mouse_drag` | `from`, `to`, `button`, `modifiers`, `frames`, `hold` | Press, interpolated moves, release unless held |
+| `mouse_release` | `button` | Ends a held drag |
+| `mouse_wheel` | `x`, `y`, `dx`, `dy`, `modifiers` | Wheel at a point; positive `dy` zooms in over a viewport |
+| `key_press` | `key`, `modifiers`, `hold_frames` | A key chord as real input |
+| `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus |
+| `inject_input_events` | `events` | Raw `erhe::window::Input_event` values with per-event `frame` offsets |
+| `get_input_state` | - | Injected pointer position, held buttons, modifiers, the stepping gesture |
+| `get_transform_handles` | `viewport` | Per gizmo handle, a window point that picks it, its `handle_value`, the gizmo anchor and radius |
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"imgui_click","arguments":{"window":"Operations","label":"Merge"}}}'
+```
+
+`capture_screenshot` takes `annotate_imgui_items` (plus `annotate_window` and
+`annotate_limit`), which draws numbered rectangles over the recorded items and
+returns the number -> item table.
+
 ## Notes
 
 - `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count`

@@ -58,7 +58,7 @@ class Viewport_scene_view;
 class Input_gesture_builder;
 
 // What imgui_click / imgui_hover / imgui_scroll do once they have resolved
-// their target (doc/plans/mcp_ui_driving.md A7).
+// their target (doc/agents/mcp_ui_driving.md).
 enum class Imgui_pointer_action
 {
     click,
@@ -373,7 +373,7 @@ private:
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_set_transform_hover     (const nlohmann::json& args) -> std::string;
 
-    // doc/plans/mcp_ui_driving.md part B (src/editor/mcp/mcp_server_ui.cpp).
+    // Input gestures, doc/agents/mcp_ui_driving.md (src/editor/mcp/mcp_server_ui.cpp).
     // Every one of these builds its event list through Input_gesture_builder
     // and then hands it to step_input_gesture(), so there is one gesture
     // builder and one stepping path.
@@ -387,7 +387,7 @@ private:
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
     auto query_transform_handles              (const nlohmann::json& args) -> std::string;
 
-    // doc/plans/mcp_ui_driving.md part A (src/editor/mcp/mcp_server_ui.cpp).
+    // ImGui introspection, doc/agents/mcp_ui_driving.md (src/editor/mcp/mcp_server_ui.cpp).
     // get_imgui_items and get_imgui_item_rect need a recorded frame, so they
     // request one on their first pass and defer; get_imgui_hosts and
     // get_imgui_windows read live ImGui state and answer at once.
@@ -592,9 +592,9 @@ private:
 
     // inject_input_events: one scripted input gesture, injecting the events of
     // one frame offset per pass of its deferred request (main thread only).
-    // doc/plans/mcp_ui_driving.md B2: one gesture runs at a time, a second call
+    // doc/agents/mcp_ui_driving.md: one gesture runs at a time, a second call
     // while this one steps is refused. The vectors are persistent scratch
-    // (R6): a finished gesture clears them and keeps their capacity, so a
+    // a finished gesture clears them and keeps their capacity, so a
     // repeated gesture of the same size allocates nothing.
     class Input_gesture_steps
     {
@@ -615,8 +615,8 @@ private:
         void clear()
         {
             request = nullptr;
-            events.clear();       // capacity kept (R6)
-            event_frames.clear(); // capacity kept (R6)
+            events.clear();       // capacity kept
+            event_frames.clear(); // capacity kept
             next_event = 0;
             frame      = 0;
             last_frame = 0;
@@ -627,8 +627,8 @@ private:
     Input_gesture_steps                              m_input_gesture_steps;
 
     // The pointer / modifier state the injected events have built up
-    // (doc/plans/mcp_ui_driving.md B3). null_window reports no cursor position
-    // and no modifiers of its own (F7), so this is the only record of where an
+    // (doc/agents/mcp_ui_driving.md). null_window reports no cursor position
+    // and no modifiers of its own, so this is the only record of where an
     // injected pointer is; get_input_state reports it.
     class Input_pointer_state
     {
@@ -638,14 +638,14 @@ private:
         bool     position_known{false};
         uint32_t button_mask   {0};
         uint32_t modifier_mask {0};
-        // cursor_enter + window_focus have been injected once (B3).
+        // cursor_enter + window_focus have been injected once.
         bool     entered       {false};
     };
     Input_pointer_state                              m_input_pointer_state;
 
     // get_imgui_items / get_imgui_item_rect: the request that asked the host
     // for a recorded frame and is deferring until that frame is done (main
-    // thread only). doc/plans/mcp_ui_driving.md A7.
+    // thread only). doc/agents/mcp_ui_driving.md.
     const Queued_request*                            m_imgui_recording_request{nullptr};
 
     // What a gesture tool resolved before it recorded its events (the item

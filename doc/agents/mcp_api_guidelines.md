@@ -42,3 +42,30 @@ When adding a new MCP tool that wraps an `Operations` method, check whether
 the method reads any `Operations` member that the window's widgets mutate; if
 so, add an overload taking the value explicitly and call that from the MCP
 handler.
+
+## UI-driving tools and scene-scripting tools are separate
+
+The server carries two families of tools and each has its own job.
+
+- **Scene scripting** - `create_shape`, `transform_selection`,
+  `set_item_property`, `edit_material`, `import_gltf` and the rest - takes
+  explicit arguments and acts on scene state. This is how a script or an
+  agent changes a document.
+- **UI driving** - the `get_imgui_*`, `imgui_*`, `mouse_*`, `key_press`,
+  `type_text`, `inject_input_events` and `get_transform_handles` tools,
+  described in [mcp_ui_driving.md](mcp_ui_driving.md) - exercises the
+  interactive entry points (menus, docking, property rows, gizmo drags,
+  viewport gestures) so UI behavior can be verified headlessly.
+
+Use a UI-driving call when the interactive path itself is what is under test:
+a menu entry that must open a window, a drag that must move a selection, a
+row that must accept a typed value, a splitter that must move both axes. Set
+a parameter with the explicit tool that exposes it - a UI-driving call that
+reaches a widget to change a value the API already exposes is slower, depends
+on the layout and window visibility of the moment, and verifies nothing the
+explicit call does not.
+
+A new UI-driving tool follows the same rule as the rest: its behavior is
+determined by its own arguments and by the scene and window state it is
+defined to act on, and it reports what it resolved (`target`, the injected
+event counts) so a transcript records what actually ran.

@@ -37,6 +37,30 @@ XR event types (`Xr_action_boolean`, etc.) are forward-declared in `window_event
 - Joystick scanning runs on a background thread to avoid blocking the main loop.
 - The SDL backend is the default and recommended choice.
 
-## Future work
+## Injected input events
 
-- [plans/mcp_ui_driving.md](../plans/mcp_ui_driving.md)
+`Context_window::inject_input_event(const Input_event&)` appends an event to
+the write buffer of the double-buffered queue, exactly where a backend
+callback puts a real one. All three backends (`sdl_window`, `null_window`,
+`glfw_window`) implement it identically, so an injected event is
+indistinguishable from a real one to every consumer.
+
+- **Ordering.** The write buffer becomes readable at the next
+  `poll_events()`, and `get_input_events()` then hands it to
+  `Editor::dispatch_input_event`. A caller that injects from inside the tick
+  (the editor's MCP server does, after that frame's dispatch) sees its event
+  dispatched on the next frame, in every backend. A gesture that must span
+  several frames therefore injects one frame's worth per frame; the editor's
+  MCP tools do that through a deferred request
+  ([../agents/mcp_ui_driving.md](../agents/mcp_ui_driving.md)).
+- **The synthesizer callback is a different thing.**
+  `set_input_event_synthesizer_callback()` is a single slot that produces
+  events during `poll_events()`; `Fly_camera_tool` holds it for its scripted
+  input test. Injection does not touch it.
+- **Events carry their own state.** `modifier_mask` travels with the event,
+  and `null_window` answers `get_cursor_position()` with (0, 0) and keeps no
+  modifier state, so an injected button or wheel event is preceded by a move
+  event to its position rather than relying on the window's own cursor.
+- Relative-hold consumers (`set_cursor_relative_hold()`, fly camera mouse
+  look) read `dx` / `dy` off move events, so an injected move fills them;
+  `null_window` ignores the hold request itself.

@@ -99,7 +99,7 @@ camera; `close_scene` logs a clean `scene-close check`.
 
 Wheel zoom, middle-drag pan and the rotation lock reach the fly camera through
 window input events, so they are driven by the input gesture tools
-(`doc/plans/mcp_ui_driving.md`) over the rectangles `get_viewports` reports:
+([../agents/mcp_ui_driving.md](../agents/mcp_ui_driving.md)) over the rectangles `get_viewports` reports:
 
 - Wheel zoom. `mouse_wheel` at the center of an orthogonal cell with a
   positive `dy`; `get_four_views` then reports a smaller `view_height` and the

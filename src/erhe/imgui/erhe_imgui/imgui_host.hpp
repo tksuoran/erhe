@@ -102,7 +102,7 @@ public:
     // across two files).
     void set_imgui_ini_path(const std::string& path);
 
-    // Item recording (doc/plans/mcp_ui_driving.md A3). A request arms
+    // Item recording (doc/erhe/imgui.md). A request arms
     // ImGuiContext::TestEngineHookItems for exactly the next NewFrame ..
     // Render of this host; the frame's records stay readable until the next
     // request. Recording is off in every other frame, so an unrequested frame

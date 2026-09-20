@@ -86,6 +86,54 @@ is generic docking code, independent of erhe.
   the inner segments staying collinear. `capture_screenshot` shows the same
   thing as pixels.
 
-## Future work
+## Item recorder
 
-- [plans/mcp_ui_driving.md](../plans/mcp_ui_driving.md)
+`Imgui_item_recorder` (`erhe_imgui/imgui_item_recorder.{hpp,cpp}`) records
+what Dear ImGui submitted in one frame, which is what the editor's
+`get_imgui_*` MCP tools read
+([../agents/mcp_ui_driving.md](../agents/mcp_ui_driving.md)).
+
+- **Hooks.** Dear ImGui reports every item to four extern functions -
+  `ImGuiTestEngineHook_ItemAdd`, `ImGuiTestEngineHook_ItemInfo`,
+  `ImGuiTestEngineHook_Log` and `ImGuiTestEngine_FindItemDebugLabel` - when
+  `IMGUI_ENABLE_TEST_ENGINE` is defined and `ImGuiContext::TestEngineHookItems`
+  is true. `imgui_item_recorder.cpp` supplies the four; the `imgui_test_engine`
+  library, one other implementation of them, carries its own non-MIT license
+  and erhe does not use it.
+- **The definition is PUBLIC on the `imgui` target**
+  (`src/imgui/CMakeLists.txt`). It decides whether `imgui_internal.h` declares
+  the hook functions and the `ImGuiItemStatusFlags_Openable` / `Opened` /
+  `Checkable` / `Checked` / `Inputable` enumerators, so every translation unit
+  that includes the headers must agree on it.
+- **Recording is on request.** `Imgui_host::request_item_recording()` sets
+  `TestEngineHookItems` for exactly the next `NewFrame` .. `Render` and clears
+  it after, and the recorder keeps that frame's records until the next
+  request. With the flag false Dear ImGui calls no hook at all, which
+  `get_imgui_hosts`'s `hook_calls_total` shows. The record vector and the
+  label arena are cleared with their capacity kept, so a recorded frame
+  reaches a high-water mark and stops allocating.
+- **One recorder per `ImGuiContext`**, owned by the `Imgui_host` that owns
+  the context; the hooks find it through a registry keyed by context.
+- **The first non-empty label wins.** A widget built out of another one
+  reports twice - a menu is a `Selectable("")` reporting an empty label and
+  `BeginMenu()` then reports the menu's name for the same id - so a recorded
+  name is not overwritten and an empty one gives way.
+- **Naming an item erhe draws itself.** `set_item_debug_label()` names the
+  item submitted last; `set_recorded_item_labels(first_index, label)` names a
+  run of items bracketed with `get_recorded_item_count()`, giving a single
+  item the label and several the `.x` / `.y` / `.z` / `.w` / `.<position>`
+  component suffixes. `is_item_recording()` guards building the text. Item
+  tree rows and property rows use these.
+- **Threading.** Every ImGui context erhe creates is driven from the main
+  (tick) thread - `Imgui_windows::begin_frame` / `draw_imgui_windows` /
+  `end_frame` for the desktop host and for every `Rendertarget_imgui_host`
+  alike - so the registry and the records need no synchronization.
+
+The tool vocabulary the MCP server exposes over this
+(`get_imgui_items`, `get_imgui_item_rect`, `imgui_click`, `imgui_hover`,
+`imgui_scroll`, annotated screenshots) comes from
+[SaloQT/imgui-mcp](https://github.com/SaloQT/imgui-mcp) (MIT). That project is
+a standalone UI design tool: it spawns its own SDL2 + OpenGL renderer process
+and records rectangles only for the widgets it declared itself, with no
+embedding API and no hook into a host application's ImGui calls, which is why
+erhe implements the hooks itself instead of depending on it.
