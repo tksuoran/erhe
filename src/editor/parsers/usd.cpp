@@ -2262,6 +2262,14 @@ constexpr std::string_view c_physics_material_description_fields[] = {
     std::string_view{"friction_combine"},
     std::string_view{"restitution_combine"}
 };
+// The three system name lists a PhysicsCollisionGroup prim states itself
+// (Property_flags::native_gltf, section 4.21), so no custom attribute of the
+// record repeats them.
+constexpr std::string_view c_collision_filter_description_fields[] = {
+    std::string_view{"collision_systems"},
+    std::string_view{"collide_with_systems"},
+    std::string_view{"not_collide_with_systems"}
+};
 constexpr std::string_view c_node_physics_description_fields[] = {
     std::string_view{"motion_mode"},
     std::string_view{"is_trigger"},
@@ -2682,7 +2690,7 @@ void collect_usd_physics(
         erhe::usd::Usd_save_physics_record record{};
         if ((i < items.collision_filters.size()) && items.collision_filters[i]) {
             record.item = items.collision_filters[i];
-            collect_usd_physics_properties(*items.collision_filters[i].get(), {}, record.properties);
+            collect_usd_physics_properties(*items.collision_filters[i].get(), c_collision_filter_description_fields, record.properties);
         }
         physics.collision_filters.push_back(std::move(record));
     }

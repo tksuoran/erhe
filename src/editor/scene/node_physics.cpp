@@ -136,6 +136,7 @@ Node_physics::Node_physics(const Node_physics& src)
     , m_collision_mesh  {src.m_collision_mesh}
 {
     observe_physics_material();
+    observe_collision_filter();
 }
 
 Node_physics& Node_physics::operator=(const Node_physics& src)
@@ -149,6 +150,7 @@ Node_physics& Node_physics::operator=(const Node_physics& src)
     m_wake_on_attach   = src.m_wake_on_attach;
     m_collision_mesh   = src.m_collision_mesh;
     observe_physics_material();
+    observe_collision_filter();
     return *this;
 }
 
@@ -162,6 +164,7 @@ Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
     , m_collision_mesh{src.m_collision_mesh}
 {
     observe_physics_material();
+    observe_collision_filter();
 }
 
 Node_physics::Node_physics(const IRigid_body_create_info& create_info)
@@ -183,6 +186,7 @@ Node_physics::Node_physics(const IRigid_body_create_info& create_info)
     if (create_info.physics_material)                       { set_value(physics_material_property, Material_traits::to_value(create_info.physics_material)); }
     if (create_info.collision_filter)                       { set_value(collision_filter_property, Filter_traits::to_value(create_info.collision_filter)); }
     observe_physics_material();
+    observe_collision_filter();
 }
 
 void Node_physics::on_property_changed(const erhe::property::Property_changed_args& args)
@@ -223,6 +227,7 @@ void Node_physics::on_property_changed(const erhe::property::Property_changed_ar
         reapply_physics_material();
     } else if (changed == collision_filter_property.get_ptr()) {
         m_create_info.collision_filter = Filter_traits::from_value(get_value(collision_filter_property));
+        observe_collision_filter();
         reapply_collision_filter();
     }
 }
@@ -504,6 +509,16 @@ void Node_physics::observe_physics_material()
     if (m_create_info.physics_material) {
         m_physics_material_observer = m_create_info.physics_material->add_observer(
             [this](erhe::property::Dependency_object&, const erhe::property::Property_changed_args&) { reapply_physics_material(); }
+        );
+    }
+}
+
+void Node_physics::observe_collision_filter()
+{
+    m_collision_filter_observer.release();
+    if (m_create_info.collision_filter) {
+        m_collision_filter_observer = m_create_info.collision_filter->add_observer(
+            [this](erhe::property::Dependency_object&, const erhe::property::Property_changed_args&) { reapply_collision_filter(); }
         );
     }
 }

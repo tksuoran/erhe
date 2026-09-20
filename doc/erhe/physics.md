@@ -41,7 +41,11 @@ a specific engine.
   `c_default_*` values; `IRigid_body::set_physics_material()` applies the damping to the body and
   re-derives a density-based mass; KHR_physics_rigid_bodies precedence in `combine()`
 - `Collision_filter` -- shared collision-system filter item (allowlist / denylist of free-form
-  system strings; Jolt backend interns at most 64 system names per world into uint64 bitsets)
+  system strings; Jolt backend interns at most 64 system names per world into uint64 bitsets).
+  The three lists are registered `string[]` properties (`doc/erhe/property_system.md`
+  section 4.21), read through `get_collision_systems()` and the two other getters; the
+  editor's `Node_physics` observes the filter, so an edit from any writer recompiles the
+  backend's snapshot
 - `Physics_joint_settings` -- shared joint settings item (`Joint_limit` / `Joint_drive` arrays,
   1:1 with KHR_physics_rigid_bodies physicsJoints entries)
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims

@@ -492,9 +492,9 @@ void import_physics(
         const Physics_import_item* record = record_of(arguments.collision_filters, i);
         const std::string name = record_name(record, description.name, "Collision filter", i);
         auto item = std::make_shared<erhe::physics::Collision_filter>(name);
-        item->collision_systems        = description.collision_systems;
-        item->collide_with_systems     = description.collide_with_systems;
-        item->not_collide_with_systems = description.not_collide_with_systems;
+        item->set_collision_systems       (description.collision_systems);
+        item->set_collide_with_systems    (description.collide_with_systems);
+        item->set_not_collide_with_systems(description.not_collide_with_systems);
         if (record != nullptr) {
             apply_record_properties(*item, record->properties, record->property_set, Object_property_handling::apply);
         }

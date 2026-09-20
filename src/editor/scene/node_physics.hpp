@@ -138,8 +138,9 @@ public:
     void               reapply_physics_material();
 
     // Shared collision filter; updates both create info and the live rigid
-    // body. reapply_collision_filter() pushes the current filter to the
-    // body again after the Collision_filter item was edited, so the
+    // body. The attachment observes the filter's properties (doc/erhe/
+    // property_system.md section 4.21) and reapply_collision_filter()
+    // pushes the current filter to the body again when one changes, so the
     // backend re-snapshots the compiled filter.
     [[nodiscard]] auto get_collision_filter    () const -> const std::shared_ptr<erhe::physics::Collision_filter>&;
     void               set_collision_filter    (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
@@ -211,6 +212,10 @@ private:
     // Subscribes to the current material (every property); the subscription
     // dies with this attachment, so the callback never outlives it.
     void observe_physics_material   ();
+    // Subscribes to the current collision filter (every property); the
+    // subscription dies with this attachment, so the callback never
+    // outlives it.
+    void observe_collision_filter   ();
 
     erhe::physics::IWorld*                      m_physics_world{nullptr};
     erhe::physics::IRigid_body_create_info      m_create_info;  // mirror of the effective property values (plus the shape and the label)
@@ -219,6 +224,7 @@ private:
     bool                                        m_wake_on_attach{false};
     std::weak_ptr<erhe::scene::Mesh>            m_collision_mesh; // bridged storage of collision_mesh_property
     erhe::property::Observer_token              m_physics_material_observer;
+    erhe::property::Observer_token              m_collision_filter_observer;
 };
 
 }

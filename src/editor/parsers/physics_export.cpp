@@ -151,9 +151,9 @@ public:
         filter_index_map.emplace(filter.get(), index);
         erhe::scene::Physics_collision_filter_description description{};
         description.name                     = filter->get_name();
-        description.collision_systems        = filter->collision_systems;
-        description.collide_with_systems     = filter->collide_with_systems;
-        description.not_collide_with_systems = filter->not_collide_with_systems;
+        description.collision_systems        = filter->get_collision_systems();
+        description.collide_with_systems     = filter->get_collide_with_systems();
+        description.not_collide_with_systems = filter->get_not_collide_with_systems();
         data.collision_filters.push_back(std::move(description));
         items.collision_filters.push_back(filter);
         return index;

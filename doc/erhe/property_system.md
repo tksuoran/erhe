@@ -1275,6 +1275,31 @@ table, see D2a), and references to other objects (D28).
     value, as it keeps one shadowing an inherited or style value. A copy
     (D10) carries the reference pointer as it carries the style pointer. A
     sealed object (D24) rejects `set_reference`.
+- D34 A list of scalars is one array property. The whole list is the
+  value: an edit of one element is a set of the whole list, and the
+  generic row of the Properties window draws one editor per element
+  (`dependency_property_rows.cpp`; up to sixteen elements, a longer list
+  and a selection whose lists disagree stay a read-only summary). Where
+  the element count follows another property - the track count of a
+  layout axis - it is a `coerce` callback (D7) on the array property, so
+  the list is resized where the value is produced and the draw code
+  mutates nothing. `Property_ui::array_size` says whether the count is
+  the user's: `Array_size::fixed` (the default) draws element editors
+  alone, `Array_size::editable` also draws a "-" per element and an
+  "Add" button, each of which records one `Property_set_operation` of the
+  whole list.
+- D35 Array value types. `Property_type::float_array`
+  (`std::vector<float>`), `int_array` (`std::vector<int>`) and
+  `string_array` (`std::vector<std::string>`) carry a USD primvar and a
+  list of names (a collision filter's systems). None of them is an
+  expression target or source (`Expression::component_count` is zero).
+  D16 text is the components space separated for the numeric pair, and
+  for `string_array` a quoted, space-separated list - each element double
+  quoted with `\"` and `\` escapes, so an element may hold spaces,
+  quotes or be empty - with the empty list as the empty text. The USD
+  types are `float[]`, `int[]` and `string[]`; a `string[]` custom
+  attribute is read as the array it is rather than through the literal
+  text, which would lose the quoting.
 
 ## 4. Implementation
 
@@ -1894,7 +1919,7 @@ non-const accessor.
 
 The Properties window has no hand-written layout rows. The generic array
 row draws the list (one drag field per element,
-`doc/plans/hand_written_rows_to_properties.md` H4), and a
+D34), and a
 `Property_row_action` registered by `Properties` below each of the three
 rows is the "Custom track sizes on / off" toggle: on an empty list it
 seeds one equal size per track from the layout's volume along that axis,
@@ -2193,6 +2218,48 @@ prims have become Style items of the scene.
 Test: `src/erhe/scene/test/test_scene_properties.cpp` (default, setter
 to mirror, untyped access, style-held value reaching the mirror). `Scene` has
 no clone case: its copy constructor is `ERHE_FATAL`, a scene is never copied.
+
+### 4.21 Collision_filter
+
+`erhe::physics::Collision_filter` (the KHR_physics_rigid_bodies
+`collisionFilters` entry and the USD `PhysicsCollisionGroup` prim; the
+content library's Collision Filters category holds them) registers its three
+system name lists as entry-stored `string_array` properties (D35), owner type
+`Collision_filter::property_owner_type()`, UI group `Collision Filter`:
+`collision_systems` (the systems this filter's body belongs to),
+`collide_with_systems` (non-empty = allowlist) and
+`not_collide_with_systems` (the denylist used while the allowlist is empty).
+All three carry `Array_size::editable` (D34), so the generic array row draws a
+text field, a "-" button per element and an "Add" button, and every completed
+action is one `Property_set_operation` of the whole list. A filter states the
+systems of its own body, so none of the three inherits: an empty list is what
+the allowlist / denylist rule above is written against, and a value from a
+folder or a style would change that rule silently.
+
+`Collision_filter` keeps the three `std::vector<std::string>` members as
+MIRRORS of the effective values, refreshed in `on_property_changed` (the
+bridged-owner recipe of section 4.18); `get_collision_systems()` and the two
+other getters read the mirror, the setters write the store, and the backends
+(the Jolt and Box3D collision filter tables, the glTF and USD physics export)
+read the getters. The consequence of an edit reaches the live simulation the
+way a physics material's does (section 4.12): the editor's `Node_physics`
+subscribes an any-property observer (D21) to its filter whenever its
+`collision_filter` property is set and in its constructors, with
+`reapply_collision_filter()` as the callback, so the backend recompiles the
+filter snapshot after an edit from any writer - the generic row,
+`Property_set_operation`, MCP `edit_collision_filter` or `set_item_property`,
+a file load. No scan of the open scenes and no hand-written row remain.
+
+Both file formats carry the three lists in their own entry, so the
+registrations are flagged `Property_flags::native_gltf` (D32): the
+`KHR_physics_rigid_bodies` `collisionFilters` entry holds them and the USD
+writer spells them as the `erhe:Collision_filter:*` attributes of the
+`PhysicsCollisionGroup` prim, which is also the name a resource prim's local
+value would take, so the USD physics record excludes them
+(`c_collision_filter_description_fields` in `src/editor/parsers/usd.cpp`) the
+way the physics material's schema fields are excluded.
+Test: `src/erhe/physics/test/test_collision_filter_properties.cpp` (defaults,
+setter to mirror, untyped access through the D16 text, clone, no inheritance).
 
 ## 5. Out of scope
 

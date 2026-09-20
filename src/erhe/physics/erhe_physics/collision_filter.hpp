@@ -2,6 +2,7 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_item/typed.hpp"
+#include "erhe_property/dependency_property.hpp"
 
 #include <string>
 #include <string_view>
@@ -22,8 +23,11 @@ namespace erhe::physics {
 // The test is applied bidirectionally: both bodies' filters must allow the
 // pair for a collision to occur.
 //
-// The Jolt backend compiles a filter once per item (keyed by item pointer);
-// editing a live filter requires re-assigning it to the bodies that use it.
+// The Jolt backend compiles a filter once per item (keyed by item pointer)
+// and recompiles it when the filter is assigned to a body again; the
+// editor's Node_physics observes the filter's properties and re-assigns on
+// every change (doc/erhe/property_system.md section 4.21), so an edit of a
+// live filter reaches the simulation on its own.
 class Collision_filter : public erhe::Item<erhe::Item_base, erhe::Typed, Collision_filter>
 {
 public:
@@ -42,9 +46,32 @@ public:
     // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Collision_filter"; }
 
-    std::vector<std::string> collision_systems;
-    std::vector<std::string> collide_with_systems;     // non-empty => allowlist semantics
-    std::vector<std::string> not_collide_with_systems; // used when collide_with_systems is empty => denylist semantics
+    // Implements erhe::property::Dependency_object: the three lists are
+    // entry-stored properties, so the mirrors below follow every source of a
+    // change (doc/erhe/property_system.md section 4.21).
+    void on_property_changed(const erhe::property::Property_changed_args& args) override;
+
+    // Registered properties (doc/erhe/property_system.md section 4.21): the
+    // three system name lists, entry-stored `string[]` whose element count is
+    // the user's. A filter states its own systems, so none of them inherits.
+    static const erhe::property::Property<std::vector<std::string>> collision_systems_property;
+    static const erhe::property::Property<std::vector<std::string>> collide_with_systems_property;
+    static const erhe::property::Property<std::vector<std::string>> not_collide_with_systems_property;
+
+    [[nodiscard]] auto get_collision_systems       () const -> const std::vector<std::string>& { return m_collision_systems; }
+    [[nodiscard]] auto get_collide_with_systems    () const -> const std::vector<std::string>& { return m_collide_with_systems; }
+    [[nodiscard]] auto get_not_collide_with_systems() const -> const std::vector<std::string>& { return m_not_collide_with_systems; }
+
+    void set_collision_systems       (const std::vector<std::string>& value) { set_value(collision_systems_property,        value); }
+    void set_collide_with_systems    (const std::vector<std::string>& value) { set_value(collide_with_systems_property,     value); }
+    void set_not_collide_with_systems(const std::vector<std::string>& value) { set_value(not_collide_with_systems_property, value); }
+
+private:
+    // Mirrors of the effective values, refreshed by on_property_changed; the
+    // backends read these while compiling a filter.
+    std::vector<std::string> m_collision_systems;
+    std::vector<std::string> m_collide_with_systems;     // non-empty => allowlist semantics
+    std::vector<std::string> m_not_collide_with_systems; // used when collide_with_systems is empty => denylist semantics
 };
 
 } // namespace erhe::physics

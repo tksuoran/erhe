@@ -26,7 +26,6 @@ The closed list of state this plan migrates, in phase order:
 
 | Phase | Owner | State | Property form |
 |---|---|---|---|
-| 3 | `erhe::physics::Collision_filter` | `collision_systems`, `collide_with_systems`, `not_collide_with_systems` | three `string_array`, entry store (new value type) |
 | 4 | `erhe::physics::Physics_joint_settings` | `limits`, `drives` | child items with scalar properties (H6) |
 
 The scene's settings-override block (`Scene_settings`, the codegen optionals
@@ -39,16 +38,6 @@ operation.
 
 ## 3. Decisions
 
-- H4 A list of scalars is one array property: the whole list is the value, an
-  edit of one element is a set of the whole list, and the generic row gains a
-  per-element editor for the array types (today it shows a read-only summary,
-  `dependency_property_rows.cpp`). Element count rules that depend on another
-  property (the track count of a layout axis) are a `coerce` callback (D7) on
-  the array property, so the list is resized where the value is produced and
-  the draw code mutates nothing.
-- H5 `Property_type::string_array` (`std::vector<std::string>`) joins
-  `float_array` and `int_array`, with the same standing: not an expression
-  target, D16 text form a quoted, space-separated list, USD type `string[]`.
 - H6 A list of RECORDS (`Physics_joint_settings::limits`, `::drives`) becomes
   child items of the settings item, one `Joint_limit` / `Joint_drive` item per
   element, each with scalar properties (`linear_axes` and `angular_axes` as
@@ -78,15 +67,9 @@ per-axis extent lists now are and how the array row draws them.
 
 ### Phase 3: Collision_filter system lists
 
-1. H5 in `erhe::property` (value type, D16 text, tests), the USD writer's
-   `string[]` spelling, and a string element editor in the H4 row (add,
-   remove, edit on deactivate).
-2. The three lists become entry-store properties of `Collision_filter`; the
-   members become mirrors; `on_property_changed` calls what
-   `reapply_collision_filter` calls today, so the consequence follows every
-   source of a change.
-3. `Properties::collision_filter_properties` is deleted; the KHR collision
-   filter export reads the mirrors unchanged.
+Landed; `doc/erhe/property_system.md` section 4.21 states what the filter's
+three system lists now are, and D34 and D35 state the array row and the
+`string_array` value type the phase added.
 
 ### Phase 4: Physics_joint_settings limits and drives
 

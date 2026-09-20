@@ -230,11 +230,11 @@ auto Jolt_group_filter::get_or_compile(const std::shared_ptr<Collision_filter>& 
         return existing->second;
     }
     Compiled_collision_filter compiled{};
-    compiled.membership    = make_bitset(filter->collision_systems);
-    compiled.is_allow_list = !filter->collide_with_systems.empty();
+    compiled.membership    = make_bitset(filter->get_collision_systems());
+    compiled.is_allow_list = !filter->get_collide_with_systems().empty();
     compiled.mask          = compiled.is_allow_list
-        ? make_bitset(filter->collide_with_systems)
-        : make_bitset(filter->not_collide_with_systems);
+        ? make_bitset(filter->get_collide_with_systems())
+        : make_bitset(filter->get_not_collide_with_systems());
     const JPH::CollisionGroup::GroupID group_id = static_cast<JPH::CollisionGroup::GroupID>(m_compiled_filters.size());
     m_compiled_filters.push_back(compiled);
     m_filter_to_compiled.emplace(filter.get(), group_id);
@@ -248,11 +248,11 @@ auto Jolt_group_filter::recompile(const std::shared_ptr<Collision_filter>& filte
         return get_or_compile(filter);
     }
     Compiled_collision_filter& compiled = m_compiled_filters[existing->second];
-    compiled.membership    = make_bitset(filter->collision_systems);
-    compiled.is_allow_list = !filter->collide_with_systems.empty();
+    compiled.membership    = make_bitset(filter->get_collision_systems());
+    compiled.is_allow_list = !filter->get_collide_with_systems().empty();
     compiled.mask          = compiled.is_allow_list
-        ? make_bitset(filter->collide_with_systems)
-        : make_bitset(filter->not_collide_with_systems);
+        ? make_bitset(filter->get_collide_with_systems())
+        : make_bitset(filter->get_not_collide_with_systems());
     return existing->second;
 }
 

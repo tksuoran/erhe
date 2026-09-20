@@ -18,9 +18,9 @@ using erhe::physics::Collision_filter;
 ) -> std::shared_ptr<Collision_filter>
 {
     std::shared_ptr<Collision_filter> filter = std::make_shared<Collision_filter>();
-    filter->collision_systems        = systems;
-    filter->collide_with_systems     = collide_with;
-    filter->not_collide_with_systems = not_collide_with;
+    filter->set_collision_systems       (systems);
+    filter->set_collide_with_systems    (collide_with);
+    filter->set_not_collide_with_systems(not_collide_with);
     return filter;
 }
 
@@ -153,7 +153,7 @@ TEST(collision_filter_table, recompile_picks_up_edits)
     const int debris_index = table.get_or_compile(debris);
     EXPECT_FALSE(table.should_collide(player_index, debris_index));
 
-    player->collide_with_systems = {"terrain", "debris"};
+    player->set_collide_with_systems({"terrain", "debris"});
     // A cached compilation does not see the edit until recompile().
     EXPECT_FALSE(table.should_collide(player_index, debris_index));
     EXPECT_EQ(table.recompile(player), player_index);

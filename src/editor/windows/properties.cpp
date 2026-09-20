@@ -28,7 +28,6 @@
 #include "scene/ik_properties.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/physics_edits.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -54,7 +53,6 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
@@ -850,56 +848,6 @@ void optional_float_editor(std::optional<float>& value, const float default_valu
 
 } // anonymous namespace
 
-void Properties::collision_filter_properties(const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    class List_description
-    {
-    public:
-        const char*               group_label;
-        const char*               tooltip;
-        std::vector<std::string>* strings;
-    };
-    const List_description lists[] = {
-        { "Collision Systems",        "Systems this filter's body belongs to",                          &collision_filter->collision_systems        },
-        { "Collide With",             "Non-empty = collide only with these systems (allowlist)",       &collision_filter->collide_with_systems     },
-        { "Not Collide With",         "Used when Collide With is empty: never collide with these",     &collision_filter->not_collide_with_systems },
-    };
-    for (const List_description& list : lists) {
-        push_group(list.group_label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        std::vector<std::string>* strings = list.strings;
-        for (std::size_t i = 0, end = strings->size(); i < end; ++i) {
-            add_entry(
-                fmt::format("System {}", i),
-                [this, collision_filter, strings, i]() {
-                    if (i >= strings->size()) {
-                        return;
-                    }
-                    if (ImGui::Button("-")) {
-                        strings->erase(strings->begin() + static_cast<std::ptrdiff_t>(i));
-                        reapply_collision_filter(m_context, collision_filter);
-                        return;
-                    }
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ImGui::InputText("##", &(*strings)[i]);
-                    if (ImGui::IsItemDeactivatedAfterEdit()) {
-                        reapply_collision_filter(m_context, collision_filter);
-                    }
-                },
-                list.tooltip
-            );
-        }
-        add_entry("Add", [strings]() {
-            if (ImGui::Button("Add System", ImVec2{-FLT_MIN, 0.0f})) {
-                strings->emplace_back();
-            }
-        });
-        pop_group();
-    }
-}
-
 void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1107,7 +1055,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
     const auto& brush_placement  = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture          = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
-    const auto& collision_filter = std::dynamic_pointer_cast<erhe::physics::Collision_filter      >(item);
     const auto& physics_joint    = std::dynamic_pointer_cast<erhe::physics::Physics_joint_settings>(item);
 
     const bool edit_disabled = item->is_lock_edit();
@@ -1116,7 +1063,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     }
     if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
-    if (collision_filter) { collision_filter_properties(collision_filter); }
     if (physics_joint)    { physics_joint_settings_properties(physics_joint); }
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }

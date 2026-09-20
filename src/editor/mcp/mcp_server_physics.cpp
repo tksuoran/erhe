@@ -211,9 +211,9 @@ auto Mcp_server::query_physics_items(const json& args) -> std::string
         filters.push_back({
             {"name",                      filter->get_name()},
             {"id",                        filter->get_id()},
-            {"collision_systems",         filter->collision_systems},
-            {"collide_with_systems",      filter->collide_with_systems},
-            {"not_collide_with_systems",  filter->not_collide_with_systems}
+            {"collision_systems",         filter->get_collision_systems()},
+            {"collide_with_systems",      filter->get_collide_with_systems()},
+            {"not_collide_with_systems",  filter->get_not_collide_with_systems()}
         });
     }
     json joint_settings = json::array();
@@ -682,9 +682,9 @@ auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
     }
 
     auto item = std::make_shared<erhe::physics::Collision_filter>(name);
-    if (args.contains("collision_systems"))        { item->collision_systems        = args["collision_systems"].get<std::vector<std::string>>(); }
-    if (args.contains("collide_with_systems"))     { item->collide_with_systems     = args["collide_with_systems"].get<std::vector<std::string>>(); }
-    if (args.contains("not_collide_with_systems")) { item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>(); }
+    if (args.contains("collision_systems"))        { item->set_collision_systems       (args["collision_systems"       ].get<std::vector<std::string>>()); }
+    if (args.contains("collide_with_systems"))     { item->set_collide_with_systems    (args["collide_with_systems"    ].get<std::vector<std::string>>()); }
+    if (args.contains("not_collide_with_systems")) { item->set_not_collide_with_systems(args["not_collide_with_systems"].get<std::vector<std::string>>()); }
 
     m_context.operation_stack->queue(
         make_resource_insert_operation(m_context, library, item, parent)
@@ -725,26 +725,28 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
         item->set_name(new_name);
         applied.push_back("new_name");
     }
+    // Every list is a property, so the write reaches the bodies that use
+    // this filter through the attachment's observer (section 4.21); this
+    // tool re-applies nothing of its own.
     if (args.contains("collision_systems")) {
-        item->collision_systems = args["collision_systems"].get<std::vector<std::string>>();
+        item->set_collision_systems(args["collision_systems"].get<std::vector<std::string>>());
         applied.push_back("collision_systems");
     }
     if (args.contains("collide_with_systems")) {
-        item->collide_with_systems = args["collide_with_systems"].get<std::vector<std::string>>();
+        item->set_collide_with_systems(args["collide_with_systems"].get<std::vector<std::string>>());
         applied.push_back("collide_with_systems");
     }
     if (args.contains("not_collide_with_systems")) {
-        item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>();
+        item->set_not_collide_with_systems(args["not_collide_with_systems"].get<std::vector<std::string>>());
         applied.push_back("not_collide_with_systems");
     }
-    reapply_collision_filter(m_context, item);
 
     return make_json_content({
         {"name",                     item->get_name()},
         {"applied",                  applied},
-        {"collision_systems",        item->collision_systems},
-        {"collide_with_systems",     item->collide_with_systems},
-        {"not_collide_with_systems", item->not_collide_with_systems}
+        {"collision_systems",        item->get_collision_systems()},
+        {"collide_with_systems",     item->get_collide_with_systems()},
+        {"not_collide_with_systems", item->get_not_collide_with_systems()}
     }).dump();
 }
 

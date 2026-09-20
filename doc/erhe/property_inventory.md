@@ -62,6 +62,11 @@ behavior; these are the registrations that have it:
   on), the per-slot texgen / UV transform / sampler fields (only with the
   slot bound), and reflectance (no glTF carrier at all).
 - `Mesh_primitive`: material (the glTF primitive's material index).
+- `Collision_filter`: collision_systems, collide_with_systems,
+  not_collide_with_systems - the `KHR_physics_rigid_bodies`
+  `collisionFilters` entry states all three, and the USD
+  `PhysicsCollisionGroup` prim carries them under the same attribute
+  names a resource prim's local value would use.
 
 The Properties window tints a row's label by its value source (D12):
 member and bridge rows are blue, entry rows green / gray / cyan / orange /
@@ -173,6 +178,12 @@ change touches the settings store from on_property_changed.
 | linear_damping, angular_damping | entry | inherits; applied to every live body of the material |
 | wind_receptivity | entry | inherits; read by the scene wind each fixed step |
 | density | entry | inherits; the mass of a body without an explicit mass |
+
+### Collision_filter (`src/erhe/physics/erhe_physics/collision_filter.cpp`, section 4.21)
+
+| Property | Storage | Notes |
+|---|---|---|
+| collision_systems, collide_with_systems, not_collide_with_systems | entry | `string[]`, `Array_size::editable`, `native_gltf`; does not inherit; bodies recompile through the Node_physics observer |
 
 ### Rendertarget_mesh (`src/editor/rendertarget_mesh.cpp`, section 4.15)
 
@@ -293,12 +304,12 @@ property form and the phase of each row.
 
 | Owner | Fields | Notes |
 |---|---|---|
-| Collision_filter | collision_systems, collide_with_systems, not_collide_with_systems | phase 3; string lists |
 | Physics_joint_settings | limits, drives | phase 4; lists of records |
 
 Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,
 raytrace state, skin joints, rigid body label / position / activity /
 shape / inertia, brush polygon counts, the id and the flag word), and list
-editors (attachments, samplers, animation channels and samplers, joint
-limits and drives).
+editors of records (attachments, samplers, animation channels and
+samplers, joint limits and drives). A list of scalars is not one of them:
+it is an array property (D34).

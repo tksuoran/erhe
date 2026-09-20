@@ -49,14 +49,18 @@ migrated" table lists the hand-written rows that are authored state; section
   color channels each on their own); editing a component sets that
   component on every item and leaves the others as they were, after
   which the shared value shows. A quaternion, a string, an enumeration
-  and an object reference are mixed as a whole. An array
+  and an object reference are mixed as a whole. A numeric array
   (`float_array`, `int_array`) draws a summary line - the element count
   and the head of the list - and below it one drag field per element, up
   to sixteen; each element mixes on its own, and an edit of one element
-  is a set of the whole list
-  (`doc/plans/hand_written_rows_to_properties.md` H4). A longer list, a
-  read-only one and a selection whose lists differ in length stay the
-  summary line alone.
+  is a set of the whole list (`doc/erhe/property_system.md` D34). A
+  `string_array` draws one text field per element, committed when the
+  field is deactivated after an edit, plus - where the property says the
+  count is the user's (`Property_ui::Array_size::editable`) - a "-"
+  button per element and an "Add" button, each of which is one recorded
+  set of the whole list; a selection whose lists differ shows the summary
+  line alone. A longer list, a read-only one and a selection whose lists
+  differ in length stay the summary line alone.
 - R2 Authored state is a property, or a bridge (D18) where the storage must
   stay a member: the name (a bridged string property over
   `Item_base::get_name` / `set_name`), the authored persistent flags
@@ -75,11 +79,14 @@ migrated" table lists the hand-written rows that are authored state; section
   record); `material_properties` draws only the preview render and the
   BRDF slice for a selected material.
 - R5 List-valued state with no `Property_value` form
-  (`Physics_joint_settings` limits and drives, `Collision_filter`'s three
-  system lists) and the scene's
+  (`Physics_joint_settings` limits and drives, which are lists of records)
+  and the scene's
   settings-override block keep their hand-written editor, drawn per item,
   and are the documented exception; the inventory's "Not yet migrated"
-  table lists them.
+  table lists them. A list of scalars has a form: it is one array property
+  drawn by the generic row (`doc/erhe/property_system.md` D34 and D35 -
+  the layout grid track extents and the collision filter's three system
+  lists).
 
 ## 3. Item-level rows
 

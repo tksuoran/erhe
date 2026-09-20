@@ -195,12 +195,12 @@ TEST_F(Overlap_query_fixture, world_query_ignores_collision_filters)
     const std::shared_ptr<ICollision_shape> box = ICollision_shape::create_box_shape_shared(glm::vec3{1.0f, 1.0f, 1.0f});
 
     const std::shared_ptr<erhe::physics::Collision_filter> filter_a = std::make_shared<erhe::physics::Collision_filter>();
-    filter_a->collision_systems        = {"a"};
-    filter_a->not_collide_with_systems = {"b"};
+    filter_a->set_collision_systems       ({"a"});
+    filter_a->set_not_collide_with_systems({"b"});
 
     const std::shared_ptr<erhe::physics::Collision_filter> filter_b = std::make_shared<erhe::physics::Collision_filter>();
-    filter_b->collision_systems        = {"b"};
-    filter_b->not_collide_with_systems = {"a"};
+    filter_b->set_collision_systems       ({"b"});
+    filter_b->set_not_collide_with_systems({"a"});
 
     IRigid_body_create_info occupant_create_info;
     occupant_create_info.collision_shape  = box;
