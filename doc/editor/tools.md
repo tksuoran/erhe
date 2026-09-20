@@ -78,3 +78,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - erhe::commands, erhe::imgui, erhe::scene
 - editor: App_context, App_message_bus, Icon_set, Mesh_memory, Scene_view
+
+## Future work
+
+- [Fly camera: mouse-wheel motion towards the hovered point](../plans/fly_camera_zoom_toward_hover.md)
