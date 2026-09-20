@@ -2335,3 +2335,310 @@ TEST_F(Mcp_test, inject_input_events_validates_arguments_and_tracks_pointer_stat
     EXPECT_TRUE(state.payload.value("cursor_entered", false)) << "the first pointer event did not enter the cursor";
     EXPECT_FALSE(state.payload["gesture"].value("active", true));
 }
+
+// ---- Gestures (doc/plans/mcp_ui_driving.md B4) -----------------------------
+
+namespace {
+
+// The world-space position of a node, from its world transform.
+[[nodiscard]] auto node_world_position(Mcp_client& client, const std::string& scene, const std::string& name, std::array<float, 3>& out) -> bool
+{
+    Mcp_client::Tool_result details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", name}});
+    if (details.is_error || !details.payload.contains("world_transform")) {
+        return false;
+    }
+    const json& translation = details.payload.at("world_transform").at("translation");
+    for (std::size_t i = 0; i < 3; ++i) {
+        out[i] = translation[i].get<float>();
+    }
+    return true;
+}
+
+// A box right in front of the viewport camera, nearer than the imported test
+// asset, so the viewport center is over it.
+[[nodiscard]] auto create_box_in_front_of_camera(
+    Mcp_client&          client,
+    const std::string&   scene,
+    const Viewport_rect& viewport,
+    const std::string&   name,
+    const float          distance
+) -> bool
+{
+    const float position_x = viewport.world_from_camera[12];
+    const float position_y = viewport.world_from_camera[13];
+    const float position_z = viewport.world_from_camera[14];
+    const float forward_x  = -viewport.world_from_camera[8];
+    const float forward_y  = -viewport.world_from_camera[9];
+    const float forward_z  = -viewport.world_from_camera[10];
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  scene},
+        {"shape",       "box"},
+        {"name",        name},
+        {"motion_mode", "none"},
+        {"size",        json::array({0.5, 0.5, 0.5})},
+        {"position",    json::array({
+            position_x + (forward_x * distance),
+            position_y + (forward_y * distance),
+            position_z + (forward_z * distance)
+        })}
+    });
+    return !shape.is_error && wait_until_idle(client, 10000);
+}
+
+} // anonymous namespace
+
+// Turning the wheel over a viewport zooms its camera: the wheel is bound to
+// Fly_camera.zoom_camera, which adjusts the controller's own zoom axis, so the
+// camera keeps gliding for a few frames after the event.
+TEST_F(Mcp_test, mouse_wheel_over_a_viewport_zooms_the_camera)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to turn the wheel over";
+    ASSERT_TRUE(viewport.has_camera) << "the viewport has no camera to zoom";
+
+    // Something under the pointer to zoom towards: the default perspective
+    // zoom mode steps along the pointer ray by the hover hit distance.
+    const std::string box_name = "wheel zoom test box";
+    ASSERT_TRUE(create_box_in_front_of_camera(client, env.scene_name(), viewport, box_name, 3.0f));
+
+    const Viewport_rect before = first_viewport(client);
+    ASSERT_TRUE(before.has_camera);
+
+    Mcp_client::Tool_result wheel = client.call_tool("mouse_wheel", json{
+        {"x",  viewport.center_x()},
+        {"y",  viewport.center_y()},
+        {"dy", 4.0}
+    });
+    ASSERT_FALSE(wheel.is_error) << wheel.text;
+    // The zoom glide is damped, so the move takes a few frames to show.
+    advance_frames(client, 30);
+
+    const Viewport_rect after = first_viewport(client);
+    ASSERT_TRUE(after.has_camera);
+    const float dx = after.world_from_camera[12] - before.world_from_camera[12];
+    const float dy = after.world_from_camera[13] - before.world_from_camera[13];
+    const float dz = after.world_from_camera[14] - before.world_from_camera[14];
+    const float moved = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    EXPECT_GT(moved, 0.01f) << "the wheel did not move the camera";
+
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
+// Dragging a transform gizmo handle moves the selection, the way a user's
+// gizmo drag does: get_transform_handles reports a window point that picks the
+// handle, and mouse_drag presses there and pulls. The check is that the node
+// moved along the dragged axis only - the same outcome drag_selection produces
+// from an explicit translation.
+TEST_F(Mcp_test, mouse_drag_on_a_transform_handle_moves_the_selection)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to drag in";
+    ASSERT_TRUE(viewport.has_camera) << "the viewport has no camera";
+
+    const std::string box_name = "gizmo drag test box";
+    ASSERT_TRUE(create_box_in_front_of_camera(client, env.scene_name(), viewport, box_name, 3.0f));
+
+    Mcp_client::Tool_result select = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({box_name})}
+    });
+    ASSERT_FALSE(select.is_error) << select.text;
+    advance_frames(client, 4);
+
+    Mcp_client::Tool_result handles = client.call_tool("get_transform_handles", json::object());
+    ASSERT_FALSE(handles.is_error) << handles.text;
+    ASSERT_TRUE(handles.payload.contains("handles"));
+    const json& handle_list = handles.payload.at("handles");
+    ASSERT_FALSE(handle_list.empty()) << "the gizmo reported no handles: " << handles.payload.dump();
+
+    // The X translate arrow. Only the camera-facing direction of an axis is
+    // drawn and pickable unless negative handles are turned on, so either the
+    // positive (Handle::e_handle_translate_pos_x == 1) or the negative
+    // (e_handle_translate_neg_x == 2) arrow is the one on screen; pulling
+    // along whichever it is moves the box along X.
+    const json* arrow = nullptr;
+    for (const json& entry : handle_list) {
+        const unsigned int value = entry.value("handle_value", 0u);
+        if ((value == 1u) || (value == 2u)) {
+            arrow = &entry;
+        }
+    }
+    ASSERT_NE(arrow, nullptr) << "no Translate X handle on screen: " << handle_list.dump();
+
+    std::array<float, 3> before{};
+    ASSERT_TRUE(node_world_position(client, env.scene_name(), box_name, before));
+    std::size_t undo_before = 0;
+    std::size_t redo_before = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_before, redo_before));
+
+    // The gizmo anchor and the arrow point are both on screen, so the arrow
+    // direction in window pixels is the direction to pull.
+    const float anchor_x = handles.payload.at("anchor").value("x", 0.0f);
+    const float anchor_y = handles.payload.at("anchor").value("y", 0.0f);
+    const float from_x   = arrow->value("x", 0.0f);
+    const float from_y   = arrow->value("y", 0.0f);
+    const float axis_x   = from_x - anchor_x;
+    const float axis_y   = from_y - anchor_y;
+    const float axis_len = std::sqrt((axis_x * axis_x) + (axis_y * axis_y));
+    ASSERT_GT(axis_len, 1.0f) << "the gizmo arrow is on top of its anchor";
+    constexpr float c_pull_pixels = 60.0f;
+
+    Mcp_client::Tool_result drag = client.call_tool("mouse_drag", json{
+        {"from",   json::array({from_x, from_y})},
+        {"to",     json::array({
+            from_x + ((axis_x / axis_len) * c_pull_pixels),
+            from_y + ((axis_y / axis_len) * c_pull_pixels)
+        })},
+        {"frames", 8}
+    });
+    ASSERT_FALSE(drag.is_error) << drag.text;
+    advance_frames(client, 4);
+
+    Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(state.is_error) << state.text;
+    EXPECT_TRUE(state.payload["buttons"].empty()) << "the drag left the button held: " << state.payload.dump();
+
+    std::array<float, 3> after{};
+    ASSERT_TRUE(node_world_position(client, env.scene_name(), box_name, after));
+    const float moved_x = std::abs(after[0] - before[0]);
+    const float moved_y = std::abs(after[1] - before[1]);
+    const float moved_z = std::abs(after[2] - before[2]);
+    EXPECT_GT(moved_x, 0.05f) << "the gizmo drag did not move the box along X";
+    EXPECT_LT(moved_y, 0.05f * moved_x + 1e-3f) << "the gizmo drag moved the box off its axis (Y)";
+    EXPECT_LT(moved_z, 0.05f * moved_x + 1e-3f) << "the gizmo drag moved the box off its axis (Z)";
+
+    // One undo entry for the whole gesture, the same as a drag_selection drag.
+    std::size_t undo_after = 0;
+    std::size_t redo_after = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_after, redo_after));
+    EXPECT_EQ(undo_after, undo_before + 1u) << "the gizmo drag did not record exactly one undo entry";
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
+// A held drag leaves the button down until mouse_release ends it.
+TEST_F(Mcp_test, mouse_drag_hold_leaves_the_button_down_until_mouse_release)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to drag in";
+
+    Mcp_client::Tool_result drag = client.call_tool("mouse_drag", json{
+        {"from",   json::array({viewport.center_x(), viewport.center_y()})},
+        {"to",     json::array({viewport.center_x() + 40.0f, viewport.center_y()})},
+        {"button", "middle"},
+        {"frames", 4},
+        {"hold",   true}
+    });
+    ASSERT_FALSE(drag.is_error) << drag.text;
+
+    Mcp_client::Tool_result held = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(held.is_error) << held.text;
+    ASSERT_TRUE(held.payload["buttons"].is_array());
+    bool middle_held = false;
+    for (const json& button : held.payload["buttons"]) {
+        if (button.get<std::string>() == "middle") {
+            middle_held = true;
+        }
+    }
+    EXPECT_TRUE(middle_held) << "the held drag did not leave the button down: " << held.payload.dump();
+
+    Mcp_client::Tool_result release = client.call_tool("mouse_release", json{{"button", "middle"}});
+    ASSERT_FALSE(release.is_error) << release.text;
+
+    Mcp_client::Tool_result released = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(released.is_error) << released.text;
+    EXPECT_TRUE(released.payload["buttons"].empty()) << "mouse_release left a button held: " << released.payload.dump();
+
+    Mcp_client::Tool_result again = client.call_tool("mouse_release", json{{"button", "middle"}});
+    EXPECT_TRUE(again.is_error) << "releasing a button that is not held was accepted";
+}
+
+// key_press sends the chord a real keyboard sends: the modifier key goes down
+// first, the key carries the modifier bit, and both come back up.
+TEST_F(Mcp_test, key_press_runs_the_bound_undo_command)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to aim the pointer at";
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "key press test box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    // The pointer has to be over the viewport, or ImGui captures the keyboard
+    // and the chord never reaches erhe::commands.
+    Mcp_client::Tool_result moved = client.call_tool("inject_input_events", json{
+        {"events", json::array({pointer_into_viewport(viewport, 0)})}
+    });
+    ASSERT_FALSE(moved.is_error) << moved.text;
+    advance_frames(client, 2);
+
+    std::size_t undo_before = 0;
+    std::size_t redo_before = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_before, redo_before));
+    ASSERT_GT(undo_before, 0u) << "nothing on the undo stack to undo";
+
+    Mcp_client::Tool_result key = client.call_tool("key_press", json{
+        {"key",       "z"},
+        {"modifiers", json::array({"ctrl"})}
+    });
+    ASSERT_FALSE(key.is_error) << key.text;
+    advance_frames(client, 3);
+
+    std::size_t undo_after = 0;
+    std::size_t redo_after = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_after, redo_after));
+    EXPECT_EQ(undo_after, undo_before - 1u) << "Ctrl+Z did not pop an undo entry";
+    EXPECT_EQ(redo_after, redo_before + 1u) << "Ctrl+Z did not push a redo entry";
+
+    Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(state.is_error) << state.text;
+    EXPECT_TRUE(state.payload["modifiers"].empty()) << "the chord left a modifier held: " << state.payload.dump();
+
+    client.call_tool("redo", json::object());
+    advance_frames(client, 2);
+}
+
+// type_text splits into text events that fit one Text_event, on UTF-8
+// boundaries, and the gesture runs to completion.
+TEST_F(Mcp_test, type_text_splits_into_text_events)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    // 40 bytes: longer than one 31 byte text event, so it is split.
+    Mcp_client::Tool_result typed = client.call_tool("type_text", json{
+        {"text", "abcdefghijklmnopqrstuvwxyz0123456789ABCD"}
+    });
+    ASSERT_FALSE(typed.is_error) << typed.text;
+    EXPECT_EQ(typed.payload.value("injected", 0), 2) << typed.payload.dump();
+    EXPECT_EQ(typed.payload.value("frames", 0), 2) << typed.payload.dump();
+
+    // A multi-byte sequence that straddles the 31 byte boundary must not be
+    // cut: 30 ASCII bytes then a two byte 'a with acute'.
+    Mcp_client::Tool_result utf8 = client.call_tool("type_text", json{
+        {"text", "abcdefghijklmnopqrstuvwxyz0123\xc3\xa1"}
+    });
+    ASSERT_FALSE(utf8.is_error) << utf8.text;
+    EXPECT_EQ(utf8.payload.value("injected", 0), 2) << utf8.payload.dump();
+
+    Mcp_client::Tool_result empty = client.call_tool("type_text", json{{"text", ""}});
+    EXPECT_TRUE(empty.is_error) << "an empty string was accepted";
+}

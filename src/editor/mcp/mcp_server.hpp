@@ -51,6 +51,8 @@ class Brush;
 enum class Transform_drag_kind : unsigned int;
 class Scene_root;
 class Viewport_scene_view;
+// Builds the event list of one input gesture (src/editor/mcp/mcp_server_ui.cpp).
+class Input_gesture_builder;
 
 // Represents a single MCP tool descriptor
 struct Mcp_tool_info
@@ -77,6 +79,10 @@ struct Mcp_tool_info
 class Mcp_server
 {
 public:
+    // Fills m_input_gesture_steps for every gesture tool; needs the private
+    // Input_gesture_steps and Input_pointer_state.
+    friend class Input_gesture_builder;
+
     Mcp_server(
         erhe::commands::Commands& commands,
         App_context&              context,
@@ -356,9 +362,33 @@ private:
     auto action_debug_set_transform_hover     (const nlohmann::json& args) -> std::string;
     auto action_debug_imgui_mouse             (const nlohmann::json& args) -> std::string;
 
-    // doc/plans/mcp_ui_driving.md part B (src/editor/mcp/mcp_server_ui.cpp)
+    // doc/plans/mcp_ui_driving.md part B (src/editor/mcp/mcp_server_ui.cpp).
+    // Every one of these builds its event list through Input_gesture_builder
+    // and then hands it to step_input_gesture(), so there is one gesture
+    // builder and one stepping path.
     auto action_inject_input_events           (const nlohmann::json& args) -> std::string;
+    auto action_mouse_click                   (const nlohmann::json& args) -> std::string;
+    auto action_mouse_drag                    (const nlohmann::json& args) -> std::string;
+    auto action_mouse_release                 (const nlohmann::json& args) -> std::string;
+    auto action_mouse_wheel                   (const nlohmann::json& args) -> std::string;
+    auto action_key_press                     (const nlohmann::json& args) -> std::string;
+    auto action_type_text                     (const nlohmann::json& args) -> std::string;
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
+    auto query_transform_handles              (const nlohmann::json& args) -> std::string;
+
+    // The three stages every gesture tool shares.
+    //
+    // input_gesture_preamble() answers with the string the handler must
+    // return when this pass is a continuation of its own deferred request (the
+    // gesture is already recorded and only needs stepping), when another
+    // gesture is stepping, or when there is no window to inject into; an empty
+    // optional means "record your events now".
+    // commit_input_gesture() closes the recorded list and steps its first
+    // frame; step_input_gesture() injects the events of the current frame,
+    // defers, and produces the result after the tail frame (R4).
+    [[nodiscard]] auto input_gesture_preamble() -> std::optional<std::string>;
+    [[nodiscard]] auto commit_input_gesture  () -> std::string;
+    [[nodiscard]] auto step_input_gesture    () -> std::string;
     auto action_open_four_view                (const nlohmann::json& args) -> std::string;
     auto query_four_views                     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;

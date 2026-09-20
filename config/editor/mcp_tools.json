@@ -7091,6 +7091,215 @@
     "name": "get_input_state"
   },
   {
+    "description": "Click a mouse button at a point in the editor window: the pointer moves there, settles for a few frames (the hover a click acts on is computed once per frame), then the button is pressed and released without moving - a move between press and release would make it a drag. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "x": {
+          "description": "Pointer x in editor window pixels (the space get_viewports reports its rectangles in)",
+          "type": "number"
+        },
+        "y": {
+          "description": "Pointer y in editor window pixels",
+          "type": "number"
+        },
+        "button": {
+          "description": "Mouse button by name (left, right, middle) or index (default left)"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "double": {
+          "description": "Send two press/release pairs in consecutive frames, which ImGui reads as a double click (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "mouse_click"
+  },
+  {
+    "description": "Drag a mouse button from one point to another in the editor window: the pointer moves to 'from', settles, the button is pressed, 'frames' interpolated move events follow one per frame (each carrying its dx / dy), and the button is released at 'to' unless hold is true. With hold the button stays down - report it with get_input_state and end the drag with mouse_release. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "from": {
+          "description": "Drag start [x, y] in editor window pixels",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "to": {
+          "description": "Drag end [x, y] in editor window pixels",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "button": {
+          "description": "Mouse button by name (left, right, middle) or index (default left)"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "frames": {
+          "description": "Number of interpolated move steps, one per editor frame (default 10)",
+          "type": "integer"
+        },
+        "hold": {
+          "description": "Leave the button down at 'to' instead of releasing it (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "name": "mouse_drag"
+  },
+  {
+    "description": "Release a mouse button that a held mouse_drag left down, at the position the pointer is at now, and release the modifier keys that were held with it. Errors when the button is not held. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "button": {
+          "description": "Mouse button by name (left, right, middle) or index (default left)"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "mouse_release"
+  },
+  {
+    "description": "Turn the mouse wheel at a point in the editor window. The pointer moves there and settles first, because the fly camera's zoom step is proportional to the distance of what the pointer hovers. Over a viewport this zooms the camera; over an orthogonal four view cell it changes the shared view height (get_four_views). The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "x": {
+          "description": "Pointer x in editor window pixels (the space get_viewports reports its rectangles in)",
+          "type": "number"
+        },
+        "y": {
+          "description": "Pointer y in editor window pixels",
+          "type": "number"
+        },
+        "dx": {
+          "description": "Horizontal wheel delta (default 0)",
+          "type": "number"
+        },
+        "dy": {
+          "description": "Vertical wheel delta; positive zooms in",
+          "type": "number"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "name": "mouse_wheel"
+  },
+  {
+    "description": "Press a key, hold it for a number of frames and release it, with the modifier keys pressed before and released after - what a real chord such as Ctrl+Z sends. Keyboard commands reach erhe::commands only while ImGui does not capture the keyboard, so move the pointer over a viewport first (mouse_click or inject_input_events) when the command is a viewport one. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "key": {
+          "description": "The erhe::window::Keycode by name ('z', 'left shift', 'Key_f5' - case and '_' insensitive) or by numeric value"
+        },
+        "modifiers": {
+          "description": "Modifier keys held for the gesture. Their keys are pressed before it and released after it, the way a real session reports the modifier bits.",
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "super",
+              "menu"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hold_frames": {
+          "description": "Editor frames the key stays down (default 1)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    },
+    "name": "key_press"
+  },
+  {
+    "description": "Type a UTF-8 string into whatever has keyboard focus, as text events - the same events a real keyboard's text input produces. The string is split into chunks that fit one text event (31 bytes) without breaking a UTF-8 sequence, one chunk per frame. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "inputSchema": {
+      "properties": {
+        "text": {
+          "description": "The UTF-8 text to type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "type_text"
+  },
+  {
+    "description": "Report where the transform gizmo's handles are, in the editor window pixels mouse_drag aims at. The gizmo has no meshes - it is hit tested analytically - so this runs the editor's own handle pick over a grid of rays through the gizmo's screen area and returns, per handle currently shown, a point that picks that handle (the sample deepest inside its region) plus the world point the ray hits. Each entry carries the handle's name (which names the axis, not the direction) and handle_value, the Handle enumerator debug_set_transform_hover takes. Also reports the gizmo anchor and its radius. Requires a selection; pass 'viewport' to probe a viewport other than the first.",
+    "inputSchema": {
+      "properties": {
+        "viewport": {
+          "description": "Viewport window title (default: the first viewport showing a scene through a camera)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_transform_handles"
+  },
+  {
     "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},

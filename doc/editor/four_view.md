@@ -96,8 +96,20 @@ Headless, over MCP: `open_four_view`, `capture_screenshot` for the layout;
 `get_four_views` shows the focus and the other cameras following, and
 `undo` returns them - once for an orthogonal camera, once for the perspective
 camera; `close_scene` logs a clean `scene-close check`.
-Wheel zoom, middle-drag pan and the rotation lock run through window input
-events and are verified interactively.
+
+Wheel zoom, middle-drag pan and the rotation lock reach the fly camera through
+window input events, so they are driven by the input gesture tools
+(`doc/plans/mcp_ui_driving.md`) over the rectangles `get_viewports` reports:
+
+- Wheel zoom. `mouse_wheel` at the center of an orthogonal cell with a
+  positive `dy`; `get_four_views` then reports a smaller `view_height` and the
+  same value on all three orthogonal cameras.
+- Middle-drag pan. `mouse_drag` with `button: "middle"` and
+  `modifiers: ["menu"]` (the track command's binding) across an orthogonal
+  cell; `get_four_views` then reports a moved `focus` and the other cameras
+  placed for it.
+- Rotation lock. `mouse_drag` with `button: "right"` across an orthogonal cell
+  leaves that camera's `position` unchanged.
 
 ## Grid
 
