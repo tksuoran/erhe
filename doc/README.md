@@ -289,6 +289,7 @@ Every document states its standing in its first ten lines:
 - [plans/node_attachments_to_properties.md](plans/node_attachments_to_properties.md) (proposed): Node attachments as attached properties of the node
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/ortho_view_grids.md](plans/ortho_view_grids.md) (proposed): Grid on the facing axis plane in axis-aligned orthogonal views (four view Front / Right)
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
