@@ -1071,6 +1071,22 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
     // shows: zoom is the size of the view volume. The cameras of a four view
     // share one zoom.
     if ((m_camera != nullptr) && m_camera->projection()->is_orthogonal()) {
+        // Ortho_zoom_mode::size_and_pan: all pointer rays of an orthogonal
+        // camera are parallel, so the offset between the pointer ray origins
+        // before and after the size change is the pan that puts the point
+        // that was under the pointer back under it.
+        const Camera_controls_config* const camera_controls = get_writable_camera_controls();
+        const bool pan =
+            (camera_controls != nullptr) &&
+            (camera_controls->ortho_zoom_mode == Ortho_zoom_mode::size_and_pan);
+        Scene_view* const          scene_view          = pan ? get_hover_scene_view() : nullptr;
+        Viewport_scene_view* const viewport_scene_view = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+        std::optional<glm::vec3>   ray_origin_before;
+        if (viewport_scene_view != nullptr) {
+            viewport_scene_view->update_hover(true);
+            ray_origin_before = scene_view->get_control_ray_origin_in_world();
+        }
+
         const float       scale     = std::pow(0.9f, delta);
         Four_view* const  four_view = m_context.scene_views->find_four_view(m_camera);
         if (four_view != nullptr) {
@@ -1078,6 +1094,17 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
         } else {
             m_camera->set_ortho_width (m_camera->projection()->ortho_width  * scale);
             m_camera->set_ortho_height(m_camera->projection()->ortho_height * scale);
+        }
+
+        if (ray_origin_before.has_value()) {
+            viewport_scene_view->update_hover(true);
+            const std::optional<glm::vec3> ray_origin_after = scene_view->get_control_ray_origin_in_world();
+            if (ray_origin_after.has_value()) {
+                const glm::vec3 translation = ray_origin_after.value() - ray_origin_before.value();
+                m_camera_controller->set_position(m_camera_controller->get_position() - translation);
+                m_camera_controller->get_node()->update_world_from_node();
+                viewport_scene_view->update_hover(true);
+            }
         }
         return true;
     }

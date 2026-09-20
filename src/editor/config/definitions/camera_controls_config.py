@@ -87,5 +87,15 @@ struct("Camera_controls_config",
             visible=True,
             developer=False
         ),
+        field(
+            "ortho_zoom_mode",
+            EnumRef("Ortho_zoom_mode"),
+            added_in=1,
+            default="Ortho_zoom_mode::size_only",
+            short_desc="Orthogonal View Zoom",
+            long_desc="What zooming (mouse wheel) does in a view with an orthogonal camera: Size only changes the size of the view around its center; Size and pan also pans the camera so that the point under the pointer stays under the pointer.",
+            visible=True,
+            developer=False
+        ),
     ],
 )
