@@ -1,6 +1,6 @@
 #pragma once
 
-// Dear ImGui item recorder (doc/plans/mcp_ui_driving.md A2).
+// Dear ImGui item recorder (doc/erhe/imgui.md, "Item recorder").
 //
 // Dear ImGui reports every item it submits to four extern functions when
 // IMGUI_ENABLE_TEST_ENGINE is defined (it is, for the imgui target, in
@@ -21,6 +21,7 @@
 
 #include <imgui/imgui.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -32,7 +33,7 @@ namespace erhe::imgui {
 
 // One item Dear ImGui submitted in a recorded frame. The rectangle is in the
 // context's screen pixels, which for the desktop host are editor window
-// pixels - the coordinate space the input injection tools (part B) take.
+// pixels - the coordinate space the input gesture MCP tools take.
 class Item_record
 {
 public:
@@ -70,7 +71,7 @@ public:
     [[nodiscard]] auto get_context() const -> ImGuiContext*;
 
     // Frame boundaries of a recorded frame. begin_frame() clears the records
-    // keeping their capacity (R6); end_frame() marks them readable.
+    // keeping their capacity; end_frame() marks them readable.
     void begin_frame();
     void end_frame  ();
 
@@ -90,6 +91,16 @@ public:
     // set_item_debug_label() below.
     void set_item_label(ImGuiID id, std::string_view label);
 
+    [[nodiscard]] auto get_record_count() const -> std::size_t;
+
+    // Names the items recorded at [first_index, get_record_count()): a single
+    // named item takes 'label' itself, several take '<label>.x', '<label>.y',
+    // '<label>.z', '<label>.w' and '<label>.<position>' past the fourth, so
+    // one component of a vector row is addressable on its own. Items Dear
+    // ImGui submits with id 0 - a group's bounding box, a text run - are left
+    // unnamed because nothing can click them.
+    void set_labels_from(std::size_t first_index, std::string_view label);
+
     [[nodiscard]] auto find_label(ImGuiID id) const -> const char*;
 
     [[nodiscard]] static auto find_for_context(ImGuiContext* context) -> Imgui_item_recorder*;
@@ -108,5 +119,18 @@ private:
 // glyph. Without this the item is recorded with no label and cannot be
 // addressed by name. Costs one branch when no frame is being recorded.
 void set_item_debug_label(std::string_view label);
+
+// True while the current ImGui context is recording its items. Code that
+// names items builds its label text only while this holds, so a frame nobody
+// asked to record allocates nothing for naming.
+[[nodiscard]] auto is_item_recording() -> bool;
+
+// Number of items the current context has recorded so far in the frame being
+// recorded, and 0 when no frame is. Reading it before and after a widget
+// brackets the items that widget submitted, which set_recorded_item_labels()
+// then names (Imgui_item_recorder::set_labels_from).
+[[nodiscard]] auto get_recorded_item_count() -> std::size_t;
+
+void set_recorded_item_labels(std::size_t first_index, std::string_view label);
 
 } // namespace erhe::imgui

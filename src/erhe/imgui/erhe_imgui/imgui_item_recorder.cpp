@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 namespace erhe::imgui {
 
@@ -63,8 +64,8 @@ auto Imgui_item_recorder::find_for_context(ImGuiContext* context) -> Imgui_item_
 
 void Imgui_item_recorder::begin_frame()
 {
-    m_records.clear(); // capacity kept (R6)
-    m_labels .clear(); // capacity kept (R6)
+    m_records.clear(); // capacity kept
+    m_labels .clear(); // capacity kept
     m_has_records = false;
 }
 
@@ -165,17 +166,90 @@ void Imgui_item_recorder::set_item_label(const ImGuiID id, const std::string_vie
     }
 }
 
-void set_item_debug_label(const std::string_view label)
+auto Imgui_item_recorder::get_record_count() const -> std::size_t
+{
+    return m_records.size();
+}
+
+void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const std::string_view label)
+{
+    static constexpr std::string_view c_component_suffixes[4] = {".x", ".y", ".z", ".w"};
+
+    std::size_t named_count = 0;
+    for (std::size_t i = first_index; i < m_records.size(); ++i) {
+        if (m_records[i].id != 0) {
+            ++named_count;
+        }
+    }
+    if (named_count == 0) {
+        return;
+    }
+
+    std::size_t component = 0;
+    for (std::size_t i = first_index; i < m_records.size(); ++i) {
+        Item_record& record = m_records[i];
+        if (record.id == 0) {
+            continue;
+        }
+        record.label_offset = static_cast<uint32_t>(m_labels.size());
+        m_labels.insert(m_labels.end(), label.begin(), label.end());
+        if (named_count > 1) {
+            if (component < 4) {
+                const std::string_view suffix = c_component_suffixes[component];
+                m_labels.insert(m_labels.end(), suffix.begin(), suffix.end());
+            } else {
+                const std::string suffix = "." + std::to_string(component);
+                m_labels.insert(m_labels.end(), suffix.begin(), suffix.end());
+            }
+        }
+        m_labels.push_back('\0');
+        ++component;
+    }
+}
+
+namespace {
+
+// The recorder of the context currently being recorded, or nullptr when the
+// current frame records nothing. This is the one branch every naming call
+// costs in an ordinary frame.
+[[nodiscard]] auto get_recording_recorder() -> Imgui_item_recorder*
 {
     ImGuiContext* const context = ImGui::GetCurrentContext();
     if ((context == nullptr) || !context->TestEngineHookItems) {
-        return;
+        return nullptr;
     }
-    Imgui_item_recorder* const recorder = Imgui_item_recorder::find_for_context(context);
+    return Imgui_item_recorder::find_for_context(context);
+}
+
+} // anonymous namespace
+
+void set_item_debug_label(const std::string_view label)
+{
+    Imgui_item_recorder* const recorder = get_recording_recorder();
     if (recorder == nullptr) {
         return;
     }
-    recorder->set_item_label(context->LastItemData.ID, label);
+    recorder->set_item_label(ImGui::GetCurrentContext()->LastItemData.ID, label);
+}
+
+auto is_item_recording() -> bool
+{
+    return get_recording_recorder() != nullptr;
+}
+
+auto get_recorded_item_count() -> std::size_t
+{
+    const Imgui_item_recorder* const recorder = get_recording_recorder();
+    return (recorder != nullptr) ? recorder->get_record_count() : 0;
+}
+
+void set_recorded_item_labels(const std::size_t first_index, const std::string_view label)
+{
+    Imgui_item_recorder* const recorder = get_recording_recorder();
+    if (recorder == nullptr) {
+        return;
+    }
+    recorder->set_labels_from(first_index, label);
 }
 
 auto Imgui_item_recorder::find_label(const ImGuiID id) const -> const char*

@@ -2095,7 +2095,7 @@ TEST_F(Mcp_test, assign_mesh_material_is_undoable)
     advance_frames(client, 3);
 }
 
-// ---- Input event injection (doc/plans/mcp_ui_driving.md part B) ------------
+// ---- Input event injection (doc/agents/mcp_ui_driving.md) ------------------
 
 namespace {
 
@@ -2336,7 +2336,7 @@ TEST_F(Mcp_test, inject_input_events_validates_arguments_and_tracks_pointer_stat
     EXPECT_FALSE(state.payload["gesture"].value("active", true));
 }
 
-// ---- Gestures (doc/plans/mcp_ui_driving.md B4) -----------------------------
+// ---- Gestures (doc/agents/mcp_ui_driving.md) -------------------------------
 
 namespace {
 
@@ -2668,7 +2668,7 @@ namespace {
 } // anonymous namespace
 
 // get_imgui_hosts reports the desktop host, and a frame in which nothing asked
-// for a recording calls no item hook at all (R6): hook_calls_total stands
+// for a recording calls no item hook at all: hook_calls_total stands
 // still over a run of frames.
 TEST_F(Mcp_test, get_imgui_hosts_reports_the_desktop_host_and_records_nothing_unasked)
 {
@@ -2756,7 +2756,7 @@ TEST_F(Mcp_test, get_imgui_items_lists_the_hierarchy_rows)
     advance_frames(client, 3);
 }
 
-// R2 end to end: get_imgui_item_rect resolves a Hierarchy row to a rectangle,
+// End to end: get_imgui_item_rect resolves a Hierarchy row to a rectangle,
 // and a mouse_click at its center selects that node - the rectangles are in
 // the same window pixels the input gestures take.
 TEST_F(Mcp_test, imgui_item_rect_center_is_a_click_target)
@@ -3118,4 +3118,125 @@ TEST_F(Mcp_test, capture_screenshot_annotates_imgui_items)
         EXPECT_LE(entry.value("x", 0.0f) + entry.value("width", 0.0f), static_cast<float>(width)) << entry.dump();
         EXPECT_LE(entry.value("y", 0.0f) + entry.value("height", 0.0f), static_cast<float>(height)) << entry.dump();
     }
+}
+
+// A Properties row is addressed by the name the row shows. The value widgets
+// of a row are labelled "##..." and the name is drawn as table text, so the
+// row names its widgets for the item recorder
+// (Property_editor::show_entries -> erhe::imgui::set_recorded_item_labels);
+// a vector row names one item per component, which makes "Translation.x" one
+// drag field. Ctrl+click opens that field's text input, and what is typed
+// there reaches the node.
+TEST_F(Mcp_test, property_row_is_addressable_by_its_label)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const auto is_window_active = [&](const char* const name) -> bool {
+        Mcp_client::Tool_result windows = client.call_tool("get_imgui_windows", json::object());
+        EXPECT_FALSE(windows.is_error) << windows.text;
+        for (const json& window : windows.payload["windows"]) {
+            if (window.value("name", "") == name) {
+                return window.value("active", false);
+            }
+        }
+        return false;
+    };
+
+    const bool properties_was_open = is_window_active("Properties");
+    Mcp_client::Tool_result shown = client.call_tool("set_window_visibility", json{
+        {"title",   "Properties"},
+        {"visible", true}
+    });
+    ASSERT_FALSE(shown.is_error) << shown.text;
+    advance_frames(client, 3);
+    ASSERT_TRUE(is_window_active("Properties")) << "the Properties window did not open";
+
+    const std::string box_name = "property row test box";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        box_name},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+
+    Mcp_client::Tool_result selected = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({box_name})}
+    });
+    ASSERT_FALSE(selected.is_error) << selected.text;
+    advance_frames(client, 3);
+
+    // The first record carrying the label is the node's own Translation row;
+    // the read-only World section below it repeats the label, so the row is
+    // taken in submission order rather than by index, which only counts the
+    // items a query kept.
+    const auto first_translation_x = [&]() -> json {
+        Mcp_client::Tool_result items = client.call_tool("get_imgui_items", json{
+            {"window",         "Properties"},
+            {"label_contains", "Translation.x"},
+            {"visible_only",   false},
+            {"limit",          10}
+        });
+        EXPECT_FALSE(items.is_error) << items.text;
+        if (items.is_error || items.payload["items"].empty()) {
+            return json::object();
+        }
+        return items.payload["items"][0];
+    };
+
+    json row = first_translation_x();
+    ASSERT_FALSE(row.empty()) << "no Properties row is named 'Translation.x'";
+
+    // Scroll the window to its top and then step down until the row is on
+    // screen: only an unclipped item can be clicked.
+    client.call_tool("imgui_scroll", json{{"window", "Properties"}, {"dy", 100.0f}});
+    bool row_visible = false;
+    for (int step = 0; (step < 60) && !row_visible; ++step) {
+        row = first_translation_x();
+        ASSERT_FALSE(row.empty());
+        row_visible = row["status"].value("visible", false);
+        if (!row_visible) {
+            client.call_tool("imgui_scroll", json{{"window", "Properties"}, {"dy", -2.0f}});
+        }
+    }
+    ASSERT_TRUE(row_visible) << "the Translation row never came on screen: " << row.dump();
+    EXPECT_EQ(row.value("display_label", ""), "Translation.x") << row.dump();
+
+    Mcp_client::Tool_result click = client.call_tool("mouse_click", json{
+        {"x",         row.value("center_x", 0.0f)},
+        {"y",         row.value("center_y", 0.0f)},
+        {"modifiers", json::array({"ctrl"})}
+    });
+    ASSERT_FALSE(click.is_error) << click.text;
+
+    Mcp_client::Tool_result typed = client.call_tool("type_text", json{{"text", "2.5"}});
+    ASSERT_FALSE(typed.is_error) << typed.text;
+    Mcp_client::Tool_result commit = client.call_tool("key_press", json{{"key", "enter"}});
+    ASSERT_FALSE(commit.is_error) << commit.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result properties = client.call_tool("get_item_properties", json{
+        {"scene_name", env.scene_name()},
+        {"item_name",  box_name}
+    });
+    ASSERT_FALSE(properties.is_error) << properties.text;
+    std::string translation;
+    for (const json& property : properties.payload["properties"]) {
+        if (property.value("name", "") == "translation") {
+            translation = property.value("value", "");
+        }
+    }
+    ASSERT_FALSE(translation.empty()) << "the node reports no translation";
+    EXPECT_EQ(translation.rfind("2.5", 0), 0u)
+        << "typing into the row's text input did not reach the node: " << translation;
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    if (!properties_was_open) {
+        client.call_tool("set_window_visibility", json{{"title", "Properties"}, {"visible", false}});
+    }
+    advance_frames(client, 3);
 }

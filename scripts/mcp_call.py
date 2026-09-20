@@ -30,6 +30,20 @@ import urllib.error
 import urllib.request
 
 
+def use_utf8_output():
+    """Print replies verbatim on a console whose code page is not UTF-8.
+
+    Editor labels carry icon-font glyphs (private-use code points), which a
+    cp1252 Windows console cannot encode: printing one raises
+    UnicodeEncodeError and the call looks like it failed. Reconfiguring the
+    streams to UTF-8 with replacement keeps the rest of the reply readable.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def rpc(port, method, params):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode("utf-8")
     headers = {"Content-Type": "application/json"}
@@ -50,6 +64,7 @@ def parse_arguments_value(raw):
 
 
 def main():
+    use_utf8_output()
     parser = argparse.ArgumentParser(description="Call a tool on the in-editor MCP server")
     parser.add_argument("tool", nargs="?", help="tool name (see --list)")
     parser.add_argument("arguments", nargs="?", default=None, help="JSON object / b64:<base64 JSON> / '-' for stdin")

@@ -1,5 +1,6 @@
 #include "windows/property_editor.hpp"
 
+#include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -183,7 +184,18 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
             }
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN);
+            // A row's value widgets are labelled "##..." and the name the row
+            // shows is drawn as table text, so without this the row cannot be
+            // addressed by name from the get_imgui_* MCP queries
+            // (doc/agents/mcp_ui_driving.md). Naming happens only in a frame
+            // a query asked to record, so an ordinary frame pays one branch
+            // and allocates nothing.
+            const bool        naming_items     = erhe::imgui::is_item_recording();
+            const std::size_t first_item_index = naming_items ? erhe::imgui::get_recorded_item_count() : 0;
             entry.editor();
+            if (naming_items) {
+                erhe::imgui::set_recorded_item_labels(first_item_index, entry.label);
+            }
             row_hovered = row_hovered || ImGui::IsItemHovered();
             if (m_state != nullptr) {
                 if (ImGui::IsItemDeactivatedAfterEdit()) {
