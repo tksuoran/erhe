@@ -1,6 +1,6 @@
 §MBEL:5.0
 
-[TASK::hand-written-rows-to-properties]{IN-PROGRESS-2026-09-20;phase-1-DONE{f3385c682+1082d95c2};next=phase-2;detail=activeContext}
+[TASK::hand-written-rows-to-properties]{DONE-2026-09-20;10-commits-a339719c0..ab26a8cd1;detail=activeContext;?user-interactive{layout-array-rows,collision-filter-lists,joint-axis-groups}}
 
 [TASK::fly-camera-wheel-towards-hover]{DONE+USER-VERIFIED-2026-09-20;8125c035c;detail=activeContext}
 
