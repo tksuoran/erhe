@@ -32,7 +32,7 @@ auto is_boundary_edge(
     if (edge == GEO::NO_EDGE) {
         return true;
     }
-    const std::vector<GEO::index_t>& facets = source.get_edge_facets(edge);
+    const std::span<const GEO::index_t> facets = source.get_edge_facets(edge);
     int selected_count = 0;
     for (const GEO::index_t facet : facets) {
         if (selected_facets.count(facet) != 0) {
@@ -51,7 +51,7 @@ void orient_edge_with_facet(const Geometry& source, GEO::index_t& a, GEO::index_
     if (edge == GEO::NO_EDGE) {
         return;
     }
-    const std::vector<GEO::index_t>& facets = source.get_edge_facets(edge);
+    const std::span<const GEO::index_t> facets = source.get_edge_facets(edge);
     if (facets.empty()) {
         return;
     }

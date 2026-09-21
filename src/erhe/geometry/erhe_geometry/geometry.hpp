@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <tuple>
 
 namespace spdlog {
@@ -826,6 +827,36 @@ public:
     std::size_t tangent_texcoord_usage_index{0};
 };
 
+// Lists of indices keyed by an element index, in compressed form: the list of
+// key k is m_indices[m_offsets[k] .. m_offsets[k + 1]). Built in two passes -
+// count every (key, value) pair, then add them in the same order - so a build
+// allocates nothing per key, and the values of a key keep the order they were
+// added in.
+class Index_lists
+{
+public:
+    void begin_count(std::size_t key_count);
+    void count      (GEO::index_t key) { ++m_offsets[static_cast<std::size_t>(key) + 1]; }
+    void begin_fill ();
+    void add        (GEO::index_t key, GEO::index_t value) { m_indices[m_cursors[key]++] = value; }
+    void clear      ();
+
+    [[nodiscard]] auto size() const -> std::size_t { return m_offsets.empty() ? 0 : (m_offsets.size() - 1); }
+    [[nodiscard]] auto get (GEO::index_t key) const -> std::span<const GEO::index_t>
+    {
+        return std::span<const GEO::index_t>{m_indices.data() + m_offsets[key], m_indices.data() + m_offsets[static_cast<std::size_t>(key) + 1]};
+    }
+    [[nodiscard]] auto get_mutable(GEO::index_t key) -> std::span<GEO::index_t>
+    {
+        return std::span<GEO::index_t>{m_indices.data() + m_offsets[key], m_indices.data() + m_offsets[static_cast<std::size_t>(key) + 1]};
+    }
+
+private:
+    std::vector<GEO::index_t> m_offsets; // key count + 1 entries
+    std::vector<GEO::index_t> m_indices;
+    std::vector<GEO::index_t> m_cursors; // next free slot per key while filling
+};
+
 class Geometry
 {
 public:
@@ -835,10 +866,10 @@ public:
     [[nodiscard]] auto get_name          () const -> const std::string&;
     [[nodiscard]] auto get_mesh          () -> GEO::Mesh&;
     [[nodiscard]] auto get_mesh          () const -> const GEO::Mesh&;
-    [[nodiscard]] auto get_vertex_corners(GEO::index_t vertex) const -> const std::vector<GEO::index_t>&;
-    [[nodiscard]] auto get_vertex_edges  (GEO::index_t vertex) const -> const std::vector<GEO::index_t>&;
+    [[nodiscard]] auto get_vertex_corners(GEO::index_t vertex) const -> std::span<const GEO::index_t>;
+    [[nodiscard]] auto get_vertex_edges  (GEO::index_t vertex) const -> std::span<const GEO::index_t>;
     [[nodiscard]] auto get_corner_facet  (GEO::index_t corner) const -> GEO::index_t;
-    [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> const std::vector<GEO::index_t>&;
+    [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> std::span<const GEO::index_t>;
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
 
     // Semi-sharp crease sharpness accessors (see doc/erhe/subdivision_crease_edges.md).
@@ -926,17 +957,18 @@ private:
         GEO::index_t                     v1;
         GEO::vector<GEO::index_t>&       facets_to_delete;
         std::vector<GEO::index_t>        merged_face_corners{};
-        const std::vector<GEO::index_t>& edge_facets;
+        std::span<const GEO::index_t>    edge_facets;
     };
     void collect_corners_from_facet(Edge_collapse_context& edge_collapse_context, GEO::index_t facet, std::optional<GEO::index_t> trigger_vertex);
 
     GEO::Mesh                              m_mesh;
     Mesh_attributes                        m_attributes;
     std::string                            m_name;
-    std::vector<std::vector<GEO::index_t>> m_vertex_to_corners;
+    Index_lists                            m_vertex_to_corners;
     std::vector<GEO::index_t>              m_corner_to_facet;
-    std::vector<std::vector<GEO::index_t>> m_edge_to_facets;
-    std::vector<std::vector<GEO::index_t>> m_vertex_to_edges;
+    Index_lists                            m_edge_to_facets;
+    Index_lists                            m_vertex_to_edges;
+    std::vector<GEO::index_t>              m_corner_to_edge_scratch; // build_edges(): edge of the facet edge starting at each corner
 
     struct Edge_hash
     {

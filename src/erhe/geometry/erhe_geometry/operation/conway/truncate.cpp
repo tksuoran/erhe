@@ -72,7 +72,7 @@ void Truncate::build()
         if (!interior_selected(src_vertex)) {
             continue;
         }
-        const std::vector<GEO::index_t>& src_corners      = source.get_vertex_corners(src_vertex);
+        const std::span<const GEO::index_t> src_corners      = source.get_vertex_corners(src_vertex);
         const GEO::index_t               src_corner_count = static_cast<GEO::index_t>(src_corners.size());
         if (src_corner_count < 3) {
             continue;

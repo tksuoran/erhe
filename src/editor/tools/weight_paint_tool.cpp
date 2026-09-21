@@ -583,7 +583,7 @@ void Weight_paint_tool::write_vertex_joints(const GEO::index_t vertex, const glm
         return;
     }
     const erhe::primitive::Element_mappings& element_mappings = primitive.render_shape->get_element_mappings();
-    const std::vector<GEO::index_t>& vertex_corners = m_stroke_geometry->get_vertex_corners(vertex);
+    const std::span<const GEO::index_t> vertex_corners = m_stroke_geometry->get_vertex_corners(vertex);
     for (const GEO::index_t corner : vertex_corners) {
         if (corner >= element_mappings.mesh_corner_to_vertex_buffer_index.size()) {
             continue;

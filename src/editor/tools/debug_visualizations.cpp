@@ -1919,7 +1919,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
 
                 GEO::vec3f normal_sum{0.0f, 0.0f, 0.0f};
 
-                const std::vector<GEO::index_t>& facets = geometry->get_edge_facets(edge);
+                const std::span<const GEO::index_t> facets = geometry->get_edge_facets(edge);
                 for (GEO::index_t facet : facets) {
                     GEO::vec3f facet_normal = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
                     normal_sum += facet_normal;

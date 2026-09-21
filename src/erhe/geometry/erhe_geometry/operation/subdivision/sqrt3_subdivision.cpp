@@ -67,7 +67,7 @@ void Sqrt3_subdivision::build(const uint64_t post_process_flags, const uint64_t 
     // Refine old vertices: smooth every interior-selected vertex with S(p); pin
     // everything else with weight 1.0 to itself.
     for (const GEO::index_t src_vertex : source_mesh.vertices) {
-        const std::vector<GEO::index_t>& src_corners = source.get_vertex_corners(src_vertex);
+        const std::span<const GEO::index_t> src_corners = source.get_vertex_corners(src_vertex);
         if (!interior_selected(src_vertex) || src_corners.empty()) {
             make_new_dst_vertex_from_src_vertex(1.0f, src_vertex);
             continue;

@@ -101,7 +101,7 @@ void Chamfer3::build()
     std::vector<HexPlane> hex_planes(source_mesh.edges.nb());
 
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(src_edge);
         if (edge_facets.size() != 2) {
             continue;
         }
@@ -175,8 +175,8 @@ void Chamfer3::build()
             continue;
         }
 
-        const std::vector<GEO::index_t>& v_corners = source.get_vertex_corners(src_vertex);
-        const std::vector<GEO::index_t>& v_edges   = source.get_vertex_edges(src_vertex);
+        const std::span<const GEO::index_t> v_corners = source.get_vertex_corners(src_vertex);
+        const std::span<const GEO::index_t> v_edges   = source.get_vertex_edges(src_vertex);
 
         if (v_corners.empty() || v_edges.empty()) {
             set_pointf(destination_mesh.vertices, new_dst_vertex, V);
@@ -259,7 +259,7 @@ void Chamfer3::build()
     //     between the shrunk selected face and the unchanged neighbor edge.
     //   - exterior edge (neither selected) / non-manifold edge: nothing.
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(src_edge);
         if (edge_facets.size() != 2) {
             continue;
         }

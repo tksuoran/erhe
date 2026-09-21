@@ -41,7 +41,7 @@ void Merge_faces::build()
         return x;
     };
     for (const GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(src_edge);
         if (edge_facets.size() != 2) {
             continue;
         }
@@ -83,7 +83,7 @@ void Merge_faces::build()
             bool internal = false;
             const GEO::index_t edge = source.get_edge(a, b);
             if (edge != GEO::NO_EDGE) {
-                const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(edge);
+                const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(edge);
                 if (edge_facets.size() == 2) {
                     const GEO::index_t other = (edge_facets[0] == src_facet) ? edge_facets[1] : edge_facets[0];
                     if (is_facet_selected(other)) {

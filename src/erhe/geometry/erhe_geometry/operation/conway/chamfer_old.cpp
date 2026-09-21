@@ -343,7 +343,7 @@ void Chamfer::build()
     std::fill(vertex_min_heights.begin(), vertex_min_heights.end(), std::numeric_limits<float>::max());
     float min_height = std::numeric_limits<float>::max();
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(src_edge);
         GEO::vec3f normal_sum{0.0f, 0.0f, 0.0f};
         for (GEO::index_t facet : edge_facets) {
             normal_sum += mesh_facet_normalf(source_mesh, facet);
@@ -493,7 +493,7 @@ void Chamfer::build()
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertex();
         const GEO::vec3f original_pos = get_pointf(source_mesh.vertices, src_vertex);
-        const std::vector<GEO::index_t>& v_edges = source.get_vertex_edges(src_vertex);
+        const std::span<const GEO::index_t> v_edges = source.get_vertex_edges(src_vertex);
 
         if (v_edges.empty()) {
             set_pointf(destination_mesh.vertices, new_dst_vertex, original_pos);
@@ -545,7 +545,7 @@ void Chamfer::build()
         GEO::vec3f target_sum{0.0f, 0.0f, 0.0f};
         GEO::index_t target_count = 0;
         for (GEO::index_t e : v_edges) {
-            const std::vector<GEO::index_t>& ef = source.get_edge_facets(e);
+            const std::span<const GEO::index_t> ef = source.get_edge_facets(e);
             if (ef.size() != 2) {
                 continue;
             }
@@ -607,7 +607,7 @@ void Chamfer::build()
 
     // Create new dst hexagon facets matching source mesh edges
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> edge_facets = source.get_edge_facets(src_edge);
         if (edge_facets.size() != 2) {
             continue; // TODO
         }

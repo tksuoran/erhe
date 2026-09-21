@@ -10,6 +10,7 @@ Geogram), and primitive shape generators.
 
 ## Key Types
 - `Geometry` -- Main class wrapping `GEO::Mesh` with named attributes, connectivity queries, processing flags, and AABB computation.
+- `Index_lists` -- Compressed index lists keyed by an element index (offsets + one flat index array), built in two passes (count, then add in the same order). `Geometry` keeps its vertex-to-corners, vertex-to-edges and edge-to-facets tables in this form and `get_vertex_corners()` / `get_vertex_edges()` / `get_edge_facets()` return a `std::span<const GEO::index_t>` into them, valid until the next `update_connectivity()` / `build_edges()`. A `std::vector` per vertex made `process()` heap-bound: with many worker threads processing meshes at once (editor brush build, async mesh operations) the per-vertex allocations dominated and contended on the heap.
 - `Mesh_attributes` -- Typed wrappers (`Attribute_present<T>`) for all standard vertex/corner/facet attributes (normals, tangents, tex coords, colors, joint data, IDs).
 - `Attribute_present<T>` -- Binds a `GEO::Attribute<T>` with a presence flag per element.
 - `Attribute_descriptor` -- Describes an attribute's name, transform mode, and interpolation mode.

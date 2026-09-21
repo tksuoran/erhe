@@ -209,7 +209,7 @@ auto compute_selection_frame_rotation(Mesh_component_selection& selection, const
                 glm::vec3          normal_local{0.0f, 1.0f, 0.0f};
                 const GEO::index_t edge = geometry->get_edge(v0, v1);
                 if (edge != GEO::NO_EDGE) {
-                    const std::vector<GEO::index_t>& facets = geometry->get_edge_facets(edge);
+                    const std::span<const GEO::index_t> facets = geometry->get_edge_facets(edge);
                     if (!facets.empty()) {
                         const glm::vec3 n0 = facet_normal_local(facets[0]);
                         const glm::vec3 n1 = (facets.size() >= 2) ? facet_normal_local(facets[1]) : n0;

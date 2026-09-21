@@ -318,7 +318,7 @@ TEST(SelectiveOperationNormals, Selective_Join_Is_Watertight_And_Keeps_Unmodifie
     // the selection) AND the boundary-triangle path are both exercised.
     std::set<GEO::index_t> selected_facets;
     for (GEO::index_t e = 0; (e < src_mesh.edges.nb()) && selected_facets.empty(); ++e) {
-        const std::vector<GEO::index_t>& facets = box->get_edge_facets(e);
+        const std::span<const GEO::index_t> facets = box->get_edge_facets(e);
         if (facets.size() == 2) {
             selected_facets.insert(facets[0]);
             selected_facets.insert(facets[1]);
@@ -410,7 +410,7 @@ TEST(SelectiveOperationNormals, Selective_Gyro_Watertight_And_Keeps_Unmodified_R
     // exercised.
     std::set<GEO::index_t> selected_facets;
     for (GEO::index_t e = 0; (e < src_mesh.edges.nb()) && selected_facets.empty(); ++e) {
-        const std::vector<GEO::index_t>& facets = box->get_edge_facets(e);
+        const std::span<const GEO::index_t> facets = box->get_edge_facets(e);
         if (facets.size() == 2) {
             selected_facets.insert(facets[0]);
             selected_facets.insert(facets[1]);
@@ -903,7 +903,7 @@ TEST(SelectiveOperationNormals, Merge_Faces_Dissolves_Patch_Into_One_Polygon_And
             const GEO::index_t edge = box->get_edge(a, b);
             bool internal = false;
             if (edge != GEO::NO_EDGE) {
-                const std::vector<GEO::index_t>& ef = box->get_edge_facets(edge);
+                const std::span<const GEO::index_t> ef = box->get_edge_facets(edge);
                 if (ef.size() == 2) {
                     const GEO::index_t other = (ef[0] == f) ? ef[1] : ef[0];
                     internal = (selected_facets.count(other) != 0);

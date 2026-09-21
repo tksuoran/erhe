@@ -617,7 +617,7 @@ void Paint_tool::paint()
         }
         case Paint_mode::Point: {
             const GEO::index_t vertex = geo_mesh.facet_corners.vertex(nearest_corner);
-            const std::vector<GEO::index_t>& vertex_corners = geometry.get_vertex_corners(vertex);
+            const std::span<const GEO::index_t> vertex_corners = geometry.get_vertex_corners(vertex);
             for (GEO::index_t corner : vertex_corners) {
                 paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
             }

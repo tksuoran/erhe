@@ -43,7 +43,7 @@ void Subdivide::build()
     {
         ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
         for (const GEO::index_t src_edge : source_mesh.edges) {
-            const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
+            const std::span<const GEO::index_t> src_edge_facets = source.get_edge_facets(src_edge);
             bool any_selected = false;
             for (const GEO::index_t src_facet : src_edge_facets) {
                 if (is_facet_selected(src_facet)) {

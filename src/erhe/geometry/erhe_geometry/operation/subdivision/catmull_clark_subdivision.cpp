@@ -80,7 +80,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
             return sharpness;
         }
         float result = sharpness;
-        const std::vector<GEO::index_t>& incident_edges = source.get_vertex_edges(end_vertex);
+        const std::span<const GEO::index_t> incident_edges = source.get_vertex_edges(end_vertex);
         if (incident_edges.size() >= 2) {
             float semi_sharp_sum   = 0.0f;
             int   semi_sharp_count = 0;
@@ -156,7 +156,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
         m_dst_vertex_corner_sources.resize(destination_mesh.vertices.nb());
         for (GEO::index_t vertex : source_mesh.vertices) {
             const GEO::index_t dst_vertex = first_dst_vertex + vertex;
-            const std::vector<GEO::index_t>& corners = source.get_vertex_corners(vertex);
+            const std::span<const GEO::index_t> corners = source.get_vertex_corners(vertex);
             if (interior_selected(vertex) && (corners.size() >= 3)) {
                 const float n = static_cast<float>(corners.size());
                 // n = 0   -> centroid points, safe to skip
@@ -210,7 +210,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
         m_dst_vertex_corner_sources.resize(destination_mesh.vertices.nb());
 
         for (GEO::index_t src_edge : source_mesh.edges) {
-            const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
+            const std::span<const GEO::index_t> src_edge_facets = source.get_edge_facets(src_edge);
             GEO::index_t selected_facet_count   = 0;
             GEO::index_t unselected_facet_count = 0;
             for (GEO::index_t src_facet : src_edge_facets) {
@@ -365,7 +365,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
                     continue;
                 }
                 const GEO::index_t               dst_vertex         = m_vertex_src_to_dst[src_vertex];
-                const std::vector<GEO::index_t>& src_vertex_corners = source.get_vertex_corners(src_vertex);
+                const std::span<const GEO::index_t> src_vertex_corners = source.get_vertex_corners(src_vertex);
                 if (src_vertex_corners.empty()) {
                     continue;
                 }
@@ -461,7 +461,7 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
             if (source.get_vertex_corners(src_vertex).size() < 3) {
                 continue; // pinned by the initial-points phase
             }
-            const std::vector<GEO::index_t>& incident_edges = source.get_vertex_edges(src_vertex);
+            const std::span<const GEO::index_t> incident_edges = source.get_vertex_edges(src_vertex);
 
             int          parent_sharp_count    = 0;
             GEO::index_t parent_sharp_edges[2] = { GEO::NO_EDGE, GEO::NO_EDGE };

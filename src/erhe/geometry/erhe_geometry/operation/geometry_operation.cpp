@@ -129,7 +129,7 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     const GEO::index_t new_dst_vertex_end   = new_dst_vertex_start + new_dst_vertex_count;
     GEO::index_t new_dst_vertex = new_dst_vertex_start;
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>&            src_edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t>            src_edge_facets = source.get_edge_facets(src_edge);
         const GEO::index_t                          src_vertex_a    = source_mesh.edges.vertex(src_edge, 0);
         const GEO::index_t                          src_vertex_b    = source_mesh.edges.vertex(src_edge, 1);
         const std::pair<GEO::index_t, GEO::index_t> src_edge_key    = std::make_pair(src_vertex_a, src_vertex_b);
@@ -165,7 +165,7 @@ void Geometry_operation::make_selected_edge_midpoints(const std::initializer_lis
     geo_assert(relative_positions.size() != 0);
     ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
     for (GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> src_edge_facets = source.get_edge_facets(src_edge);
         bool any_selected = false;
         for (const GEO::index_t src_facet : src_edge_facets) {
             if (is_facet_selected(src_facet)) {

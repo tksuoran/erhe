@@ -71,7 +71,7 @@ void Join::build()
     }
 
     for (const GEO::index_t src_edge : source_mesh.edges) {
-        const std::vector<GEO::index_t>& src_facets = source.get_edge_facets(src_edge);
+        const std::span<const GEO::index_t> src_facets = source.get_edge_facets(src_edge);
         // Match the whole-mesh operation: only manifold (2-facet) edges produce
         // geometry. A boundary edge of the mesh itself is skipped (leaving the same
         // hole the classic join leaves).
