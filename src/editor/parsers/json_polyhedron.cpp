@@ -93,8 +93,12 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
         {
             // Geogram algorithm; callers include the parallel brush init
             // tasks - see erhe::geometry::geogram_lock().
+            ERHE_PROFILE_SCOPE("geogram lock + mesh_repair");
             const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
-            GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TOPOLOGY, 0.0);
+            {
+                ERHE_PROFILE_SCOPE("GEO::mesh_repair");
+                GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TOPOLOGY, 0.0);
+            }
         }
         mesh.vertices.set_single_precision();
         return true;
