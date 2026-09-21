@@ -36,3 +36,7 @@ Implements the brush system for placing parametric mesh shapes onto surfaces.
 
 - erhe::geometry, erhe::primitive, erhe::physics, erhe::scene
 - editor: App_context, Operation_stack, Tools, Scene_root, Icon_set
+
+## Future work
+
+- [Deferred brush geometry](../plans/deferred_brush_geometry.md)

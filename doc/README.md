@@ -266,6 +266,7 @@ Every document states its standing in its first ten lines:
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (proposed): Positive crash signal for harness-run apps
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
+- [plans/deferred_brush_geometry.md](plans/deferred_brush_geometry.md) (proposed): Deferred brush geometry: prepare a palette brush when a scene placement or the UI needs it
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements

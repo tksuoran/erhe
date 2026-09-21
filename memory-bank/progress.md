@@ -1,6 +1,8 @@
 §MBEL:5.0
 
-[TASK::startup-profiling]{2026-09-21;~20-commits-dd023d9f4..258addc4b;16.9s->1.85s-Debug;detail=activeContext;left=make_brushes-375ms+prewarm-330ms+ninja-tree-on-demand-OFF+Vulkan-shader-monitor-never-started}
+[TASK::deferred-brush-geometry]{PLANNED-2026-09-21;doc/plans/deferred_brush_geometry.md;6-phases;not-started}
+
+[TASK::startup-profiling]{2026-09-21;~24-commits-dd023d9f4..78015a6d3;16.9s->1.68s-Debug;detail=activeContext;left=prewarm-330ms+facet-texcoord-step-regression-uninvestigated}
 
 [TASK::mcp-ui-driving]{DONE-2026-09-20;9-commits-04c45b657..785882d17;detail=activeContext;run-book=doc/agents/mcp_ui_driving.md;?user-interactive{windowed-injection,Ctrl+A-select-all}}
 
