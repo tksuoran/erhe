@@ -15,8 +15,6 @@
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "parsers/gltf.hpp"
 #include "prefabs/prefab_instance.hpp"
-#include "scene/node_physics.hpp"
-#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -411,8 +409,6 @@ void add_gltf_editor_state(
 
     const std::shared_ptr<Asset_payload_data> data = std::make_shared<Asset_payload_data>();
 
-    bool used_physics    = false;
-
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node == scene_root_node) {
             return true; // the scene root itself is not a glTF node
@@ -427,7 +423,6 @@ void add_gltf_editor_state(
         // Exclusion hook + ERHE_node_graphs node bindings: the products a
         // node's geometry graph controls are baked artifacts the graph
         // rebuilds on load.
-        std::optional<Node_physics_data> node_physics = read_node_physics(*node.get());
         const Geometry_graph_mesh_entry* const graph_mesh_entry =
             scene_root.get_geometry_graph_mesh_system().find_entry(*node.get());
         if (graph_mesh_entry != nullptr) {
@@ -436,9 +431,6 @@ void add_gltf_editor_state(
             }
             if (graph_mesh_entry->ghost_mesh) {
                 arguments.excluded_meshes.insert(graph_mesh_entry->ghost_mesh.get());
-            }
-            if (graph_mesh_entry->owns_rigid_body) {
-                node_physics.reset(); // build_physics_description skips it too
             }
         }
         const std::optional<Geometry_graph_mesh_data> graph_mesh_data = read_geometry_graph_mesh(*node.get());
@@ -451,22 +443,6 @@ void add_gltf_editor_state(
             );
         }
 
-        // ERHE_physics: erhe rigid-body state KHR_physics_rigid_bodies
-        // cannot carry, and the attachment's local property values (its
-        // complete local set on reload, the ERHE_light rule). Damping,
-        // wind receptivity and density ride the physics material
-        // (ERHE_scene physics_materials).
-        if (node_physics.has_value()) {
-            // The values are the node's own now (P8), so the payload states
-            // only the motion mode; the node's Node_physics.* local values
-            // ride ERHE_node.properties with the rest of its opinions.
-            nlohmann::json physics_json{
-                {"motion_mode", motion_mode_name(node_physics.value().motion_mode)},
-            };
-            append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_physics\":{}", physics_json.dump()));
-            used_physics = true;
-        }
-
         // ERHE_collections: item tags (runtime-only Item_base state; never
         // persisted before).
         for (const std::string& tag : node->get_tags()) {
@@ -475,9 +451,6 @@ void add_gltf_editor_state(
         return true;
     });
 
-    if (used_physics) {
-        arguments.extensions_used.push_back("ERHE_physics");
-    }
     // ERHE_scene: per-scene settings (#239), ambient light (#237),
     // enable_physics. Always emitted - its presence in extensionsUsed marks
     // the file as an erhe-authored scene.

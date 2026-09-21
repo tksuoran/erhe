@@ -244,6 +244,18 @@ auto Node_physics::all_properties() -> const std::vector<const Dependency_proper
     return s_properties;
 }
 
+auto motion_state_of(const erhe::physics::Motion_mode mode) -> Motion_state
+{
+    switch (mode) {
+        case erhe::physics::Motion_mode::e_none:                   return Motion_state::e_none;
+        case erhe::physics::Motion_mode::e_static:                 return Motion_state::e_static;
+        case erhe::physics::Motion_mode::e_kinematic_non_physical: return Motion_state::e_kinematic;
+        case erhe::physics::Motion_mode::e_kinematic_physical:     return Motion_state::e_kinematic;
+        case erhe::physics::Motion_mode::e_dynamic:                return Motion_state::e_dynamic;
+        default:                                                   return Motion_state::e_none;
+    }
+}
+
 auto carries_node_physics(const erhe::scene::Node& node) -> bool
 {
     return erhe::property::carries_attached_group(node, Node_physics::motion_mode_property.get());

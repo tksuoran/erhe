@@ -99,6 +99,22 @@ public:
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
 
+// What a native file carrier states of a body's motion: whether it simulates
+// at all, and which of the three states `KHR_physics_rigid_bodies` (a motion
+// object, with isKinematic) and the UsdPhysics schemas (`PhysicsRigidBodyAPI`,
+// with physics:kinematicEnabled) can spell. Both carriers collapse the two
+// kinematic modes into one, so which of them a kinematic body is in is the
+// node's own Node_physics.motion_mode value to state
+// (doc/erhe/khr_physics_rigid_bodies_support.md, "Motion modes in a file").
+enum class Motion_state : int {
+    e_none,
+    e_static,
+    e_kinematic,
+    e_dynamic
+};
+
+[[nodiscard]] auto motion_state_of(erhe::physics::Motion_mode mode) -> Motion_state;
+
 // True while the node carries the group: the key property's effective value
 // differs from its default (erhe::property::carries_attached_group).
 [[nodiscard]] auto carries_node_physics(const erhe::scene::Node& node) -> bool;

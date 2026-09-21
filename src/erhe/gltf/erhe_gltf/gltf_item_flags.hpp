@@ -31,7 +31,7 @@ public:
 // state (selected, hovered_*, negative_determinant, affects_shadow) and the
 // structurally handled import_root are deliberately absent from the set.
 // Shared by the exporter-internal ERHE_node / ERHE_camera / ERHE_light
-// writers and the editor-domain extension builders (ERHE_physics).
+// writers and the editor-domain extension builders (ERHE_scene).
 
 // JSON array of persistent flag names for the set bits, e.g.
 // ["visible","content"].

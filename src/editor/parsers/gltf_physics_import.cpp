@@ -4,10 +4,7 @@
 #include "parsers/physics_import.hpp"
 
 #include "erhe_gltf/gltf.hpp"
-#include "erhe_scene/node.hpp"
 #include "erhe_scene/physics_description.hpp"
-
-#include <unordered_map>
 
 namespace editor {
 
@@ -55,23 +52,9 @@ void import_gltf_physics(
         arguments.collision_filters.push_back(Physics_import_item{.name = name});
     }
 
-    // ERHE_physics node payloads: rigid-body state KHR_physics_rigid_bodies
-    // cannot carry.
-    const std::unordered_map<const erhe::scene::Node*, Gltf_physics_overrides> physics_overrides =
-        parse_gltf_physics_overrides(gltf_data);
-    for (const std::pair<const erhe::scene::Node* const, Gltf_physics_overrides>& entry : physics_overrides) {
-        arguments.bodies.emplace(
-            entry.first,
-            Physics_import_body{
-                .motion_mode  = entry.second.motion_mode,
-                .properties   = entry.second.properties,
-                .property_set = entry.second.has_properties
-                    ? Physics_property_set::complete_local_set
-                    : Physics_property_set::listed_values
-            }
-        );
-    }
-
+    // A body's own values are the node's (P8): they ride ERHE_node
+    // `properties` and the glTF reader has already applied them, so the
+    // import has nothing to state per body beyond the KHR record.
     import_physics(context, arguments, scene_root, operations);
 }
 

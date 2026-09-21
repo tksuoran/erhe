@@ -72,7 +72,7 @@ Blender `code_artifact` play the same role.
 | AI chat UI | Yes — chat-first web app with progress messages, retry, version switching | None — interaction via external agent / CLI / scripts |
 | Error handling | Recoverable-vs-fatal classification, bounded retries, idempotent starts via client request ids, 11 error categories, verbatim user-facing failure messages | `isError` + stringly-typed message in a text block; per-request exception boundary |
 | Auth/security | OAuth loopback login, 0600 session files, key scrubbing, BYOK keys browser-local, analytics scrubber | Bearer token file (auth **off** if absent), loopback-only bind, plain HTTP |
-| Formats | GLB in/out only | glTF import/export with `ERHE_brushes`/`ERHE_physics`/`ERHE_scene` extensions, prefabs, asset manager |
+| Formats | GLB in/out only | glTF import/export with `ERHE_brushes`/`ERHE_node`/`ERHE_scene` extensions, prefabs, asset manager |
 | Headless operation | Server-side (closed) | First-class: headless build runs full pipeline + MCP + screenshots |
 | DCC integration | Blender add-on (import as named meshes, code in Text Editor, crash-resumable jobs, safe self-update) | None |
 | Agent-facing docs | FastMCP `instructions`, `llms.txt`, README decision tree keyed on `next_action` | `AGENTS.md`, `.claude/skills/erhe-creations/` with maintenance contract, `doc/agents/mcp_api_guidelines.md` |

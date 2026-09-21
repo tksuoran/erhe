@@ -516,7 +516,7 @@ constexpr Serialized_item_flag c_serialized_item_flags[] = {
 }
 
 // The persistent (authored) Item flag helpers live in gltf_item_flags.{hpp,cpp}
-// (shared with the editor-domain extension builders, e.g. ERHE_physics).
+// (shared with the editor-domain extension builders, e.g. ERHE_scene).
 
 // erhe::scene::Projection::Type <-> ERHE_camera projection_type string.
 [[nodiscard]] auto projection_type_name(const erhe::scene::Projection::Type type) -> const char*

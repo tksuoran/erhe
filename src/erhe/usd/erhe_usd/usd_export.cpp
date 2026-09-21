@@ -697,6 +697,27 @@ public:
         if (name == "double_sided") { return "doubleSided"; }
         return {};
     }
+    if (owner == "Node_physics") {
+        // The body's own prim carries `PhysicsRigidBodyAPI`, `PhysicsMassAPI`
+        // and the physics-purpose material binding, which
+        // `write_physics_on_prim` authors from the neutral description. Those
+        // attributes exist only for a body the description gives a motion
+        // record, so a body without one - a static body - has its local mass
+        // properties and velocities put in the body's own record instead
+        // (`collect_usd_physics`, src/editor/parsers/usd.cpp), and so has a
+        // kinematic mode the `physics:kinematicEnabled` bool cannot tell apart
+        // (doc/erhe/khr_physics_rigid_bodies_support.md, "Motion modes in a
+        // file"). What no UsdPhysics schema states at all - the trigger flag,
+        // the gravity factor, the collision filter and the collision mesh -
+        // is not here and travels as an `erhe:` attribute.
+        if (name == "mass")                     { return "physics:mass"; }
+        if (name == "center_of_mass_offset")    { return "physics:centerOfMass"; }
+        if (name == "initial_linear_velocity")  { return "physics:velocity"; }
+        if (name == "initial_angular_velocity") { return "physics:angularVelocity"; }
+        if (name == "physics_material")         { return "material:binding:physics"; }
+        if (name == "motion_mode")              { return "PhysicsRigidBodyAPI with physics:kinematicEnabled"; }
+        return {};
+    }
     if (owner == "Draw_mode") {
         // An applied API schema authors its attributes on the prim itself, so
         // the draw-mode attachment's values are native in both forms.

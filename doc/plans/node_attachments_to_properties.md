@@ -27,8 +27,12 @@ attachment has no path; a value on the node is overridable as it stands.
   observers in a per-scene `Node_physics_system`
   (`doc/erhe/property_system.md` section 4.26, `doc/editor/scene.md`). The
   native carriers - `KHR_physics_rigid_bodies` and the UsdPhysics schemas -
-  stay, fed from `read_node_physics()` (D8); `Motion_mode::e_none` is the new
-  enum value the key property defaults to.
+  stay, fed from `read_node_physics()` (D8), and its retirement deleted the
+  `ERHE_physics` glTF extension: what the native carriers cannot state - which
+  of the two kinematic modes a kinematic body is in
+  (`doc/erhe/khr_physics_rigid_bodies_support.md`, "Motion modes in a file") -
+  rides `ERHE_node` `properties` and `erhe:Node_physics:<name>`.
+  `Motion_mode::e_none` is the new enum value the key property defaults to.
 - **Ik** (`src/editor/scene/ik_properties.{hpp,cpp}`): the per-bone IK
   locks, limits, stiffness, rest rotation and pole, group "IK"
   (`doc/erhe/property_system.md` section 4.19,
@@ -197,11 +201,10 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P8. Delete `ERHE_physics`** (D8).
 - **P9. `Node_joint` -> `Joint` prim** (D3). New `Item_type` bit, icon,
   Create menu entry and MCP `create_joint`; glTF import places the prim
-  below the joint's node. Same suites as P8; creation 21 rebuilt by its
-  script.
+  below the joint's node. Suites: usd, physics, scene; creation 21 rebuilt by
+  its script.
 - **P10. `Prefab_instance`** (D4). Suites: usd, scene, gltf; roundtrip
   references, variants and override legs.
 - **P11. Delete the attachment infrastructure.** `Node_attachment`,
@@ -213,7 +216,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P9 follows P8; P11 is last.
+P11 is last.
 
 ## Decision to confirm before P10
 

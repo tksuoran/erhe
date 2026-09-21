@@ -118,40 +118,6 @@ void apply_flags(erhe::Item_base& item, const nlohmann::json& payload)
 
 } // anonymous namespace
 
-auto parse_gltf_physics_overrides(const erhe::gltf::Gltf_data& gltf_data)
-    -> std::unordered_map<const erhe::scene::Node*, Gltf_physics_overrides>
-{
-    std::unordered_map<const erhe::scene::Node*, Gltf_physics_overrides> overrides;
-    for (std::size_t i = 0, end = gltf_data.node_extensions.size(); i < end; ++i) {
-        if ((i >= gltf_data.nodes.size()) || !gltf_data.nodes[i]) {
-            continue;
-        }
-        const std::string* extension_json = find_extension(gltf_data.node_extensions[i], "ERHE_physics");
-        if (extension_json == nullptr) {
-            continue;
-        }
-        const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_physics", gltf_data.nodes[i]->get_name());
-        if (payload.is_null()) {
-            continue;
-        }
-        Gltf_physics_overrides entry{};
-        if (payload.contains("motion_mode") && payload["motion_mode"].is_string()) {
-            entry.motion_mode = motion_mode_from_name(payload["motion_mode"].get<std::string>());
-        }
-        const auto properties_it = payload.find("properties");
-        if ((properties_it != payload.end()) && properties_it->is_object()) {
-            entry.has_properties = true;
-            for (const auto& [name, value] : properties_it->items()) {
-                if (value.is_string()) {
-                    entry.properties.emplace_back(name, value.get<std::string>());
-                }
-            }
-        }
-        overrides.emplace(gltf_data.nodes[i].get(), entry);
-    }
-    return overrides;
-}
-
 auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::optional<Gltf_scene_state>
 {
     const std::string* extension_json = find_extension(gltf_data.scene_extensions, "ERHE_scene");

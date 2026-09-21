@@ -39,6 +39,30 @@ are therefore static or kinematic only.
   compound folding, implicit-shape table, hull and mesh colliders, triggers,
   joints).
 
+## Motion modes in a file
+
+`Node_physics.motion_mode` has five values and the extension states three of
+them, through the presence of the `motion` object and its `isKinematic` flag.
+`editor::motion_state_of()` (`src/editor/scene/node_physics.hpp`) is that
+projection, and the same three states are what the UsdPhysics schemas spell
+with `PhysicsRigidBodyAPI` and `physics:kinematicEnabled`:
+
+| `Motion_mode` | `KHR_physics_rigid_bodies` | Carries the exact mode |
+|---|---|---|
+| `e_none` | no `physicsRigidBody` on the node | - |
+| `e_static` | `physicsRigidBody` with no `motion` | the extension |
+| `e_kinematic_non_physical` | `motion` with `isKinematic: true` | `ERHE_node` `properties` |
+| `e_kinematic_physical` | `motion` with `isKinematic: true` | `ERHE_node` `properties` |
+| `e_dynamic` | `motion` with `isKinematic` absent | the extension |
+
+The two kinematic modes are the one distinction the extension cannot make, so
+the mode rides the node's own `Node_physics.motion_mode` value in the
+`ERHE_node` `properties` map, which the reader has already applied by the time
+the physics import runs. The import takes that authored value only while it
+projects onto the same state the file's own record states, so an edited
+`physicsRigidBody` still decides whether a body is static, kinematic or
+dynamic.
+
 ## Authoring without an import
 
 `Scene_commands::create_new_rigid_body` and `create_new_joint` are undoable
@@ -81,7 +105,7 @@ physics fields of `get_node_details`.
   `export_gltf` tool and scene save (`save_scene_gltf` in `parsers/gltf.cpp`).
   The scene file itself is the canonical physics store
   (`doc/editor/scene_serialization.md`; the erhe-specific remainder rides in the
-  `ERHE_physics` node extension).
+  `ERHE_node` `properties` map of the body's node).
 - Import folds synthesized children back: a dynamic body through the
   motion-root compound fold, a static synthesized child as an individual static
   body, which is physically equivalent.
@@ -129,10 +153,14 @@ physics fields of `get_node_details`.
 - Export skips a world-attached joint (one with no connected node) with a
   warning, and exports only the first of several `Node_joint`s on one node,
   because glTF carries one joint per node.
-- Export writes no inertia overrides (the value group has none), and
-  writes mass for dynamic bodies only.
+- Export writes no inertia overrides (the value group has none). A dynamic
+  body's mass is written from the live body when nothing authored one; a
+  kinematic body's mass is written only where the node holds a value, and a
+  static body's has no carrier in the extension.
 - Export collapses kinematic non-physical and kinematic physical to
-  `isKinematic = true`, so a re-import yields a kinematic physical body.
+  `isKinematic = true`; the exact mode rides `ERHE_node` `properties`, so only
+  a file written without the editor-domain extensions re-imports as kinematic
+  physical.
 - The text (`.gltf`) export variant writes no buffer URI and therefore cannot
   be re-imported; use `.glb` for a round-trip and `.gltf` for JSON inspection.
 - Friction is dynamic friction: there is no velocity-threshold selection

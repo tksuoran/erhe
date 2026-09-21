@@ -522,6 +522,18 @@ void import_physics(
         const Physics_import_body* const body = find_body(node);
         if ((body != nullptr) && body->motion_mode.has_value()) {
             create_info.motion_mode = body->motion_mode.value();
+            return;
+        }
+        // The node's own Node_physics.motion_mode, which the reader applied
+        // from the file's property map before the physics import runs, is the
+        // finer opinion where the native carrier has a coarser one: glTF
+        // states static / kinematic / dynamic and USD states the same three,
+        // so which of the two kinematic modes a kinematic body is in is the
+        // node's to say. It refines the create info only while the two agree
+        // on the coarse state, so an edited native record still wins.
+        const erhe::physics::Motion_mode authored = node->get_value(Node_physics::motion_mode_property);
+        if (motion_state_of(authored) == motion_state_of(create_info.motion_mode)) {
+            create_info.motion_mode = authored;
         }
     };
     // The values live on the node itself now (P8): the file's recorded

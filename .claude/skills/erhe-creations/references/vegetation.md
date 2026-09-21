@@ -150,4 +150,5 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   ambient foliage. Wind force is
   `receptivity * (wind_velocity - body_velocity)` at the COM each fixed
   step; zero receptivity bodies are never touched (they sleep).
-  `wind_receptivity` persists in the ERHE_physics extension on save.
+  `wind_receptivity` is a physics material value and persists in the
+  ERHE_scene physics_materials entry on save.

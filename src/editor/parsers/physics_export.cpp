@@ -391,8 +391,16 @@ auto build_physics_description(
                 const float mass = physics_data.mass.has_value()
                     ? physics_data.mass.value()
                     : ((live_body != nullptr) ? live_body->get_mass() : 0.0f); // 0 while neither authored nor live
+                // A dynamic body's mass is what it simulates with, so the live
+                // value is written when nothing authored one. A kinematic body
+                // simulates no mass, so its record states only a mass the node
+                // holds: that is the one value the file has to carry for it,
+                // and a shape-derived number would come back as an authored
+                // opinion on the next load.
                 if (!motion.is_kinematic && (mass > 0.0f)) {
                     motion.mass = mass;
+                } else if (motion.is_kinematic && physics_data.mass.has_value()) {
+                    motion.mass = physics_data.mass.value();
                 }
                 motion.center_of_mass = physics_data.center_of_mass_offset;
                 // Initial velocities are stored in world space; the spec wants

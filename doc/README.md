@@ -252,7 +252,6 @@ Every document states its standing in its first ten lines:
 - [gltf_extensions/ERHE_material.md](gltf_extensions/ERHE_material.md) (mostly stable): ERHE_material
 - [gltf_extensions/ERHE_node.md](gltf_extensions/ERHE_node.md) (mostly stable): ERHE_node
 - [gltf_extensions/ERHE_node_graphs.md](gltf_extensions/ERHE_node_graphs.md) (mostly stable): ERHE_node_graphs
-- [gltf_extensions/ERHE_physics.md](gltf_extensions/ERHE_physics.md) (mostly stable): ERHE_physics
 - [gltf_extensions/ERHE_scene.md](gltf_extensions/ERHE_scene.md) (mostly stable): ERHE_scene
 
 ### Plans (`plans/`)

@@ -53,7 +53,7 @@ it runs, and the list of what is and is not persisted, is
 | meshes (triangle soup) | core |
 | meshes (geometry-normative, geogram) | core TRIANGLES plus `ERHE_geometry` extension (polygon rings plus attribute dump) |
 | physics bodies, colliders, triggers, velocities, COM | KHR_physics_rigid_bodies plus KHR_implicit_shapes |
-| physics motion_mode detail (both kinematic modes), per-body friction / restitution, linear / angular damping | `ERHE_physics` node extension; KHR_physics_rigid_bodies has a single isKinematic bool and no per-body friction, restitution or damping |
+| physics motion_mode detail (which of the two kinematic modes a kinematic body is in) | `ERHE_node` `properties`; KHR_physics_rigid_bodies has a single isKinematic bool |
 | physics materials, collision filters, joint settings, including unreferenced library items | the same extension's top-level arrays |
 | node joints | KHR_physics_rigid_bodies joints |
 | prefab instances | glTF 2.1 externalAssets |
@@ -238,12 +238,6 @@ editor-controlled attachments.
   cast_shadow, Item flags, and an explicit `infinite_range` marker that
   resolves the asymmetry between an export that omits range 0 and an import
   that defaults a missing range to 1000.
-- `ERHE_physics` (node extension, alongside KHR_physics_rigid_bodies):
-  motion_mode (which distinguishes `e_kinematic_non_physical` from
-  `e_kinematic_physical`, where KHR has a single isKinematic bool), per-body
-  friction and restitution (KHR carries them on physics materials only, while
-  erhe rigid bodies carry them with no material assigned), linear_damping and
-  angular_damping (which have no KHR carrier at all).
 - `ERHE_material` (material extension): roughness_y, bxdf_model,
   blending_mode and the brushed-metal fields.
 - `ERHE_scene` (scene extension): per-scene settings, ambient_light and

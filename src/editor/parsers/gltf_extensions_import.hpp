@@ -1,14 +1,12 @@
 #pragma once
 
-#include "erhe_physics/irigid_body.hpp"
-
 #include <glm/glm.hpp>
 
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace erhe        { class Item_base; }
@@ -25,24 +23,6 @@ class Scene_root;
 // Import side of the editor-domain ERHE_* glTF extensions
 // (doc/editor/gltf_scene_roundtrip.md phase 3); the export side is
 // parsers/gltf_extensions_export.hpp.
-
-// Parsed ERHE_physics node payload: rigid-body state the
-// KHR_physics_rigid_bodies import cannot recover (both kinematic motion
-// modes, per-body friction / restitution, damping). Applied onto the
-// IRigid_body_create_info before Node_physics construction in
-// import_gltf_physics().
-class Gltf_physics_overrides
-{
-public:
-    std::optional<erhe::physics::Motion_mode>        motion_mode;
-    // The Node_physics local values (name -> text); has_properties marks a
-    // file that carries the map, the attachment's complete local set.
-    std::vector<std::pair<std::string, std::string>> properties;
-    bool                                             has_properties{false};
-};
-
-[[nodiscard]] auto parse_gltf_physics_overrides(const erhe::gltf::Gltf_data& gltf_data)
-    -> std::unordered_map<const erhe::scene::Node*, Gltf_physics_overrides>;
 
 // Parsed ERHE_scene payload. Parsing lives here so the extension shape has
 // one owner; APPLYING it is the phase-4 Open-Scene path (importing an

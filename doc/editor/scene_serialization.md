@@ -35,7 +35,7 @@ JSON, erhe state attaches at three levels:
 
 | Level | Extensions |
 |---|---|
-| per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry`, `ERHE_physics` |
+| per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry` |
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, the scene item's local property values and style, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
@@ -128,8 +128,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
 6. **Editor state** - `add_gltf_editor_state()`
    (`parsers/gltf_extensions_export.cpp`) appends the editor-domain
    extension payloads and `extensionsUsed` entries:
-   - per node: `ERHE_physics` (erhe rigid-body state the Khronos extension
-     cannot express), node bindings for graph meshes;
+   - per node: node bindings for graph meshes;
    - scene level: `ERHE_scene` - ambient light, the scene item's own
      `properties` map and `style`, `enable_physics`, and the
      per-scene `Scene_settings` overrides, serialized through

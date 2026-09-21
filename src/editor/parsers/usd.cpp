@@ -2269,11 +2269,19 @@ constexpr std::string_view c_collision_filter_description_fields[] = {
     std::string_view{"collide_with_systems"},
     std::string_view{"not_collide_with_systems"}
 };
-constexpr std::string_view c_node_physics_description_fields[] = {
-    std::string_view{"motion_mode"},
+// The Node_physics values the USD physics writer authors itself, which are
+// then not custom attributes of the body's record. The trigger flag and the
+// gravity factor are its own `erhe:` attributes, written from the neutral
+// description; the four motion values below are the `PhysicsMassAPI` and
+// `PhysicsRigidBodyAPI` attributes of a body that HAS a motion record, and
+// the mode is `physics:kinematicEnabled` plus the presence of the rigid-body
+// schema (`native_usd_property_name`, `erhe_usd/usd_export.cpp`).
+constexpr std::string_view c_node_physics_writer_fields[] = {
     std::string_view{"is_trigger"},
+    std::string_view{"gravity_factor"}
+};
+constexpr std::string_view c_node_physics_motion_fields[] = {
     std::string_view{"mass"},
-    std::string_view{"gravity_factor"},
     std::string_view{"initial_linear_velocity"},
     std::string_view{"initial_angular_velocity"},
     std::string_view{"center_of_mass_offset"}
@@ -2679,13 +2687,35 @@ void collect_usd_physics(
         physics.joint_settings.push_back(std::move(record));
     }
     physics.bodies.reserve(description.node_physics.size());
+    std::vector<std::string_view> body_writer_fields;
     for (const erhe::scene::Physics_node_description& body : description.node_physics) {
         erhe::usd::Usd_save_physics_record record{};
         record.item = body.node;
         if (body.node) {
             // The rigid-body values are the node's own (P8), so the erhe-only
-            // fields are collected from the node itself.
-            collect_usd_physics_properties(*body.node.get(), c_node_physics_description_fields, record.properties);
+            // fields are collected from the node itself. Which of them the
+            // writer states natively depends on the body: a body with no
+            // motion record - a static body - gets no mass or velocity
+            // attribute, and the rigid-body schema tells a kinematic body
+            // from a dynamic one but not one kinematic mode from the other,
+            // so those local values are the record's to carry.
+            body_writer_fields.clear();
+            for (const std::string_view field : c_node_physics_writer_fields) {
+                body_writer_fields.push_back(field);
+            }
+            if (body.motion.has_value()) {
+                for (const std::string_view field : c_node_physics_motion_fields) {
+                    body_writer_fields.push_back(field);
+                }
+            }
+            const std::optional<Node_physics_data> data = read_node_physics(*body.node.get());
+            const bool mode_is_native =
+                !data.has_value() ||
+                (data.value().motion_mode != erhe::physics::Motion_mode::e_kinematic_non_physical);
+            if (mode_is_native) {
+                body_writer_fields.push_back(std::string_view{"motion_mode"});
+            }
+            collect_usd_physics_properties(*body.node.get(), body_writer_fields, record.properties);
         }
         physics.bodies.push_back(std::move(record));
     }

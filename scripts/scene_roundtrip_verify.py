@@ -12,7 +12,7 @@ verification of doc/editor/gltf_scene_roundtrip.md:
    animation keys, and an external-asset prefab instance.
 2. Saves the scene and validates every ERHE_* extension payload in the
    .glb against its JSON schema (doc/gltf_extensions/schema/), asserting
-   full extension coverage (all 10 ERHE_* extensions present) and clean
+   full extension coverage (all 9 ERHE_* extensions present) and clean
    extensionsUsed / extensionsRequired conventions. Then asserts the R5
    data-loss tripwire (asset-manager plan step R5.1): every
    library-DEFINED material / brush / animation appears in the file with
@@ -72,7 +72,6 @@ ALL_ERHE_EXTENSIONS = [
     "ERHE_material",
     "ERHE_node",
     "ERHE_node_graphs",
-    "ERHE_physics",
     "ERHE_scene",
 ]
 

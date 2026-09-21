@@ -22,10 +22,6 @@ class Scene_root;
 // - excluded_meshes: graph-mesh-controlled meshes (baked artifacts the
 //   graphs rebuild on load; ERHE_node_graphs re-binds them). The matching
 //   Node_physics exclusion lives in build_physics_description().
-// - ERHE_physics node payloads: motion_mode (both kinematic modes),
-//   per-body friction / restitution, linear / angular damping -
-//   KHR_physics_rigid_bodies has no carrier for these.
-//   with their Item flags.
 // - ERHE_scene scene payload: per-scene settings (#239), ambient light
 //   (#237), enable_physics.
 // - extra_meshes: brush geometry as unreferenced glTF meshes, plus an
