@@ -200,6 +200,69 @@ erhe's own source is MIT-licensed -- see [src/erhe/LICENSE](src/erhe/LICENSE). B
 
 ## Acknowledgements
 
-erhe stands on many excellent open-source projects, including [Dear ImGui](https://github.com/ocornut/imgui), [Jolt Physics](https://github.com/jrouwe/JoltPhysics), [Geogram](https://github.com/BrunoLevy/geogram), [fastgltf](https://github.com/spnda/fastgltf), [simdjson](https://github.com/simdjson/simdjson), [SDL](https://github.com/libsdl-org/SDL), [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK), [FreeType](https://www.freetype.org/), [HarfBuzz](https://github.com/harfbuzz/harfbuzz), [Tracy](https://github.com/wolfpld/tracy), [GLM](https://github.com/g-truc/glm), [fmt](https://github.com/fmtlib/fmt), and [spdlog](https://github.com/gabime/spdlog). Dependencies are fetched at configure time via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
+erhe stands on many excellent open-source projects. Most are fetched at configure time via CPM.cmake; some are in-tree copies under `src/`. Several are pulled from erhe-specific forks of the listed upstream. Entries marked optional are used only when the matching CMake option selects them (see [doc/building.md](doc/building.md)). Each dependency retains its own license; the table names it in short form and the dependency's own license file is authoritative.
+
+| Library | Used for | License |
+| :--- | :--- | :--- |
+| [Dear ImGui](https://github.com/ocornut/imgui) | Editor user interface (docking branch fork, in-tree copy) | MIT |
+| [imgui_gradient](https://github.com/CoolLibs/imgui_gradient) | Gradient editor widget (in-tree copy) | BSL-1.0 |
+| [ImViewGuizmo](https://github.com/Ka1serM/ImViewGuizmo) | Viewport orientation gizmo (in-tree, modified) | MIT |
+| [SDL](https://github.com/libsdl-org/SDL) | Windowing and input (default window library) | Zlib |
+| [GLFW](https://github.com/glfw/glfw) | Windowing and input (optional, deprecated) | Zlib |
+| [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | Vulkan backend | Apache-2.0 OR MIT |
+| [volk](https://github.com/zeux/volk) | Vulkan function loader | MIT |
+| [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | Vulkan memory allocation | MIT |
+| [glslang](https://github.com/KhronosGroup/glslang) | GLSL to SPIR-V compilation | BSD-3-Clause and others |
+| [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross) | SPIR-V to MSL for the Metal backend | Apache-2.0 OR MIT |
+| [metal-cpp](https://github.com/bkaradzic/metal-cpp) | Metal backend C++ bindings | Apache-2.0 |
+| [OpenGL-Registry](https://github.com/KhronosGroup/OpenGL-Registry) | `gl.xml` and Khronos headers for the generated OpenGL wrappers | Apache-2.0 / MIT |
+| [OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK-Source) | VR / XR headset support (optional) | Apache-2.0 |
+| [Geogram](https://github.com/BrunoLevy/geogram) | Polygon mesh backend, CSG, remeshing | BSD-3-Clause |
+| [quickhull](https://github.com/akuukka/quickhull) | Convex hulls (in-tree copy) | Public domain |
+| [MikkTSpace](http://www.mikktspace.com/) | Tangent space generation (in-tree copy) | Zlib |
+| [meshoptimizer](https://github.com/zeux/meshoptimizer) | Mesh optimization and vertex encodings | MIT |
+| [OpenVDB](https://github.com/AcademySoftwareFoundation/openvdb) | Sparse voxel signed distance fields (optional) | Apache-2.0 |
+| [oneTBB](https://github.com/uxlfoundation/oneTBB) | Required by OpenVDB (optional) | Apache-2.0 |
+| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Physics (default physics backend) | MIT |
+| [Box3D](https://github.com/erincatto/box3d) | Physics (optional backend) | MIT |
+| [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Navigation meshes (optional) | Zlib |
+| [bvh](https://github.com/madmann91/bvh) | CPU ray tracing (default raytrace backend) | MIT |
+| [tinybvh](https://github.com/jbikker/tinybvh) | CPU ray tracing (optional backend) | MIT |
+| [Embree](https://github.com/RenderKit/embree) | CPU ray tracing (optional backend) | Apache-2.0 |
+| [fastgltf](https://github.com/spnda/fastgltf) | glTF parsing and writing | MIT |
+| [LightUSD](https://github.com/lighttransport/LightUSD) | USD reading and writing (optional) | Apache-2.0 |
+| [simdjson](https://github.com/simdjson/simdjson) | JSON parsing (codegen structs, configuration) | Apache-2.0 OR MIT |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON (MCP server, serialization) | MIT |
+| [RapidJSON](https://github.com/Tencent/rapidjson) | JSON (in-tree copy) | MIT |
+| [cpp-httplib](https://github.com/yhirose/cpp-httplib) | HTTP transport of the MCP server | MIT |
+| [Wuffs](https://github.com/google/wuffs) | PNG and JPEG decoding | Apache-2.0 OR MIT |
+| [fpng](https://github.com/richgel999/fpng) | PNG encoding | Public domain (Unlicense) |
+| [dds_image](https://github.com/spnda/dds_image) | DDS texture loading | MIT |
+| [Basis Universal](https://github.com/BinomialLLC/basis_universal) | KTX2 / Basis texture transcoding | Apache-2.0 |
+| [mango](https://github.com/t0rakka/mango) | Image codecs (in-tree fork) | Zlib |
+| [FreeType](https://www.freetype.org/) | Glyph rasterization | FTL OR GPL-2.0 |
+| [HarfBuzz](https://github.com/harfbuzz/harfbuzz) | Text shaping | MIT (Old MIT) |
+| [PlutoSVG](https://github.com/sammycage/plutosvg) | SVG icons and color emoji glyphs | MIT |
+| [RectangleBinPack](https://github.com/juj/RectangleBinPack) | Atlas packing (in-tree copy) | Public domain |
+| [GLM](https://github.com/g-truc/glm) | Vector and matrix math | MIT |
+| [fmt](https://github.com/fmtlib/fmt) | String formatting | MIT |
+| [spdlog](https://github.com/gabime/spdlog) | Logging | MIT |
+| [cpptrace](https://github.com/jeremy-rifkin/cpptrace) | Stack traces in error reports | MIT |
+| [Taskflow](https://github.com/taskflow/taskflow) | Task-parallel worker threads | MIT |
+| [concurrentqueue](https://github.com/cameron314/concurrentqueue) | Concurrent queue | BSD-2-Clause OR BSL-1.0 |
+| [ETL](https://github.com/ETLCPP/etl) | Fixed-capacity containers | MIT |
+| [robin-hood-hashing](https://github.com/martinus/robin-hood-hashing) | Hash map (in-tree copy) | MIT |
+| [xxHash](https://github.com/Cyan4973/xxHash) | Compile-time XXH32 string hashing (in-tree, derived) | BSD-2-Clause |
+| [TinyExpr](https://github.com/codeplea/tinyexpr) | Property expression evaluation (in-tree copy) | Zlib |
+| [cxxopts](https://github.com/jarro2783/cxxopts) | Command line parsing | MIT |
+| [cpp-terminal](https://github.com/jupyter-xeus/cpp-terminal) | Terminal input (optional) | MIT |
+| [miniaudio](https://github.com/mackron/miniaudio) | Audio (optional, in-tree copy) | Public domain OR MIT-0 |
+| [Tracy](https://github.com/wolfpld/tracy) | Profiler (optional) | BSD-3-Clause |
+| [NVTX](https://github.com/NVIDIA/NVTX) | Profiler annotations (optional) | Apache-2.0 WITH LLVM-exception |
+| [Superluminal Performance API](https://superluminal.eu/) | Profiler annotations (optional, in-tree copy) | BSD-2-Clause |
+| [mimalloc](https://github.com/microsoft/mimalloc) | Memory allocator (optional) | MIT |
+| [jemalloc](https://github.com/jemalloc/jemalloc) | Memory allocator (optional) | BSD-2-Clause |
+| [googletest](https://github.com/google/googletest) | Unit tests (optional) | BSD-3-Clause |
+| [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) | Fetches dependencies at configure time | MIT |
 
 Static analysis provided by [PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code, free for open-source projects.
