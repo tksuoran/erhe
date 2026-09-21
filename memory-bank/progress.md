@@ -8,7 +8,8 @@
 ✓P5{transform-observers;Frame_controller+Four_view_link;scene-167}
 ✓P6{141877437:Grid}
 ✓P7{40d199a07:Geometry_graph_mesh}
-⚡P8-Node_physics
+✓P8-main{beb405148:Node_physics+Node_physics_system}
+⚡P8b{ERHE_physics-deletion+3-debts}
 
 [TASK::agent-files-relocation]{DONE-2026-09-21;4-commits;detail=activeContext;?verify-after-restart{prompt_queue.txt-item-1}}
 
