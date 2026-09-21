@@ -1,5 +1,9 @@
 §MBEL:5.0
 
+[TASK::node-attachments-to-properties]{started-2026-09-21;via-harness}
+✓P1{3ccaea2e1:key-property-groups+node-systems;property-147,scene-154}
+⚡P2-Draw_mode
+
 [TASK::agent-files-relocation]{DONE-2026-09-21;4-commits;detail=activeContext;?verify-after-restart{prompt_queue.txt-item-1}}
 
 [TASK::deferred-brush-geometry]{DONE-2026-09-21;6-phases-6-commits;detail=activeContext;left=doc/plans/brushes.md;?user-interactive{spinners-windowed}}
