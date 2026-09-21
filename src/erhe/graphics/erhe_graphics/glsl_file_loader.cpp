@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iterator>
+#include <optional>
 #include <sstream>
 
 namespace erhe::graphics {
@@ -26,7 +28,11 @@ auto Glsl_file_loader::process_includes(std::size_t source_string_index, const s
 
     const char* head = source.c_str();
 
-    std::stringstream sb;
+    // Text between includes is appended as whole spans: [span_start, head)
+    // is source text that is not in the result yet.
+    std::string sb;
+    sb.reserve(source.size());
+    const char* span_start = head;
 
     bool line_start_white_space_only = true;
     int line{1};
@@ -39,7 +45,6 @@ auto Glsl_file_loader::process_includes(std::size_t source_string_index, const s
         if (c == '\r' || c == '\n') {
             line += (c == '\n') ? 1 : 0;
             line_start_white_space_only = true;
-            sb << c;
             ++head;
             continue;
         }
@@ -81,28 +86,32 @@ auto Glsl_file_loader::process_includes(std::size_t source_string_index, const s
                             const std::filesystem::path path = directory / filename;
 
                             // Log include operation
-                            std::stringstream lss;
-                            for (std::size_t i = 1, end = m_include_stack.size(); i < end; ++i) {
-                                lss << "    ";
+                            if (log_glsl->should_log(spdlog::level::trace)) {
+                                std::stringstream lss;
+                                for (std::size_t i = 1, end = m_include_stack.size(); i < end; ++i) {
+                                    lss << "    ";
+                                }
+                                lss << fmt::format("{} includes {}", m_include_stack.back().string(), path.string());
+                                log_glsl->trace(lss.str());
                             }
-                            lss << fmt::format("{} includes {}", m_include_stack.back().string(), path.string());
-                            log_glsl->trace(lss.str());
+
+                            sb.append(span_start, include_start);
 
                             // Place the include directive in comments
-                            sb << "//";
+                            sb += "//";
                             for (const char* q = include_start; (*q != '\0') && (*q != '\n'); ++q) {
                                 if (*q != '\r') {
-                                    sb << *q;
+                                    sb += *q;
                                 }
                             }
-                            sb << "\n";
+                            sb += '\n';
 
                             const std::string included_source = read_shader_source_file(path, m_extra_include_paths);
-                            sb << included_source;
+                            sb += included_source;
                             if (included_source.empty() || included_source.back() != '\n') {
-                                sb << '\n';
+                                sb += '\n';
                             }
-                            sb << "#line " << line << ' ' << source_string_index << '\n';
+                            fmt::format_to(std::back_inserter(sb), "#line {} {}\n", line, source_string_index);
 
                             // Drop rest of the line
                             while ((*p != '\0') && (*p != '\n')) {
@@ -116,6 +125,7 @@ auto Glsl_file_loader::process_includes(std::size_t source_string_index, const s
                             ++line;
                             line_start_white_space_only = true;
                             head = p;
+                            span_start = head;
                             continue;
                         }
                     }
@@ -127,10 +137,10 @@ auto Glsl_file_loader::process_includes(std::size_t source_string_index, const s
             line_start_white_space_only = false;
         }
 
-        sb << c;
         ++head;
     }
-    return sb.str();
+    sb.append(span_start, head);
+    return sb;
 }
 
 auto Glsl_file_loader::read_shader_source_file(
@@ -154,21 +164,25 @@ auto Glsl_file_loader::read_shader_source_file(
     // directly: on Android the helper probes via SDL_IOFromFile so APK
     // assets are visible (std::filesystem cannot see them).
     std::filesystem::path resolved_path = path;
-    if (!erhe::file::check_is_existing_non_empty_regular_file(
-            "Glsl_file_loader::read_shader_source_file", resolved_path,
-            /*silent_if_not_exists=*/true)) {
-        for (const std::filesystem::path& extra : m_extra_include_paths) {
-            const std::filesystem::path candidate = extra / path.filename();
-            if (erhe::file::check_is_existing_non_empty_regular_file(
-                    "Glsl_file_loader::read_shader_source_file", candidate,
-                    /*silent_if_not_exists=*/true)) {
-                resolved_path = candidate;
-                break;
+    std::optional<std::string> source;
+    {
+        ERHE_PROFILE_SCOPE("Glsl_file_loader: find and read file");
+        if (!erhe::file::check_is_existing_non_empty_regular_file(
+                "Glsl_file_loader::read_shader_source_file", resolved_path,
+                /*silent_if_not_exists=*/true)) {
+            for (const std::filesystem::path& extra : m_extra_include_paths) {
+                const std::filesystem::path candidate = extra / path.filename();
+                if (erhe::file::check_is_existing_non_empty_regular_file(
+                        "Glsl_file_loader::read_shader_source_file", candidate,
+                        /*silent_if_not_exists=*/true)) {
+                    resolved_path = candidate;
+                    break;
+                }
             }
         }
-    }
 
-    auto source = erhe::file::read("Shader_stages_create_info::final_source", resolved_path);
+        source = erhe::file::read("Shader_stages_create_info::final_source", resolved_path);
+    }
     if (!source.has_value()) {
         // Loud failure: previously this returned a "// Source load
         // failed from: ..." comment string, which downstream code
@@ -203,13 +217,12 @@ auto Glsl_file_loader::read_shader_source_file(
     std::size_t source_string_index = 1 + m_source_string_index_to_path.size();
     m_source_string_index_to_path.push_back(resolved_path);
     std::string processed_source = process_includes(source_string_index, source.value());
-    std::stringstream ss;
-    ss << "#line 1 " << source_string_index << " // " << resolved_path.string() << '\n';
-    ss << processed_source;
+    std::string result = fmt::format("#line 1 {} // {}\n", source_string_index, resolved_path.string());
+    result += processed_source;
 
     m_include_stack.pop_back();
 
-    return ss.str();
+    return result;
 }
 
 auto Glsl_file_loader::get_file_paths() const -> const std::vector<std::filesystem::path>&
