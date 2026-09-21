@@ -35,6 +35,7 @@ auto Shader_variant_cache::get(
     const erhe::dataformat::Vertex_format* vertex_format
 ) -> erhe::graphics::Reloadable_shader_stages*
 {
+    ERHE_PROFILE_SCOPE("Shader_variant_cache::get");
     const auto it = m_entries.find(shader_key);
     if (it != m_entries.end()) {
         erhe::graphics::Reloadable_shader_stages* entry = it->second.get();
@@ -61,13 +62,30 @@ auto Shader_variant_cache::get(
     };
 
     erhe::graphics::Shader_stages_prototype prototype = m_program_interface.make_prototype(std::move(create_info));
-    prototype.compile_shaders();
-    const bool linked = prototype.link_program();
+    {
+        ERHE_PROFILE_SCOPE("compile_shaders");
+        prototype.compile_shaders();
+    }
+    bool linked = false;
+    {
+        ERHE_PROFILE_SCOPE("link_program");
+        linked = prototype.link_program();
+    }
     if (!linked) {
         return nullptr;
     }
 
-    auto entry = std::make_unique<erhe::graphics::Reloadable_shader_stages>(m_graphics_device, std::move(prototype));
+    // Taken before the prototype is consumed: the shader monitor watches
+    // these files, and would otherwise read every source again to find them.
+    // Each stage lists the includes it shares with the other stages.
+    std::vector<std::filesystem::path> dependency_paths = prototype.get_dependency_paths();
+    std::sort(dependency_paths.begin(), dependency_paths.end());
+    dependency_paths.erase(std::unique(dependency_paths.begin(), dependency_paths.end()), dependency_paths.end());
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> entry;
+    {
+        ERHE_PROFILE_SCOPE("make Reloadable_shader_stages");
+        entry = std::make_unique<erhe::graphics::Reloadable_shader_stages>(m_graphics_device, std::move(prototype));
+    }
     erhe::graphics::Reloadable_shader_stages* entry_ptr = entry.get();
     const bool valid = linked && entry_ptr->shader_stages.is_valid();
 
@@ -81,7 +99,10 @@ auto Shader_variant_cache::get(
     // only ever freed in the cache's destructor (clear() invalidates in
     // place), so the monitor's Shader_stages* stays valid for the
     // cache's whole lifetime.
-    m_graphics_device.get_shader_monitor().add(*entry_ptr);
+    {
+        ERHE_PROFILE_SCOPE("Shader_monitor::add");
+        m_graphics_device.get_shader_monitor().add(*entry_ptr, dependency_paths);
+    }
 
     m_entries[shader_key] = std::move(entry);
     return entry_ptr;

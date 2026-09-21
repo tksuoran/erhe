@@ -26,6 +26,10 @@ public:
     void set_enabled(bool enabled);
     void add(Shader_stages_create_info create_info, Shader_stages* program);
     void add(Reloadable_shader_stages& reloadable_shader_stages);
+    // For a caller that already knows the source files the stages were
+    // built from (Shader_stages_prototype::get_dependency_paths): watches
+    // those, without reading the sources again to find the includes.
+    void add(Reloadable_shader_stages& reloadable_shader_stages, const std::vector<std::filesystem::path>& dependency_paths);
 
     // Drop every reload entry that points at this shader_stages.
     // Use before destroying a Reloadable_shader_stages whose lifetime is

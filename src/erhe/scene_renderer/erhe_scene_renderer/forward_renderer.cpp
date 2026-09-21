@@ -478,7 +478,10 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                         ci.depth_usage_before        = target.depth_usage_before;
                         ci.depth_usage_after         = target.depth_usage_after;
                         ci.sample_count              = target.sample_count;
-                        m_graphics_device.warmup_render_pipeline(ci);
+                        {
+                            ERHE_PROFILE_SCOPE("warmup_render_pipeline");
+                            m_graphics_device.warmup_render_pipeline(ci);
+                        }
                         ++pipeline_warmup_count;
                     }
                 }
@@ -503,6 +506,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                         has_skin ? &parameters.mesh_memory.vertex_format_skinned_optimized : &parameters.mesh_memory.vertex_format_not_skinned_optimized
                     };
                     for (const erhe::dataformat::Vertex_format* const vertex_format : vertex_formats) {
+                        ERHE_PROFILE_SCOPE("extra material variant");
                         Shader_key derived = environment_key.derive(material.get(), vertex_format, has_skin);
                         derived.bool_mask |=  parameters.shader_key_force_enable_mask;
                         derived.bool_mask &= ~parameters.shader_key_force_disable_mask;

@@ -100,6 +100,19 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
     add(reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
 }
 
+void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages, const std::vector<std::filesystem::path>& dependency_paths)
+{
+#if defined(ERHE_OS_ANDROID)
+    // Disabled on Android - see Shader_monitor::begin().
+    static_cast<void>(reloadable_shader_stages);
+    static_cast<void>(dependency_paths);
+#else
+    for (const std::filesystem::path& path : dependency_paths) {
+        add(path, reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
+    }
+#endif
+}
+
 void Shader_monitor::remove(Reloadable_shader_stages& reloadable_shader_stages)
 {
     remove(&reloadable_shader_stages.shader_stages);

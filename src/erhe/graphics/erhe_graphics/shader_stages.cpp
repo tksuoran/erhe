@@ -185,6 +185,11 @@ auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::
     return m_impl->get_final_source(shader, gl_name);
 }
 
+auto Shader_stages_prototype::get_dependency_paths() const -> const std::vector<std::filesystem::path>&
+{
+    return m_impl->get_dependency_paths();
+}
+
 auto Shader_stages_prototype::get_impl() -> Shader_stages_prototype_impl&
 {
     return *m_impl.get();

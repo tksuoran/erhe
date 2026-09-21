@@ -107,6 +107,9 @@ public:
     [[nodiscard]] auto create_info     () const -> const Shader_stages_create_info&;
     [[nodiscard]] auto is_valid        () const -> bool;
     [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string;
+    // Every source file the stages were built from: the stage files and
+    // what they include, as found while the final sources were assembled.
+    [[nodiscard]] auto get_dependency_paths() const -> const std::vector<std::filesystem::path>&;
     [[nodiscard]] auto get_impl        () -> Shader_stages_prototype_impl&;
     [[nodiscard]] auto get_impl        () const -> const Shader_stages_prototype_impl&;
 
