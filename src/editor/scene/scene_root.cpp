@@ -31,7 +31,8 @@
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
+#include "scene/joint_system.hpp"
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
@@ -194,6 +195,9 @@ Scene_root::Scene_root(
     m_scene->add_node_system(*m_geometry_graph_mesh_system.get());
     m_node_physics_system = std::make_unique<Node_physics_system>(*this);
     m_scene->add_node_system(*m_node_physics_system.get());
+    // Not a node system: a joint prim is no node, so it is reported through
+    // the prim registration hook rather than the node hooks (D3).
+    m_joint_system = std::make_unique<Joint_system>(*this);
 
     // The scene owns its content library: its resources are prims of this
     // scene's tree, under the kind scopes the library keeps below the root
@@ -404,7 +408,10 @@ Scene_root::~Scene_root() noexcept
     }
     m_draw_mode_system.reset();
     m_geometry_graph_mesh_system.reset();
+    // The physics system tears its bodies down through the joint system, so
+    // the joint system outlives it.
     m_node_physics_system.reset();
+    m_joint_system.reset();
 
     // Library items (and possibly the library itself, via browser windows or
     // clipboard/selection references) can outlive this host; detach them now
@@ -656,32 +663,9 @@ auto Scene_root::make_browser_window(
             }
             // "Add Attachment": the catalog's applied-API-schema entries (issue
             // #249), each entry disabled when the node cannot take that kind.
-            // Joint keeps its richer connect-to-selection behaviour instead of
-            // the catalog make.
-            if (ImGui::BeginMenu("Add Attachment")) {
+            if (!get_attachment_types().empty() && ImGui::BeginMenu("Add Attachment")) {
                 for (const Attachment_type_info& type_info : get_attachment_types()) {
                     const bool can_add = type_info.can_add(*node);
-                    if (type_info.key == "joint") {
-                        if (ImGui::MenuItem("Joint", nullptr, false, can_add)) {
-                            deferred_operations.push_back(
-                                [&context, node]() {
-                                    // Connect to the first selected node other than
-                                    // the menu node, when there is one in this scene.
-                                    std::shared_ptr<erhe::scene::Node> connected{};
-                                    for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
-                                        const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
-                                        if (other && (other != node) && (other->get_item_host() == node->get_item_host())) {
-                                            connected = other;
-                                            break;
-                                        }
-                                    }
-                                    context.scene_commands->create_new_joint(node.get(), connected);
-                                }
-                            );
-                            close = true;
-                        }
-                        continue;
-                    }
                     if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
                         deferred_operations.push_back(
                             [&context, node, make = type_info.make]() {
@@ -1730,43 +1714,19 @@ void Scene_root::add_card_texture(const std::string& path, const std::shared_ptr
     m_card_textures[path] = texture;
 }
 
-void Scene_root::register_node_joint(const std::shared_ptr<Node_joint>& node_joint)
+auto Scene_root::get_joint_system() -> Joint_system&
 {
-    if (!m_physics_world) {
-        return;
-    }
+    return *m_joint_system.get();
+}
 
-#ifndef NDEBUG
-    const auto i = std::find(m_node_joints.begin(), m_node_joints.end(), node_joint);
-    if (i != m_node_joints.end()) {
-        auto* node = node_joint->get_node();
-        log_physics->error("Node_joint for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
-    } else
-#endif
-    {
-        m_node_joints.push_back(node_joint);
-    }
-
-    node_joint->set_physics_world(m_physics_world.get());
-    // The needed rigid bodies may not be registered yet (scene load / paste
-    // order); when this returns false the joint stays pending and is retried
-    // from register_node_physics().
-    static_cast<void>(node_joint->try_create_constraint());
+auto Scene_root::get_joint_system() const -> const Joint_system&
+{
+    return *m_joint_system.get();
 }
 
 auto Scene_root::is_jointed_rigid_body(const erhe::physics::IRigid_body* const rigid_body) const -> bool
 {
-    for (const std::shared_ptr<Node_joint>& node_joint : m_node_joints) {
-        if (node_joint->constrains_rigid_body(rigid_body)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Scene_root::get_node_joints() const -> const std::vector<std::shared_ptr<Node_joint>>&
-{
-    return m_node_joints;
+    return m_joint_system && m_joint_system->is_jointed_rigid_body(rigid_body);
 }
 
 void Scene_root::register_physics_drag(Physics_drag_constraint* const drag)
@@ -1779,23 +1739,6 @@ void Scene_root::register_physics_drag(Physics_drag_constraint* const drag)
 void Scene_root::unregister_physics_drag(Physics_drag_constraint* const drag)
 {
     m_physics_drags.erase(std::remove(m_physics_drags.begin(), m_physics_drags.end(), drag), m_physics_drags.end());
-}
-
-void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_joint)
-{
-    if (!m_physics_world) {
-        return;
-    }
-
-    const auto i = std::remove(m_node_joints.begin(), m_node_joints.end(), node_joint);
-    if (i == m_node_joints.end()) {
-        auto* node = node_joint->get_node();
-        log_physics->error("Node_joint for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
-    } else {
-        m_node_joints.erase(i, m_node_joints.end());
-    }
-
-    node_joint->set_physics_world(nullptr);
 }
 
 void Scene_root::set_physics_simulation_running(const bool running)
@@ -2421,12 +2364,20 @@ void Scene_root::register_prim(const std::shared_ptr<erhe::Typed>& prim)
     if (m_content_library) {
         m_content_library->register_prim(prim);
     }
+    const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(prim);
+    if (joint && m_joint_system) {
+        m_joint_system->register_joint(joint);
+    }
 }
 
 void Scene_root::unregister_prim(const std::shared_ptr<erhe::Typed>& prim)
 {
     if (m_content_library) {
         m_content_library->unregister_prim(prim);
+    }
+    const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(prim);
+    if (joint && m_joint_system) {
+        m_joint_system->unregister_joint(joint);
     }
 }
 

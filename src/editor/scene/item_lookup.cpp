@@ -100,7 +100,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
             }
         }
     }
-    // Physics joint settings: the targets of a Node_joint's joint_settings
+    // Physics joint settings: the targets of a Joint's joint_settings
     // property (section 4.17).
     if (library) {
         for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->get_all<erhe::physics::Physics_joint_settings>()) {

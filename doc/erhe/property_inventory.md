@@ -224,13 +224,14 @@ All of them are `native_gltf` and inherit, and all of them refresh the two
 |---|---|---|
 | first_time, last_time, sampler_count, channel_count | computed | read-only over the samplers and channels; notify_keyframes_changed pushes to expressions |
 
-### Node_joint (`src/editor/scene/node_joint.cpp`, section 4.17)
+### Joint (`src/editor/scene/joint.cpp`, section 4.17)
 
 | Property | Storage | Notes |
 |---|---|---|
-| connected_node | bridge | node-typed object reference over the weak member (no node-to-node cycle); local only; refuses the joint's own node |
+| body_0 | entry | weak object reference (D28) to the first frame node; per instance, does not inherit |
+| body_1 | entry | weak object reference (D28) to the second frame node; null anchors the joint to the world; does not inherit |
 | joint_settings | entry | object reference to a Physics_joint_settings; inherits (D30) |
-| enable_collision | entry | inherits; the mirror follows and the constraint rebuilds |
+| enable_collision | entry | inherits; a change rebuilds the constraint |
 
 ### Ik, attached (`src/editor/scene/ik_properties.cpp`, section 4.19)
 

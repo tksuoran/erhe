@@ -80,7 +80,7 @@ class Item_tree_window;
 class Draw_mode_system;
 class Geometry_graph_mesh_system;
 class Node_physics_system;
-class Node_joint;
+class Joint_system;
 class Physics_drag_constraint;
 class Node_physics;
 class Raytrace_primitive;
@@ -352,21 +352,16 @@ public:
     void add_card_texture(const std::string& path, const std::shared_ptr<erhe::graphics::Texture>& texture);
 
 
-    // Node_joint bookkeeping. All attached joints stay registered; a joint
-    // without a live constraint is pending. register_node_physics() retries
-    // pending joints after adding the new rigid body to the world, and
-    // unregister_node_physics() tears down constraints referencing the
-    // departing body (returning those joints to the pending state).
-    void register_node_joint    (const std::shared_ptr<Node_joint>& node_joint);
-    void unregister_node_joint  (const std::shared_ptr<Node_joint>& node_joint);
-    // True when a live Node_joint constraint of this scene references
-    // rigid_body. Asked at events (selection, drag start), never per frame:
-    // a selected jointed dynamic body stays dynamic, and a Transform tool drag
-    // pulls it through physics instead of writing its node transform.
+    // The constraints of this scene's `Joint` prims
+    // (doc/plans/node_attachments_to_properties.md D3). register_prim() and
+    // unregister_prim() report every joint entering and leaving the tree.
+    [[nodiscard]] auto get_joint_system() -> Joint_system&;
+    [[nodiscard]] auto get_joint_system() const -> const Joint_system&;
+    // True when a live joint constraint of this scene references rigid_body.
+    // Asked at events (selection, drag start), never per frame: a selected
+    // jointed dynamic body stays dynamic, and a Transform tool drag pulls it
+    // through physics instead of writing its node transform.
     [[nodiscard]] auto is_jointed_rigid_body(const erhe::physics::IRigid_body* rigid_body) const -> bool;
-    // Every registered Node_joint, live or pending (read at drag start to
-    // build the joint-space projection of a physics drag).
-    [[nodiscard]] auto get_node_joints() const -> const std::vector<std::shared_ptr<Node_joint>>&;
     // Attached interactive physics drags: update_physics_simulation_fixed_step()
     // calls Physics_drag_constraint::on_fixed_step() on each before stepping
     // the world. attach() registers, detach() unregisters.
@@ -584,8 +579,8 @@ private:
     std::unique_ptr<Draw_mode_system>               m_draw_mode_system;
     std::unique_ptr<Geometry_graph_mesh_system>     m_geometry_graph_mesh_system;
     std::unique_ptr<Node_physics_system>            m_node_physics_system;
+    std::unique_ptr<Joint_system>                   m_joint_system;
     std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
-    std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<Physics_drag_constraint*>           m_physics_drags;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 

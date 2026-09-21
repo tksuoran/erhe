@@ -27,7 +27,7 @@
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
@@ -1001,66 +1001,67 @@ auto Scene_commands::create_new_graph_mesh(erhe::Hierarchy* parent) -> std::shar
 }
 
 auto Scene_commands::create_new_joint(
-    erhe::scene::Node*                                            node,
-    const std::shared_ptr<erhe::scene::Node>&                     connected_node,
+    erhe::Hierarchy*                                              parent,
+    const std::shared_ptr<erhe::scene::Node>&                     body_0,
+    const std::shared_ptr<erhe::scene::Node>&                     body_1,
     const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings,
     const bool                                                    enable_collision
-) -> std::shared_ptr<Node_joint>
+) -> std::shared_ptr<Joint>
 {
-    std::shared_ptr<erhe::scene::Node> target;
-    std::shared_ptr<erhe::scene::Node> connected = connected_node;
-    if (node != nullptr) {
-        target = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-    } else {
-        // doc/editor/active_item.md D6: the target is the active node.
-        target = m_context.selection->get_active_item_as<erhe::scene::Node>();
-        if (target && !connected) {
-            // Convenience for the bare command: connect to another selected
-            // node in the same scene, when there is one.
-            for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
-                const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (other && (other != target) && (other->get_item_host() == target->get_item_host())) {
-                    connected = other;
-                    break;
-                }
+    erhe::Hierarchy* place = parent;
+    if (place == nullptr) {
+        // doc/editor/active_item.md D6: the joint goes below the active item.
+        const std::shared_ptr<erhe::Item_base> active = m_context.selection->get_active_item();
+        place = dynamic_cast<erhe::Hierarchy*>(active.get());
+    }
+    Scene_root* scene_root = get_scene_root(place);
+    if (scene_root == nullptr) {
+        return {};
+    }
+
+    // The first frame node: the one given, else the nearest node the joint is
+    // placed below - a joint created on a body joins that body.
+    std::shared_ptr<erhe::scene::Node> frame_0 = body_0;
+    if (!frame_0) {
+        erhe::Hierarchy* walk = place;
+        while ((walk != nullptr) && !frame_0) {
+            frame_0 = std::dynamic_pointer_cast<erhe::scene::Node>(walk->shared_from_this());
+            walk = walk->get_parent().lock().get();
+        }
+    }
+    std::shared_ptr<erhe::scene::Node> frame_1 = body_1;
+    if (frame_0 && !frame_1) {
+        // Convenience for the bare command: join another selected node in the
+        // same scene, when there is one.
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (other && (other != frame_0) && (other->get_item_host() == frame_0->get_item_host())) {
+                frame_1 = other;
+                break;
             }
         }
     }
 
-    auto node_joint = std::make_shared<Node_joint>(connected, settings, enable_collision);
-    node_joint->set_name("new joint");
-    node_joint->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-
-    if (target) {
-        m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(node_joint, target));
-        return node_joint;
-    }
-
-    // Nothing to attach to: create a new empty node carrying the joint.
-    Scene_root* scene_root = get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
-    if (scene_root == nullptr) {
-        return {};
-    }
-    auto new_node = std::make_shared<erhe::scene::Xform>("new joint node");
-    new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    // The same name the importers give a joint the file names none: a glTF
+    // joint is a nameless entry of its node's extension, so a joint created
+    // here and the one a reload makes from it have to agree.
+    const std::string joint_name = frame_0
+        ? fmt::format("{} joint", frame_0->get_name())
+        : std::string{"new joint"};
+    auto new_joint = std::make_shared<Joint>(joint_name, frame_0, frame_1, settings, enable_collision);
+    new_joint->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(
-            Compound_operation::Parameters{
-                .operations = {
-                    std::make_shared<Item_insert_remove_operation>(
-                        Item_insert_remove_operation::Parameters{
-                            .context = m_context,
-                            .item    = new_node,
-                            .parent  = scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Item_insert_remove_operation::Mode::insert
-                        }
-                    ),
-                    std::make_shared<Node_attach_operation>(node_joint, new_node)
-                }
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context         = m_context,
+                .item            = new_joint,
+                .parent          = get_insert_parent(*scene_root, place),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
             }
         )
     );
-    return node_joint;
+    return new_joint;
 }
 
 void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment)

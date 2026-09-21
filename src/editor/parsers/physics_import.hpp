@@ -77,7 +77,7 @@ public:
 // Physics_material / Collision_filter / Physics_joint_settings content-library
 // items (placed in the loaded tree, or attached through library attach
 // operations appended to operations), Node_physics attachments (rigid bodies /
-// triggers, with compound folding of descendant colliders) and Node_joint
+// triggers, with compound folding of descendant colliders) and Joint prims
 // attachments. Must be called after mesh finalization (mesh-sourced collision
 // shapes need the built Geometry) and before the Compound_operation is
 // composed.

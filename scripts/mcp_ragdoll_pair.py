@@ -57,7 +57,7 @@ def main() -> int:
     print(f"Waiting for MCP server on port {args.port} ...")
     wait_for_server(client, args.wait)
 
-    required_tools = {"create_shape", "create_node", "create_physics_joint", "create_physics_joint_settings", "transform_selection"}
+    required_tools = {"create_shape", "create_node", "create_joint", "create_physics_joint_settings", "transform_selection"}
     missing = required_tools - client.tool_names()
     if missing:
         print(f"FAIL: missing MCP tools: {sorted(missing)}")
@@ -100,7 +100,7 @@ def main() -> int:
     check_true("no part intersection", worst_gap > 0.0, f"surface gap {worst_gap * 1000.0:.1f} mm ({worst_pair})")
 
     details = client.call("get_node_details", {"scene_name": scene_name, "node_name": f"{prefix}_joint_body_b"})
-    joints = [a for a in details.get("attachments", []) if a.get("type") == "Node_joint"]
+    joints = details.get("joints", [])
     check_true("constraint created", bool(joints) and joints[0].get("constraint") == "created",
                str(joints[0].get("constraint")) if joints else "no joint attachment")
 

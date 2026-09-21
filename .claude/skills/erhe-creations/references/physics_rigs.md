@@ -10,7 +10,7 @@ references/settling_rock_piles.md.
 
 - Shapes with `motion_mode="dynamic"`; per joint create TWO coincident
   anchor child nodes (`common.anchor`, world positions), `settle()`,
-  then `create_physics_joint node=anchorA connected=anchorB
+  then `create_joint node=anchorA connected=anchorB
   settings_name=<library settings>`. Limits: lock linear = all axes
   0..0; hinge = lock 2 angular + range on one; ball = range on all 3;
   weld = everything locked; pendulum-to-world = no connected node.
@@ -71,7 +71,7 @@ Momentum passed ball to ball needs each collision solved on its own.
   "Hinge" anchor under the ball to a "Pivot" node under the frame
   (`c.joint(hinge, connected_node_id=pivot)`).
 - **A world-anchored joint needs a connected node that stays put.**
-  `Node_joint` re-captures both frames whenever its constraint is
+  A joint re-captures both frames whenever its constraint is
   rebuilt (a viewport drag of the body rebuilds it), and without a
   connected node the world-side frame is the joint node's own world
   pose. With the anchor under the dragged body, the pivot travels with

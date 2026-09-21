@@ -126,7 +126,7 @@ as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. A node placed by a brush carries a `brush_placement` section (`brush_name`, `brush_id`, `facet`, `corner`), null on every other node. A node carrying a rigid body carries a `physics` section (`motion_mode`, `is_trigger`, `gravity_factor`, `physics_material`, `collision_filter`, `collision_mesh`, `collision_shape`, and the live body's `mass`, `is_active` and damping), null on every other node. `attachments` lists the applied-API-schema attachments alone (`Node_joint`, `Prefab_instance`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/erhe/usd_compatibility_design.md X2).
+Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. A node placed by a brush carries a `brush_placement` section (`brush_name`, `brush_id`, `facet`, `corner`), null on every other node. A node carrying a rigid body carries a `physics` section (`motion_mode`, `is_trigger`, `gravity_factor`, `physics_material`, `collision_filter`, `collision_mesh`, `collision_shape`, and the live body's `mass`, `is_active` and damping), null on every other node. `attachments` lists the applied-API-schema attachments alone (`Prefab_instance`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. `joints` lists the `Joint` child prims that name this prim as their first frame node (`name`, `id`, `connected_node`, `joint_settings`, `enable_collision`, `constraint`). A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/erhe/usd_compatibility_design.md X2).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -557,17 +557,17 @@ Parameters (all optional except `scene_name` + node reference):
 
 `edit_physics_body` takes the same fields; only fields supplied are changed. Shape fields replace the collision shape and recreate the body. `mass` / `friction` / `restitution` / damping edit the live body.
 
-### create_physics_joint / edit_physics_joint
+### create_joint / edit_joint
 
-Attach a joint (Node_joint) to a node / edit it. The joint joins the nearest self-or-ancestor rigid body of its node to that of the connected node (no connected node = the world).
+Create a `Joint` prim below a node / edit it (`create_joint` / `edit_joint`). The joint joins the nearest self-or-ancestor rigid body of that node - its first frame node - to that of the connected node (no connected node = the world).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint","arguments":{"scene_name":"Default Scene","node_name":"Door","connected_node_name":"Frame","settings_name":"Hinge","enable_collision":false}}}'
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_joint","arguments":{"scene_name":"Default Scene","node_name":"Door","connected_node_name":"Frame","settings_name":"Hinge","enable_collision":false}}}'
 ```
 
-Parameters: node reference, `connected_node_id`/`connected_node_name` (optional), `settings_name` (optional, empty = free six-dof joint), `enable_collision` (default false). `edit_physics_joint` additionally takes `joint_index` (default 0, for nodes with several joints), `connect_to_world` (clear the connected node) and `rebuild` (re-capture joint frames from current node transforms).
+Parameters: node reference, `connected_node_id`/`connected_node_name` (optional), `settings_name` (optional, empty = free six-dof joint), `enable_collision` (default false). `edit_joint` additionally takes `joint_index` (default 0, for nodes with several joints), `connect_to_world` (clear the connected node) and `rebuild` (re-capture joint frames from current node transforms).
 
 ### create_physics_material / edit_physics_material
 

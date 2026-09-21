@@ -26,7 +26,8 @@
 #include "parsers/physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
+#include "scene/joint_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_builder.hpp"
@@ -349,7 +350,7 @@ public:
 }
 
 // Nearest self-or-ancestor live rigid body (the body a node "belongs" to).
-// Mirrors Node_joint's find_nearest_body.
+// Mirrors Joint_system's find_nearest_body.
 [[nodiscard]] auto nearest_rigid_body(erhe::scene::Node* node) -> erhe::physics::IRigid_body*
 {
     while (node != nullptr) {
@@ -416,7 +417,7 @@ class Flip_joint_target
 {
 public:
     bool                               valid{false};
-    std::shared_ptr<Node_joint>        node_joint;
+    std::shared_ptr<Joint>             joint;
     std::shared_ptr<erhe::scene::Node> moved_node;
     std::shared_ptr<erhe::scene::Node> frame_node;
     std::shared_ptr<erhe::scene::Node> other_node;
@@ -442,52 +443,46 @@ public:
         return std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
     };
 
-    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<Node_joint> node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
-            if (!node_joint) {
-                continue;
-            }
-            if (!is_hinge_settings(node_joint->get_settings().get())) {
-                continue;
-            }
-            erhe::scene::Node* const                 joint_node     = node_joint->get_node();
-            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_connected_node();
-            if ((joint_node == nullptr) || !connected_node) {
-                continue; // Flip needs two body parties (body-to-world joints are skipped)
-            }
-            erhe::scene::Node* const body_a_node = nearest_body_node(joint_node);
-            erhe::scene::Node* const body_b_node = nearest_body_node(connected_node.get());
-            if ((body_a_node == nullptr) || (body_b_node == nullptr) || (body_a_node == body_b_node)) {
-                continue;
-            }
-            if ((get_node_rigid_body(*body_a_node) == nullptr) || (get_node_rigid_body(*body_b_node) == nullptr)) {
-                continue;
-            }
-
-            if (selected_body_node == body_a_node) {
-                // Flip side A; the unmoved hinge frame is side B's connected node.
-                result.valid       = true;
-                result.node_joint  = node_joint;
-                result.moved_node  = as_shared(body_a_node);
-                result.frame_node  = as_shared(joint_node);
-                result.other_node  = as_shared(body_b_node);
-                result.hinge_frame = node_rigid_world(*connected_node);
-                return false;
-            }
-            if (selected_body_node == body_b_node) {
-                // Flip side B; the unmoved hinge frame is side A's joint node.
-                result.valid       = true;
-                result.node_joint  = node_joint;
-                result.moved_node  = as_shared(body_b_node);
-                result.frame_node  = connected_node;
-                result.other_node  = as_shared(body_a_node);
-                result.hinge_frame = node_rigid_world(*joint_node);
-                return false;
-            }
+    for (const std::unique_ptr<Joint_entry>& entry : scene_root.get_joint_system().get_entries()) {
+        Joint& joint = *entry->joint;
+        if (!is_hinge_settings(joint.get_settings().get())) {
+            continue;
         }
-        return true;
-    });
+        const std::shared_ptr<erhe::scene::Node> frame_0 = joint.get_body_0();
+        const std::shared_ptr<erhe::scene::Node> frame_1 = joint.get_body_1();
+        if (!frame_0 || !frame_1) {
+            continue; // Flip needs two body parties (body-to-world joints are skipped)
+        }
+        erhe::scene::Node* const body_a_node = nearest_body_node(frame_0.get());
+        erhe::scene::Node* const body_b_node = nearest_body_node(frame_1.get());
+        if ((body_a_node == nullptr) || (body_b_node == nullptr) || (body_a_node == body_b_node)) {
+            continue;
+        }
+        if ((get_node_rigid_body(*body_a_node) == nullptr) || (get_node_rigid_body(*body_b_node) == nullptr)) {
+            continue;
+        }
+
+        if (selected_body_node == body_a_node) {
+            // Flip side A; the unmoved hinge frame is side B's frame node.
+            result.valid       = true;
+            result.joint       = entry->joint_weak.lock();
+            result.moved_node  = as_shared(body_a_node);
+            result.frame_node  = frame_0;
+            result.other_node  = as_shared(body_b_node);
+            result.hinge_frame = node_rigid_world(*frame_1.get());
+            return result;
+        }
+        if (selected_body_node == body_b_node) {
+            // Flip side B; the unmoved hinge frame is side A's frame node.
+            result.valid       = true;
+            result.joint       = entry->joint_weak.lock();
+            result.moved_node  = as_shared(body_b_node);
+            result.frame_node  = frame_1;
+            result.other_node  = as_shared(body_a_node);
+            result.hinge_frame = node_rigid_world(*frame_0.get());
+            return result;
+        }
+    }
     return result;
 }
 
@@ -1801,8 +1796,8 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     }
 
     // The joint frame is represented by two nodes (so the transform lives on nodes,
-    // not on the attachment): the joint node carries the Node_joint, the connected
-    // node is referenced by it. Both sit at the world joint frame; Node::set_parent
+    // not on the joint prim): the joint prim names both as its two frame nodes.
+    // Both sit at the world joint frame; Node::set_parent
     // preserves world transform on reparent, so we set each node's transform to the
     // world frame and let insertion recompute the body-local part. The joint node
     // is a child of the anchor body, the connected node a child of the moved body,
@@ -1820,9 +1815,14 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     // through each other while the joint moves. This is safe because the alignment
     // search above guarantees the parts start in a non-penetrating pose, so
     // enabling collision does not cause a push-apart on creation.
-    auto node_joint = std::make_shared<Node_joint>(connected_node, settings, true /* enable_collision */);
-    node_joint->set_name(is_hinge ? "Hinge joint" : "Ball joint");
-    node_joint->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    auto joint = std::make_shared<Joint>(
+        is_hinge ? "Hinge joint" : "Ball joint",
+        joint_node,
+        connected_node,
+        settings,
+        true /* enable_collision */
+    );
+    joint->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
 
 
@@ -1855,7 +1855,16 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
             }
         )
     );
-    compound.operations.push_back(std::make_shared<Node_attach_operation>(node_joint, joint_node));
+    compound.operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = joint,
+                .parent  = joint_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
 
     m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound)));
     return true;
@@ -1984,7 +1993,7 @@ auto Operations::flip_joint(const Add_joint_avoidance avoidance) -> bool
         .frame_node   = target.frame_node,
         .frame_before = frame_node->parent_from_node_transform(),
         .frame_after  = erhe::scene::Transform{parent_from_frame_after},
-        .node_joint   = target.node_joint
+        .joint        = target.joint
     };
     m_context.operation_stack->queue(std::make_shared<Flip_joint_operation>(std::move(parameters)));
     return true;

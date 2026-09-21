@@ -302,7 +302,11 @@ public:
     static constexpr uint64_t index_asset_file_other       = 23;
     static constexpr uint64_t index_content_library_folder = 24;
     static constexpr uint64_t index_content_library_node   = 25;
-    static constexpr uint64_t index_physics                = 26;
+    // The `editor::Joint` prim (doc/plans/node_attachments_to_properties.md
+    // D3). erhe::usd tests the bit to leave a joint prim out of the prims it
+    // writes: a joint is written as the UsdPhysics joint prim of the body it
+    // joins, from the physics description.
+    static constexpr uint64_t index_joint                  = 26;
     static constexpr uint64_t index_raytrace               = 27;
     static constexpr uint64_t index_node_attachment        = 28;
     static constexpr uint64_t index_render_style           = 29;
@@ -359,7 +363,7 @@ public:
     static constexpr uint64_t asset_file_other       = (uint64_t{1} << index_asset_file_other      );
     static constexpr uint64_t content_library_folder = (uint64_t{1} << index_content_library_folder);
     static constexpr uint64_t content_library_node   = (uint64_t{1} << index_content_library_node  );
-    static constexpr uint64_t physics                = (uint64_t{1} << index_physics               );
+    static constexpr uint64_t joint                  = (uint64_t{1} << index_joint                 );
     static constexpr uint64_t raytrace               = (uint64_t{1} << index_raytrace              );
     static constexpr uint64_t node_attachment        = (uint64_t{1} << index_node_attachment       );
     static constexpr uint64_t render_style           = (uint64_t{1} << index_render_style          );
@@ -413,7 +417,7 @@ public:
         "Asset_file_other",
         "Content_library_folder",
         "Content_library_node",
-        "Physics",
+        "Joint",
         "Raytrace",
         "Node_attachment",
         "Render_style",

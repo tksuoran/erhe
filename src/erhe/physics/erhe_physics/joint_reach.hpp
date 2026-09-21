@@ -34,7 +34,7 @@ enum class Joint_reach_shape : unsigned int {
 // jointed body can reach, for interactive drags that must not pull against
 // the joint.
 //
-// Joint convention (the one Node_joint builds Six_dof_constraint_settings
+// Joint convention (the one editor::Joint_system builds Six_dof_constraint_settings
 // with and erhe::physics backends solve): with anchor frames F_a (on body A)
 // and F_b (on body B) in world space, the joint coordinates are the offset
 // t = F_a.basis^T * (F_b.origin - F_a.origin) and the rotation R with

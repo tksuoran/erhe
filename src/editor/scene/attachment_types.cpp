@@ -16,15 +16,12 @@ namespace editor {
 
 namespace {
 
-using erhe::scene::Node;
+
 
 void make_camera(Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_camera(&parent); }
 void make_light (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_light (&parent); }
 void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_mesh  (&parent); }
-
-auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal
-
-void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
+void make_joint (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_joint (&parent); }
 
 } // anonymous namespace
 
@@ -33,16 +30,18 @@ auto get_child_prim_types() -> const std::vector<Child_prim_type_info>&
     static const std::vector<Child_prim_type_info> catalog = {
         {"mesh",   "Mesh",   make_mesh  },
         {"camera", "Camera", make_camera},
-        {"light",  "Light",  make_light }
+        {"light",  "Light",  make_light },
+        {"joint",  "Joint",  make_joint }
     };
     return catalog;
 }
 
+// The applied-API-schema attachment catalog is empty since the joint became a
+// prim of its own (doc/plans/node_attachments_to_properties.md P9); the
+// catalog and the UI that reads it go with P11.
 auto get_attachment_types() -> const std::vector<Attachment_type_info>&
 {
-    static const std::vector<Attachment_type_info> catalog = {
-        {"joint",            "Joint",            joint_gate,            make_joint           }
-    };
+    static const std::vector<Attachment_type_info> catalog = {};
     return catalog;
 }
 

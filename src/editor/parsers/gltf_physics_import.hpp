@@ -17,7 +17,7 @@ class Scene_root;
 // Collision_filter / Physics_joint_settings content-library items (attached
 // via library attach operations appended to operations), Node_physics
 // attachments (rigid bodies / triggers, with compound folding of descendant
-// colliders) and Node_joint attachments. Must be called from import_gltf()
+// colliders) and Joint prims. Must be called from import_gltf()
 // after mesh finalization (mesh-sourced collision shapes need the built
 // Geometry) and before the Compound_operation is composed.
 void import_gltf_physics(

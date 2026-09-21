@@ -29,7 +29,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
 #include "prefabs/prefab_instance.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "erhe_scene/layout.hpp"
 #include "scene/draw_mode_properties.hpp"
 #include "scene/draw_mode_system.hpp"
@@ -742,6 +742,28 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         node_physics_json = physics_json;
     }
 
+    // The joints of this prim: the `Joint` child prims naming it as their
+    // first frame node (doc/plans/node_attachments_to_properties.md D3).
+    json joints = json::array();
+    for (const std::shared_ptr<erhe::Hierarchy>& child : found_node->get_children()) {
+        const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(child);
+        if (!joint) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node>                     body_1   = joint->get_body_1();
+        const std::shared_ptr<erhe::physics::Physics_joint_settings> settings = joint->get_settings();
+        joints.push_back(
+            json{
+                {"name",             joint->get_name()},
+                {"id",               joint->get_id()},
+                {"connected_node",   body_1 ? body_1->get_name() : "(world)"},
+                {"joint_settings",   settings ? settings->get_name() : ""},
+                {"enable_collision", joint->get_enable_collision()},
+                {"constraint",       (joint->get_constraint() != nullptr) ? "created" : "pending"}
+            }
+        );
+    }
+
     json attachments = json::array();
     for (const auto& att : found_node->get_attachments()) {
         json att_json = {
@@ -749,16 +771,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"name", att->get_name()},
             {"id",   att->get_id()}
         };
-
-        auto node_joint = std::dynamic_pointer_cast<Node_joint>(att);
-        if (node_joint) {
-            const std::shared_ptr<erhe::scene::Node> connected = node_joint->get_connected_node();
-            att_json["connected_node"]   = connected ? connected->get_name() : "(world)";
-            const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings = node_joint->get_settings();
-            att_json["joint_settings"]   = settings ? settings->get_name() : "";
-            att_json["enable_collision"] = node_joint->get_enable_collision();
-            att_json["constraint"]       = (node_joint->get_constraint() != nullptr) ? "created" : "pending";
-        }
 
         // Prefab instance: what the carrier instantiates - the source file and,
         // for a USD composition arc, the prim of it the arc named
@@ -838,6 +850,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"skew",          {wk.x, wk.y, wk.z}}
         }},
         {"attachments",    attachments},
+        {"joints",         joints},
         {"physics",        node_physics_json},
         {"mesh",           erhe::is<erhe::scene::Mesh>(found_node.get())
             ? mesh_details(std::static_pointer_cast<erhe::scene::Mesh>(found_node))

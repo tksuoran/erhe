@@ -10,7 +10,7 @@ namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 
-class Node_joint;
+class Joint;
 
 // Reorients one rigid-body party of a hinge joint by a precomputed rigid world
 // delta (a 180-degree "edge-endpoints-swapped" flip plus the collision-avoidance
@@ -33,7 +33,7 @@ public:
         std::shared_ptr<erhe::scene::Node> frame_node;   // selected party's joint frame node (re-pinned to F)
         erhe::scene::Transform             frame_before;
         erhe::scene::Transform             frame_after;
-        std::shared_ptr<Node_joint>        node_joint;
+        std::shared_ptr<Joint>             joint;
     };
 
     explicit Flip_joint_operation(Parameters&& parameters);

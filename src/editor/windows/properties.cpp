@@ -24,7 +24,7 @@
 #include "preview/material_preview.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/ik_properties.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
@@ -794,39 +794,40 @@ void Properties::node_physics_properties(erhe::scene::Node& node)
 }
 
 
-void Properties::node_joint_properties(Node_joint& node_joint)
+void Properties::joint_properties(Joint& joint)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // The connected node, the joint settings and the collision flag are
+    // The two frame nodes, the joint settings and the collision flag are
     // generic property rows (doc/erhe/property_system.md section 4.17); the
     // actions and the diagnostic remain here.
     add_entry(
         "Connect",
-        [this, &node_joint]() {
+        [this, &joint]() {
             if (ImGui::Button("Connect to Selected Node", ImVec2{-FLT_MIN, 0.0f})) {
                 const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+                const std::shared_ptr<erhe::scene::Node> frame_0 = joint.get_body_0();
                 for (const std::shared_ptr<erhe::Item_base>& selected_item : selected_items) {
                     const std::shared_ptr<erhe::scene::Node> selected_node = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
-                    if (selected_node && (selected_node.get() != node_joint.get_node())) {
-                        node_joint.set_connected_node(selected_node);
+                    if (selected_node && (selected_node != frame_0)) {
+                        joint.set_body_1(selected_node);
                         break;
                     }
                 }
             }
         },
-        "Connects the joint to the first selected node other than the joint's own node"
+        "Names the first selected node other than the joint's first frame node as the second frame node"
     );
 
-    add_entry("Constraint", [&node_joint]() {
-        ImGui::TextUnformatted((node_joint.get_constraint() != nullptr) ? "Created" : "Pending");
+    add_entry("Constraint", [&joint]() {
+        ImGui::TextUnformatted((joint.get_constraint() != nullptr) ? "Created" : "Pending");
     });
 
     add_entry(
         "Rebuild",
-        [&node_joint]() {
+        [&joint]() {
             if (ImGui::Button("Rebuild Joint", ImVec2{-FLT_MIN, 0.0f})) {
-                node_joint.rebuild();
+                joint.rebuild();
             }
         },
         "Recreates the constraint, re-capturing the joint frames; use after moving the nodes"
@@ -859,7 +860,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 // disabled while the item is sealed.
 void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
-    const auto& node_joint       = std::dynamic_pointer_cast<Node_joint             >(item);
+    const auto& joint            = std::dynamic_pointer_cast<Joint                  >(item);
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
@@ -870,7 +871,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (edit_disabled) {
         ImGui::BeginDisabled();
     }
-    if (node_joint)       { node_joint_properties(*node_joint); }
+    if (joint)            { joint_properties(*joint); }
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }

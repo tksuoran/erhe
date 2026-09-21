@@ -152,7 +152,7 @@ def main():
 
     # ------------------------------------------------------------- joints
     # Coincident anchor child nodes on both bodies give each joint a clean
-    # pivot (create_physics_joint captures frames from the node transforms).
+    # pivot (create_joint captures frames from the node transforms).
     def link(child, parent, pivot, settings):
         a = c.anchor(f"{child} pivot", parts[child], pivot)
         b = c.anchor(f"{child}<->{parent}", parts[parent], pivot)

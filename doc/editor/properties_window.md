@@ -66,7 +66,7 @@ migrated" table lists the hand-written rows that are authored state; section
   (`show_in_ui`, `lock_edit`, the viewport locks, `no_transform_update`, ...
   as bridged booleans), the tags, and the derived rows that are computed
   properties with setters (D26: `Rendertarget_mesh`, `Animation`,
-  `Node_joint`, the Light derived rows). New authored state of a migrated
+  `Joint`, the Light derived rows). New authored state of a migrated
   owner is registered the same way rather than hand-written.
 - R3 Diagnostics (counts, dimensions, the live rigid body's state,
   raytrace state, skin joints) are read-only rows, drawn per item; they

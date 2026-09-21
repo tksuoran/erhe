@@ -1329,7 +1329,7 @@
     "name": "ik_drag"
   },
   {
-    "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
+    "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {
         "name": {
@@ -1669,11 +1669,11 @@
     "name": "set_log_levels"
   },
   {
-    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kind joint applies to an Xformable node. A rigid body is not an attachment: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
+    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera, light and joint insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. A joint created this way names the nearest node at or above the addressed prim as its first frame node (use create_joint to name both frame nodes). A rigid body is not an attachment: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
-          "description": "Target prim ID (any prim for mesh / camera / light; a node for the attachment kinds)",
+          "description": "Target prim ID (any prim)",
           "type": "integer"
         },
         "node_name": {
@@ -3992,7 +3992,7 @@
     "name": "edit_physics_body"
   },
   {
-    "description": "Attach a new joint (Node_joint) to a scene node (undoable): joins the nearest self-or-ancestor rigid body of the node to that of the connected node (or the world)",
+    "description": "Create a new Joint prim below a scene node (undoable): joins the nearest self-or-ancestor rigid body of that node (the joint's first frame node) to that of the connected node (the second frame node; none = the world). Any number of joints may name one body; the joint prim shows up as a child of the node in get_node_details 'joints'.",
     "inputSchema": {
       "properties": {
         "connected_node_id": {
@@ -4029,10 +4029,10 @@
       ],
       "type": "object"
     },
-    "name": "create_physics_joint"
+    "name": "create_joint"
   },
   {
-    "description": "Edit a joint attached to a scene node. Only fields supplied are changed; changes rebuild the constraint.",
+    "description": "Edit a Joint prim below a scene node. Only fields supplied are changed; changes rebuild the constraint.",
     "inputSchema": {
       "properties": {
         "connect_to_world": {
@@ -4052,7 +4052,7 @@
           "type": "boolean"
         },
         "joint_index": {
-          "description": "Index among the node's joint attachments (default 0)",
+          "description": "Index among the node's child Joint prims (default 0)",
           "type": "integer"
         },
         "node_id": {
@@ -4081,7 +4081,7 @@
       ],
       "type": "object"
     },
-    "name": "edit_physics_joint"
+    "name": "edit_joint"
   },
   {
     "description": "Create a shared physics material under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",

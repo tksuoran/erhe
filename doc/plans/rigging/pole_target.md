@@ -234,7 +234,7 @@ no scene involved, covering:
 
 **R17.** Both properties of R1 draw as generic registered-property rows in
 group "IK" of the joint node: `Ik.pole_target` as the object-reference row
-(the picker the `reference_item_types` mask drives, as `Node_joint`'s
+(the picker the `reference_item_types` mask drives, as `Joint`'s
 Connected Node row does) and `Ik.pole_angle` as a float row edited in degrees
 and stored in radians, the way the limit rows of `ik_settings.md` section 5
 are, with a drag range of -180 to +180 degrees and no coercion - the angle is
@@ -302,7 +302,7 @@ checks both.
 
 **R26.** USD save carries the pole exactly as far as it carries the rest of
 the rest of the `Ik.*` values, which is not at all: the USD writer has a
-form for `Node_physics` and `Node_joint` (through the physics description),
+form for `Node_physics` and `Joint` (through the physics description),
 `Prefab_instance` (composition arcs), `Draw_mode` (`GeomModelAPI`) and
 `Geometry_graph_mesh` (the `erhe:scene` block), and none for rig data.
 `save_scene_usd` (`parsers/usd.cpp`) counts the nodes holding a local `Ik.*`

@@ -6389,6 +6389,12 @@ private:
                 // the next open injects the default again.
                 continue;
             }
+            if ((erhe_child_prim->get_type() & erhe::Item_type::joint) != 0) {
+                // A joint prim is written as the KHR_physics_rigid_bodies
+                // joint of the node whose body is its first party, from the
+                // physics description, not as a node of its own.
+                continue;
+            }
             const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if (erhe_child_node == nullptr) {
                 // A prim of a class that carries no transform: the transform

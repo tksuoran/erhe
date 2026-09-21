@@ -518,7 +518,7 @@ def node_sort_key(record):
 NODE_PHYSICS_FIELDS = ["motion_mode", "friction", "restitution", "mass", "gravity_factor", "is_trigger", "collision_shape"]
 # joint_settings is intentionally NOT compared: a settings-less (free
 # six-dof) joint materializes a Physics_joint_settings item on reload.
-NODE_JOINT_FIELDS = ["connected_node", "enable_collision"]
+JOINT_FIELDS = ["connected_node", "enable_collision"]
 
 
 def norm_physics_details(details):
@@ -541,11 +541,19 @@ def norm_physics_details(details):
 
 def norm_attachment_details(details):
     out = []
+    # The joints of the prim are child prims of their own (P9 of
+    # doc/plans/node_attachments_to_properties.md); they are compared beside
+    # the attachments, in the same list.
+    for joint in details.get("joints", []):
+        record = {k: joint.get(k) for k in JOINT_FIELDS}
+        for key, value in list(record.items()):
+            if isinstance(value, float):
+                record[key] = round(value, 4)
+        record["type"] = "Joint"
+        out.append(record)
     for attachment in details.get("attachments", []):
         a_type = attachment.get("type")
-        if a_type == "Node_joint":
-            record = {k: attachment.get(k) for k in NODE_JOINT_FIELDS}
-        elif a_type == "Mesh":
+        if a_type == "Mesh":
             record = {"name": attachment.get("name")}
         else:
             record = {}
@@ -833,10 +841,10 @@ def section_build_scene():
             "scene_name": scene, "node_name": "P6 Box", "material_name": "Roundtrip rubber",
         })
         check(S, "edit_physics_body (material_name)", bool(edited) and "material_name" in edited.get("applied", []), str(edited))
-        joint = mutate("create_physics_joint", {
+        joint = mutate("create_joint", {
             "scene_name": scene, "node_name": "P6 Sphere", "connected_node_name": "P6 Box",
         })
-        check(S, "create_physics_joint", bool(joint) and joint.get("created"), str(joint))
+        check(S, "create_joint", bool(joint) and joint.get("created"), str(joint))
         # A named joint-settings item under a folder that supplies one of its
         # axis values: what the ERHE_scene physics_joints entry carries
         # (doc/gltf_extensions/ERHE_scene.md). The KHR physicsJoints entry has
@@ -2227,11 +2235,11 @@ def usd_physics_leg(S):
     })
     check(S, "physics: edit_physics_body (material_name)",
           bool(edited) and "material_name" in edited.get("applied", []), str(edited))
-    joint = mutate("create_physics_joint", {
+    joint = mutate("create_joint", {
         "scene_name": scene_name, "node_name": "Sensor", "connected_node_name": "Anchor",
         "settings_name": "Hinge_settings", "enable_collision": True,
     })
-    check(S, "physics: create_physics_joint", bool(joint) and joint.get("created"), str(joint))
+    check(S, "physics: create_joint", bool(joint) and joint.get("created"), str(joint))
 
     original = usd_physics_state(scene_name, USD_PHYSICS_LEG_BODIES)
     check(S, "physics: the file's shared items are in the library",

@@ -258,7 +258,7 @@ def build_cradle(c, m):
                      c.anchor(f"{name} Pivot", pivots, pivot)))
     c.settle()
     # Joints once the bodies exist. The connected node carries the fixed
-    # side: Node_joint re-captures both frames whenever the constraint is
+    # side: the joint re-captures both frames whenever the constraint is
     # rebuilt (a viewport drag rebuilds it), and a world-anchored joint
     # without a connected node takes its world frame from the joint node
     # itself - which moves with the dragged ball, dragging the pivot along.

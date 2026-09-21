@@ -155,6 +155,10 @@ public:
 class Physics_node_joint
 {
 public:
+    // The name the file gives the joint, empty when it names none (a glTF
+    // joint is a nameless entry of the node's extension). The editor's joint
+    // prim takes it; the writers name the joint prim themselves.
+    std::string           name;
     std::shared_ptr<Node> connected_node;
     std::size_t           joint_index{0}; // into joints
     bool                  enable_collision{false};

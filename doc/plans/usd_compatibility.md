@@ -150,7 +150,7 @@ children too, and the last is the value reader's own coverage.
 A carrier prim reads its arc target's values through the reference layer (the
 design record's C10), and the override walk of
 `erhe::scene::instance_override` visits prims only, so a local value on a
-`Node_physics`, `Node_joint` or other attachment below a carrier is neither
+`Node_physics`, a `Joint` prim or another attachment below a carrier is neither
 written as part of the carrier's `over` prims nor kept across a prefab reload.
 Taking it up means walking the attachments in the same lockstep the
 counterpart link uses and giving each an `over` path (USD authors an applied

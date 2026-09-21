@@ -17,7 +17,8 @@ namespace erhe::physics {
 
 namespace editor {
 
-class Node_joint;
+class Joint_system;
+class Joint_entry;
 class Scene_root;
 
 // How the drag point body follows a new drag point position.
@@ -90,7 +91,7 @@ constexpr float        c_jointed_drag_brake_distance            = 0.05f; // mete
 //
 // The pivot follows erhe::physics::Point_to_point_constraint_settings.
 //
-// Joint-space projection: attach() looks at the live joints (of node_joints)
+// Joint-space projection: attach() looks at the live joints of the scene
 // that constrain the dragged body. When exactly one does and its other side
 // is the world or a non-dynamic body (a fixed anchor frame), every drag point
 // requested by move_drag_point() is first projected onto the positions the
@@ -169,7 +170,7 @@ private:
     glm::vec3                                   m_drag_point          {0.0f};
     float                                       m_drag_point_speed_limit{std::numeric_limits<float>::infinity()}; // m/s; infinity for an immediate drag
 
-    void configure_projection(std::span<const std::shared_ptr<Node_joint>> node_joints, glm::vec3 pivot_in_world);
+    void configure_projection(const Joint_system& joint_system, glm::vec3 pivot_in_world);
     void place_drag_point    (glm::vec3 position_in_world, Drag_point_motion motion);
 };
 

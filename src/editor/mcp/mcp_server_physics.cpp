@@ -10,7 +10,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
@@ -93,7 +93,7 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
     };
 
     // Bodies enter the world deactivated (quiet scene loading); wake the
-    // dynamic ones the same way Node_joint does after constraint creation.
+    // dynamic ones the same way Joint_system does after constraint creation.
     std::size_t woken = 0;
     sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (!in_scope(node)) {
@@ -413,7 +413,7 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::action_create_physics_joint(const json& args) -> std::string
+auto Mcp_server::action_create_joint(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     Scene_root* sr = find_scene(scene_name);
@@ -447,13 +447,14 @@ auto Mcp_server::action_create_physics_joint(const json& args) -> std::string
     }
     const bool enable_collision = args.value("enable_collision", false);
 
-    const std::shared_ptr<Node_joint> node_joint = m_context.scene_commands->create_new_joint(node.get(), connected, settings, enable_collision);
-    if (!node_joint) {
+    const std::shared_ptr<Joint> joint = m_context.scene_commands->create_new_joint(node.get(), node, connected, settings, enable_collision);
+    if (!joint) {
         return make_error_content("Failed to create joint on node: " + node->get_name());
     }
     return make_json_content({
         {"created",          true},
-        {"queued",           true}, // the attach operation executes on the next editor frame
+        {"queued",           true}, // the insert operation executes on the next editor frame
+        {"joint_id",         joint->get_id()},
         {"node",             node->get_name()},
         {"node_id",          node->get_id()},
         {"connected_node",   connected ? connected->get_name() : "(world)"},
@@ -462,7 +463,7 @@ auto Mcp_server::action_create_physics_joint(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
+auto Mcp_server::action_edit_joint(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     Scene_root* sr = find_scene(scene_name);
@@ -473,11 +474,11 @@ auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
-    std::vector<std::shared_ptr<Node_joint>> joints;
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-        const std::shared_ptr<Node_joint> node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
-        if (node_joint) {
-            joints.push_back(node_joint);
+    std::vector<std::shared_ptr<Joint>> joints;
+    for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
+        const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(child);
+        if (joint) {
+            joints.push_back(joint);
         }
     }
     if (joints.empty()) {
@@ -487,11 +488,11 @@ auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
     if (joint_index >= joints.size()) {
         return make_error_content("joint_index out of range: node has " + std::to_string(joints.size()) + " joint(s)");
     }
-    const std::shared_ptr<Node_joint> node_joint = joints[joint_index];
+    const std::shared_ptr<Joint> node_joint = joints[joint_index];
 
     json applied = json::array();
     if (args.value("connect_to_world", false)) {
-        node_joint->set_connected_node({});
+        node_joint->set_body_1({});
         applied.push_back("connect_to_world");
     } else if (args.contains("connected_node_id") || args.contains("connected_node_name")) {
         const std::shared_ptr<erhe::scene::Node> connected = find_node_in_scene(*sr, args, "connected_node_id", "connected_node_name");
@@ -501,7 +502,7 @@ auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
         if (connected == node) {
             return make_error_content("Connected node must differ from the joint node");
         }
-        node_joint->set_connected_node(connected);
+        node_joint->set_body_1(connected);
         applied.push_back("connected_node");
     }
     if (args.contains("settings_name")) {
@@ -528,8 +529,8 @@ auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
         applied.push_back("rebuild");
     }
 
-    const std::shared_ptr<erhe::scene::Node> connected = node_joint->get_connected_node();
-    const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings = node_joint->get_settings();
+    const std::shared_ptr<erhe::scene::Node>                     connected = node_joint->get_body_1();
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> settings  = node_joint->get_settings();
     return make_json_content({
         {"node",             node->get_name()},
         {"applied",          applied},

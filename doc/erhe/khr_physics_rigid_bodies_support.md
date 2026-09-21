@@ -31,7 +31,8 @@ are therefore static or kinematic only.
 - The editor holds physics materials, collision filters and joint settings in
   content-library folders, exposes every `Node_physics.*` value (material,
   filter, trigger, gravity factor, initial velocities, centre-of-mass offset)
-  and carries a `Node_joint` attachment with a `Scene_root` constraint retry.
+  and carries the joints of a scene as `Joint` prims whose constraints its
+  `Joint_system` builds and retries.
 - `erhe::scene::Physics_description`
   (`erhe_scene/physics_description.hpp`) is the plain-data carrier both formats
   read and write; `parse_physics()` fills it from glTF and
@@ -68,13 +69,13 @@ dynamic.
 `Scene_commands::create_new_rigid_body` and `create_new_joint` are undoable
 (`Node_attach_operation`) and reachable from the `scene.create_new_rigid_body`
 and `scene.create_new_joint` commands, the Create menu, and the item-tree
-context menu ("Attach > Rigid Body / Joint"; a joint auto-connects to another
-selected node). The Create menu also creates Physics Material, Collision Filter
+context menu ("Create > Joint"; a joint auto-connects to another selected
+node). The Create menu also creates Physics Material, Collision Filter
 and Joint Settings content-library items. An edit of a shared item reaches
-the live simulation through the observers `Node_physics_system` and `Node_joint`
-subscribe to it. The MCP tools are `get_physics_items`,
-`create_physics_body` / `edit_physics_body`, `create_physics_joint` /
-`edit_physics_joint`, `create_physics_material` / `edit_physics_material`,
+the live simulation through the observers `Node_physics_system` and
+`Joint_system` subscribe to it. The MCP tools are `get_physics_items`,
+`create_physics_body` / `edit_physics_body`, `create_joint` /
+`edit_joint`, `create_physics_material` / `edit_physics_material`,
 `create_collision_filter` / `edit_collision_filter`,
 `create_physics_joint_settings` / `edit_physics_joint_settings`, plus the
 physics fields of `get_node_details`.
@@ -83,7 +84,7 @@ physics fields of `get_node_details`.
 
 - `build_gltf_physics_data(scene) -> erhe::scene::Physics_description`
   (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`) walks the rigid-body values and
-  `Node_joint` attachments. Collision shape introspection dedups implicit shapes
+  the scene's `Joint` prims. Collision shape introspection dedups implicit shapes
   into the top-level array; convex hull and mesh shapes become mesh-keyed
   `geometry.mesh` references (the current spec). Compound shape children,
   non-Y shape axes and wrapper scales that differ from the node world scale
@@ -151,7 +152,8 @@ physics fields of `get_node_details`.
   the body keeps the motion, which is the `KHR_physics_rigid_bodies` rule that
   a collider belongs to its nearest ancestor body.
 - Export skips a world-attached joint (one with no connected node) with a
-  warning, and exports only the first of several `Node_joint`s on one node,
+  warning, and exports only the first of several joints naming one node as
+  their first frame node,
   because glTF carries one joint per node.
 - Export writes no inertia overrides (the value group has none). A dynamic
   body's mass is written from the live body when nothing authored one; a
@@ -175,8 +177,6 @@ physics fields of `get_node_details`.
   transform does not rebuild the compound.
 - A sleeping body resting inside a sensor fires a trigger exit, and an enter
   again on wake. This is standard Jolt sensor behavior.
-- A joint settings edit takes effect when "Rebuild Joint" is pressed on each
-  using `Node_joint`.
 
 ## Future work
 

@@ -3,7 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 
 #include "erhe_scene/node.hpp"
 
@@ -29,8 +29,8 @@ void Flip_joint_operation::execute(App_context& context)
     // (now coincident) joint frames from the new node poses.
     m_parameters.moved_node->set_parent_from_node(m_parameters.moved_after);
     m_parameters.frame_node->set_parent_from_node(m_parameters.frame_after);
-    if (m_parameters.node_joint) {
-        m_parameters.node_joint->rebuild();
+    if (m_parameters.joint) {
+        m_parameters.joint->rebuild();
     }
 
     context.app_message_bus->node_touched.send_message(
@@ -50,8 +50,8 @@ void Flip_joint_operation::undo(App_context& context)
     // too - see the class comment).
     m_parameters.moved_node->set_parent_from_node(m_parameters.moved_before);
     m_parameters.frame_node->set_parent_from_node(m_parameters.frame_before);
-    if (m_parameters.node_joint) {
-        m_parameters.node_joint->rebuild();
+    if (m_parameters.joint) {
+        m_parameters.joint->rebuild();
     }
 
     context.app_message_bus->node_touched.send_message(

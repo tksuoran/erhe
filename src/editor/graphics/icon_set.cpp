@@ -81,7 +81,7 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_animation           ] = { .code = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_camera              ] = { .code = icons.camera};     // .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_light               ] = { .code = icons.point_light};// .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_physics             ] = { .code = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_joint               ] = { .code = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_raytrace            ] = { .code = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
     type_icons[erhe::Item_type::index_grid                ] = { .code = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
     type_icons[erhe::Item_type::index_texture             ] = { .code = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};

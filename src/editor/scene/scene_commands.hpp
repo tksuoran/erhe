@@ -54,7 +54,7 @@ class Graph_mesh;
 class Graph_texture;
 class Headset_view;
 class Mesh_rendertarget_view;
-class Node_joint;
+class Joint;
 class Node_physics;
 class Operation_stack;
 class Rendertarget_mesh;
@@ -304,18 +304,18 @@ public:
     // the node has no usable mesh geometry). Returns empty when the node
     // already has a Node_physics (one rigid body per node).
 
-    // Attaches a new Node_joint to the node (undoable), joining the nearest
-    // self-or-ancestor rigid body of the node to that of connected_node (no
-    // connected node = the world). Settings may be empty (a free six-dof
+    // A new Joint prim below `parent` (undoable; the active item when parent
+    // is null), joining the nearest self-or-ancestor rigid body of body_0 to
+    // that of body_1 (no body_1 = the world). body_0 defaults to the nearest
+    // node the joint is placed below. Settings may be empty (a free six-dof
     // joint); assign shared Physics_joint_settings later in the properties.
-    // With no node, uses the last selected node; with no selection, creates
-    // a new empty node with the joint.
     auto create_new_joint(
-        erhe::scene::Node*                                            node             = nullptr,
-        const std::shared_ptr<erhe::scene::Node>&                     connected_node   = {},
+        erhe::Hierarchy*                                              parent           = nullptr,
+        const std::shared_ptr<erhe::scene::Node>&                     body_0           = {},
+        const std::shared_ptr<erhe::scene::Node>&                     body_1           = {},
         const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings         = {},
         bool                                                          enable_collision = false
-    ) -> std::shared_ptr<Node_joint>;
+    ) -> std::shared_ptr<Joint>;
 
     // Node attachment management (issue #249). Each of these attaches a new
     // attachment to an EXISTING in-scene node via a bare (undoable)

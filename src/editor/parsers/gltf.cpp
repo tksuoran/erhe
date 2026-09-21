@@ -1233,7 +1233,7 @@ auto make_import_gltf_operation(
     append_content_library_attach_operations(context, scene_root->get_content_library(), gltf_data, path.generic_string(), material_reference_keys, operations);
 
     // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
-    // through content-library attach operations; Node_physics / Node_joint
+    // through content-library attach operations; Node_physics values / Joint prims
     // attachments are attached directly to the imported nodes (like meshes)
     // and enter the scene with the insert operation below. Must run after
     // mesh finalization above (mesh-sourced collision shapes need Geometry).

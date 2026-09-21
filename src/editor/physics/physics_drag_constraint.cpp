@@ -1,6 +1,7 @@
 #include "physics/physics_drag_constraint.hpp"
 
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
+#include "scene/joint_system.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
@@ -22,7 +23,7 @@ namespace editor {
 namespace {
 
 // Rotation + translation of the node world transform; scale ignored. The
-// convention Node_joint::try_create_constraint() builds the joint frames with.
+// convention Joint_system builds the joint frames with.
 [[nodiscard]] auto world_transform_of(const erhe::scene::Node& node) -> erhe::physics::Transform
 {
     const erhe::scene::Trs_transform& world_from_node = node.world_from_node_transform();
@@ -40,10 +41,9 @@ namespace {
     return (entry->node != nullptr) ? entry->node->get_name() : std::string{"(detached)"};
 }
 
-[[nodiscard]] auto joint_name_of(const Node_joint& joint) -> std::string
+[[nodiscard]] auto joint_name_of(const Joint& joint) -> std::string
 {
-    const erhe::scene::Node* const node = joint.get_node();
-    return (node != nullptr) ? node->get_name() : joint.get_name();
+    return joint.get_name();
 }
 
 constexpr const char* c_axis_names[3] = { "X", "Y", "Z" };
@@ -101,7 +101,7 @@ auto Physics_drag_constraint::attach(
         return false;
     }
     world.add_rigid_body(m_drag_point_body.get());
-    configure_projection(scene_root.get_node_joints(), drag_point_in_world);
+    configure_projection(scene_root.get_joint_system(), drag_point_in_world);
     m_drag_point_speed_limit = std::numeric_limits<float>::infinity();
     if (settings.drag_point_speed == Drag_point_speed::braking) {
         const float brake_acceleration = (settings.max_force / body.get_mass()) - c_standard_gravity;
@@ -138,19 +138,22 @@ auto Physics_drag_constraint::attach(
 }
 
 void Physics_drag_constraint::configure_projection(
-    const std::span<const std::shared_ptr<Node_joint>> node_joints,
-    const glm::vec3                                    pivot_in_world
+    const Joint_system& joint_system,
+    const glm::vec3     pivot_in_world
 )
 {
     m_reach = erhe::physics::Joint_reach{};
 
-    const Node_joint* joint      = nullptr;
-    std::size_t       live_count = 0;
-    for (const std::shared_ptr<Node_joint>& node_joint : node_joints) {
-        if ((node_joint->get_constraint_state() == nullptr) || !node_joint->constrains_rigid_body(m_body)) {
+    const Joint_entry* joint      = nullptr;
+    std::size_t        live_count = 0;
+    for (const std::unique_ptr<Joint_entry>& entry : joint_system.get_entries()) {
+        if (!entry->constraint) {
             continue;
         }
-        joint = node_joint.get();
+        if ((entry->rigid_body_a != m_body) && (entry->rigid_body_b != m_body)) {
+            continue;
+        }
+        joint = entry.get();
         ++live_count;
     }
     if (live_count == 0) {
@@ -162,14 +165,14 @@ void Physics_drag_constraint::configure_projection(
         return;
     }
 
-    const Node_joint_constraint_state& state = *joint->get_constraint_state();
+    const Joint_constraint_state& state = joint->state;
     const bool moving_a =
         (state.node_physics_a != nullptr) &&
         (state.node_physics_a->rigid_body.get() == m_body);
     const erhe::physics::Joint_side  side   = moving_a ? erhe::physics::Joint_side::a : erhe::physics::Joint_side::b;
     const Node_physics_entry* const  moving = moving_a ? state.node_physics_a : state.node_physics_b;
     const Node_physics_entry* const  fixed  = moving_a ? state.node_physics_b : state.node_physics_a;
-    const std::string joint_name = joint_name_of(*joint);
+    const std::string joint_name = joint_name_of(*joint->joint);
     if ((moving == nullptr) || (moving->node == nullptr)) {
         m_projection_description = fmt::format("unprojected: joint '{}' body node not found", joint_name);
         return;

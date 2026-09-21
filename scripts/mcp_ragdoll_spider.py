@@ -6,7 +6,7 @@ Anatomy (all from tapered capsules via the create_shape tool):
   - 8 legs (4 per side), each made of 6 capsule segments with tapering radii.
 
 Articulation: every part pair is connected with a physics joint
-(create_physics_joint). Joint frames are captured from node world
+(create_joint). Joint frames are captured from node world
 transforms, so each joint gets two coincident empty anchor nodes
 (create_node) at the anatomical pivot - one parented to each connected
 segment - and the joint is created anchor-to-anchor. Joint settings lock the
@@ -190,7 +190,7 @@ class Spider_builder:
         pivot (one child per part), joined anchor-to-anchor."""
         anchor_a = self.call("create_node", {"name": f"{name}_a", "parent_node_id": part_a["node_id"], "position": pivot})
         anchor_b = self.call("create_node", {"name": f"{name}_b", "parent_node_id": part_b["node_id"], "position": pivot})
-        self.call("create_physics_joint", {
+        self.call("create_joint", {
             "node_id":           anchor_b["node_id"],
             "connected_node_id": anchor_a["node_id"],
             "settings_name":     settings_name,
@@ -298,7 +298,7 @@ def main() -> int:
     print(f"Waiting for MCP server on port {args.port} ...")
     wait_for_server(client, args.wait)
 
-    required_tools = {"create_shape", "create_node", "create_physics_joint", "create_physics_joint_settings", "transform_selection"}
+    required_tools = {"create_shape", "create_node", "create_joint", "create_physics_joint_settings", "transform_selection"}
     missing = required_tools - client.tool_names()
     if missing:
         print(f"FAIL: missing MCP tools: {sorted(missing)}")
@@ -345,7 +345,7 @@ def main() -> int:
     # Sample a few joints: constraint must be created (not pending).
     for sample in (f"{prefix}_joint_body_b", f"{prefix}_leg_r1_hip_b", f"{prefix}_leg_l4_knee5_b"):
         details = client.call("get_node_details", {"scene_name": scene_name, "node_name": sample})
-        joints = [a for a in details.get("attachments", []) if a.get("type") == "Node_joint"]
+        joints = details.get("joints", [])
         check_true(f"constraint created on {sample}", bool(joints) and joints[0].get("constraint") == "created",
                    str(joints[0].get("constraint")) if joints else "no joint attachment")
 

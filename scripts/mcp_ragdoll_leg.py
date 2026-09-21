@@ -42,7 +42,7 @@ class Leg_builder(Spider_builder):
         no connected node - the constraint anchors to the world at the
         anchor's initial world frame."""
         anchor = self.call("create_node", {"name": f"{name}_b", "parent_node_id": part["node_id"], "position": pivot})
-        self.call("create_physics_joint", {
+        self.call("create_joint", {
             "node_id":          anchor["node_id"],
             "settings_name":    settings_name,
             "enable_collision": False,
@@ -134,7 +134,7 @@ def main() -> int:
     print(f"Waiting for MCP server on port {args.port} ...")
     wait_for_server(client, args.wait)
 
-    required_tools = {"create_shape", "create_node", "create_physics_joint", "create_physics_joint_settings", "transform_selection"}
+    required_tools = {"create_shape", "create_node", "create_joint", "create_physics_joint_settings", "transform_selection"}
     missing = required_tools - client.tool_names()
     if missing:
         print(f"FAIL: missing MCP tools: {sorted(missing)}")
@@ -180,7 +180,7 @@ def main() -> int:
     samples = [f"{prefix}_knee1_b", f"{prefix}_knee5_b"] + ([f"{prefix}_hip_b"] if anchored else [])
     for sample in samples:
         details = client.call("get_node_details", {"scene_name": scene_name, "node_name": sample})
-        joints = [a for a in details.get("attachments", []) if a.get("type") == "Node_joint"]
+        joints = details.get("joints", [])
         check_true(f"constraint created on {sample}", bool(joints) and joints[0].get("constraint") == "created",
                    str(joints[0].get("constraint")) if joints else "no joint attachment")
 

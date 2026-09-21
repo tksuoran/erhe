@@ -4,7 +4,7 @@
 #include "editor_log.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
@@ -954,7 +954,10 @@ void import_physics(
         ++body_count;
     }
 
-    // 3. Joints.
+    // 3. Joints. A joint is a prim of its own (D3), placed below the prim
+    //    whose body is its first party - which is where both formats state
+    //    it: a glTF joint sits on that node, and the USD reader made that
+    //    prim the joint's `<joint>_frame0` node.
     for (const erhe::scene::Physics_node_description& description : physics.node_physics) {
         if (!description.node || !description.joint.has_value()) {
             continue;
@@ -965,13 +968,23 @@ void import_physics(
             settings = importer.joint_items[joint.joint_index];
         } else {
             log_parsers->warn(
-                "physics import: node '{}' joint index {} out of range - attaching joint without settings",
+                "physics import: node '{}' joint index {} out of range - the joint is created without settings",
                 description.node->get_name(),
                 joint.joint_index
             );
         }
-        auto node_joint = std::make_shared<Node_joint>(joint.connected_node, settings, joint.enable_collision);
-        description.node->attach(node_joint);
+        const std::string joint_name = joint.name.empty()
+            ? fmt::format("{} joint", description.node->get_name())
+            : joint.name;
+        auto joint_prim = std::make_shared<Joint>(
+            joint_name,
+            description.node,
+            joint.connected_node,
+            settings,
+            joint.enable_collision
+        );
+        joint_prim->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        joint_prim->set_parent(description.node);
         ++joint_count;
     }
 

@@ -1244,6 +1244,7 @@ private:
             const std::size_t               joint_index = resolve_joint_settings(entry, props);
             const std::size_t               body_index  = ensure_node_entry(joint_node_path, joint_node);
             erhe::scene::Physics_node_joint node_joint{};
+            node_joint.name             = std::string{entry.prim->element_name()};
             node_joint.connected_node   = connected_node;
             node_joint.joint_index      = joint_index;
             node_joint.enable_collision = (base != nullptr) && base->collisionEnabled.get_value();
@@ -1356,12 +1357,12 @@ private:
     }
 
     // The joint-settings item one joint prim uses: the one its
-    // `erhe:Node_joint:joint_settings` relationship names, else one made from
+    // `erhe:Joint:joint_settings` relationship names, else one made from
     // the limits and drives the joint prim carries itself and from what its
     // own class states.
     [[nodiscard]] auto resolve_joint_settings(const Prim_entry& entry, const Property_map* props) -> std::size_t
     {
-        const std::vector<std::string> settings_paths = read_paths(entry, std::string{c_node_joint_settings_relationship});
+        const std::vector<std::string> settings_paths = read_paths(entry, std::string{c_joint_settings_relationship});
         if (!settings_paths.empty()) {
             const std::map<std::string, std::size_t>::const_iterator i = m_joint_settings_index_by_path.find(settings_paths.front());
             if (i != m_joint_settings_index_by_path.end()) {

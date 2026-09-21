@@ -20,6 +20,19 @@ attachment has no path; a value on the node is overridable as it stands.
 
 ## Done
 
+- **Node_joint -> `Joint` prim** (`src/editor/scene/joint.{hpp,cpp}`,
+  `joint_system.{hpp,cpp}`): the joint as a typed prim deriving
+  `erhe::scene::Imageable`, naming its two frame nodes with `Joint.body_0` /
+  `Joint.body_1` (D3), with the six-dof constraint, the two body pointers and
+  the shared-settings observer in a per-scene `Joint_system` held by
+  `Scene_root` (`doc/erhe/property_system.md` section 4.17,
+  `doc/editor/physics.md`). A joint prim is reported to the system through the
+  prim registration hook (`Item_host::register_prim`), not the node hooks: a
+  joint carries no transform and is no node. The native carriers - the
+  `KHR_physics_rigid_bodies` joint of a node and the UsdPhysics joint prims -
+  stay, fed from the scene's `Joint` prims by `build_physics_description()`
+  (D8), and each importer places the prim below the prim whose body is the
+  joint's first party.
 - **Node_physics** (`src/editor/scene/node_physics.{hpp,cpp}`,
   `node_physics_system.{hpp,cpp}`): the rigid body of a node as a value group
   keyed on `Node_physics.motion_mode`, with the collision shape, the body, the
@@ -94,10 +107,9 @@ class's own shape, stated in the row.
 
 | Class | USD counterpart | Verdict | Runtime state | Per node | Saved in | Form |
 |-------|-----------------|---------|---------------|----------|----------|------|
-| `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
 
-`Joint` is the only new prim type. The typed prims USD has for the other
+`Joint` was the only new prim type. The typed prims USD has for the other
 physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
 `PointInstancer`, `Skeleton`) are prim types in erhe already.
 
@@ -135,20 +147,10 @@ group's system against them. The systems replace
 `Node_attachment::handle_item_host_update` and the attachment's own flag-bit
 hook.
 
-**D3. A joint is a prim.** `Node_joint` becomes `editor::Joint`, a typed
-prim deriving `erhe::scene::Imageable` - the level `UsdPhysicsJoint`
-derives - so it carries `visible` / `purpose` and no transform of its own.
-It sits anywhere in the hierarchy (the importers place it where the file
-has it; the Create menu places it below the active item). `Joint.body_0`
-and `Joint.body_1` are weak object references (D28) to the two frame nodes:
-a frame is the referenced node's world transform, the two-node model the
-constraint code, the glTF writer (joint node + `connectedNode`) and the USD
-reader (`<joint>_frame0` / `_frame1`) already use. The USD writer derives
-`physics:body0` / `body1` and the local frames from the frame nodes as it
-does today. `Joint.joint_settings` and `Joint.enable_collision` are own
-properties of the class. Any number of joints may name one body. The
-constraint lives in the physics system of D2, keyed by the `Joint` prim,
-and is rebuilt on a change of one of the four properties.
+**D3. A joint is a prim.** Carried out; the standing description is
+`doc/erhe/property_system.md` section 4.17 (the four properties),
+`doc/editor/physics.md` (the constraint and the drag that reads it) and
+`doc/erhe/usd_compatibility.md` (the two file carriers).
 
 **D4. Composition arcs are a node-held record list.** `Xformable` gains
 `get_composition_arcs() -> std::span<const Composition_arc>` (source path,
@@ -201,10 +203,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P9. `Node_joint` -> `Joint` prim** (D3). New `Item_type` bit, icon,
-  Create menu entry and MCP `create_joint`; glTF import places the prim
-  below the joint's node. Suites: usd, physics, scene; creation 21 rebuilt by
-  its script.
 - **P10. `Prefab_instance`** (D4). Suites: usd, scene, gltf; roundtrip
   references, variants and override legs.
 - **P11. Delete the attachment infrastructure.** `Node_attachment`,

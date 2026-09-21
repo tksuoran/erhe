@@ -38,12 +38,7 @@ graphics device, the command buffer and the DPI).
 Removal needs no operation class of its own: `Node_attach_operation`
 constructed with an empty host node is a pure, undoable detach, and
 `Scene_commands::remove_attachment()` queues exactly that for ANY attachment,
-catalog kind or not. `Node_joint` needs no special case - its detach
-releases the rigid body from the physics world through the item-host update
-hook, and an undo puts it back.
-
-The additive half is `Scene_commands::create_new_joint()`, which the joint
-entry reuses.
+catalog kind or not.
 
 Detaching a `Mesh` a node's geometry graph controls is a legal state: the pure
 detach keeps the removed `Mesh` alive, so the bound graph mesh neither
@@ -75,7 +70,7 @@ Its schema in `config/editor/mcp_tools.json` advertises the same key list the
 catalog holds, so a schema-validating client can reach every kind.
 `remove_node_attachment { node_id, attachment_id | type }` queues the remove
 helper; `type` is the attachment type name `get_node_details` reports (e.g.
-`Node_joint`), while `attachment_id` - also in `get_node_details` - removes
+`Prefab_instance`), while `attachment_id` - also in `get_node_details` - removes
 unambiguously.
 
 ## Verification

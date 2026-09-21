@@ -43,7 +43,7 @@ inline constexpr std::size_t c_joint_axis_count = 6;
 
 // Shared joint settings asset (KHR_physics_rigid_bodies physicsJoints entry).
 // Data only: constraints are built from this in the Six-DOF constraint
-// wrapper (see iconstraint.hpp) by the editor's Node_joint attachment.
+// wrapper (see iconstraint.hpp) by the editor's Joint prim.
 //
 // The six degrees of freedom are eleven registered properties each (66 in
 // all, doc/erhe/property_system.md section 4.22): one limit and one drive per

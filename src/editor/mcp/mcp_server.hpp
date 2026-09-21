@@ -318,8 +318,8 @@ private:
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_body  (const nlohmann::json& args) -> std::string;
-    auto action_create_physics_joint(const nlohmann::json& args) -> std::string;
-    auto action_edit_physics_joint  (const nlohmann::json& args) -> std::string;
+    auto action_create_joint(const nlohmann::json& args) -> std::string;
+    auto action_edit_joint  (const nlohmann::json& args) -> std::string;
     auto action_create_physics_material(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_material  (const nlohmann::json& args) -> std::string;
     auto action_create_collision_filter(const nlohmann::json& args) -> std::string;

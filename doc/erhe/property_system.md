@@ -1943,34 +1943,35 @@ readers: `reset_channel_seek_state` (the tail of every keyframe edit in
 call it. `Properties::animation_properties` keeps only the "Open in
 Animation Window" button; the generic section draws the four rows.
 
-### 4.17 Node_joint
+### 4.17 Joint
 
-`Node_joint` (the editor's physics joint attachment, section 4.26's
-sibling) registers `connected_node`, `joint_settings` and
-`enable_collision` (UI group `Joint`). `connected_node` is a node-typed
-object reference (D28, `reference_item_types` the node bit, validated to
-null or a `Node`) bridged (D18) over the weak member: attachments detach
-only in `Node::~Node`, so a strong node-to-node reference through two
-joints connected to each other's nodes would be a cycle no scene close
-breaks; the bridge keeps the joint's reference weak, which makes the
-property local only (no holder, no inheritance). The bridge's set refuses
-the joint's own node with a warning; `set_connected_node` invalidates
-the property for expressions. `joint_settings` (an object reference to a
-shared `Physics_joint_settings`, a content-library item) and
-`enable_collision` (bool) are entry-stored and inherit (D30), so a node
-or a style holds them for the joints below. The members are a mirror
-refreshed by `Node_joint::on_property_changed`, which also rebuilds the
-constraint (the former setters' consequence); the setters write the
-store, and the placing constructor writes local values only where an
-argument differs from the property default. The KHR_physics_rigid_bodies
-joint carrier keeps writing the effective values and reading them back
-as local ones (it carries no `properties` map). `Properties::
-node_joint_properties` keeps the "Connect to Selected Node" and "Rebuild
-Joint" actions and the constraint state diagnostic; the generic section
-draws the three rows. "Rebuild Joint" is an action, not state: it
-re-captures the joint frames after the user has moved the joint's nodes,
-which no property change announces. An edit of the shared settings item
-needs no such press, the observer of section 4.22 rebuilding on its own.
+`editor::Joint` (the joint prim of
+`doc/plans/node_attachments_to_properties.md` D3, section 4.26's sibling)
+registers `body_0`, `body_1`, `joint_settings` and `enable_collision` (UI
+group `Joint`). `body_0` and `body_1` name the joint's two FRAME nodes as
+weak object references (D28, `reference_item_types` the xformable bit,
+validated to null or a `Node`): a joint keeps no strong reference to a prim
+of the scene, so a joint naming a node of its own subtree forms no cycle a
+scene close cannot break. They are per instance and do not inherit - the two
+nodes are what makes this joint this joint. `joint_settings` (an object
+reference to a shared `Physics_joint_settings`, a content-library item) and
+`enable_collision` (bool) are entry-stored and inherit (D30), so a scope or a
+style holds them for the joints below it. The placing constructor writes
+local values only where an argument differs from the property default.
+`Joint::on_property_changed` hands a change of one of the four to the scene's
+`Joint_system`, which rebuilds the constraint; the properties the joint
+inherits from `Item_base` (name, visible, ...) do not rebuild, because a
+rebuild re-captures the joint frames from the current poses and settles both
+bodies, so renaming a joint or hiding it would otherwise stop a swinging body
+dead. The `KHR_physics_rigid_bodies` joint carrier and the UsdPhysics joint
+prim keep writing the effective values and reading them back as local ones
+(neither carries a `properties` map). `Properties::joint_properties` keeps the
+"Connect to Selected Node" and "Rebuild Joint" actions and the constraint
+state diagnostic; the generic section draws the four rows. "Rebuild Joint" is
+an action, not state: it re-captures the joint frames after the user has moved
+the frame nodes, which no property change announces. An edit of the shared
+settings item needs no such press, the observer of section 4.22 rebuilding on
+its own.
 
 ### 4.18 Migration recipe
 
@@ -2234,7 +2235,7 @@ setter to mirror, untyped access through the D16 text, clone, no inheritance).
 ### 4.22 Physics_joint_settings
 
 `erhe::physics::Physics_joint_settings` (the shared settings item a
-`Node_joint` names, the content library's Physics Joints category) states its
+`Joint` prim names, the content library's Physics Joints category) states its
 six degrees of freedom as registered properties.
 
 **The six axes.** The degrees of freedom are the closed set `trans_x`,
@@ -2287,7 +2288,7 @@ draggable.
 values, refreshed in `on_property_changed` (the bridged-owner recipe of
 section 4.18) and read through `get_axis_limits()` / `get_axis_drives()`.
 The mirror types are the ones `Six_dof_constraint_settings` is made of, so
-`Node_joint::build_constraint` copies the arrays whole; `Joint_reach` and
+`Joint_system` copies the arrays whole; `Joint_reach` and
 `Physics_drag_constraint` read those settings and are untouched;
 `Operations::is_hinge_settings` reads the mirror; and
 `build_physics_description` / `import_physics` translate between the
@@ -2299,9 +2300,10 @@ file round trips.
 
 **The consequence of an edit.** A live constraint follows every source of a
 change the way a collision filter's assignment does (section 4.21):
-`Node_joint` subscribes an any-property observer (D21) to the settings item it
-resolves, whenever its `joint_settings` property is set and in its
-constructors, with its constraint rebuild as the callback. The observer
+`Joint_system` subscribes an any-property observer (D21) to the settings item
+a joint resolves, when the joint registers with the scene and whenever its
+`joint_settings` property is set, with its constraint rebuild as the
+callback. The observer
 rebuilds only for a change of a property `Physics_joint_settings` owns
 (`is_owner_type_or_descendant` on the changed property's owner type): a
 rebuild re-captures the joint frames and teleports both bodies to rest, so a

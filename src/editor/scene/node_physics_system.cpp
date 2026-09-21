@@ -2,7 +2,7 @@
 
 #include "editor_log.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
@@ -170,11 +170,9 @@ void Node_physics_system::create_body(erhe::scene::Node& node, Node_physics_entr
         entry.rigid_body->end_move();
     }
 
-    // The new body may be the missing body of a pending Node_joint (scene load
-    // / paste order); retry constraint creation.
-    for (const std::shared_ptr<Node_joint>& node_joint : m_scene_root.get_node_joints()) {
-        static_cast<void>(node_joint->try_create_constraint());
-    }
+    // The new body may be the missing body of a pending joint (scene load /
+    // paste order); retry constraint creation.
+    m_scene_root.get_joint_system().retry_pending_constraints();
 }
 
 void Node_physics_system::destroy_body(Node_physics_entry& entry)
@@ -184,9 +182,7 @@ void Node_physics_system::destroy_body(Node_physics_entry& entry)
     }
     // Tear down joint constraints referencing this rigid body before it leaves
     // the world; the affected joints return to the pending state.
-    for (const std::shared_ptr<Node_joint>& node_joint : m_scene_root.get_node_joints()) {
-        node_joint->handle_rigid_body_removed(entry.rigid_body.get());
-    }
+    m_scene_root.get_joint_system().handle_rigid_body_removed(entry.rigid_body.get());
     if (entry.in_world && m_scene_root.has_physics_world()) {
         m_scene_root.get_physics_world().remove_rigid_body(entry.rigid_body.get());
     }

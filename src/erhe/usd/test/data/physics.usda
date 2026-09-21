@@ -218,7 +218,7 @@ def Xform "World"
         rel physics:body0 = </World/Crate>
         rel physics:body1 = </World/Anchor>
         bool physics:collisionEnabled = 1
-        custom rel erhe:Node_joint:joint_settings = </World/Joints/Hinge_settings>
+        custom rel erhe:Joint:joint_settings = </World/Joints/Hinge_settings>
     }
 
     def PhysicsRevoluteJoint "Door"

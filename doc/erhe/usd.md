@@ -1393,7 +1393,7 @@ follows are:
 - A prim applying `PhysicsLimitAPI:<axis>` or `PhysicsDriveAPI:<axis>` and
   carrying no joint type is a joint-settings item, one
   `Physics_joint_description` the joints naming it through
-  `rel erhe:Node_joint:joint_settings` share. Instances of identical value
+  `rel erhe:Joint:joint_settings` share. Instances of identical value
   join back into one erhe limit, the inverse of the writer's one instance per
   axis. A joint prim that names no settings prim gets a settings record of
   its own, from the instances it applies itself and from what its class
@@ -1403,9 +1403,9 @@ follows are:
   `physics:axis`, and `PhysicsDistanceJoint` one linear limit over all three.
 - A joint prim's `physics:body0` (its holding prim when it names none) names
   the first body and `physics:body1` the second. erhe takes a joint's two
-  frames from two nodes - the node the `Node_joint` sits on and the node it
-  names - so each frame the prim authors is a node: an identity
-  `localPos0` / `localRot0` puts the `Node_joint` on the first body's prim,
+  frames from two nodes - the joint prim's `body_0` and `body_1` - so each
+  frame the prim authors is a node: an identity
+  `localPos0` / `localRot0` makes `body_0` the first body's prim,
   and a frame of its own puts it on an `Xform` frame node below that prim
   carrying the frame, named `<joint prim name>_frame0`;
   `localPos1` / `localRot1` and the second body give the connected node the
@@ -1829,7 +1829,7 @@ becomes. The rules the write follows:
   states the identity - erhe's constraint reads that side's frame off the
   node's own transform either way. The prim also carries
   `physics:collisionEnabled`, the settings' limit and drive instances inline,
-  and `custom rel erhe:Node_joint:joint_settings` naming the settings prim
+  and `custom rel erhe:Joint:joint_settings` naming the settings prim
   when the settings are a prim other joints share. A frame node is an
   ordinary `Xform` prim of the tree, written where it sits, so the reload
   finds it again.

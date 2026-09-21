@@ -3,7 +3,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
-#include "scene/node_joint.hpp"
+#include "scene/joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 
@@ -335,6 +335,34 @@ public:
 
 } // anonymous namespace
 
+namespace {
+
+// Every `Joint` prim of a tree, whatever prim it sits below, by the node its
+// `body_0` names: that node is the one both formats state the joint on (D3).
+void collect_joints(
+    const erhe::Hierarchy&                                                                       parent,
+    std::unordered_map<const erhe::scene::Node*, std::vector<std::shared_ptr<Joint>>>&           out_joints
+)
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+        const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(child);
+        if (joint) {
+            const std::shared_ptr<erhe::scene::Node> frame_0 = joint->get_body_0();
+            if (frame_0) {
+                out_joints[frame_0.get()].push_back(joint);
+            } else {
+                log_parsers->warn(
+                    "physics export: joint '{}' names no first frame node - skipping joint",
+                    joint->get_name()
+                );
+            }
+        }
+        collect_joints(*child.get(), out_joints);
+    }
+}
+
+} // anonymous namespace
+
 auto build_physics_description(
     const erhe::scene::Scene&  scene,
     const Content_library*     content_library,
@@ -342,6 +370,12 @@ auto build_physics_description(
 ) -> erhe::scene::Physics_description
 {
     Physics_builder builder{};
+
+    std::unordered_map<const erhe::scene::Node*, std::vector<std::shared_ptr<Joint>>> joints_by_frame_0;
+    const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
+    if (root_node) {
+        collect_joints(*root_node.get(), joints_by_frame_0);
+    }
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         std::optional<Node_physics_data> node_physics = read_node_physics(*node.get());
@@ -357,16 +391,13 @@ auto build_physics_description(
                 node_physics.reset();
             }
         }
-        std::shared_ptr<Node_joint>         node_joint{};
-        std::size_t                         joint_count = 0;
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<Node_joint> joint = std::dynamic_pointer_cast<Node_joint>(attachment);
-            if (joint) {
-                if (!node_joint) {
-                    node_joint = joint;
-                }
-                ++joint_count;
-            }
+        std::shared_ptr<Joint> node_joint{};
+        std::size_t            joint_count = 0;
+        const std::unordered_map<const erhe::scene::Node*, std::vector<std::shared_ptr<Joint>>>::const_iterator joints_it =
+            joints_by_frame_0.find(node.get());
+        if (joints_it != joints_by_frame_0.end()) {
+            node_joint  = joints_it->second.front();
+            joint_count = joints_it->second.size();
         }
         if (!node_physics.has_value() && !node_joint) {
             return true;
@@ -588,7 +619,7 @@ auto build_physics_description(
                     joint_count
                 );
             }
-            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_connected_node();
+            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_body_1();
             if (!connected_node) {
                 log_parsers->warn(
                     "physics export: node '{}' joint has no connected node (world attachment is not representable) - skipping joint",
@@ -596,6 +627,7 @@ auto build_physics_description(
                 );
             } else {
                 erhe::scene::Physics_node_joint joint{};
+                joint.name             = node_joint->get_name();
                 joint.connected_node   = connected_node;
                 joint.joint_index      = builder.get_joint_index(node_joint->get_settings());
                 joint.enable_collision = node_joint->get_enable_collision();

@@ -1083,8 +1083,9 @@ class Creation:
         return node["id"]
 
     def joint(self, node_id, connected_node_id=None, settings_name=None, enable_collision=False):
-        """create_physics_joint: joins the nearest self-or-ancestor rigid
-        body of node_id to that of connected_node_id (or the world)."""
+        """create_joint: a Joint prim below node_id, joining the nearest
+        self-or-ancestor rigid body of node_id to that of
+        connected_node_id (or the world)."""
         args = {
             "scene_name": self.scene, "node_id": int(node_id),
             "enable_collision": bool(enable_collision),
@@ -1093,7 +1094,7 @@ class Creation:
             args["connected_node_id"] = int(connected_node_id)
         if settings_name:
             args["settings_name"] = settings_name
-        return self.mutate("create_physics_joint", args)
+        return self.mutate("create_joint", args)
 
     def strip_physics(self, node_id):
         """Remove the rigid body from a node (pure visual detail parts).

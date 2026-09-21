@@ -2344,6 +2344,12 @@ private:
             if (m_skel_animation_items.count(child_prim) != 0) {
                 continue; // rebuilt by the Skeleton prim from the joint channels
             }
+            if ((child_prim->get_type() & erhe::Item_type::joint) != 0) {
+                // A joint prim is written from the physics description, as the
+                // UsdPhysics joint prim of the body it joins, wherever that
+                // body's prim sits (doc/erhe/usd_compatibility.md, "Physics").
+                continue;
+            }
             // A skin and an animation are library resources of the editor,
             // not prims of a stage: a skin is the `Skeleton` prim's arrays
             // and the skinned mesh's `SkelBindingAPI` primvars (K1), and an
@@ -7162,7 +7168,7 @@ private:
             if (!settings_path.empty()) {
                 add_relationship_property(
                     usd_joint.props,
-                    std::string{c_node_joint_settings_relationship},
+                    std::string{c_joint_settings_relationship},
                     {settings_path},
                     Attribute_form::custom_attribute
                 );

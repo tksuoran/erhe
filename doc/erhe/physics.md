@@ -52,7 +52,7 @@ a specific engine.
   `trans_y`, `trans_z`, `rot_x`, `rot_y`, `rot_z` (66 in all,
   `doc/erhe/property_system.md` section 4.22), read through `get_axis_limits()` and
   `get_axis_drives()` as the `Constraint_axis_limit` / `Constraint_axis_drive` arrays
-  `Six_dof_constraint_settings` is made of; the editor's `Node_joint` observes the item, so
+  `Six_dof_constraint_settings` is made of; the editor's `Joint_system` observes the item, so
   an edit from any writer rebuilds the live constraint
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
   (`erhe::Typed`, `doc/erhe/item.md` "Prim classes"), each with its erhe class name as

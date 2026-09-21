@@ -44,7 +44,7 @@ namespace editor {
 class Brush;
 class App_context;
 class App_message_bus;
-class Node_joint;
+class Joint;
 class Rendertarget_mesh;
 class Scene_root;
 
@@ -114,7 +114,7 @@ private:
     void material_properties          (const std::vector<std::shared_ptr<erhe::Item_base>>& items);
     void brush_placement_properties   (const erhe::scene::Node& node);
     void node_physics_properties      (erhe::scene::Node& node);
-    void node_joint_properties        (Node_joint& node_joint);
+    void joint_properties             (Joint& joint);
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
