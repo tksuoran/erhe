@@ -7,7 +7,7 @@
 #include "items.hpp"
 #include "operations/mesh_operation.hpp"
 #include "tools/selection_tool.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_system.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -431,9 +431,9 @@ void App_scenes::build_display_color_primitive(
 }
 
 // The generated quad geometry a `cards` draw mode supplies. Driven by the
-// change (Scene_root's queue) for the same reasons the display colors are: the
-// write can land on a worker thread or inside a tree walk, and the build
-// inserts a prim into the tree.
+// change (each scene's draw-mode system queue) for the same reasons the
+// display colors are: the write can land on a worker thread or inside a tree
+// walk, and the build inserts a prim into the tree.
 void App_scenes::rebuild_draw_mode_proxies()
 {
     ERHE_PROFILE_FUNCTION();
@@ -443,13 +443,7 @@ void App_scenes::rebuild_draw_mode_proxies()
         m_draw_mode_roots = m_scene_roots;
     }
     for (const std::shared_ptr<Scene_root>& scene_root : m_draw_mode_roots) {
-        scene_root->take_draw_mode_proxy_rebuilds(m_draw_mode_rebuilds);
-        for (const std::shared_ptr<Draw_mode>& draw_mode : m_draw_mode_rebuilds) {
-            if (draw_mode) {
-                draw_mode->rebuild_card_proxy();
-            }
-        }
-        m_draw_mode_rebuilds.clear();
+        scene_root->get_draw_mode_system().flush_proxy_rebuilds(m_context);
     }
     m_draw_mode_roots.clear();
 }

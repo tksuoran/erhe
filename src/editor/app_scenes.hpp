@@ -31,7 +31,6 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
-class Draw_mode;
 class Scene_root;
 class Time_context;
 
@@ -68,8 +67,8 @@ public:
     // rebuild").
     void rebuild_display_colors              ();
     // Main thread, once per frame beside rebuild_display_colors(): builds the
-    // card proxy of every draw-mode attachment whose values, extent or
-    // placement changed (doc/erhe/usd_compatibility.md, "Draw modes").
+    // card proxy of every prim whose draw-mode values, extent or placement
+    // changed (doc/erhe/usd_compatibility.md, "Draw modes").
     // Change-driven for the same reason and in the same shape.
     void rebuild_draw_mode_proxies           ();
     // Step 2 of the per-frame material schedule
@@ -158,7 +157,6 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>>     m_display_color_items;
     // Scratch of rebuild_draw_mode_proxies(); cleared after use, capacity kept.
     std::vector<std::shared_ptr<Scene_root>>          m_draw_mode_roots;
-    std::vector<std::shared_ptr<Draw_mode>>           m_draw_mode_rebuilds;
 };
 
 }

@@ -279,23 +279,17 @@ carrier's own clone. This is the shape a real asset has: a referencing prim
 whose target references another file in turn, with the override authored at
 the path USD composes (`over "geo" { over "default" { over "Body" } }`).
 
-A value's name is resolved by `find_override_property_target`. A name
-qualified with the class name of an applied API schema's attachment
-(`Draw_mode.card_geometry`) is asked first and lands on that attachment of the
-prim: USD authors such a schema's attributes on the prim itself while erhe
-holds them on an attachment of it, and the prim is free to hold a value of
-another class as a secondary property of its own (`doc/erhe/property_system.md`
-D30), so the attachment has to own the name for the value to be the
-attachment's own opinion - which is what it draws from and what a save writes
-back. `register_applied_schema_attachment` is how a class says it stands for
-an applied schema: the class name, the owner type its properties are
-registered on, and how one is made. The prim need not hold the attachment yet
-- `prepend apiSchemas` in a variant block is what makes the schema present, so
-the first opinion naming it makes the attachment - and
-`is_applied_schema_attachment_class` is what the editor's pairing of an
-instance with its template asks to know which attachments read their
-counterpart's values through the reference layer. Every other name resolves on
-the item itself. The collectors walk prims only, so an attachment's own local
+A value's name is resolved by `find_override_property_target`. An applied API
+schema's attributes are attached properties of the prim itself
+(`doc/erhe/property_system.md` section 4.23), so a name qualified with the
+registering class's name (`Draw_mode.card_geometry`) resolves on the item
+through `find_override_property`: USD authors such a schema's attributes on
+the prim, and so does erhe. A prim need hold no value of the group yet -
+`prepend apiSchemas` in a variant block is what makes the schema present, and
+an opinion naming one of its values is authored on the prim as any other value
+is. A name qualified with the class name of an ATTACHMENT of the prim resolves
+to that attachment's property, and every other name resolves on the item
+itself. The collectors walk prims only, so an attachment's own local
 value is not yet reported as an override
 (`doc/erhe/usd_compatibility_design.md` section 6, "Overrides on applied API schemas
 inside an instance"); what the resolution serves today is a value a file

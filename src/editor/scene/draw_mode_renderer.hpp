@@ -11,18 +11,18 @@
 namespace editor {
 
 class App_context;
-class Draw_mode;
+class Draw_mode_system;
 class Tools;
 
 // Draws the proxy a prim's draw mode asks for, per viewport
 // (doc/erhe/usd_compatibility.md, "Draw modes"). A background tool rather than a
-// window: it has no state and no UI, it only submits lines for the draw-mode
-// attachments the rendered scene registered with its Scene_root.
+// window: it has no state and no UI, it only submits lines for the nodes
+// the rendered scene's draw-mode system holds.
 //
 // `bounds` is the extent box and `origin` the three axis lines from the
 // prim's origin, both in the prim's own space and in the draw-mode color.
 // `cards` needs nothing here: its proxy is generated quad geometry the
-// attachment owns as a child prim, which the ordinary content passes render.
+// system owns as a child prim, which the ordinary content passes render.
 class Draw_mode_renderer : public Tool
 {
 public:

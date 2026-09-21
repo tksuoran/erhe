@@ -32,7 +32,7 @@
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
@@ -182,6 +182,12 @@ Scene_root::Scene_root(
     }
 
     m_scene = std::make_shared<Scene>(name, this);
+
+    // The node systems of this scene's value groups are added before the
+    // scene holds any node, so every node that enters reaches them
+    // (doc/erhe/scene.md "Node systems").
+    m_draw_mode_system = std::make_unique<Draw_mode_system>();
+    m_scene->add_node_system(*m_draw_mode_system.get());
 
     // The scene owns its content library: its resources are prims of this
     // scene's tree, under the kind scopes the library keeps below the root
@@ -385,7 +391,14 @@ Scene_root::~Scene_root() noexcept
     // Mesh::detach_rt_from_scene, Node_physics world removal).
     if (m_scene) {
         m_scene->sever_host();
+        // The Scene may outlive this host, so the node systems this host owns
+        // leave its list before they are destroyed. sever_host() has already
+        // unregistered every node, so each system has released its records.
+        if (m_draw_mode_system) {
+            m_scene->remove_node_system(*m_draw_mode_system.get());
+        }
     }
+    m_draw_mode_system.reset();
 
     // Library items (and possibly the library itself, via browser windows or
     // clipboard/selection references) can outlive this host; detach them now
@@ -1698,48 +1711,9 @@ void Scene_root::flush_draw_lists()
     m_draw_list_scene->flush_pending();
 }
 
-void Scene_root::register_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode)
+auto Scene_root::get_draw_mode_system() -> Draw_mode_system&
 {
-    const std::vector<std::shared_ptr<Draw_mode>>::iterator i = std::find(m_draw_modes.begin(), m_draw_modes.end(), draw_mode);
-    if (i != m_draw_modes.end()) {
-        return;
-    }
-    m_draw_modes.push_back(draw_mode);
-}
-
-void Scene_root::unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode)
-{
-    const std::vector<std::shared_ptr<Draw_mode>>::iterator i = std::find(m_draw_modes.begin(), m_draw_modes.end(), draw_mode);
-    if (i == m_draw_modes.end()) {
-        return;
-    }
-    m_draw_modes.erase(i);
-}
-
-auto Scene_root::get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&
-{
-    return m_draw_modes;
-}
-
-void Scene_root::queue_draw_mode_proxy_rebuild(const std::shared_ptr<Draw_mode>& draw_mode)
-{
-    if (!draw_mode) {
-        return;
-    }
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_draw_mode_proxy_rebuilds_mutex};
-    for (const std::shared_ptr<Draw_mode>& pending : m_draw_mode_proxy_rebuilds) {
-        if (pending == draw_mode) {
-            return;
-        }
-    }
-    m_draw_mode_proxy_rebuilds.push_back(draw_mode);
-}
-
-void Scene_root::take_draw_mode_proxy_rebuilds(std::vector<std::shared_ptr<Draw_mode>>& out_draw_modes)
-{
-    out_draw_modes.clear();
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_draw_mode_proxy_rebuilds_mutex};
-    std::swap(out_draw_modes, m_draw_mode_proxy_rebuilds);
+    return *m_draw_mode_system.get();
 }
 
 auto Scene_root::find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>

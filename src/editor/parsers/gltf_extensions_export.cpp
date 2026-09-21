@@ -14,7 +14,6 @@
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "parsers/gltf.hpp"
 #include "prefabs/prefab_instance.hpp"
-#include "scene/draw_mode.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -413,7 +412,6 @@ void add_gltf_editor_state(
 
     bool used_physics    = false;
     bool used_layout     = false;
-    int  draw_mode_count = 0;
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node == scene_root_node) {
@@ -449,13 +447,6 @@ void add_gltf_editor_state(
                     }
                 );
             }
-        }
-
-        // A draw mode is `UsdGeomModelAPI`, which glTF has no counterpart for
-        // (C1: each format carries its own features), so it is left out and
-        // counted for the one warning below.
-        if (erhe::scene::get_attachment<Draw_mode>(node.get())) {
-            ++draw_mode_count;
         }
 
         // ERHE_physics: erhe rigid-body state KHR_physics_rigid_bodies
@@ -513,12 +504,6 @@ void add_gltf_editor_state(
     }
     if (used_layout) {
         arguments.extensions_used.push_back("ERHE_layout");
-    }
-    if (draw_mode_count > 0) {
-        log_parsers->warn(
-            "glTF export '{}': {} prim(s) carry a draw mode, which glTF has no form for - the draw modes are not written",
-            erhe::file::to_string(export_path), draw_mode_count
-        );
     }
     // ERHE_scene: per-scene settings (#239), ambient light (#237),
     // enable_physics. Always emitted - its presence in extensionsUsed marks

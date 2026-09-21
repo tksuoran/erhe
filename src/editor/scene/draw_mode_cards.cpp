@@ -2,7 +2,7 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_properties.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -469,26 +469,24 @@ constexpr float c_card_opacity_threshold = 0.1f;
 
 } // anonymous namespace
 
-auto build_draw_mode_card_proxy(App_context& context, Draw_mode& draw_mode) -> std::shared_ptr<erhe::scene::Mesh>
+auto build_draw_mode_card_proxy(
+    App_context&           context,
+    erhe::scene::Node&     node,
+    const Draw_mode_data&  data,
+    const glm::vec3&       min,
+    const glm::vec3&       max
+) -> std::shared_ptr<erhe::scene::Mesh>
 {
-    if (draw_mode.resolved_draw_mode() != erhe::scene::Draw_mode::cards) {
-        return {};
-    }
-    erhe::Item_host* const item_host = draw_mode.get_item_host();
+    erhe::Item_host* const item_host = node.get_item_host();
     if (item_host == nullptr) {
         return {};
     }
     Scene_root& scene_root = *static_cast<Scene_root*>(item_host);
-    glm::vec3   min{0.0f};
-    glm::vec3   max{0.0f};
-    if (!draw_mode.get_extent(min, max)) {
-        return {};
-    }
 
-    const Draw_mode_card_geometry   card_geometry = draw_mode.get_value(Draw_mode::card_geometry_property);
-    const Draw_mode_card_visibility visibility    = draw_mode.resolved_card_visibility();
-    const glm::vec3                 color         = draw_mode.get_value(Draw_mode::draw_mode_color_property);
-    const std::string               owner_name    = draw_mode.get_node() != nullptr ? draw_mode.get_node()->get_name() : draw_mode.get_name();
+    const Draw_mode_card_geometry   card_geometry = data.card_geometry;
+    const Draw_mode_card_visibility visibility    = data.resolved_card_visibility;
+    const glm::vec3                 color         = data.draw_mode_color;
+    const std::string               owner_name    = node.get_name();
 
     std::shared_ptr<erhe::scene::Mesh> proxy = std::make_shared<erhe::scene::Mesh>(owner_name + " cards");
     bool from_texture_fallback_reported = false;
@@ -500,7 +498,7 @@ auto build_draw_mode_card_proxy(App_context& context, Draw_mode& draw_mode) -> s
         }
         // The value resolved against the file that authored it: a variant
         // block's opinion travels as the relative path the file spelled.
-        const std::filesystem::path              texture_path = draw_mode.resolve_card_texture_path(face);
+        const std::filesystem::path              texture_path = resolve_card_texture_path(node, face);
         std::shared_ptr<erhe::graphics::Texture> texture;
         if (!texture_path.empty()) {
             texture = load_card_texture(context, scene_root, texture_path);

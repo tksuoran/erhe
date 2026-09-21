@@ -31,7 +31,8 @@
 #include "prefabs/prefab_instance.hpp"
 #include "scene/node_joint.hpp"
 #include "erhe_scene/layout.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_properties.hpp"
+#include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/item_lookup.hpp"
@@ -603,6 +604,39 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         };
     };
 
+    // Draw mode: the prim's own opinion, what it resolves to and the box the
+    // proxy is sized from (doc/erhe/usd_compatibility.md, "Draw modes"). A
+    // value group of the prim itself, so it is reported on the prim's own
+    // entry the way the mesh, camera and light detail is.
+    const auto draw_mode_details = [&sr](const std::shared_ptr<erhe::scene::Node>& node) -> json
+    {
+        const std::optional<Draw_mode_data> data = read_draw_mode(*node.get());
+        if (!data.has_value()) {
+            return json(nullptr);
+        }
+        json draw_mode_json = json::object();
+        draw_mode_json["draw_mode"]          = erhe::scene::c_str(data.value().draw_mode);
+        draw_mode_json["resolved_draw_mode"] = erhe::scene::c_str(data.value().resolved_draw_mode);
+        draw_mode_json["apply_draw_mode"]    = node->get_value(Draw_mode::apply_draw_mode_property);
+        draw_mode_json["card_geometry"]      = erhe::scene::c_str(data.value().card_geometry);
+        draw_mode_json["card_visibility"]    = erhe::scene::c_str(data.value().resolved_card_visibility);
+        const glm::vec3 color = data.value().draw_mode_color;
+        draw_mode_json["draw_mode_color"]    = {color.x, color.y, color.z};
+        glm::vec3 extent_min{0.0f};
+        glm::vec3 extent_max{0.0f};
+        if (sr->get_draw_mode_system().get_extent(*node.get(), extent_min, extent_max)) {
+            draw_mode_json["extent_min"] = {extent_min.x, extent_min.y, extent_min.z};
+            draw_mode_json["extent_max"] = {extent_max.x, extent_max.y, extent_max.z};
+        }
+        json card_textures = json::array();
+        for (std::size_t face = 0; face < erhe::scene::c_draw_mode_card_face_count; ++face) {
+            const erhe::scene::Draw_mode_card_face card_face = static_cast<erhe::scene::Draw_mode_card_face>(face);
+            card_textures.push_back(node->get_value(Draw_mode::get_card_texture_property(card_face)).path);
+        }
+        draw_mode_json["card_textures"] = card_textures;
+        return draw_mode_json;
+    };
+
     const auto light_details = [](const std::shared_ptr<erhe::scene::Light>& light) -> json
     {
         const char* type_str = (light->get_light_type() == erhe::scene::Light_type::directional) ? "directional"
@@ -665,31 +699,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 att_json["linear_damping"]  = rigid_body->get_linear_damping();
                 att_json["angular_damping"] = rigid_body->get_angular_damping();
             }
-        }
-
-        // Draw mode: the prim's own opinion, what it resolves to and the box
-        // the proxy is sized from (doc/erhe/usd_compatibility.md, "Draw modes").
-        auto draw_mode = std::dynamic_pointer_cast<Draw_mode>(att);
-        if (draw_mode) {
-            att_json["draw_mode"]          = erhe::scene::c_str(draw_mode->get_value(Draw_mode::draw_mode_property));
-            att_json["resolved_draw_mode"] = erhe::scene::c_str(draw_mode->resolved_draw_mode());
-            att_json["apply_draw_mode"]    = draw_mode->get_value(Draw_mode::apply_draw_mode_property);
-            att_json["card_geometry"]      = erhe::scene::c_str(draw_mode->get_value(Draw_mode::card_geometry_property));
-            att_json["card_visibility"]    = erhe::scene::c_str(draw_mode->resolved_card_visibility());
-            const glm::vec3 color = draw_mode->get_value(Draw_mode::draw_mode_color_property);
-            att_json["draw_mode_color"]    = {color.x, color.y, color.z};
-            glm::vec3 extent_min{0.0f};
-            glm::vec3 extent_max{0.0f};
-            if (draw_mode->get_extent(extent_min, extent_max)) {
-                att_json["extent_min"] = {extent_min.x, extent_min.y, extent_min.z};
-                att_json["extent_max"] = {extent_max.x, extent_max.y, extent_max.z};
-            }
-            json card_textures = json::array();
-            for (std::size_t face = 0; face < erhe::scene::c_draw_mode_card_face_count; ++face) {
-                const erhe::scene::Draw_mode_card_face card_face = static_cast<erhe::scene::Draw_mode_card_face>(face);
-                card_textures.push_back(draw_mode->get_value(Draw_mode::get_card_texture_property(card_face)).path);
-            }
-            att_json["card_textures"] = card_textures;
         }
 
         auto node_joint = std::dynamic_pointer_cast<Node_joint>(att);
@@ -804,6 +813,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"light",          erhe::is<erhe::scene::Light>(found_node.get())
             ? light_details(std::static_pointer_cast<erhe::scene::Light>(found_node))
             : json(nullptr)},
+        {"draw_mode",      draw_mode_details(found_node)},
         {"children",       children},
         {"subtree_world_aabb", subtree_aabb.is_valid()
             ? json{

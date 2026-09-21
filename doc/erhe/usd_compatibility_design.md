@@ -488,21 +488,22 @@ now owns its behavior; `git log` on that record has the history.
   Utah columns render in their shading variant's color
   (`doc/erhe/usd.md` "Variant sets"; `doc/erhe/scene.md`;
   `doc/editor/parsers.md`; `doc/editor/scene.md`).
-- C10 `GeomModelAPI` draw modes. A model prim's `UsdGeomModelAPI` is an
-  `editor::Draw_mode` attachment of that prim (`Item_type::draw_mode`),
-  holding every attribute of the schema as an entry property named as
+- C10 `GeomModelAPI` draw modes. A model prim's `UsdGeomModelAPI` is a value
+  group of that prim itself (`doc/plans/node_attachments_to_properties.md`
+  D1): `editor::Draw_mode` registers every attribute of the schema as an
+  attached property of `erhe::scene::Node`, named as
   `doc/erhe/usd_compatibility.md` "Draw modes" names it; the neutral record is
   `erhe::scene::Draw_mode_description`, whose enumerations spell USD's
   tokens, read per prim applying the schema (or authoring a `model:`
   attribute) and written back in the schema's spelling. A value of the
   record is named `Draw_mode.<property>` wherever a name addresses it: a
-  variant block's `model:` attributes are carried under that name,
-  `find_override_property_target` resolves it to the attachment - made on
-  the spot through the applied-schema attachment registry
-  (`erhe::scene::register_applied_schema_attachment`) when the prim holds
-  none, which is what `prepend apiSchemas` inside the block means - and a
-  carrier's attachment reads its arc target's through the reference layer
-  (`link_carrier_attachments_to_target`). A prim whose own mode asks for a
+  variant block's `model:` attributes are carried under that name and
+  `find_override_property_target` resolves it on the prim itself. The
+  group's key property `Draw_mode.apply_draw_mode` states that the prim
+  carries the feature, which is what `prepend apiSchemas` inside the block
+  means: authoring any value of the group sets it. A carrier prim reads its
+  arc target's values through the reference layer
+  (`link_carrier_values_to_target`, D9). A prim whose own mode asks for a
   proxy takes its children's subtrees out of render, pick and simulation
   (`Item_base::set_prunes_children`, ANDed into the derived active bit;
   the prim and its attachments stay) and supplies the proxy: `bounds` and
@@ -515,8 +516,9 @@ now owns its behavior; `git log` on that record has the history.
   the mid plane and faces opposite ways; back-face culling resolves the
   pair, where the adapter's 2^-23 offset z-fights), its image alpha-tested at the
   adapter's 0.1 threshold, in `drawModeColor` when the face has no image;
-  an inactive prim owns no proxy. `resolved_draw_mode()` walks `inherited`
-  up to the nearest authored ancestor. DrawModes.usd renders as usdview
+  an inactive prim owns no proxy; the runtime state is owned by the scene's
+  `editor::Draw_mode_system` (`doc/erhe/scene.md` "Node systems").
+  `read_draw_mode()` walks `inherited` up to the nearest authored ancestor. DrawModes.usd renders as usdview
   renders it: seven teapots and 28 proxies in their columns' colors and
   card images; the survey's Storm render draws `bounds` and `origin` as
   filled slabs where usdview draws lines, which is the entry's remaining

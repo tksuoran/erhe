@@ -53,7 +53,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "parsers/gltf_extensions_names.hpp"
 #include "parsers/physics_export.hpp"
 #include "parsers/physics_import.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_properties.hpp"
 #include "scene/ik_properties.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
@@ -2552,12 +2552,13 @@ void resolve_usd_physics(
     }
 }
 
-// The draw modes of one USD file as editor attachments: one `Draw_mode` per
-// record, applied to the prim the record names, holding exactly the values
-// the file authored. The attachment is applied to the loaded tree before the
-// tree's own insert, the way a `Node_physics` is, so the whole import is one
-// undoable operation.
-void resolve_usd_draw_modes(App_context& context, const erhe::usd::Usd_data& usd_data)
+// The draw modes of one USD file as values of the prims they apply to: the
+// values the file authored become local values of the prim named by the
+// record, and the key property `Draw_mode.apply_draw_mode` states that the
+// prim carries the feature (doc/erhe/property_system.md section 4.24). It
+// runs before the tree's own insert, the way the physics does, so the whole
+// import is one undoable operation.
+void resolve_usd_draw_modes(const erhe::usd::Usd_data& usd_data)
 {
     for (const erhe::usd::Usd_draw_mode& record : usd_data.draw_modes) {
         if (!record.prim) {
@@ -2573,48 +2574,23 @@ void resolve_usd_draw_modes(App_context& context, const erhe::usd::Usd_data& usd
             );
             continue;
         }
-        std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(node);
-        if (!draw_mode) {
-            draw_mode = std::make_shared<Draw_mode>(context);
-            node->attach(draw_mode);
-        }
-        draw_mode->set_description(record.description);
+        set_draw_mode_description(*node, record.description);
     }
 }
 
-// Where a relative card-texture path of this file is resolved from. A record
-// carries an absolute path already, but a card texture a variant block
-// authors travels as the text the file spelled - it is written back that way
-// - so the attachment holding it must know the file it came out of. Set once
-// per attachment, so a clone that carries its template's directory keeps it.
-void set_usd_draw_mode_source_directory(erhe::Hierarchy& root, const std::filesystem::path& path)
-{
-    const std::filesystem::path directory = path.parent_path();
-    root.for_each<erhe::scene::Xformable>(
-        [&directory](erhe::scene::Xformable& prim) -> bool {
-            const std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(&prim);
-            if (draw_mode && draw_mode->get_source_directory().empty()) {
-                draw_mode->set_source_directory(directory);
-            }
-            return true;
-        }
-    );
-}
-
 // The draw modes of a scene to write: one entry per prim of the tree carrying
-// a `Draw_mode` attachment, with the values the attachment holds locally.
+// a draw mode, with the values the prim holds locally.
 void collect_usd_draw_modes(
-    erhe::scene::Node&                              root_node,
-    std::vector<erhe::usd::Usd_save_draw_mode>&     out_draw_modes
+    erhe::scene::Node&                          root_node,
+    std::vector<erhe::usd::Usd_save_draw_mode>& out_draw_modes
 )
 {
     root_node.for_each<erhe::scene::Xformable>(
         [&out_draw_modes](erhe::scene::Xformable& prim) -> bool {
-            const std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(&prim);
-            if (!draw_mode) {
+            if (!carries_draw_mode(prim)) {
                 return true;
             }
-            const erhe::scene::Draw_mode_description description = draw_mode->get_description();
+            const erhe::scene::Draw_mode_description description = get_draw_mode_description(prim);
             if (!description.has_authored_value()) {
                 return true;
             }
@@ -2902,12 +2878,11 @@ auto make_import_usd_operation(
     // style assignment; both ride the import_root insert below.
     resolve_usd_classes(usd_data, root_node);
 
-    // A draw mode is a value of the prim it is applied to, so the attachments
-    // stand before the arcs are instantiated: a carrier's own one is paired
+    // A draw mode is a value of the prim it is applied to, so the values
+    // stand before the arcs are instantiated: a carrier's own ones are paired
     // with its target's the moment the instance is linked, and a variant
-    // opinion that reaches a prim with none makes one
-    // (erhe::scene::register_applied_schema_attachment).
-    resolve_usd_draw_modes(context, usd_data);
+    // opinion naming one resolves on the prim itself.
+    resolve_usd_draw_modes(usd_data);
 
     // Composition arcs: each referencing prim gets one Prefab_instance per
     // arc, with the arc's target cloned below it. The instances ride the
@@ -2928,7 +2903,7 @@ auto make_import_usd_operation(
     // reader left those entries pending because the arcs were not in the tree
     // when it ran (doc/erhe/usd_compatibility_design.md C6).
     apply_pending_variant_opinions(usd_data, root_node);
-    set_usd_draw_mode_source_directory(*root_node.get(), path);
+    set_draw_mode_source_directory(*root_node.get(), path);
 
     // The file's variant sets join the target scene's table. The selected
     // variant is already bound, so an import needs no switch.
@@ -3064,7 +3039,7 @@ auto load_usd_prefab_template(
     // template reads them through the reference layer, and a carrier inside
     // the template is paired with its own target the way a scene's carrier
     // is.
-    resolve_usd_draw_modes(context, usd_data);
+    resolve_usd_draw_modes(usd_data);
 
     // Arcs authored inside the template subtree are instantiated the same way
     // the scene paths do it, so nested references reproduce.
@@ -3104,7 +3079,7 @@ auto load_usd_prefab_template(
     // variant table, but the opinions are the template's own content: an
     // instance of it reads them through the reference layer (X2).
     apply_pending_variant_opinions(usd_data, container_node);
-    set_usd_draw_mode_source_directory(*container_node.get(), path);
+    set_draw_mode_source_directory(*container_node.get(), path);
 
     if (root_prim_path.empty()) {
         container_node->set_parent({});
@@ -3298,12 +3273,11 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // style assignment, before the prims move under the scene root.
     resolve_usd_classes(usd_data, container_node);
 
-    // A draw mode is a value of the prim it is applied to, so the attachments
-    // stand before the arcs are instantiated: a carrier's own one is paired
+    // A draw mode is a value of the prim it is applied to, so the values
+    // stand before the arcs are instantiated: a carrier's own ones are paired
     // with its target's the moment the instance is linked, and a variant
-    // opinion that reaches a prim with none makes one
-    // (erhe::scene::register_applied_schema_attachment).
-    resolve_usd_draw_modes(context, usd_data);
+    // opinion naming one resolves on the prim itself.
+    resolve_usd_draw_modes(usd_data);
 
     // Composition arcs: one Prefab_instance per arc under its carrier prim,
     // before the prims move under the scene root.
@@ -3323,7 +3297,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // reader left those entries pending because the arcs were not in the tree
     // when it ran (doc/erhe/usd_compatibility_design.md C6).
     apply_pending_variant_opinions(usd_data, container_node);
-    set_usd_draw_mode_source_directory(*container_node.get(), path);
+    set_draw_mode_source_directory(*container_node.get(), path);
 
     // The file's variant sets, while the prims are still under the container
     // the material paths address them from.

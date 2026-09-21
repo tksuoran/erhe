@@ -78,7 +78,7 @@ class App_message_bus;
 class App_scenes;
 class App_settings;
 class Item_tree_window;
-class Draw_mode;
+class Draw_mode_system;
 class Node_joint;
 class Physics_drag_constraint;
 class Node_physics;
@@ -327,21 +327,11 @@ public:
     void begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void end_mesh_rt_update  (const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
-    // The draw-mode attachments of this scene, which is where the proxy
-    // renderer finds them: the attachment registers itself when it reaches a
-    // host and leaves the list when it leaves the host, so no pass scans the
-    // tree for them (doc/erhe/usd_compatibility.md, "Draw modes").
-    void register_draw_mode  (const std::shared_ptr<Draw_mode>& draw_mode);
-    void unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode);
-    [[nodiscard]] auto get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&;
-
-    // The draw-mode attachments whose card proxy is out of date. Enqueue
-    // only: a value change or an attach can land inside a tree walk or on a
-    // worker thread, and building the proxy inserts a prim, so the build is
-    // App_scenes::rebuild_draw_mode_proxies() on the main thread - the way a
-    // display-color change is handled.
-    void queue_draw_mode_proxy_rebuild(const std::shared_ptr<Draw_mode>& draw_mode);
-    void take_draw_mode_proxy_rebuilds(std::vector<std::shared_ptr<Draw_mode>>& out_draw_modes);
+    // The runtime state of this scene's draw modes: the nodes carrying one,
+    // their cached extent and their card proxies
+    // (doc/erhe/usd_compatibility.md, "Draw modes"). The scene drives it from
+    // the node-system change sites, so no pass scans the tree for them.
+    [[nodiscard]] auto get_draw_mode_system() -> Draw_mode_system&;
 
     // The card images the draw-mode proxies of this scene read, keyed by the
     // file each was read from, so two attachments naming the same file share
@@ -584,10 +574,8 @@ private:
     bool                                            m_physics_simulation_running{true};
     double                                          m_wind_time{0.0};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
-    std::vector<std::shared_ptr<Draw_mode>>         m_draw_modes;
+    std::unique_ptr<Draw_mode_system>               m_draw_mode_system;
     std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
-    std::vector<std::shared_ptr<Draw_mode>>         m_draw_mode_proxy_rebuilds;
-    ERHE_PROFILE_MUTEX(std::mutex,                  m_draw_mode_proxy_rebuilds_mutex);
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<Physics_drag_constraint*>           m_physics_drags;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;

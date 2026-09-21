@@ -528,12 +528,14 @@ erhe_target_sources_grouped(
     scene/ik_properties.hpp
     scene/mesh_intersect.cpp
     scene/mesh_intersect.hpp
-    scene/draw_mode.cpp
-    scene/draw_mode.hpp
+    scene/draw_mode_properties.cpp
+    scene/draw_mode_properties.hpp
     scene/draw_mode_cards.cpp
     scene/draw_mode_cards.hpp
     scene/draw_mode_renderer.cpp
     scene/draw_mode_renderer.hpp
+    scene/draw_mode_system.cpp
+    scene/draw_mode_system.hpp
     scene/node_joint.cpp
     scene/node_joint.hpp
     scene/node_physics.cpp

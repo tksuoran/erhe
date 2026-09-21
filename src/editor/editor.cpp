@@ -96,7 +96,6 @@
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
-#include "scene/draw_mode.hpp"
 #include "scene/draw_mode_renderer.hpp"
 #include "scene/debug_draw.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -1395,12 +1394,6 @@ public:
         // Editor is constructed on the main thread; anything capturing an
         // owner thread id must record this one, not a worker's.
         m_app_context.main_thread_id = std::this_thread::get_id();
-
-        // How the attachment of an applied API schema is made for a prim a
-        // file applies the schema to (erhe::scene::register_applied_schema_attachment).
-        // The factory outlives every scene, so it holds the App_context
-        // reference and reads nothing of it here.
-        register_draw_mode_applied_schema(m_app_context);
 
         // thread_count <= 0 means one worker per hardware thread.
         const int configured_thread_count = m_editor_settings.threading.thread_count;

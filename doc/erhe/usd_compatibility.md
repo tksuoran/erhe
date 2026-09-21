@@ -256,28 +256,29 @@ of "Texture node graphs" holds unchanged except the four below.
 
 `UsdGeomModelAPI` asks the imaging layer to draw a model prim's subtree as a
 proxy. The schema is applied to a prim rather than defining one, so the erhe
-form is a `Draw_mode` attachment of that prim holding every attribute as an
-entry property; the record `erhe::usd` reads and writes is
-`erhe::scene::Draw_mode_description`. erhe's three enumerations spell USD's
-tokens verbatim, so a value travels as that token wherever it travels as text.
-A value of the attachment is named `Draw_mode.<property>` wherever a name
+form is a value group of that prim itself: `editor::Draw_mode` registers every
+attribute as an attached property of `erhe::scene::Node`
+(`doc/erhe/property_system.md` section 4.24), and the record `erhe::usd` reads
+and writes is `erhe::scene::Draw_mode_description`. erhe's three enumerations
+spell USD's tokens verbatim, so a value travels as that token wherever it
+travels as text. A value is named `Draw_mode.<property>` wherever a name
 addresses it - a variant opinion, an instance override, a class prim's
-opinions - which is how USD's spelling, an applied schema authoring its
-attributes on the prim itself, reaches the item that holds them
-(`erhe::scene::find_override_property_target`). Such a name is what applies
-the schema, too: a variant block that carries
-`prepend apiSchemas = ["GeomModelAPI"]` and its `model:` attributes reaches a
-prim erhe gave no attachment, and the first value naming one makes it. A prim
-that references a target reads the target's attachment through the reference
-layer, the way every other value of an instance is read (X2): the two are one
-prim in the composed stage, so the referencing prim's own file authors some of
-the attributes and the target's the rest.
+opinions - and resolves on the prim itself, which is USD's own spelling
+(`erhe::scene::find_override_property_target`). The group's key property
+`Draw_mode.apply_draw_mode` is the erhe form of the schema being applied:
+authoring any value of the group sets it, so a variant block that carries
+`prepend apiSchemas = ["GeomModelAPI"]` and its `model:` attributes gives the
+prim a draw mode through the first value naming one. A prim that references a
+target reads the target's values through the reference layer, the way every
+other value of an instance is read (X2): the two are one prim in the composed
+stage, so the referencing prim's own file authors some of the attributes and
+the target's the rest.
 
 | erhe `Draw_mode` property | USD `UsdGeomModelAPI` | notes |
 |---|---|---|
-| the attachment on a prim | `GeomModelAPI` in the prim's `apiSchemas` | a prim that authors a `model:` attribute without applying the schema gets a record too, with one info line: usdview honours the draw mode either way |
+| `apply_draw_mode`, the group's key property | `GeomModelAPI` in the prim's `apiSchemas` | the prim carries a draw mode exactly while the key is true; a prim that authors a `model:` attribute without applying the schema gets a record too, with one info line: usdview honours the draw mode either way |
 | `draw_mode` (`inherited`, `default`, `origin`, `bounds`, `cards`) | `uniform token model:drawMode` | `inherited` defers to the nearest ancestor authoring one; the fallback of a hierarchy authoring none is `default`. A prim whose value is a proxy mode takes its children's subtrees out of render, pick and simulation through the derived `Item_flags::active` bit and keeps its own, since it carries the proxy |
-| `apply_draw_mode` | `uniform bool model:applyDrawMode` | read and written; it does not gate the proxy, the way the imaging adapter honours `drawMode` on every model prim |
+| `apply_draw_mode` | `uniform bool model:applyDrawMode` | the same property as the row above: erhe states the schema's presence through it, so an import sets it on every prim the file gives a record and a save authors `model:applyDrawMode = 1` on every prim carrying a draw mode. It does not gate the proxy, the way the imaging adapter honours `drawMode` on every model prim |
 | `card_geometry` (`cross`, `box`, `fromTexture`) | `uniform token model:cardGeometry` | |
 | `card_visibility` (`inherited`, `full`, `simple`) | `uniform token model:cardVisibility` | `simple` leaves out the cards of the stage's up axis; `inherited` resolves the same way `draw_mode` does, with the root fallback `full` |
 | `card_texture_x_neg` .. `card_texture_z_pos` | `asset model:cardTexture{X,Y,Z}{Neg,Pos}` | the record holds the resolved absolute path, an authored relative one resolved against the stage file's directory the way an image's is; a texture packed inside a `.usdz` is named in a warning and left as the path beside the archive, the record carrying no bytes. A value a variant block or an `over` authors keeps the text the file spelled instead, because that is the text a save writes back inside the block, and the attachment resolves it against the file it came out of when it reads the image. The writer authors the path relative to the written file |
@@ -287,8 +288,10 @@ the attributes and the target's the rest.
 
 Every `*_authored` flag of the record says whether the file spelled the value
 at all, and a save writes exactly the authored ones: USD's schema fallbacks
-are not erhe's defaults to author (D32). What the attachment draws is the
-editor's half; `erhe::usd` carries the record and nothing else.
+are not erhe's defaults to author (D32). glTF carries the same values through
+`ERHE_node.properties`, so a draw mode survives a glTF round trip as well.
+What the draw mode draws is the editor's half (`doc/editor/scene.md`,
+`Draw_mode_system`); `erhe::usd` carries the record and nothing else.
 
 ## Physics
 

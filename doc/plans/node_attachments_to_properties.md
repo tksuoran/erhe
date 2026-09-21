@@ -24,6 +24,12 @@ attachment has no path; a value on the node is overridable as it stands.
   locks, limits, stiffness, rest rotation and pole, group "IK"
   (`doc/erhe/property_system.md` section 4.19,
   `doc/plans/rigging/ik_settings.md`).
+- **Draw_mode** (`src/editor/scene/draw_mode_properties.{hpp,cpp}`,
+  `src/editor/scene/draw_mode_system.{hpp,cpp}`): `UsdGeomModelAPI` as a value
+  group keyed on `Draw_mode.apply_draw_mode`, with the pruning, the cached
+  extent and the card proxy in a per-scene `Draw_mode_system`
+  (`doc/erhe/property_system.md` section 4.24, `doc/editor/scene.md`). Its
+  retirement deleted the applied-schema attachment registry (D9).
 - **P1, the D1 and D2 infrastructure.** The key-property rule and its
   `visible_when` (`erhe_property/attached_group.hpp`,
   `doc/erhe/property_system.md` section 4.23) and the node systems and their
@@ -41,7 +47,6 @@ class's own shape, stated in the row.
 
 | Class | USD counterpart | Verdict | Runtime state | Per node | Saved in | Form |
 |-------|-----------------|---------|---------------|----------|----------|------|
-| `Draw_mode` | `UsdGeomModelAPI` (applied API schema, `model:*` attributes) | property | card proxy mesh, pruning, cached extent | 1 | USD `GeomModelAPI`, glTF `ERHE_node` | D1 + D2 |
 | `Node_physics` | `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI`, `PhysicsMaterialAPI` binding (all applied API schemas) | property | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
@@ -142,10 +147,10 @@ reader).
 
 **D9. Prefab interplay.** Values on the instance node reach the template
 node through the existing reference layer (`link_instance_to_template` pairs
-nodes). `register_applied_schema_attachment`,
-`link_carrier_attachments_to_target` and the attachment pairing loop are
-deleted in the phase that retires their last user (`Draw_mode`, then
-`Node_physics`).
+nodes). `register_applied_schema_attachment` and the applied-schema
+attachment registry are gone with `Draw_mode`, their only user;
+`link_carrier_values_to_target` pairs a carrier prim with its arc target
+through the reference layer when the carrier authors a value of any group.
 
 ## Phases
 
@@ -159,9 +164,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P2. `Draw_mode`.** Smallest group with runtime state; proves D2 and
-  removes the applied-schema attachment registry's first user (D9). Suites:
-  usd, scene; DrawModes.usd survey row stays `works`.
 - **P3. `Layout`.** `Layout.type = none`; `Scene::update_layouts` iterates
   the layout system's records. Deletes `ERHE_layout` (D8). Suites: scene;
   roundtrip layout leg.
@@ -190,7 +192,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P2-P7 are independent of each other; P9 follows P8; P11 is last.
+P3-P7 are independent of each other; P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

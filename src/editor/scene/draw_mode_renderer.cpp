@@ -1,7 +1,8 @@
 #include "scene/draw_mode_renderer.hpp"
 
 #include "renderers/render_context.hpp"
-#include "scene/draw_mode.hpp"
+#include "scene/draw_mode_properties.hpp"
+#include "scene/draw_mode_system.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
@@ -70,8 +71,8 @@ void Draw_mode_renderer::tool_render(const Render_context& context)
     if (!scene_root) {
         return;
     }
-    const std::vector<std::shared_ptr<Draw_mode>>& draw_modes = scene_root->get_draw_modes();
-    if (draw_modes.empty()) {
+    Draw_mode_system& draw_mode_system = scene_root->get_draw_mode_system();
+    if (draw_mode_system.get_entries().empty()) {
         return;
     }
 
@@ -82,21 +83,22 @@ void Draw_mode_renderer::tool_render(const Render_context& context)
     );
     line_renderer.set_thickness(c_line_thickness);
 
-    for (const std::shared_ptr<Draw_mode>& draw_mode : draw_modes) {
-        if (!draw_mode || !draw_mode->is_active() || !draw_mode->is_visible()) {
+    for (const std::pair<erhe::scene::Node* const, Draw_mode_entry>& entry : draw_mode_system.get_entries()) {
+        erhe::scene::Node& node = *entry.first;
+        if (!node.is_active() || !node.is_visible()) {
             continue;
         }
-        const erhe::scene::Node* const node = draw_mode->get_node();
-        if (node == nullptr) {
+        const std::optional<Draw_mode_data> data = read_draw_mode(node);
+        if (!data.has_value()) {
             continue;
         }
-        const erhe::scene::Draw_mode mode = draw_mode->resolved_draw_mode();
+        const erhe::scene::Draw_mode mode = data.value().resolved_draw_mode;
         if ((mode == erhe::scene::Draw_mode::default_) || (mode == erhe::scene::Draw_mode::inherited)) {
             continue;
         }
         glm::vec3 min{0.0f};
         glm::vec3 max{0.0f};
-        if (!draw_mode->get_extent(min, max)) {
+        if (!draw_mode_system.get_extent(node, min, max)) {
             continue;
         }
         m_lines.clear();
@@ -110,8 +112,9 @@ void Draw_mode_renderer::tool_render(const Render_context& context)
                 break;
             }
             // `cards` draws no lines: its proxy is the generated quad
-            // geometry the attachment owns (Draw_mode::get_card_proxy),
-            // which the ordinary content passes render.
+            // geometry the draw-mode system owns
+            // (Draw_mode_entry::card_proxy), which the ordinary content
+            // passes render.
             default: {
                 break;
             }
@@ -119,8 +122,8 @@ void Draw_mode_renderer::tool_render(const Render_context& context)
         if (m_lines.empty()) {
             continue;
         }
-        const glm::vec3 color = draw_mode->get_value(Draw_mode::draw_mode_color_property);
-        line_renderer.add_lines(node->world_from_node(), glm::vec4{color, 1.0f}, m_lines);
+        const glm::vec3 color = data.value().draw_mode_color;
+        line_renderer.add_lines(node.world_from_node(), glm::vec4{color, 1.0f}, m_lines);
     }
     m_lines.clear();
 }

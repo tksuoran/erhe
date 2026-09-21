@@ -1,7 +1,6 @@
 #include "scene/attachment_types.hpp"
 
 #include "grid/grid.hpp"
-#include "scene/draw_mode.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
@@ -33,14 +32,12 @@ auto joint_gate           (const Node&     ) -> bool { return true; } // multipl
 auto layout_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Layout    >(&node); }
 auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<Grid                    >(&node); }
 auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
-auto draw_mode_gate       (const Node& node) -> bool { return !erhe::scene::get_attachment<Draw_mode               >(&node); }
 
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
 void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layout           (node); }
 void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
 void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame_controller (node); }
-void make_draw_mode       (Scene_commands& sc, Node& node) { sc.attach_new_draw_mode        (node); }
 
 } // anonymous namespace
 
@@ -61,8 +58,7 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
         {"joint",            "Joint",            joint_gate,            make_joint           },
         {"layout",           "Layout",           layout_gate,           make_layout          },
         {"grid",             "Grid",             grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller},
-        {"draw_mode",        "Draw Mode",        draw_mode_gate,        make_draw_mode       }
+        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller}
     };
     return catalog;
 }

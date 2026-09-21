@@ -2420,6 +2420,51 @@ property through that system's `on_values_changed`.
 
 Tests: `src/erhe/property/test/test_attached_group.cpp`.
 
+### 4.24 Draw_mode (attached to Node)
+
+`editor::Draw_mode` (`src/editor/scene/draw_mode_properties.{hpp,cpp}`)
+registers `UsdGeomModelAPI` as an attached value group of the prim (section
+4.23, `doc/plans/node_attachments_to_properties.md` D1), owner type
+`Draw_mode`, holder type `erhe::scene::Node`, qualified
+`Draw_mode.apply_draw_mode` .. `Draw_mode.extents_hint_max`, which is the name
+a file's opinion of one addresses it by. Like `Ik` it is a registration holder
+with static members only, not a `Dependency_object`, so its owner type sits
+directly under the root; the per-domain mapping to the schema's attributes is
+the "Draw modes" table of `doc/erhe/usd_compatibility.md`.
+
+`Draw_mode.apply_draw_mode` (bool, default `false`) is the group's KEY
+property: the prim carries a draw mode exactly while its effective value is
+true, which is the erhe form of `GeomModelAPI` being applied to the prim.
+Authoring any other value of the group sets it, because in USD those
+attributes exist because the schema is applied - that rule is the
+`property_changed` callback of every non-key value, and it is what a variant
+block carrying `prepend apiSchemas` plus its `model:` attributes relies on.
+Every other value takes `attached_group_visible_when(apply_draw_mode)` as its
+`visible_when`, the card rows with the "the prim resolves to `cards`"
+predicate ANDed in.
+
+None of the values inherits: each is the prim's own opinion, and
+`Draw_mode::inherited` is USD's own deferral token, resolved by walking the
+ancestor prims. Readers go through
+`read_draw_mode(const erhe::scene::Node&) -> std::optional<Draw_mode_data>`, a
+plain record of the effective values plus the two resolved ones, which holds
+no path so a per-frame reader allocates nothing;
+`resolve_card_texture_path(node, face)` is the path half.
+`Draw_mode.source_directory` (string) is session state registered without
+`Property_flags::serialize` (D5): the directory a relative card-texture path
+of this prim resolves against. It travels with the values, so an instance
+holds none of its own and reads the template's through the reference layer,
+which is the file whose variant block spelled the relative path.
+
+`get_draw_mode_description` / `set_draw_mode_description` are the
+`erhe::scene::Draw_mode_description` halves the USD reader and writer use,
+with a value's authored flag being whether the node holds it locally (D32).
+The values ride the node's `ERHE_node` `properties` map by their qualified
+names (D14), so a draw mode survives a glTF round trip too. The runtime state
+the group implies - the pruning of the prim's children, the cached extent and
+the card proxy - is owned by `editor::Draw_mode_system`, one per scene
+(`doc/erhe/scene.md` "Node systems", `doc/editor/scene.md`).
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

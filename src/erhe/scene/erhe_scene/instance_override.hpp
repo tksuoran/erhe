@@ -152,13 +152,11 @@ void apply_property_values(
 ) -> const erhe::property::Dependency_property*;
 
 // Where one override value's name lands: the object that holds the property
-// and the property itself, both null when the name reaches neither. A name
-// qualified with the class name of an applied-schema attachment of the prim
-// (`Draw_mode.card_geometry`, `Node_physics.mass`) resolves to that
-// attachment's property, which is how USD's spelling - an applied schema
-// authors its attributes on the prim itself - reaches the erhe item that
-// holds them. Every other name resolves on the item, through
-// find_override_property.
+// and the property itself, both null when the name reaches neither. An
+// applied API schema's attributes are values of the prim itself
+// (`Draw_mode.card_geometry`), so USD's spelling resolves on the item through
+// find_override_property; a name qualified with the class name of an
+// attachment of the prim resolves to that attachment's property.
 class Override_property_target final
 {
 public:
@@ -170,31 +168,6 @@ public:
     erhe::Item_base&   item,
     const std::string& name
 ) -> Override_property_target;
-
-// How an attachment standing for an applied API schema is made. USD applies a
-// schema to a prim - `prepend apiSchemas = ["GeomModelAPI"]` - and the schema
-// authors its attributes on that prim, so a file's opinion of one reaches a
-// prim erhe has given no such attachment yet: a variant block that applies
-// the schema and authors its attributes is exactly that, and the block
-// applying the schema is what makes the schema present. A class of attachment
-// registers the owner type its properties are registered on and how one is
-// made, and find_override_property_target makes one on the prim the first
-// time an opinion names it. erhe::scene names no editor class, so the editor
-// registers its own from startup, while the process is still single threaded
-// and no scene exists.
-using Applied_schema_attachment_factory = std::function<std::shared_ptr<Node_attachment>()>;
-void register_applied_schema_attachment(
-    std::string_view                  class_name,
-    erhe::property::Owner_type        owner_type,
-    Applied_schema_attachment_factory factory
-);
-
-// True while a class of that name has registered a factory. The pairing of an
-// instance with its template asks this: an applied schema's attachment is the
-// prim's own USD state, so a carrier's one reads its target's through the
-// reference layer, while every other attachment is paired by the clone walk
-// alone.
-[[nodiscard]] auto is_applied_schema_attachment_class(std::string_view class_name) -> bool;
 
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's

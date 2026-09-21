@@ -31,8 +31,8 @@ public:
 };
 
 // One user-addable Node_attachment kind, applied to a node the way USD applies
-// an API schema to a prim: rigid body, joint, layout, grid, frame controller,
-// draw mode. The Hierarchy context menu "Add Attachment" lists these, and the
+// an API schema to a prim: rigid body, joint, layout, grid, frame controller.
+// The Hierarchy context menu "Add Attachment" lists these, and the
 // add_node_attachment MCP tool accepts them.
 //
 // can_add / make are stateless free functions (function pointers, no heap):

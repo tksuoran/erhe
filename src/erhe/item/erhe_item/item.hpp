@@ -336,8 +336,7 @@ public:
     static constexpr uint64_t index_boundable              = 53;
     static constexpr uint64_t index_gprim                  = 54;
     static constexpr uint64_t index_point_instancer        = 55;
-    static constexpr uint64_t index_draw_mode              = 56;
-    static constexpr uint64_t count                        = 57; // index 57 is free
+    static constexpr uint64_t count                        = 56; // index 56 is free
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -395,7 +394,6 @@ public:
     static constexpr uint64_t boundable              = (uint64_t{1} << index_boundable             );
     static constexpr uint64_t gprim                  = (uint64_t{1} << index_gprim                 );
     static constexpr uint64_t point_instancer        = (uint64_t{1} << index_point_instancer       );
-    static constexpr uint64_t draw_mode              = (uint64_t{1} << index_draw_mode             );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -454,8 +452,7 @@ public:
         "Xform",
         "Boundable",
         "Gprim",
-        "Point_instancer",
-        "Draw_mode"
+        "Point_instancer"
     };
 };
 
