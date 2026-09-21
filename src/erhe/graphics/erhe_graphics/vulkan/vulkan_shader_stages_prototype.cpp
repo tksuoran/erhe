@@ -110,7 +110,10 @@ auto Shader_stages_prototype_impl::get_final_source(
     std::optional<unsigned int> gl_name
 ) -> std::string
 {
-    return m_create_info.final_source(m_device, shader, &m_paths, gl_name);
+    if (!m_struct_and_block_source.has_value()) {
+        m_struct_and_block_source = m_create_info.struct_and_block_source();
+    }
+    return m_create_info.final_source(m_device, shader, &m_paths, gl_name, &m_struct_and_block_source.value());
 }
 
 auto Shader_stages_prototype_impl::get_dependency_paths() -> std::vector<std::filesystem::path>&

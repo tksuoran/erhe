@@ -197,6 +197,15 @@ auto Shader_stages_create_info::interface_blocks_source() const -> std::string
     return sb.str();
 }
 
+auto Shader_stages_create_info::struct_and_block_source() const -> std::string
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::string source = struct_types_source();
+    source += interface_blocks_source();
+    return source;
+}
+
 auto Shader_stages_create_info::interface_source() const -> std::string
 {
     std::stringstream sb;
@@ -211,7 +220,8 @@ auto Shader_stages_create_info::final_source(
     Device&                             graphics_device,
     const Shader_stage&                 shader,
     std::vector<std::filesystem::path>* paths,
-    std::optional<unsigned int>         gl_name
+    std::optional<unsigned int>         gl_name,
+    const std::string*                  struct_and_block_source_in
 ) const -> std::string
 {
     ERHE_PROFILE_FUNCTION();
@@ -466,13 +476,10 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
-    {
-        ERHE_PROFILE_SCOPE("struct_types_source");
-        sb << struct_types_source();
-    }
-    {
-        ERHE_PROFILE_SCOPE("interface_blocks_source");
-        sb << interface_blocks_source();
+    if (struct_and_block_source_in != nullptr) {
+        sb << *struct_and_block_source_in;
+    } else {
+        sb << struct_and_block_source();
     }
 
     // Default uniform block: the sampler declarations are owned by the

@@ -63,6 +63,9 @@ private:
     std::map<std::string, Shader_resource, std::less<>> m_resources;
     std::map<unsigned int, std::string>                 m_final_sources;
     std::vector<std::filesystem::path>                  m_paths;
+    // Same text in the final source of every stage: generated once, by the
+    // first get_final_source().
+    std::optional<std::string>                          m_struct_and_block_source;
 
     Glslang_shader_stages                               m_glslang_shader_stages;
 };

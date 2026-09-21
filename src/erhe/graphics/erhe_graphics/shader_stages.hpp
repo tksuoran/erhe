@@ -47,12 +47,19 @@ class Shader_stages_create_info
 public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
+    // struct_and_block_source is struct_and_block_source() of this create
+    // info, for a caller that builds several stages from it: the text is the
+    // same for every stage. nullptr: generated here.
     [[nodiscard]] auto final_source(
         Device&                             graphics_device,
         const Shader_stage&                 shader,
         std::vector<std::filesystem::path>* paths,
-        std::optional<unsigned int>         gl_name = {}
+        std::optional<unsigned int>         gl_name = {},
+        const std::string*                  struct_and_block_source = nullptr
     ) const -> std::string;
+
+    // struct_types_source() followed by interface_blocks_source().
+    [[nodiscard]] auto struct_and_block_source() const -> std::string;
 
     [[nodiscard]] auto attributes_source       () const -> std::string;
     [[nodiscard]] auto attribute_defines_source() const -> std::string;
