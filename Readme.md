@@ -206,6 +206,7 @@ erhe stands on many excellent open-source projects. Most are fetched at configur
 | :--- | :--- | :--- |
 | [Dear ImGui](https://github.com/ocornut/imgui) | Editor user interface (docking branch fork, in-tree copy) | MIT |
 | [imgui_gradient](https://github.com/CoolLibs/imgui_gradient) | Gradient editor widget (in-tree copy) | BSL-1.0 |
+| [imgui-node-editor](https://github.com/thedmd/imgui-node-editor) | Node editor canvas of the geometry, texture and shader graph editors (in-tree fork in `erhe::imgui`) | MIT |
 | [ImViewGuizmo](https://github.com/Ka1serM/ImViewGuizmo) | Viewport orientation gizmo (in-tree, modified) | MIT |
 | [SDL](https://github.com/libsdl-org/SDL) | Windowing and input (default window library) | Zlib |
 | [GLFW](https://github.com/glfw/glfw) | Windowing and input (optional, deprecated) | Zlib |
