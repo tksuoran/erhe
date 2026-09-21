@@ -2483,6 +2483,14 @@ Device_impl::Device_impl(
             }
         }
     }
+
+    // Shader hot-reload. Started here, before any shader stages exist:
+    // Shader_monitor::add() registers nothing while the monitor is not
+    // running.
+    {
+        ERHE_PROFILE_SCOPE("Start shader monitor");
+        m_shader_monitor.begin(graphics_config.shader_monitor_enabled);
+    }
 }
 
 }
