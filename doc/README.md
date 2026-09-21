@@ -220,6 +220,7 @@ Every document states its standing in its first ten lines:
 - [agents/creations.md](agents/creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
 - [agents/lsai_usage_playbook.md](agents/lsai_usage_playbook.md) (mostly stable): LSAI usage playbook (erhe, C++)
 - [agents/mcp_api_guidelines.md](agents/mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
+- [agents/mcp_server_usage.md](agents/mcp_server_usage.md) (mostly stable): In-editor MCP server reference: transport, ports, auth, registration, Quest forwarding, every tool with its arguments
 - [agents/mcp_ui_driving.md](agents/mcp_ui_driving.md) (mostly stable): Run-book for driving the editor user interface over MCP: ImGui introspection and input gestures
 - [agents/orchestration_harness.md](agents/orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
 - [agents/quest_renderdoc_capture.md](agents/quest_renderdoc_capture.md) (mostly stable): RenderDoc Meta Fork capture workflow on Quest

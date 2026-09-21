@@ -7,7 +7,7 @@ points - menus, docking, property rows, viewport gestures, tool handles -
 rather than its scene-scripting tools. The tools live in
 `src/editor/mcp/mcp_server_ui.cpp`, their schemas in
 `config/editor/mcp_tools.json`, and the server itself is described in
-`mcp_server_usage.md` at the repository root.
+`doc/agents/mcp_server_usage.md`.
 
 Reach for these tools to exercise and verify UI behavior. Set a parameter a
 scene-scripting tool exposes with that tool instead; see

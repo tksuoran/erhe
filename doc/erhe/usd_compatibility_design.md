@@ -165,7 +165,7 @@ now owns its behavior; `git log` on that record has the history.
   Attachment" the API-schema kinds (`scene/attachment_types.hpp`), the
   hierarchy accepts a drag payload named for the prim's class, and MCP
   `get_node_details` carries `mesh` / `camera` / `light` on the node
-  entry (`mcp_server_usage.md`). The interactive drag gesture has not
+  entry (`doc/agents/mcp_server_usage.md`). The interactive drag gesture has not
   been exercised since the payload fix.
 - U4 Resources are prims: every content-library kind is `erhe::Item<
   Item_base, Typed, X>` and a prim of the scene tree, by default under
@@ -541,7 +541,7 @@ now owns its behavior; `git log` on that record has the history.
   its tooltip while it is hovered (`Property_editor::set_entry_tooltip_extra`)
   and MCP `get_item_properties` reports it as each property's `origin`
   (`doc/erhe/usd_compatibility.md` "Where a value comes from",
-  `doc/editor/windows.md`, `mcp_server_usage.md`). A glTF-backed
+  `doc/editor/windows.md`, `doc/agents/mcp_server_usage.md`). A glTF-backed
   scene answers in the same shape with the glTF file as the layer and
   `properties["Owner.name"]` of the item's `ERHE_*` extension as the
   attribute. The `pcp` DAG engine stays the option for a full-stack case

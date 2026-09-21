@@ -1,5 +1,7 @@
 # erhe Editor MCP Server
 
+Stability: mostly stable
+
 The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:3743` ("erhe" on a phone keypad). The `ERHE_MCP_PORT` environment variable overrides the preferred port, and `ERHE_MCP_TOKEN_FILE` names the bearer-token file explicitly (default `~/.agents/erhe_mcp_token`; the mode 0600 requirement applies to both). If the preferred port is already in use the server falls back to the next free port, scanning 20 successors (`[3743, 3763)` by default); the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`. The client scripts (`scripts/mcp_call.py`, `scripts/erhe_mcp.py`) also honor `ERHE_MCP_PORT` for their default port.
 
 ## Endpoints
@@ -618,7 +620,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
 Tools that inspect the editor's ImGui content and inject window input events,
 so the menu- and mouse-driven entry points can be exercised headlessly. The
 run-book - the inspect / resolve / act loop, item addressing, the standing
-traps - is [doc/agents/mcp_ui_driving.md](doc/agents/mcp_ui_driving.md). All
+traps - is [doc/agents/mcp_ui_driving.md](mcp_ui_driving.md). All
 rectangles and all `x` / `y` arguments are editor window pixels with the
 origin at the top left, the space `get_viewports` and `capture_screenshot`
 use.

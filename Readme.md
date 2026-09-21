@@ -127,7 +127,7 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 
 ### MCP Server
 
-The editor embeds an [MCP](https://modelcontextprotocol.io/) server (JSON-RPC over HTTP on `127.0.0.1:3743`), so AI agents and scripts can drive a running editor. It works in the windowed build, in the headless build (no display needed) and on Quest over `adb forward`. See [mcp_server_usage.md](mcp_server_usage.md) for the API reference.
+The editor embeds an [MCP](https://modelcontextprotocol.io/) server (JSON-RPC over HTTP on `127.0.0.1:3743`), so AI agents and scripts can drive a running editor. It works in the windowed build, in the headless build (no display needed) and on Quest over `adb forward`. See [doc/agents/mcp_server_usage.md](doc/agents/mcp_server_usage.md) for the API reference.
 
 -   **Scene queries** -- scenes, nodes, cameras, lights, materials, textures, brushes, selection, undo/redo stack, physics items, async load status
 -   **Scene editing** -- create shapes and nodes, place brushes, select, transform, reparent, edit materials, geometry operations, mesh component (face / edge / vertex) editing, physics bodies and joints, node graphs; edits go through the undo stack
