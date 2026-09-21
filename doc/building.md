@@ -137,6 +137,7 @@ attempt and the launch must be retried.
 | `ERHE_MALLOC_LIBRARY` | Memory allocator for C++ `new`/`delete` | `mimalloc`, `jemalloc`, `none` | `none` |
 | `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
+| `ERHE_TRACY_ON_DEMAND` | Tracy records only while a profiler is connected | `ON`, `OFF` | `ON` |
 | `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` | `none` |
 | `ERHE_AUDIO_LIBRARY` | Audio library | `miniaudio`, `none` | `none` |
 | `ERHE_FONT_RASTERIZATION_LIBRARY` | Font rasterization | `freetype`, `none` | `freetype` |
@@ -168,6 +169,8 @@ tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.
 
 **ERHE_PROFILE_LIBRARY** -- The main profiler is Tracy (the configure wrappers enable it). Superluminal and nvtx support exists but is likely stale.
+
+**ERHE_TRACY_ON_DEMAND** -- Sets Tracy's `TRACY_ON_DEMAND`. `ON` records only while a profiler is connected, so a run without one costs nothing. `OFF` records from process start and buffers the events until a profiler connects; use it to profile startup (start `tracy-capture -o <file>.tracy` first, then the application), in a build tree that is always run with a profiler attached, because the buffer grows for as long as none is.
 
 **ERHE_WINDOW_LIBRARY** -- Use `sdl` (or `none` for headless). `glfw` is still recognized but deprecated; SDL is the window library going forward.
 

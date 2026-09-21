@@ -56,6 +56,7 @@ set_option(ERHE_MALLOC_LIBRARY             "Memory allocator library. Either mim
 set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt, box3d or none"               "jolt"     "jolt;box3d;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
+set_option(ERHE_TRACY_ON_DEMAND            "Tracy records only while a profiler is connected. OFF captures startup"    "ON"       "ON;OFF")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"     "bvh"      "embree;bvh;tinybvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")
@@ -1005,7 +1006,11 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
             # (e.g. editor.cpp's #if TRACY_ENABLE block, which then trips
             # /W4 /WX on an unused variable under MSVC).
             "TRACY_ENABLE ON"
-            "TRACY_ON_DEMAND ON"
+            # ON: the client records only while a profiler is connected, so a
+            # run without one costs nothing. OFF: the client records from
+            # process start and buffers until a profiler connects, which is
+            # what a startup profile needs (memory grows while unconnected).
+            "TRACY_ON_DEMAND ${ERHE_TRACY_ON_DEMAND}"
             # Bind the client's listen socket (TCP 8086+) to loopback only.
             # The default binds the wildcard address, which makes Windows
             # Defender Firewall prompt for every binary that links

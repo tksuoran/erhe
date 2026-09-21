@@ -154,6 +154,7 @@ chooses the library output directory for APK packaging.
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt`, `box3d`, or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `none` | `tracy`, `nvtx`, `superluminal`, or `none`; the configure wrappers pass `tracy` |
+| `ERHE_TRACY_ON_DEMAND` | `ON` | `ON` records only while a profiler is connected; `OFF` records from process start (startup profiling, see `doc/building.md`) |
 | `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw` (deprecated), or `none` (headless) |
 | `ERHE_XR_LIBRARY` | `none` | `openxr` or `none`; the configure wrappers pass `openxr` |
 | `ERHE_USD_LIBRARY` | `none` | `lightusd` or `none`; the Windows configure wrappers and the Android build pass `lightusd`. Builds `erhe::usd` (LightUSD) and the `describe_usd_file` MCP tool |
