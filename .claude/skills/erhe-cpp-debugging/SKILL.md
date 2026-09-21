@@ -17,8 +17,8 @@ Windows / MSVC (Visual Studio MCP server)".
 ## Pick the platform path
 
 - **macOS / Linux -> lldb via a shell.** `/usr/bin/lldb` ships with the
-  Command Line Tools (no install). All three Debug builds have full symbols:
-  `build_xcode_{metal,opengl,vulkan}/bin/Debug/editor`.
+  Command Line Tools (no install). The Debug builds have full symbols:
+  `build_xcode_{metal,vulkan,metal_headless}/bin/Debug/editor`.
 - **Windows -> the `visualstudio` MCP server** (`mcp__visualstudio__*`). It drives a
   live VS instance: `debugger_add_breakpoint` -> `debugger_launch` -> poll
   `debugger_status` until it breaks -> `debugger_get_callstack` /
@@ -73,15 +73,16 @@ Windows / MSVC (Visual Studio MCP server)".
 
 ## Constraints
 
-- **The windowed editor needs a live display.** Metal/OpenGL builds have no headless
-  variant, so a *windowed* launch under lldb still aborts at startup if the display is
-  off/asleep. Attaching to an already-running editor is unaffected. (On Windows the
-  headless Vulkan build avoids this; on macOS there is no headless GPU build.)
+- **The windowed editor needs a live display.** A *windowed* launch under lldb
+  aborts at startup if the display is off/asleep; attaching to an already-running
+  editor is unaffected. When the display is off, debug a headless build instead:
+  `build_vs2026_vulkan_headless` on Windows, `build_xcode_metal_headless`
+  (`scripts/configure_xcode_metal_headless.sh`) on macOS.
 - **Building & launching to verify is self-serve** -- you may build
   `build_xcode_metal`/etc. and launch the editor on your own initiative (mind the
   live-display requirement); only ask if the user told you to.
-- Run erhe gtest suites serially, one failure at a time (see the run-tests-serially
-  memory); an abort hides the rest of the run.
+- Run erhe gtest suites serially, one failure at a time (AGENTS.md "Testing"); an
+  abort hides the rest of the run.
 
 ## When NOT this skill
 

@@ -48,8 +48,11 @@ py -3 scripts/mcp_call.py get_server_info    # { name, version, pid, build, port
 ```
 
 Assert the reported `pid` == `$p.Id` and `build` is your just-built binary; a
-mismatch, or a fallback port (8081+) in the listening line, means another
-editor.exe owns 3743 -- kill it and relaunch. Remember `$p.Id` for cleanup.
+mismatch, or a fallback port (3744+) in the listening line, means another
+editor.exe owns 3743. When that editor is a leftover of yours, kill it and
+relaunch; when it may be the user's own editor, leave it running and drive yours
+on the port from the listening line (`ERHE_MCP_PORT=<port>` or `--port <port>`).
+Remember `$p.Id` for cleanup.
 
 ## Step 3 -- drive it with scripts/mcp_call.py
 
@@ -83,17 +86,22 @@ py -3 scripts/mcp_call.py get_scene_nodes b64:<base64-of-{"scene_name":"Default 
 - After `capture_screenshot`, `Read` `logs/mcp_screenshot.png` to actually see
   the frame. A useful trick to identify an object visually: select it and
   `transform_selection` it, then re-screenshot and diff by eye.
-- Missing capability? Add a new MCP tool to
-  `src/editor/mcp/mcp_server.{hpp,cpp}` rather than working around it --
+- Missing capability? Add a new MCP tool (handler + dispatch entry in
+  `src/editor/mcp/mcp_server*.{hpp,cpp}`, schema in
+  `config/editor/mcp_tools.json`) rather than working around it --
   AGENTS.md calls this out as first-class debugging infrastructure.
 
 ## Step 4 -- clean up (always)
 
 ```powershell
 Stop-Process -Id <pid> -Force
-git checkout -- config/editor/desktop_window_imgui_host_imgui.ini   # editor rewrites it on exit
-git status --short    # confirm nothing else got dirtied (never commit the ini)
+git status --short    # confirm the run dirtied no tracked file
 ```
+
+The ImGui ini (`config/editor/desktop_window_imgui_host_imgui.ini`) is gitignored
+and rewritten on every exit; leave it alone. A run that drives window visibility
+or layout can rewrite the tracked `config/editor/desktop_windows.json` --
+`git checkout --` it when `git status` shows it and the change was yours.
 
 ## Gotchas
 

@@ -31,7 +31,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-SCAN_ROOTS = ["src/erhe", "src/editor", "src/example", "src/hello_swap", "src/hextiles", "src/CMakeLists.txt", "scripts", "doc", ".github", "cmake", "AGENTS.md", "CLAUDE.md", "Readme.md", "CMakeLists.txt", "prompt_queue.txt"]
+SCAN_ROOTS = ["src/erhe", "src/editor", "src/example", "src/hello_swap", "src/hextiles", "src/CMakeLists.txt", "scripts", "doc", ".github", "cmake", ".claude/skills", "AGENTS.md", "CLAUDE.md", "Readme.md", "CMakeLists.txt", "prompt_queue.txt"]
 SCAN_SUFFIXES = {".cpp", ".hpp", ".h", ".c", ".mm", ".py", ".md", ".txt", ".cmake", ".yml", ".yaml", ".bat", ".sh", ".json", ".glsl", ".frag", ".vert", ".comp"}
 SKIP_DIR_NAMES = {".git", ".cpm_cache", "node_modules", "__pycache__"}
 SKIP_FILE_PREFIXES = ("wuffs-",)  # vendored single-file libraries

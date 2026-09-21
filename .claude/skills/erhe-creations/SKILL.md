@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_20_frog` (henge,
+`creation_1_conway_cathedral` ... `creation_22_skin_test_boxes` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
@@ -41,7 +41,9 @@ by a scene node under Frog > "Frog Rig" -
 see geometry_graph_sculpt.md + csg_hulls.md),
 newtons cradle = five hinged dynamic spheres on a lossless physics
 material; the ball gap that makes momentum transfer work depends on the
-physics backend - see physics_rigs.md "Collision chains").
+physics backend - see physics_rigs.md "Collision chains",
+skin test boxes = three boxes as one rigid-skinned mesh on a three-bone
+chain, built with the `create_skin` MCP tool and exported as a test asset).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -134,14 +136,12 @@ they carry the current idioms.
   There is no MCP toggle: back the file up, set both render styles'
   `edge_lines` false, create the scene (its fresh viewport picks the
   file up - no restart), and RESTORE the file when done.
-- **AMD iGPU (Radeon 890M) machine notes** (2026-08-10): GPU ray tracing
-  crashes the editor at startup - `config/editor/erhe_graphics.json`
+- **GPU without working ray tracing**: `config/editor/erhe_graphics.json`
   `vulkan: {"_version": 2, "disable_ray_tracing": true}` keeps it off
   (Device_info::use_ray_query false; ray-trace renderer + lightmap baker
   report unsupported). The `_version: 2` is REQUIRED (versionless JSON
-  parses as v1 and drops the field). The same driver also lacks
-  VK_KHR_shader_relaxed_extended_instruction; the glslang layer now
-  auto-recompiles affected shaders without non-semantic debug info.
+  parses as v1 and drops the field). Whether this machine needs it is
+  recorded in `memory-bank/local/`.
 - Outputs: screenshots `logs/creations/*.png`, headless-saved scenes
   `res/editor/scenes/creations/*.glb` (untracked; loadable with
   `load_scene`). Only the script is committed.
@@ -205,7 +205,6 @@ they carry the current idioms.
   choice matters: closest_point answers "nearest surface anywhere" and
   DRIFTS toward the bulkier body near curved ends - for "surface AT
   this station" cast a RAY from outside toward the centerline
-  (creation 16 hull_surface()).
   (creation 16 hull_surface()). The full hull-hugging band recipe is in
   `references/csg_hulls.md`.
 
@@ -299,7 +298,8 @@ following its construction logic:
 - Geometry ops (remesh / decimate / smooth / chamfer / merge_faces /
   catmull_clark) accept `node_ids` / `node_id` / `node_name` +
   `scene_name` since 2026-08-08 - no select_items dance; the previous
-  selection is restored server-side.
+  selection is restored server-side. The Laplacian `smooth` op has no
+  visible effect (see `references/csg_hulls.md`).
 - Align-to-direction quaternion (chained cones, blades): axis MUST be
   `cross(+Y, dir) = (d.z, 0, -d.x)`. The mirrored sign renders every
   chained segment tilted opposite its chain step -> gapped "dashed"
@@ -414,17 +414,16 @@ file is read before any creation work:
 - `references/geometry_graph_sculpt.md` - smooth organic bodies as live
   geometry graphs (box -> lattice FFD -> subdivide via MCP: offsets array
   layout, station-squeeze sculpting, cap rounding, cross-section shaping,
-  probed attachments). Creation 18.
+  probed attachments). Creations 18-20.
 
 ## Conventions
 
 - Commit message: `scripts/creations: <scene> (<hook>)` + a body that
-  records WHY and any debugging lesson; end with the Claude co-author
-  line. Only the script (and common.py changes) are committed; the user
+  records WHY and any debugging lesson; end with the attribution trailer
+  the session's commit guidance gives. Only the script (and common.py changes) are committed; the user
   pushes.
-- prompt_queue.txt ITEM -1 and the `mcp-creation-scripts-*` agent
-  memory only POINT at git log and this skill - do not grow commit
-  ledgers in them; git log is the history.
+- Agent memory and prompt_queue.txt only POINT at git log and this skill -
+  do not grow commit ledgers in them; git log is the history.
 - MCP node/material ids are per-session - never hardcode them.
 - **Box "steps" means SUBDIVISIONS since 2026-08-10** (breaking change,
   user-approved): the create_shape/place pools still use the "steps" key,
@@ -441,22 +440,5 @@ file is read before any creation work:
 
 ## Open bugs (workarounds in place; fix only if asked)
 
-- (The chamfer crash is FIXED 2026-08-08: it was a cross-thread
-  Operation_stack::queue in seven async mesh-op lambdas, not a
-  uv_sphere geometry problem - chamfer/truncate/gyro/kis/merge_faces
-  all work now.)
-- (Both former blockers are FIXED 2026-08-08: `capture_screenshot`
-  works windowed -- swapchain readback + one-frame MCP deferral -- and
-  the windowed `save_scene` crash is gone: the glTF exporter saves only
-  `Item_flags::content` children, so the hotbar rendertarget quad no
-  longer reaches export.)
-- Graphics preset High once shipped `shadow_light_count 32` (~2.1 GiB
-  VRAM per view -> OOM with two scenes); trimmed to 8 locally in
-  `config/editor/graphics_presets.json` - coordinate before reverting.
-- (The graph-mesh material save/load loss is FIXED 2026-08-10 late: the
-  exporter's lazy material pass dropped materials referenced only by
-  graph output nodes because graph-controlled meshes are excluded from
-  export; they now export via extra_materials, and graph-texture slot
-  bindings carry sampler wrap/filter state. Files saved BEFORE the fix
-  stay broken - the material is simply absent from them; re-save from a
-  fresh build.)
+- Files saved before the 2026-08-10 graph-mesh material export fix lack the
+  material outright; re-save them from a fresh build.

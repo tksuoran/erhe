@@ -106,10 +106,10 @@ Wait for the user to confirm or redirect. Do NOT silently regroup.
 
 ## Step 5 -- commit each topic
 
-Before the first commit, snapshot the pre-commit diff so step 6 can verify nothing was dropped:
+Before the first commit, snapshot the pre-commit diff so step 6 can verify nothing was dropped (`<scratch>` = the session's scratch directory, outside the repo):
 
 ```sh
-git diff > /tmp/git-history-cleanup-target.diff
+git diff > <scratch>/git-history-cleanup-target.diff
 ```
 
 Then, for each topic in order:
@@ -117,9 +117,9 @@ Then, for each topic in order:
 1. Stage exactly that topic:
    ```sh
    git add path/to/whole_topic_files
-   git add -p path/to/mixed_file        # interactive; only when a file has mixed-topic hunks
+   git apply --cached <hunk.patch>      # only when a file has mixed-topic hunks
    ```
-   When `git add -p` is awkward to drive non-interactively, write per-hunk patches to disk and apply with `git apply --cached <hunk.patch>`. Do not paper over difficulty by lumping a mixed file into one topic if it really belongs to two -- that defeats the purpose of the skill.
+   `git add -p` is interactive and cannot be driven from this tool: for a mixed file, write per-hunk patches to the scratch directory and stage them with `git apply --cached`. Do not paper over difficulty by lumping a mixed file into one topic if it really belongs to two -- that defeats the purpose of the skill.
 
 2. Sanity check before committing:
    ```sh
@@ -127,10 +127,10 @@ Then, for each topic in order:
    git diff             # should show everything still pending for later topics
    ```
 
-3. Commit using the project's style. For erhe (see AGENTS.md "Git Workflow"):
+3. Commit using the project's style (match `git log`):
    - Short subject, ideally under ~70 chars, focused on the *why*.
    - Optional body for context.
-   - Add an AI co-author trailer only when the user or repository policy explicitly requires one; do not invent a model-specific identity.
+   - End the message with the attribution trailer the session's commit guidance gives, exactly as given; when the session gives none, add none.
    - Use a HEREDOC for multi-line messages.
 
 4. Move on to the next topic.
@@ -141,8 +141,8 @@ After the last topic commit, BOTH of these must hold:
 
 ```sh
 git status                          # must be clean -- no remaining changes
-git diff origin/main..HEAD > /tmp/git-history-cleanup-after.diff
-diff /tmp/git-history-cleanup-target.diff /tmp/git-history-cleanup-after.diff
+git diff origin/main..HEAD > <scratch>/git-history-cleanup-after.diff
+diff <scratch>/git-history-cleanup-target.diff <scratch>/git-history-cleanup-after.diff
 ```
 
 The `diff` must be empty (or only differ in trailing whitespace). Equivalently, the total diff vs. `origin/main` must equal the diff captured before any topic commits.

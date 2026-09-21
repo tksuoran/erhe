@@ -1,6 +1,6 @@
 ---
 name: erhe-renderdoc-gpu-debug
-description: GPU-debug the erhe editor by capturing a frame of the windowed Vulkan build with the tksuoran/renderdoc fork MCP server and reading back pipeline state, render targets, per-texel statistics, AND the decoded shader uniform/constant-buffer values feeding any draw. Use this whenever you need to SEE the rendering result or the exact parameters fed to a shader -- "renders nothing / renders wrong / why does X look different from Y / which texture or uniform actually holds what". This is the tool for any "I need to see it" question on the windowed build: save a render target to PNG and Read it, and read the live uniform-buffer values at a specific draw. On macOS the in-editor MCP capture_screenshot only works headless-Vulkan and screencapture is permission-blocked, so RenderDoc is the way to see a Metal-or-windowed-Vulkan frame. Works on macOS (build_xcode_vulkan + build_mac qrenderdoc) and Windows (build_vs2026_vulkan); RenderDoc needs a windowed Vulkan build with a live display (not Metal, not OpenGL, not the headless emulated swapchain) -- so to GPU-debug a bug seen on the Metal build, reproduce it on build_xcode_vulkan.
+description: GPU-debug the erhe editor by capturing a frame of the windowed Vulkan build with the tksuoran/renderdoc fork MCP server and reading back pipeline state, render targets, per-texel statistics, AND the decoded shader uniform/constant-buffer values feeding any draw. Use this whenever you need to SEE the rendering result or the exact parameters fed to a shader -- "renders nothing / renders wrong / why does X look different from Y / which texture or uniform actually holds what". This is the tool for any "I need to see it" question on the windowed build: save a render target to PNG and Read it, and read the live uniform-buffer values at a specific draw. For just seeing the final frame prefer the in-editor MCP capture_screenshot (works windowed and headless, Vulkan and Metal); RenderDoc is for the render targets and GPU state behind it. Works on macOS (build_xcode_vulkan + build_mac qrenderdoc) and Windows (build_vs2026_vulkan); RenderDoc needs a windowed Vulkan build with a live display (not Metal, not OpenGL, not the headless emulated swapchain) -- so to GPU-debug a bug seen on the Metal build, reproduce it on build_xcode_vulkan.
 ---
 
 # erhe RenderDoc GPU debugging (windowed Vulkan)
@@ -14,7 +14,7 @@ or a decoded value, RenderDoc shows the actual texture/buffer/pipeline state tha
 produced it.
 
 The canonical reference (Windows/VS, plus the worked "black atmosphere sky"
-example and every gotcha) is [`doc/renderdoc_fork.md`](../../doc/renderdoc_fork.md);
+example and every gotcha) is [`doc/agents/renderdoc_fork.md`](../../../doc/agents/renderdoc_fork.md);
 the fork's own tool reference is its
 [`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md).
 This skill is the condensed, cross-platform run-book.
@@ -41,26 +41,29 @@ This skill is the condensed, cross-platform run-book.
   absent from this session, look for `.mcp.json` in the repo root; if it is
   missing, wire it with
   `py -3 scripts/setup_renderdoc_mcp.py --skip-clone --skip-build --renderdoc-dir <your fork checkout>`
-  (`--renderdoc-dir` defaults to `D:\renderdoc`, which is one machine's location,
-  not a convention -- always pass it). Or create `.mcp.json` by hand registering
+  (always pass `--renderdoc-dir`; its default is one machine's location, not a
+  convention -- this machine's fork checkout is recorded in
+  `memory-bank/local/`). Or create `.mcp.json` by hand registering
   `py -3 <repo>/scripts/renderdoc_mcp_proxy.py` as a stdio server with
-  `env.ERHE_RENDERDOC_QRENDERDOC` set to your `qrenderdoc` binary (the proxy's
-  baked default is the same `D:\renderdoc` path). MCP servers connect only at
+  `env.ERHE_RENDERDOC_QRENDERDOC` set to your `qrenderdoc` binary. MCP servers connect only at
   session start, so after wiring, the session must be restarted before the tools
   appear.
 - **After a fork rebuild**, re-run `py -3 scripts/capture_renderdoc_tools.py` --
   the proxy serves a schema cached in `scripts/renderdoc_tools.json`, so a stale
   one advertises removed tools and hides new ones. Also kill any `qrenderdoc`
   left running from the previous build; target-control is version-sensitive.
-  See `doc/renderdoc_fork.md` section 4.
+  See `doc/agents/renderdoc_fork.md`.
 - When registered, the proxy launches `qrenderdoc --mcp-server` lazily on the
   first tool call. `renderdoc_launch` pre-warms it; `renderdoc_status` confirms.
-- `config/editor/erhe_graphics.json` already sets
-  `renderdoc_capture_support:true`, `renderdoc_library_path_override_enable:true`,
-  and the override path:
-  - macOS: `/Users/timosuoranta/git/tksuoran/renderdoc/build_mac/lib/librenderdoc.dylib`
-    (qrenderdoc at `.../build_mac/bin/qrenderdoc.app/Contents/MacOS/qrenderdoc`).
-  - Windows: the `D:\renderdoc\x64\Development\renderdoc.dll` style path.
+- `config/editor/erhe_graphics.json` must set `renderdoc_capture_support: true`,
+  `renderdoc_library_path_override_enable: true` and
+  `renderdoc_library_path_override` to the fork's in-app library. The committed
+  file has them off / empty; `scripts/setup_renderdoc_mcp.py` writes them as a
+  deliberately local, uncommitted change. `<renderdoc>` below is this machine's
+  fork checkout, recorded in `memory-bank/local/`:
+  - macOS: `<renderdoc>/build_mac/lib/librenderdoc.dylib`
+    (qrenderdoc at `<renderdoc>/build_mac/bin/qrenderdoc.app/Contents/MacOS/qrenderdoc`).
+  - Windows: `<renderdoc>\x64\Development\renderdoc.dll`.
 - Confirm the override took effect after launch:
   `grep renderdoc logs/log.txt` -> a `RenderDoc: override library '...' active` line.
 - Always run `qrenderdoc` with its **visible window** (collaboration); never
@@ -84,9 +87,8 @@ This skill is the condensed, cross-platform run-book.
 - Windows: debug-launch via the VS MCP `debugger_launch` (so you also get the
   debugger if it crashes).
 - macOS Vulkan ICD note: MoltenVK vs KosmicKrisp selection is via the
-  `use_kosmickrisp` knob; see the macОS-Vulkan-drivers memory. If the editor hangs
-  on frame 1 or aborts at device selection, that memory has the bisection
-  playbook.
+  `use_kosmickrisp` knob in `config/editor/erhe_graphics.json`. If the editor
+  hangs on frame 1 or aborts at device selection, flip it and retry.
 - Do NOT blind-sleep. Poll for readiness: either `logs/log.txt` showing the editor
   is presenting frames, or poll `mcp__renderdoc__list_targets` until the editor
   appears, or poll the in-editor MCP (`http://127.0.0.1:3743/mcp`, `list_scenes`).
@@ -144,9 +146,9 @@ you whether a fragment was depth/stencil-rejected vs ran-and-wrote-the-wrong-val
 
 ## Step 5a -- SEE the frame (save a render target and Read the PNG)
 
-When the question is "what does it actually look like" (and you cannot screenshot
--- Metal MCP capture is headless-only, macOS `screencapture` is permission-blocked
-when driving headless), this is how you see it:
+When the question is "what does a render target actually look like" (the final
+composited frame is cheaper through the in-editor MCP `capture_screenshot`; never
+use OS-level capture tools), this is how you see it:
 
 ```
 mcp__renderdoc__save_texture {"resourceId":"<viewport color>","filename":"frame.png","overwrite":true}
@@ -158,7 +160,7 @@ frame. The viewport color target's debug label is `Viewport window color texture
 texture`); always save the resolved one. It is `R16G16B16A16F` (HDR) but
 `save_texture` applies the Texture-Viewer default tonemap so the PNG is viewable
 (judge brightness from `get_texture_stats`, not the PNG, per the HDR gotcha below).
-`SendUserFile` the PNG too when the user should see what you see.
+Tell the user the PNG path when they should see what you see.
 
 ## Step 5b -- read the SHADER UNIFORMS feeding a draw
 
@@ -226,7 +228,7 @@ rect) settle it without any CPU-readback ambiguity.
 5. `trigger_capture` and re-read the same stats -- now you can diff the numbers
    before/after.
 
-## Gotchas (see doc/renderdoc_fork.md for the full list)
+## Gotchas (see doc/agents/renderdoc_fork.md for the full list)
 
 - MSAA viewport color target: pass `sample` to `get_pixel_history`/`pick_pixel`,
   or read the resolved non-`multisampled` sibling. The ID textures are

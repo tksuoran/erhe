@@ -37,11 +37,11 @@ If a fresh shader you just added still fails:
 2. **Check the fork fix is in the active build**. Inspect `.cpm_cache/glslang/<hash>/SPIRV/SpvBuilder.cpp` for `variableOperand`; if missing, delete the cache + the corresponding `_deps/glslang-*` dirs and rebuild so CPM re-clones the pinned `tksuoran/glslang` commit.
 3. **Disassemble the SPIR-V** to identify `%679` (or whatever the validator points at):
    ```
-   "C:/VulkanSDK/<sdk>/Bin/spirv-dis.exe" <cached.spv> | grep -B2 "%679 ="
+   "$VULKAN_SDK/Bin/spirv-dis.exe" <cached.spv> | grep -B2 "%679 ="
    ```
-   If it's an `OpConstantComposite`, the patch should have caught it -- check (2). If it's something else (e.g. `OpSpecConstantOp`), this is a different glslang bug; see `doc/glslang_bug_report_debugglobalvariable.md` for the related glslang #4186 family.
+   If it's an `OpConstantComposite`, the fork fix should have caught it -- check (2). If it's something else (e.g. `OpSpecConstantOp`), this is a different glslang bug; see `doc/reference/glslang_bug_report_debugglobalvariable.md` for the related glslang #4186 family.
 
-**NEVER disable `NonSemantic.Shader.DebugInfo.100`** in `glsl_to_spirv.cpp` SpvOptions to silence this. The runtime debug info is wanted, the validation layer is wanted, and per-shader / per-bug fixes are the agreed approach. (See `feedback_keep_nonsemantic_debug_info.md` in memory.)
+**NEVER disable `NonSemantic.Shader.DebugInfo.100`** in `glsl_to_spirv.cpp` SpvOptions to silence this. The runtime debug info is wanted, the validation layer is wanted, and per-shader / per-bug fixes are the agreed approach. (Standing user decision.)
 
 ### `VUID-VkShaderModuleCreateInfo-pCode-08737` without `DebugGlobalVariable`
 
@@ -54,7 +54,7 @@ Aliased feature struct in pNext chain (e.g. `VkPhysicalDeviceVulkan11Features` +
 
 ### Generic `Shader compilation/linking failed`
 
-Editor aborts at `editor.cpp:718` with the GLSL error log + source copied to clipboard. Read the clipboard or grep logcat for the GLSL `ERROR:` lines. Most often a typo, a missing extension declaration, or a layout/binding mismatch with the C++ side's bind_group_layout.
+Editor aborts via `ERHE_FATAL("Shader compilation/linking failed ...")` in `editor.cpp`. The GLSL error log + source go to `logs/shader_error.txt` under `ERHE_AI_DRIVER=1` (the clipboard otherwise); on device, grep logcat for the GLSL `ERROR:` lines. Most often a typo, a missing extension declaration, or a layout/binding mismatch with the C++ side's bind_group_layout.
 
 ## Step 3: rebuild + re-test
 
@@ -67,8 +67,8 @@ After applying a source-level fix:
 
 ## Cross-references
 
-- `doc/glslang_bug_report_debugglobalvariable.md` -- root-cause writeup of the recurring `DebugGlobalVariable` family of issues.
-- `cmake/patches/glslang-debugglobalvariable-noop-for-composites.patch` -- the local workaround.
-- `doc/quest.md` Section 4.3.1 -- end-to-end guide for enabling the validation layer.
+- `doc/reference/glslang_bug_report_debugglobalvariable.md` -- root-cause writeup of the recurring `DebugGlobalVariable` family of issues.
+- The `glslang` `CPMAddPackage` in the root `CMakeLists.txt` -- the `tksuoran/glslang` fork pin that carries the fix.
+- `doc/quest.md` section "Vulkan validation layer" -- end-to-end guide for enabling the validation layer.
 - `erhe-quest-validation` skill -- enable validation if it isn't on yet.
 - `erhe-quest-launch` skill -- canonical build/install/launch sequence + headset prompt rule.
