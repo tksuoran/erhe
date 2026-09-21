@@ -35,6 +35,7 @@ XR event types (`Xr_action_boolean`, etc.) are forward-declared in `window_event
 - Input events are double-buffered: one queue is written by callbacks while the other is read by the application.
 - Both SDL and GLFW backends provide the same `Context_window` API; `window.hpp` includes the appropriate header based on the configured backend.
 - Joystick scanning runs on a background thread to avoid blocking the main loop.
+- Joystick / gamepad input is opt-in: `Window_configuration::enable_joystick` (the `enable_joystick` field of `window.json`) defaults to `false`. When it is set, `Context_window::open` initializes the SDL joystick and gamepad subsystems on the main thread, which takes about one second on Windows: SDL's GameInput backend blocks that long in Microsoft's `GameInputInitialize`. SDL skips that backend when both `SDL_HINT_JOYSTICK_GAMEINPUT` and `SDL_HINT_JOYSTICK_GAMEINPUT_RAW` are off (the raw one defaults to on and serves GIP raw-report devices only), which leaves about 0.13 s.
 - The SDL backend is the default and recommended choice.
 
 ## Injected input events

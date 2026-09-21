@@ -32,7 +32,7 @@ public:
     float           refreshrate             {0.0f};
     bool            framebuffer_transparency{false};
     bool            high_pixel_density      {false};
-    bool            enable_joystick         {true};
+    bool            enable_joystick         {false}; // SDL joystick init costs about 1 s on Windows (GameInput)
 #if defined(ERHE_GRAPHICS_API_OPENGL)
     bool            use_finish              {false};
     int             gl_major                {4};

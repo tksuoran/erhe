@@ -537,12 +537,21 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 
-        SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
-        if (configuration.enable_joystick) {
-            init_flags |= SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
+        bool sdl_init_ok = false;
+        {
+            ERHE_PROFILE_SCOPE("SDL_Init video + events");
+            sdl_init_ok = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
         }
-
-        bool sdl_init_ok = SDL_Init(init_flags);
+        if (sdl_init_ok && configuration.enable_joystick) {
+            {
+                ERHE_PROFILE_SCOPE("SDL_InitSubSystem joystick");
+                sdl_init_ok = SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+            }
+            if (sdl_init_ok) {
+                ERHE_PROFILE_SCOPE("SDL_InitSubSystem gamepad");
+                sdl_init_ok = SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+            }
+        }
         if (!sdl_init_ok) {
             fputs("Failed to initialize SDL\n", stderr);
             return false;
@@ -563,7 +572,11 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 
 #if defined(ERHE_GRAPHICS_API_VULKAN)
-    bool vulkan_load_library_status = SDL_Vulkan_LoadLibrary(nullptr);
+    bool vulkan_load_library_status = false;
+    {
+        ERHE_PROFILE_SCOPE("SDL_Vulkan_LoadLibrary");
+        vulkan_load_library_status = SDL_Vulkan_LoadLibrary(nullptr);
+    }
 #if defined(__APPLE__)
     if (!vulkan_load_library_status) {
         vulkan_load_library_status = SDL_Vulkan_LoadLibrary("/usr/local/lib/libvulkan.dylib");
@@ -722,7 +735,11 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 #endif
 
-    SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
+    SDL_Window* sdl_window = nullptr;
+    {
+        ERHE_PROFILE_SCOPE("SDL_CreateWindow");
+        sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
+    }
     m_sdl_window = sdl_window;
 
     if (sdl_window == nullptr) {
@@ -849,6 +866,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 #endif
 
     if (primary) {
+        ERHE_PROFILE_SCOPE("SDL_ShowWindow");
         SDL_ShowWindow(sdl_window);
 
         // ImGui mouse cursor shapes -> SDL system cursors. Consumed by

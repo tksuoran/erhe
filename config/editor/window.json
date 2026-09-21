@@ -13,7 +13,7 @@
     "use_sleep": false,
     "sleep_margin": 0,
     "swap_interval": 0,
-    "enable_joystick": true,
+    "enable_joystick": false,
     "power_save": false,
     "unfocused_fps": 30,
     "hidden_fps": 10

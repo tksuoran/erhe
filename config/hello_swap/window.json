@@ -11,5 +11,5 @@
     "use_sleep": false,
     "sleep_margin": 0,
     "swap_interval": 0,
-    "enable_joystick": true
+    "enable_joystick": false
 }
