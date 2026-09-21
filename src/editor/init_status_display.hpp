@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -49,14 +50,18 @@ public:
     // sets a dirty flag. Safe to call from taskflow workers.
     void set_line       (std::size_t line_index, std::string_view text);
 
-    // Main-thread only: drains pending line state and, if dirty,
-    // polls window events and drives a swapchain or XR frame.
-    // Drives SDL_PollEvent and xrBegin/EndFrame which must not be
-    // called from worker threads.
+    // Main-thread only: polls window events and, when the line state is
+    // dirty and min_present_interval has passed since the previous frame,
+    // drives a swapchain or XR frame. A dirty state that comes too early
+    // stays dirty for a later pump(). Drives SDL_PollEvent and
+    // xrBegin/EndFrame which must not be called from worker threads.
     void pump();
 
 private:
-    static constexpr std::chrono::milliseconds kMinPresentInterval{16};
+    // Init sets a new line before and after every task, most of which take
+    // a few milliseconds: a frame per change costs more than the init work
+    // it reports (53 frames, about 350 ms of a 1 s constructor).
+    static constexpr std::chrono::milliseconds min_present_interval{50};
 
     void render_present_desktop();
     void render_present_xr     ();
@@ -139,6 +144,7 @@ private:
     std::vector<std::string>          m_lines;         // protected by m_state_mutex
     std::array<double, 4>             m_clear_color{0.01, 0.02, 0.06, 1.0}; // very dark blue; protected by m_state_mutex
     bool                              m_dirty{false};  // protected by m_state_mutex
+    std::optional<std::chrono::steady_clock::time_point> m_last_present_time; // main thread only
 
     // Snapshot consumed by render_text_overlay on the main thread. Not
     // shared with workers; populated by pump() under m_state_mutex

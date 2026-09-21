@@ -218,6 +218,11 @@ void Init_status_display::pump()
     // session alive.
     m_window.poll_events();
 
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (m_last_present_time.has_value() && ((now - m_last_present_time.value()) < min_present_interval)) {
+        return; // m_dirty stays set for a later pump()
+    }
+
     bool render_this_tick = false;
     {
         std::lock_guard<std::mutex> lock{m_state_mutex};
@@ -232,6 +237,7 @@ void Init_status_display::pump()
     if (!render_this_tick) {
         return;
     }
+    m_last_present_time = now;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset != nullptr) {
