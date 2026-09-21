@@ -150,7 +150,7 @@ erhe is organized as a set of independent libraries under `src/erhe/`. Each has 
 | `erhe::rendergraph` | DAG of render nodes with typed inputs/outputs, executed in dependency order |
 | `erhe::scene` | glTF-like scene graph: nodes, meshes, cameras, lights, animations, skins |
 | `erhe::gltf` | glTF 2.0 import and export via fastgltf, including KHR physics extensions |
-| `erhe::usd` | Partial OpenUSD import and export via LightUSD (optional) |
+| `erhe::usd` | Partial OpenUSD (`.usd` / `.usda` / `.usdc` / `.usdz`) import and export via LightUSD: meshes, materials, cameras, lights, xformOp stacks, time samples, skinning, physics, composition arcs, variants; optional (`ERHE_USD_LIBRARY=lightusd`) and the only library that includes LightUSD headers |
 | `erhe::raytrace` | CPU ray tracing abstraction with swappable bvh / tinybvh / Embree backends and BVH disk caching |
 | `erhe::texgen` | Procedural texture generation: data-driven node descriptors composed into GLSL fragment shaders (Material Maker port) |
 | `erhe::graph` | Generic node graph: nodes, pins, links, topological-order evaluation; base for the geometry, texture, and shader graphs |
