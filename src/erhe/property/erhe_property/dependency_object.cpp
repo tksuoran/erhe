@@ -1698,8 +1698,12 @@ void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snaps
     const Owner_type owner_type = get_property_owner_type();
     for (const Dependency_property* property_pointer : properties) {
         const Dependency_property& property = *property_pointer;
-        if (!property.get_metadata(owner_type).inherits) {
+        const Property_metadata&   metadata = property.get_metadata(owner_type);
+        if (!metadata.inherits) {
             continue;
+        }
+        if (metadata.bridge.is_bound()) {
+            continue; // bridged: the object holds the value itself (has_local_value)
         }
         if (supplies_value_to_descendants(property)) {
             continue; // local, style, reference or animated value: unaffected by the tree
@@ -1729,6 +1733,9 @@ auto Dependency_object::capture_inheritance_snapshot(const Dependency_object* co
         collect_supplied_properties(get_inheritance_parent(), properties) &&
         collect_supplied_properties(new_inheritance_parent,   properties);
     if (enumerable) {
+        if (properties.empty()) {
+            return Inheritance_snapshot{}; // no ancestor supplies anything: nothing in the subtree can change
+        }
         std::sort(
             properties.begin(), properties.end(),
             [](const Dependency_property* lhs, const Dependency_property* rhs) { return lhs->get_index() < rhs->get_index(); }

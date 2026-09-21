@@ -146,8 +146,6 @@ auto make_node(
 {
     ERHE_PROFILE_SCOPE("asset_browser: make_node");
     std::shared_ptr<Asset_node> new_node;
-    {
-    ERHE_PROFILE_SCOPE("asset_browser: construct node");
     switch (kind) {
         case Asset_node_kind::folder:  new_node = std::make_shared<Asset_folder>      (path); break;
         case Asset_node_kind::gltf:    new_node = std::make_shared<Asset_file_gltf>   (path); break;
@@ -157,15 +155,8 @@ auto make_node(
         case Asset_node_kind::other:
         default:                       new_node = std::make_shared<Asset_file_other>  (path); break;
     }
-    }
-    {
-        ERHE_PROFILE_SCOPE("asset_browser: show");
-        new_node->show();
-    }
-    {
-        ERHE_PROFILE_SCOPE("asset_browser: path key + map");
-        tree.nodes_by_path[std::move(path_key)] = new_node;
-    }
+    new_node->show();
+    tree.nodes_by_path[std::move(path_key)] = new_node;
     if (parent) {
         if (position.has_value()) {
             new_node->set_parent(parent, position.value());
@@ -541,11 +532,7 @@ void Asset_browser::apply_scan_progress()
             m_node_tree_window->set_root(m_tree.root);
             continue;
         }
-        std::shared_ptr<Asset_node> parent_node;
-        {
-            ERHE_PROFILE_SCOPE("asset_browser: find_node");
-            parent_node = find_node(entry.parent_path_key);
-        }
+        const std::shared_ptr<Asset_node> parent_node = find_node(entry.parent_path_key);
         if (!parent_node) {
             // A parent always precedes its children in the walk's order (R2),
             // so this is a defect rather than a state to tolerate.
