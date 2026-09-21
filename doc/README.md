@@ -315,6 +315,7 @@ Every document states its standing in its first ten lines:
 
 ### Reference (`reference/`)
 
+- [reference/audit_erhe_2026_06_21.md](reference/audit_erhe_2026_06_21.md): Architecture, foundations and security audit report (2026-06-21)
 - [reference/esoterica_rendering.md](reference/esoterica_rendering.md): Esoterica vs erhe rendering comparison
 - [reference/forge_erhe.md](reference/forge_erhe.md): SDL3 GPU concepts mapped to erhe's graphics API
 - [reference/geogram_atlas_packing_feature_request.md](reference/geogram_atlas_packing_feature_request.md): Feature request to Geogram / xatlas maintainers

@@ -97,7 +97,7 @@ they are still intended.
 - **Architecture vs team size**: This is the genuine risk. The codebase is large
   (34 erhe libraries + a large editor) and effectively single-author. The backend
   `#ifdef` matrix, 6 forks, and Quest/XR specifics demand specialized, hard-to-replace
-  knowledge. The extensive AGENTS.md + Memory Bank + per-library `notes.md` are a
+  knowledge. The extensive AGENTS.md + Memory Bank + per-library notes documents are a
   deliberate, effective mitigation -- onboarding documentation is well above average.
 - **Process vs speed**: CI is well-tuned (9-config matrix, CPM caching, concurrency
   cancellation, doc-only skip). Build-only CI keeps it fast; the trade-off is no test
@@ -276,7 +276,7 @@ There is no cloud spend. The meaningful cost is **developer maintenance time and
 | `-Werror` only on MSVC | Warnings accumulate on Clang/GCC/Android unseen | "Hundreds of fixes later" when someone finally enables it | Enable `-Werror` incrementally per-library on Clang |
 | `Mcp_server` 4.4k-line god-class | Hard to navigate/test; merge-conflict magnet | Slows MCP feature work; raises contributor bar | Split transport/dispatch/actions |
 | ~27 deps, no vuln monitoring | Manual tracking of upstream CVEs | Vulnerable component ships | Dependabot for Actions + periodic pin review |
-| Single-author bus factor | Specialized XR/Vulkan/forks knowledge | Project stalls if author unavailable | Already mitigated by strong docs (AGENTS.md, notes.md, Memory Bank) |
+| Single-author bus factor | Specialized XR/Vulkan/forks knowledge | Project stalls if author unavailable | Already mitigated by strong docs (AGENTS.md, per-library notes, Memory Bank) |
 
 ---
 
