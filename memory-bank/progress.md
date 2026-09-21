@@ -1,5 +1,7 @@
 §MBEL:5.0
 
+[TASK::startup-profiling]{DONE-2026-09-21;7-commits-dd023d9f4..dcd065e6d;detail=activeContext;left=prewarm_all-include-reparse+ninja-tree-on-demand-OFF}
+
 [TASK::mcp-ui-driving]{DONE-2026-09-20;9-commits-04c45b657..785882d17;detail=activeContext;run-book=doc/agents/mcp_ui_driving.md;?user-interactive{windowed-injection,Ctrl+A-select-all}}
 
 [TASK::hand-written-rows-to-properties]{DONE-2026-09-20;10-commits-a339719c0..ab26a8cd1;detail=activeContext;?user-interactive{layout-array-rows,collision-filter-lists,joint-axis-groups}}
