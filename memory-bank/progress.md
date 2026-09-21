@@ -9,7 +9,9 @@
 ✓P6{141877437:Grid}
 ✓P7{40d199a07:Geometry_graph_mesh}
 ✓P8-main{beb405148:Node_physics+Node_physics_system}
-⚡P8b{ERHE_physics-deletion+3-debts}
+✓P8b{69d514288+7743095c7:ERHE_physics-deleted}
+✓P9{5cf5ab676:Joint-prim+Joint_system}
+?P10-Prefab_instance{confirm-D4-with-user-first}->P11-delete-infrastructure;handoff=prompt_queue.txt-item-0+plan-section-'How the remaining phases are worked'
 
 [TASK::agent-files-relocation]{DONE-2026-09-21;4-commits;detail=activeContext;?verify-after-restart{prompt_queue.txt-item-1}}
 

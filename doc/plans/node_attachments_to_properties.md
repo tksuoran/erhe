@@ -216,6 +216,39 @@ reopens.
 
 P11 is last.
 
+## How the remaining phases are worked
+
+P10 and P11 remain. Each is worked through
+`doc/agents/orchestration_harness.md` on `build_vs2026_vulkan_headless`
+(tests on), one coder per commit, the orchestrator reviewing and committing.
+
+- Ask the user to confirm D4 (next section) before briefing P10.
+- A brief lists the files the coder never stages, reverts or deletes:
+  `config/editor/desktop_windows.json`, `config/editor/editor_settings.json`,
+  `config/editor/desktop_window_imgui_host_imgui.ini`, `prompt_queue.txt`,
+  `memory-bank/*`; a layout-sensitive `Mcp_` failure is reported, and the ini
+  stays. The coder reads its editor's MCP port from `logs/log.txt`, kills only
+  editors it launched, and removes script output it creates
+  (`res/editor/graphs/`).
+- A phase with more than about twenty consumer sites is split into several
+  briefs up front, each ending in a building tree: the value or prim and its
+  system with every consumer, then the file carriers, then deletions, scripts
+  and documents.
+- Baselines a phase must hold: `erhe_property_tests` 147, `erhe_item_tests`
+  188, `erhe_scene_tests` 167, `erhe_usd_tests` 405, `erhe_physics_tests` 34
+  (Jolt) and 85 (Box3D tree); `scripts/scene_roundtrip_verify.py` total 468,
+  pass 465, the three failures being the falling-body positions of the P6
+  bodies, `textured ... local_property_names` and `references_override: the
+  def below a carrier authored nothing`; `ctest -R "Mcp_"` 72 of 73, the
+  failure being the layout-dependent
+  `property_row_is_addressable_by_its_label` (or, under another layout, the
+  gizmo-drag case); `scripts/undo_reference_clearing_smoke_test.py` 59;
+  `scripts/geometry_nodes_smoke_test.py` 136;
+  `scripts/physics_drag_joint_sweep.py` 16 of 16 on `--jolt` and `--box3d`.
+- P11 starts from `src/editor/scene/attachment_types.{hpp,cpp}`: the applied
+  API schema catalog is empty and the Add Attachment menu is hidden while it
+  is; `Joint` is a child-prim catalog key, which stays.
+
 ## Decision to confirm before P10
 
 D4 (arcs as prim-held structure, not properties): the verdict follows from
