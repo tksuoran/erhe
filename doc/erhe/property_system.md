@@ -283,7 +283,7 @@ table, see D2a), and references to other objects (D28).
     UI indicators; `has_local_value(property)`.
   - `for_each_local_value(callback)` (R10).
   - `add_observer(property, callback) -> Observer_token` (D15).
-  - `capture_inheritance_snapshot()` / `apply_inheritance_snapshot()` (D8).
+  - `capture_inheritance_snapshot(new_inheritance_parent)` / `apply_inheritance_snapshot()` (D8).
   - `virtual void on_property_changed(const Property_changed_args&)`.
   `Property_changed_args` carries the property, old and new effective
   values, and old and new `Value_source`.

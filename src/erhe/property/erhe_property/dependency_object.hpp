@@ -328,7 +328,12 @@ public:
     // Inheritance support for tree changes: capture on the subtree root
     // before the tree changes, apply after. apply notifies every object in
     // the snapshot whose effective value or source changed.
-    [[nodiscard]] auto capture_inheritance_snapshot() -> Inheritance_snapshot;
+    // new_inheritance_parent is the inheritance parent the subtree root is
+    // about to get (nullptr: none). An inherited value in the subtree can
+    // only change for a property that an ancestor above the root supplies,
+    // before or after the change, so the snapshot holds those properties
+    // only.
+    [[nodiscard]] auto capture_inheritance_snapshot(const Dependency_object* new_inheritance_parent) -> Inheritance_snapshot;
     void               apply_inheritance_snapshot(const Inheritance_snapshot& snapshot);
 
     // While one is alive, changed notifications on the object are queued and
@@ -500,7 +505,12 @@ private:
         const Property_value&      old_value,
         const Property_value&      new_value
     );
-    void capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot);
+    void capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot, const std::vector<const Dependency_property*>& properties);
+    // Appends every property an ancestor chain starting at chain_start
+    // supplies to its descendants. Returns false when the chain holds an
+    // object whose supplied properties are not enumerable (a reference
+    // source may answer through a computed provider).
+    [[nodiscard]] static auto collect_supplied_properties(const Dependency_object* chain_start, std::vector<const Dependency_property*>& properties) -> bool;
 
     std::vector<Effective_value_entry>              m_entries;     // sorted by index
     std::shared_ptr<Observer_token::Observer_list>  m_observers;   // allocated on first add_observer

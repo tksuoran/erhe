@@ -59,7 +59,7 @@ public:
     // Reparent with the snapshot protocol Hierarchy::set_parent uses.
     void set_parent(Test_object* parent)
     {
-        const Inheritance_snapshot snapshot = capture_inheritance_snapshot();
+        const Inheritance_snapshot snapshot = capture_inheritance_snapshot(parent);
         if (m_parent != nullptr) {
             std::erase(m_parent->m_children, this);
         }

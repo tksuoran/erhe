@@ -298,9 +298,12 @@ structural parent names the container that holds it -
 node, which visits the item as a child). Inherited values are not cached: a read walks up until an
 ancestor with a local value. A set or clear on an inherits property notifies
 every descendant without a local value, stopping at descendants that have
-one. A tree change uses `capture_inheritance_snapshot` before and
-`apply_inheritance_snapshot` after so the subtree's notifications carry the
-right old values.
+one. A tree change uses `capture_inheritance_snapshot(new_inheritance_parent)`
+before and `apply_inheritance_snapshot` after so the subtree's notifications
+carry the right old values. The snapshot holds the properties that an ancestor
+above the subtree root supplies, in the old chain or the new one: those are
+the only inherited values the change can move, so reparenting under ancestors
+that supply nothing costs one walk of the two ancestor chains.
 
 ## Metadata resolution
 

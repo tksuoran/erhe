@@ -99,7 +99,7 @@ void Node_attachment::set_node(Node* const node, const std::size_t position)
     const std::shared_ptr<Node_attachment> keep_alive = std::static_pointer_cast<Node_attachment>(weak_from_this().lock());
     // Inherited property values before the move; applied after it so the
     // change notifications carry the right old values (D8).
-    const erhe::property::Inheritance_snapshot inheritance_snapshot = capture_inheritance_snapshot();
+    const erhe::property::Inheritance_snapshot inheritance_snapshot = capture_inheritance_snapshot(node);
     Node* const old_node = m_node;
     erhe::Item_host* const old_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
     m_node = node;

@@ -1664,13 +1664,32 @@ auto Dependency_object::set_reference(std::shared_ptr<const Dependency_object> r
 
 // Inheritance snapshots
 
-void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot)
+auto Dependency_object::collect_supplied_properties(const Dependency_object* chain_start, std::vector<const Dependency_property*>& properties) -> bool
 {
     const Property_registry& registry = Property_registry::get();
+    for (const Dependency_object* ancestor = chain_start; ancestor != nullptr; ancestor = ancestor->get_inheritance_parent()) {
+        if (ancestor->m_reference) {
+            return false;
+        }
+        ancestor->for_each_supplied_property(
+            [&properties](const Dependency_property& property) {
+                properties.push_back(&property);
+            }
+        );
+        for (const Effective_value_entry& entry : ancestor->m_entries) {
+            if (entry.has_animated()) {
+                properties.push_back(&registry.get(entry.index));
+            }
+        }
+    }
+    return true;
+}
+
+void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot, const std::vector<const Dependency_property*>& properties)
+{
     const Owner_type owner_type = get_property_owner_type();
-    const std::size_t count = registry.get_count();
-    for (uint16_t index = 0; index < count; ++index) {
-        const Dependency_property& property = registry.get(index);
+    for (const Dependency_property* property_pointer : properties) {
+        const Dependency_property& property = *property_pointer;
         if (!property.get_metadata(owner_type).inherits) {
             continue;
         }
@@ -1688,15 +1707,36 @@ void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snaps
             }
         );
     }
-    for_each_inheritance_child([&snapshot](Dependency_object& child) { child.capture_inheritance_snapshot_recursive(snapshot); });
+    for_each_inheritance_child([&snapshot, &properties](Dependency_object& child) { child.capture_inheritance_snapshot_recursive(snapshot, properties); });
 }
 
-auto Dependency_object::capture_inheritance_snapshot() -> Inheritance_snapshot
+auto Dependency_object::capture_inheritance_snapshot(const Dependency_object* const new_inheritance_parent) -> Inheritance_snapshot
 {
     ERHE_PROFILE_SCOPE("Dependency_object::capture_inheritance_snapshot");
 
+    // Not live across a nested call: the recursion below only reads values.
+    static thread_local std::vector<const Dependency_property*> properties;
+    properties.clear();
+    const bool enumerable =
+        collect_supplied_properties(get_inheritance_parent(), properties) &&
+        collect_supplied_properties(new_inheritance_parent,   properties);
+    if (enumerable) {
+        std::sort(
+            properties.begin(), properties.end(),
+            [](const Dependency_property* lhs, const Dependency_property* rhs) { return lhs->get_index() < rhs->get_index(); }
+        );
+        properties.erase(std::unique(properties.begin(), properties.end()), properties.end());
+    } else {
+        const Property_registry& registry = Property_registry::get();
+        const std::size_t count = registry.get_count();
+        properties.clear();
+        for (uint16_t index = 0; index < count; ++index) {
+            properties.push_back(&registry.get(index));
+        }
+    }
+
     Inheritance_snapshot snapshot;
-    capture_inheritance_snapshot_recursive(snapshot);
+    capture_inheritance_snapshot_recursive(snapshot, properties);
     return snapshot;
 }
 

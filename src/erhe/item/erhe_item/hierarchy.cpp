@@ -201,7 +201,10 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     // Inherited property values of this subtree may change with the parent;
     // capture them while the old parent is still in place so the change
     // notifications after the move carry the right old values.
-    const erhe::property::Inheritance_snapshot inheritance_snapshot = capture_inheritance_snapshot();
+    const erhe::property::Inheritance_snapshot inheritance_snapshot = capture_inheritance_snapshot(
+        // A parentless item inherits from the container that holds it.
+        (new_parent != nullptr) ? new_parent : Item_base::get_inheritance_parent()
+    );
     m_parent = new_parent_;
 
     log->trace(
