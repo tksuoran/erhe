@@ -1442,8 +1442,8 @@ public:
             auto& app_message_bus = *m_app_message_bus.get();
 
 #define ERHE_GET_GL_CONTEXT
-#define ERHE_TASK_HEADER(var) init_status_display.set_line(1, #var); init_status_display.pump();
-#define ERHE_TASK_FOOTER(ops) init_status_display.set_line(1, ""); init_status_display.pump();
+#define ERHE_TASK_HEADER(var) init_status_display.set_line(1, #var); init_status_display.pump(); { ERHE_PROFILE_SCOPE(#var);
+#define ERHE_TASK_FOOTER(ops) } init_status_display.set_line(1, ""); init_status_display.pump();
 
             // Window and graphics context creation - in main thread
             m_window = create_window(m_graphics_config, m_window_config, m_editor_settings);
@@ -1484,35 +1484,38 @@ public:
 #endif
 
             // Graphics context state init after window - in main thread
-            m_graphics_device = std::make_unique<erhe::graphics::Device>(
-                erhe::graphics::Surface_create_info{
-                    .context_window            = m_window.get(),
-                    .prefer_low_bandwidth      = false,
-                    .prefer_high_dynamic_range = false
-                },
-                m_graphics_config,
-                [](erhe::graphics::Message_severity severity, const std::string& error_message, const std::string& callstack) {
-                    const std::string report_text = error_message + "\n=== Callstack ===\n" + callstack;
-                    if (is_ai_driver()) {
-                        write_ai_error_report("logs/device_error.txt", "Device error", report_text);
-                        if (severity == erhe::graphics::Message_severity::error) {
-                            ERHE_FATAL("Device error (see logs/device_error.txt): %s", error_message.c_str());
-                        } else {
-                            log_render->warn("Device message (captured to logs/device_error.txt): {}", error_message);
+            {
+                ERHE_PROFILE_SCOPE("erhe::graphics::Device");
+                m_graphics_device = std::make_unique<erhe::graphics::Device>(
+                    erhe::graphics::Surface_create_info{
+                        .context_window            = m_window.get(),
+                        .prefer_low_bandwidth      = false,
+                        .prefer_high_dynamic_range = false
+                    },
+                    m_graphics_config,
+                    [](erhe::graphics::Message_severity severity, const std::string& error_message, const std::string& callstack) {
+                        const std::string report_text = error_message + "\n=== Callstack ===\n" + callstack;
+                        if (is_ai_driver()) {
+                            write_ai_error_report("logs/device_error.txt", "Device error", report_text);
+                            if (severity == erhe::graphics::Message_severity::error) {
+                                ERHE_FATAL("Device error (see logs/device_error.txt): %s", error_message.c_str());
+                            } else {
+                                log_render->warn("Device message (captured to logs/device_error.txt): {}", error_message);
+                            }
+                            return;
                         }
-                        return;
-                    }
-                    erhe::utility::copy_to_clipboard(report_text);
-                    if (severity == erhe::graphics::Message_severity::error) {
-                        ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
-                    } else {
-                        log_render->warn("Device message (copied to clipboard): %s", error_message.c_str());
-                        static int counter = 0;
-                        ++counter;
-                    }
-                },
-                vulkan_xr_creators_ptr
-            );
+                        erhe::utility::copy_to_clipboard(report_text);
+                        if (severity == erhe::graphics::Message_severity::error) {
+                            ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
+                        } else {
+                            log_render->warn("Device message (copied to clipboard): %s", error_message.c_str());
+                            static int counter = 0;
+                            ++counter;
+                        }
+                    },
+                    vulkan_xr_creators_ptr
+                );
+            }
 
             // RenderDoc capture is auto-initialized by Device based on Graphics_config
 
@@ -1609,18 +1612,21 @@ public:
             }
 #endif
 
-            m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
-            m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
-            m_texture_file_loader  = std::make_unique<Texture_file_loader>(m_app_context);
-            m_animation_player     = std::make_unique<Animation_player>(m_app_context, app_message_bus);
-            m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
-            m_asset_manager        = std::make_unique<Asset_manager >(m_app_context, app_message_bus, *m_app_scenes.get());
-            m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
-            m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
-            m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
-            m_mesh_component_selection = std::make_unique<Mesh_component_selection>(app_message_bus);
-            m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context, app_message_bus);
-            m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
+            {
+                ERHE_PROFILE_SCOPE("Early parts");
+                m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
+                m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
+                m_texture_file_loader  = std::make_unique<Texture_file_loader>(m_app_context);
+                m_animation_player     = std::make_unique<Animation_player>(m_app_context, app_message_bus);
+                m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
+                m_asset_manager        = std::make_unique<Asset_manager >(m_app_context, app_message_bus, *m_app_scenes.get());
+                m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
+                m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
+                m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
+                m_mesh_component_selection = std::make_unique<Mesh_component_selection>(app_message_bus);
+                m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context, app_message_bus);
+                m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
+            }
             // Drive view_count from the OpenXR session's multiview
             // capability. The session was created above (line ~789).
             // When multiview is enabled, the camera UBO holds two
@@ -1645,15 +1651,21 @@ public:
                 .max_draw_count      = m_renderer_config.max_draw_count,
                 .view_count      = xr_view_count
             };
-            m_mesh_memory = std::make_unique<erhe::scene_renderer::Mesh_memory>(
-                m_mesh_memory_config,
-                *m_graphics_device.get()
-            );
-            m_program_interface = std::make_unique<erhe::scene_renderer::Program_interface>(
-                *m_graphics_device.get(),
-                *m_mesh_memory.get(),
-                program_interface_config
-            );
+            {
+                ERHE_PROFILE_SCOPE("Mesh_memory");
+                m_mesh_memory = std::make_unique<erhe::scene_renderer::Mesh_memory>(
+                    m_mesh_memory_config,
+                    *m_graphics_device.get()
+                );
+            }
+            {
+                ERHE_PROFILE_SCOPE("Program_interface");
+                m_program_interface = std::make_unique<erhe::scene_renderer::Program_interface>(
+                    *m_graphics_device.get(),
+                    *m_mesh_memory.get(),
+                    program_interface_config
+                );
+            }
             // Before the taskflow, and published into App_context on the
             // spot: the scene roots and the previews that taskflow builds
             // each construct a Material_set from their constructor, so this
@@ -1668,23 +1680,32 @@ public:
             // Cache constructed before Programs so each Programs member
             // can hold a reference to it. The cache stays empty until
             // something calls Shader_variant_cache::get(...).
-            m_shader_variant_cache = std::make_unique<erhe::scene_renderer::Shader_variant_cache>(
-                *m_graphics_device.get(),
-                *m_program_interface.get()
-            );
-            m_programs = std::make_unique<Programs>(
-                *m_graphics_device.get(),
-                *m_program_interface.get()
-                //*m_shader_variant_cache.get()
-            );
+            {
+                ERHE_PROFILE_SCOPE("Shader_variant_cache");
+                m_shader_variant_cache = std::make_unique<erhe::scene_renderer::Shader_variant_cache>(
+                    *m_graphics_device.get(),
+                    *m_program_interface.get()
+                );
+            }
+            {
+                ERHE_PROFILE_SCOPE("Programs");
+                m_programs = std::make_unique<Programs>(
+                    *m_graphics_device.get(),
+                    *m_program_interface.get()
+                    //*m_shader_variant_cache.get()
+                );
+            }
 
-            m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
-                *m_graphics_device.get(),
-                *m_app_context.current_command_buffer,
-                m_text_renderer_config.enabled,
-                m_text_renderer_config.font_size,
-                xr_view_count
-            );
+            {
+                ERHE_PROFILE_SCOPE("Text_renderer");
+                m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
+                    *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
+                    m_text_renderer_config.enabled,
+                    m_text_renderer_config.font_size,
+                    xr_view_count
+                );
+            }
 
             // Stack-local: the status display is only useful during init,
             // and Editor::Editor() is the only scope that drives it.

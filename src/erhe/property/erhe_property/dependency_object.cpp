@@ -1,5 +1,6 @@
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/property_log.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -1692,6 +1693,8 @@ void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snaps
 
 auto Dependency_object::capture_inheritance_snapshot() -> Inheritance_snapshot
 {
+    ERHE_PROFILE_SCOPE("Dependency_object::capture_inheritance_snapshot");
+
     Inheritance_snapshot snapshot;
     capture_inheritance_snapshot_recursive(snapshot);
     return snapshot;
@@ -1699,6 +1702,8 @@ auto Dependency_object::capture_inheritance_snapshot() -> Inheritance_snapshot
 
 void Dependency_object::apply_inheritance_snapshot(const Inheritance_snapshot& snapshot)
 {
+    ERHE_PROFILE_SCOPE("Dependency_object::apply_inheritance_snapshot");
+
     for (const Inheritance_snapshot::Entry& entry : snapshot.entries) {
         Dependency_object& object = *entry.object;
         Value_source   new_source{};

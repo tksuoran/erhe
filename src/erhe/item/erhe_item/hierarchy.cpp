@@ -1,5 +1,6 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item_log.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -185,6 +186,8 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& parent)
 
 void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const std::size_t position)
 {
+    ERHE_PROFILE_SCOPE("Hierarchy::set_parent");
+
     ERHE_VERIFY(new_parent_.get() != this);
     std::shared_ptr<Hierarchy> old_parent_shared = m_parent.lock();
     Hierarchy*                 old_parent         = old_parent_shared.get();
@@ -229,8 +232,14 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     }
 
     set_depth_recursive(new_parent ? new_parent->get_depth() + 1 : 0);
-    handle_parent_update(old_parent, new_parent);
-    hierarchy_sanity_check();
+    {
+        ERHE_PROFILE_SCOPE("handle_parent_update");
+        handle_parent_update(old_parent, new_parent);
+    }
+    {
+        ERHE_PROFILE_SCOPE("hierarchy_sanity_check");
+        hierarchy_sanity_check();
+    }
     apply_inheritance_snapshot(inheritance_snapshot);
     // The effective active state (X2) is not an inherited property value:
     // it is the derived Item_flags::active bit, so the parent change has to

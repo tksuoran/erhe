@@ -272,6 +272,8 @@ void Imgui_windows::draw_imgui_windows()
                 }
                 bool hidden = true;
                 if (imgui_window->is_window_visible()) {
+                    ERHE_PROFILE_SCOPE("Imgui_window");
+                    ERHE_PROFILE_DATA("Imgui_window", imgui_window->get_title().data(), imgui_window->get_title().size());
                     ImGui::PushID(++window_id);
                     const bool is_window_visible = imgui_window->begin();
                     if (is_window_visible) {

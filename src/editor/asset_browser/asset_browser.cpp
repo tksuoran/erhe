@@ -496,6 +496,8 @@ void Asset_browser::apply_scan_progress()
     if (!m_scan_request) {
         return;
     }
+
+    ERHE_PROFILE_FUNCTION();
     Asset_scan_request& request = *m_scan_request;
 
     // Read before draining: the worker sets the flag after its last batch is
