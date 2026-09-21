@@ -1,6 +1,6 @@
 §MBEL:5.0
 
-[TASK::deferred-brush-geometry]{PLANNED-2026-09-21;doc/plans/deferred_brush_geometry.md;6-phases;not-started}
+[TASK::deferred-brush-geometry]{DONE-2026-09-21;6-phases-6-commits;detail=activeContext;left=doc/plans/brushes.md;?user-interactive{spinners-windowed}}
 
 [TASK::startup-profiling]{2026-09-21;~24-commits-dd023d9f4..78015a6d3;16.9s->1.68s-Debug;detail=activeContext;left=prewarm-330ms+facet-texcoord-step-regression-uninvestigated}
 
