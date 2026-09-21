@@ -488,7 +488,7 @@ void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
 {
     ERHE_PROFILE_FUNCTION();
 
-    push_group("Geometry", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+    push_group("Geometry", ImGuiTreeNodeFlags_None, m_indent);
 
     const GEO::Mesh& geo_mesh = geometry.get_mesh();
     add_entry("Vertices", [&geo_mesh](){
@@ -519,7 +519,7 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
         return;
     }
 
-    push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
 
     add_entry("Fill Triangles", [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
     add_entry("Edge Lines",     [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
@@ -613,8 +613,12 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         push_group("Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
     }
     const std::shared_ptr<erhe::Item_base> mesh_shared = mesh.shared_from_this();
-    int primitive_index = 0;
-    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh.get_primitives();
+    const std::size_t primitive_count = mesh_primitives.size();
+
+    for (size_t primitive_index = 0; primitive_index < primitive_count; ++primitive_index) {
+        const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(primitive_index);
         while (m_primitive_labels.size() <= primitive_index) {
             m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
         }
@@ -671,16 +675,18 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
             add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
         }
         const auto& rt_primitives = mesh.get_rt_primitives();
+        const std::size_t rt_primitive_count = rt_primitives.size();
         if (!rt_primitives.empty()) {
             push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
-            for (const auto& rt_primitive : rt_primitives) {
-                while (m_rt_primitive_labels.size() <= primitive_index) {
+            for (size_t rt_primitive_index = 0; rt_primitive_index < rt_primitive_count; ++rt_primitive_index) {
+                while (m_rt_primitive_labels.size() <= rt_primitive_index) {
                     m_rt_primitive_labels.push_back(fmt::format("Raytrace Primitive {}", m_rt_primitive_labels.size()));
                 }
+                const auto& rt_primitive = rt_primitives.at(rt_primitive_index);
 
                 const auto* rt_instance = rt_primitive->rt_instance.get();
                 const auto* rt_scene    = rt_primitive->rt_scene.get();
-                push_group(m_rt_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+                push_group(m_rt_primitive_labels.at(rt_primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
                 add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
                 add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
                 add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
@@ -703,7 +709,7 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
     if (!brush) {
         return;
     }
-    push_group("Polygons", ImGuiTreeNodeFlags_DefaultOpen);
+    push_group("Polygons", ImGuiTreeNodeFlags_None);
     const std::map<GEO::index_t, std::vector<GEO::index_t>>& facets = brush->get_corner_count_to_facets();
     for (const auto& i : facets) {
         const GEO::index_t corner_count  = i.first;
