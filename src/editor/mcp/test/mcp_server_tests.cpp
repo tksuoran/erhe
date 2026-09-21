@@ -419,6 +419,49 @@ TEST_F(Mcp_test, list_scenes_returns_named_scenes)
     }
 }
 
+// get_node_details addresses a prim by its id as readily as by its name: the
+// ids get_scene_nodes hands out are what a caller holds after a walk of the
+// tree, and a name may repeat between subtrees.
+TEST_F(Mcp_test, get_node_details_finds_a_node_by_id)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "node id lookup box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    advance_frames(client, 2);
+
+    Mcp_client::Tool_result nodes = client.call_tool("get_scene_nodes", json{{"scene_name", env.scene_name()}});
+    ASSERT_FALSE(nodes.is_error) << nodes.text;
+    std::size_t node_id = 0;
+    for (const json& node : nodes.payload.at("nodes")) {
+        if (node.value("name", "") == "node id lookup box") {
+            node_id = node.value("id", std::size_t{0});
+            break;
+        }
+    }
+    ASSERT_NE(node_id, std::size_t{0}) << "the created box is not in the node list";
+
+    Mcp_client::Tool_result by_id = client.call_tool("get_node_details", json{
+        {"scene_name", env.scene_name()},
+        {"node_id",    node_id}
+    });
+    ASSERT_FALSE(by_id.is_error) << by_id.text;
+    EXPECT_EQ(by_id.payload.value("name", ""), "node id lookup box");
+    EXPECT_EQ(by_id.payload.value("id", std::size_t{0}), node_id);
+
+    Mcp_client::Tool_result missing = client.call_tool("get_node_details", json{
+        {"scene_name", env.scene_name()},
+        {"node_id",    std::size_t{0x7fffffff}}
+    });
+    EXPECT_TRUE(missing.is_error) << "an unknown id was answered with a node";
+}
+
 // reset_editor_state takes the editor back to no scenes, no selection and
 // no undo history - and returns only once the scene closes have run.
 TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)

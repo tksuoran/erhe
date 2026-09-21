@@ -62,6 +62,7 @@
 #include "erhe_gltf/gltf_item_flags.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_item/scope.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -3242,6 +3243,40 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
         {"pending_seconds",   static_cast<double>(time->get_pending_simulation_advance_ns()) * 1e-9},
         {"simulation_time_s", static_cast<double>(time->get_simulation_time_ns()) * 1e-9},
         {"frame_number",      time->get_frame_number()}
+    }).dump();
+}
+
+// The level of one or more spdlog categories, for the run the caller is
+// driving: a diagnostic a script needs from `logs/log.txt` - the geometry
+// graph's per-node evaluation trace, say - is below the level
+// `config/editor/logging.json` leaves the category at, and turning it up
+// there would make every ordinary run carry it. The levels are the spdlog
+// names ("trace", "debug", "info", "warn", "err", "critical", "off"), and a
+// category the process has no logger for is reported rather than applied.
+auto Mcp_server::action_set_log_levels(const json& args) -> std::string
+{
+    const auto loggers_it = args.find("loggers");
+    if ((loggers_it == args.end()) || !loggers_it->is_object() || loggers_it->empty()) {
+        return make_error_content("set_log_levels: 'loggers' must be a non-empty object of category -> level");
+    }
+    std::vector<std::pair<std::string, std::string>> name_level_pairs;
+    json                                             applied = json::array();
+    json                                             unknown = json::array();
+    for (const auto& [name, level] : loggers_it->items()) {
+        if (!level.is_string()) {
+            return make_error_content("set_log_levels: the level of '" + name + "' must be a string");
+        }
+        if (spdlog::get(name) == nullptr) {
+            unknown.push_back(name);
+            continue;
+        }
+        name_level_pairs.emplace_back(name, level.get<std::string>());
+        applied.push_back(json{{"name", name}, {"level", level.get<std::string>()}});
+    }
+    erhe::log::configure_log_levels(name_level_pairs);
+    return make_json_content({
+        {"applied", applied},
+        {"unknown", unknown}
     }).dump();
 }
 

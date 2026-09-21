@@ -66,9 +66,13 @@
     "name": "get_composition_passes"
   },
   {
-    "description": "Get detailed info for a node (transform, attachments). The node is named by name or by path. A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
+    "description": "Get detailed info for a node (transform, attachments). The node is named by name, by path or by id. A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
     "inputSchema": {
       "properties": {
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
         "node_name": {
           "description": "Name of the node, or its path: slash-separated node names from the scene root node down, root's own name excluded (e.g. 'Parent/Child')",
           "type": "string"
@@ -79,8 +83,7 @@
         }
       },
       "required": [
-        "scene_name",
-        "node_name"
+        "scene_name"
       ],
       "type": "object"
     },
@@ -1646,6 +1649,26 @@
     "name": "advance_time"
   },
   {
+    "description": "Set the spdlog level of one or more log categories for this run, so a script can turn a diagnostic on without raising it in config/editor/logging.json for every run. Levels are the spdlog names: trace, debug, info, warn, err, critical, off. Reports the categories applied and the ones the process has no logger for.",
+    "inputSchema": {
+      "properties": {
+        "loggers": {
+          "additionalProperties": {
+            "description": "spdlog level name",
+            "type": "string"
+          },
+          "description": "Category name -> level, e.g. {\"editor.graph_editor\": \"trace\"}",
+          "type": "object"
+        }
+      },
+      "required": [
+        "loggers"
+      ],
+      "type": "object"
+    },
+    "name": "set_log_levels"
+  },
+  {
     "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kind joint applies to an Xformable node. A rigid body is not an attachment: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
@@ -2974,7 +2997,7 @@
     "name": "create_scene"
   },
   {
-    "description": "Export a scene to a glTF file, without a file dialog. By default a plain interchange export; with editor_state=true the file additionally carries the editor-domain ERHE_* extensions (ERHE_scene settings, ERHE_physics, ERHE_brushes, ERHE_node_graphs, ERHE_collections) for full scene persistence, and baked graph-mesh products are excluded (rebuilt on load).",
+    "description": "Export a scene to a glTF file, without a file dialog. By default a plain interchange export; with editor_state=true the file additionally carries the editor-domain ERHE_* extensions (ERHE_scene settings, ERHE_brushes, ERHE_node_graphs, ERHE_collections) for full scene persistence, and baked graph-mesh products are excluded (rebuilt on load).",
     "inputSchema": {
       "properties": {
         "binary": {

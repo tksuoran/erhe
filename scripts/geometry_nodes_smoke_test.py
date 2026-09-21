@@ -7,7 +7,7 @@ incremental evaluation proof (trace log), multi-link join, structural
 churn with deep undo/redo, output node edge cases, multi-link partial
 disconnects, invalid connect rejection (type mismatch, self links,
 cycles), bad group asset files, out-of-range parameter abuse, output
-physics edge cases, the Graph Mesh asset + Geometry Graph Mesh attachment
+physics edge cases, the Graph Mesh asset + the node's graph-mesh binding
 (create/select/bind/re-bake/shared-bake/physics/unbind + scene v7
 save/load round-trip), and stress chains. Prints a structured PASS/FAIL
 report.
@@ -16,8 +16,8 @@ Geometry graphs only live in Graph_mesh content-library assets (no window
 scratch graph, no graph file save/load): every block starts by creating +
 selecting a fresh asset (fresh_graph()); persistence is scene save/load,
 covered by section_graph_mesh_asset. The output node publishes a bake to
-its owning asset - scene content appears only where an explicit
-Geometry_graph_mesh attachment binds a scene node to the asset. Group
+its owning asset - scene content appears only where a node's own
+Geometry_graph_mesh.graph_mesh value binds it to the asset. Group
 nodes still read subgraph JSON files; the test authors those files
 directly (write_graph_file).
 """
@@ -436,8 +436,8 @@ def section_parameter_sweeps():
     box = add_node("box")["id"]
     output = add_node("output")["id"]
     connect(box, 0, output, 0)
-    sweep(box, {"size": [0.1, 0.1, 0.1], "steps": [1, 1, 1], "power": 1.0},
-               {"size": [4.0, 2.0, 1.0], "steps": [3, 2, 1], "power": 0.5},
+    sweep(box, {"size": [0.1, 0.1, 0.1], "subdivisions": [1, 1, 1], "power": 1.0},
+               {"size": [4.0, 2.0, 1.0], "subdivisions": [3, 2, 1], "power": 0.5},
           verify=lambda: geometry_counts(box)[0] > 26, label="box size/steps/power")
 
     fresh_graph()
@@ -630,6 +630,13 @@ def section_parameter_sweeps():
 
 def section_incremental():
     S = "incremental"
+    # The per-node evaluation line is a trace of editor.graph_editor, which
+    # config/editor/logging.json leaves at info so an ordinary run does not
+    # carry it. Raise it for this run only.
+    levels = call("set_log_levels", {"loggers": {"editor.graph_editor": "trace"}})
+    check(S, "evaluation trace enabled",
+          bool(levels) and any(e.get("name") == "editor.graph_editor" for e in levels.get("applied", [])),
+          detail=str(levels))
     fresh_graph()
     box = add_node("box")["id"]
     sub = add_node("subdivide")["id"]
@@ -668,6 +675,8 @@ def section_incremental():
     check(S, "editing chain 2 re-evaluates only conway+output",
           evaluated_ids and evaluated_ids <= {str(conway), str(out2)},
           f"evaluated={sorted(evaluated_ids)}")
+
+    call("set_log_levels", {"loggers": {"editor.graph_editor": "info"}})
 
 
 def section_structural_churn():
@@ -747,13 +756,11 @@ def section_output_edge_cases():
     check(S, "bound scene node created", wait_for_scene_node(sn, "Out Edge Node"))
     mutate("set_node_graph_mesh", {"node_name": "Out Edge Node", "graph_mesh": asset_name, "scene_name": sn})
     get_graph()
-    mesh_atts = [a for a in node_attachments(sn, "Out Edge Node") if a.get("type") == "Mesh"]
-    check(S, "bound node materializes the bake", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 24,
-          f"atts={mesh_atts}")
+    check(S, "bound node materializes the bake", controlled_mesh_facets(sn, "Out Edge Node") == 24,
+          f"mesh={controlled_mesh(sn, 'Out Edge Node')}")
 
     def bound_mesh_facets():
-        mesh_atts = [a for a in node_attachments(sn, "Out Edge Node") if a.get("type") == "Mesh"]
-        return mesh_atts[0].get("facet_count") if mesh_atts else None
+        return controlled_mesh_facets(sn, "Out Edge Node")
 
     # Removing the output node publishes an empty bake -> the bound node's
     # controlled mesh clears (primitives dropped, attachment kept); undo
@@ -770,10 +777,10 @@ def section_output_edge_cases():
     # controlled mesh clears); reconnect restores.
     disconnect(box, 0, out1, 0)
     get_graph()
-    types = [a.get("type") for a in node_attachments(sn, "Out Edge Node")]
+    binding = graph_mesh_binding(sn, "Out Edge Node")
     facets = bound_mesh_facets()
-    check(S, "disconnected output keeps attachment, clears mesh",
-          ("Geometry_graph_mesh" in types) and not facets, f"types={types} facets={facets}")
+    check(S, "disconnected output keeps the binding, clears mesh",
+          (binding == asset_name) and not facets, f"binding={binding} facets={facets}")
     connect(box, 0, out1, 0)
     get_graph()
     check(S, "reconnect restores the bound mesh", bound_mesh_facets() == 24, f"facets={bound_mesh_facets()}")
@@ -1186,9 +1193,54 @@ def wait_for_scene(scene_name, tries=50):
     return False
 
 
-def node_attachments(scene_name, node_name):
+def node_details(scene_name, node_name):
     details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
-    return details.get("attachments", []) if isinstance(details, dict) else []
+    return details if isinstance(details, dict) else {}
+
+
+def node_attachments(scene_name, node_name):
+    return node_details(scene_name, node_name).get("attachments", [])
+
+
+def graph_mesh_binding(scene_name, node_name):
+    # The Graph Mesh a node sources its mesh from is a value group of the
+    # node (doc/editor/geometry_graph_mesh.md), reported under
+    # "geometry_graph_mesh"; None means the node is not bound.
+    binding = node_details(scene_name, node_name).get("geometry_graph_mesh")
+    return binding.get("graph_mesh") if isinstance(binding, dict) else None
+
+
+def controlled_mesh(scene_name, node_name):
+    # A Mesh IS a prim (doc/erhe/usd_compatibility_design.md C5), so the mesh a
+    # bake controls is either the bound prim itself (the bind adopted an
+    # existing Mesh prim) or the "<node> Mesh" child the bake created. The
+    # ghost mesh is a companion of its own and never the controlled mesh.
+    details = node_details(scene_name, node_name)
+    own = details.get("mesh")
+    if isinstance(own, dict):
+        return own
+    for child in details.get("children", []):
+        if child.endswith(" Ghost Mesh"):
+            continue
+        child_mesh = node_details(scene_name, child).get("mesh")
+        if isinstance(child_mesh, dict):
+            return child_mesh
+    return None
+
+
+def controlled_mesh_facets(scene_name, node_name):
+    mesh = controlled_mesh(scene_name, node_name)
+    return mesh.get("facet_count") if isinstance(mesh, dict) else None
+
+
+def mesh_child_count(scene_name, node_name):
+    count = 0
+    for child in node_details(scene_name, node_name).get("children", []):
+        if child.endswith(" Ghost Mesh"):
+            continue
+        if isinstance(node_details(scene_name, child).get("mesh"), dict):
+            count += 1
+    return count
 
 
 def node_physics(scene_name, node_name):
@@ -1249,11 +1301,11 @@ def section_graph_mesh_asset():
     bound = mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node", "graph_mesh": "Smoke GM", "scene_name": scene_name})
     check(S, "set_node_graph_mesh binds", bool(bound) and bound.get("bound"), detail=str(bound))
     get_graph()
-    atts = node_attachments(scene_name, "Smoke GM Node")
-    gm_atts   = [a for a in atts if a.get("type") == "Geometry_graph_mesh"]
-    mesh_atts = [a for a in atts if a.get("type") == "Mesh"]
-    check(S, "attachment back-references the asset", len(gm_atts) == 1 and gm_atts[0].get("graph_mesh") == "Smoke GM", detail=str(gm_atts))
-    check(S, "controlled mesh carries the box geometry", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 24, detail=str(mesh_atts))
+    binding = graph_mesh_binding(scene_name, "Smoke GM Node")
+    check(S, "the node's binding names the asset", binding == "Smoke GM", detail=str(binding))
+    check(S, "controlled mesh carries the box geometry",
+          controlled_mesh_facets(scene_name, "Smoke GM Node") == 24,
+          detail=str(controlled_mesh(scene_name, "Smoke GM Node")))
 
     # Live link: a graph edit re-bakes and re-renders every bound node.
     sub = add_node("subdivide")
@@ -1261,31 +1313,34 @@ def section_graph_mesh_asset():
     connect(box["id"], 0, sub["id"], 0)
     connect(sub["id"], 0, out["id"], 0)
     get_graph()
-    mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node") if a.get("type") == "Mesh"]
-    check(S, "graph edit re-bakes the bound node's mesh", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
+    check(S, "graph edit re-bakes the bound node's mesh",
+          controlled_mesh_facets(scene_name, "Smoke GM Node") == 96,
+          detail=str(controlled_mesh(scene_name, "Smoke GM Node")))
 
     # A second node bound to the same asset picks up the existing bake at
     # bind time (no re-evaluation) and shares the GPU primitive.
     mutate("create_node", {"name": "Smoke GM Node 2", "scene_name": scene_name})
     check(S, "second scene node created", wait_for_scene_node(scene_name, "Smoke GM Node 2"))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node 2", "graph_mesh": "Smoke GM", "scene_name": scene_name})
-    mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node 2") if a.get("type") == "Mesh"]
-    check(S, "second node shares the existing bake at bind time", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
+    check(S, "second node shares the existing bake at bind time",
+          controlled_mesh_facets(scene_name, "Smoke GM Node 2") == 96,
+          detail=str(controlled_mesh(scene_name, "Smoke GM Node 2")))
 
-    # Binding a node that ALREADY has a Mesh (and a rigid body, from brush
-    # placement) must ADOPT them - a node has exactly one attachment of
-    # each type - not attach duplicates. The graph's bake replaces the
-    # adopted mesh's primitives; with graph physics off, the adopted
-    # rigid body is removed (the bake dictates the physics state).
+    # Binding a prim that ALREADY IS a Mesh (and carries a rigid body, from
+    # brush placement) must ADOPT them - the bake replaces the adopted
+    # prim's own primitives and adds no Mesh child; with graph physics off,
+    # the adopted rigid body is removed (the bake dictates the physics
+    # state).
     mutate("create_shape", {"shape": "box", "name": "Smoke GM Shape", "scene_name": scene_name})
     check(S, "shape node created", wait_for_scene_node(scene_name, "Smoke GM Shape"))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "Smoke GM", "scene_name": scene_name})
     get_graph()
-    atts = node_attachments(scene_name, "Smoke GM Shape")
-    mesh_atts = [a for a in atts if a.get("type") == "Mesh"]
+    own_mesh = node_details(scene_name, "Smoke GM Shape").get("mesh")
+    extra_meshes = mesh_child_count(scene_name, "Smoke GM Shape")
     phys = node_physics(scene_name, "Smoke GM Shape")
-    check(S, "binding adopts the existing mesh (exactly one Mesh attachment, re-baked)",
-          len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(atts))
+    check(S, "binding adopts the existing mesh prim (re-baked, no Mesh child added)",
+          isinstance(own_mesh, dict) and own_mesh.get("facet_count") == 96 and extra_meshes == 0,
+          detail=f"own={own_mesh} mesh_children={extra_meshes}")
     check(S, "graph without physics removes the adopted physics", phys is None, detail=str(phys))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "", "scene_name": scene_name})
 
@@ -1308,8 +1363,10 @@ def section_graph_mesh_asset():
 
     # Unbind removes the attachment and its controlled products.
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node 2", "graph_mesh": "", "scene_name": scene_name})
-    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
-    check(S, "unbind removes attachment and controlled mesh", ("Geometry_graph_mesh" not in types) and ("Mesh" not in types), detail=str(types))
+    binding = graph_mesh_binding(scene_name, "Smoke GM Node 2")
+    facets = controlled_mesh_facets(scene_name, "Smoke GM Node 2")
+    check(S, "unbind removes the binding and the controlled mesh",
+          (binding is None) and (facets is None), detail=f"binding={binding} facets={facets}")
 
     # Scene save/load round-trip (erhe-authored glTF scene file; the graph
     # assets and bindings ride in the root-level ERHE_node_graphs extension).
@@ -1331,7 +1388,7 @@ def section_graph_mesh_asset():
             bound_node = gltf_nodes[node_index] if 0 <= node_index < len(gltf_nodes) else {}
             node_extensions = bound_node.get("extensions", {})
             check(S, "controlled mesh is not double-persisted", "mesh" not in bound_node, detail=str(bound_node)[:120])
-            has_physics = ("KHR_physics_rigid_bodies" in node_extensions) or ("ERHE_physics" in node_extensions)
+            has_physics = "KHR_physics_rigid_bodies" in node_extensions
             check(S, "controlled physics is not double-persisted", not has_physics, detail=str(sorted(node_extensions.keys())))
 
     before = len([g for g in call("get_graph_meshes")["graph_meshes"] if g["name"] == "Smoke GM"])

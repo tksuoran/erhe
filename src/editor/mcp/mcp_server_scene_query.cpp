@@ -475,12 +475,17 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     // A prim path (doc/erhe/usd_compatibility_design.md M1) names one prim from the
     // root node down; a text without '/' is a prim name. The lookup walks the
     // scene TREE, so a prim that is not a registered node - a Scope, and the
-    // prims below it - is found too (C5).
-    json lookup_args = json::object();
-    lookup_args["node_name"] = node_name;
-    const std::shared_ptr<erhe::Hierarchy> found_prim = find_prim_in_scene(*sr, lookup_args, "node_id", "node_name");
+    // prims below it - is found too (C5). The caller's own arguments are what
+    // the lookup reads, so `node_id` addresses the prim as readily as
+    // `node_name` does.
+    const std::shared_ptr<erhe::Hierarchy> found_prim = find_prim_in_scene(*sr, args, "node_id", "node_name");
     if (!found_prim) {
-        json r = make_text_content("Node not found: " + node_name);
+        const std::size_t node_id = args.value("node_id", std::size_t{0});
+        json r = make_text_content(
+            node_name.empty()
+                ? ("Node not found: id " + std::to_string(node_id))
+                : ("Node not found: " + node_name)
+        );
         r["isError"] = true;
         return r.dump();
     }

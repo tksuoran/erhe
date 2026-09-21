@@ -597,6 +597,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "edit_camera",                    &Mcp_server::action_edit_camera                   },
         { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
         { "advance_time",                   &Mcp_server::action_advance_time                  },
+        { "set_log_levels",                 &Mcp_server::action_set_log_levels                },
         { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
         { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
         { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
