@@ -3,12 +3,16 @@
 #include "grid/grid_frame.hpp"
 #include "renderers/render_context.hpp"
 
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_property/dependency_property.hpp"
+// erhe::scene::Node is an alias of Xformable, so it cannot be forward declared.
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/transform_observer.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
+#include <memory>
 
 struct Grid_config;
 
@@ -39,14 +43,17 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4;
 
 extern const erhe::property::Enum_info c_grid_plane_type_enum_info;
 
-class Grid : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Grid, erhe::Item_kind::clone_using_custom_clone_constructor>
+// A grid is an item of its own, owned by Grid_tool in every case
+// (doc/editor/grid.md, doc/plans/node_attachments_to_properties.md D6). It is
+// editor-settings content that outlives every scene, so it is never part of a
+// scene hierarchy and is never cloned.
+class Grid : public erhe::Item<erhe::Item_base, erhe::Item_base, Grid, erhe::Item_kind::not_clonable>
 {
 public:
     Grid();
-    Grid(const Grid& src, erhe::for_clone);
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Grid"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::grid; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::grid; }
 
     // Registered properties (erhe::property, doc/erhe/property_system.md
     // section 4.11), stored in the entry store and inheriting from the
@@ -56,6 +63,10 @@ public:
     // settings store for the autosave and re-derives the grid transform
     // after plane_type, center or rotation.
     static const erhe::property::Property<Grid_plane_type> plane_type_property;
+    // D6: the node whose world transform the Node plane follows. Null is the
+    // world frame. Session state - a grid lives in the editor settings, which
+    // cannot name a node of a scene - so it carries no serialize flag.
+    static const erhe::property::Property<erhe::property::Weak_object_reference> frame_node_property;
     static const erhe::property::Property<glm::vec3>       center_property;
     static const erhe::property::Property<float>           rotation_property;
     static const erhe::property::Property<bool>            intersect_enable_property;
@@ -89,6 +100,10 @@ public:
     [[nodiscard]] auto tangent_in_world   () const -> glm::vec3;
     [[nodiscard]] auto bitangent_in_world () const -> glm::vec3;
     [[nodiscard]] auto get_cell_size      () const -> float;
+    // D6: the node the Node plane follows, null when none is named (or the
+    // named one is gone).
+    [[nodiscard]] auto get_frame_node     () const -> std::shared_ptr<erhe::scene::Node>;
+    void set_frame_node(const std::shared_ptr<erhe::scene::Node>& node);
 
     // The grid's own plane.
     [[nodiscard]] auto get_frame          () const -> Grid_frame;
@@ -102,11 +117,10 @@ public:
     [[nodiscard]] auto intersect_ray      (const Grid_frame& frame, const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) const -> std::optional<glm::vec3>;
 
     void render          (const Render_context& context);
-    // The rows that are not properties: the name, and the host node
-    // attach / detach of the Node plane type. Returns true when one of them
+    // The one row that is not a property: the name. Returns true when it
     // edited the grid, so the caller can schedule the settings autosave;
     // the property rows (Dependency_property_rows) schedule it themselves.
-    auto imgui           (App_context& context) -> bool;
+    auto imgui           () -> bool;
     void read_config     (const Grid_config& config);
     void write_config    (Grid_config& config) const;
     void set_snap_enabled(bool snap_enabled) { set_value(snap_enabled_property, snap_enabled); }
@@ -129,6 +143,10 @@ private:
     void update();
     void refresh_mirror();
     void touch_settings();
+    // D7: re-takes the transform observer token on the node frame_node names,
+    // so the grid transform follows that node's world transform on change
+    // instead of being re-read every frame.
+    void update_frame_node_observer();
 
     Editor_settings_store* m_settings_store{nullptr};
 
@@ -160,6 +178,9 @@ private:
     glm::vec4       m_label_color        {0.0f, 0.0f, 0.0f, 1.0f};
     glm::mat4       m_world_from_grid {1.0f};
     glm::mat4       m_grid_from_world {1.0f};
+    // Mirror of frame_node_property and the subscription to it.
+    std::weak_ptr<erhe::scene::Node>      m_frame_node;
+    erhe::scene::Transform_observer_token m_frame_node_observer;
 };
 
 }

@@ -1,10 +1,14 @@
 #include "grid/grid_tool.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "grid/grid.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
+
+#include "erhe_scene/node.hpp"
 
 #include "config/generated/grid_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -25,6 +29,7 @@ Grid_tool::Grid_tool(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 context,
+    App_message_bus&             app_message_bus,
     Editor_settings_store&       settings_store,
     Icon_set&                    icon_set,
     Tools&                       tools
@@ -46,6 +51,37 @@ Grid_tool::Grid_tool(
     grid->set_settings_store(&m_settings_store);
 
     m_grids.push_back(grid);
+
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+}
+
+void Grid_tool::on_close_scene(erhe::Item_host* const closing_host)
+{
+    for (const std::shared_ptr<Grid>& grid : m_grids) {
+        const std::shared_ptr<erhe::scene::Node> frame_node = grid->get_frame_node();
+        if (frame_node && (frame_node->get_item_host() == closing_host)) {
+            grid->set_frame_node({});
+        }
+    }
+}
+
+void Grid_tool::on_items_removed(const Removed_items& removed)
+{
+    for (const std::shared_ptr<Grid>& grid : m_grids) {
+        const std::shared_ptr<erhe::scene::Node> frame_node = grid->get_frame_node();
+        if (frame_node && removed.lookup.contains(frame_node.get())) {
+            grid->set_frame_node({});
+        }
+    }
 }
 
 void Grid_tool::write_config(Grid_config& grid_config) const
@@ -144,7 +180,7 @@ void Grid_tool::window_imgui()
     if (!m_grids.empty()) {
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
         const std::shared_ptr<Grid>& grid = m_grids[m_grid_index];
-        changed |= grid->imgui(m_context);
+        changed |= grid->imgui();
         // The grid's registered properties (doc/erhe/property_system.md 4.11):
         // generic rows, undo through Property_set_operation; a change
         // touches the settings store through the Grid's own callback.

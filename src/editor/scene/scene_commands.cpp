@@ -15,7 +15,6 @@
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
-#include "grid/grid.hpp"
 #include "windows/item_tree_window.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
@@ -1155,19 +1154,6 @@ auto Scene_commands::create_new_joint(
         )
     );
     return node_joint;
-}
-
-auto Scene_commands::attach_new_grid(erhe::scene::Node& node) -> std::shared_ptr<Grid>
-{
-    if (erhe::scene::get_attachment<Grid>(&node)) {
-        log_scene->warn("Node '{}' already has a grid attachment", node.get_name());
-        return {};
-    }
-    auto grid = std::make_shared<Grid>();
-    grid->set_name("new grid");
-    grid->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(grid, node.shared_node_from_this()));
-    return grid;
 }
 
 void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment)

@@ -4,11 +4,33 @@ Stability: mostly stable
 
 The editor grid (`src/editor/grid/`) is an infinite reference plane with four
 levels of lines and axis coordinate labels, used for display, hover and
-snapping. `Grid_tool` owns the grids; `Grid` is a `Node_attachment` whose
-registered properties (plane, offset, rotation, cell sizes, colors, labels,
-snap, Behind Content) are edited in the Grid window and persist through
-`Grid_config` in `editor_settings.json` (per-scene overrides apply to the
-appearance).
+snapping. `Grid_tool` owns every grid; `Grid` is an item of its own
+(`erhe::Item<Item_base, Item_base, Grid>`), in no scene hierarchy and never
+cloned, because a grid is editor-settings content that outlives every scene.
+Its registered properties (plane, frame node, offset, rotation, cell sizes,
+colors, labels, snap, Behind Content) are edited in the Grid window and persist
+through `Grid_config` in `editor_settings.json` (per-scene overrides apply to
+the appearance).
+
+## Frame
+
+`Grid.plane_type` picks the plane: `XZ`, `XY` and `YZ` are world planes placed
+by `Grid.center` and `Grid.rotation`; `Node` follows the world transform of the
+node `Grid.frame_node` names (a weak object reference, so the grid never keeps a
+node alive). `frame_node` unset is the world frame. The grid takes a transform
+observer token (`doc/erhe/scene.md` "Transform observers") on that node when
+`frame_node` changes and re-derives `world_from_grid` / `grid_from_world` on
+each notification, so nothing is recomputed per frame.
+
+`frame_node` is session state: a grid lives in the editor settings, which have
+no scene to name a node in, so the value carries no serialize flag and starts
+unset in every session. `Grid_tool` subscribes to `App_message_bus::close_scene`
+and `items_removed` and clears `frame_node` on the grids naming content that
+leaves (AGENTS.md "Scene-hosted references in editor parts"); the
+`get_editor_references` MCP query reports each grid's frame node. A grid is in
+no scene, so MCP addresses it by its name or item id (`get_item_properties`,
+`set_item_property`) and `set_item_property` takes `reference_id` for
+`frame_node`.
 
 ## Rendering
 

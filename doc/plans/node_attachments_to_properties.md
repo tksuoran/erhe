@@ -41,6 +41,13 @@ attachment has no path; a value on the node is overridable as it stands.
   `Brush_placement.brush`, registered without the serialize flag (D5), read
   with `read_brush_placement()` (`doc/erhe/property_system.md` section 4.11,
   `doc/editor/brushes.md`). No runtime state, so no node system.
+- **`Grid`** (`src/editor/grid/grid.{hpp,cpp}`, `grid_tool.{hpp,cpp}`): an
+  item of its own owned by `Grid_tool`, naming the node whose frame it
+  follows by `Grid.frame_node` and following that node's transform through
+  D7's observer (`doc/editor/grid.md`,
+  `doc/erhe/property_system.md` section 4.11). Its retirement deleted the
+  `grid` attachment catalog entry, `Scene_commands::attach_new_grid` and the
+  MCP `add_node_attachment` `grid` key.
 - **`Frame_controller` and `Four_view`'s camera links** (D7): plain objects
   owned by `Fly_camera_tool` / `Four_view`, naming their node by `weak_ptr`
   and following its transform through
@@ -67,7 +74,6 @@ class's own shape, stated in the row.
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
-| `Grid` | none; editor-settings content that outlives every scene, so it has no scene to be a prim of | item outside the hierarchy | settings-store autosave, matrices | 1 | editor settings | D6 |
 
 `Joint` is the only new prim type. The typed prims USD has for the other
 physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
@@ -136,13 +142,8 @@ that flag alone. A clone copies every local value whatever its flags, so a
 duplicated node keeps such a value - which is what a placement wants, and
 what `Draw_mode.source_directory` already relies on.
 
-**D6. A grid is an item that names its node.** `Grid` derives from
-`erhe::Item<Item_base, Item_base, Grid>` and is owned by `Grid_tool` in
-every case. `Grid.frame_node` (weak object reference) names the node whose
-world transform the grid follows; null means the world frame. The grid
-subscribes to that node through D7's observer and drops the reference on
-`items_removed` and `close_scene` (AGENTS.md "Scene-hosted references in
-editor parts").
+**D6. A grid is an item that names its node.** Stated by
+`doc/editor/grid.md` "Frame".
 
 **D7. Node transform observer.** `Xformable::add_transform_observer(callback)
 -> Transform_observer_token`, the replacement for
@@ -178,7 +179,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P6. `Grid`** (D6).
 - **P7. `Geometry_graph_mesh`.** Roundtrip geometry-graph leg.
 - **P8. `Node_physics`.** ~35 `get_attachment<Node_physics>` sites move to
   `read_node_physics` / the physics system. Deletes `ERHE_physics`. Suites:
@@ -198,7 +198,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P6 and P7 are independent of each other; P9 follows P8; P11 is last.
+P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

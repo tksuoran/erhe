@@ -1779,13 +1779,16 @@ inertia).
 
 ### 4.11 Grid and Brush_placement
 
-`Grid` (the editor's grid attachment, owned by `Grid_tool` and optionally
-attached to a node) registers its settings as entry-stored properties,
+`Grid` (the editor's grid, an item of its own owned by `Grid_tool`,
+`doc/editor/grid.md`) registers its settings as entry-stored properties,
 the Material way (section 4.1), every one `inherits` (a grid without a
-local value reads its node chain, section 4.2 / D30, so a node or a
-style holds `Grid.cell_size` for the grids below it): `plane_type`
+local value reads its style, section 4.2 / D30, so a style holds
+`Grid.cell_size` for the grids using it): `plane_type`
 (`Grid_plane_type`, `Enum_info` `c_grid_plane_type_enum_info` next to
-`grid_plane_type_strings`), `center` and `rotation` (degrees,
+`grid_plane_type_strings`), `frame_node` (a weak object reference, D28:
+the node the Node plane follows, `visible_when` the plane is the Node
+plane; per grid, so it does not inherit, and session state, so it carries
+no serialize flag, D5), `center` and `rotation` (degrees,
 `visible_when` the plane is not the Node plane), `intersect_enable`,
 `snap_enabled`, `cell_size` (logarithmic 0.01..10), `cell_div` (1..10),
 `cell_count` (the snap region bound), the four `level<N>_color` and
@@ -1795,20 +1798,19 @@ style holds `Grid.cell_size` for the grids below it): `plane_type`
 intersection paths read are a mirror of the effective values:
 `Grid::on_property_changed` refreshes them on every change of a `Grid`
 property, whatever its source, re-derives the grid transform after
-`plane_type`, `center` or `rotation`, and touches the
+`plane_type`, `center`, `rotation` or `frame_node` (re-taking the
+transform observer token on the frame node, `doc/editor/grid.md`), and
+touches the
 `Editor_settings_store` the owning `Grid_tool` handed the grid (D19), so
 a property edit from any writer schedules the settings autosave that
 `Grid_tool::write_config` feeds from the mirror; `Grid::read_config`
 writes the config fields as local values through the store (before the
 store is handed over, so the load schedules no autosave). The `visible`
 flag (an `Item_base` property) reaches the same store through
-`handle_flag_bits_update`. The clone constructor copies the mirror; the
-entries copy through D10. The
-Grid window draws the name field and the Node plane's attach / detach
-buttons by hand and everything else as generic rows through its own
-`Property_editor` and `Dependency_property_rows`, so a grid edit is a
-`Property_set_operation` with undo; a grid selected as an item gets the
-same rows in the Properties window.
+`handle_flag_bits_update`. The
+Grid window draws the name field by hand and everything else as generic
+rows through its own `Property_editor` and `Dependency_property_rows`, so
+a grid edit is a `Property_set_operation` with undo.
 
 `editor::Brush_placement` (`src/editor/brushes/brush_placement.{hpp,cpp}`)
 registers how a brush was placed as an attached value group of the placed

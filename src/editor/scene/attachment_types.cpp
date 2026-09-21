@@ -1,6 +1,5 @@
 #include "scene/attachment_types.hpp"
 
-#include "grid/grid.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 
@@ -24,14 +23,12 @@ void make_light (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_li
 void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_mesh  (&parent); }
 
 // Single-instance gates: refuse a second attachment of the same kind (issue
-// #249 decision: at most one Node_physics / Grid / ... per node).
+// #249 decision: at most one Node_physics per node).
 auto rigid_body_gate      (const Node& node) -> bool { return !erhe::scene::get_attachment<Node_physics           >(&node); }
 auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal
-auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<Grid                    >(&node); }
 
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
-void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
 
 } // anonymous namespace
 
@@ -49,8 +46,7 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
 {
     static const std::vector<Attachment_type_info> catalog = {
         {"rigid_body",       "Rigid Body",       rigid_body_gate,       make_rigid_body      },
-        {"joint",            "Joint",            joint_gate,            make_joint           },
-        {"grid",             "Grid",             grid_gate,             make_grid            }
+        {"joint",            "Joint",            joint_gate,            make_joint           }
     };
     return catalog;
 }

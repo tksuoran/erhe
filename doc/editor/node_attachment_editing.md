@@ -19,9 +19,9 @@ insert of a new prim as the parent's last child. Any prim parents any prim
 node and a parent takes any number of them.
 
 `Attachment_type_info` lists the user-addable attachment kinds - the applied
-API schemas of a prim: `rigid_body`, `joint`, `grid`. Each carries a key, a label, a
-stateless `can_add(const Node&)` gate (a node holds at most one `Grid`, and so
-on; `joint` is the one kind a node may hold several of) and a
+API schemas of a prim: `rigid_body`, `joint`. Each carries a key, a label, a
+stateless `can_add(const Node&)` gate (a node holds at most one `Node_physics`;
+`joint` is the one kind a node may hold several of) and a
 `make(Scene_commands&, Node&)` that queues the undoable operation.
 `find_child_prim_type()` / `find_attachment_type()` resolve a key.
 

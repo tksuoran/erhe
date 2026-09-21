@@ -6,12 +6,10 @@
 #include "editor_settings_store.hpp"
 #include "config/generated/grid_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
-#include "items.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
-#include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
@@ -20,8 +18,6 @@
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
-
-#include <fmt/format.h>
 
 #include <glm/gtx/matrix_operation.hpp>
 
@@ -34,8 +30,11 @@ namespace {
 
 using erhe::property::Dependency_object;
 using erhe::property::Property;
+using erhe::property::Property_flags;
 using erhe::property::Property_metadata;
 using erhe::property::Property_ui;
+using erhe::property::Weak_object_reference;
+using Frame_node_traits = erhe::property::Member_value_traits<std::weak_ptr<erhe::scene::Node>>;
 
 constexpr erhe::property::Enum_entry c_grid_plane_type_entries[] = {
     {"XZ-Plane Y+", static_cast<int32_t>(Grid_plane_type::XZ)},
@@ -46,7 +45,12 @@ constexpr erhe::property::Enum_entry c_grid_plane_type_entries[] = {
 
 auto is_free_plane(const Dependency_object& object) -> bool
 {
-    return static_cast<const Grid&>(object).get_value(Grid::plane_type_property) != Grid_plane_type::Node;
+    return object.get_value(Grid::plane_type_property) != Grid_plane_type::Node;
+}
+
+auto is_node_plane(const Dependency_object& object) -> bool
+{
+    return object.get_value(Grid::plane_type_property) == Grid_plane_type::Node;
 }
 
 auto slider(const float min, const float max, const std::string_view label, const std::string_view tooltip = {}, const bool logarithmic = false) -> Property_ui
@@ -75,6 +79,25 @@ const erhe::property::Enum_info c_grid_plane_type_enum_info{"Grid_plane_type", c
 const Property<Grid_plane_type> Grid::plane_type_property = Property<Grid_plane_type>::register_property(
     "plane_type", Grid::property_owner_type(), c_grid_plane_type_enum_info,
     Property_metadata{.default_value = erhe::property::make_value(Grid_plane_type::XZ), .inherits = true, .ui = Property_ui{.label = "Plane"}}
+);
+// D6 / D28: a weak reference, so a grid never keeps a node alive. Session
+// state: the grid is editor-settings content and a node belongs to a scene,
+// so the value carries no serialize flag (D5).
+const Property<Weak_object_reference> Grid::frame_node_property = Property<Weak_object_reference>::register_property(
+    "frame_node", Grid::property_owner_type(),
+    Property_metadata{
+        // Per-grid, so it does not inherit: a style shared by several grids
+        // holds appearance, never the one node a single grid follows.
+        .inherits = false,
+        .flags    = Property_flags::none,
+        .ui       = Property_ui{
+            .tooltip              = "Node whose world transform the Node plane follows; unset, the grid sits in the world frame",
+            .label                = "Frame Node",
+            .visible_when         = is_node_plane,
+            .reference_item_types = erhe::Item_type::xformable
+        }
+    },
+    Frame_node_traits::validate
 );
 const Property<glm::vec3> Grid::center_property = Property<glm::vec3>::register_property(
     "center", Grid::property_owner_type(),
@@ -113,7 +136,15 @@ void Grid::on_property_changed(const erhe::property::Property_changed_args& args
     }
     refresh_mirror();
     const erhe::property::Dependency_property* const property = &args.property;
-    if ((property == plane_type_property.get_ptr()) || (property == center_property.get_ptr()) || (property == rotation_property.get_ptr())) {
+    if (property == frame_node_property.get_ptr()) {
+        update_frame_node_observer();
+    }
+    if (
+        (property == plane_type_property.get_ptr()) ||
+        (property == center_property    .get_ptr()) ||
+        (property == rotation_property  .get_ptr()) ||
+        (property == frame_node_property.get_ptr())
+    ) {
         update();
     }
     touch_settings(); // D19: every Grid property change schedules the settings autosave
@@ -122,6 +153,7 @@ void Grid::on_property_changed(const erhe::property::Property_changed_args& args
 void Grid::refresh_mirror()
 {
     m_plane_type          = get_value(plane_type_property);
+    m_frame_node          = Frame_node_traits::from_value(get_value(frame_node_property.get()));
     m_center              = get_value(center_property);
     m_rotation            = get_value(rotation_property);
     m_intersect_enable    = get_value(intersect_enable_property);
@@ -164,30 +196,30 @@ Grid::Grid()
     update();
 }
 
-// Clone constructor for node duplication. Copies all grid data while the base
-// (Item / Node_attachment for_clone) gives the clone a fresh id and leaves it
-// detached (m_node reset). Keep this in sync with the data members below.
-Grid::Grid(const Grid& src, erhe::for_clone)
-    : Item                 {src, erhe::for_clone{}}
-    , m_plane_type         {src.m_plane_type         }
-    , m_intersect_enable   {src.m_intersect_enable   }
-    , m_snap_enabled       {src.m_snap_enabled       }
-    , m_behind_content     {src.m_behind_content     }
-    , m_rotation           {src.m_rotation           }
-    , m_center             {src.m_center             }
-    , m_cell_size          {src.m_cell_size          }
-    , m_cell_div           {src.m_cell_div           }
-    , m_cell_count         {src.m_cell_count         }
-    , m_label_enable       {src.m_label_enable       }
-    , m_label_text_fraction{src.m_label_text_fraction}
-    , m_label_spacing      {src.m_label_spacing      }
-    , m_label_fade         {src.m_label_fade         }
-    , m_level_colors       {src.m_level_colors       }
-    , m_level_widths       {src.m_level_widths       }
-    , m_label_color        {src.m_label_color        }
-    , m_world_from_grid    {src.m_world_from_grid    }
-    , m_grid_from_world    {src.m_grid_from_world    }
+void Grid::update_frame_node_observer()
 {
+    // Release before subscribing, so at most one subscription is ever alive
+    // and the node the grid stops following stops notifying it.
+    m_frame_node_observer.release();
+    const std::shared_ptr<erhe::scene::Node> node = m_frame_node.lock();
+    if (!node) {
+        return;
+    }
+    m_frame_node_observer = node->add_transform_observer(
+        [this](erhe::scene::Xformable&) {
+            update();
+        }
+    );
+}
+
+auto Grid::get_frame_node() const -> std::shared_ptr<erhe::scene::Node>
+{
+    return m_frame_node.lock();
+}
+
+void Grid::set_frame_node(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    set_value(frame_node_property, Weak_object_reference{node});
 }
 
 void Grid::read_config(const Grid_config& config)
@@ -280,23 +312,11 @@ auto Grid::snap_grid_position(const glm::vec3& position_in_grid) const -> glm::v
 
 auto Grid::world_from_grid() const -> glm::mat4
 {
-    if (m_plane_type == Grid_plane_type::Node) {
-        const erhe::scene::Node* node = get_node();
-        if (node != nullptr) {
-            return node->world_from_node();
-        }
-    }
     return m_world_from_grid;
 }
 
 auto Grid::grid_from_world() const -> glm::mat4
 {
-    if (m_plane_type == Grid_plane_type::Node) {
-        const erhe::scene::Node* node = get_node();
-        if (node != nullptr) {
-            return node->node_from_world();
-        }
-    }
     return m_grid_from_world;
 }
 
@@ -371,49 +391,29 @@ void Grid::render(const Render_context& context)
 
 void Grid::update()
 {
-    if (m_plane_type != Grid_plane_type::Node) {
-        const float     radians      = glm::radians(m_rotation);
-        const glm::mat4 orientation  = get_plane_transform(m_plane_type);
-        const glm::vec3 plane_normal = glm::vec3{0.0f, 1.0f, 0.0f};
-        const glm::mat4 offset       = erhe::math::create_translation<float>(m_center);
-        const glm::mat4 rotation     = erhe::math::create_rotation<float>(radians, plane_normal);
-        m_world_from_grid = orientation * rotation * offset;
-        m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
+    if (m_plane_type == Grid_plane_type::Node) {
+        // D6: the frame node's world transform, refreshed by the transform
+        // observer rather than re-read every frame. No node named: the world
+        // frame.
+        const std::shared_ptr<erhe::scene::Node> node = m_frame_node.lock();
+        m_world_from_grid = node ? node->world_from_node() : glm::mat4{1.0f};
+        m_grid_from_world = node ? node->node_from_world() : glm::mat4{1.0f};
+        return;
     }
+    const float     radians      = glm::radians(m_rotation);
+    const glm::mat4 orientation  = get_plane_transform(m_plane_type);
+    const glm::vec3 plane_normal = glm::vec3{0.0f, 1.0f, 0.0f};
+    const glm::mat4 offset       = erhe::math::create_translation<float>(m_center);
+    const glm::mat4 rotation     = erhe::math::create_rotation<float>(radians, plane_normal);
+    m_world_from_grid = orientation * rotation * offset;
+    m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
 }
 
-auto Grid::imgui(App_context& context) -> bool
+auto Grid::imgui() -> bool
 {
-    bool changed = false;
-
-    changed |= ImGui::InputText("Name", &m_name);
-
-    if (m_plane_type == Grid_plane_type::Node) {
-        {
-            erhe::scene::Node* host_node = get_node();
-            if (host_node != nullptr) {
-                const std::string label        = fmt::format("Node: {}", host_node->get_name());
-                const std::string detach_label = fmt::format("Detach from {}", host_node->get_name());
-                ImGui::TextUnformatted(label.c_str());
-                if (ImGui::Button(detach_label.c_str())) {
-                    host_node->detach(this);
-                    changed = true;
-                }
-            }
-        }
-        const auto& host_node = get<erhe::scene::Node>(context.selection->get_selected_items());
-        if (host_node) {
-            const std::string label = fmt::format("Attach to {}", host_node->get_name());
-            if (ImGui::Button(label.c_str())) {
-                host_node->attach(
-                    std::static_pointer_cast<Grid>(shared_from_this())
-                );
-                changed = true;
-            }
-        }
-    }
-
-    return changed;
+    // The Frame Node picker is a generic object-reference row of
+    // frame_node_property, drawn by the caller with the other property rows.
+    return ImGui::InputText("Name", &m_name);
 }
 
 auto Grid::normal_in_world() const -> glm::vec3

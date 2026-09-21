@@ -12,6 +12,8 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "content_library/style.hpp"
+#include "grid/grid.hpp"
+#include "grid/grid_tool.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -43,58 +45,91 @@ using namespace mcp_server_detail;
 
 namespace {
 
-// Resolves args.item_id (any scene) or args.item_name - an item name or an
-// item path (doc/erhe/usd_compatibility_design.md M1) - in args.scene_name, or in
-// the first scene when absent.
-auto resolve_item(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
+// A grid is owned by Grid_tool and belongs to no scene
+// (doc/plans/node_attachments_to_properties.md D6), so it is addressed through
+// the tool's own list. `item_id` wins over `item_name` when it is given.
+auto find_grid(App_context& context, const std::size_t item_id, const std::string& item_name) -> std::shared_ptr<erhe::Item_base>
 {
-    if (context.app_scenes == nullptr) {
-        out_error = "No scenes";
+    if (context.grid_tool == nullptr) {
         return {};
     }
-    const std::size_t item_id   = args.value("item_id", std::size_t{0});
-    const std::string item_name = args.value("item_name", "");
+    for (const std::shared_ptr<Grid>& grid : context.grid_tool->get_grids()) {
+        if (!grid) {
+            continue;
+        }
+        if (item_id != 0) {
+            if (grid->get_id() == item_id) {
+                return grid;
+            }
+        } else if (grid->get_name() == item_name) {
+            return grid;
+        }
+    }
+    return {};
+}
+
+// Resolves args.item_id (any scene, or a grid) or args.item_name - an item
+// name or an item path (doc/erhe/usd_compatibility_design.md M1) - in
+// args.scene_name, or in the first scene when absent, falling back to the
+// grids.
+auto resolve_item(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
+{
+    const std::size_t item_id    = args.value("item_id", std::size_t{0});
+    const std::string item_name  = args.value("item_name", "");
     const std::string scene_name = args.value("scene_name", "");
 
+    if ((item_id == 0) && item_name.empty()) {
+        out_error = "item_id or item_name is required";
+        return {};
+    }
+
     if (item_id != 0) {
-        for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-            if (!scene_root) {
-                continue;
+        if (context.app_scenes != nullptr) {
+            for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+                if (!scene_root) {
+                    continue;
+                }
+                std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_id(*scene_root, item_id);
+                if (item) {
+                    return item;
+                }
             }
-            std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_id(*scene_root, item_id);
-            if (item) {
-                return item;
-            }
+        }
+        std::shared_ptr<erhe::Item_base> grid = find_grid(context, item_id, {});
+        if (grid) {
+            return grid;
         }
         out_error = "Item not found with id: " + std::to_string(item_id);
         return {};
     }
-    if (item_name.empty()) {
-        out_error = "item_id or item_name is required";
-        return {};
-    }
+
     Scene_root* scene_root = nullptr;
-    if (!scene_name.empty()) {
-        for (const std::shared_ptr<Scene_root>& candidate : context.app_scenes->get_scene_roots()) {
-            if (candidate && (candidate->get_name() == scene_name)) {
-                scene_root = candidate.get();
-                break;
+    if (context.app_scenes != nullptr) {
+        if (!scene_name.empty()) {
+            for (const std::shared_ptr<Scene_root>& candidate : context.app_scenes->get_scene_roots()) {
+                if (candidate && (candidate->get_name() == scene_name)) {
+                    scene_root = candidate.get();
+                    break;
+                }
             }
+            if (scene_root == nullptr) {
+                out_error = "Scene not found: " + scene_name;
+                return {};
+            }
+        } else if (!context.app_scenes->get_scene_roots().empty()) {
+            scene_root = context.app_scenes->get_scene_roots().front().get();
         }
-        if (scene_root == nullptr) {
-            out_error = "Scene not found: " + scene_name;
-            return {};
-        }
-    } else if (!context.app_scenes->get_scene_roots().empty()) {
-        scene_root = context.app_scenes->get_scene_roots().front().get();
     }
-    if (scene_root == nullptr) {
-        out_error = "No scene";
-        return {};
-    }
-    std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_reference(*scene_root, item_name);
+    std::shared_ptr<erhe::Item_base> item = (scene_root != nullptr)
+        ? find_item_in_scene_by_reference(*scene_root, item_name)
+        : std::shared_ptr<erhe::Item_base>{};
     if (!item) {
-        out_error = "Item not found with name or path: " + item_name;
+        item = find_grid(context, 0, item_name);
+    }
+    if (!item) {
+        out_error = (scene_root != nullptr)
+            ? ("Item not found with name or path: " + item_name)
+            : ("No scene, and no grid named: " + item_name);
     }
     return item;
 }

@@ -52,7 +52,6 @@ class App_context;
 class App_message_bus;
 class Graph_mesh;
 class Graph_texture;
-class Grid;
 class Headset_view;
 class Mesh_rendertarget_view;
 class Node_joint;
@@ -338,7 +337,6 @@ public:
     // node's item host). See scene/attachment_types.{hpp,cpp} for the user
     // catalog that drives them; Rigid Body / Joint reuse create_new_rigid_body
     // / create_new_joint above.
-    auto attach_new_grid            (erhe::scene::Node& node) -> std::shared_ptr<Grid>;
 
     // Queues an undoable pure detach of the attachment from its current node
     // (Node_attach_operation with an empty host node). No-op on a null pointer.

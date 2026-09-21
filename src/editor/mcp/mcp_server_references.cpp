@@ -28,6 +28,8 @@
 #include "create/create.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
+#include "grid/grid.hpp"
+#include "grid/grid_tool.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "physics/physics_tool.hpp"
@@ -206,6 +208,24 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
         });
     }
     result["item_trees"] = item_trees;
+
+    // D6: a grid names the node whose frame it follows. The grid is owned by
+    // Grid_tool and outlives every scene, so that reference is exactly the
+    // cross-frame kind this query exists for.
+    json grids = json::array();
+    if (m_context.grid_tool != nullptr) {
+        for (const std::shared_ptr<Grid>& grid : m_context.grid_tool->get_grids()) {
+            if (!grid) {
+                continue;
+            }
+            grids.push_back({
+                {"name",       grid->get_name()},
+                {"uid",        grid->get_id()},
+                {"frame_node", reference_json(grid->get_frame_node().get())}
+            });
+        }
+    }
+    result["grids"] = grids;
 
     json selection = json::array();
     if (m_context.selection != nullptr) {

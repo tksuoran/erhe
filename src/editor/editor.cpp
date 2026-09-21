@@ -2413,6 +2413,7 @@ public:
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     m_app_context,
+                    *m_app_message_bus.get(),
                     m_app_settings.settings_store(),
                     *m_icon_set.get(),
                     *m_tools.get()

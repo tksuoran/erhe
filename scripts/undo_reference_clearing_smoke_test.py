@@ -447,6 +447,40 @@ def section_tool_references():
         check(section, f"{key} cleared by undo", after[key] is None, json.dumps(after[key]))
 
 
+def section_grid_frame_node():
+    """A grid drops the node its frame names when an undo removes that node.
+
+    The grid is owned by Grid_tool and outlives every scene
+    (doc/editor/grid.md, doc/plans/node_attachments_to_properties.md D6), so
+    Grid.frame_node is exactly the cross-frame reference this suite is about.
+    """
+    section = "grid frame node"
+    grids = refs().get("grids", [])
+    if not check(section, "the editor has a grid", len(grids) > 0):
+        return
+    grid_id = grids[0]["uid"]
+
+    scene, imported_nodes, _ = import_into_new_scene()
+    if not check(section, "import added a node", len(imported_nodes) > 0):
+        return
+    node_id = imported_nodes[0]["id"]
+
+    call("set_item_property", {"item_id": grid_id, "property": "plane_type", "value": "Node"})
+    call("set_item_property", {"item_id": grid_id, "property": "frame_node", "reference_id": node_id})
+    advance(4)
+    armed = next((entry for entry in refs().get("grids", []) if entry["uid"] == grid_id), {})
+    if not check(section, "grid frame node armed", (armed.get("frame_node") or {}).get("uid") == node_id, json.dumps(armed)):
+        return
+
+    # Removing the node announces it through items_removed (the frame_node set
+    # sits on top of the undo stack, so the import itself cannot be undone from
+    # under it - a delete is the removal this reference has to survive).
+    call("delete_nodes", {"scene_name": scene, "ids": [node_id]})
+    advance(6)
+    after = next((entry for entry in refs().get("grids", []) if entry["uid"] == grid_id), {})
+    check(section, "grid frame node cleared by removal", after.get("frame_node") is None, json.dumps(after))
+
+
 def section_tree_window_pin():
     """The hover / popup pin only persists on a tree that stops rendering."""
     section = "tree window pin"
@@ -662,6 +696,7 @@ def main():
     run("announcement", section_announcement_content)
     run("false positive (move)", section_false_positive_move)
     run("tool references", section_tool_references)
+    run("grid frame node", section_grid_frame_node)
     run("tree window pin", section_tree_window_pin)
     run("selection", section_selection_pruning)
     run("truly released", section_truly_released)

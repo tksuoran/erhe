@@ -165,7 +165,8 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 
 | Property | Storage | Notes |
 |---|---|---|
-| plane_type, center, rotation | entry | inherits (D30, from the node chain); on_property_changed re-derives the transform |
+| plane_type, center, rotation | entry | inherits (D30, through the grid's style); on_property_changed re-derives the transform |
+| frame_node | entry | weak object reference (D28) to the node the Node plane follows; does not inherit, not serialized (session state); re-takes the transform observer token on change |
 | intersect_enable, snap_enabled, cell_size, cell_div, cell_count | entry | inherits |
 | level0_color .. level3_color, level0_width .. level3_width | entry | inherits; the two mirror arrays follow |
 | label_enable, label_text_fraction, label_spacing, label_fade, label_color | entry | inherits |
