@@ -25,23 +25,31 @@ attachment has no path; a value on the node is overridable as it stands.
   (`doc/erhe/property_system.md` section 4.19,
   `doc/plans/rigging/ik_settings.md`).
 
-## Inventory
+## Inventory and verdicts
 
-One row per `Node_attachment` subclass; "form" names the design entry that
-replaces it.
+Rule: a class whose USD counterpart is a typed prim becomes a prim type in
+the erhe hierarchy (`doc/erhe/usd_compatibility_design.md` C5); a class whose
+USD counterpart is an applied API schema, a relationship or plain attributes
+on the prim becomes a value group (D1); prim metadata stays prim-held
+structure (D4). Where USD has no counterpart the verdict rests on the
+class's own shape, stated in the row.
 
-| Class | Values | Runtime state | Per node | Saved in | Form |
-|-------|--------|---------------|----------|----------|------|
-| `Draw_mode` | 13 entry | card proxy mesh, pruning, cached extent | 1 | USD `GeomModelAPI`, glTF `ERHE_node` | D1 + D2 |
-| `erhe::scene::Layout` | 11 entry (+ 8 child hints, attached already) | `Scene::update_layouts` registration, mirrors | 1 | glTF `ERHE_layout` | D1 + D2 |
-| `Brush_placement` | brush ref, facet, corner | none | 1 | nothing | D1, session values (D5) |
-| `Geometry_graph_mesh` | `graph_mesh` ref | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
-| `Node_physics` | 10 entry + `collision_mesh` weak ref | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
-| `Node_joint` | connected node, settings ref, enable_collision | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
-| `Prefab_instance` | source path, prim path, arc kind, variant selections | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
-| `Grid` | 22 entry | settings-store autosave, matrices | 1 | editor settings | D6 |
-| `Frame_controller` (editor and `src/example`) | none | input axes, pose | 1 | nothing | D7 |
-| `Four_view_link` | none | back pointer to `Four_view` | 1 | nothing | D7 |
+| Class | USD counterpart | Verdict | Runtime state | Per node | Saved in | Form |
+|-------|-----------------|---------|---------------|----------|----------|------|
+| `Draw_mode` | `UsdGeomModelAPI` (applied API schema, `model:*` attributes) | property | card proxy mesh, pruning, cached extent | 1 | USD `GeomModelAPI`, glTF `ERHE_node` | D1 + D2 |
+| `Node_physics` | `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI`, `PhysicsMaterialAPI` binding (all applied API schemas) | property | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
+| `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
+| `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
+| `erhe::scene::Layout` | none; `doc/erhe/usd_compatibility.md` already maps its child hints to applied-API-schema attributes (`layout:alignY`), and the container values take the same spelling | property | `Scene::update_layouts` registration, mirrors | 1 | glTF `ERHE_layout` | D1 + D2 |
+| `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
+| `Brush_placement` | none; three session values about the node | property | none | 1 | nothing | D1, session values (D5) |
+| `Grid` | none; editor-settings content that outlives every scene, so it has no scene to be a prim of | item outside the hierarchy | settings-store autosave, matrices | 1 | editor settings | D6 |
+| `Frame_controller` (editor and `src/example`) | none; holds no authored value | neither: tool-owned object | input axes, pose | 1 | nothing | D7 |
+| `Four_view_link` | none; holds no authored value | neither: part-owned object | back pointer to `Four_view` | 1 | nothing | D7 |
+
+`Joint` is the only new prim type. The typed prims USD has for the other
+physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
+`PointInstancer`, `Skeleton`) are prim types in erhe already.
 
 ## Design
 
@@ -92,14 +100,20 @@ hold no `shared_ptr` to the node, and `on_node_unregistered` erases the
 record, so a scene close releases everything without a `close_scene`
 subscription.
 
-**D3. A joint is a prim.** `Node_joint` becomes `editor::Joint`, an
-`Xformable` child prim of the first body's node. Its own transform is the
-joint frame in that body's space; `Joint.connected_node` (weak object
-reference, D28) names the second frame node. This is the shape the USD
-reader already builds (`<joint>_frame0`), it matches the UsdPhysics joint
-prim and the glTF joint node, and any number of joints per body needs no
-indexing. The constraint lives in the physics system of D2, keyed by the
-`Joint` prim.
+**D3. A joint is a prim.** `Node_joint` becomes `editor::Joint`, a typed
+prim deriving `erhe::scene::Imageable` - the level `UsdPhysicsJoint`
+derives - so it carries `visible` / `purpose` and no transform of its own.
+It sits anywhere in the hierarchy (the importers place it where the file
+has it; the Create menu places it below the active item). `Joint.body_0`
+and `Joint.body_1` are weak object references (D28) to the two frame nodes:
+a frame is the referenced node's world transform, the two-node model the
+constraint code, the glTF writer (joint node + `connectedNode`) and the USD
+reader (`<joint>_frame0` / `_frame1`) already use. The USD writer derives
+`physics:body0` / `body1` and the local frames from the frame nodes as it
+does today. `Joint.joint_settings` and `Joint.enable_collision` are own
+properties of the class. Any number of joints may name one body. The
+constraint lives in the physics system of D2, keyed by the `Joint` prim,
+and is rebuilt on a change of one of the four properties.
 
 **D4. Composition arcs are a node-held record list.** `Xformable` gains
 `get_composition_arcs() -> std::span<const Composition_arc>` (source path,
@@ -174,8 +188,10 @@ reopens.
 - **P8. `Node_physics`.** ~35 `get_attachment<Node_physics>` sites move to
   `read_node_physics` / the physics system. Deletes `ERHE_physics`. Suites:
   physics (both backends), usd, `physics_drag_joint_sweep.py` 16/16.
-- **P9. `Node_joint` -> `Joint` prim** (D3). Same suites as P8; creation 21
-  rebuilt by its script.
+- **P9. `Node_joint` -> `Joint` prim** (D3). New `Item_type` bit, icon,
+  Create menu entry and MCP `create_joint`; glTF import places the prim
+  below the joint's node. Same suites as P8; creation 21 rebuilt by its
+  script.
 - **P10. `Prefab_instance`** (D4). Suites: usd, scene, gltf; roundtrip
   references, variants and override legs.
 - **P11. Delete the attachment infrastructure.** `Node_attachment`,
@@ -189,13 +205,11 @@ reopens.
 
 P2-P7 are independent of each other after P1; P9 follows P8; P11 is last.
 
-## Decisions to confirm before the phase that needs them
+## Decision to confirm before P10
 
-- D3 (joint as a prim) before P9. The alternative, a fixed number of indexed
-  joint groups per node, caps joints per body and was not chosen.
-- D4 (arcs as a node-held record list, not properties) before P10: the
-  property system has no array-of-records type, and the arc list is
-  structure, not an authored value.
+D4 (arcs as prim-held structure, not properties): the verdict follows from
+arcs being prim metadata in USD, and the property system has no
+array-of-records type to hold them otherwise.
 
 ## Recipe for one value group, as Ik proved it
 
