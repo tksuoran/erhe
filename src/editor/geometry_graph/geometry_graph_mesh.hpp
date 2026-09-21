@@ -32,9 +32,9 @@ class Node_physics;
 // loaded graphs are born dirty, so the first evaluation pushes.
 // apply_baked_products() is main-thread only.
 //
-// Intentionally not_clonable for the MVP (like Frame_controller /
-// Brush_placement): cloning a node skips this attachment; re-bind the
-// clone explicitly when needed.
+// Intentionally not_clonable for the MVP (like Frame_controller):
+// cloning a node skips this attachment; re-bind the clone explicitly
+// when needed.
 class Geometry_graph_mesh
     : public erhe::Item<
         erhe::Item_base,

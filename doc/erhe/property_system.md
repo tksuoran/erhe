@@ -1810,18 +1810,41 @@ buttons by hand and everything else as generic rows through its own
 `Property_set_operation` with undo; a grid selected as an item gets the
 same rows in the Properties window.
 
-`Brush_placement` registers `brush` as an object property (D28,
-`reference_item_types` the brush type bit, validated to null or a
-`Brush`) and `facet` and `corner` as developer-only integers (-1 is
-`GEO::NO_INDEX`), all three entry-stored and inheriting (D30). The
-members `get_brush()` / `get_facet()` / `get_corner()` read are a mirror
-refreshed by `Brush_placement::on_property_changed`; `set_corner()` and
-the placing constructor write the store, the constructor only where an
-argument differs from the property default so a default-constructed
-placement stays open to a holder. Placements are not persisted, so
-there is no carrier to keep in step.
+`editor::Brush_placement` (`src/editor/brushes/brush_placement.{hpp,cpp}`)
+registers how a brush was placed as an attached value group of the placed
+node itself (section 4.23,
+`doc/plans/node_attachments_to_properties.md` D1), owner type
+`Brush_placement`, holder type `erhe::scene::Node`, UI group
+`Brush Placement`, qualified `Brush_placement.brush`, `.facet` and
+`.corner`. Like `Ik`, `Layout` and `Draw_mode` it is a registration holder
+with static members only, not a `Dependency_object`, so its owner type sits
+directly under the root.
+
+`Brush_placement.brush` is the group's KEY property: an object reference
+(D28, `reference_item_types` the brush type bit, validated to null or a
+`Brush`) whose default is the null reference, so a node is a brush placement
+exactly while something names a brush on it. It is a strong reference, like
+every other reference naming a content-library resource: the node's
+reference is an ordinary resource usership and it dies with the node.
+`.facet` and `.corner` are developer-only integers (-1 is `GEO::NO_INDEX`)
+taking `attached_group_visible_when(Brush_placement.brush)` as their
+`visible_when`, so the rows are listed on exactly the placed nodes. None of
+the three inherits - a placement is the node's own seat - and none of them
+carries `Property_flags::serialize` (D5): they are session values, so both
+exporters skip them through that flag alone and no file has a carrier to
+keep in step. A clone carries them, which is what makes a duplicated
+instance still a placement of its brush.
+
+Readers go through `read_brush_placement(const erhe::scene::Node&) ->
+std::optional<Brush_placement_data>`, a plain record of the effective
+values; `carries_brush_placement(node)` is the key test,
+`set_brush_placement(node, brush, facet, corner)` is what
+`place_brush_in_scene()` and `Scene_builder` write it with (a local value
+only where an argument differs from the property default), and
+`set_brush_placement_corner()` is the brush tool's rotate step.
 `Properties::brush_placement_properties` keeps the brush's polygon
-count diagnostics.
+count diagnostics, drawn on the placed node; MCP `get_node_details`
+reports the record as the node's own `brush_placement` section.
 
 ### 4.12 Physics_material
 

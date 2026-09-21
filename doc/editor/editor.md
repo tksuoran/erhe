@@ -170,7 +170,7 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 
 ### Brush Placement
 
-`Brush` is a parametric shape template (geometry + collision shape + density). `Brush::make_instance(Instance_create_info)` creates a scene node with mesh, material, and optional physics body at a pre-scaled geometry. The `place_brush_in_scene()` free function (in `brushes/brush.hpp`) wraps `make_instance()` with undo support and `Brush_placement` attachment tracking. Both `Brush_tool` (interactive surface-aligned placement) and the MCP server (programmatic placement by position) call this shared function.
+`Brush` is a parametric shape template (geometry + collision shape + density). `Brush::make_instance(Instance_create_info)` creates a scene node with mesh, material, and optional physics body at a pre-scaled geometry. The `place_brush_in_scene()` free function (in `brushes/brush.hpp`) wraps `make_instance()` with undo support and `set_brush_placement()`, which records the brush, facet and corner as values of the instance node itself. Both `Brush_tool` (interactive surface-aligned placement) and the MCP server (programmatic placement by position) call this shared function.
 
 ### Scene Serialization
 

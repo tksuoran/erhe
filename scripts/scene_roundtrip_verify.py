@@ -448,9 +448,7 @@ def norm_node(node, parent_name=None):
         "rotation":    norm_quat(node.get("rotation_xyzw", [])),
         "scale":       round_vec(node.get("scale", [])),
         "tags":        sorted(node.get("tags", [])),
-        # Brush_placement attachments are session-only (not persisted; see
-        # doc/editor/scene_serialization.md "What is not persisted").
-        "attachments": sorted(a for a in node.get("attachment_types", []) if a != "Brush_placement"),
+        "attachments": sorted(node.get("attachment_types", [])),
         "locked":      node.get("locked"),
     }
 
@@ -528,8 +526,6 @@ def norm_attachment_details(details):
     out = []
     for attachment in details.get("attachments", []):
         a_type = attachment.get("type")
-        if a_type == "Brush_placement":
-            continue  # session-only, not persisted (doc/editor/scene_serialization.md)
         if a_type == "Node_physics":
             record = {k: attachment.get(k) for k in NODE_PHYSICS_FIELDS}
             if record.get("motion_mode") == "static":

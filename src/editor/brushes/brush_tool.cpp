@@ -347,12 +347,12 @@ auto Brush_tool::try_rotate(int direction) -> bool
     std::shared_ptr<erhe::Item_base>   node_item_base = node->shared_from_this();
     std::shared_ptr<erhe::scene::Node> node_shared    = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
 
-    std::shared_ptr<Brush_placement> brush_placement = erhe::scene::get_attachment<Brush_placement>(node);
-    if (!brush_placement) {
+    const std::optional<Brush_placement_data> brush_placement = read_brush_placement(*node);
+    if (!brush_placement.has_value()) {
         return false;
     }
 
-    std::shared_ptr<Brush> brush = brush_placement->get_brush();
+    std::shared_ptr<Brush> brush = brush_placement.value().brush;
     if (!brush) {
         return false;
     }
@@ -365,13 +365,13 @@ auto Brush_tool::try_rotate(int direction) -> bool
 
     erhe::geometry::Geometry& geometry = *m_hover.geometry.get();
     const GEO::Mesh& geo_mesh           = geometry.get_mesh();
-    GEO::index_t     facet              = brush_placement->get_facet();
+    GEO::index_t     facet              = brush_placement.value().facet;
     if (facet == GEO::NO_INDEX) {
         return false; // TODO node/mesh was created by Scene_builder
     }
     ERHE_VERIFY(facet < geo_mesh.facets.nb());
     GEO::index_t     facet_corner_count = geo_mesh.facets.nb_corners(facet);
-    GEO::index_t     old_corner         = brush_placement->get_corner();
+    GEO::index_t     old_corner         = brush_placement.value().corner;
     GEO::index_t     new_corner         = (old_corner + facet_corner_count + direction) % facet_corner_count;
 
     Reference_frame initial_frame{geo_mesh, facet, 0, old_corner, Frame_orientation::in};
@@ -396,7 +396,7 @@ auto Brush_tool::try_rotate(int direction) -> bool
     );
     m_context.operation_stack->queue(node_operation);
 
-    brush_placement->set_corner(new_corner);
+    set_brush_placement_corner(*node, new_corner);
     return true;
 }
 
@@ -421,13 +421,12 @@ auto Brush_tool::get_hover_brush() const -> std::shared_ptr<Brush>
         return {};
     }
 
-    std::shared_ptr<Brush_placement> brush_placement = erhe::scene::get_attachment<Brush_placement>(node);
-    if (!brush_placement) {
+    const std::optional<Brush_placement_data> brush_placement = read_brush_placement(*node);
+    if (!brush_placement.has_value()) {
         return {};
     }
 
-    std::shared_ptr<Brush> brush = brush_placement->get_brush();
-    return brush;
+    return brush_placement.value().brush;
 }
 
 auto Brush_tool::try_pick() -> bool

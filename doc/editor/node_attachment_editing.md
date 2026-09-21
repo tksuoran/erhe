@@ -27,8 +27,8 @@ on; `joint` is the one kind a node may hold several of) and a
 `find_child_prim_type()` / `find_attachment_type()` resolve a key.
 
 An attachment the user does not create stays out of the add catalog and
-remains removable: `Brush_placement` comes from the brush placement flow,
-`Geometry_graph_mesh` from dropping a `Graph_mesh` asset, `Rendertarget_mesh`
+remains removable: `Geometry_graph_mesh` comes from dropping a `Graph_mesh`
+asset, `Rendertarget_mesh`
 from the node-creating rendertarget command (its construction needs the
 graphics device, the command buffer and the DPI).
 

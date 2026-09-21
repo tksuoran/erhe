@@ -262,10 +262,13 @@ Per-child hints, attached (section 4.14), set on the child Node:
 
 ### Brush_placement (`src/editor/brushes/brush_placement.cpp`, section 4.11)
 
+Attached to `erhe::scene::Node`, group "Brush Placement", none of them
+inheriting and none of them serialized (session values, D5).
+
 | Property | Storage | Notes |
 |---|---|---|
-| brush | entry | object reference (D28), null or a Brush; inherits (D30); the mirror pointer follows |
-| facet, corner | entry | developer-only; -1 = NO_INDEX; inherits; set_corner writes the store |
+| Brush_placement.brush | attached | KEY property; object reference (D28), null or a Brush |
+| Brush_placement.facet, Brush_placement.corner | attached | developer-only; -1 = NO_INDEX; listed on the nodes carrying the group |
 
 ### Brush (`src/editor/brushes/brush.cpp`)
 

@@ -306,35 +306,34 @@ public:
     static constexpr uint64_t index_physics                = 27;
     static constexpr uint64_t index_raytrace               = 28;
     static constexpr uint64_t index_node_attachment        = 29;
-    static constexpr uint64_t index_brush_placement        = 30;
-    static constexpr uint64_t index_render_style           = 31;
-    static constexpr uint64_t index_graph                  = 32;
-    static constexpr uint64_t index_graph_node             = 33;
-    static constexpr uint64_t index_graph_link             = 34;
-    static constexpr uint64_t index_rendergraph_node       = 35;
-    static constexpr uint64_t index_physics_material       = 36;
-    static constexpr uint64_t index_collision_filter       = 37;
-    static constexpr uint64_t index_physics_joint_settings = 38;
-    static constexpr uint64_t index_asset_file_scene       = 39;
-    static constexpr uint64_t index_graph_texture          = 40;
-    static constexpr uint64_t index_graph_mesh             = 41;
-    static constexpr uint64_t index_geometry_graph_mesh    = 42;
-    static constexpr uint64_t index_prefab_instance        = 43;
-    static constexpr uint64_t index_asset_file_texture     = 44;
-    static constexpr uint64_t index_style                  = 45;
-    static constexpr uint64_t index_asset_file_usd         = 46;
+    static constexpr uint64_t index_render_style           = 30;
+    static constexpr uint64_t index_graph                  = 31;
+    static constexpr uint64_t index_graph_node             = 32;
+    static constexpr uint64_t index_graph_link             = 33;
+    static constexpr uint64_t index_rendergraph_node       = 34;
+    static constexpr uint64_t index_physics_material       = 35;
+    static constexpr uint64_t index_collision_filter       = 36;
+    static constexpr uint64_t index_physics_joint_settings = 37;
+    static constexpr uint64_t index_asset_file_scene       = 38;
+    static constexpr uint64_t index_graph_texture          = 39;
+    static constexpr uint64_t index_graph_mesh             = 40;
+    static constexpr uint64_t index_geometry_graph_mesh    = 41;
+    static constexpr uint64_t index_prefab_instance        = 42;
+    static constexpr uint64_t index_asset_file_texture     = 43;
+    static constexpr uint64_t index_style                  = 44;
+    static constexpr uint64_t index_asset_file_usd         = 45;
     // A more specific class takes the LOWER index: the editor's icon set
     // picks the icon of the lowest set type bit that has one, so a Scope
     // shows the scope icon rather than the icon of the Typed level it also
     // carries (src/editor/graphics/icon_set.cpp).
-    static constexpr uint64_t index_scope                  = 47;
-    static constexpr uint64_t index_typed                  = 48;
-    static constexpr uint64_t index_imageable              = 49;
-    static constexpr uint64_t index_xform                  = 50;
-    static constexpr uint64_t index_boundable              = 51;
-    static constexpr uint64_t index_gprim                  = 52;
-    static constexpr uint64_t index_point_instancer        = 53;
-    static constexpr uint64_t count                        = 54; // index 54 is free
+    static constexpr uint64_t index_scope                  = 46;
+    static constexpr uint64_t index_typed                  = 47;
+    static constexpr uint64_t index_imageable              = 48;
+    static constexpr uint64_t index_xform                  = 49;
+    static constexpr uint64_t index_boundable              = 50;
+    static constexpr uint64_t index_gprim                  = 51;
+    static constexpr uint64_t index_point_instancer        = 52;
+    static constexpr uint64_t count                        = 53; // index 53 is free
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -366,7 +365,6 @@ public:
     static constexpr uint64_t physics                = (uint64_t{1} << index_physics               );
     static constexpr uint64_t raytrace               = (uint64_t{1} << index_raytrace              );
     static constexpr uint64_t node_attachment        = (uint64_t{1} << index_node_attachment       );
-    static constexpr uint64_t brush_placement        = (uint64_t{1} << index_brush_placement       );
     static constexpr uint64_t render_style           = (uint64_t{1} << index_render_style          );
     static constexpr uint64_t graph                  = (uint64_t{1} << index_graph                 );
     static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
@@ -423,7 +421,6 @@ public:
         "Physics",
         "Raytrace",
         "Node_attachment",
-        "Brush_placement",
         "Render_style",
         "Graph",
         "Graph_node",

@@ -626,6 +626,24 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         return layout_json;
     };
 
+    // Brush placement: which brush the node was placed with and the seat it
+    // was placed on (doc/erhe/property_system.md 4.11). A value group of the
+    // node itself, so it is reported on the node's own entry.
+    const auto brush_placement_details = [](const std::shared_ptr<erhe::scene::Node>& node) -> json
+    {
+        const std::optional<Brush_placement_data> data = read_brush_placement(*node.get());
+        if (!data.has_value()) {
+            return json(nullptr);
+        }
+        json placement_json = json::object();
+        const std::shared_ptr<Brush>& brush = data.value().brush;
+        placement_json["brush_name"] = brush ? brush->get_name() : std::string{};
+        placement_json["brush_id"]   = brush ? json(brush->get_id()) : json(nullptr);
+        placement_json["facet"]      = (data.value().facet  == GEO::NO_INDEX) ? -1 : static_cast<int>(data.value().facet);
+        placement_json["corner"]     = (data.value().corner == GEO::NO_INDEX) ? -1 : static_cast<int>(data.value().corner);
+        return placement_json;
+    };
+
     // Draw mode: the prim's own opinion, what it resolves to and the box the
     // proxy is sized from (doc/erhe/usd_compatibility.md, "Draw modes"). A
     // value group of the prim itself, so it is reported on the prim's own
@@ -686,15 +704,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             const std::shared_ptr<Graph_mesh>& graph_mesh = geometry_graph_mesh->get_graph_mesh();
             att_json["graph_mesh"]    = graph_mesh ? graph_mesh->get_name() : "";
             att_json["graph_mesh_id"] = graph_mesh ? json(graph_mesh->get_id()) : json(nullptr);
-        }
-
-        auto bp = std::dynamic_pointer_cast<Brush_placement>(att);
-        if (bp) {
-            auto brush = bp->get_brush();
-            if (brush) {
-                att_json["brush_name"] = brush->get_name();
-                att_json["brush_id"]   = brush->get_id();
-            }
         }
 
         auto node_physics = std::dynamic_pointer_cast<Node_physics>(att);
@@ -820,6 +829,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"light",          erhe::is<erhe::scene::Light>(found_node.get())
             ? light_details(std::static_pointer_cast<erhe::scene::Light>(found_node))
             : json(nullptr)},
+        {"brush_placement", brush_placement_details(found_node)},
         {"draw_mode",      draw_mode_details(found_node)},
         {"layout",         layout_details(found_node)},
         {"children",       children},

@@ -11,8 +11,6 @@
 
 #include <bit>
 
-#define ICON_MDI_BRUSH                                    "\xf3\xb0\x83\xa3" // U+F00E3
-
 namespace editor {
 
 Icon_set::Icon_set(
@@ -93,11 +91,6 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_asset_file_texture  ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_usd      ] = { .code = icons.scene,       .color = glm::vec4{0.9f, 0.6f, 0.2f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_brush_placement     ] = {
-        .font  = material_design,
-        .code  = ICON_MDI_BRUSH,
-        .color = glm::vec4{0.4f, 0.1f, 1.0f, 1.0f}
-    };
     type_icons[erhe::Item_type::index_prefab_instance       ] = { .code = icons.scene,    .color = glm::vec4{1.0f, 0.6f, 0.2f, 1.0f}};
     type_icons[erhe::Item_type::index_physics_material      ] = { .code = icons.material, .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_collision_filter      ] = { .code = icons.physics,  .color = glm::vec4{0.5f, 0.8f, 0.5f, 1.0f}};

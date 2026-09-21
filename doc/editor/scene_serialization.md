@@ -296,8 +296,9 @@ keep their state on import.
   .glb/.gltf imported before source retention, or graph bakes) do not embed
   an image; graph bakes are re-derived on load, others lose the slot with a
   warning.
-- **`Brush_placement` attachments are not persisted** (the brush *library*
-  is, via `ERHE_brushes`): a placed-brush node reloads as a plain mesh node
+- **`Brush_placement.*` values are not persisted** (the brush *library*
+  is, via `ERHE_brushes`): the three values are registered without the
+  serialize flag, so a placed-brush node reloads as a plain mesh node
   without the link back to its source brush. The legacy scene.json format
   did not persist them either.
 - A static rigid body's mass is not persisted (KHR_physics_rigid_bodies has

@@ -215,8 +215,8 @@ discarded in-progress edit visible instead of silent.
 Deliberately not wired: the hotbar and inventory slots and the clipboard pin
 their items on purpose through `Asset_reference` (a persistent inventory);
 they are declared users and surface as named unload refusals.
-`Brush_placement` is a `Node_attachment` rather than an editor part, so it
-leaves the scene with the node it is attached to.
+`Brush_placement.brush` is a value of the placed node rather than a reference
+held by an editor part, so it leaves the scene with that node.
 
 An undo also takes out the kind `Scope` a resource's insert had to create;
 that rule, and why the scope's undo is conditional on the scope being

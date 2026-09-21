@@ -703,13 +703,18 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
     }
 }
 
-void Properties::brush_placement_properties(Brush_placement& brush_placement)
+void Properties::brush_placement_properties(const erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // The brush, facet and corner are generic rows (doc/erhe/property_system.md
-    // 4.11); the polygon counts of the brush follow as diagnostics.
-    std::shared_ptr<Brush> brush = brush_placement.get_brush();
+    // The brush, facet and corner are generic rows of the node itself
+    // (doc/erhe/property_system.md 4.11); the polygon counts of the brush
+    // follow as diagnostics.
+    const std::optional<Brush_placement_data> placement = read_brush_placement(node);
+    if (!placement.has_value()) {
+        return;
+    }
+    const std::shared_ptr<Brush>& brush = placement.value().brush;
     if (!brush) {
         return;
     }
@@ -870,7 +875,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
-    const auto& brush_placement  = std::dynamic_pointer_cast<Brush_placement        >(item);
+    const auto& node             = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
     const auto& texture          = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
     const bool edit_disabled = item->is_lock_edit();
@@ -882,7 +887,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
-    if (brush_placement)  { brush_placement_properties(*brush_placement); }
+    if (node)             { brush_placement_properties(*node); }
     if (texture)          { texture_properties(texture); }
     if (edit_disabled) {
         ImGui::EndDisabled();

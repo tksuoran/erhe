@@ -1209,13 +1209,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
 
             std::shared_ptr<erhe::Item_base> shared_brush_item_base = brush->shared_from_this();
             std::shared_ptr<Brush>           shared_brush           = std::dynamic_pointer_cast<Brush>(shared_brush_item_base);
-            std::shared_ptr<Brush_placement> brush_placement        = std::make_shared<Brush_placement>(shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
-            instance_node->attach(brush_placement);
-            brush_placement->enable_flag_bits(
-                erhe::Item_flags::brush      |
-                erhe::Item_flags::no_message |
-                erhe::Item_flags::show_in_ui
-            );
+            set_brush_placement(*instance_node.get(), shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
 
             if (config.instance_count > 1) {
                 instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), entry.instance_number + 1));

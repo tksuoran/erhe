@@ -1,11 +1,13 @@
 #pragma once
 
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_value.hpp"
 
 #include <geogram/mesh/mesh.h>
 
 #include <memory>
+#include <optional>
+#include <vector>
 
 namespace erhe::scene { class Xformable; using Node = Xformable; }
 
@@ -13,46 +15,75 @@ namespace editor {
 
 class Brush;
 
-class Brush_placement : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Brush_placement, erhe::Item_kind::not_clonable>{
+// The effective brush-placement values of one node: which brush the node is
+// an instance of, and the facet and corner of the hovered geometry the
+// instance was seated on. A plain record, read with read_brush_placement().
+class Brush_placement_data
+{
 public:
-    Brush_placement(const std::shared_ptr<Brush>& brush, GEO::index_t facet, GEO::index_t corner);
-    Brush_placement(const Brush_placement&);
-    Brush_placement& operator=(const Brush_placement&);
-    ~Brush_placement() noexcept override;
+    std::shared_ptr<Brush> brush;
+    GEO::index_t           facet {GEO::NO_INDEX};
+    GEO::index_t           corner{GEO::NO_INDEX};
+};
 
-    Brush_placement();
+// The brush placement of a node as an attached value group of the node
+// itself (doc/erhe/property_system.md section 4.11,
+// doc/plans/node_attachments_to_properties.md D1).
+//
+// Brush_placement is a registration holder with static members only, not an
+// item and not a Dependency_object: it owns the property registrations
+// (owner type Brush_placement, so the qualified names are
+// Brush_placement.brush, .facet and .corner) and the holder of every value
+// is an erhe::scene::Node.
+//
+// Brush_placement.brush is the group's KEY property, with the null reference
+// as its default: the node is a brush placement exactly while something
+// names a brush on it. None of the three values is saved (D5), so all three
+// are registered without Property_flags::serialize and no file carries them.
+class Brush_placement
+{
+public:
+    Brush_placement() = delete;
 
-    static constexpr std::string_view static_type_name{"Brush_placement"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::brush_placement; }
+    // The registering class's owner type id. Brush_placement has no
+    // instances, so it is allocated directly under the root rather than by
+    // Item<>.
+    [[nodiscard]] static auto property_owner_type() -> erhe::property::Owner_type;
 
-    // TODO Consider if Brush_placement is clonable or not
-    auto clone() const -> std::shared_ptr<erhe::Item_base> override;
-
-    // Registered properties (doc/erhe/property_system.md section 4.11), stored
-    // in the entry store and inheriting from the node chain (D30): the
-    // brush as an object reference (D28) and the facet and corner as
-    // developer-only integers (-1 = NO_INDEX). The members below are a
-    // mirror of the effective values kept current by on_property_changed.
+    // The key property, registered first (D1). A strong object reference,
+    // like every other reference naming a content-library resource: the
+    // node's reference is an ordinary resource usership and it dies with the
+    // node. Validated to null or a Brush.
     static const erhe::property::Property<erhe::property::Object_reference> brush_property;
+
+    // The seat of the instance on the geometry it was placed against, -1
+    // being GEO::NO_INDEX. Developer-only rows, listed on the nodes that
+    // carry the group (attached_group_visible_when).
     static const erhe::property::Property<int>                              facet_property;
     static const erhe::property::Property<int>                              corner_property;
 
-    // Public API
-    [[nodiscard]] auto get_brush () const -> std::shared_ptr<Brush>;
-    [[nodiscard]] auto get_facet () const -> GEO::index_t;
-    [[nodiscard]] auto get_corner() const -> GEO::index_t;
-    void set_corner(GEO::index_t corner);
-
-    // Implements erhe::property::Dependency_object: refreshes the mirror
-    // on every change of a Brush_placement property, whatever its source.
-    void on_property_changed(const erhe::property::Property_changed_args& args) override;
-
-private:
-    void refresh_mirror();
-
-    std::shared_ptr<Brush> m_brush;
-    GEO::index_t           m_facet;
-    GEO::index_t           m_corner;
+    // Every Brush_placement.* property, registration order, for generic walks.
+    [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
 
-}
+// True while the node carries the group: the key property's effective value
+// differs from its default (erhe::property::carries_attached_group).
+[[nodiscard]] auto carries_brush_placement(const erhe::scene::Node& node) -> bool;
+
+// The effective values of one node, or nothing when the node names no brush.
+[[nodiscard]] auto read_brush_placement(const erhe::scene::Node& node) -> std::optional<Brush_placement_data>;
+
+// Seats the node on a brush. Local values only where the argument differs
+// from the property default, so a placement without a facet stays open to a
+// holder supplying one.
+void set_brush_placement(
+    erhe::scene::Node&            node,
+    const std::shared_ptr<Brush>& brush,
+    GEO::index_t                  facet,
+    GEO::index_t                  corner
+);
+
+// Rotates the instance to another corner of its facet.
+void set_brush_placement_corner(erhe::scene::Node& node, GEO::index_t corner);
+
+} // namespace editor

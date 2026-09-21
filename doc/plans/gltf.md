@@ -52,7 +52,7 @@ drops. Three items there are worth closing rather than accepting:
 - A content-library material that no mesh references is not exported, because
   glTF materials exist only where meshes reference them, so a graph-texture
   binding on an unused material is dropped at save with a warning.
-- A `Brush_placement` attachment is not persisted, so a placed-brush node
+- The `Brush_placement.*` values are not persisted, so a placed-brush node
   reloads as a plain mesh node with no link back to its source brush. The
   brush library itself round-trips through `ERHE_brushes`.
 - A prefab instance parses only the render and physics content of its source,

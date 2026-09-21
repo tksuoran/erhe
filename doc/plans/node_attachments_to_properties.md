@@ -36,6 +36,11 @@ attachment has no path; a value on the node is overridable as it stands.
   `erhe::scene::Layout_system` owned by `Scene`
   (`doc/erhe/property_system.md` section 4.13, `doc/erhe/layout.md`). Its
   retirement deleted the `ERHE_layout` glTF extension (D8).
+- **Brush_placement** (`src/editor/brushes/brush_placement.{hpp,cpp}`): the
+  brush, facet and corner of a placed node as a group of the node keyed on
+  `Brush_placement.brush`, registered without the serialize flag (D5), read
+  with `read_brush_placement()` (`doc/erhe/property_system.md` section 4.11,
+  `doc/editor/brushes.md`). No runtime state, so no node system.
 - **P1, the D1 and D2 infrastructure.** The key-property rule and its
   `visible_when` (`erhe_property/attached_group.hpp`,
   `doc/erhe/property_system.md` section 4.23) and the node systems and their
@@ -57,7 +62,6 @@ class's own shape, stated in the row.
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
-| `Brush_placement` | none; three session values about the node | property | none | 1 | nothing | D1, session values (D5) |
 | `Grid` | none; editor-settings content that outlives every scene, so it has no scene to be a prim of | item outside the hierarchy | settings-store autosave, matrices | 1 | editor settings | D6 |
 | `Frame_controller` (editor and `src/example`) | none; holds no authored value | neither: tool-owned object | input axes, pose | 1 | nothing | D7 |
 | `Four_view_link` | none; holds no authored value | neither: part-owned object | back pointer to `Four_view` | 1 | nothing | D7 |
@@ -124,8 +128,10 @@ window and MCP. `instance_structure`, `prefab_library`, the exporters and
 `instance_override` read the span; "is a carrier" is `!arcs.empty()`.
 
 **D5. Session values.** A value that is never saved (`Brush_placement.*`)
-is registered without the serialize flag; both exporters and the clipboard
-skip it through that flag alone.
+is registered without the serialize flag, and both exporters skip it through
+that flag alone. A clone copies every local value whatever its flags, so a
+duplicated node keeps such a value - which is what a placement wants, and
+what `Draw_mode.source_directory` already relies on.
 
 **D6. A grid is an item that names its node.** `Grid` derives from
 `erhe::Item<Item_base, Item_base, Grid>` and is owned by `Grid_tool` in
@@ -169,8 +175,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P4. `Brush_placement`** (D5). Suites: Mcp_ brush cases,
-  `undo_reference_clearing_smoke_test.py`.
 - **P5. `Frame_controller`, `Four_view_link`** (D7), including `src/example`.
   Verified with `get_four_views` focus-link checks and a scripted fly-camera
   gesture (`doc/agents/mcp_ui_driving.md`).
@@ -194,7 +198,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P4-P7 are independent of each other; P9 follows P8; P11 is last.
+P5-P7 are independent of each other; P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

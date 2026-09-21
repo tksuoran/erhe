@@ -538,13 +538,7 @@ auto place_brush_in_scene(
     }
 
     auto shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
-    auto brush_placement = std::make_shared<Brush_placement>(shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
-    instance_node->attach(brush_placement);
-    brush_placement->enable_flag_bits(
-        erhe::Item_flags::brush      |
-        erhe::Item_flags::no_message |
-        erhe::Item_flags::show_in_ui
-    );
+    set_brush_placement(*instance_node.get(), shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
 
     if (!parent) {
         parent = scene_root.get_scene().get_root_node();

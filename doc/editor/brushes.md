@@ -27,7 +27,7 @@ Implements the brush system for placing parametric mesh shapes onto surfaces.
 
 - **`Reference_frame`** -- Computes a coordinate frame for a specific polygon face, used to align a brush to a surface. Defined by a facet index and corner offset.
 
-- **`Brush_placement`** -- A `Node_attachment` that records how a brush was placed (which brush, which face, which corner offset).
+- **`Brush_placement`** -- The value group of the placed node that records how a brush was placed (which brush, which face, which corner offset), keyed on `Brush_placement.brush` and read with `read_brush_placement(node)` (`doc/erhe/property_system.md` section 4.11). Session values: no file carries them.
 
 ## Geometry preparation
 
