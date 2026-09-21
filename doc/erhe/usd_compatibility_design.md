@@ -158,7 +158,7 @@ now owns its behavior; `git log` on that record has the history.
   for a light type that needs its own properties); `set_prim_parent()`,
   `get_camera()` and `get_light()` are the helpers and no typed prim has
   a `get_node()` (`doc/erhe/scene.md`); `Node_attachment` remains
-  for `Node_physics`, `Node_joint`, `Prefab_instance`, `Frame_controller`
+  for `Node_physics`, `Node_joint`, `Prefab_instance`
   and `Grid`; the hierarchy
   context menu's "Create" lists every creatable prim kind, resources
   included, on every prim row (child of the clicked prim) and "Add

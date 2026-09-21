@@ -41,6 +41,11 @@ attachment has no path; a value on the node is overridable as it stands.
   `Brush_placement.brush`, registered without the serialize flag (D5), read
   with `read_brush_placement()` (`doc/erhe/property_system.md` section 4.11,
   `doc/editor/brushes.md`). No runtime state, so no node system.
+- **`Frame_controller` and `Four_view`'s camera links** (D7): plain objects
+  owned by `Fly_camera_tool` / `Four_view`, naming their node by `weak_ptr`
+  and following its transform through
+  `Xformable::add_transform_observer` (`doc/erhe/scene.md` "Transform
+  observers", `doc/editor/scene.md`, `doc/editor/four_view.md`).
 - **P1, the D1 and D2 infrastructure.** The key-property rule and its
   `visible_when` (`erhe_property/attached_group.hpp`,
   `doc/erhe/property_system.md` section 4.23) and the node systems and their
@@ -63,8 +68,6 @@ class's own shape, stated in the row.
 | `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
 | `Grid` | none; editor-settings content that outlives every scene, so it has no scene to be a prim of | item outside the hierarchy | settings-store autosave, matrices | 1 | editor settings | D6 |
-| `Frame_controller` (editor and `src/example`) | none; holds no authored value | neither: tool-owned object | input axes, pose | 1 | nothing | D7 |
-| `Four_view_link` | none; holds no authored value | neither: part-owned object | back pointer to `Four_view` | 1 | nothing | D7 |
 
 `Joint` is the only new prim type. The typed prims USD has for the other
 physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
@@ -142,11 +145,11 @@ subscribes to that node through D7's observer and drops the reference on
 editor parts").
 
 **D7. Node transform observer.** `Xformable::add_transform_observer(callback)
--> Observer_token` invokes the callback from `handle_transform_update`.
-`Frame_controller` (editor and example) and `Four_view`'s camera links
-become plain non-item objects owned by `Fly_camera_tool` / `Four_view`,
-holding a weak node reference and a token. This is the replacement for
-`Node_attachment::handle_node_transform_update`.
+-> Transform_observer_token`, the replacement for
+`Node_attachment::handle_node_transform_update`, is stated by
+`doc/erhe/scene.md` "Transform observers". A part that follows one prim's
+transform without being an item in the scene is a plain object owned by its
+tool, holding a weak node reference and a token.
 
 **D8. Native file carriers stay, fed from the record.** `KHR_physics_rigid_bodies`,
 UsdPhysics schemas and `GeomModelAPI` are produced from `read_<x>(node)` and
@@ -175,9 +178,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P5. `Frame_controller`, `Four_view_link`** (D7), including `src/example`.
-  Verified with `get_four_views` focus-link checks and a scripted fly-camera
-  gesture (`doc/agents/mcp_ui_driving.md`).
 - **P6. `Grid`** (D6).
 - **P7. `Geometry_graph_mesh`.** Roundtrip geometry-graph leg.
 - **P8. `Node_physics`.** ~35 `get_attachment<Node_physics>` sites move to
@@ -198,7 +198,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P5-P7 are independent of each other; P9 follows P8; P11 is last.
+P6 and P7 are independent of each other; P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

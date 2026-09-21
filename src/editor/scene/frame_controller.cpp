@@ -48,7 +48,6 @@ constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};
 } // anonymous namespace
 
 Frame_controller::Frame_controller()
-    : Item{"frame controller"}
 {
     reset();
     rotate_x      .set_damp     (0.700f);
@@ -71,14 +70,52 @@ Frame_controller::Frame_controller()
     update();
 }
 
-Frame_controller::Frame_controller(const Frame_controller&) = default;
-Frame_controller& Frame_controller::operator=(const Frame_controller&) = default;
 Frame_controller::~Frame_controller() noexcept = default;
 
-auto Frame_controller::clone() const -> std::shared_ptr<erhe::Item_base>
+auto Frame_controller::get_node() const -> erhe::scene::Node*
 {
-    // It doesn't make sense copy Frame_controller - does it?
-    return std::shared_ptr<erhe::Item_base>{};
+    // The node is owned by the scene; the lock is only the liveness test that
+    // makes a camera removed with its scene read back as "no node".
+    const std::shared_ptr<erhe::scene::Node> node = m_node.lock();
+    return node.get();
+}
+
+void Frame_controller::set_node(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (m_node.lock() == node) {
+        return;
+    }
+    // Releasing before subscribing keeps at most one subscription alive, and
+    // takes the old camera's observer off it: the previous camera is the
+    // user's own and outlives the controller's interest in it.
+    m_transform_observer.release();
+    m_node = node;
+    if (!node) {
+        return;
+    }
+    m_transform_observer = node->add_transform_observer(
+        [this](erhe::scene::Node& observed_node) {
+            if (m_transform_update) {
+                return; // the controller's own write
+            }
+            // Reached for transform writes the controller did not make itself
+            // - a tool, a parent node, animation, undo, MCP - and for the
+            // deferred propagation pass in Scene::update_node_transforms().
+            get_transform_from_node(&observed_node, "external node transform write (Frame_controller transform observer)");
+            update();
+        }
+    );
+    get_transform_from_node(node.get(), "Frame_controller::set_node (camera switch)");
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
+    // The camera changed: the previous camera's orientation is not a meaningful
+    // baseline for roll attribution, so adopt the new one without reporting.
+    m_roll_monitor.rebase(measure_camera_orientation(m_orientation));
+#endif
+}
+
+void Frame_controller::set_node(erhe::scene::Node* const node)
+{
+    set_node((node != nullptr) ? node->shared_node_from_this() : std::shared_ptr<erhe::scene::Node>{});
 }
 
 auto Frame_controller::get_variable(const Variable control) -> erhe::math::Input_axis&
@@ -163,37 +200,6 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node, const ch
         )
     );
 #endif
-}
-
-void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
-{
-    static_cast<void>(old_node);
-    if (new_node == nullptr) {
-        return;
-    }
-    get_transform_from_node(new_node, "Frame_controller::handle_node_update (camera switch)");
-#if ERHE_CAMERA_ROLL_DIAGNOSTICS
-    // The camera changed: the previous camera's orientation is not a meaningful
-    // baseline for roll attribution, so adopt the new one without reporting.
-    m_roll_monitor.rebase(measure_camera_orientation(m_orientation));
-#endif
-}
-
-void Frame_controller::handle_node_transform_update()
-{
-    if (m_transform_update) {
-        return;
-    }
-
-    auto* node = get_node();
-    if (node == nullptr) {
-        return;
-    }
-    // Reached only for transform writes the controller did not make itself
-    // (m_transform_update guards its own writes) and for the deferred
-    // propagation pass in Scene::update_node_transforms().
-    get_transform_from_node(node, "external node transform write (Frame_controller::handle_node_transform_update)");
-    update();
 }
 
 void Frame_controller::reset()

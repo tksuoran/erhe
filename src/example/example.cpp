@@ -226,8 +226,8 @@ public:
             40.0f
         );
 
-        m_camera_controller = std::make_shared<Frame_controller>();
-        m_camera_controller->set_node(m_camera.get());
+        m_camera_controller = std::make_unique<Frame_controller>();
+        m_camera_controller->set_node(m_camera);
 
         m_last_window_width  = m_window.get_width();
         m_last_window_height = m_window.get_height();
@@ -659,7 +659,7 @@ private:
     std::atomic<bool>                       m_in_tick{false};
     std::shared_ptr<erhe::scene::Camera>    m_camera;
     std::shared_ptr<erhe::scene::Light>     m_light;
-    std::shared_ptr<Frame_controller>       m_camera_controller;
+    std::unique_ptr<Frame_controller>       m_camera_controller;
     std::chrono::steady_clock::time_point   m_current_time;
     double                                  m_time_accumulator{0.0};
     double                                  m_time            {0.0};

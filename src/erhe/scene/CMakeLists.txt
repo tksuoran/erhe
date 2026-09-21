@@ -50,6 +50,8 @@ erhe_target_sources_grouped(
     erhe_scene/skin.hpp
     erhe_scene/transform.cpp
     erhe_scene/transform.hpp
+    erhe_scene/transform_observer.cpp
+    erhe_scene/transform_observer.hpp
     erhe_scene/trs_transform.cpp
     erhe_scene/trs_transform.hpp
     erhe_scene/xform.cpp

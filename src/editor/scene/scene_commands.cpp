@@ -16,7 +16,6 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "grid/grid.hpp"
-#include "scene/frame_controller.hpp"
 #include "windows/item_tree_window.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
@@ -1169,19 +1168,6 @@ auto Scene_commands::attach_new_grid(erhe::scene::Node& node) -> std::shared_ptr
     grid->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(grid, node.shared_node_from_this()));
     return grid;
-}
-
-auto Scene_commands::attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>
-{
-    if (erhe::scene::get_attachment<Frame_controller>(&node)) {
-        log_scene->warn("Node '{}' already has a frame controller attachment", node.get_name());
-        return {};
-    }
-    auto frame_controller = std::make_shared<Frame_controller>();
-    frame_controller->set_name("frame controller");
-    frame_controller->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(frame_controller, node.shared_node_from_this()));
-    return frame_controller;
 }
 
 void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment)

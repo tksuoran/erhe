@@ -37,6 +37,7 @@ add_executable(${_target}
     test_scene_properties.cpp
     test_scope_prims.cpp
     test_shared_skin_registration.cpp
+    test_transform_observers.cpp
     test_xform_op_stack.cpp
 )
 

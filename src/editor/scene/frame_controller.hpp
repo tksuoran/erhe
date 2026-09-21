@@ -4,7 +4,7 @@
 
 #include "erhe_math/input_axis.hpp"
 
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_scene/transform_observer.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -33,22 +33,26 @@ enum class Zoom_direction_space : unsigned int {
     view  = 1
 };
 
-class Frame_controller : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Frame_controller, erhe::Item_kind::not_clonable>
+// The 6DOF camera pose a tool drives: input axes, a position and an
+// orientation, written into the node it is pointed at and read back from it
+// whenever anyone else writes that node's transform (D7 of
+// doc/plans/node_attachments_to_properties.md). A plain object owned by its
+// tool, never an item in the scene: it names its node by weak_ptr, so it
+// keeps no camera of a closed scene alive, and follows that node's transform
+// through a transform observer token.
+class Frame_controller
 {
 public:
-    explicit Frame_controller(const Frame_controller&);
-    Frame_controller& operator=(const Frame_controller&);
-    ~Frame_controller() noexcept override;
-
     Frame_controller();
+    ~Frame_controller() noexcept;
+    Frame_controller(const Frame_controller&)            = delete;
+    Frame_controller& operator=(const Frame_controller&) = delete;
 
-    static constexpr std::string_view static_type_name{"Frame_controller"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller; }
-
-    // TODO disallow cloning
-    auto clone() const -> std::shared_ptr<erhe::Item_base> override;
-    void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
-    void handle_node_transform_update()                                                         override;
+    // The node whose transform the controller drives. A null node leaves the
+    // controller inert; the controller adopts the node's world transform.
+    void set_node(const std::shared_ptr<erhe::scene::Node>& node);
+    void set_node(erhe::scene::Node* node);
+    [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
 
     // Public API
     void reset                  ();
@@ -109,6 +113,11 @@ public:
     float move_speed{0.2f};
 
 private:
+    // The node the controller drives, held weakly so it never keeps a camera
+    // of a closed scene alive, and the subscription that reads a transform
+    // written by anyone else back into the pose.
+    std::weak_ptr<erhe::scene::Node>      m_node;
+    erhe::scene::Transform_observer_token m_transform_observer;
     // The orientation is a quaternion, normalized after every composition, and it
     // is the only representation the controller keeps. A matrix member used to
     // hold it, which made a non-rotation basis expressible: create_rotation() was
@@ -119,7 +128,7 @@ private:
     // degrees of roll.
     //
     // glm does not default-initialize, and both members are read by update()
-    // before the first node is attached.
+    // before the first node is set.
     glm::vec3 m_position{0.0f, 0.0f, 0.0f};
     glm::quat m_orientation{1.0f, 0.0f, 0.0f, 0.0f};
     // Unit vector in the space named by m_zoom_direction_space. The default is

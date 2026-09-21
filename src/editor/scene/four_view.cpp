@@ -33,32 +33,6 @@ constexpr const char* c_camera_names[Four_view::axis_count] = { "Top", "Front", 
 
 } // anonymous namespace
 
-Four_view_link::Four_view_link(Four_view& four_view, const Four_view_axis axis)
-    : Item       {"Four_view_link"}
-    , m_four_view{&four_view}
-    , m_axis     {axis}
-{
-}
-
-Four_view_link::~Four_view_link() noexcept = default;
-
-auto Four_view_link::clone() const -> std::shared_ptr<erhe::Item_base>
-{
-    return std::shared_ptr<erhe::Item_base>{};
-}
-
-void Four_view_link::handle_node_transform_update()
-{
-    if (m_four_view != nullptr) {
-        m_four_view->on_camera_moved(m_axis);
-    }
-}
-
-void Four_view_link::unlink()
-{
-    m_four_view = nullptr;
-}
-
 namespace {
 
 // The point focus_distance ahead of the camera, along its view direction (-Z).
@@ -87,9 +61,8 @@ Four_view::Four_view(
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
     if (perspective_camera) {
-        m_focus            = get_point_ahead(*perspective_camera, m_focus_distance);
-        m_perspective_link = std::make_shared<Four_view_link>(*this, Four_view_axis::perspective);
-        perspective_camera->attach(m_perspective_link);
+        m_focus = get_point_ahead(*perspective_camera, m_focus_distance);
+        link_camera(Four_view_axis::perspective);
     }
     for (std::size_t i = 0; i < axis_count; ++i) {
         const Four_view_axis axis = static_cast<Four_view_axis>(i);
@@ -111,26 +84,30 @@ Four_view::Four_view(
         m_placing = true;
         place_camera(axis);
         m_placing = false;
-        m_links[i] = std::make_shared<Four_view_link>(*this, axis);
-        camera->attach(m_links[i]);
+        link_camera(axis);
     }
 }
 
-Four_view::~Four_view() noexcept
+// The tokens are members, so their destruction takes every observer off its
+// camera - including the user's own perspective camera, which outlives the
+// four view.
+Four_view::~Four_view() noexcept = default;
+
+void Four_view::link_camera(const Four_view_axis axis)
 {
-    for (const std::shared_ptr<Four_view_link>& link : m_links) {
-        if (link) {
-            link->unlink();
-        }
+    const std::shared_ptr<erhe::scene::Camera> camera = get_camera(axis);
+    if (!camera) {
+        return;
     }
-    // The perspective camera is the user's own camera and outlives the four
-    // view: take the link off it again.
-    if (m_perspective_link) {
-        m_perspective_link->unlink();
-        const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
-        if (perspective_camera) {
-            perspective_camera->detach(m_perspective_link.get());
+    erhe::scene::Transform_observer_token token = camera->add_transform_observer(
+        [this, axis](erhe::scene::Node&) {
+            on_camera_moved(axis);
         }
+    );
+    if (axis == Four_view_axis::perspective) {
+        m_perspective_link = std::move(token);
+    } else {
+        m_links[static_cast<std::size_t>(axis)] = std::move(token);
     }
 }
 

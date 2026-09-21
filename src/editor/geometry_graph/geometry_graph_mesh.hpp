@@ -32,7 +32,7 @@ class Node_physics;
 // loaded graphs are born dirty, so the first evaluation pushes.
 // apply_baked_products() is main-thread only.
 //
-// Intentionally not_clonable for the MVP (like Frame_controller):
+// Intentionally not_clonable for the MVP:
 // cloning a node skips this attachment; re-bind the clone explicitly
 // when needed.
 class Geometry_graph_mesh

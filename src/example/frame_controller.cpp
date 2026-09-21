@@ -17,7 +17,6 @@ using glm::vec3;
 using glm::vec4;
 
 Frame_controller::Frame_controller()
-    : Node_attachment{"frame controller"}
 {
     reset();
     rotate_x      .set_damp     (0.700f);
@@ -34,7 +33,43 @@ Frame_controller::Frame_controller()
     translate_z   .set_max_delta(0.004f);
     speed_modifier.set_max_value(3.0f);
     speed_modifier.set_damp     (0.92f);
-    speed_modifier.set_max_delta(0.5f);    update_transform();
+    speed_modifier.set_max_delta(0.5f);
+    update_transform();
+}
+
+Frame_controller::~Frame_controller() noexcept = default;
+
+auto Frame_controller::get_node() const -> erhe::scene::Node*
+{
+    const std::shared_ptr<erhe::scene::Node> node = m_node.lock();
+    return node.get();
+}
+
+void Frame_controller::set_node(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (m_node.lock() == node) {
+        return;
+    }
+    m_transform_observer.release();
+    m_node = node;
+    if (!node) {
+        return;
+    }
+    m_transform_observer = node->add_transform_observer(
+        [this](erhe::scene::Node& observed_node) {
+            if (m_transform_update) {
+                return; // the controller's own write
+            }
+            get_transform_from_node(&observed_node);
+            update_transform();
+        }
+    );
+    get_transform_from_node(node.get());
+}
+
+void Frame_controller::set_node(erhe::scene::Node* const node)
+{
+    set_node((node != nullptr) ? node->shared_node_from_this() : std::shared_ptr<erhe::scene::Node>{});
 }
 
 auto Frame_controller::get_controller(const Control control) -> erhe::math::Input_axis&
@@ -86,16 +121,6 @@ auto Frame_controller::get_heading() const -> float
     return m_heading;
 }
 
-auto Frame_controller::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Frame_controller::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
 {
     if (node == nullptr) {
@@ -112,29 +137,6 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
     m_heading   = heading;
 
     m_heading_matrix = erhe::math::create_rotation(m_heading, erhe::math::vector_types<float>::vec3_unit_y());
-}
-
-void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
-{
-    static_cast<void>(old_node);
-    if (new_node == nullptr) {
-        return;
-    }
-    get_transform_from_node(new_node);
-}
-
-void Frame_controller::handle_node_transform_update()
-{
-    if (m_transform_update) {
-        return;
-    }
-
-    auto* node = get_node();
-    if (node == nullptr) {
-        return;
-    }
-    get_transform_from_node(node);
-    update_transform();
 }
 
 void Frame_controller::reset()

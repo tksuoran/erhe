@@ -278,7 +278,9 @@ private:
     Fly_camera_active_axis_float_command  m_active_rotate_z_command;
     Fly_camera_serialization_command      m_serialize_transform_command;
     Fly_camera_serialization_command      m_deserialize_transform_command;
-    std::shared_ptr<Frame_controller>     m_camera_controller;
+    // Owned by the tool (D7): the controller is a plain object, not an item
+    // attached to the camera, and names the camera node by weak reference.
+    std::unique_ptr<Frame_controller>     m_camera_controller;
     float                                 m_rotate_scale_x{4.0f};
     float                                 m_rotate_scale_y{4.0f};
     std::optional<glm::vec3>              m_tumble_pivot;

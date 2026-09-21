@@ -51,11 +51,13 @@ point, focus distance, view height (the zoom) and orthogonal camera distance.
 The focus is the point `focus distance` ahead of the perspective camera; each
 orthogonal camera sits at `focus + axis * distance` looking at the focus.
 
-- Change notification. Each of the four cameras carries a `Four_view_link`
-  node attachment whose `handle_node_transform_update()` reports every
-  transform write of the camera - fly camera, gizmo, Properties, undo - to
-  `Four_view::on_camera_moved()`. The link on the perspective camera (the
-  user's own camera) is detached again by `~Four_view`.
+- Change notification. `Four_view` holds one
+  `erhe::scene::Transform_observer_token` per camera (`doc/erhe/scene.md`
+  "Transform observers"), whose callback reports every transform write of that
+  camera - fly camera, gizmo, Properties, undo - to
+  `Four_view::on_camera_moved()`. The tokens are members, so `~Four_view`
+  takes the observer off every camera, including the perspective camera (the
+  user's own, which outlives the four view).
 - Perspective camera moved or turned. The focus becomes the point ahead of
   it and the three orthogonal cameras are placed for the new focus.
 - Orthogonal camera moved. The part of its offset that lies in its view
@@ -82,8 +84,8 @@ orthogonal camera sits at `focus + axis * distance` looking at the focus.
 ## Lifetime
 
 `Scene_views` owns the four views. `Four_view` refers to its scene and
-cameras by `weak_ptr` and the links refer back by a raw pointer that
-`~Four_view` clears, so a four view keeps nothing of its scene alive.
+cameras by `weak_ptr` and follows them through tokens it owns, so a four view
+keeps nothing of its scene alive and leaves no observer behind.
 `Scene_views::unbind_views_from_scene()` (the scene close path) destroys the
 four views of the closing scene; their windows remain as empty viewports. A
 camera removed from the scene (it stays alive in the undo history) is skipped

@@ -29,9 +29,8 @@ auto Node_attachment::clone_attachment() const -> std::shared_ptr<Node_attachmen
     // This is the single source of truth for attachment duplication:
     //  - clone_using_copy_constructor / clone_using_custom_clone_constructor
     //    produce a proper typed clone (Light, Camera, Mesh, ...).
-    //  - not_clonable types (Frame_controller) return nullptr,
-    //    so Node's clone constructor skips them instead of attaching a sliced,
-    //    meaningless base Node_attachment.
+    //  - not_clonable types return nullptr, so Node's clone constructor skips
+    //    them instead of attaching a sliced, meaningless base Node_attachment.
     return std::dynamic_pointer_cast<Node_attachment>(clone());
 }
 

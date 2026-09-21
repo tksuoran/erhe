@@ -563,6 +563,9 @@ void Xformable::handle_transform_update(const uint64_t serial)
     for (const auto& attachment : node_data.attachments) {
         attachment->handle_node_transform_update();
     }
+    if (m_transform_observers) {
+        m_transform_observers->notify(*this);
+    }
 
     // Expressions reading this node's transform properties (D22): the
     // bridged storage changed without set_value, so announce it here, where
@@ -653,6 +656,16 @@ void Xformable::update_world_from_node()
         // preserved exactly at (near) zero scale (glm::decompose is unstable there).
         node_data.transforms.world_from_node = node_data.transforms.parent_from_node;
     }
+}
+
+auto Xformable::add_transform_observer(Transform_observer_callback callback) -> Transform_observer_token
+{
+    if (!m_transform_observers) {
+        m_transform_observers = std::make_shared<Transform_observer_list>();
+    }
+    const uint64_t id = m_transform_observers->next_id();
+    m_transform_observers->add(id, std::move(callback));
+    return Transform_observer_token{m_transform_observers, id};
 }
 
 void Xformable::node_sanity_check(bool destruction_in_progress) const

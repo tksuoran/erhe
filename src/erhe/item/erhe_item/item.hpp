@@ -284,56 +284,55 @@ public:
     static constexpr uint64_t index_brush                  =  5;
     static constexpr uint64_t index_camera                 =  6;
     static constexpr uint64_t index_composer               =  7;
-    static constexpr uint64_t index_frame_controller       =  8;
-    static constexpr uint64_t index_grid                   =  9;
-    static constexpr uint64_t index_light                  = 10;
-    static constexpr uint64_t index_light_layer            = 11;
-    static constexpr uint64_t index_material               = 12;
-    static constexpr uint64_t index_mesh                   = 13;
-    static constexpr uint64_t index_mesh_layer             = 14;
-    static constexpr uint64_t index_composition_pass       = 15;
-    static constexpr uint64_t index_rendertarget           = 16;
-    static constexpr uint64_t index_scene                  = 17;
-    static constexpr uint64_t index_skin                   = 18;
-    static constexpr uint64_t index_texture                = 19;
-    static constexpr uint64_t index_xformable              = 20;
-    static constexpr uint64_t index_asset_folder           = 21;
-    static constexpr uint64_t index_asset_file_gltf        = 22;
-    static constexpr uint64_t index_asset_file_geogram     = 23;
-    static constexpr uint64_t index_asset_file_other       = 24;
-    static constexpr uint64_t index_content_library_folder = 25;
-    static constexpr uint64_t index_content_library_node   = 26;
-    static constexpr uint64_t index_physics                = 27;
-    static constexpr uint64_t index_raytrace               = 28;
-    static constexpr uint64_t index_node_attachment        = 29;
-    static constexpr uint64_t index_render_style           = 30;
-    static constexpr uint64_t index_graph                  = 31;
-    static constexpr uint64_t index_graph_node             = 32;
-    static constexpr uint64_t index_graph_link             = 33;
-    static constexpr uint64_t index_rendergraph_node       = 34;
-    static constexpr uint64_t index_physics_material       = 35;
-    static constexpr uint64_t index_collision_filter       = 36;
-    static constexpr uint64_t index_physics_joint_settings = 37;
-    static constexpr uint64_t index_asset_file_scene       = 38;
-    static constexpr uint64_t index_graph_texture          = 39;
-    static constexpr uint64_t index_graph_mesh             = 40;
-    static constexpr uint64_t index_geometry_graph_mesh    = 41;
-    static constexpr uint64_t index_prefab_instance        = 42;
-    static constexpr uint64_t index_asset_file_texture     = 43;
-    static constexpr uint64_t index_style                  = 44;
-    static constexpr uint64_t index_asset_file_usd         = 45;
+    static constexpr uint64_t index_grid                   =  8;
+    static constexpr uint64_t index_light                  =  9;
+    static constexpr uint64_t index_light_layer            = 10;
+    static constexpr uint64_t index_material               = 11;
+    static constexpr uint64_t index_mesh                   = 12;
+    static constexpr uint64_t index_mesh_layer             = 13;
+    static constexpr uint64_t index_composition_pass       = 14;
+    static constexpr uint64_t index_rendertarget           = 15;
+    static constexpr uint64_t index_scene                  = 16;
+    static constexpr uint64_t index_skin                   = 17;
+    static constexpr uint64_t index_texture                = 18;
+    static constexpr uint64_t index_xformable              = 19;
+    static constexpr uint64_t index_asset_folder           = 20;
+    static constexpr uint64_t index_asset_file_gltf        = 21;
+    static constexpr uint64_t index_asset_file_geogram     = 22;
+    static constexpr uint64_t index_asset_file_other       = 23;
+    static constexpr uint64_t index_content_library_folder = 24;
+    static constexpr uint64_t index_content_library_node   = 25;
+    static constexpr uint64_t index_physics                = 26;
+    static constexpr uint64_t index_raytrace               = 27;
+    static constexpr uint64_t index_node_attachment        = 28;
+    static constexpr uint64_t index_render_style           = 29;
+    static constexpr uint64_t index_graph                  = 30;
+    static constexpr uint64_t index_graph_node             = 31;
+    static constexpr uint64_t index_graph_link             = 32;
+    static constexpr uint64_t index_rendergraph_node       = 33;
+    static constexpr uint64_t index_physics_material       = 34;
+    static constexpr uint64_t index_collision_filter       = 35;
+    static constexpr uint64_t index_physics_joint_settings = 36;
+    static constexpr uint64_t index_asset_file_scene       = 37;
+    static constexpr uint64_t index_graph_texture          = 38;
+    static constexpr uint64_t index_graph_mesh             = 39;
+    static constexpr uint64_t index_geometry_graph_mesh    = 40;
+    static constexpr uint64_t index_prefab_instance        = 41;
+    static constexpr uint64_t index_asset_file_texture     = 42;
+    static constexpr uint64_t index_style                  = 43;
+    static constexpr uint64_t index_asset_file_usd         = 44;
     // A more specific class takes the LOWER index: the editor's icon set
     // picks the icon of the lowest set type bit that has one, so a Scope
     // shows the scope icon rather than the icon of the Typed level it also
     // carries (src/editor/graphics/icon_set.cpp).
-    static constexpr uint64_t index_scope                  = 46;
-    static constexpr uint64_t index_typed                  = 47;
-    static constexpr uint64_t index_imageable              = 48;
-    static constexpr uint64_t index_xform                  = 49;
-    static constexpr uint64_t index_boundable              = 50;
-    static constexpr uint64_t index_gprim                  = 51;
-    static constexpr uint64_t index_point_instancer        = 52;
-    static constexpr uint64_t count                        = 53; // index 53 is free
+    static constexpr uint64_t index_scope                  = 45;
+    static constexpr uint64_t index_typed                  = 46;
+    static constexpr uint64_t index_imageable              = 47;
+    static constexpr uint64_t index_xform                  = 48;
+    static constexpr uint64_t index_boundable              = 49;
+    static constexpr uint64_t index_gprim                  = 50;
+    static constexpr uint64_t index_point_instancer        = 51;
+    static constexpr uint64_t count                        = 52; // index 52 is free
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -343,7 +342,6 @@ public:
     static constexpr uint64_t brush                  = (uint64_t{1} << index_brush                 );
     static constexpr uint64_t camera                 = (uint64_t{1} << index_camera                );
     static constexpr uint64_t composer               = (uint64_t{1} << index_composer              );
-    static constexpr uint64_t frame_controller       = (uint64_t{1} << index_frame_controller      );
     static constexpr uint64_t grid                   = (uint64_t{1} << index_grid                  );
     static constexpr uint64_t light                  = (uint64_t{1} << index_light                 );
     static constexpr uint64_t light_layer            = (uint64_t{1} << index_light_layer           );
@@ -399,7 +397,6 @@ public:
         "Brush",
         "Camera",
         "Composer",
-        "Frame_controller",
         "Grid",
         "Light",
         "Light_layer",

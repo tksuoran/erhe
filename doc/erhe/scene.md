@@ -9,7 +9,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see 
 - `Scene` -- Top-level container owning the root node, flat node list, mesh layers, light layers, cameras, and skins. Provides `update_node_transforms()` and lookup by ID.
 - `Xformable` (`Node`) -- The transform level of the prim class hierarchy, see "Prim levels". Holds `Node_transforms` (parent-from-node and world-from-node `Trs_transform`), attachments, and a `Scene_host` pointer. Supports cloning. Registers `translation`, `rotation` and `scale` as erhe::property properties bridged onto the parent-from-node `Trs_transform` (`Node::translation_property` etc.; writes run the same world-transform update as `set_parent_from_node`), so the editor's generic property rows, undo and MCP reach the transform without a second copy of it (doc/erhe/property_system.md section 4.2). `world_translation_property` / `world_rotation_property` / `world_scale_property` are computed properties (D26) reading `world_from_node_transform()`; `handle_transform_update` pushes them to expressions, so a descendant's values follow a parent move when `Scene::update_node_transforms` recomputes it.
 - `Imageable` / `Xform` / `Boundable` / `Gprim` -- The other prim levels this library owns, see "Prim levels".
-- `Node_attachment` -- Base class for what USD applies to a prim as an API schema and erhe attaches to a node: `Node_physics`, `Node_joint`, `Prefab_instance`, `Frame_controller` and `Grid`. `Mesh`, `Camera` and `Light` are prims, not attachments. Receives notifications on node transform changes and scene host changes. Its property inheritance parent is its node (`visible`, `shadow_cast`, `lightmapped` flow node -> attachment; `set_node` brackets the move with the inheritance snapshot and keeps the attachment alive while the old node's list releases it).
+- `Node_attachment` -- Base class for what USD applies to a prim as an API schema and erhe attaches to a node: `Node_physics`, `Node_joint`, `Prefab_instance` and `Grid`. `Mesh`, `Camera` and `Light` are prims, not attachments. Receives notifications on node transform changes and scene host changes. Its property inheritance parent is its node (`visible`, `shadow_cast`, `lightmapped` flow node -> attachment; `set_node` brackets the move with the inheritance snapshot and keeps the attachment alive while the old node's list releases it).
 - `Mesh_primitive` -- Primitive + Material pair, a `Dependency_object` with its own owner type: `material` is an object property (`Mesh_primitive::material_property`, `register_member` over the member, `doc/erhe/property_system.md` D28 / section 4.9) whose `after_set` notifies the owning mesh's scene host; `Mesh::set_primitive_material` writes it and stays the one writer. Carries an owner link (mesh, index) the mesh stamps after every primitive-list change. Registers member-backed properties only and is never observed: the mesh holds primitives by value, and a vector reallocation copy-constructs the base.
 - `Mesh` -- A geometric prim (`Gprim`, see "Prim levels") holding a vector of `Mesh_primitive`: an `Xformable` with its own transform, name and children, a child prim of its parent, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's mesh layers on top of the node registration the base does, and its override of `handle_transform_update` mirrors the world transform into the raytrace instances, the negative-determinant flag and the computed world bounds. Addresses its primitives as property sub-objects (D29: `get_property_sub_object_count` / `get_property_sub_object` / `get_property_sub_object_label`). Supports raytrace primitives for CPU-side picking. `get_aabb_world()` returns POSED world bounds for a skinned mesh: it unions the primitives' per-joint rest boxes (`Buffer_mesh::joint_bounding_boxes`) transformed by `world_from_bind` (`get_skinned_aabb_world()`), and does NOT apply the mesh's own transform, which skinning ignores. Correct because a skinned position is a convex combination of its per-joint images, so it lies inside the union. Uncached - joints move every frame and primitives can be rebuilt behind the Mesh's back, so there is no reliable invalidation signal. `world_bounds_min_property` / `world_bounds_max_property` are computed properties (D26) reading `get_aabb_world()` (zero for an invalid box), pushed to expressions from `handle_transform_update` and the primitive changes.
 - `Camera` -- A transformable prim (`Xformable`, see "Prim levels") with a `Projection` (perspective/orthogonal/XR): a child prim of its parent with its own transform, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's camera list on top of the node registration the base does. Computes `clip_from_world` transforms. The `Projection` fields are registered as bridged `erhe::property` properties (`Camera::z_far_property`, ...), so `projection()` writes and property writes reach the same state; exposure and shadow range live in the property store (`doc/erhe/property_system.md` section 4.4).
@@ -361,6 +361,31 @@ The scene drives a system from three change sites:
 
 Tests: `src/erhe/scene/test/test_node_systems.cpp` and
 `test_layout_system.cpp`.
+
+## Transform observers
+
+`transform_observer.hpp` owns `erhe::scene::Transform_observer_token` and the
+per-prim `Transform_observer_list` behind it
+(`doc/plans/node_attachments_to_properties.md` D7). A part that has to follow
+one prim's world transform without being an item in the scene subscribes with
+`Xformable::add_transform_observer(callback)` and keeps the returned token; the
+callback runs from `Xformable::handle_transform_update`, so every transform
+writer (a tool, a parent node, animation, undo, MCP, the propagation pass)
+reaches it. The token unsubscribes on destruction or `release()` and is safe
+when the prim dies first, which is what lets a subscriber name its prim by
+`weak_ptr` and keep nothing of a closed scene alive.
+
+A prim nobody follows carries a null list pointer and costs one test per
+transform update; a prim with observers costs the calls alone, since the
+notification allocates nothing. A callback may release its own token or add an
+observer to the same prim - an observer added during a notification is first
+called by the next one - and must not write the transform of the prim it
+observes. A clone gets no observers.
+
+The subscribers are `editor::Frame_controller` (the fly camera's 6DOF pose,
+`doc/editor/tools.md`) and `editor::Four_view` (the camera links,
+`doc/editor/four_view.md`). Tests:
+`src/erhe/scene/test/test_transform_observers.cpp`.
 
 ## Physics description
 

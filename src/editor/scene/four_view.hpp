@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_scene/transform_observer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -11,7 +11,6 @@ namespace erhe::scene { class Camera; }
 
 namespace editor {
 
-class Four_view;
 class Scene_root;
 
 // The views of a four view: three axis-aligned orthogonal views and the
@@ -21,29 +20,6 @@ enum class Four_view_axis : unsigned int {
     front       = 1, // from +Z looking towards -Z
     right       = 2, // from +X looking towards -X
     perspective = 3  // the source viewport's camera
-};
-
-// Attached to each camera of a Four_view. Reports every transform write of
-// the camera (fly camera, gizmo, Properties, undo) to the Four_view, which is
-// what keeps the views on one focus point without polling.
-class Four_view_link : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Four_view_link, erhe::Item_kind::not_clonable>
-{
-public:
-    Four_view_link(Four_view& four_view, Four_view_axis axis);
-    ~Four_view_link() noexcept override;
-
-    static constexpr std::string_view static_type_name{"Four_view_link"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment; }
-
-    auto clone() const -> std::shared_ptr<erhe::Item_base> override;
-    void handle_node_transform_update() override;
-
-    // The Four_view is going away; the link stays on its camera but is inert.
-    void unlink();
-
-private:
-    Four_view*     m_four_view{nullptr};
-    Four_view_axis m_axis;
 };
 
 // Four linked views of one scene that share one focus point: a perspective
@@ -79,7 +55,7 @@ public:
     [[nodiscard]] auto get_view_height() const -> float;
 
     // Change sites
-    void on_camera_moved(Four_view_axis axis);              // from Four_view_link
+    void on_camera_moved(Four_view_axis axis);              // from a camera's transform observer
     void set_view_height(float view_height);                // zoom, applies to all three cameras
     void set_focus      (glm::vec3 focus);
 
@@ -87,17 +63,22 @@ private:
     void place_camera            (Four_view_axis axis);
     void place_orthogonal_cameras(Four_view_axis except);
     void on_perspective_camera_moved();
+    // The link of one camera (D7 of
+    // doc/plans/node_attachments_to_properties.md): the four view holds the
+    // camera weakly and follows its transform through a token it owns, so
+    // ~Four_view takes the observer off the user's own perspective camera.
+    void link_camera(Four_view_axis axis);
 
-    std::weak_ptr<Scene_root>                                   m_scene_root;
-    std::array<std::weak_ptr<erhe::scene::Camera>, axis_count>  m_cameras;
-    std::array<std::shared_ptr<Four_view_link>,    axis_count>  m_links;
-    std::weak_ptr<erhe::scene::Camera>                          m_perspective_camera;
-    std::shared_ptr<Four_view_link>                             m_perspective_link;
-    float                                                       m_focus_distance{10.0f};
-    glm::vec3                                                   m_focus{0.0f};
-    float                                                       m_view_height{10.0f};
-    float                                                       m_distance{100.0f};
-    bool                                                        m_placing{false};
+    std::weak_ptr<Scene_root>                                            m_scene_root;
+    std::array<std::weak_ptr<erhe::scene::Camera>,            axis_count> m_cameras;
+    std::array<erhe::scene::Transform_observer_token,         axis_count> m_links;
+    std::weak_ptr<erhe::scene::Camera>                                   m_perspective_camera;
+    erhe::scene::Transform_observer_token                                m_perspective_link;
+    float                                                                m_focus_distance{10.0f};
+    glm::vec3                                                            m_focus{0.0f};
+    float                                                                m_view_height{10.0f};
+    float                                                                m_distance{100.0f};
+    bool                                                                 m_placing{false};
 };
 
 } // namespace editor

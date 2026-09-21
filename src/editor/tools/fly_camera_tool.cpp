@@ -755,7 +755,7 @@ Fly_camera_tool::Fly_camera_tool(
         return;
     }
 
-    m_camera_controller = std::make_shared<Frame_controller>();
+    m_camera_controller = std::make_unique<Frame_controller>();
 
     m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);

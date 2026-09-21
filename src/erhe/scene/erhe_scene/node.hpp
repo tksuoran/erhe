@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/imageable.hpp"
+#include "erhe_scene/transform_observer.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform_op.hpp"
 #include "erhe_property/dependency_property.hpp"
@@ -208,6 +209,14 @@ public:
     // parent_from_node_transform() while nothing animates the prim.
     [[nodiscard]] auto authored_parent_from_node_transform() const -> Trs_transform;
 
+    // Transform observers (D7 of doc/plans/node_attachments_to_properties.md):
+    // a callback invoked from handle_transform_update, for a part that follows
+    // a prim's world transform without being an item attached to it. The
+    // returned token unsubscribes on destruction and is safe when the prim
+    // dies first. The rules a callback must keep are in
+    // erhe_scene/transform_observer.hpp; a clone gets no observers.
+    [[nodiscard]] auto add_transform_observer(Transform_observer_callback callback) -> Transform_observer_token;
+
     void node_sanity_check     (bool destruction_in_progress = false) const;
     void update_world_from_node();
     void update_transform      (uint64_t serial);
@@ -271,6 +280,9 @@ private:
     // does. The setters call it in place of writing parent_from_node.
     void write_animation_base_transform(const Trs_transform& transform);
 
+    // Allocated on the first add_transform_observer(); a prim nothing follows
+    // carries a null pointer and handle_transform_update tests it once.
+    std::shared_ptr<Transform_observer_list> m_transform_observers;
     std::unique_ptr<Xform_op_stack> m_xform_op_stack;
     // Set while clear_animated_local_transform() writes the components of one
     // transform: the bridged property writes then only store.

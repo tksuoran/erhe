@@ -1,7 +1,6 @@
 #include "scene/attachment_types.hpp"
 
 #include "grid/grid.hpp"
-#include "scene/frame_controller.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 
@@ -29,12 +28,10 @@ void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_me
 auto rigid_body_gate      (const Node& node) -> bool { return !erhe::scene::get_attachment<Node_physics           >(&node); }
 auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal
 auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<Grid                    >(&node); }
-auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
 
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
 void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
-void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame_controller (node); }
 
 } // anonymous namespace
 
@@ -53,8 +50,7 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
     static const std::vector<Attachment_type_info> catalog = {
         {"rigid_body",       "Rigid Body",       rigid_body_gate,       make_rigid_body      },
         {"joint",            "Joint",            joint_gate,            make_joint           },
-        {"grid",             "Grid",             grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller}
+        {"grid",             "Grid",             grid_gate,             make_grid            }
     };
     return catalog;
 }

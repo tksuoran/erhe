@@ -19,8 +19,7 @@ insert of a new prim as the parent's last child. Any prim parents any prim
 node and a parent takes any number of them.
 
 `Attachment_type_info` lists the user-addable attachment kinds - the applied
-API schemas of a prim: `rigid_body`, `joint`, `grid`,
-`frame_controller`. Each carries a key, a label, a
+API schemas of a prim: `rigid_body`, `joint`, `grid`. Each carries a key, a label, a
 stateless `can_add(const Node&)` gate (a node holds at most one `Grid`, and so
 on; `joint` is the one kind a node may hold several of) and a
 `make(Scene_commands&, Node&)` that queues the undoable operation.
@@ -41,7 +40,7 @@ catalog kind or not. `Node_physics` needs no special case - its detach
 releases the rigid body from the physics world through the item-host update
 hook, and an undo puts it back.
 
-The additive half is `Scene_commands::attach_new_grid()` / `attach_new_frame_controller()`, each a bare
+The additive half is `Scene_commands::attach_new_grid()`, a bare
 `Node_attach_operation` on the existing
 node, plus `create_new_rigid_body()` / `create_new_joint()`, which the rigid
 body and joint entries reuse.

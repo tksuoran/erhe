@@ -2,11 +2,13 @@
 
 #include "erhe_math/input_axis.hpp"
 
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_scene/transform_observer.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
+
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace example {
 
@@ -19,21 +21,21 @@ enum class Control : unsigned int {
     rotate_z    = 5
 };
 
-class Frame_controller : public erhe::scene::Node_attachment
+// The example's camera controller: a plain object owned by the application,
+// naming its node by weak reference and following that node's transform
+// through a transform observer token (D7 of
+// doc/plans/node_attachments_to_properties.md).
+class Frame_controller
 {
 public:
     Frame_controller();
+    ~Frame_controller() noexcept;
+    Frame_controller(const Frame_controller&)            = delete;
+    Frame_controller& operator=(const Frame_controller&) = delete;
 
-    static constexpr std::string_view static_type_name{"Frame_controller"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller; }
-
-    // Implements Item_base
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
-
-    // Implements / overrides Node_attachment
-    void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
-    void handle_node_transform_update()                                                         override;
+    void set_node(const std::shared_ptr<erhe::scene::Node>& node);
+    void set_node(erhe::scene::Node* node);
+    [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
 
     // Public API
     void reset                  ();
@@ -61,6 +63,8 @@ public:
     erhe::math::Input_axis speed_modifier;
 
 private:
+    std::weak_ptr<erhe::scene::Node>      m_node;
+    erhe::scene::Transform_observer_token m_transform_observer;
     float     m_elevation       {0.0f};
     float     m_heading         {0.0f};
     glm::mat4 m_heading_matrix  {1.0f};
