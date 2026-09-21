@@ -79,6 +79,9 @@ void Shader_monitor::add(Shader_stages_create_info create_info, erhe::graphics::
     (void)create_info;
     return;
 #else
+    if (!is_running()) {
+        return;
+    }
     for (const auto& shader : create_info.shaders) {
         for (const std::filesystem::path& path : shader.paths) {
             if (erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", path)) {
@@ -107,6 +110,9 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages, con
     static_cast<void>(reloadable_shader_stages);
     static_cast<void>(dependency_paths);
 #else
+    if (!is_running()) {
+        return;
+    }
     for (const std::filesystem::path& path : dependency_paths) {
         add(path, reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
     }

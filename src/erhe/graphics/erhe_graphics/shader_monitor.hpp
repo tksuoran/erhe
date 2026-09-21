@@ -46,6 +46,15 @@ private:
         m_run = value;
     }
 
+    // The monitor runs from begin(true) on, and begin() is called while the
+    // Device is constructed, before any shader stages exist. While it is not
+    // running nothing polls the watched files, so add() registers nothing.
+    [[nodiscard]] auto is_running() -> bool
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        return m_run;
+    }
+
     void poll_thread();
 
     void add(
