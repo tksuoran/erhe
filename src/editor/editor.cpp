@@ -2195,7 +2195,6 @@ public:
                     m_editor_settings.post_processing &&
                         !m_app_context.force_post_processing_off, //bool                          enable_post_processing
                     m_default_content_library,                //std::shared_ptr<Content_library>   content_library
-                    *m_executor.get(),                        //tf::Executor&                      executor
                     m_app_context,                            //App_context&                       app_context
                     m_app_settings,                           //App_settings&                      app_settings
                     *m_mesh_memory.get()                      //erhe::scene_renderer::Mesh_memory& mesh_memory

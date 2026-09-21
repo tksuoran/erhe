@@ -31,7 +31,6 @@
 #include "app_context.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_task/task.hpp"
 #include "erhe_geometry/shapes/capsule.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
@@ -58,7 +57,6 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 
-#include <taskflow/taskflow.hpp>
 
 using erhe::geometry::to_geo_mat4f;
 using erhe::geometry::transform;
@@ -83,7 +81,6 @@ Scene_builder::Scene_builder(
     const Scene_config&                scene_config,
     const bool                         enable_post_processing,
     std::shared_ptr<Content_library>   content_library,
-    tf::Executor&                      executor,
     App_context&                       context,
     App_settings&                      app_settings,
     erhe::scene_renderer::Mesh_memory& mesh_memory
@@ -98,24 +95,24 @@ Scene_builder::Scene_builder(
     // brushes are built below -- is needed at construction time.
     m_content_library = content_library;
 
-    ERHE_VERIFY(context.current_command_buffer != nullptr);
-
     // Default cameras / lights / floor instance are added later via the
     // undoable scene.* commands queued through Operation_stack, which is
     // not yet wired into App_context at construction time. The default
     // commands.json invokes them at startup (during the init-cb phase).
     //
-    // Brushes, in contrast, are eagerly built here: they populate the
-    // content library only (no scene instances, no Operation_stack
-    // involvement), so they are safe to construct at this point. Which
-    // brush families get built is gated by scene_config flags
+    // Brushes, in contrast, are created here: they populate the content
+    // library only (no scene instances, no Operation_stack involvement), so
+    // they are safe to construct at this point. Each palette brush gets its
+    // name, flags and folder placement now and its geometry on first use
+    // (doc/plans/deferred_brush_geometry.md R1, D1), so nothing is built and
+    // nothing is uploaded here - no mesh memory flush is needed. Which brush
+    // families get created is gated by scene_config flags
     // (make_platonic_solid_brushes / make_johnson_solid_brushes /
     // make_curved_brushes) in editor_settings.json. mass_scale / detail
     // use the member defaults; ensure_brushes() becomes a no-op for any
     // later scene.add_* invocation because m_brushes_built is set here.
-    make_brushes(app_settings, mesh_memory, executor);
+    make_brushes(app_settings, mesh_memory);
     m_brushes_built = true;
-    mesh_memory.flush(*context.current_command_buffer);
 }
 
 Scene_builder::~Scene_builder() noexcept
@@ -294,26 +291,6 @@ auto Scene_builder::build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -
     };
 }
 
-auto Scene_builder::make_brush(
-    erhe::Scope&                                     scope,
-    App_settings&                                    app_settings,
-    const erhe::primitive::Build_info&               brush_build_info,
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry
-) -> std::shared_ptr<Brush>
-{
-    return make_brush(
-        scope,
-        Brush_data{
-            .context      = m_context,
-            .app_settings = app_settings,
-            .build_info   = brush_build_info,
-            .normal_style = Normal_style::polygon_normals,
-            .geometry     = geometry,
-            .density      = m_mass_scale,
-        }
-    );
-}
-
 void Scene_builder::make_platonic_solid_brushes(
     App_settings&                      app_settings,
     const erhe::primitive::Build_info& brush_build_info
@@ -338,37 +315,51 @@ void Scene_builder::make_platonic_solid_brushes(
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
         erhe::geometry::Geometry::process_flag_generate_tangents;
 
-    auto make_platonic_solid = [this, &folder, &app_settings, &brush_build_info, flags](const char* name, std::function<void(GEO::Mesh&)> builder)
+    // Each brush gets the whole recipe as its geometry generator: build the
+    // mesh, then process() with this family's flags. The generator captures
+    // its inputs by value (the name, the mesh builder and the flags), never
+    // this builder and never a reference to a local, so it stays valid however
+    // long after make_brushes() it runs (R6).
+    auto make_platonic_solid = [this, &folder, &app_settings, &brush_build_info, flags](
+        const std::string&                               name,
+        std::function<void(GEO::Mesh&)>                  builder,
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape
+    ) -> void
     {
-        auto new_geometry = std::make_shared<erhe::geometry::Geometry>(name);
-        builder(new_geometry->get_mesh());
-        new_geometry->process({.flags = flags});
-
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
-        m_platonic_solids.push_back(make_brush(folder, app_settings, brush_build_info, new_geometry));
+        Geometry_generator generator = [name, builder, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(name);
+            builder(geometry->get_mesh());
+            geometry->process({.flags = flags});
+            return geometry;
+        };
+        m_platonic_solids.push_back(
+            make_brush(
+                folder,
+                Brush_data{
+                    .context            = m_context,
+                    .app_settings       = app_settings,
+                    .name               = name,
+                    .build_info         = brush_build_info,
+                    .normal_style       = Normal_style::polygon_normals,
+                    .geometry_generator = std::move(generator),
+                    .density            = m_mass_scale,
+                    .collision_shape    = std::move(collision_shape)
+                }
+            )
+        );
     };
 
-    make_platonic_solid("dodecahedron",  [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_dodecahedron (mesh, scale); });
-    make_platonic_solid("icosahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_icosahedron  (mesh, scale); });
-    make_platonic_solid("octahedron",    [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_octahedron   (mesh, scale); });
-    make_platonic_solid("cuboctahedron", [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_cuboctahedron(mesh, scale); });
-    make_platonic_solid("tetrahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_tetrahedron  (mesh, scale); });
-
-    auto cube = std::make_shared<erhe::geometry::Geometry>("cube");
-    erhe::geometry::shapes::make_cube(cube->get_mesh(), scale);
-    cube->process({.flags = flags});
-    m_platonic_solids.push_back(make_brush(
-        folder,
-        Brush_data{
-            .context         = m_context,
-            .app_settings    = app_settings,
-            .build_info      = brush_build_info,
-            .normal_style    = Normal_style::polygon_normals,
-            .geometry        = cube,
-            .density         = m_mass_scale,
-            .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(vec3{scale * 0.5f})
-        }
-    ));
+    make_platonic_solid("dodecahedron",  [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_dodecahedron (mesh, scale); }, {});
+    make_platonic_solid("icosahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_icosahedron  (mesh, scale); }, {});
+    make_platonic_solid("octahedron",    [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_octahedron   (mesh, scale); }, {});
+    make_platonic_solid("cuboctahedron", [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_cuboctahedron(mesh, scale); }, {});
+    make_platonic_solid("tetrahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_tetrahedron  (mesh, scale); }, {});
+    make_platonic_solid(
+        "cube",
+        [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_cube(mesh, scale); },
+        erhe::physics::ICollision_shape::create_box_shape_shared(vec3{scale * 0.5f})
+    );
 }
 
 void Scene_builder::make_sphere_brushes(
@@ -379,29 +370,37 @@ void Scene_builder::make_sphere_brushes(
     ERHE_PROFILE_FUNCTION();
 
     erhe::Scope& brushes = get_brushes();
-    std::shared_ptr<erhe::geometry::Geometry> sphere = std::make_shared<erhe::geometry::Geometry>("sphere");
-    erhe::geometry::shapes::make_sphere(
-        sphere->get_mesh(),
-        1.0f, //config.object_scale,
-        8 * std::max(1, m_detail), // slice count
-        6 * std::max(1, m_detail)  // stack count
-    );
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    sphere->process({.flags = flags});
+    // m_detail is read here, at creation time, and captured by value (R6).
+    const int detail = std::max(1, m_detail);
+
+    Geometry_generator generator = [detail, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+    {
+        std::shared_ptr<erhe::geometry::Geometry> sphere = std::make_shared<erhe::geometry::Geometry>("sphere");
+        erhe::geometry::shapes::make_sphere(
+            sphere->get_mesh(),
+            1.0f,      //config.object_scale,
+            8 * detail, // slice count
+            6 * detail  // stack count
+        );
+        sphere->process({.flags = flags});
+        return sphere;
+    };
 
     m_sphere_brush = make_brush(
         brushes,
         Brush_data{
-            .context         = m_context,
-            .app_settings    = app_settings,
-            .build_info      = brush_build_info,
-            .normal_style    = Normal_style::corner_normals,
-            .geometry        = sphere,
-            .density         = m_mass_scale,
-            .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
+            .context            = m_context,
+            .app_settings       = app_settings,
+            .name               = "sphere",
+            .build_info         = brush_build_info,
+            .normal_style       = Normal_style::corner_normals,
+            .geometry_generator = std::move(generator),
+            .density            = m_mass_scale,
+            .collision_shape    = erhe::physics::ICollision_shape::create_sphere_shape_shared(
                 1.0f // config.object_scale
             )
         }
@@ -466,27 +465,35 @@ void Scene_builder::make_torus_brushes(
         }
         return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
     };
-    std::shared_ptr<erhe::geometry::Geometry> torus_geometry = std::make_shared<erhe::geometry::Geometry>("torus");
-    erhe::geometry::shapes::make_torus(
-        torus_geometry->get_mesh(),
-        major_radius,
-        minor_radius,
-        10 * std::max(1, m_detail),
-         8 * std::max(1, m_detail)
-    );
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
-        erhe::geometry::Geometry::process_flag_build_edges | 
+        erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    torus_geometry->process({.flags = flags});
+    const int detail = std::max(1, m_detail);
+
+    Geometry_generator generator = [major_radius, minor_radius, detail, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+    {
+        std::shared_ptr<erhe::geometry::Geometry> torus_geometry = std::make_shared<erhe::geometry::Geometry>("torus");
+        erhe::geometry::shapes::make_torus(
+            torus_geometry->get_mesh(),
+            major_radius,
+            minor_radius,
+            10 * detail,
+             8 * detail
+        );
+        torus_geometry->process({.flags = flags});
+        return torus_geometry;
+    };
+
     m_torus_brush = make_brush(
         brushes,
         Brush_data{
             .context                     = m_context,
             .app_settings                = app_settings,
+            .name                        = "torus",
             .build_info                  = brush_build_info,
             .normal_style                = Normal_style::corner_normals,
-            .geometry                    = torus_geometry,
+            .geometry_generator          = std::move(generator),
             .density                     = m_mass_scale,
             .collision_volume_calculator = torus_collision_volume_calculator,
             .collision_shape_generator   = torus_collision_shape_generator,
@@ -504,35 +511,41 @@ void Scene_builder::make_cylinder_brushes(
     erhe::Scope& brushes = get_brushes();
 
     const float scale = 1.0f; //config.object_scale;
+    const int   detail = std::max(1, m_detail);
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
     std::size_t index = 0;
     for (float h = 0.1f; h < 1.1f; h += 0.9f) {
-        std::shared_ptr<erhe::geometry::Geometry> cylinder_geometry = std::make_shared<erhe::geometry::Geometry>("cylinder");
-        erhe::geometry::shapes::make_cylinder(
-            cylinder_geometry->get_mesh(),
-            -h * scale,
-             h * scale,
-            1.0f * scale,
-            true,
-            true,
-            9 * std::max(1, m_detail), // slice count
-            1 * std::max(1, m_detail)  // stack count
-        ); // always axis = x
-        transform(*cylinder_geometry.get(), *cylinder_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
-        const uint64_t flags =
-            erhe::geometry::Geometry::process_flag_connect |
-            erhe::geometry::Geometry::process_flag_build_edges |
-            erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-        cylinder_geometry->process({.flags = flags});
+        Geometry_generator generator = [h, scale, detail, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            std::shared_ptr<erhe::geometry::Geometry> cylinder_geometry = std::make_shared<erhe::geometry::Geometry>("cylinder");
+            erhe::geometry::shapes::make_cylinder(
+                cylinder_geometry->get_mesh(),
+                -h * scale,
+                 h * scale,
+                1.0f * scale,
+                true,
+                true,
+                9 * detail, // slice count
+                1 * detail  // stack count
+            ); // always axis = x
+            transform(*cylinder_geometry.get(), *cylinder_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
+            cylinder_geometry->process({.flags = flags});
+            return cylinder_geometry;
+        };
         m_cylinder_brush[index++] = make_brush(
             brushes,
             Brush_data{
-                .context         = m_context,
-                .app_settings    = app_settings,
-                .build_info      = brush_build_info,
-                .normal_style    = Normal_style::corner_normals,
-                .geometry        = cylinder_geometry,
-                .density         = m_mass_scale,
-                .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                .context            = m_context,
+                .app_settings       = app_settings,
+                .name               = "cylinder",
+                .build_info         = brush_build_info,
+                .normal_style       = Normal_style::corner_normals,
+                .geometry_generator = std::move(generator),
+                .density            = m_mass_scale,
+                .collision_shape    = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
                     erhe::physics::Axis::Y,
                     vec3{h * scale, scale, h * scale}
                 )
@@ -550,32 +563,39 @@ void Scene_builder::make_cone_brushes(
 
     erhe::Scope& brushes = get_brushes();
 
-    std::shared_ptr<erhe::geometry::Geometry> cone_geometry = std::make_shared<erhe::geometry::Geometry>("cone");
-    erhe::geometry::shapes::make_cone( // always axis = x
-        cone_geometry->get_mesh(),
-        -1.0f, // * config.object_scale,    // min x
-         1.0f, // * config.object_scale,    // max x
-         1.0f, // * config.object_scale,    // bottom radius
-        true,                               // use bottm
-        10 * std::max(1, m_detail),         // slice count
-         5 * std::max(1, m_detail)          // stack count
-    );
-    transform(*cone_geometry.get(), *cone_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy)); // convert to axis = y
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    cone_geometry->process({.flags = flags});
+    const int detail = std::max(1, m_detail);
+
+    Geometry_generator generator = [detail, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+    {
+        std::shared_ptr<erhe::geometry::Geometry> cone_geometry = std::make_shared<erhe::geometry::Geometry>("cone");
+        erhe::geometry::shapes::make_cone( // always axis = x
+            cone_geometry->get_mesh(),
+            -1.0f, // * config.object_scale,    // min x
+             1.0f, // * config.object_scale,    // max x
+             1.0f, // * config.object_scale,    // bottom radius
+            true,                               // use bottm
+            10 * detail,                        // slice count
+             5 * detail                         // stack count
+        );
+        transform(*cone_geometry.get(), *cone_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy)); // convert to axis = y
+        cone_geometry->process({.flags = flags});
+        return cone_geometry;
+    };
 
     m_cone_brush = make_brush(
         brushes,
         Brush_data{
-            .context         = m_context,
-            .app_settings    = app_settings,
-            .build_info      = brush_build_info,
-            .normal_style    = Normal_style::corner_normals,
-            .geometry        = cone_geometry,
-            .density         = m_mass_scale
+            .context            = m_context,
+            .app_settings       = app_settings,
+            .name               = "cone",
+            .build_info         = brush_build_info,
+            .normal_style       = Normal_style::corner_normals,
+            .geometry_generator = std::move(generator),
+            .density            = m_mass_scale
             // Sadly, Jolt does not have cone shape
             //erhe::physics::ICollision_shape::create_cone_shape_shared(
             //    erhe::physics::Axis::Y,
@@ -598,30 +618,37 @@ void Scene_builder::make_capsule_brushes(
     const float radius = 1.0f;
     const float length = 2.0f; // cylinder mid-section length; total height = length + 2 * radius
 
-    std::shared_ptr<erhe::geometry::Geometry> capsule_geometry = std::make_shared<erhe::geometry::Geometry>("capsule");
-    erhe::geometry::shapes::make_capsule( // axis = y
-        capsule_geometry->get_mesh(),
-        radius,
-        length,
-        8 * std::max(1, m_detail), // slice count
-        3 * std::max(1, m_detail)  // hemisphere stack count
-    );
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    capsule_geometry->process({.flags = flags});
+    const int detail = std::max(1, m_detail);
+
+    Geometry_generator generator = [radius, length, detail, flags]() -> std::shared_ptr<erhe::geometry::Geometry>
+    {
+        std::shared_ptr<erhe::geometry::Geometry> capsule_geometry = std::make_shared<erhe::geometry::Geometry>("capsule");
+        erhe::geometry::shapes::make_capsule( // axis = y
+            capsule_geometry->get_mesh(),
+            radius,
+            length,
+            8 * detail, // slice count
+            3 * detail  // hemisphere stack count
+        );
+        capsule_geometry->process({.flags = flags});
+        return capsule_geometry;
+    };
 
     m_capsule_brush = make_brush(
         brushes,
         Brush_data{
-            .context         = m_context,
-            .app_settings    = app_settings,
-            .build_info      = brush_build_info,
-            .normal_style    = Normal_style::corner_normals,
-            .geometry        = capsule_geometry,
-            .density         = m_mass_scale,
-            .collision_shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
+            .context            = m_context,
+            .app_settings       = app_settings,
+            .name               = "capsule",
+            .build_info         = brush_build_info,
+            .normal_style       = Normal_style::corner_normals,
+            .geometry_generator = std::move(generator),
+            .density            = m_mass_scale,
+            .collision_shape    = erhe::physics::ICollision_shape::create_capsule_shape_shared(
                 erhe::physics::Axis::Y,
                 radius,
                 length
@@ -632,9 +659,8 @@ void Scene_builder::make_capsule_brushes(
 
 void Scene_builder::make_json_brushes(
     App_settings&                      app_settings,
-    const erhe::primitive::Build_info& brush_build_info,
-    tf::Taskflow*                      tf,
-    Json_library&                      library
+    const erhe::primitive::Build_info&         brush_build_info,
+    const std::shared_ptr<const Json_library>& library
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -654,41 +680,40 @@ void Scene_builder::make_json_brushes(
     m_johnson_solids_folder->set_parent(&brushes);
     auto& folder = *m_johnson_solids_folder.get();
 
-    for (const std::string& key_name : library.names) {
-        const std::string brush_name = library.get_display_name(key_name);
-        auto op = [this, &app_settings, &brush_build_info, &library, &key_name, brush_name, &folder]() {
+    // Every key of the library gets a brush, including a key whose geometry
+    // cannot be built: its generator returns null, the brush turns `failed` on
+    // first use and the palette keeps the name (R9).
+    for (const std::string& key_name : library->names) {
+        const std::string brush_name = library->get_display_name(key_name);
+        Geometry_generator generator = [library, key_name]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
             std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(key_name);
-            const bool ok = library.make_geometry(*geometry.get(), key_name);
+            const bool ok = library->make_geometry(*geometry.get(), key_name);
             if (!ok || (geometry->get_mesh().facets.nb() == 0)) {
-                return;
+                return {};
             }
             geometry->process({
                 .flags = process_flags,
                 .facet_texcoord_usage_index = 1,
                 .tangent_texcoord_usage_index = 1
             });
+            return geometry;
+        };
 
-            auto brush = make_brush(
+        m_johnson_solids.push_back(
+            make_brush(
                 folder,
                 Brush_data{
-                    .context      = m_context,
-                    .app_settings = app_settings,
-                    .name         = brush_name,
-                    .build_info   = brush_build_info,
-                    .normal_style = Normal_style::polygon_normals,
-                    .geometry     = geometry,
-                    .density      = m_mass_scale
+                    .context            = m_context,
+                    .app_settings       = app_settings,
+                    .name               = brush_name,
+                    .build_info         = brush_build_info,
+                    .normal_style       = Normal_style::polygon_normals,
+                    .geometry_generator = std::move(generator),
+                    .density            = m_mass_scale
                 }
-            );
-
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
-            m_johnson_solids.push_back(brush);
-        };
-        if (tf != nullptr) {
-            tf->emplace(op);
-        } else {
-            op();
-        }
+            )
+        );
     }
 }
 
@@ -700,8 +725,7 @@ auto Scene_builder::get_brushes() -> erhe::Scope&
 
 void Scene_builder::make_brushes(
     App_settings&                      app_settings,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    tf::Executor&                      executor
+    erhe::scene_renderer::Mesh_memory& mesh_memory
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -719,46 +743,25 @@ void Scene_builder::make_brushes(
     // the floor_size / floor_height / floor args from scene.add_room can
     // drive it.
 
-    Json_library library{"res/editor/polyhedra/johnson.json"};
-
-    // Built once here, on the calling thread before any worker task starts:
-    // build_info() reads Mesh_memory's vertex-input registrations, and the
-    // brush makers below may run on taskflow workers. The local outlives
-    // every task (future.wait() below).
+    // build_info() reads Mesh_memory's vertex-input registrations; it is built
+    // once here and copied into every Brush_data.
     const erhe::primitive::Build_info brush_build_info = build_info(mesh_memory);
 
-    if (executor.num_workers() > 1) {
-        tf::Taskflow tf;
-        if (make_platonic_solid_brushes_) {
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_platonic_solid_brushes(app_settings, brush_build_info); }).name("Platonic Solid Brushes");
-        }
-        if (make_curved_brushes) {
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_sphere_brushes        (app_settings, brush_build_info); }).name("Sphere Brushes");
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_torus_brushes         (app_settings, brush_build_info); }).name("Torus Brushes");
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_cylinder_brushes      (app_settings, brush_build_info); }).name("Cylinder Brushes");
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_cone_brushes          (app_settings, brush_build_info); }).name("Cone Brushes");
-            tf.emplace([this, &app_settings, &brush_build_info]() { make_capsule_brushes       (app_settings, brush_build_info); }).name("Capsule Brushes");
-        }
-        if (make_johnson_solid_brushes) {
-            make_json_brushes(app_settings, brush_build_info, &tf, library);
-        }
-
-        tf::Future<void> future = erhe::task::run(executor, tf);
-        future.wait();
-    } else {
-        if (make_platonic_solid_brushes_) {
-            make_platonic_solid_brushes(app_settings, brush_build_info);
-        }
-        if (make_curved_brushes) {
-            make_sphere_brushes        (app_settings, brush_build_info);
-            make_torus_brushes         (app_settings, brush_build_info);
-            make_cylinder_brushes      (app_settings, brush_build_info);
-            make_cone_brushes          (app_settings, brush_build_info);
-            make_capsule_brushes       (app_settings, brush_build_info);
-        }
-        if (make_johnson_solid_brushes) {
-            make_json_brushes(app_settings, brush_build_info, nullptr, library);
-        }
+    if (make_platonic_solid_brushes_) {
+        make_platonic_solid_brushes(app_settings, brush_build_info);
+    }
+    if (make_curved_brushes) {
+        make_sphere_brushes        (app_settings, brush_build_info);
+        make_torus_brushes         (app_settings, brush_build_info);
+        make_cylinder_brushes      (app_settings, brush_build_info);
+        make_cone_brushes          (app_settings, brush_build_info);
+        make_capsule_brushes       (app_settings, brush_build_info);
+    }
+    if (make_johnson_solid_brushes) {
+        // Parsed only when the Johnson brushes are created, and kept alive by
+        // their generators for as long as any of them may still run.
+        m_json_library = std::make_shared<const Json_library>("res/editor/polyhedra/johnson.json");
+        make_json_brushes(app_settings, brush_build_info, m_json_library);
     }
 
     auto sort_folder = [](erhe::Scope& scope)
@@ -781,9 +784,6 @@ void Scene_builder::make_brushes(
     if (make_johnson_solid_brushes) {
         sort_folder(*m_johnson_solids_folder.get());
     }
-
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    mesh_memory.flush(*m_context.current_command_buffer);
 }
 
 auto Scene_builder::add_room(const Add_room_args& args) -> bool
@@ -922,11 +922,7 @@ void Scene_builder::ensure_brushes(const float mass_scale, const int detail)
 
     ERHE_VERIFY(m_context.app_settings != nullptr);
     ERHE_VERIFY(m_context.mesh_memory  != nullptr);
-    ERHE_VERIFY(m_context.executor     != nullptr);
-    make_brushes(*m_context.app_settings, *m_context.mesh_memory, *m_context.executor);
-    if (m_context.current_command_buffer != nullptr) {
-        m_context.mesh_memory->flush(*m_context.current_command_buffer);
-    }
+    make_brushes(*m_context.app_settings, *m_context.mesh_memory);
 }
 
 auto Scene_builder::add_platonic_solids(const Make_mesh_config& config) -> bool

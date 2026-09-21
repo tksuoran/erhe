@@ -44,11 +44,6 @@ namespace erhe::scene_renderer {
     class Shadow_renderer;
 }
 
-namespace tf {
-    class Executor;
-    class Taskflow;
-}
-
 struct Scene_config;
 struct Add_cameras_args;
 struct Add_lights_args;
@@ -83,7 +78,6 @@ public:
         const Scene_config&                scene_config,
         bool                               enable_post_processing,
         std::shared_ptr<Content_library>   content_library,
-        tf::Executor&                      executor,
         App_context&                       app_context,
         App_settings&                      app_settings,
         erhe::scene_renderer::Mesh_memory& mesh_memory
@@ -197,33 +191,28 @@ private:
     ////     GEO::Mesh&&                        geo_mesh
     //// ) -> std::shared_ptr<Brush>;
 
-    auto make_brush(
-        erhe::Scope&                                     scope,
-        App_settings&                                    app_settings,
-        const erhe::primitive::Build_info&               brush_build_info,
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry
-    ) -> std::shared_ptr<Brush>;
-
     [[nodiscard]] auto build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -> erhe::primitive::Build_info;
 
     void animate_lights     (const double time_d);
 
     auto get_brushes() -> erhe::Scope&;
 
-    // The brush makers below make_brushes() run on taskflow workers.
-    // build_info() reads Mesh_memory vertex-input state, so make_brushes()
-    // builds the Build_info once on its calling thread, before the workers
-    // start, and the workers receive it by const reference instead of a
-    // Mesh_memory.
+    // The brush makers below make_brushes() create every palette brush with a
+    // Brush_data::geometry_generator and no geometry
+    // (doc/plans/deferred_brush_geometry.md D1), so make_brushes() builds no
+    // mesh and uploads nothing: it names the brushes, places them in their
+    // folders and returns. build_info() reads Mesh_memory vertex-input state,
+    // so the Build_info is built once here and the makers receive it by const
+    // reference instead of a Mesh_memory.
     void ensure_brushes             (float mass_scale, int detail);
-    void make_brushes               (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory, tf::Executor& executor);
+    void make_brushes               (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
     void make_platonic_solid_brushes(App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
     void make_sphere_brushes        (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
     void make_torus_brushes         (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
     void make_cylinder_brushes      (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
     void make_cone_brushes          (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
     void make_capsule_brushes       (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info);
-    void make_json_brushes          (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info, tf::Taskflow* tf, Json_library& library);
+    void make_json_brushes          (App_settings& app_settings, const erhe::primitive::Build_info& brush_build_info, const std::shared_ptr<const Json_library>& library);
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
 
     App_context&          m_context;
@@ -248,6 +237,12 @@ private:
 
     std::shared_ptr<erhe::Scope> m_platonic_solids_folder;
     std::shared_ptr<erhe::Scope> m_johnson_solids_folder;
+
+    // The polyhedron source of the Johnson solid brushes. Read-only after
+    // construction and shared with every Johnson brush's geometry generator,
+    // which may run long after make_brushes() returned
+    // (doc/plans/deferred_brush_geometry.md D1, R6).
+    std::shared_ptr<const Json_library> m_json_library;
 
     // Brushes are built eagerly in the Scene_builder constructor using
     // these defaults. ensure_brushes() guards on m_brushes_built and is
