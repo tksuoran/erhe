@@ -162,11 +162,11 @@ Each phase builds, runs and is committed on its own.
 
 ## Verification
 
-- Measurement protocol (same as the 2026-09-21 startup work): ninja Debug
-  tree configured with `"-DERHE_TRACY_ON_DEMAND=OFF"`, `tracy-capture -o
-  <file> -f` started before the editor, `ERHE_AI_DRIVER=1`, `request_exit`
-  over MCP after `Main loop: completed frame 12`; `tracy-csvexport -u` for
-  per-zone events. Three runs before, three after, report each run.
+- Measurement protocol: ninja Debug tree configured with
+  `"-DERHE_TRACY_ON_DEMAND=OFF"`, then
+  `py -3 scripts/tracy_startup_profile.py --runs 3 --zone editor::Scene_builder::make_brushes --timeline 40`
+  (see "ERHE_TRACY_ON_DEMAND" in `doc/building.md`). Three runs before, three
+  after, report each run.
   Acceptance: `Scene_builder::make_brushes` under 20 ms; startup to frame 12
   lower by at least 200 ms than the three-run baseline taken at the phase 3
   parent commit; worst of the three runs counts.

@@ -170,7 +170,7 @@ tabulated in `doc/erhe/physics.md`. Set to `none` to disable physics.
 
 **ERHE_PROFILE_LIBRARY** -- The main profiler is Tracy (the configure wrappers enable it). Superluminal and nvtx support exists but is likely stale.
 
-**ERHE_TRACY_ON_DEMAND** -- Sets Tracy's `TRACY_ON_DEMAND`. `ON` records only while a profiler is connected, so a run without one costs nothing. `OFF` records from process start and buffers the events until a profiler connects; use it to profile startup (start `tracy-capture -o <file>.tracy` first, then the application), in a build tree that is always run with a profiler attached, because the buffer grows for as long as none is.
+**ERHE_TRACY_ON_DEMAND** -- Sets Tracy's `TRACY_ON_DEMAND`. `ON` records only while a profiler is connected, so a run without one costs nothing. `OFF` records from process start and buffers the events until a profiler connects; use it to profile startup - `py -3 scripts/tracy_startup_profile.py` starts `tracy-capture` first, then the editor, stops it after frame 12 and reports the time to frame 12, named zones (`--zone`, `--within`) and the main-thread zone tree (`--timeline <ms>`); it finds `tracy-capture` / `tracy-csvexport` through `--tracy-dir` or `ERHE_TRACY_DIR` - in a build tree that is always run with a profiler attached, because the buffer grows for as long as none is.
 
 **ERHE_WINDOW_LIBRARY** -- Use `sdl` (or `none` for headless). `glfw` is still recognized but deprecated; SDL is the window library going forward.
 
