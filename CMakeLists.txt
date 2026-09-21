@@ -337,8 +337,8 @@ CPMAddPackage(
     # stb_image symbol clash that forced the fork's image_serializer_stb
     # removal no longer exists - geogram is the only stb_image implementation
     # left in the dependency set (erhe image I/O moved to wuffs/fpng). The
-    # tksuoran fork exists only to carry a stable tag: erhe-2026-08-16 points
-    # at upstream main 8f62ffe0 (2026-08-16).
+    # tksuoran fork exists only to carry a stable tag: erhe-2026-09-21 points
+    # at upstream main cdb63eff (2026-09-20).
     #
     # Pin a TAG, not a raw commit SHA. GIT_SHALLOW clones with
     # "--depth 1 --no-single-branch", which fetches branch tips and tag refs
@@ -346,7 +346,7 @@ CPMAddPackage(
     # It stopped being the tip on 2026-08-16 and every cold-cache CI job failed
     # with "fatal: unable to read tree". Upstream cannot be tagged by us, hence
     # the fork.
-    GIT_TAG           erhe-2026-08-16
+    GIT_TAG           erhe-2026-09-21
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
     # An upstream release tag would work here too (VERSION 1.9.8 +
