@@ -1,6 +1,6 @@
 §MBEL:5.0
 
-[TASK::startup-profiling]{DONE-2026-09-21;7-commits-dd023d9f4..dcd065e6d;detail=activeContext;left=prewarm_all-include-reparse+ninja-tree-on-demand-OFF}
+[TASK::startup-profiling]{2026-09-21;~20-commits-dd023d9f4..258addc4b;16.9s->1.85s-Debug;detail=activeContext;left=make_brushes-375ms+prewarm-330ms+ninja-tree-on-demand-OFF+Vulkan-shader-monitor-never-started}
 
 [TASK::mcp-ui-driving]{DONE-2026-09-20;9-commits-04c45b657..785882d17;detail=activeContext;run-book=doc/agents/mcp_ui_driving.md;?user-interactive{windowed-injection,Ctrl+A-select-all}}
 
