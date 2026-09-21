@@ -88,6 +88,20 @@ void Dependency_property::override_metadata(const Owner_type owner_type, Propert
     ERHE_VERIFY(type_of(metadata.default_value.value()) == m_type);
     ERHE_VERIFY(validate(metadata.default_value.value()));
     m_overrides.push_back(Override{.owner_type = owner_type, .metadata = std::move(metadata)});
+    Property_registry::get().invalidate_bridged_inheriting_properties();
+}
+
+auto Dependency_property::inherits_for_any_owner() const -> bool
+{
+    if (m_default_metadata.inherits) {
+        return true;
+    }
+    for (const Override& entry : m_overrides) {
+        if (entry.metadata.inherits) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Dependency_property::add_owner(const Owner_type owner_type, Property_metadata metadata)
@@ -176,6 +190,7 @@ auto Property_registry::register_property(Dependency_property::Registration&& re
         m_by_owner.resize(static_cast<std::size_t>(key.owner_type) + 1);
     }
     m_by_owner[key.owner_type].push_back(index);
+    m_bridged_inheriting.clear();
     return *m_properties.back();
 }
 
@@ -188,6 +203,7 @@ void Property_registry::add_owner(const Dependency_property& property, const Own
         ERHE_FATAL("property '%s' is already registered for owner type %u (%s)", key.name.c_str(), static_cast<unsigned int>(owner_type), m_owner_types[owner_type].name.c_str());
     }
     m_by_owner_and_name.emplace(key, property.get_index());
+    m_bridged_inheriting.clear();
     if (m_by_owner.size() <= owner_type) {
         m_by_owner.resize(static_cast<std::size_t>(owner_type) + 1);
     }
@@ -412,6 +428,40 @@ auto Property_registry::get(const uint16_t index) const -> const Dependency_prop
 auto Property_registry::get_count() const -> std::size_t
 {
     return m_properties.size();
+}
+
+void Property_registry::append_bridged_inheriting_properties(const Owner_type object_type, std::vector<const Dependency_property*>& properties) const
+{
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        if ((object_type < m_bridged_inheriting.size()) && m_bridged_inheriting[object_type].has_value()) {
+            const std::vector<const Dependency_property*>& list = m_bridged_inheriting[object_type].value();
+            properties.insert(properties.end(), list.begin(), list.end());
+            return;
+        }
+    }
+    // for_each_property_of_object takes the mutex itself.
+    std::vector<const Dependency_property*> list;
+    for_each_property_of_object(
+        object_type,
+        [&list, object_type](const Dependency_property& property) {
+            if (property.get_metadata(object_type).bridge.is_bound() && property.inherits_for_any_owner()) {
+                list.push_back(&property);
+            }
+        }
+    );
+    properties.insert(properties.end(), list.begin(), list.end());
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (object_type >= m_bridged_inheriting.size()) {
+        m_bridged_inheriting.resize(static_cast<std::size_t>(object_type) + 1);
+    }
+    m_bridged_inheriting[object_type] = std::move(list);
+}
+
+void Property_registry::invalidate_bridged_inheriting_properties()
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_bridged_inheriting.clear();
 }
 
 void Property_registry::for_each_property_of_object(

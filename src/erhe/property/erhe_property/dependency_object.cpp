@@ -1666,23 +1666,31 @@ auto Dependency_object::set_reference(std::shared_ptr<const Dependency_object> r
 
 auto Dependency_object::collect_supplied_properties(const Dependency_object* chain_start, std::vector<const Dependency_property*>& properties) -> bool
 {
-    const Property_registry& registry = Property_registry::get();
     for (const Dependency_object* ancestor = chain_start; ancestor != nullptr; ancestor = ancestor->get_inheritance_parent()) {
         if (ancestor->m_reference) {
             return false;
         }
-        ancestor->for_each_supplied_property(
-            [&properties](const Dependency_property& property) {
-                properties.push_back(&property);
-            }
-        );
-        for (const Effective_value_entry& entry : ancestor->m_entries) {
-            if (entry.has_animated()) {
-                properties.push_back(&registry.get(entry.index));
-            }
+        // The ancestor's own values, then its style chain's (has_style_value).
+        for (const Dependency_object* holder = ancestor; holder != nullptr; holder = holder->m_style.get()) {
+            holder->append_held_inheriting_properties(properties);
         }
     }
     return true;
+}
+
+void Dependency_object::append_held_inheriting_properties(std::vector<const Dependency_property*>& properties) const
+{
+    const Property_registry& registry = Property_registry::get();
+    registry.append_bridged_inheriting_properties(get_property_owner_type(), properties);
+    for (const Effective_value_entry& entry : m_entries) {
+        if (!entry.has_local() && (entry.expression == nullptr) && !entry.has_animated()) {
+            continue;
+        }
+        const Dependency_property& property = registry.get(entry.index);
+        if (property.inherits_for_any_owner()) {
+            properties.push_back(&property);
+        }
+    }
 }
 
 void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot, const std::vector<const Dependency_property*>& properties)

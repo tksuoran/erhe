@@ -510,6 +510,9 @@ private:
     // supplies to its descendants. Returns false when the chain holds an
     // object whose supplied properties are not enumerable (a reference
     // source may answer through a computed provider).
+    // Appends the inheriting properties this object holds a value for
+    // itself: bridged ones and entries (local, expression, animated).
+    void append_held_inheriting_properties(std::vector<const Dependency_property*>& properties) const;
     [[nodiscard]] static auto collect_supplied_properties(const Dependency_object* chain_start, std::vector<const Dependency_property*>& properties) -> bool;
 
     std::vector<Effective_value_entry>              m_entries;     // sorted by index

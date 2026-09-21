@@ -67,6 +67,9 @@ public:
     // level is a linear scan.
     [[nodiscard]] auto get_metadata        (Owner_type object_type) const -> const Property_metadata&;
     [[nodiscard]] auto get_default_metadata() const -> const Property_metadata& { return m_default_metadata; }
+    // True when the inherits flag is set in the metadata of at least one
+    // owner type: some object may read this property from an ancestor.
+    [[nodiscard]] auto inherits_for_any_owner() const -> bool;
     [[nodiscard]] auto get_default_value   (Owner_type object_type) const -> const Property_value&;
 
     // Type check plus the validate callback. False means the write is dropped.
@@ -165,6 +168,14 @@ public:
     // a property owned by several levels (add_owner) likewise.
     void for_each_property_of_object(Owner_type object_type, const std::function<void(const Dependency_property&)>& callback) const;
 
+    // Appends the properties of for_each_property_of_object(object_type)
+    // that are bridged for object_type and inherit for at least one owner
+    // type: what every object of that type supplies to its inheritance
+    // descendants without holding an entry. The list is built once per
+    // owner type; a registration or a metadata override drops the lists.
+    void append_bridged_inheriting_properties(Owner_type object_type, std::vector<const Dependency_property*>& properties) const;
+    void invalidate_bridged_inheriting_properties();
+
     // Owner type id table (owner_type.hpp): entry 0 is the root.
     auto               allocate_owner_type(Owner_type parent, std::string_view name) -> Owner_type;
     [[nodiscard]] auto get_owner_parent   (Owner_type id) const -> Owner_type;
@@ -206,6 +217,7 @@ private:
     std::vector<std::unique_ptr<Dependency_property>>                  m_properties;
     std::unordered_map<Owner_name_key, uint16_t, Owner_name_hash>      m_by_owner_and_name;
     std::vector<std::vector<uint16_t>>                                 m_by_owner; // indexed by owner type id, registration order
+    mutable std::vector<std::optional<std::vector<const Dependency_property*>>> m_bridged_inheriting; // indexed by owner type id
 };
 
 // Conversion between an object's member and the stored Property_value, for
