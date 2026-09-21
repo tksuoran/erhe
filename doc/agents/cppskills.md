@@ -1,5 +1,7 @@
 # cppskills -- C++ commands for AI coding agents
 
+Stability: mostly stable
+
 A small, self-contained set of AI coding-agent commands for C++ projects,
 plus the mindset files they depend on. Drop-in: no external apparatus, no
 Memory Bank, no settings required (one optional settings stub if you want it).
