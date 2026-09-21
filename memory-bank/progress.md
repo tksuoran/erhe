@@ -4,7 +4,9 @@
 ✓P1{3ccaea2e1:key-property-groups+node-systems;property-147,scene-154}
 ✓P2{8b96a76c2:Draw_mode}
 ✓P3{fc31543e7:Layout;ERHE_layout-deleted;scene-158;roundtrip-468/465}
-⚡P4-Brush_placement
+✓P4{7e7e71337:Brush_placement}
+✓P5{transform-observers;Frame_controller+Four_view_link;scene-167}
+⚡P6-Grid
 
 [TASK::agent-files-relocation]{DONE-2026-09-21;4-commits;detail=activeContext;?verify-after-restart{prompt_queue.txt-item-1}}
 
