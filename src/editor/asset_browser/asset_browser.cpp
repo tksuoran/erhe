@@ -133,15 +133,21 @@ namespace {
 // The node construction a walk publication and a single-file refresh share.
 // Written against an Asset_tree rather than the browser's members, and it makes
 // no filesystem call: the kind is decided before it is reached (R4).
+// path_key is make_path_key(tree, path); the scan walk has already computed
+// it on its worker, other callers compute it here.
 auto make_node(
     Asset_tree&                      tree,
     const std::filesystem::path&     path,
+    std::string                      path_key,
     const Asset_node_kind            kind,
     Asset_node* const                parent,
     const std::optional<std::size_t> position
 ) -> std::shared_ptr<Asset_node>
 {
+    ERHE_PROFILE_SCOPE("asset_browser: make_node");
     std::shared_ptr<Asset_node> new_node;
+    {
+    ERHE_PROFILE_SCOPE("asset_browser: construct node");
     switch (kind) {
         case Asset_node_kind::folder:  new_node = std::make_shared<Asset_folder>      (path); break;
         case Asset_node_kind::gltf:    new_node = std::make_shared<Asset_file_gltf>   (path); break;
@@ -151,8 +157,15 @@ auto make_node(
         case Asset_node_kind::other:
         default:                       new_node = std::make_shared<Asset_file_other>  (path); break;
     }
-    new_node->show();
-    tree.nodes_by_path[make_path_key(tree, path)] = new_node;
+    }
+    {
+        ERHE_PROFILE_SCOPE("asset_browser: show");
+        new_node->show();
+    }
+    {
+        ERHE_PROFILE_SCOPE("asset_browser: path key + map");
+        tree.nodes_by_path[std::move(path_key)] = new_node;
+    }
     if (parent) {
         if (position.has_value()) {
             new_node->set_parent(parent, position.value());
@@ -202,7 +215,7 @@ auto Asset_walk::add_entry(
 ) -> std::string
 {
     std::string path_key = make_path_key(m_working_directory, path);
-    m_batch.push_back(Asset_scan_entry{.path = path, .parent_path_key = parent_path_key, .kind = kind});
+    m_batch.push_back(Asset_scan_entry{.path = path, .path_key = path_key, .parent_path_key = parent_path_key, .kind = kind});
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_last_publish_time >= c_publish_interval) {
         publish();
@@ -342,7 +355,7 @@ auto Asset_browser::make_node(
     const std::optional<std::size_t> position
 ) -> std::shared_ptr<Asset_node>
 {
-    return editor::make_node(m_tree, path, kind, parent, position);
+    return editor::make_node(m_tree, path, editor::make_path_key(m_tree, path), kind, parent, position);
 }
 
 Asset_browser_window::Asset_browser_window(
@@ -523,12 +536,16 @@ void Asset_browser::apply_scan_progress()
             // here and grows in place from now on (D3).
             m_tree = Asset_tree{};
             m_tree.working_directory = working_directory;
-            m_tree.root_path_key     = editor::make_path_key(m_tree, entry.path);
-            m_tree.root              = editor::make_node(m_tree, entry.path, entry.kind, nullptr, {});
+            m_tree.root_path_key     = entry.path_key;
+            m_tree.root              = editor::make_node(m_tree, entry.path, entry.path_key, entry.kind, nullptr, {});
             m_node_tree_window->set_root(m_tree.root);
             continue;
         }
-        const std::shared_ptr<Asset_node> parent_node = find_node(entry.parent_path_key);
+        std::shared_ptr<Asset_node> parent_node;
+        {
+            ERHE_PROFILE_SCOPE("asset_browser: find_node");
+            parent_node = find_node(entry.parent_path_key);
+        }
         if (!parent_node) {
             // A parent always precedes its children in the walk's order (R2),
             // so this is a defect rather than a state to tolerate.
@@ -538,7 +555,7 @@ void Asset_browser::apply_scan_progress()
             );
             continue;
         }
-        editor::make_node(m_tree, entry.path, entry.kind, parent_node.get(), {});
+        editor::make_node(m_tree, entry.path, entry.path_key, entry.kind, parent_node.get(), {});
     }
     m_scan_entry_scratch.clear(); // capacity kept
 

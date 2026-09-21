@@ -207,12 +207,16 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     );
     m_parent = new_parent_;
 
-    log->trace(
-        "Parent change for '{}' old parent = '{}', new parent = '{}'",
-        describe(),
-        (old_parent != nullptr) ? old_parent->describe() : "none",
-        (new_parent != nullptr) ? new_parent->describe() : "none"
-    );
+    // describe() formats a string: only when the line is going to be written.
+    const bool log_trace = log->should_log(spdlog::level::trace);
+    if (log_trace) {
+        log->trace(
+            "Parent change for '{}' old parent = '{}', new parent = '{}'",
+            describe(),
+            (old_parent != nullptr) ? old_parent->describe() : "none",
+            (new_parent != nullptr) ? new_parent->describe() : "none"
+        );
+    }
 
     // Keep this alive until end of scope.
     // - We need to keep this alive while being removed from old parent before being added to new parent
@@ -229,12 +233,16 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     }
 
     if (new_parent) {
+        ERHE_PROFILE_SCOPE("handle_add_child");
         new_parent->handle_add_child(shared_this, position);
-    } else {
+    } else if (log_trace) {
         log->trace("Now orphan: '{}'", describe());
     }
 
-    set_depth_recursive(new_parent ? new_parent->get_depth() + 1 : 0);
+    {
+        ERHE_PROFILE_SCOPE("set_depth_recursive");
+        set_depth_recursive(new_parent ? new_parent->get_depth() + 1 : 0);
+    }
     {
         ERHE_PROFILE_SCOPE("handle_parent_update");
         handle_parent_update(old_parent, new_parent);
@@ -247,7 +255,10 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     // The effective active state (X2) is not an inherited property value:
     // it is the derived Item_flags::active bit, so the parent change has to
     // recompute it for this item and, when it moved, for the subtree.
-    rederive_active_flag_bits();
+    {
+        ERHE_PROFILE_SCOPE("rederive_active_flag_bits");
+        rederive_active_flag_bits();
+    }
 }
 
 auto Hierarchy::is_pruned_by_parent() const -> bool
@@ -323,7 +334,9 @@ void Hierarchy::handle_add_child(const std::shared_ptr<Hierarchy>& child, std::s
         child->handle_sibling_unique_rename(unique_name);
     }
 
-    log->trace("Adding child '{}' to '{}'", child->describe(), describe());
+    if (log->should_log(spdlog::level::trace)) {
+        log->trace("Adding child '{}' to '{}'", child->describe(), describe());
+    }
 
     position = std::min(m_children.size(), position);
     m_children.insert(m_children.begin() + position, child);

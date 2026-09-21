@@ -217,6 +217,7 @@ class Asset_scan_entry
 {
 public:
     std::filesystem::path path;
+    std::string           path_key;        // make_path_key() of path, computed by the walk
     std::string           parent_path_key;
     Asset_node_kind       kind{Asset_node_kind::other};
 };
