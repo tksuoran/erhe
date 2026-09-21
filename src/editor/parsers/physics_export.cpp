@@ -5,6 +5,7 @@
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 
 #include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
@@ -343,16 +344,16 @@ auto build_physics_description(
     Physics_builder builder{};
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        // A Node_physics a node's geometry graph controls is a baked artifact
+        std::optional<Node_physics_data> node_physics = read_node_physics(*node.get());
+        // A rigid body a node's geometry graph controls is a baked artifact
         // the graph rebuilds on load - persisting it would duplicate the rigid
         // body on every save/load round-trip (same check as save_scene;
         // doc/editor/gltf_scene_roundtrip.md phase 3 exclusion hook).
-        if (node_physics) {
+        if (node_physics.has_value()) {
             const Geometry_graph_mesh_system* const system = find_geometry_graph_mesh_system(*node.get());
             const Geometry_graph_mesh_entry*  const entry  =
                 (system != nullptr) ? system->find_entry(*node.get()) : nullptr;
-            if ((entry != nullptr) && (entry->node_physics == node_physics)) {
+            if ((entry != nullptr) && entry->owns_rigid_body) {
                 node_physics.reset();
             }
         }
@@ -367,7 +368,7 @@ auto build_physics_description(
                 ++joint_count;
             }
         }
-        if (!node_physics && !node_joint) {
+        if (!node_physics.has_value() && !node_joint) {
             return true;
         }
 
@@ -378,36 +379,40 @@ auto build_physics_description(
         // below it: an entry of its own, on that prim (see below).
         std::optional<erhe::scene::Physics_node_description> mesh_collider_description;
 
-        if (node_physics) {
-            const erhe::physics::Motion_mode motion_mode = node_physics->get_motion_mode();
-            const bool is_trigger = node_physics->is_trigger();
+        if (node_physics.has_value()) {
+            const Node_physics_data&         physics_data = node_physics.value();
+            const erhe::physics::Motion_mode motion_mode  = physics_data.motion_mode;
+            const bool is_trigger = physics_data.is_trigger;
 
             if (motion_mode != erhe::physics::Motion_mode::e_static) {
                 erhe::scene::Physics_node_motion motion{};
                 motion.is_kinematic = (motion_mode != erhe::physics::Motion_mode::e_dynamic);
-                const float mass = node_physics->get_mass(); // 0 while neither authored nor live
+                const erhe::physics::IRigid_body* const live_body = get_node_rigid_body(*node.get());
+                const float mass = physics_data.mass.has_value()
+                    ? physics_data.mass.value()
+                    : ((live_body != nullptr) ? live_body->get_mass() : 0.0f); // 0 while neither authored nor live
                 if (!motion.is_kinematic && (mass > 0.0f)) {
                     motion.mass = mass;
                 }
-                motion.center_of_mass = node_physics->get_center_of_mass_offset();
+                motion.center_of_mass = physics_data.center_of_mass_offset;
                 // Initial velocities are stored in world space; the spec wants
                 // them in node space.
                 const glm::quat world_rotation_inverse = glm::inverse(node->world_from_node_transform().get_rotation());
-                motion.linear_velocity  = world_rotation_inverse * node_physics->get_initial_linear_velocity();
-                motion.angular_velocity = world_rotation_inverse * node_physics->get_initial_angular_velocity();
-                motion.gravity_factor   = node_physics->get_gravity_factor();
+                motion.linear_velocity  = world_rotation_inverse * physics_data.initial_linear_velocity;
+                motion.angular_velocity = world_rotation_inverse * physics_data.initial_angular_velocity;
+                motion.gravity_factor   = physics_data.gravity_factor;
                 description.motion = motion;
                 has_content = true;
             }
 
             const std::optional<std::size_t> material_index = is_trigger
                 ? std::optional<std::size_t>{}
-                : builder.get_material_index(node_physics->get_physics_material());
-            const std::optional<std::size_t> filter_index = builder.get_filter_index(node_physics->get_collision_filter());
+                : builder.get_material_index(physics_data.physics_material);
+            const std::optional<std::size_t> filter_index = builder.get_filter_index(physics_data.collision_filter);
 
             // The center-of-mass offset wrapper is the outermost wrapper when
             // present; it is exported as motion.centerOfMass above.
-            const std::shared_ptr<erhe::physics::ICollision_shape>& body_shape = node_physics->get_collision_shape();
+            const std::shared_ptr<erhe::physics::ICollision_shape> body_shape = get_node_collision_shape(*node.get());
             const erhe::physics::ICollision_shape* shape = body_shape.get();
             if ((shape != nullptr) && (shape->get_shape_type() == erhe::physics::Collision_shape_type::e_offset_center_of_mass)) {
                 shape = shape->get_inner_shape().get();
@@ -452,9 +457,9 @@ auto build_physics_description(
                             );
                             continue;
                         }
-                        std::shared_ptr<erhe::scene::Mesh> mesh = node_physics->get_collision_mesh();
+                        std::shared_ptr<erhe::scene::Mesh> mesh = physics_data.collision_mesh;
                         if (!mesh) {
-                            if (node_physics->has_lost_collision_mesh()) {
+                            if (physics_data.lost_collision_mesh) {
                                 log_parsers->warn(
                                     "physics export: body '{}' names a collision mesh that has left the scene - the collider is exported from the body's own mesh",
                                     node->get_name()

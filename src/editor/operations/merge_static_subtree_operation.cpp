@@ -123,7 +123,7 @@ void Merge_static_subtree_operation::build_target(
         visited_preorder.push_back(node);
         const bool boundary =
             node->is_no_transform_update() ||
-            (erhe::scene::get_attachment<Node_physics>(node.get()) != nullptr);
+            carries_node_physics(*node.get());
         if (boundary) {
             out_boundaries.push_back(node);
             dispositions[node.get()] = Disposition::boundary;

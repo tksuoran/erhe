@@ -15,6 +15,7 @@
 #include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -1673,12 +1674,11 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
                 continue;
             }
 
-            const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node);
-            if (!node_physics) {
+            Node_physics_system* const physics_system = find_node_physics_system(*node);
+            if (physics_system == nullptr) {
                 continue;
             }
-
-            const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+            const erhe::physics::IRigid_body* rigid_body = physics_system->get_rigid_body(*node);
             if (rigid_body == nullptr) {
                 continue;
             }
@@ -1692,7 +1692,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
                 1.0f,
                 context.scene_view.get_conventions()
             );
-            const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
+            const auto label_text = "<" + node->describe() + ">";
             const glm::vec2 label_size = context.app_context.text_renderer->measure(label_text).size();
             const glm::vec3 p3_in_window_z_negated{
                  p3_in_window.x - label_size.x * 0.5,
@@ -1710,7 +1710,8 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
             const glm::vec3 dx{0.1f, 0.0f, 0.0f};
             const glm::vec3 dy{0.0f, 0.1f, 0.0f};
             const glm::vec3 dz{0.0f, 0.0f, 0.1f};
-            for (const auto& marker : node_physics->markers) {
+            const Node_physics_entry* const physics_entry = physics_system->find(*node);
+            for (const glm::vec3& marker : physics_entry->markers) {
                 const glm::vec4 blue{0.0f, 0.0f, 1.0f, 1.0f};
                 line_renderer.add_lines(
                     m,

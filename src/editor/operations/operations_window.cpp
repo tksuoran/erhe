@@ -28,6 +28,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_commit_queue.hpp"
@@ -348,36 +349,30 @@ public:
 }
 
 // Nearest self-or-ancestor live rigid body (the body a node "belongs" to).
-// Mirrors Node_joint's find_nearest_node_physics.
+// Mirrors Node_joint's find_nearest_body.
 [[nodiscard]] auto nearest_rigid_body(erhe::scene::Node* node) -> erhe::physics::IRigid_body*
 {
     while (node != nullptr) {
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
-        if (node_physics) {
-            erhe::physics::IRigid_body* const rigid_body = node_physics->get_rigid_body();
-            if (rigid_body != nullptr) {
-                return rigid_body;
-            }
+        erhe::physics::IRigid_body* const rigid_body = get_node_rigid_body(*node);
+        if (rigid_body != nullptr) {
+            return rigid_body;
         }
         node = node->get_parent_node().get();
     }
     return nullptr;
 }
 
-// Nearest self-or-ancestor Node_physics (the physics node a node "belongs" to).
-// Matches Node_joint's body resolution and exposes the owning node (which
-// nearest_rigid_body, returning the bare body, does not). Returns the first
-// Node_physics found regardless of whether its rigid body is live.
-[[nodiscard]] auto nearest_node_physics(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
+// Nearest self-or-ancestor node carrying rigid-body values (the body node a
+// node "belongs" to), whether or not its body is live.
+[[nodiscard]] auto nearest_body_node(erhe::scene::Node* node) -> erhe::scene::Node*
 {
     while (node != nullptr) {
-        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
-        if (node_physics) {
-            return node_physics;
+        if (carries_node_physics(*node)) {
+            return node;
         }
         node = node->get_parent_node().get();
     }
-    return {};
+    return nullptr;
 }
 
 // Rigid (rotation + translation, scale dropped) world transform of a node, the
@@ -438,12 +433,8 @@ public:
     if (!selected_node) {
         return result;
     }
-    const std::shared_ptr<Node_physics> selected_physics = nearest_node_physics(selected_node.get());
-    if (!selected_physics || (selected_physics->get_rigid_body() == nullptr)) {
-        return result;
-    }
-    erhe::scene::Node* const selected_body_node = selected_physics->get_node();
-    if (selected_body_node == nullptr) {
+    erhe::scene::Node* const selected_body_node = nearest_body_node(selected_node.get());
+    if ((selected_body_node == nullptr) || (get_node_rigid_body(*selected_body_node) == nullptr)) {
         return result;
     }
 
@@ -465,14 +456,12 @@ public:
             if ((joint_node == nullptr) || !connected_node) {
                 continue; // Flip needs two body parties (body-to-world joints are skipped)
             }
-            const std::shared_ptr<Node_physics> physics_a = nearest_node_physics(joint_node);
-            const std::shared_ptr<Node_physics> physics_b = nearest_node_physics(connected_node.get());
-            if (!physics_a || !physics_b || (physics_a->get_rigid_body() == nullptr) || (physics_b->get_rigid_body() == nullptr)) {
+            erhe::scene::Node* const body_a_node = nearest_body_node(joint_node);
+            erhe::scene::Node* const body_b_node = nearest_body_node(connected_node.get());
+            if ((body_a_node == nullptr) || (body_b_node == nullptr) || (body_a_node == body_b_node)) {
                 continue;
             }
-            erhe::scene::Node* const body_a_node = physics_a->get_node();
-            erhe::scene::Node* const body_b_node = physics_b->get_node();
-            if ((body_a_node == nullptr) || (body_b_node == nullptr) || (body_a_node == body_b_node)) {
+            if ((get_node_rigid_body(*body_a_node) == nullptr) || (get_node_rigid_body(*body_b_node) == nullptr)) {
                 continue;
             }
 
@@ -1817,7 +1806,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     // preserves world transform on reparent, so we set each node's transform to the
     // world frame and let insertion recompute the body-local part. The joint node
     // is a child of the anchor body, the connected node a child of the moved body,
-    // so find_nearest_node_physics resolves bodies A / B and the frames move with
+    // so find_nearest_body resolves bodies A / B and the frames move with
     // their bodies.
     auto joint_node = std::make_shared<erhe::scene::Xform>("Joint");
     joint_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
@@ -2231,7 +2220,7 @@ void Operations::make_geometry()
                 ERHE_VERIFY(scene_mesh);
 
                 erhe::scene::Node*                              node              = scene_mesh.get();
-                std::shared_ptr<Node_physics>                   node_physics      = erhe::scene::get_attachment<Node_physics>(node);
+                const Mesh_operation::Entry::Version            physics_state     = Mesh_operation::capture_physics(*node);
                 const std::vector<erhe::scene::Mesh_primitive>& primitives_before = scene_mesh->get_primitives();
                 std::vector<erhe::scene::Mesh_primitive>        primitives_after  = primitives_before;
 
@@ -2250,12 +2239,14 @@ void Operations::make_geometry()
                     Mesh_operation::Entry{
                         .scene_mesh = scene_mesh,
                         .before = {
-                            .node_physics = node_physics,
-                            .primitives   = primitives_before
+                            .collision_shape = physics_state.collision_shape,
+                            .motion_mode     = physics_state.motion_mode,
+                            .primitives      = primitives_before
                         },
                         .after = {
-                            .node_physics = node_physics,
-                            .primitives   = primitives_after
+                            .collision_shape = physics_state.collision_shape,
+                            .motion_mode     = physics_state.motion_mode,
+                            .primitives      = primitives_after
                         }
                     }
                 );

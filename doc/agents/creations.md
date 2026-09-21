@@ -99,7 +99,7 @@ per node.
 
 | Creation feature | Editor feature underneath |
 |---|---|
-| `create_physics_body` (`shape: "auto"` mesh hulls, mass, `gravity_factor`, `material_name`, `wake`), `edit_physics_body`, `create_physics_material` / `edit_physics_material` (friction, restitution, damping, `wind_receptivity`, density) | `Node_physics` attachments over Jolt rigid bodies, sharing `Physics_material` items that carry how the matter behaves; `auto` builds a convex hull of the node's own mesh |
+| `create_physics_body` (`shape: "auto"` mesh hulls, mass, `gravity_factor`, `material_name`, `wake`), `edit_physics_body`, `create_physics_material` / `edit_physics_material` (friction, restitution, damping, `wind_receptivity`, density) | the node's `Node_physics.*` values over Jolt rigid bodies, sharing `Physics_material` items that carry how the matter behaves; `auto` builds a convex hull of the node's own mesh |
 | `create_physics_joint` + shared `create_physics_joint_settings` (limits + per-axis drives) | Six-dof Jolt constraints; drives with `position_target 0` act as **rest-pose motors** - the basis for swaying foliage and the standing spider ragdoll |
 | `create_collision_filter` (self-denylist groups) | Jolt collision layers/filters - e.g. sibling sway spines that must not collide with each other |
 | Scene wind (`common.wind`, `wind_*` settings) | Per-step force `receptivity * (wind_velocity - body_velocity)` on every receptive body, with gusts, turbulence and a wavelength phase field |

@@ -1,7 +1,7 @@
 #include "physics/physics_drag_constraint.hpp"
 
 #include "scene/node_joint.hpp"
-#include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -32,13 +32,12 @@ namespace {
     };
 }
 
-[[nodiscard]] auto name_of(const Node_physics* const node_physics) -> std::string
+[[nodiscard]] auto name_of(const Node_physics_entry* const entry) -> std::string
 {
-    if (node_physics == nullptr) {
+    if (entry == nullptr) {
         return "world";
     }
-    const erhe::scene::Node* const node = node_physics->get_node();
-    return (node != nullptr) ? node->get_name() : std::string{"(detached)"};
+    return (entry->node != nullptr) ? entry->node->get_name() : std::string{"(detached)"};
 }
 
 [[nodiscard]] auto joint_name_of(const Node_joint& joint) -> std::string
@@ -166,18 +165,18 @@ void Physics_drag_constraint::configure_projection(
     const Node_joint_constraint_state& state = *joint->get_constraint_state();
     const bool moving_a =
         (state.node_physics_a != nullptr) &&
-        (state.node_physics_a->get_rigid_body() == m_body);
-    const erhe::physics::Joint_side side   = moving_a ? erhe::physics::Joint_side::a : erhe::physics::Joint_side::b;
-    const Node_physics* const       moving = moving_a ? state.node_physics_a : state.node_physics_b;
-    const Node_physics* const       fixed  = moving_a ? state.node_physics_b : state.node_physics_a;
+        (state.node_physics_a->rigid_body.get() == m_body);
+    const erhe::physics::Joint_side  side   = moving_a ? erhe::physics::Joint_side::a : erhe::physics::Joint_side::b;
+    const Node_physics_entry* const  moving = moving_a ? state.node_physics_a : state.node_physics_b;
+    const Node_physics_entry* const  fixed  = moving_a ? state.node_physics_b : state.node_physics_a;
     const std::string joint_name = joint_name_of(*joint);
-    if ((moving == nullptr) || (moving->get_node() == nullptr)) {
+    if ((moving == nullptr) || (moving->node == nullptr)) {
         m_projection_description = fmt::format("unprojected: joint '{}' body node not found", joint_name);
         return;
     }
     if (fixed != nullptr) {
-        const erhe::physics::IRigid_body* const fixed_body = fixed->get_rigid_body();
-        if ((fixed_body == nullptr) || (fixed->get_node() == nullptr)) {
+        const erhe::physics::IRigid_body* const fixed_body = fixed->rigid_body.get();
+        if ((fixed_body == nullptr) || (fixed->node == nullptr)) {
             m_projection_description = fmt::format("unprojected: joint '{}' anchor body not found", joint_name);
             return;
         }
@@ -192,10 +191,10 @@ void Physics_drag_constraint::configure_projection(
 
     const erhe::physics::Transform& frame_in_moving = moving_a ? state.frame_in_a : state.frame_in_b;
     const erhe::physics::Transform& frame_in_fixed  = moving_a ? state.frame_in_b : state.frame_in_a;
-    const erhe::physics::Transform  world_from_moving_anchor = world_transform_of(*moving->get_node()) * frame_in_moving;
+    const erhe::physics::Transform  world_from_moving_anchor = world_transform_of(*moving->node) * frame_in_moving;
     const erhe::physics::Transform  world_from_fixed_anchor  = (fixed == nullptr)
         ? frame_in_fixed // world-anchored side: the frame is in world space
-        : (world_transform_of(*fixed->get_node()) * frame_in_fixed);
+        : (world_transform_of(*fixed->node) * frame_in_fixed);
     const erhe::physics::Transform moving_anchor_from_world = inverse(world_from_moving_anchor);
     const glm::vec3 pivot_in_moving_anchor = (moving_anchor_from_world.basis * pivot_in_world) + moving_anchor_from_world.origin;
 

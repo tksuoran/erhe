@@ -158,7 +158,7 @@ now owns its behavior; `git log` on that record has the history.
   for a light type that needs its own properties); `set_prim_parent()`,
   `get_camera()` and `get_light()` are the helpers and no typed prim has
   a `get_node()` (`doc/erhe/scene.md`); `Node_attachment` remains
-  for `Node_physics`, `Node_joint`, `Prefab_instance`
+  for `Node_joint`, `Prefab_instance`
   and `Grid`; the hierarchy
   context menu's "Create" lists every creatable prim kind, resources
   included, on every prim row (child of the clicked prim) and "Add
@@ -695,7 +695,7 @@ now owns its behavior; `git log` on that record has the history.
   that side's node transform in the body's space, so a file erhe wrote
   reloads to the same tree (the `Node_joint` row of the mapping;
   `physics.usda`'s `Flap`). A hull or triangle collider remembers the
-  `Mesh` prim it was built from (`Node_physics::collision_mesh`, empty for
+  `Mesh` prim it was built from (`Node_physics.collision_mesh`, empty for
   the body's own mesh), so a collider on a prim below its body
   (`Rock/shell`) is written back on that prim in both formats and the
   fixture's second save is byte for byte the first. A body whose file

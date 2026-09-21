@@ -28,10 +28,9 @@ from erhe_mcp import McpClient, check_close, check_true, pick_scene, report, wai
 
 
 def get_physics_attachment(details: dict) -> dict:
-    for attachment in details.get("attachments", []):
-        if attachment.get("type") == "Node_physics":
-            return attachment
-    return {}
+    # The rigid body is values of the node itself (P8).
+    physics = details.get("physics")
+    return physics if isinstance(physics, dict) else {}
 
 
 def get_mesh_attachment(details: dict) -> dict:

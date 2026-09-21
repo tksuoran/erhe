@@ -309,7 +309,7 @@ explicit push pipeline. `Graph_mesh` stores the **baked products**
 **revision** counter. A scene `Node` names the `Graph_mesh` in its own
 **`Geometry_graph_mesh.graph_mesh`** value, and the scene's
 `Geometry_graph_mesh_system` swaps the node's controlled `Mesh`'s primitives
-(and keeps `Node_physics` in sync) whenever the revision advances. N scene
+(and keeps the node's rigid-body values in sync) whenever the revision advances. N scene
 nodes can share one graph asset (the products are shared `shared_ptr`s).
 `erhe::scene` is untouched - the value group and its system live entirely in
 `src/editor/`.

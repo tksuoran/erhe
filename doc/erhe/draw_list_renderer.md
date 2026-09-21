@@ -245,7 +245,7 @@ Registration:
 - R0 (registration pattern, resolves Q4): registration follows the
   physics / raytrace pattern in `Scene_root`: `Scene_root::register_mesh` /
   `unregister_mesh` (driven by the item-host attach / detach path, as with
-  `attach_rt_to_scene` / `Node_physics`) also register / unregister the mesh
+  `attach_rt_to_scene` / `Node_physics_system`) also register / unregister the mesh
   with `Draw_list_scene`. There are no separate editor-side call sites.
 - R0a (library layering): `Mesh` lives in `erhe::scene`, which does not and
   must not link `erhe::scene_renderer`. Every scene-to-draw-list notification
@@ -254,7 +254,7 @@ Registration:
   `erhe::scene::Scene_host` interface (`scene_host.hpp`) - virtuals alongside
   `register_mesh` / `unregister_mesh` - implemented by `Scene_root`, which owns
   the `Draw_list_scene`. `Mesh` calls its host; it never sees
-  `Draw_list_scene`. This is how `attach_rt_to_scene` and `Node_physics` are
+  `Draw_list_scene`. This is how `attach_rt_to_scene` and `Node_physics_system` are
   reached.
 - R1: `register` function taking `Draw_list_object_create_info`. For each
   primitive of the object it determines the draw list(s) the primitive belongs

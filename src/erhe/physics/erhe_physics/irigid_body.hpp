@@ -18,7 +18,7 @@ namespace erhe::scene {
 namespace erhe::physics {
 
 enum class Motion_mode : unsigned int {
-    e_invalid                = 0,
+    e_none                   = 0, // no rigid body: the node is out of the simulation
     e_static                 = 1, // immovable
     e_kinematic_non_physical = 2, // movable from scene graph (instant, does not create kinetic energy), not movable from physics simulation
     e_kinematic_physical     = 3, // movable from scene graph (creates kinetic energy), "not" movable from physics simulation
@@ -26,7 +26,7 @@ enum class Motion_mode : unsigned int {
 };
 
 static constexpr const char* c_motion_mode_strings[] = {
-    "Invalid",
+    "None",
     "Static",
     "Kinematic Non-Physical",
     "Kinematic Physical",
@@ -38,8 +38,11 @@ static constexpr const char* c_motion_mode_strings[] = {
     return c_motion_mode_strings[static_cast<int>(motion_mode)];
 }
 
-// The authorable motion modes (e_invalid is not one), for a registered
-// property of Motion_mode type (doc/erhe/property_system.md D2a).
+// The authorable motion modes, for a registered property of Motion_mode type
+// (doc/erhe/property_system.md D2a). e_none is one of them: it is the default
+// of the Node_physics.motion_mode key property, and a node carries a rigid
+// body exactly while its effective value is something else
+// (doc/plans/node_attachments_to_properties.md D1).
 extern const erhe::property::Enum_info c_motion_mode_enum_info;
 
 class Collision_filter;

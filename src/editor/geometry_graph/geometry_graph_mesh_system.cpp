@@ -4,6 +4,7 @@
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_physics/icollision_shape.hpp"
@@ -24,9 +25,7 @@ Geometry_graph_mesh_system::~Geometry_graph_mesh_system() noexcept
     // there is normally nothing left; a record that survived is released
     // through the node it names, which is still alive while the scene is.
     for (std::pair<erhe::scene::Node* const, Geometry_graph_mesh_entry>& entry : m_entries) {
-        if (entry.second.node_physics && (entry.first != nullptr)) {
-            entry.first->detach(entry.second.node_physics.get());
-        }
+        release_rigid_body(entry.first, entry.second);
         release(entry.second);
     }
 }
@@ -53,9 +52,7 @@ void Geometry_graph_mesh_system::on_node_unregistered(erhe::scene::Node& node)
     if (i == m_entries.end()) {
         return;
     }
-    if (i->second.node_physics) {
-        node.detach(i->second.node_physics.get());
-    }
+    release_rigid_body(&node, i->second);
     release(i->second);
     m_entries.erase(i);
 }
@@ -73,9 +70,7 @@ void Geometry_graph_mesh_system::on_values_changed(
     // not linger.
     const std::unordered_map<erhe::scene::Node*, Geometry_graph_mesh_entry>::iterator i = m_entries.find(&node);
     if (i != m_entries.end()) {
-        if (i->second.node_physics) {
-            node.detach(i->second.node_physics.get());
-        }
+        release_rigid_body(&node, i->second);
         release(i->second);
         if (!carries_geometry_graph_mesh(node)) {
             m_entries.erase(i);
@@ -121,18 +116,36 @@ void Geometry_graph_mesh_system::apply_for_graph(const std::shared_ptr<Graph_mes
     }
 }
 
+void Geometry_graph_mesh_system::release_rigid_body(erhe::scene::Node* const node, Geometry_graph_mesh_entry& entry)
+{
+    if (!entry.owns_rigid_body || (node == nullptr)) {
+        return;
+    }
+    // The bake gave the node the body; taking the binding away takes it back.
+    clear_node_physics(*node);
+    Node_physics_system* const system = find_node_physics_system(*node);
+    if (system != nullptr) {
+        system->set_collision_shape(*node, {});
+    }
+    entry.owns_rigid_body = false;
+}
+
 void Geometry_graph_mesh_system::release(Geometry_graph_mesh_entry& entry)
 {
-    // A Mesh is a child prim (doc/erhe/usd_compatibility_design.md C5), so it
-    // is released from whatever parent holds it - a mesh left behind here
-    // comes back as a second, name-suffixed sibling on the next bake.
-    if (entry.mesh) {
+    // A Mesh the system created is a child prim
+    // (doc/erhe/usd_compatibility_design.md C5), so it is released from
+    // whatever parent holds it - a mesh left behind here comes back as a
+    // second, name-suffixed sibling on the next bake. An adopted mesh is not
+    // the system's to remove: the node itself is a Mesh prim whenever a shape
+    // or a brush made it, and unparenting it would take the bound node out of
+    // the scene under its own on_node_unregistered - freeing this very entry.
+    if (entry.mesh && entry.owns_mesh) {
         erhe::scene::set_mesh_parent(entry.mesh, {});
     }
+    entry.owns_mesh = false;
     if (entry.ghost_mesh) {
         erhe::scene::set_mesh_parent(entry.ghost_mesh, {});
     }
-    entry.node_physics.reset();
     entry.mesh.reset();
     entry.ghost_mesh.reset();
     entry.applied_revision = 0;
@@ -165,8 +178,8 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
     if (!entry.mesh) {
         entry.mesh = erhe::scene::get_mesh(&node);
     }
-    if (!entry.node_physics) {
-        entry.node_physics = erhe::scene::get_attachment<Node_physics>(&node);
+    if (!entry.owns_rigid_body) {
+        entry.owns_rigid_body = carries_node_physics(node);
     }
 
     // The graph's output node may not have selected a material (it needs no
@@ -211,10 +224,7 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
             entry.mesh->clear_primitives();
             scene_root->end_mesh_rt_update(entry.mesh);
         }
-        if (entry.node_physics) {
-            node.detach(entry.node_physics.get());
-            entry.node_physics.reset();
-        }
+        release_rigid_body(&node, entry);
         entry.applied_revision = revision;
         return;
     }
@@ -225,6 +235,7 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
         entry.mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::id);
         entry.mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
         erhe::scene::set_mesh_parent(entry.mesh, node.shared_node_from_this());
+        entry.owns_mesh = true;
     }
     // The mesh is registered in the scene at this point, so its raytrace
     // instances are already attached to the scene's raytrace world. Swapping
@@ -237,21 +248,11 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
     scene_root->end_mesh_rt_update(entry.mesh);
 
     if (products.physics_enabled && products.collision_shape) {
-        if (!entry.node_physics) {
-            const erhe::physics::IRigid_body_create_info create_info{
-                .collision_shape = products.collision_shape,
-                .debug_label     = node.get_name(),
-                .motion_mode     = products.physics_motion_mode
-            };
-            entry.node_physics = std::make_shared<Node_physics>(create_info);
-            node.attach(entry.node_physics);
-        } else {
-            entry.node_physics->set_collision_shape(products.collision_shape);
-            entry.node_physics->set_motion_mode(products.physics_motion_mode);
-        }
-    } else if (entry.node_physics) {
-        node.detach(entry.node_physics.get());
-        entry.node_physics.reset();
+        scene_root->get_node_physics_system().set_collision_shape(node, products.collision_shape);
+        node.set_value(Node_physics::motion_mode_property, products.physics_motion_mode);
+        entry.owns_rigid_body = true;
+    } else {
+        release_rigid_body(&node, entry);
     }
 
     entry.applied_revision = revision;

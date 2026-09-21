@@ -1,5 +1,6 @@
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
@@ -21,18 +22,22 @@ using erhe::scene::Node_attachment;
 
 namespace {
 
-// Nearest self-or-ancestor Node_physics of node (per KHR_physics_rigid_bodies
-// a node "belongs" to the nearest ancestor body).
-[[nodiscard]] auto find_nearest_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
+// Nearest self-or-ancestor node holding a rigid body (per
+// KHR_physics_rigid_bodies a node "belongs" to the nearest ancestor body).
+[[nodiscard]] auto find_nearest_body(const erhe::scene::Node* node) -> Node_physics_entry*
 {
+    Node_physics_system* const system = (node != nullptr) ? find_node_physics_system(*node) : nullptr;
+    if (system == nullptr) {
+        return nullptr;
+    }
     while (node != nullptr) {
-        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
-        if (node_physics) {
-            return node_physics;
+        Node_physics_entry* const entry = system->find(*node);
+        if ((entry != nullptr) && entry->rigid_body) {
+            return entry;
         }
         node = node->get_parent_node().get();
     }
-    return {};
+    return nullptr;
 }
 
 // Rotation + translation of the node world transform as a physics transform;
@@ -304,8 +309,8 @@ void Node_joint::handle_rigid_body_removed(erhe::physics::IRigid_body* rigid_bod
     }
     // The referenced body is about to leave the world; tear down the
     // constraint while the body is still valid. The joint stays registered
-    // and pending: Scene_root::register_node_physics() retries it when a
-    // rigid body becomes available again.
+    // and pending: Node_physics_system retries it when a rigid body becomes
+    // available again.
     destroy_constraint();
 }
 
@@ -323,32 +328,32 @@ auto Node_joint::try_create_constraint() -> bool
     }
 
     // Body A: nearest self-or-ancestor rigid body of the joint node.
-    const std::shared_ptr<Node_physics> node_physics_a = find_nearest_node_physics(node);
-    if (!node_physics_a) {
-        return false; // stays pending - no Node_physics on the joint node chain (yet)
+    Node_physics_entry* const node_physics_a = find_nearest_body(node);
+    if (node_physics_a == nullptr) {
+        return false; // stays pending - no rigid body on the joint node chain (yet)
     }
-    IRigid_body* const body_a = node_physics_a->get_rigid_body();
+    IRigid_body* const body_a = node_physics_a->rigid_body.get();
     if (body_a == nullptr) {
-        return false; // stays pending - Node_physics exists but is not registered yet
+        return false; // stays pending - the body is not in the world yet
     }
 
     // Body B: nearest self-or-ancestor rigid body of the connected node;
     // no connected node (or none found) = constrain to the world.
-    IRigid_body*                  body_b      {nullptr};
-    erhe::scene::Node*            body_b_node {nullptr};
-    std::shared_ptr<Node_physics> node_physics_b;
+    IRigid_body*        body_b        {nullptr};
+    erhe::scene::Node*  body_b_node   {nullptr};
+    Node_physics_entry* node_physics_b{nullptr};
     const std::shared_ptr<erhe::scene::Node> connected_node = m_connected_node.lock();
     if (connected_node) {
-        node_physics_b = find_nearest_node_physics(connected_node.get());
-        if (node_physics_b) {
-            body_b = node_physics_b->get_rigid_body();
+        node_physics_b = find_nearest_body(connected_node.get());
+        if (node_physics_b != nullptr) {
+            body_b = node_physics_b->rigid_body.get();
             if (body_b == nullptr) {
-                return false; // stays pending - connected body exists but is not registered yet
+                return false; // stays pending - connected body is not in the world yet
             }
-            body_b_node = node_physics_b->get_node();
+            body_b_node = node_physics_b->node;
         } else if (connected_node->get_item_host() != node->get_item_host()) {
             // The connected node is not (yet) hosted by this scene - its
-            // subtree (and possible Node_physics) has not arrived; wait.
+            // subtree (and its possible body) has not arrived; wait.
             return false; // stays pending
         }
         // else: the connected node is in this scene and has no rigid body on
@@ -362,7 +367,7 @@ auto Node_joint::try_create_constraint() -> bool
     erhe::physics::Six_dof_constraint_settings constraint_settings{};
     constraint_settings.rigid_body_a = body_a;
     constraint_settings.rigid_body_b = body_b;
-    constraint_settings.frame_in_a   = inverse(world_transform_of(*node_physics_a->get_node())) * world_from_joint;
+    constraint_settings.frame_in_a   = inverse(world_transform_of(*node_physics_a->node)) * world_from_joint;
     if (body_b != nullptr) {
         ERHE_VERIFY(body_b_node != nullptr);
         ERHE_VERIFY(connected_node);
@@ -393,8 +398,8 @@ auto Node_joint::try_create_constraint() -> bool
     m_rigid_body_a = body_a;
     m_rigid_body_b = body_b;
     m_constraint_state = Node_joint_constraint_state{
-        .node_physics_a = node_physics_a.get(),
-        .node_physics_b = node_physics_b.get(),
+        .node_physics_a = node_physics_a,
+        .node_physics_b = node_physics_b,
         .frame_in_a     = constraint_settings.frame_in_a,
         .frame_in_b     = constraint_settings.frame_in_b,
         .limits         = constraint_settings.limits
@@ -406,9 +411,12 @@ auto Node_joint::try_create_constraint() -> bool
     // effect immediately, replacing the previous begin_move/end_move) and zeroes the
     // kinematic MoveKinematic delta so a selected (kinematic-physical) body injects no
     // velocity on the next frame.
-    node_physics_a->teleport_to_node();
-    if (node_physics_b) {
-        node_physics_b->teleport_to_node();
+    Node_physics_system* const system = find_node_physics_system(*node);
+    if (system != nullptr) {
+        system->teleport_to_node(*node_physics_a->node);
+        if ((node_physics_b != nullptr) && (node_physics_b->node != nullptr)) {
+            system->teleport_to_node(*node_physics_b->node);
+        }
     }
 
     log_physics->trace("Node_joint '{}': constraint created", get_name());

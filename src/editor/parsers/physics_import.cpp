@@ -6,6 +6,7 @@
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
 #include "scene/generated/gltf_source_reference.hpp"
@@ -523,12 +524,25 @@ void import_physics(
             create_info.motion_mode = body->motion_mode.value();
         }
     };
-    const auto apply_node_physics_properties = [&find_body](Node_physics& node_physics, const erhe::scene::Node* node) {
-        const Physics_import_body* const body = find_body(node);
-        if (body == nullptr) {
-            return;
+    // The values live on the node itself now (P8): the file's recorded
+    // Node_physics.* opinions are applied to it, and the built shape goes to
+    // the scene's physics system, which makes the body when the insert
+    // operation gives the node its host.
+    Node_physics_system& node_physics_system = scene_root->get_node_physics_system();
+    const auto make_body = [&find_body, &node_physics_system](
+        erhe::scene::Node*                                  node,
+        const erhe::physics::IRigid_body_create_info&       create_info,
+        const std::shared_ptr<erhe::scene::Mesh>&           collision_mesh
+    ) {
+        node_physics_system.set_collision_shape(*node, create_info.collision_shape);
+        write_node_physics_create_info(*node, create_info);
+        if (collision_mesh) {
+            node->set_value(Node_physics::collision_mesh_property, erhe::property::Weak_object_reference{collision_mesh});
         }
-        apply_record_properties(node_physics, body->properties, body->property_set, Object_property_handling::keep);
+        const Physics_import_body* const body = find_body(node);
+        if (body != nullptr) {
+            apply_record_properties(*node, body->properties, body->property_set, Object_property_handling::keep);
+        }
     };
 
     // 1. Shared content-library items (1:1 with the description's top-level
@@ -807,15 +821,11 @@ void import_physics(
         // The imported subtree arrives pre-attached (like meshes); rigid
         // bodies are created when the insert operation gives the nodes a
         // scene host.
-        auto node_physics = std::make_shared<Node_physics>(create_info);
         // A trigger senses with the shapes it collected and states them as a
         // trigger of the body prim, which has no place for a source mesh of
         // its own, so only a collider body remembers one.
-        if (!body_is_trigger && (mesh_geometry_count == 1) && collision_mesh) {
-            node_physics->set_collision_mesh(collision_mesh);
-        }
-        apply_node_physics_properties(*node_physics, root);
-        root->attach(node_physics);
+        const bool remembers_mesh = !body_is_trigger && (mesh_geometry_count == 1) && collision_mesh;
+        make_body(root, create_info, remembers_mesh ? collision_mesh : std::shared_ptr<erhe::scene::Mesh>{});
         nodes_with_body.insert(root);
         if (body_is_trigger) {
             nodes_with_trigger_body.insert(root);
@@ -903,9 +913,7 @@ void import_physics(
         erhe::physics::IRigid_body_create_info create_info =
             importer.make_body_create_info(*node, description.motion, trigger_shape, {}, trigger_filter, true);
         apply_physics_overrides(create_info, node);
-        auto node_physics = std::make_shared<Node_physics>(create_info);
-        apply_node_physics_properties(*node_physics, node);
-        node->attach(node_physics);
+        make_body(node, create_info, {});
         nodes_with_body.insert(node);
         ++trigger_count;
     }
@@ -929,9 +937,7 @@ void import_physics(
             false
         );
         apply_physics_overrides(create_info, node);
-        auto node_physics = std::make_shared<Node_physics>(create_info);
-        apply_node_physics_properties(*node_physics, node);
-        node->attach(node_physics);
+        make_body(node, create_info, {});
         nodes_with_body.insert(node);
         ++body_count;
     }

@@ -4,7 +4,7 @@
 #include "app_message.hpp"
 #include "editor_log.hpp"
 #include "physics/physics_drag_constraint.hpp"
-#include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "transform/transform_tool.hpp"
@@ -44,16 +44,12 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
         if (erhe::utility::test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform)) {
             continue; // the drag does not move it
         }
-        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        if (!node_physics) {
-            continue;
-        }
-        erhe::physics::IRigid_body* const rigid_body = node_physics->get_rigid_body();
+        erhe::physics::IRigid_body* const rigid_body = get_node_rigid_body(*node.get());
         if ((rigid_body == nullptr) || (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic)) {
             continue; // kinematic (a selected unjointed body), static: the node write moves it
         }
         Scene_root* const scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
-        if ((scene_root == nullptr) || !scene_root->has_physics_world() || (node_physics->get_physics_world() == nullptr)) {
+        if ((scene_root == nullptr) || !scene_root->has_physics_world()) {
             continue;
         }
         const Physics_config& physics = get_effective_physics(*context.editor_settings, *scene_root);
@@ -68,9 +64,8 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
         entry.world_from_node_before  = node->world_from_node_transform();
 
         Driven_node driven_node{};
-        driven_node.node_physics = node_physics;
-        driven_node.node         = node.get();
-        driven_node.item_host    = scene_root;
+        driven_node.node      = node;
+        driven_node.item_host = scene_root;
         const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = rigid_body->get_collision_shape();
         if (collision_shape) {
             driven_node.center_of_mass_in_node = collision_shape->get_center_of_mass();
@@ -91,7 +86,7 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
             );
             log_physics->trace("Transform drag pulls jointed body through physics: {}", node->describe());
         } else {
-            node_physics->begin_interaction();
+            scene_root->get_node_physics_system().begin_interaction(*node.get());
             log_physics->trace("Transform drag holds dynamic body kinematic: {}", node->describe());
         }
         m_driven_nodes.push_back(std::move(driven_node));
@@ -101,7 +96,7 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
 auto Physics_driven_drag::drive(const erhe::scene::Node* const node, const glm::mat4& world_from_node) -> bool
 {
     for (Driven_node& driven_node : m_driven_nodes) {
-        if ((driven_node.node != node) || !driven_node.spring) {
+        if ((driven_node.node.get() != node) || !driven_node.spring) {
             continue;
         }
         const glm::vec3 drag_point = glm::vec3{world_from_node * glm::vec4{driven_node.center_of_mass_in_node, 1.0f}};
@@ -114,7 +109,7 @@ auto Physics_driven_drag::drive(const erhe::scene::Node* const node, const glm::
 auto Physics_driven_drag::is_spring_driven(const erhe::scene::Node* const node) const -> bool
 {
     for (const Driven_node& driven_node : m_driven_nodes) {
-        if ((driven_node.node == node) && driven_node.spring) {
+        if ((driven_node.node.get() == node) && driven_node.spring) {
             return true;
         }
     }
@@ -131,10 +126,13 @@ void Physics_driven_drag::release(Driven_node& driven_node)
     if (driven_node.spring) {
         driven_node.spring->detach();
         driven_node.spring.reset();
-    } else if (driven_node.node_physics) {
-        driven_node.node_physics->end_interaction();
+    } else if (driven_node.node) {
+        Node_physics_system* const system = find_node_physics_system(*driven_node.node.get());
+        if (system != nullptr) {
+            system->end_interaction(*driven_node.node.get());
+        }
     }
-    driven_node.node_physics.reset();
+    driven_node.node.reset();
 }
 
 void Physics_driven_drag::end()
@@ -155,7 +153,7 @@ void Physics_driven_drag::on_close_scene(const erhe::Item_host* const closing_ho
     m_driven_nodes.erase(
         std::remove_if(
             m_driven_nodes.begin(), m_driven_nodes.end(),
-            [](const Driven_node& driven_node) { return !driven_node.node_physics; }
+            [](const Driven_node& driven_node) { return !driven_node.node; }
         ),
         m_driven_nodes.end()
     );
@@ -164,14 +162,14 @@ void Physics_driven_drag::on_close_scene(const erhe::Item_host* const closing_ho
 void Physics_driven_drag::on_items_removed(const Removed_items& removed)
 {
     for (Driven_node& driven_node : m_driven_nodes) {
-        if (removed.lookup.contains(driven_node.node) || removed.lookup.contains(driven_node.node_physics.get())) {
+        if (driven_node.node && removed.lookup.contains(driven_node.node.get())) {
             release(driven_node);
         }
     }
     m_driven_nodes.erase(
         std::remove_if(
             m_driven_nodes.begin(), m_driven_nodes.end(),
-            [](const Driven_node& driven_node) { return !driven_node.node_physics; }
+            [](const Driven_node& driven_node) { return !driven_node.node; }
         ),
         m_driven_nodes.end()
     );

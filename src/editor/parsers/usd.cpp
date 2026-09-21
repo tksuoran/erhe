@@ -2683,10 +2683,9 @@ void collect_usd_physics(
         erhe::usd::Usd_save_physics_record record{};
         record.item = body.node;
         if (body.node) {
-            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(body.node.get());
-            if (node_physics) {
-                collect_usd_physics_properties(*node_physics.get(), c_node_physics_description_fields, record.properties);
-            }
+            // The rigid-body values are the node's own (P8), so the erhe-only
+            // fields are collected from the node itself.
+            collect_usd_physics_properties(*body.node.get(), c_node_physics_description_fields, record.properties);
         }
         physics.bodies.push_back(std::move(record));
     }

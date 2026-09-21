@@ -19,10 +19,13 @@ insert of a new prim as the parent's last child. Any prim parents any prim
 node and a parent takes any number of them.
 
 `Attachment_type_info` lists the user-addable attachment kinds - the applied
-API schemas of a prim: `rigid_body`, `joint`. Each carries a key, a label, a
-stateless `can_add(const Node&)` gate (a node holds at most one `Node_physics`;
-`joint` is the one kind a node may hold several of) and a
-`make(Scene_commands&, Node&)` that queues the undoable operation.
+API schemas of a prim: `joint`. Each carries a key, a label, a stateless
+`can_add(const Node&)` gate (`joint` is a kind a node may hold several of, so
+its gate always admits) and a `make(Scene_commands&, Node&)` that queues the
+undoable operation. A rigid body is no longer one of them: it is the
+`Node_physics.*` values of the node, added through Add Property and the
+Properties window's Rigid Body group (`doc/erhe/property_system.md`
+section 4.26).
 `find_child_prim_type()` / `find_attachment_type()` resolve a key.
 
 An attachment the user does not create stays out of the add catalog and
@@ -35,14 +38,12 @@ graphics device, the command buffer and the DPI).
 Removal needs no operation class of its own: `Node_attach_operation`
 constructed with an empty host node is a pure, undoable detach, and
 `Scene_commands::remove_attachment()` queues exactly that for ANY attachment,
-catalog kind or not. `Node_physics` needs no special case - its detach
+catalog kind or not. `Node_joint` needs no special case - its detach
 releases the rigid body from the physics world through the item-host update
 hook, and an undo puts it back.
 
-The additive half is `Scene_commands::attach_new_grid()`, a bare
-`Node_attach_operation` on the existing
-node, plus `create_new_rigid_body()` / `create_new_joint()`, which the rigid
-body and joint entries reuse.
+The additive half is `Scene_commands::create_new_joint()`, which the joint
+entry reuses.
 
 Detaching a `Mesh` a node's geometry graph controls is a legal state: the pure
 detach keeps the removed `Mesh` alive, so the bound graph mesh neither
@@ -74,7 +75,7 @@ Its schema in `config/editor/mcp_tools.json` advertises the same key list the
 catalog holds, so a schema-validating client can reach every kind.
 `remove_node_attachment { node_id, attachment_id | type }` queues the remove
 helper; `type` is the attachment type name `get_node_details` reports (e.g.
-`Node_physics`), while `attachment_id` - also in `get_node_details` - removes
+`Node_joint`), while `attachment_id` - also in `get_node_details` - removes
 unambiguously.
 
 ## Verification
@@ -83,9 +84,8 @@ Headless, through `scripts/mcp_call.py` against the headless Vulkan build:
 create an empty node, add each catalog key and assert through
 `get_node_details` that the attachment appears, assert that a gated kind
 refuses a second add, remove each and assert it is gone, and round-trip
-undo / redo through `get_undo_redo_stack` (for a rigid body, with
-`get_physics_items` before and after). The cases worth keeping: removing a
-`Node_physics` from a node with live physics and undoing it returns the body
-to the world; the geometry-graph missing-Mesh tolerance; a clean
+undo / redo through `get_undo_redo_stack`. The cases worth keeping: clearing
+`Node_physics.motion_mode` on a node with live physics and undoing it returns
+the body to the world; the geometry-graph missing-Mesh tolerance; a clean
 `capture_screenshot` after adding a light, a camera and a grid. Restore
 `config/editor/desktop_window_imgui_host_imgui.ini` after a run.

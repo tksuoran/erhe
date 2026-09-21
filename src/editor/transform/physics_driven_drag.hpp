@@ -15,7 +15,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
-class Node_physics;
+class Node_physics_entry;
 class Physics_drag_constraint;
 class Transform_entry;
 struct Removed_items;
@@ -80,8 +80,9 @@ private:
         auto operator=(Driven_node&&) noexcept -> Driven_node&;
         ~Driven_node() noexcept;
 
-        std::shared_ptr<Node_physics>            node_physics;
-        const erhe::scene::Node*                 node{nullptr};
+        // Held strong while the drag runs: the node is what the drag drives,
+        // and releasing it needs the node to still be there.
+        std::shared_ptr<erhe::scene::Node>       node;
         const erhe::Item_host*                   item_host{nullptr};
         std::unique_ptr<Physics_drag_constraint> spring;             // nullptr: kinematic for the drag
         glm::vec3                                center_of_mass_in_node{0.0f};

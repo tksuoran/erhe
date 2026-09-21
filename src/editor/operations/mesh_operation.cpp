@@ -6,6 +6,7 @@
 #include "app_settings.hpp"
 #include "items.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 
@@ -86,16 +87,10 @@ void Mesh_operation::execute(App_context& context)
 
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
-        auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-        if (old_node_physics) {
-            node->detach(old_node_physics.get());
-        }
         entry.scene_mesh->set_primitives(entry.after.primitives);
-        if (entry.after.node_physics) {
-            node->attach(entry.after.node_physics);
-        }
 
         node->set_parent(parent);
+        restore_physics(*node, entry.after);
     }
 
     log_operations->trace("Op Execute End {}", describe());
@@ -159,16 +154,10 @@ void Mesh_operation::undo(App_context& context)
 
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
-        auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-        if (old_node_physics) {
-            node->detach(old_node_physics.get());
-        }
         entry.scene_mesh->set_primitives(entry.before.primitives);
-        if (entry.before.node_physics) {
-            node->attach(entry.before.node_physics);
-        }
 
         node->set_parent(parent);
+        restore_physics(*node, entry.before);
     }
 
     log_operations->trace("Op Undo End {}", describe());
@@ -236,15 +225,10 @@ void Mesh_operation::make_entries(
             Entry entry{
                 // TODO consider keeping node alive always .node   = node_shared,
                 .scene_mesh = scene_mesh,
-                .before = {
-                    .node_physics = erhe::scene::get_attachment<Node_physics>(node),
-                    .primitives   = scene_mesh->get_primitives()
-                },
+                .before = capture_physics(*node),
             };
 
-            erhe::physics::Motion_mode motion_mode = entry.before.node_physics
-                ? entry.before.node_physics->get_motion_mode()
-                : erhe::physics::Motion_mode::e_invalid;
+            const erhe::physics::Motion_mode motion_mode = entry.before.motion_mode;
 
             for (const erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_primitives()) {
                 const erhe::primitive::Primitive&                               primitive       = *mesh_primitive.primitive.get();
@@ -372,14 +356,9 @@ void Mesh_operation::make_entries(
                             static_cast<int>(3 * sizeof(float))
                         );
 
-                        const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                            .collision_shape = collision_shape,
-                            .debug_label     = after_geometry->get_name(),
-                            .motion_mode     = motion_mode
-                        };
-
-                        if (entry.before.node_physics) {
-                            entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                        if (motion_mode != erhe::physics::Motion_mode::e_none) {
+                            entry.after.collision_shape = collision_shape;
+                            entry.after.motion_mode     = motion_mode;
                         }
                     }
                 }
@@ -461,6 +440,31 @@ void Mesh_operation::make_entries(
 #if !defined(NDEBUG)
     scene.sanity_check();
 #endif
+}
+
+auto Mesh_operation::capture_physics(const erhe::scene::Node& node) -> Mesh_operation::Entry::Version
+{
+    Entry::Version version{};
+    const std::optional<Node_physics_data> data = read_node_physics(node);
+    if (!data.has_value()) {
+        return version;
+    }
+    version.motion_mode     = data.value().motion_mode;
+    version.collision_shape = get_node_collision_shape(node);
+    return version;
+}
+
+void Mesh_operation::restore_physics(erhe::scene::Node& node, const Mesh_operation::Entry::Version& version)
+{
+    Node_physics_system* const system = find_node_physics_system(node);
+    if (system != nullptr) {
+        system->set_collision_shape(node, version.collision_shape);
+    }
+    if (version.motion_mode == erhe::physics::Motion_mode::e_none) {
+        clear_node_physics(node);
+    } else {
+        node.set_value(Node_physics::motion_mode_property, version.motion_mode);
+    }
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

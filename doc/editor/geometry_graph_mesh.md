@@ -47,7 +47,8 @@ from its own mesh.
 ## `Geometry_graph_mesh_system` owns the controlled products
 
 The runtime state the binding implies - the controlled `Mesh`, the ghost
-`Mesh`, the controlled `Node_physics` and the bake revision already applied -
+`Mesh`, whether the bake gave the node its rigid body and its mesh, and the
+bake revision already applied -
 is owned by `Geometry_graph_mesh_system`
 (`src/editor/geometry_graph/geometry_graph_mesh_system.{hpp,cpp}`), one per
 scene, held by `Scene_root` and driven by the three node-system change sites
@@ -68,8 +69,11 @@ per bound node, keyed by a raw `Node*`:
 The renderer keeps rendering a perfectly ordinary `erhe::scene::Mesh`: the
 system creates that child `Mesh` prim (or ADOPTS a pre-existing one, so a
 graph dropped onto a mesh node takes it over instead of adding a duplicate),
-replaces its primitives whenever the graph re-bakes, and keeps `Node_physics`
-in sync. Layering holds by construction: the system lives in `src/editor/` and
+replaces its primitives whenever the graph re-bakes, and keeps the node's
+`Node_physics.*` values in sync. `owns_mesh` and `owns_rigid_body` on the entry
+say which of the two the bake supplied: releasing the binding takes back only
+what it gave, so an adopted mesh - the bound node itself, whenever a shape or a
+brush made it - stays in the scene with the geometry the last bake gave it. Layering holds by construction: the system lives in `src/editor/` and
 `erhe::scene` only supplies the `INode_system` interface.
 
 Detaching a `Mesh` the system controls is a legal state: the detach keeps the
@@ -146,7 +150,9 @@ pushes to every binding.
 
 Physics stays configured on the output node, graph-side: the baked collision
 shape and the motion mode / enable travel with the products, and each bound
-node gets its own `Node_physics` from them.
+node gets its own rigid body from them: the system hands its
+`Node_physics_system` the shape and writes `Node_physics.motion_mode` on the
+node.
 
 ## Persistence
 
@@ -156,7 +162,7 @@ Two codegen structs in `scene.json`:
   string blob in the geometry-graph v1 format that save, load and groups
   already use.
 - `Graph_mesh_binding_data { node_id, graph_mesh_name }` - one per bound node,
-  `node_id` being the file-local id, the `Node_physics_data` convention.
+  `node_id` being the file-local id, the physics-binding convention.
 
 These two, the glTF `ERHE_node_graphs` `node_bindings` array and the USD
 `erhe:scene` block's `graph_meshes.bound_prims` are the binding's native

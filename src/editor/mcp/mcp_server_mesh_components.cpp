@@ -17,6 +17,7 @@
 #include "operations/set_edge_sharpness_operation.hpp"
 #include "renderers/id_renderer.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
@@ -821,13 +822,9 @@ auto Mcp_server::query_get_physics_state(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
-    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-    if (!node_physics) {
-        return make_error_content("Node has no rigid body: " + node->get_name());
-    }
-    const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    const erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*node.get());
     if (rigid_body == nullptr) {
-        return make_error_content("Rigid body is not live (node not attached to a scene): " + node->get_name());
+        return make_error_content("Node has no live rigid body: " + node->get_name());
     }
     const glm::vec3 lin = rigid_body->get_linear_velocity();
     const glm::vec3 ang = rigid_body->get_angular_velocity();

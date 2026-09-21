@@ -6,7 +6,7 @@
 #include "app_settings.hpp"
 #include "renderers/render_context.hpp"
 #include "graphics/icon_set.hpp"
-#include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
@@ -238,22 +238,22 @@ auto Physics_tool::begin_drag(
     erhe::scene::Node* target_node = target_mesh.get();
     ERHE_VERIFY(target_node != nullptr);
 
-    auto target_node_physics = erhe::scene::get_attachment<Node_physics>(target_node);
-    if (!target_node_physics) {
+    Node_physics_system* const system = find_node_physics_system(*target_node);
+    Node_physics_entry* const  entry   = (system != nullptr) ? system->find(*target_node) : nullptr;
+    if ((entry == nullptr) || !entry->rigid_body) {
         log_physics->warn("Cant target: No physics mesh");
         return false;
     }
 
-    erhe::physics::IRigid_body* rigid_body = target_node_physics->get_rigid_body();
-    if ((rigid_body == nullptr) || (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static)) {
+    erhe::physics::IRigid_body* rigid_body = entry->rigid_body.get();
+    if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static) {
         log_physics->warn("Cant target: Static mesh");
         return false;
     }
 
     m_drag_constraint.detach();
 
-    m_target_mesh         = target_mesh;
-    m_target_node_physics = target_node_physics;
+    m_target_mesh = target_mesh;
 
     const auto collision_shape = rigid_body->get_collision_shape();
     const glm::vec3 rigid_body_center_of_mass = collision_shape->get_center_of_mass();
@@ -264,8 +264,8 @@ auto Physics_tool::begin_drag(
     m_grab_position_in_collision_shape = m_grab_position_in_node - rigid_body_center_of_mass;
     m_center_of_mass_in_node = rigid_body_center_of_mass;
 
-    m_target_node_physics->markers.clear();
-    m_target_node_physics->markers.push_back(m_grab_position_in_node);
+    entry->markers.clear();
+    entry->markers.push_back(m_grab_position_in_node);
 
     m_original_linear_damping  = rigid_body->get_linear_damping();
     m_original_angular_damping = rigid_body->get_angular_damping();
@@ -387,7 +387,10 @@ void Physics_tool::apply_drag_goal()
 
     // TODO investigate jolt damping
     if (!m_target_jointed && m_extra_damping_enable) {
-        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
+        erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*m_target_mesh.get());
+        if (rigid_body == nullptr) {
+            return;
+        }
         glm::vec3 angular_velocity = rigid_body->get_angular_velocity();
         glm::vec3 linear_velocity  = rigid_body->get_linear_velocity();
 
@@ -404,14 +407,13 @@ void Physics_tool::release_target()
     // velocity and may sleep again.
     m_drag_constraint.detach();
 
-    if (m_target_node_physics) {
-        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
+    if (m_target_mesh) {
+        erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*m_target_mesh.get());
         if (m_overrides_applied && (rigid_body != nullptr)) {
             rigid_body->set_damping(m_original_linear_damping, m_original_angular_damping);
             rigid_body->set_friction(m_original_friction);
             rigid_body->set_gravity_factor(m_original_gravity);
         }
-        m_target_node_physics.reset();
     }
     m_overrides_applied = false;
     m_target_jointed    = false;
@@ -436,8 +438,7 @@ auto Physics_tool::get_last_target_mesh() const -> const std::shared_ptr<erhe::s
 void Physics_tool::on_items_removed(const Removed_items& removed)
 {
     if (
-        (m_target_mesh && removed.lookup.contains(m_target_mesh.get())) ||
-        (m_target_node_physics && removed.lookup.contains(m_target_node_physics.get()))
+        m_target_mesh && removed.lookup.contains(m_target_mesh.get())
     ) {
         release_target();
     }
@@ -494,10 +495,6 @@ auto Physics_tool::on_drag() -> bool
         return false;
     }
     if (!m_context.editor_settings->physics.dynamic_enable) {
-        return false;
-    }
-
-    if (!m_target_node_physics) {
         return false;
     }
 
@@ -690,8 +687,8 @@ void Physics_tool::tool_properties(erhe::imgui::Imgui_window&)
         ImGui::Text("Grab point in Collision Shape: %s", collision_shape_position.c_str());
         ImGui::Text("Grab point in World: %s", world_position.c_str());
     }
-    if (m_target_node_physics) {
-        auto* rigid_body = m_target_node_physics->get_rigid_body();
+    if (m_target_mesh) {
+        erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*m_target_mesh.get());
         if (rigid_body != nullptr) {
             const glm::mat4 transform = rigid_body->get_world_transform();
             std::string pos = fmt::format("{}", glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}});

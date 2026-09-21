@@ -522,18 +522,29 @@ NODE_PHYSICS_FIELDS = ["motion_mode", "friction", "restitution", "mass", "gravit
 NODE_JOINT_FIELDS = ["connected_node", "enable_collision"]
 
 
+def norm_physics_details(details):
+    # The rigid body is values of the node itself (P8): get_node_details
+    # reports it under "physics", not as an attachment.
+    physics = details.get("physics")
+    if not isinstance(physics, dict):
+        return None
+    record = {k: physics.get(k) for k in NODE_PHYSICS_FIELDS}
+    if record.get("motion_mode") == "static":
+        # A static body's mass is physically meaningless and not representable
+        # in KHR_physics_rigid_bodies (no "motion" object): the reported value
+        # is shape-derived noise.
+        record.pop("mass", None)
+    for key, value in list(record.items()):
+        if isinstance(value, float):
+            record[key] = round(value, 4)
+    return record
+
+
 def norm_attachment_details(details):
     out = []
     for attachment in details.get("attachments", []):
         a_type = attachment.get("type")
-        if a_type == "Node_physics":
-            record = {k: attachment.get(k) for k in NODE_PHYSICS_FIELDS}
-            if record.get("motion_mode") == "static":
-                # A static body's mass is physically meaningless and not
-                # representable in KHR_physics_rigid_bodies (no "motion"
-                # object): the reported value is shape-derived noise.
-                record.pop("mass", None)
-        elif a_type == "Node_joint":
+        if a_type == "Node_joint":
             record = {k: attachment.get(k) for k in NODE_JOINT_FIELDS}
         elif a_type == "Mesh":
             record = {"name": attachment.get("name")}
@@ -642,7 +653,10 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
             snap["node_details"][node_name] = f"lookup failed: {error}"
             continue
         if isinstance(details, dict):
-            snap["node_details"][node_name] = norm_attachment_details(details)
+            snap["node_details"][node_name] = {
+                "attachments": norm_attachment_details(details),
+                "physics":     norm_physics_details(details),
+            }
     return snap
 
 
@@ -2176,7 +2190,10 @@ def usd_physics_state(scene_name, node_names):
     }
     for name in node_names:
         details = call("get_node_details", {"scene_name": scene_name, "node_name": name})
-        state["bodies"][name] = norm_attachment_details(details)
+        state["bodies"][name] = {
+            "attachments": norm_attachment_details(details),
+            "physics":     norm_physics_details(details),
+        }
     return state
 
 

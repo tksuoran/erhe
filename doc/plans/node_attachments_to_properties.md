@@ -20,6 +20,15 @@ attachment has no path; a value on the node is overridable as it stands.
 
 ## Done
 
+- **Node_physics** (`src/editor/scene/node_physics.{hpp,cpp}`,
+  `node_physics_system.{hpp,cpp}`): the rigid body of a node as a value group
+  keyed on `Node_physics.motion_mode`, with the collision shape, the body, the
+  create-info mirror, the world registration and the material / filter
+  observers in a per-scene `Node_physics_system`
+  (`doc/erhe/property_system.md` section 4.26, `doc/editor/scene.md`). The
+  native carriers - `KHR_physics_rigid_bodies` and the UsdPhysics schemas -
+  stay, fed from `read_node_physics()` (D8); `Motion_mode::e_none` is the new
+  enum value the key property defaults to.
 - **Ik** (`src/editor/scene/ik_properties.{hpp,cpp}`): the per-bone IK
   locks, limits, stiffness, rest rotation and pole, group "IK"
   (`doc/erhe/property_system.md` section 4.19,
@@ -81,7 +90,6 @@ class's own shape, stated in the row.
 
 | Class | USD counterpart | Verdict | Runtime state | Per node | Saved in | Form |
 |-------|-----------------|---------|---------------|----------|----------|------|
-| `Node_physics` | `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI`, `PhysicsMaterialAPI` binding (all applied API schemas) | property | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
 
@@ -189,9 +197,7 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P8. `Node_physics`.** ~35 `get_attachment<Node_physics>` sites move to
-  `read_node_physics` / the physics system. Deletes `ERHE_physics`. Suites:
-  physics (both backends), usd, `physics_drag_joint_sweep.py` 16/16.
+- **P8. Delete `ERHE_physics`** (D8).
 - **P9. `Node_joint` -> `Joint` prim** (D3). New `Item_type` bit, icon,
   Create menu entry and MCP `create_joint`; glTF import places the prim
   below the joint's node. Same suites as P8; creation 21 rebuilt by its

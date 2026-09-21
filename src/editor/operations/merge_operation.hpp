@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_physics/irigid_body.hpp"
+
 #include "operations/operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
@@ -11,7 +13,7 @@ namespace erhe::primitive { class Buffer_info; }
 namespace editor {
 
 class PP_context;
-class Node_physics;
+class Mesh_operation;
 class Mesh_raytrace;
 
 class Merge_operation : public Operation
@@ -45,12 +47,17 @@ private:
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> before_parent;
-        std::shared_ptr<Node_physics>      node_physics;
+        // The node's physics state as the merge found it, restored by undo
+        // (doc/plans/node_attachments_to_properties.md P8).
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+        erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none};
     };
 
     Parameters                                                 m_parameters;
     std::vector<Entry>                                         m_sources;
-    std::shared_ptr<Node_physics>                              m_combined_node_physics;
+    // The compound shape the merged mesh's body is made from; empty when the
+    // sources carried no body or the simulation is off.
+    std::shared_ptr<erhe::physics::ICollision_shape>           m_combined_collision_shape;
     std::vector<erhe::scene::Mesh_primitive>                   m_first_mesh_primitives_before{};
     std::vector<erhe::scene::Mesh_primitive>                   m_first_mesh_primitives_after{};
 

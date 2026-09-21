@@ -34,7 +34,7 @@ class App_message_bus;
 struct Hover_scene_view_message;
 class Headset_view;
 class Icon_set;
-class Node_physics;
+class Node_physics_entry;
 class Physics_tool;
 class Scene_root;
 
@@ -143,7 +143,6 @@ private:
     std::shared_ptr<erhe::scene::Mesh>          m_hover_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_last_target_mesh;
-    std::shared_ptr<Node_physics>               m_target_node_physics;
     float                                       m_target_distance                 {1.0f};
     glm::vec3                                   m_grab_position_in_node           {0.0f, 0.0f, 0.0f}; // Where object drag started in local node space
     glm::vec3                                   m_grab_position_in_collision_shape{0.0f, 0.0f, 0.0f}; // Where object drag started in local node space

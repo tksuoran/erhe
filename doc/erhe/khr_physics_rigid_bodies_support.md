@@ -29,7 +29,7 @@ are therefore static or kinematic only.
   `JPH::SixDOFConstraint` with limits, translation soft limits and
   position / velocity motors.
 - The editor holds physics materials, collision filters and joint settings in
-  content-library folders, exposes every `Node_physics` accessor (material,
+  content-library folders, exposes every `Node_physics.*` value (material,
   filter, trigger, gravity factor, initial velocities, centre-of-mass offset)
   and carries a `Node_joint` attachment with a `Scene_root` constraint retry.
 - `erhe::scene::Physics_description`
@@ -47,7 +47,7 @@ and `scene.create_new_joint` commands, the Create menu, and the item-tree
 context menu ("Attach > Rigid Body / Joint"; a joint auto-connects to another
 selected node). The Create menu also creates Physics Material, Collision Filter
 and Joint Settings content-library items. An edit of a shared item reaches
-the live simulation through the observers `Node_physics` and `Node_joint`
+the live simulation through the observers `Node_physics_system` and `Node_joint`
 subscribe to it. The MCP tools are `get_physics_items`,
 `create_physics_body` / `edit_physics_body`, `create_physics_joint` /
 `edit_physics_joint`, `create_physics_material` / `edit_physics_material`,
@@ -58,7 +58,7 @@ physics fields of `get_node_details`.
 ## Export design
 
 - `build_gltf_physics_data(scene) -> erhe::scene::Physics_description`
-  (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`) walks `Node_physics` and
+  (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`) walks the rigid-body values and
   `Node_joint` attachments. Collision shape introspection dedups implicit shapes
   into the top-level array; convex hull and mesh shapes become mesh-keyed
   `geometry.mesh` references (the current spec). Compound shape children,
@@ -122,14 +122,14 @@ physics fields of `get_node_details`.
 - Export skips a compound child that carries a convex hull or mesh shape, with
   a warning: the baked compound holds no source mesh reference. A direct hull
   or mesh shape references the mesh it was built from
-  (`Node_physics::collision_mesh`; no value means the body's own mesh). When
+  (`Node_physics.collision_mesh`; no value means the body's own mesh). When
   that mesh is a node below the body, the collider is exported on that node and
   the body keeps the motion, which is the `KHR_physics_rigid_bodies` rule that
   a collider belongs to its nearest ancestor body.
 - Export skips a world-attached joint (one with no connected node) with a
   warning, and exports only the first of several `Node_joint`s on one node,
   because glTF carries one joint per node.
-- Export writes no inertia overrides (`Node_physics` does not expose them), and
+- Export writes no inertia overrides (the value group has none), and
   writes mass for dynamic bodies only.
 - Export collapses kinematic non-physical and kinematic physical to
   `isKinematic = true`, so a re-import yields a kinematic physical body.

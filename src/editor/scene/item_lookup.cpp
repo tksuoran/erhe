@@ -128,7 +128,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
         }
     }
     // Physics materials and collision filters: the targets of a
-    // Node_physics' reference properties (section 4.10).
+    // Node_physics' reference properties (section 4.26).
     if (library) {
         for (const std::shared_ptr<erhe::physics::Physics_material>& physics_material : library->get_all<erhe::physics::Physics_material>()) {
             if (physics_material && matches(*physics_material)) {

@@ -4,6 +4,7 @@
 
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #include <geogram/basic/numeric.h>
@@ -30,7 +31,6 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
-class Node_physics;
 
 class Mesh_operation_parameters
 {
@@ -86,11 +86,17 @@ public:
         // TODO consider keeping node always alive using std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Mesh> scene_mesh;
 
+        // The physics state of the node for this version of the mesh: the
+        // collision shape built for it and the key value that says whether it
+        // carries a body at all. Restoring a version writes both, so the
+        // operation stays one undo entry
+        // (doc/plans/node_attachments_to_properties.md P8).
         class Version
         {
         public:
-            std::shared_ptr<Node_physics>            node_physics{};
-            std::vector<erhe::scene::Mesh_primitive> primitives{};
+            std::shared_ptr<erhe::physics::ICollision_shape> collision_shape{};
+            erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none};
+            std::vector<erhe::scene::Mesh_primitive>         primitives{};
         };
         Version before{};
         Version after{};
@@ -120,6 +126,14 @@ public:
     void undo    (App_context& context)  override;
 
     // Public API
+    // The physics state of `node` as the operation found it: the collision
+    // shape its scene's system holds and the key value, so a version can be
+    // restored whole.
+    [[nodiscard]] static auto capture_physics(const erhe::scene::Node& node) -> Entry::Version;
+    // Writes a captured version's physics state back onto `node`: the shape
+    // first, then the key value, so a body is never made from a stale shape.
+    static void restore_physics(erhe::scene::Node& node, const Entry::Version& version);
+
     void add_entry   (Entry&& entry);
 
     // Most general form. The geometry operation additionally receives the

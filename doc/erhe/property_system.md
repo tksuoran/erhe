@@ -1711,72 +1711,6 @@ subscribes an observer or an expression to a primitive; `get_primitives()`
 is const, so no caller reaches `set_value` on a primitive except through
 `Mesh`.
 
-### 4.10 Node_physics
-
-The editor's `Node_physics` attachment registers its authored rigid body
-state as entry-stored properties the Light and Camera way (sections 4.3,
-4.4; owner type `Node_physics::property_owner_type()`, UI group `Rigid
-Body`), every one `inherits` (D30), so an empty node above or a style
-holds `Node_physics.physics_material`, `Node_physics.motion_mode`, ...
-for every body below it. The `IRigid_body_create_info` the attachment
-keeps and its intended motion mode are MIRRORS of the effective values:
-`Node_physics::on_property_changed` refreshes the mirror for every
-source of a change (local, style, inherited) and applies the consequence
-in the same place, so the body is still (re)created from a plain struct
-at scene attach. The constructor that takes a create info writes a local
-value for each field that differs from the property default and leaves
-the rest unset, so a body created with the defaults is open to a holder.
-
-The attachment holds what describes this body instance: its role and the
-`KHR_physics_rigid_bodies` motion fields. `motion_mode`
-(`erhe::physics::Motion_mode`, `Enum_info` table `c_motion_mode_enum_info`
-next to `c_motion_mode_strings` in `erhe_physics/irigid_body.hpp`, the
-four authorable modes) mirrors into the intended mode, re-derives the
-effective mode and sets it on the body; `is_trigger` mirrors into the
-create info and recreates the body; `gravity_factor` (0..2, `visible_when`
-the mode is not static; the callback casts to `Node_physics` and is
-evaluated on bodies only) mirrors and sets the body's gravity factor
-while the body is not static; the two initial velocities (world space,
-applied at (re)creation) mirror with no live consequence; `mass`
-(validated positive) with a value from any source stores it in the create
-info and scales the body's local inertia with the mass ratio, and with no
-value anywhere (source `default`) leaves the create info's mass unset and
-recreates the body so it is back at its shape mass scaled by the material
-density (section 4.12); `center_of_mass_offset` is realized as the
-offset-center-of-mass wrapper around the collision shape (rewrapped and
-recreated on a change, and re-applied by `set_collision_shape()` around
-a new shape). `physics_material` and `collision_filter` are object
-properties (D28, `reference_item_types` the physics material and
-collision filter type bits; `find_item_in_scene` walks the content
-library's physics materials and collision filters so a name resolves)
-that mirror into the create info and set the body's material or filter.
-What describes the kind of matter - friction, restitution, damping, wind
-receptivity, density - is the material's (section 4.12): the attachment,
-the create info and `ERHE_physics` hold no such scalar of their own, and
-a body without a material behaves like one with the material defaults;
-`reapply_physics_material()` / `reapply_collision_filter()` push the
-current one again after the referenced item itself was edited, because a
-write of the pointer the mirror already holds is a no-op (R4): the
-material observer of section 4.12 calls the first, and the filter
-observer of section 4.21 the second.
-
-The typed accessors (`set_motion_mode()`, `set_trigger()`, `set_mass()`,
-`set_gravity_factor()`, ... `set_collision_filter()`) write through the
-properties, so the MCP `edit_physics_body` tool, the glTF physics import
-overrides, the geometry graph mesh binding and the Properties rows all
-notify; the physics tool's drag-time overrides of friction, damping and
-gravity go to the rigid body only and are transient (a body's own
-friction takes part in contact resolution only while it has no
-material). The glTF exporters read the accessors, not the live body;
-`ERHE_physics` writes `motion_mode` explicitly and the `properties` map
-of local values, and on load the map is the attachment's complete local
-set (`clear_local_properties_not_listed`, the `ERHE_light` rule), the
-object references keeping the identity the KHR collider gave the create
-info (`doc/gltf_extensions/ERHE_physics.md`).
-`Properties::node_physics_properties` keeps only the diagnostics (body
-label, position, active state, collision shape, local center of mass and
-inertia).
-
 ### 4.11 Grid and Brush_placement
 
 `Grid` (the editor's grid, an item of its own owned by `Grid_tool`,
@@ -1880,7 +1814,7 @@ glTF physics import and export, the MCP physics tools, the scene wind,
 the default library material - uses them.
 
 The material is the only carrier of these scalars: neither `Node_physics`
-nor `IRigid_body_create_info` holds one of its own (section 4.10; the
+nor `IRigid_body_create_info` holds one of its own (section 4.26; the
 body keeps its own mass, and a brush-placed body's mass is explicit). The
 consequence of an edit stays backend-neutral. A backend may snapshot the
 material per body at `IRigid_body::set_physics_material()` (Jolt does,
@@ -2011,7 +1945,7 @@ Animation Window" button; the generic section draws the four rows.
 
 ### 4.17 Node_joint
 
-`Node_joint` (the editor's physics joint attachment, section 4.10's
+`Node_joint` (the editor's physics joint attachment, section 4.26's
 sibling) registers `connected_node`, `joint_settings` and
 `enable_collision` (UI group `Joint`). `connected_node` is a node-typed
 object reference (D28, `reference_item_types` the node bit, validated to
@@ -2048,7 +1982,7 @@ is updated in the same commit as every registration change.
 #### Recipe for a bridged owner
 
 The Light (section 4.3), Camera (section 4.4), Node_physics (section
-4.10) and Layout (section 4.13) migrations are the template; a
+4.26) and Layout (section 4.13) migrations are the template; a
 member-backed (bridged, D18) registration is always local, so no node,
 folder or style can hold it and no descendant inherits it, and moving it
 to the entry store is what makes it holdable. A property that models "this body
@@ -2528,6 +2462,59 @@ runtime state the group implies - the controlled mesh, the ghost mesh, the
 controlled rigid body and the applied bake revision - is owned by
 `editor::Geometry_graph_mesh_system`, one per scene (`doc/erhe/scene.md`
 "Node systems", `doc/editor/geometry_graph_mesh.md`).
+
+### 4.26 Node_physics (attached to Node)
+
+`editor::Node_physics` (`src/editor/scene/node_physics.{hpp,cpp}`) registers a
+node's rigid body as an attached value group of the node (section 4.23,
+`doc/plans/node_attachments_to_properties.md` D1), owner type `Node_physics`,
+holder type `erhe::scene::Node`, UI group `Rigid Body`. Like `Ik`, `Draw_mode`
+and `Geometry_graph_mesh` it is a registration holder with static members only,
+not a `Dependency_object`, so its owner type sits directly under the root. USD
+gives the same shape: `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`,
+`PhysicsMassAPI` and the `PhysicsMaterialAPI` binding are applied API schemas
+contributing plain attributes to the prim.
+
+`Node_physics.motion_mode` (`erhe::physics::Motion_mode`, `Enum_info` table
+`c_motion_mode_enum_info` in `erhe_physics/irigid_body.hpp`) is the group's KEY
+property, with `Motion_mode::e_none` as its default: the node carries a rigid
+body exactly while its effective value is another mode. It does not inherit - a
+body is a property of the one prim it simulates, and a subtree below a dynamic
+body is carried by that body rather than made of bodies of its own.
+
+The rest of the group inherits (D30), so a node above or a style holds it for
+every body below: `is_trigger` (a sensor body; recreates the body),
+`mass` (validated positive; with no value anywhere the body's mass is its shape
+mass scaled by the material density, section 4.12), `gravity_factor` (0..2),
+`initial_linear_velocity` and `initial_angular_velocity` (world space, applied
+at (re)creation), `center_of_mass_offset` (realized as the
+offset-center-of-mass wrapper around the collision shape),
+`physics_material` and `collision_filter` (object references, D28,
+`reference_item_types` the physics material and collision filter type bits).
+`mass`, `gravity_factor` and the two velocities are `visible_when` the mode is
+movable, through `attached_group_visible_when`. `collision_mesh` is a weak
+object reference (D28) naming the `Mesh` prim a hull or triangle shape was
+built from - none names the body's own mesh - and does not inherit: it must not
+reach the bodies below.
+
+What describes the kind of matter - friction, restitution, damping, wind
+receptivity, density - is the material's (section 4.12); a body without a
+material behaves like one with the material defaults.
+
+Readers go through
+`read_node_physics(const erhe::scene::Node&) -> std::optional<Node_physics_data>`
+and `carries_node_physics(node)`; `make_node_physics_create_info(node)` and
+`write_node_physics_create_info(node, create_info)` convert between the values
+and `IRigid_body_create_info`, and `clear_node_physics(node)` takes the group
+off the node. Every value's `property_changed` is
+`erhe::scene::node_system_property_changed`: the runtime state the group
+implies - the collision shape, the rigid body, the create-info mirror, the
+world registration and the material / filter observers - is owned by
+`editor::Node_physics_system`, one per `Scene_root`
+(`doc/erhe/scene.md` "Node systems", `doc/editor/scene.md`). The collision
+shape is built geometry rather than an opinion, so it is the system's and not a
+value; it outlives the body, because an undo takes the node out of the scene
+and a redo puts it back without rebuilding it.
 
 ## 5. Out of scope
 

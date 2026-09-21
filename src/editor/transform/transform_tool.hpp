@@ -105,7 +105,7 @@ public:
     std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before;
     erhe::scene::Trs_transform                world_from_node_before;
     std::optional<erhe::physics::Motion_mode> original_motion_mode;
-    erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_invalid};
+    erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_none};
 };
 
 class Transform_tool_shared

@@ -6,6 +6,7 @@
 #include "renderers/lightmap_report.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -692,22 +693,24 @@ auto Binary_mesh_operation::make_operations(
 
     // The result replaces the target mesh's primitives in place; the target
     // keeps its material unless it had none (then the first tool material).
-    const std::shared_ptr<Node_physics> before_node_physics = erhe::scene::get_attachment<Node_physics>(target_node.get());
+    const Mesh_operation::Entry::Version physics_before = Mesh_operation::capture_physics(*target_node.get());
     Mesh_operation::Entry entry{
         .scene_mesh = target_mesh,
         .before = {
-            .node_physics = before_node_physics,
-            .primitives   = target_mesh->get_primitives()
+            .collision_shape = physics_before.collision_shape,
+            .motion_mode     = physics_before.motion_mode,
+            .primitives      = target_mesh->get_primitives()
         },
         .after = {
-            .node_physics = before_node_physics,
-            .primitives   = { erhe::scene::Mesh_primitive{primitive, material} }
+            .collision_shape = physics_before.collision_shape,
+            .motion_mode     = physics_before.motion_mode,
+            .primitives      = { erhe::scene::Mesh_primitive{primitive, material} }
         }
     };
 
     // Rebuild the collision shape from the result (same policy as
     // Mesh_operation::make_entries: convex hull of the new geometry).
-    if (before_node_physics && parameters.context.editor_settings->physics.static_enable) {
+    if ((physics_before.motion_mode != erhe::physics::Motion_mode::e_none) && parameters.context.editor_settings->physics.static_enable) {
         GEO::Mesh convex_hull{};
         const bool convex_hull_ok = erhe::geometry::make_convex_hull(out_geometry->get_mesh(), convex_hull);
         if (convex_hull_ok) {
@@ -724,12 +727,7 @@ auto Binary_mesh_operation::make_operations(
                 static_cast<int>(convex_hull.vertices.nb()),
                 static_cast<int>(3 * sizeof(float))
             );
-            const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                .collision_shape = collision_shape,
-                .debug_label     = out_geometry->get_name(),
-                .motion_mode     = before_node_physics->get_motion_mode()
-            };
-            entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+            entry.after.collision_shape = collision_shape;
         }
     }
 

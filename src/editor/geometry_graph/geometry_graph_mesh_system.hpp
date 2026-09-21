@@ -11,7 +11,6 @@ namespace erhe::scene { class Mesh; }
 namespace editor {
 
 class Graph_mesh;
-class Node_physics;
 
 // The runtime state one node's geometry-graph binding implies: the products
 // the graph controls on the node, and the bake revision already applied.
@@ -28,7 +27,15 @@ public:
     // shadow_cast / id, so only the dedicated ghost edge-lines composition
     // pass draws it.
     std::shared_ptr<erhe::scene::Mesh> ghost_mesh;
-    std::shared_ptr<Node_physics>      node_physics;
+    // True while the mesh is one the system created for the node, so
+    // releasing the binding knows to take it back out of the scene. A mesh
+    // adopted from the node - including the node itself, which is a Mesh prim
+    // whenever it was made by a shape or a brush - is the user's, and stays
+    // where it is with the geometry the last bake gave it.
+    bool                               owns_mesh{false};
+    // True while the bake gave the node a rigid body, so releasing the
+    // binding knows to take the body's values back off the node.
+    bool                               owns_rigid_body{false};
     std::uint64_t                      applied_revision{0};
 };
 
@@ -72,6 +79,9 @@ private:
     // item_host_mutex. A no-op when the graph is unset / never baked or its
     // latest bake was already applied (revision check). Main thread only.
     void apply(erhe::scene::Node& node, Geometry_graph_mesh_entry& entry);
+
+    // Takes the rigid body the bake gave the node back off it.
+    void release_rigid_body(erhe::scene::Node* node, Geometry_graph_mesh_entry& entry);
 
     // Detaches the products from the node that holds them and drops them.
     void release(Geometry_graph_mesh_entry& entry);

@@ -223,7 +223,7 @@ stays editor-agnostic. The exporter offers a hook so the editor can attach
 extension JSON to an arbitrary exported object and can exclude
 editor-controlled attachments.
 
-- **Exclusion hook**: graph-mesh-controlled meshes and their `Node_physics`
+- **Exclusion hook**: graph-mesh-controlled meshes and the rigid bodies they gave their nodes
   are baked artifacts, rebuilt on load, and are not exported.
 - `ERHE_node` (node extension): node Item flags as a name list, plus the
   node's mesh-attachment Item flags.

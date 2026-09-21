@@ -1065,8 +1065,8 @@ def section_parameter_abuse():
 
 def section_output_physics_edges():
     """Output node physics under the asset model: the physics flags travel
-    with the bake to a BOUND scene node's Node_physics attachment and
-    follow the graph's connect state."""
+    with the bake to a BOUND scene node's rigid-body values and follow the
+    graph's connect state."""
     S = "output-physics"
     sn = scene_name_of_test()
     fresh_graph()
@@ -1082,34 +1082,33 @@ def section_output_physics_edges():
     get_graph()
 
     def has_physics():
-        types = [a.get("type") for a in node_attachments(sn, "Phys Edge Node")]
-        return "Node_physics" in types
+        return node_physics(sn, "Phys Edge Node") is not None
 
-    check(S, "physics attachment present after enable", has_physics())
+    check(S, "rigid body present after enable", has_physics())
 
     # All three motion modes.
     for motion in ("static", "kinematic", "dynamic"):
         set_param(output, {"physics_motion": motion})
         get_graph()
         params = node_by_id(get_graph(), output)["parameters"]
-        check(S, f"physics motion mode '{motion}' applies and keeps attachment",
+        check(S, f"physics motion mode '{motion}' applies and keeps the body",
               (params.get("physics_motion") == motion) and has_physics(), f"params={params}")
 
-    # Disconnecting the input publishes an empty bake -> the physics
-    # attachment is removed (the bound scene node itself remains).
+    # Disconnecting the input publishes an empty bake -> the rigid body is
+    # removed (the bound scene node itself remains).
     disconnect(box, 0, output, 0)
     get_graph()
-    check(S, "disconnect removes physics attachment, keeps scene node",
+    check(S, "disconnect removes the rigid body, keeps scene node",
           wait_for_scene_node(sn, "Phys Edge Node") and not has_physics(),
-          f"attachments={node_attachments(sn, 'Phys Edge Node')}")
+          f"physics={node_physics(sn, 'Phys Edge Node')}")
     connect(box, 0, output, 0)
     get_graph()
-    check(S, "reconnect restores physics attachment", has_physics())
+    check(S, "reconnect restores the rigid body", has_physics())
 
-    # Disabling physics removes the attachment from the bound node.
+    # Disabling physics removes the body from the bound node.
     set_param(output, {"physics": False})
     get_graph()
-    check(S, "physics disable removes the attachment", not has_physics())
+    check(S, "physics disable removes the rigid body", not has_physics())
 
     # Cleanup: unbind so later sections see a plain node.
     mutate("set_node_graph_mesh", {"node_name": "Phys Edge Node", "graph_mesh": "", "scene_name": sn})
@@ -1192,6 +1191,13 @@ def node_attachments(scene_name, node_name):
     return details.get("attachments", []) if isinstance(details, dict) else []
 
 
+def node_physics(scene_name, node_name):
+    # The rigid body is values of the node itself, reported in "physics";
+    # None means the node carries no body.
+    details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
+    return details.get("physics") if isinstance(details, dict) else None
+
+
 def wait_for_scene_node(scene_name, node_name, tries=50):
     # create_node queues the insert operation; it lands on a later frame's
     # request batch, so poll rather than assuming same-batch visibility.
@@ -1266,21 +1272,21 @@ def section_graph_mesh_asset():
     mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node 2") if a.get("type") == "Mesh"]
     check(S, "second node shares the existing bake at bind time", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
 
-    # Binding a node that ALREADY has a Mesh (and Node_physics, from brush
+    # Binding a node that ALREADY has a Mesh (and a rigid body, from brush
     # placement) must ADOPT them - a node has exactly one attachment of
     # each type - not attach duplicates. The graph's bake replaces the
     # adopted mesh's primitives; with graph physics off, the adopted
-    # physics is removed (the bake dictates the physics state).
+    # rigid body is removed (the bake dictates the physics state).
     mutate("create_shape", {"shape": "box", "name": "Smoke GM Shape", "scene_name": scene_name})
     check(S, "shape node created", wait_for_scene_node(scene_name, "Smoke GM Shape"))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "Smoke GM", "scene_name": scene_name})
     get_graph()
     atts = node_attachments(scene_name, "Smoke GM Shape")
     mesh_atts = [a for a in atts if a.get("type") == "Mesh"]
-    phys_atts = [a for a in atts if a.get("type") == "Node_physics"]
+    phys = node_physics(scene_name, "Smoke GM Shape")
     check(S, "binding adopts the existing mesh (exactly one Mesh attachment, re-baked)",
           len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(atts))
-    check(S, "graph without physics removes the adopted physics", len(phys_atts) == 0, detail=str(phys_atts))
+    check(S, "graph without physics removes the adopted physics", phys is None, detail=str(phys))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "", "scene_name": scene_name})
 
     # Issue #252: the window TARGET (not the global selection) drives which
@@ -1293,12 +1299,12 @@ def section_graph_mesh_asset():
     # Physics travels with the bake to every bound node.
     set_param(out["id"], {"physics": True})
     get_graph()
-    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
-    check(S, "physics enable materializes Node_physics on bound nodes", "Node_physics" in types, detail=str(types))
+    phys = node_physics(scene_name, "Smoke GM Node 2")
+    check(S, "physics enable materializes a rigid body on bound nodes", phys is not None, detail=str(phys))
     set_param(out["id"], {"physics": False})
     get_graph()
-    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
-    check(S, "physics disable removes Node_physics from bound nodes", "Node_physics" not in types, detail=str(types))
+    phys = node_physics(scene_name, "Smoke GM Node 2")
+    check(S, "physics disable removes the rigid body from bound nodes", phys is None, detail=str(phys))
 
     # Unbind removes the attachment and its controlled products.
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node 2", "graph_mesh": "", "scene_name": scene_name})

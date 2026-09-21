@@ -125,16 +125,6 @@ private:
     App_context& m_context;
 };
 
-class Create_new_rigid_body_command : public erhe::commands::Command
-{
-public:
-    Create_new_rigid_body_command(erhe::commands::Commands& commands, App_context& context);
-    auto try_call() -> bool override;
-
-private:
-    App_context& m_context;
-};
-
 class Create_new_joint_command : public erhe::commands::Command
 {
 public:
@@ -313,8 +303,6 @@ public:
     // with a convex hull shape built from the node's mesh (a unit box when
     // the node has no usable mesh geometry). Returns empty when the node
     // already has a Node_physics (one rigid body per node).
-    auto create_new_rigid_body(erhe::scene::Node* node = nullptr) -> std::shared_ptr<Node_physics>;
-    auto create_new_rigid_body(erhe::scene::Node* node, const erhe::physics::IRigid_body_create_info& create_info) -> std::shared_ptr<Node_physics>;
 
     // Attaches a new Node_joint to the node (undoable), joining the nearest
     // self-or-ancestor rigid body of the node to that of connected_node (no
@@ -376,7 +364,6 @@ private:
     Create_new_scope_command        m_create_new_scope_command;
     Create_new_light_command        m_create_new_light_command;
     Create_new_rendertarget_command m_create_new_rendertarget_command;
-    Create_new_rigid_body_command   m_create_new_rigid_body_command;
     Create_new_joint_command        m_create_new_joint_command;
     Add_cameras_command             m_add_cameras_command;
     Add_room_command                m_add_room_command;

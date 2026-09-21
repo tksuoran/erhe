@@ -6,6 +6,8 @@
 #include "app_settings.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
+#include "operations/mesh_operation.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -71,14 +73,14 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         mat4 transform;
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
+        const Mesh_operation::Entry::Version physics_state = Mesh_operation::capture_physics(*node);
 
-        Entry source_entry{
-            .mesh          = mesh,
-            .node          = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this()),
-            .before_parent = node->get_parent_node(),
-            .node_physics  = node_physics,
-        };
+        Entry source_entry{};
+        source_entry.mesh            = mesh;
+        source_entry.node            = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+        source_entry.before_parent   = node->get_parent_node();
+        source_entry.collision_shape = physics_state.collision_shape;
+        source_entry.motion_mode     = physics_state.motion_mode;
 
         ERHE_VERIFY(source_entry.before_parent);
 
@@ -93,17 +95,13 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             transform = reference_node_from_world * node->world_from_node();
         }
 
-        if (node_physics) {
-            erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-            if (rigid_body != nullptr) {
-                auto collision_shape = rigid_body->get_collision_shape();
-
-                erhe::physics::Compound_child child{
-                    .shape     = collision_shape,
+        if (physics_state.collision_shape) {
+            compound_shape_create_info.children.push_back(
+                erhe::physics::Compound_child{
+                    .shape     = physics_state.collision_shape,
                     .transform = erhe::physics::Transform{transform}
-                };
-                compound_shape_create_info.children.push_back(child);
-            }
+                }
+            );
         }
 
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
@@ -143,13 +141,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         );
 
         if (m_parameters.context.editor_settings->physics.static_enable) {
-            const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                .collision_shape = combined_collision_shape,
-                .debug_label     = "merged", // TODO
-                .motion_mode     = erhe::physics::Motion_mode::e_dynamic
-            };
-
-            m_combined_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+            m_combined_collision_shape = combined_collision_shape;
         }
     }
 
@@ -222,18 +214,17 @@ void Merge_operation::execute(App_context& context)
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
             // For first mesh: Replace mesh primitives
-            auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-            if (old_node_physics) {
-                node->detach(old_node_physics.get());
-            }
             mesh->set_primitives(m_first_mesh_primitives_after);
-            if (m_combined_node_physics) {
-                node->attach(m_combined_node_physics);
-            }
 
             first_entry = false;
 
             node->set_parent(parent);
+            Mesh_operation::Entry::Version combined_version{};
+            combined_version.collision_shape = m_combined_collision_shape;
+            combined_version.motion_mode     = m_combined_collision_shape
+                ? erhe::physics::Motion_mode::e_dynamic
+                : erhe::physics::Motion_mode::e_none;
+            Mesh_operation::restore_physics(*node, combined_version);
         } else {
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
@@ -287,18 +278,13 @@ void Merge_operation::undo(App_context& context)
 
             first_entry = false;
 
-            auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-            if (old_node_physics) {
-                node->detach(old_node_physics.get());
-            }
-
             mesh->set_primitives(m_first_mesh_primitives_before);
 
-            if (entry.node_physics) {
-                node->attach(entry.node_physics);
-            }
-
             node->set_parent(parent);
+            Mesh_operation::Entry::Version before_version{};
+            before_version.collision_shape = entry.collision_shape;
+            before_version.motion_mode     = entry.motion_mode;
+            Mesh_operation::restore_physics(*node, before_version);
         } else {
             node->set_parent(entry.before_parent);
         }

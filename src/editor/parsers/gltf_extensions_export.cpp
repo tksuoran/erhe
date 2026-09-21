@@ -16,6 +16,7 @@
 #include "parsers/gltf.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -426,7 +427,7 @@ void add_gltf_editor_state(
         // Exclusion hook + ERHE_node_graphs node bindings: the products a
         // node's geometry graph controls are baked artifacts the graph
         // rebuilds on load.
-        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        std::optional<Node_physics_data> node_physics = read_node_physics(*node.get());
         const Geometry_graph_mesh_entry* const graph_mesh_entry =
             scene_root.get_geometry_graph_mesh_system().find_entry(*node.get());
         if (graph_mesh_entry != nullptr) {
@@ -436,7 +437,7 @@ void add_gltf_editor_state(
             if (graph_mesh_entry->ghost_mesh) {
                 arguments.excluded_meshes.insert(graph_mesh_entry->ghost_mesh.get());
             }
-            if (graph_mesh_entry->node_physics == node_physics) {
+            if (graph_mesh_entry->owns_rigid_body) {
                 node_physics.reset(); // build_physics_description skips it too
             }
         }
@@ -455,10 +456,12 @@ void add_gltf_editor_state(
         // complete local set on reload, the ERHE_light rule). Damping,
         // wind receptivity and density ride the physics material
         // (ERHE_scene physics_materials).
-        if (node_physics) {
+        if (node_physics.has_value()) {
+            // The values are the node's own now (P8), so the payload states
+            // only the motion mode; the node's Node_physics.* local values
+            // ride ERHE_node.properties with the rest of its opinions.
             nlohmann::json physics_json{
-                {"motion_mode", motion_mode_name(node_physics->get_motion_mode())},
-                {"properties",  json_properties(*node_physics)},
+                {"motion_mode", motion_mode_name(node_physics.value().motion_mode)},
             };
             append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_physics\":{}", physics_json.dump()));
             used_physics = true;

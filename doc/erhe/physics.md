@@ -44,7 +44,7 @@ a specific engine.
   system strings; Jolt backend interns at most 64 system names per world into uint64 bitsets).
   The three lists are registered `string[]` properties (`doc/erhe/property_system.md`
   section 4.21), read through `get_collision_systems()` and the two other getters; the
-  editor's `Node_physics` observes the filter, so an edit from any writer recompiles the
+  editor's `Node_physics_system` observes the filter, so an edit from any writer recompiles the
   backend's snapshot
 - `Physics_joint_settings` -- shared joint settings item, 1:1 with
   KHR_physics_rigid_bodies physicsJoints entries. It states one limit and one drive per degree
@@ -67,7 +67,10 @@ a specific engine.
   against a running editor
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
-- `Motion_mode` -- enum: static, kinematic (non-physical/physical), dynamic
+- `Motion_mode` -- enum: `e_none`, static, kinematic (non-physical/physical), dynamic.
+  `e_none` is the default of the editor's `Node_physics.motion_mode` key property and
+  means the prim simulates nothing, so a node carries a rigid body exactly while its
+  effective mode is another one (`doc/erhe/property_system.md` section 4.26)
 
 ## Public API
 - Factory pattern: `IWorld::create()`, `ICollision_shape::create_box_shape_shared()`, etc.

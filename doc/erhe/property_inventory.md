@@ -149,17 +149,21 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | ortho_left, ortho_width, ortho_bottom, ortho_height, frustum_left, frustum_right, frustum_bottom, frustum_top, z_near, z_far | entry | inherits; mirrored; logarithmic extents |
 | exposure, shadow_range | entry | inherits |
 
-### Node_physics (`src/editor/scene/node_physics.cpp`, section 4.10)
+### Node_physics (`src/editor/scene/node_physics.cpp`, section 4.26)
+
+Attached properties of `erhe::scene::Node`, UI group `Rigid Body`, keyed on
+`motion_mode`. The runtime state they imply lives in `Node_physics_system`.
 
 | Property | Storage | Notes |
 |---|---|---|
-| motion_mode | entry | inherits (D30); enumeration, mirrored into the intended mode, sets the body's effective mode |
-| is_trigger | entry | inherits; mirrored into the create info, recreates the body |
-| gravity_factor | entry | inherits; mirrored, pushed to the live body |
-| initial_linear_velocity, initial_angular_velocity | entry | inherits; mirrored, no live consequence |
-| mass | entry | inherits; source default = shape mass scaled by the material density, else scales the body's inertia |
+| motion_mode | entry | KEY property; enumeration, default `e_none` (no body); does not inherit |
+| is_trigger | entry | inherits (D30); a sensor body, recreates the body |
+| gravity_factor | entry | inherits; pushed to the live body; visible while the mode is movable |
+| initial_linear_velocity, initial_angular_velocity | entry | inherits; world space, applied at (re)creation; visible while the mode is movable |
+| mass | entry | inherits; source default = shape mass scaled by the material density, else scales the body's inertia; visible while the mode is movable |
 | center_of_mass_offset | entry | inherits; realized as the collision shape wrapper, recreates the body |
 | physics_material, collision_filter | entry | inherits; object references, a holder assigns them to every body below |
+| collision_mesh | entry | weak object reference (D28) to the `Mesh` prim the shape was built from, none = the body's own mesh; does not inherit |
 
 ### Grid (`src/editor/grid/grid.cpp`, section 4.11)
 

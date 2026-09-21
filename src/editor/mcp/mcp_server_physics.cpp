@@ -12,6 +12,7 @@
 #include "operations/operation_stack.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 
@@ -98,11 +99,7 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
         if (!in_scope(node)) {
             return true;
         }
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        if (!node_physics) {
-            return true;
-        }
-        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*node.get());
         if (rigid_body == nullptr) {
             return true;
         }
@@ -131,13 +128,9 @@ auto Mcp_server::action_apply_physics_force(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
-    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-    if (!node_physics) {
-        return make_error_content("Node has no rigid body: " + node->get_name());
-    }
-    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*node.get());
     if (rigid_body == nullptr) {
-        return make_error_content("Rigid body is not registered: " + node->get_name());
+        return make_error_content("Node has no live rigid body: " + node->get_name());
     }
     if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
         return make_error_content("Rigid body is not dynamic: " + node->get_name());
@@ -237,7 +230,7 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
-    if (erhe::scene::get_attachment<Node_physics>(node.get())) {
+    if (carries_node_physics(*node.get())) {
         return make_error_content("Node already has a rigid body: " + node->get_name());
     }
     if (!sr->has_physics_world()) {
@@ -289,16 +282,15 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
     }
     create_info.debug_label = node->get_name();
 
-    const std::shared_ptr<Node_physics> node_physics = m_context.scene_commands->create_new_rigid_body(node.get(), create_info);
-    if (!node_physics) {
-        return make_error_content("Failed to create rigid body on node: " + node->get_name());
-    }
+    Node_physics_system& system = sr->get_node_physics_system();
+    system.set_collision_shape(*node.get(), create_info.collision_shape);
     if (args.value("wake", false)) {
-        node_physics->set_wake_on_attach(true);
+        system.set_wake_on_attach(*node.get(), Wake_on_attach::yes);
     }
+    write_node_physics_create_info(*node.get(), create_info);
     return make_json_content({
         {"created",     true},
-        {"queued",      true}, // the attach operation executes on the next editor frame
+        {"queued",      false},
         {"node",        node->get_name()},
         {"node_id",     node->get_id()},
         {"shape",       create_info.collision_shape->describe()},
@@ -317,8 +309,7 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
-    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-    if (!node_physics) {
+    if (!carries_node_physics(*node.get())) {
         return make_error_content("Node has no rigid body: " + node->get_name());
     }
     const std::shared_ptr<Content_library> library = sr->get_content_library();
@@ -328,9 +319,10 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
 
     // Validate everything before applying anything, so an error leaves the
     // body unchanged.
+    const erhe::physics::Motion_mode current_motion_mode = node->get_value(Node_physics::motion_mode_property);
     const erhe::physics::Motion_mode motion_mode = args.contains("motion_mode")
-        ? parse_motion_mode(args["motion_mode"].get<std::string>(), node_physics->get_motion_mode())
-        : node_physics->get_motion_mode();
+        ? parse_motion_mode(args["motion_mode"].get<std::string>(), current_motion_mode)
+        : current_motion_mode;
     std::shared_ptr<erhe::physics::ICollision_shape> new_shape{};
     if (args.contains("shape")) {
         std::string shape_error;
@@ -365,60 +357,59 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
 
     json applied = json::array();
     if (args.contains("motion_mode")) {
-        node_physics->set_motion_mode(motion_mode);
+        node->set_value(Node_physics::motion_mode_property, motion_mode);
         applied.push_back("motion_mode");
     }
     // Body-recreating edits first so live scalar edits below land on the
     // final rigid body.
     if (new_shape) {
-        node_physics->set_collision_shape(new_shape);
+        sr->get_node_physics_system().set_collision_shape(*node.get(), new_shape);
         applied.push_back("shape");
     }
     if (args.contains("is_trigger")) {
-        node_physics->set_trigger(args["is_trigger"].get<bool>());
+        node->set_value(Node_physics::is_trigger_property, args["is_trigger"].get<bool>());
         applied.push_back("is_trigger");
     }
     if (args.contains("center_of_mass")) {
-        node_physics->set_center_of_mass_offset(get_vec3(args, "center_of_mass", glm::vec3{0.0f}));
+        node->set_value(Node_physics::center_of_mass_offset_property, get_vec3(args, "center_of_mass", glm::vec3{0.0f}));
         applied.push_back("center_of_mass");
     }
     if (args.contains("gravity_factor")) {
-        node_physics->set_gravity_factor(args["gravity_factor"].get<float>());
+        node->set_value(Node_physics::gravity_factor_property, args["gravity_factor"].get<float>());
         applied.push_back("gravity_factor");
     }
     if (args.contains("linear_velocity")) {
-        node_physics->set_initial_linear_velocity(get_vec3(args, "linear_velocity", glm::vec3{0.0f}));
+        node->set_value(Node_physics::initial_linear_velocity_property, get_vec3(args, "linear_velocity", glm::vec3{0.0f}));
         applied.push_back("linear_velocity");
     }
     if (args.contains("angular_velocity")) {
-        node_physics->set_initial_angular_velocity(get_vec3(args, "angular_velocity", glm::vec3{0.0f}));
+        node->set_value(Node_physics::initial_angular_velocity_property, get_vec3(args, "angular_velocity", glm::vec3{0.0f}));
         applied.push_back("angular_velocity");
     }
     if (args.contains("material_name")) {
-        node_physics->set_physics_material(material);
+        node->set_value(Node_physics::physics_material_property, erhe::property::Object_reference{material});
         applied.push_back("material_name");
     }
     if (args.contains("filter_name")) {
-        node_physics->set_collision_filter(filter);
+        node->set_value(Node_physics::collision_filter_property, erhe::property::Object_reference{filter});
         applied.push_back("filter_name");
     }
 
-    // The mass is a Node_physics property: the create info keeps the
-    // authored value and the live body (if any) gets it now. Damping, wind
-    // receptivity and density belong to the physics material
-    // (edit_physics_material).
+    // The mass is a Node_physics value: the create info keeps the authored
+    // value and the live body (if any) gets it now. Damping, wind receptivity
+    // and density belong to the physics material (edit_physics_material).
     if (args.contains("mass")) {
-        node_physics->set_mass(args["mass"].get<float>());
+        node->set_value(Node_physics::mass_property, args["mass"].get<float>());
         applied.push_back("mass");
     }
 
-    const std::shared_ptr<erhe::physics::ICollision_shape>& shape = node_physics->get_collision_shape();
+    const std::shared_ptr<erhe::physics::ICollision_shape> shape = get_node_collision_shape(*node.get());
     return make_json_content({
         {"node",        node->get_name()},
         {"applied",     applied},
-        {"motion_mode", motion_mode_to_string(node_physics->get_motion_mode())},
+        {"motion_mode", motion_mode_to_string(node->get_value(Node_physics::motion_mode_property))},
         {"shape",       shape ? shape->describe() : ""},
-        {"is_trigger",  node_physics->is_trigger()}
+        {"is_trigger",  node->get_value(Node_physics::is_trigger_property)}
     }).dump();
 }
 

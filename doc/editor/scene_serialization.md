@@ -98,7 +98,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    flagged `import_root` are transparent (their children are written in
    their place), so open/save cycles do not nest wrappers.
 2. **Physics data** - `build_physics_description()`
-   (`parsers/physics_export.cpp`, the builder the USD save uses too) converts `Node_physics` /
+   (`parsers/physics_export.cpp`, the builder the USD save uses too) converts the rigid-body values /
    `Node_joint` attachments and the content library's physics materials,
    collision filters and joint settings into the plain-data
    `erhe::scene::Physics_description` carrier (`KHR_physics_rigid_bodies` +
@@ -246,7 +246,7 @@ JSON-only, no buffer decode) and branches on
   6. Execute inline (built as operations, executed and dropped - same
      ordering as the import compound): content-library attaches (textures /
      materials / skins / animations), `import_gltf_physics()` -> `import_physics()` (Khronos
-     payload -> `Node_physics` / `Node_joint`, compound folding, carrier
+     payload -> `Node_physics.*` values / `Node_joint`, compound folding, carrier
      node removal) and `import_gltf_editor_state()`
      (`parsers/gltf_extensions_import.cpp`: flags, layouts, rigs (IK
      settings), tags, brushes, node graphs + their bindings; graph meshes

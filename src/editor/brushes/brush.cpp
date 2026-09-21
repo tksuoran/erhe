@@ -7,6 +7,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -443,7 +444,12 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
     mesh->layer_id = instance_create_info.scene_root->layers().content()->id;
-    mesh->enable_flag_bits   (instance_create_info.mesh_flags);
+    // lock_edit seals the prim against value writes, so it is enabled last,
+    // after every value this instance authors (P8: the rigid body is values of
+    // the prim, and the sealed floor instance would otherwise carry none).
+    const uint64_t sealing_flags   = erhe::Item_flags::lock_edit;
+    const uint64_t deferred_flags  = (instance_create_info.mesh_flags | instance_create_info.node_flags) & sealing_flags;
+    mesh->enable_flag_bits   (instance_create_info.mesh_flags & ~sealing_flags);
     if (instance_create_info.mesh_shadow_cast) {
         mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
     }
@@ -451,7 +457,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         mesh->set_value(erhe::scene::Mesh::lightmapped_property, true);
     }
     node->set_world_from_node(instance_create_info.world_from_node);
-    node->enable_flag_bits   (instance_create_info.node_flags);
+    node->enable_flag_bits   (instance_create_info.node_flags & ~sealing_flags);
 
     if (m_data.app_settings.config().physics.static_enable) {
         if (m_data.collision_shape || m_data.collision_shape_generator) {
@@ -474,9 +480,19 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
                 .debug_label      = std::string{name},
                 .motion_mode      = instance_create_info.motion_mode,
             };
-            auto node_physics = std::make_shared<Node_physics>(rigid_body_create_info); // TODO use content library?
-            node->attach(node_physics);
+            // The shape is runtime state of the node's physics system; the
+            // create info's fields become values of the node (D1).
+            // The instance is not in the scene yet, so the system is named
+            // through the destination scene root rather than through the node.
+            instance_create_info.scene_root->get_node_physics_system().set_collision_shape(
+                *node.get(), scaled.collision_shape
+            );
+            write_node_physics_create_info(*node.get(), rigid_body_create_info);
         }
+    }
+
+    if (deferred_flags != 0u) {
+        node->enable_flag_bits(deferred_flags);
     }
 
     return node;

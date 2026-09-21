@@ -26,6 +26,7 @@
 #include "scene/ik_properties.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -746,11 +747,11 @@ void Properties::on_end()
     ImGui::PopStyleVar();
 }
 
-void Properties::node_physics_properties(Node_physics& node_physics)
+void Properties::node_physics_properties(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::physics::IRigid_body* rigid_body = node_physics.get_rigid_body();
+    erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(node);
     if (rigid_body == nullptr) {
         return;
     }
@@ -788,7 +789,7 @@ void Properties::node_physics_properties(Node_physics& node_physics)
     // The authored rigid body state (motion mode, trigger, mass, friction,
     // restitution, damping, gravity factor, wind receptivity, initial
     // velocities, center of mass, physics material, collision filter) is
-    // generic rows (doc/erhe/property_system.md 4.10), drawn by
+    // generic rows (doc/erhe/property_system.md 4.26), drawn by
     // dependency_properties() after the item rows.
 }
 
@@ -847,9 +848,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 
 [[nodiscard]] auto show_item_details(const erhe::Item_base* const item)
 {
-    return
-        !erhe::is<Node_physics>     (item) &&
-        !erhe::is<Rendertarget_mesh>(item);
+    return !erhe::is<Rendertarget_mesh>(item);
 }
 
 // The per-item part of the window (R3 / R5 of
@@ -860,7 +859,6 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 // disabled while the item is sealed.
 void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
-    const auto& node_physics     = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint       = std::dynamic_pointer_cast<Node_joint             >(item);
     const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
@@ -872,11 +870,11 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (edit_disabled) {
         ImGui::BeginDisabled();
     }
-    if (node_physics)     { node_physics_properties(*node_physics); }
     if (node_joint)       { node_joint_properties(*node_joint); }
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
+    if (node)             { node_physics_properties(*node); }
     if (node)             { brush_placement_properties(*node); }
     if (texture)          { texture_properties(texture); }
     if (edit_disabled) {
@@ -895,7 +893,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
-    if (!erhe::is<Node_physics>(item.get()) && !erhe::is<Rendertarget_mesh>(item.get())) {
+    if (!erhe::is<Rendertarget_mesh>(item.get())) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
     }
 

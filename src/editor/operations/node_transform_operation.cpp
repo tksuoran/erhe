@@ -3,7 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
-#include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "time.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -125,9 +125,9 @@ void Node_transform_operation::execute(App_context& context)
         // Snap the node's rigid body to the new pose at rest so the simulation does
         // not react to this discrete (non-interactive) move with a kinematic velocity
         // injection or corrective impulse.
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(m_parameters.node.get());
-        if (node_physics) {
-            node_physics->teleport_to_node();
+        Node_physics_system* const system = find_node_physics_system(*m_parameters.node.get());
+        if (system != nullptr) {
+            system->teleport_to_node(*m_parameters.node.get());
         }
     } else {
         context.time->begin_transform_animation(
@@ -150,9 +150,9 @@ void Node_transform_operation::undo(App_context& context)
         }
     );
     // Snap the node's rigid body to the restored pose at rest (see execute()).
-    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(m_parameters.node.get());
-    if (node_physics) {
-        node_physics->teleport_to_node();
+    Node_physics_system* const system = find_node_physics_system(*m_parameters.node.get());
+    if (system != nullptr) {
+        system->teleport_to_node(*m_parameters.node.get());
     }
 }
 

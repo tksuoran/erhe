@@ -40,6 +40,7 @@
 #include "scene/attachment_types.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
@@ -1567,8 +1568,7 @@ auto Mcp_server::action_physics_drag(const json& args) -> std::string
         if (!mesh) {
             return make_error_content("physics_drag drags a Mesh prim with a rigid body; '" + node->get_name() + "' is not a Mesh");
         }
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        erhe::physics::IRigid_body* const rigid_body = node_physics ? node_physics->get_rigid_body() : nullptr;
+        erhe::physics::IRigid_body* const rigid_body = get_node_rigid_body(*node.get());
         if (rigid_body == nullptr) {
             return make_error_content("Node '" + node->get_name() + "' has no rigid body");
         }
@@ -2099,9 +2099,10 @@ auto Mcp_server::place_brush_instance(
         return r.dump();
     }
     if (skip_physics) {
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(instance_node.get());
-        if (node_physics) {
-            instance_node->detach(node_physics.get());
+        clear_node_physics(*instance_node.get());
+        Node_physics_system* const system = find_node_physics_system(*instance_node.get());
+        if (system != nullptr) {
+            system->set_collision_shape(*instance_node.get(), {});
         }
     }
     // Per-instance name renames the NODE only: the mesh keeps the brush name,

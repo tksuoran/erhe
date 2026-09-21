@@ -1096,10 +1096,14 @@ class Creation:
         return self.mutate("create_physics_joint", args)
 
     def strip_physics(self, node_id):
-        """Remove the rigid body from a node (pure visual detail parts)."""
-        self.mutate("remove_node_attachment", {
-            "scene_name": self.scene, "node_id": int(node_id),
-            "type": "Node_physics",
+        """Remove the rigid body from a node (pure visual detail parts).
+
+        The body is values of the node itself, so taking it away is clearing
+        the key property (doc/plans/node_attachments_to_properties.md P8).
+        """
+        self.mutate("set_item_property", {
+            "scene_name": self.scene, "item_id": int(node_id),
+            "property": "Node_physics.motion_mode",
         })
 
 

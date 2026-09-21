@@ -35,6 +35,7 @@
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/node_raytrace_mask.hpp"
@@ -191,6 +192,8 @@ Scene_root::Scene_root(
     m_scene->add_node_system(*m_draw_mode_system.get());
     m_geometry_graph_mesh_system = std::make_unique<Geometry_graph_mesh_system>();
     m_scene->add_node_system(*m_geometry_graph_mesh_system.get());
+    m_node_physics_system = std::make_unique<Node_physics_system>(*this);
+    m_scene->add_node_system(*m_node_physics_system.get());
 
     // The scene owns its content library: its resources are prims of this
     // scene's tree, under the kind scopes the library keeps below the root
@@ -216,11 +219,11 @@ Scene_root::Scene_root(
                     return;
                 }
                 void* owner = rigid_body->get_owner();
-                Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
-                if (node_physics == nullptr) {
+                Node_physics_entry* entry = reinterpret_cast<Node_physics_entry*>(owner);
+                if (entry == nullptr) {
                     return;
                 }
-                erhe::scene::Node* node = node_physics->get_node();
+                erhe::scene::Node* node = entry->node;
                 if (node == nullptr) {
                     return;
                 }
@@ -241,11 +244,11 @@ Scene_root::Scene_root(
                 //    return;
                 //}
                 void* owner = rigid_body->get_owner();
-                Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
-                if (node_physics == nullptr) {
+                Node_physics_entry* entry = reinterpret_cast<Node_physics_entry*>(owner);
+                if (entry == nullptr) {
                     return;
                 }
-                erhe::scene::Node* node = node_physics->get_node();
+                erhe::scene::Node* node = entry->node;
                 if (node == nullptr) {
                     return;
                 }
@@ -282,11 +285,7 @@ Scene_root::Scene_root(
                     if (!node) {
                         continue;
                     }
-                    const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-                    if (!node_physics) {
-                        continue;
-                    }
-                    auto* rigid_body = node_physics->get_rigid_body();
+                    erhe::physics::IRigid_body* rigid_body = m_node_physics_system->get_rigid_body(*node.get());
                     if (rigid_body == nullptr) {
                         continue;
                     }
@@ -298,7 +297,7 @@ Scene_root::Scene_root(
                     }
                     m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
                     log_physics->trace("release physics: {}", node->describe());
-                    node_physics->end_interaction();
+                    m_node_physics_system->end_interaction(*node.get());
                 }
 
                 for (const auto& item : selection_change.newly_selected) {
@@ -309,11 +308,7 @@ Scene_root::Scene_root(
                     if (!node) {
                         continue;
                     }
-                    const auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-                    if (!node_physics) {
-                        continue;
-                    }
-                    auto* rigid_body = node_physics->get_rigid_body();
+                    erhe::physics::IRigid_body* rigid_body = m_node_physics_system->get_rigid_body(*node.get());
                     if (rigid_body == nullptr) {
                         continue;
                     }
@@ -328,7 +323,7 @@ Scene_root::Scene_root(
                         continue;
                     }
                     log_physics->trace("acquire physics: {}", node->describe());
-                    node_physics->begin_interaction();
+                    m_node_physics_system->begin_interaction(*node.get());
 
                     const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
                     if (i != m_physics_disabled_nodes.end()) {
@@ -400,12 +395,16 @@ Scene_root::~Scene_root() noexcept
         if (m_draw_mode_system) {
             m_scene->remove_node_system(*m_draw_mode_system.get());
         }
+        if (m_node_physics_system) {
+            m_scene->remove_node_system(*m_node_physics_system.get());
+        }
         if (m_geometry_graph_mesh_system) {
             m_scene->remove_node_system(*m_geometry_graph_mesh_system.get());
         }
     }
     m_draw_mode_system.reset();
     m_geometry_graph_mesh_system.reset();
+    m_node_physics_system.reset();
 
     // Library items (and possibly the library itself, via browser windows or
     // clipboard/selection references) can outlive this host; detach them now
@@ -1712,6 +1711,11 @@ auto Scene_root::get_geometry_graph_mesh_system() -> Geometry_graph_mesh_system&
     return *m_geometry_graph_mesh_system.get();
 }
 
+auto Scene_root::get_node_physics_system() -> Node_physics_system&
+{
+    return *m_node_physics_system.get();
+}
+
 auto Scene_root::find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     const std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>>::const_iterator i = m_card_textures.find(path);
@@ -1724,85 +1728,6 @@ auto Scene_root::find_card_texture(const std::string& path) const -> std::shared
 void Scene_root::add_card_texture(const std::string& path, const std::shared_ptr<erhe::graphics::Texture>& texture)
 {
     m_card_textures[path] = texture;
-}
-
-void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node_physics)
-{
-    if (!m_physics_world) {
-        return;
-    }
-    // An inactive item and everything below it is out of the simulation
-    // (doc/erhe/usd_compatibility_design.md X2); the body enters the world when
-    // Node_physics::handle_flag_bits_update sees the bit come back.
-    if (!node_physics->is_active()) {
-        return;
-    }
-    // No caller registers a body that is already in a world: attach
-    // registers only after the old host unregistered, the active-bit flip
-    // only after the body left, and recreate_rigid_body unregisters first.
-    ERHE_VERIFY(node_physics->get_physics_world() == nullptr);
-
-#ifndef NDEBUG
-    const auto i = std::find(m_node_physics.begin(), m_node_physics.end(), node_physics);
-    if (i != m_node_physics.end()) {
-        auto* node = node_physics->get_node();
-        log_physics->error("Node_physics for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
-    } else
-#endif
-    {
-        m_node_physics.push_back(node_physics);
-        m_node_physics_sorted = false;
-    }
-
-    node_physics->set_physics_world(m_physics_world.get());
-    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-    if (rigid_body != nullptr) {
-        m_physics_world->add_rigid_body(node_physics->get_rigid_body());
-    }
-
-    // The newly registered rigid body may be the missing body of a pending
-    // Node_joint (scene load / paste order); retry constraint creation.
-    for (const auto& node_joint : m_node_joints) {
-        static_cast<void>(node_joint->try_create_constraint());
-    }
-}
-
-void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics)
-{
-    if (!m_physics_world) {
-        return;
-    }
-    if (node_physics->get_physics_world() == nullptr) {
-        return; // not in the world (an inactive item's body never entered it)
-    }
-
-    // Tear down joint constraints referencing this rigid body before it
-    // leaves the world; the affected joints return to the pending state.
-    erhe::physics::IRigid_body* rigid_body_for_joints = node_physics->get_rigid_body();
-    if (rigid_body_for_joints != nullptr) {
-        for (const auto& node_joint : m_node_joints) {
-            node_joint->handle_rigid_body_removed(rigid_body_for_joints);
-        }
-    }
-
-    const auto i = std::remove(
-        m_node_physics.begin(),
-        m_node_physics.end(),
-        node_physics
-    );
-    if (i == m_node_physics.end()) {
-        auto* node = node_physics->get_node();
-        log_physics->error("Node_physics for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
-    } else {
-        m_node_physics.erase(i, m_node_physics.end());
-        m_node_physics_sorted = false;
-    }
-
-    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-    if (rigid_body != nullptr) {
-        m_physics_world->remove_rigid_body(node_physics->get_rigid_body());
-    }
-    node_physics->set_physics_world(nullptr);
 }
 
 void Scene_root::register_node_joint(const std::shared_ptr<Node_joint>& node_joint)
@@ -1882,12 +1807,12 @@ void Scene_root::set_physics_simulation_running(const bool running)
     if (!m_physics_world) {
         return;
     }
-    for (const auto& node_physics : m_node_physics) {
-        auto* rigid_body = node_physics->get_rigid_body();
+    for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
+        erhe::physics::IRigid_body* rigid_body = entry->rigid_body.get();
         if (rigid_body == nullptr) {
             continue;
         }
-        erhe::scene::Node* node = node_physics->get_node();
+        erhe::scene::Node* node = entry->node;
         if (node == nullptr) {
             continue;
         }
@@ -1905,12 +1830,8 @@ void Scene_root::set_physics_simulation_running(const bool running)
 
 void Scene_root::before_physics_simulation_steps()
 {
-    for (const auto& node_physics : m_node_physics) {
-        auto* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body == nullptr) {
-            continue;
-        }
-        node_physics->before_physics_simulation();
+    for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
+        m_node_physics_system->before_physics_simulation(*entry);
     }
 }
 
@@ -1948,15 +1869,15 @@ void Scene_root::apply_wind_forces(const float dt, const Physics_config& physics
     const float t          = static_cast<float>(m_wind_time);
     const float wavelength = std::max(physics.wind_wavelength, 0.01f);
 
-    for (const std::shared_ptr<Node_physics>& node_physics : m_node_physics) {
+    for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
         // The physics material carries the receptivity; a body without a
         // material is unaffected (the material default is 0).
-        const std::shared_ptr<erhe::physics::Physics_material>& material = node_physics->get_physics_material();
+        const std::shared_ptr<erhe::physics::Physics_material>& material = entry->create_info.physics_material;
         const float receptivity = material ? material->get_wind_receptivity() : erhe::physics::c_default_wind_receptivity;
         if (receptivity <= 0.0f) {
             continue;
         }
-        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        erhe::physics::IRigid_body* rigid_body = entry->rigid_body.get();
         if ((rigid_body == nullptr) || (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic)) {
             continue;
         }
@@ -1986,35 +1907,18 @@ void Scene_root::after_physics_simulation_steps()
         return;
     }
 
-    // Sort nodes, so that parent transforms are updated before child nodes
-    if (!m_node_physics_sorted) {
-        std::sort(
-            m_node_physics.begin(),
-            m_node_physics.end(),
-            [](const auto& lhs, const auto& rhs) -> bool {
-                erhe::scene::Node* lhs_node = lhs->get_node();
-                erhe::scene::Node* rhs_node = rhs->get_node();
-                if ((lhs_node == nullptr) || (rhs_node == nullptr)) {
-                    return true;
-                }
-                return lhs_node->get_depth() < rhs_node->get_depth();
-            }
-        );
-        m_node_physics_sorted = true;
-    }
-
     // Owner-write bracket: dirt recorded by these body -> node writes keeps
     // the propagation skip over no_transform_update children (the writeback
     // covers every body-driven node itself); dirt from any other writer
     // carries body-driven subtrees with their edited ancestor instead (see
     // Scene::Transform_owner_writes_scope).
     const erhe::scene::Scene::Transform_owner_writes_scope owner_writes_scope{*m_scene};
-    for (const auto& node_physics : m_node_physics) {
-        auto* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body) {
-            if (rigid_body->is_active()) {
-                node_physics->after_physics_simulation();
-            }
+    // get_bodies() returns the entries parents-first, so a body-driven node's
+    // transform is written after its ancestor's.
+    for (Node_physics_entry* const entry : m_node_physics_system->get_bodies()) {
+        erhe::physics::IRigid_body* rigid_body = entry->rigid_body.get();
+        if ((rigid_body != nullptr) && rigid_body->is_active()) {
+            m_node_physics_system->after_physics_simulation(*entry);
         }
     }
 }

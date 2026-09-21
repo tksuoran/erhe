@@ -79,6 +79,7 @@ class App_settings;
 class Item_tree_window;
 class Draw_mode_system;
 class Geometry_graph_mesh_system;
+class Node_physics_system;
 class Node_joint;
 class Physics_drag_constraint;
 class Node_physics;
@@ -337,6 +338,12 @@ public:
     // node-system change sites.
     [[nodiscard]] auto get_geometry_graph_mesh_system() -> Geometry_graph_mesh_system&;
 
+    // The runtime state of this scene's rigid bodies: the collision shape and
+    // the live body of every node carrying Node_physics values
+    // (doc/editor/physics.md). The scene drives it from the node-system change
+    // sites, so no pass scans the tree for bodies.
+    [[nodiscard]] auto get_node_physics_system() -> Node_physics_system&;
+
     // The card images the draw-mode proxies of this scene read, keyed by the
     // file each was read from, so two attachments naming the same file share
     // one texture. Weakly held: the proxy materials own the textures, the
@@ -344,8 +351,6 @@ public:
     [[nodiscard]] auto find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>;
     void add_card_texture(const std::string& path, const std::shared_ptr<erhe::graphics::Texture>& texture);
 
-    void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
-    void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 
     // Node_joint bookkeeping. All attached joints stay registered; a joint
     // without a live constraint is pending. register_node_physics() retries
@@ -574,12 +579,11 @@ private:
     void apply_wind_forces(float dt, const Physics_config& physics);
 
     // Must live longer than m_scene for example
-    bool                                            m_node_physics_sorted{false};
     bool                                            m_physics_simulation_running{true};
     double                                          m_wind_time{0.0};
-    std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
     std::unique_ptr<Draw_mode_system>               m_draw_mode_system;
     std::unique_ptr<Geometry_graph_mesh_system>     m_geometry_graph_mesh_system;
+    std::unique_ptr<Node_physics_system>            m_node_physics_system;
     std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<Physics_drag_constraint*>           m_physics_drags;

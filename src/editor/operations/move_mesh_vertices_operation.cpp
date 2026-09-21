@@ -6,6 +6,8 @@
 #include "editor_log.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
+#include "operations/mesh_operation.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_graphics/device.hpp"
@@ -196,9 +198,9 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
         std::shared_ptr<erhe::Hierarchy>   parent      = mesh_node->get_parent().lock();
         std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(mesh_node->shared_from_this());
 
-        std::shared_ptr<Node_physics> old_node_physics = erhe::scene::get_attachment<Node_physics>(mesh_node);
-        std::shared_ptr<Node_physics> new_node_physics;
-        if (static_enable && old_node_physics) {
+        const Mesh_operation::Entry::Version physics_before = Mesh_operation::capture_physics(*mesh_node);
+        Mesh_operation::Entry::Version       physics_after{};
+        if (static_enable && (physics_before.motion_mode != erhe::physics::Motion_mode::e_none)) {
             if (!shared_collision_shape) {
                 GEO::Mesh convex_hull{};
                 // A moved-vertex result with no volume has no convex hull;
@@ -223,24 +225,15 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
             }
 
             if (shared_collision_shape) {
-                const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                    .collision_shape = shared_collision_shape,
-                    .debug_label     = m_parameters.geometry->get_name(),
-                    .motion_mode     = old_node_physics->get_motion_mode()
-                };
-                new_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                physics_after.collision_shape = shared_collision_shape;
+                physics_after.motion_mode     = physics_before.motion_mode;
             }
         }
 
         mesh_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-        if (old_node_physics) {
-            mesh_node->detach(old_node_physics.get());
-        }
         mesh->set_primitives(new_primitives);
-        if (new_node_physics) {
-            mesh_node->attach(new_node_physics);
-        }
         mesh_node->set_parent(parent);
+        Mesh_operation::restore_physics(*mesh_node, physics_after);
 
         // Honor the geometry-changed contract uniformly (the Geometry pointer is
         // unchanged, so the component-selection store keeps its entries).

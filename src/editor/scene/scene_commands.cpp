@@ -147,17 +147,6 @@ auto Create_new_rendertarget_command::try_call() -> bool
     return m_context.scene_commands->create_new_rendertarget().operator bool();
 }
 
-Create_new_rigid_body_command::Create_new_rigid_body_command(erhe::commands::Commands& commands, App_context& context)
-    : Command  {commands, "scene.create_new_rigid_body"}
-    , m_context{context}
-{
-}
-
-auto Create_new_rigid_body_command::try_call() -> bool
-{
-    return m_context.scene_commands->create_new_rigid_body().operator bool();
-}
-
 Create_new_joint_command::Create_new_joint_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_joint"}
     , m_context{context}
@@ -360,7 +349,6 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_scope_command       {commands, context}
     , m_create_new_light_command       {commands, context}
     , m_create_new_rendertarget_command{commands, context}
-    , m_create_new_rigid_body_command  {commands, context}
     , m_create_new_joint_command       {commands, context}
     , m_add_cameras_command            {commands, context}
     , m_add_room_command               {commands, context}
@@ -377,7 +365,6 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_create_new_scope_command);
     commands.register_command   (&m_create_new_light_command);
     commands.register_command   (&m_create_new_rendertarget_command);
-    commands.register_command   (&m_create_new_rigid_body_command);
     commands.register_command   (&m_create_new_joint_command);
     commands.register_command   (&m_add_cameras_command);
     commands.register_command   (&m_add_room_command);
@@ -397,7 +384,6 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_menu(&m_create_new_scope_command,        "Create.Scope");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
-    commands.bind_command_to_menu(&m_create_new_rigid_body_command,   "Create.Rigid Body");
     commands.bind_command_to_menu(&m_create_new_joint_command,        "Create.Joint");
 
     m_create_scene_subscription = app_message_bus.create_scene.subscribe(
@@ -1012,85 +998,6 @@ auto Scene_commands::create_new_graph_mesh(erhe::Hierarchy* parent) -> std::shar
         m_context.geometry_graph_window->set_target(new_graph_mesh);
     }
     return new_graph_mesh;
-}
-
-auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
-{
-    // doc/editor/active_item.md D6: without an explicit node the target is the
-    // active node.
-    std::shared_ptr<erhe::scene::Node> target = (node != nullptr)
-        ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
-        : m_context.selection->get_active_item_as<erhe::scene::Node>();
-
-    if (!target) {
-        // Nothing to attach to: create a new empty node carrying the body.
-        Scene_root* scene_root = get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
-        if (scene_root == nullptr) {
-            return {};
-        }
-        auto new_node = std::make_shared<erhe::scene::Xform>("new rigid body node");
-        new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-
-        erhe::physics::IRigid_body_create_info create_info{};
-        create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{0.5f});
-        create_info.debug_label     = new_node->get_name();
-        auto node_physics = std::make_shared<Node_physics>(create_info);
-        node_physics->set_name("new rigid body");
-        node_physics->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-
-        m_context.operation_stack->queue(
-            std::make_shared<Compound_operation>(
-                Compound_operation::Parameters{
-                    .operations = {
-                        std::make_shared<Item_insert_remove_operation>(
-                            Item_insert_remove_operation::Parameters{
-                                .context = m_context,
-                                .item    = new_node,
-                                .parent  = scene_root->get_hosted_scene()->get_root_node(),
-                                .mode    = Item_insert_remove_operation::Mode::insert
-                            }
-                        ),
-                        std::make_shared<Node_attach_operation>(node_physics, new_node)
-                    }
-                }
-            )
-        );
-        return node_physics;
-    }
-
-    erhe::physics::IRigid_body_create_info create_info{};
-    create_info.collision_shape = build_shape_from_node_mesh(target.get(), true);
-    if (!create_info.collision_shape) {
-        create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(glm::vec3{0.5f});
-    }
-    return create_new_rigid_body(target.get(), create_info);
-}
-
-auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node, const erhe::physics::IRigid_body_create_info& create_info) -> std::shared_ptr<Node_physics>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    if (erhe::scene::get_attachment<Node_physics>(node)) {
-        log_scene->warn("Node '{}' already has a rigid body attachment", node->get_name());
-        return {};
-    }
-
-    erhe::physics::IRigid_body_create_info effective_create_info = create_info;
-    if (effective_create_info.debug_label.empty()) {
-        effective_create_info.debug_label = node->get_name();
-    }
-    auto node_physics = std::make_shared<Node_physics>(effective_create_info);
-    node_physics->set_name("new rigid body");
-    node_physics->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-
-    m_context.operation_stack->queue(
-        std::make_shared<Node_attach_operation>(
-            node_physics,
-            std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
-        )
-    );
-    return node_physics;
 }
 
 auto Scene_commands::create_new_joint(

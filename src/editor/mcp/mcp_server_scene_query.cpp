@@ -34,6 +34,7 @@
 #include "scene/draw_mode_properties.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
@@ -707,6 +708,35 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         };
     };
 
+    // The rigid body is values of the node itself (P8), so it is reported
+    // beside the node's other values, not as an attachment.
+    json node_physics_json = json(nullptr);
+    const std::optional<Node_physics_data> physics_data = read_node_physics(*found_node.get());
+    if (physics_data.has_value()) {
+        json physics_json = {
+            {"motion_mode",      motion_mode_to_string(physics_data.value().motion_mode)},
+            {"is_trigger",       physics_data.value().is_trigger},
+            {"gravity_factor",   physics_data.value().gravity_factor},
+            {"physics_material", physics_data.value().physics_material ? physics_data.value().physics_material->get_name() : ""},
+            {"collision_filter", physics_data.value().collision_filter ? physics_data.value().collision_filter->get_name() : ""},
+            // The mesh prim a hull / triangle shape was built from; empty
+            // names the body's own mesh.
+            {"collision_mesh",   physics_data.value().collision_mesh ? physics_data.value().collision_mesh->get_name() : ""}
+        };
+        const std::shared_ptr<erhe::physics::ICollision_shape> shape = get_node_collision_shape(*found_node.get());
+        physics_json["collision_shape"] = shape ? shape->describe() : "";
+        const erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*found_node.get());
+        if (rigid_body != nullptr) {
+            physics_json["mass"]      = rigid_body->get_mass();
+            physics_json["is_active"] = rigid_body->is_active();
+            // The live body's damping: the physics material's values as the
+            // backend applied them (0 for a static body).
+            physics_json["linear_damping"]  = rigid_body->get_linear_damping();
+            physics_json["angular_damping"] = rigid_body->get_angular_damping();
+        }
+        node_physics_json = physics_json;
+    }
+
     json attachments = json::array();
     for (const auto& att : found_node->get_attachments()) {
         json att_json = {
@@ -714,32 +744,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"name", att->get_name()},
             {"id",   att->get_id()}
         };
-
-        auto node_physics = std::dynamic_pointer_cast<Node_physics>(att);
-        if (node_physics) {
-            att_json["motion_mode"]      = motion_mode_to_string(node_physics->get_motion_mode());
-            att_json["is_trigger"]       = node_physics->is_trigger();
-            att_json["gravity_factor"]   = node_physics->get_gravity_factor();
-            const std::shared_ptr<erhe::physics::ICollision_shape>& shape = node_physics->get_collision_shape();
-            att_json["collision_shape"] = shape ? shape->describe() : "";
-            const std::shared_ptr<erhe::physics::Physics_material>& physics_material = node_physics->get_physics_material();
-            att_json["physics_material"] = physics_material ? physics_material->get_name() : "";
-            const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter = node_physics->get_collision_filter();
-            att_json["collision_filter"] = collision_filter ? collision_filter->get_name() : "";
-            // The mesh prim a hull / triangle shape was built from; empty
-            // names the body's own mesh.
-            const std::shared_ptr<erhe::scene::Mesh> collision_mesh = node_physics->get_collision_mesh();
-            att_json["collision_mesh"] = collision_mesh ? collision_mesh->get_name() : "";
-            const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-            if (rigid_body != nullptr) {
-                att_json["mass"]            = rigid_body->get_mass();
-                att_json["is_active"]       = rigid_body->is_active();
-                // The live body's damping: the physics material's values as
-                // the backend applied them (0 for a static body).
-                att_json["linear_damping"]  = rigid_body->get_linear_damping();
-                att_json["angular_damping"] = rigid_body->get_angular_damping();
-            }
-        }
 
         auto node_joint = std::dynamic_pointer_cast<Node_joint>(att);
         if (node_joint) {
@@ -829,6 +833,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"skew",          {wk.x, wk.y, wk.z}}
         }},
         {"attachments",    attachments},
+        {"physics",        node_physics_json},
         {"mesh",           erhe::is<erhe::scene::Mesh>(found_node.get())
             ? mesh_details(std::static_pointer_cast<erhe::scene::Mesh>(found_node))
             : json(nullptr)},
