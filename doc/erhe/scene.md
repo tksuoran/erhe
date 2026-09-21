@@ -326,6 +326,43 @@ enumerator tables and nothing else; the mapping is the "Draw modes" table of
 `doc/erhe/usd_compatibility.md`, the reader and writer are `erhe::usd`, and what
 the record draws is the editor's.
 
+## Node systems
+
+`node_system.hpp` owns `erhe::scene::INode_system`, the interface a per-scene
+owner of node runtime state implements
+(`doc/plans/node_attachments_to_properties.md` D2). A node value group - the
+attached properties one class registers on `Node`, keyed on one of them
+(`doc/erhe/property_system.md` section 4.23) - states what the user authored;
+the objects that exist because of it (a physics body, a card proxy mesh, a
+layout solve registration) are owned by one system per group per scene. The
+system keeps its record per node in a container keyed by `Node*`, holds no
+`shared_ptr` to a node, and erases the record in `on_node_unregistered`, so a
+scene close releases what it holds without a `close_scene` subscription.
+
+A system is added to a scene with `Scene::add_node_system` and removed with
+`Scene::remove_node_system`; the list holds non-owning pointers, so the system
+is owned by whoever created it - the editor's `Scene_root` for the groups it
+serves, the `Scene` itself for a group of its own. Both calls are made while
+no notification is being delivered, because a callback may write values of the
+same scene and reach the systems again on the same thread.
+
+The scene drives a system from three change sites:
+
+1. `Scene::register_node` / `unregister_node` call `on_node_registered` /
+   `on_node_unregistered`, where the system tests the group's key property and
+   creates or erases its record. A node that already carries the feature gets
+   its record when it enters a scene.
+2. Every value of the group is registered with
+   `erhe::scene::node_system_property_changed` as its
+   `Property_metadata::property_changed`; it finds the node's scene and calls
+   `on_values_changed` on each of its systems. A change of the key property
+   creates or destroys the record.
+3. `Xformable::handle_flag_bits_update` calls `on_node_active_changed` when
+   the derived `erhe::Item_flags::active` bit moves, so the system takes the
+   node's subtree out of rendering, picking and simulation with it.
+
+Tests: `src/erhe/scene/test/test_node_systems.cpp`.
+
 ## Physics description
 
 `physics_description.hpp` owns `erhe::scene::Physics_description`, the

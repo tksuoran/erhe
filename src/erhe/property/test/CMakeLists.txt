@@ -18,6 +18,7 @@ add_executable(${_target}
     test_style.cpp
     test_reference_layer.cpp
     test_animated_layer.cpp
+    test_attached_group.cpp
     test_dependency_object.cpp
     test_inheritance.cpp
     test_observers.cpp

@@ -16,11 +16,9 @@ enum class Developer_mode : unsigned int {
 // D13) and the secondary-type properties of a content-library folder (D30)
 // - shared by the Properties window and the MCP property tools.
 
-// D12 listing rule for one object. An attached property is listed when the
-// object is of its holder type (Dependency_property::applies_to) and the
-// registering type's visible_when holds for the object, or the object holds
-// a local value for it (a stale hint stays visible and resettable). A
-// secondary property (Property_registry::is_secondary_property) is listed
+// D12 listing rule for one object. An attached property is listed by
+// erhe::property::is_attached_property_listed, which owns that half of the
+// rule. A secondary property (Property_registry::is_secondary_property) is listed
 // when the object holds an own value for it (local, or from its style);
 // its visible_when belongs to the secondary type's objects and is never
 // evaluated on this one.

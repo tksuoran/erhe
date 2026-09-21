@@ -1,6 +1,6 @@
 # Node attachments as attached properties
 
-Status: proposed
+Status: in progress
 
 Per-node data belongs in properties of the node, grouped in the Properties
 window by `Property_ui::group`. Every `erhe::scene::Node_attachment` subclass
@@ -24,6 +24,11 @@ attachment has no path; a value on the node is overridable as it stands.
   locks, limits, stiffness, rest rotation and pole, group "IK"
   (`doc/erhe/property_system.md` section 4.19,
   `doc/plans/rigging/ik_settings.md`).
+- **P1, the D1 and D2 infrastructure.** The key-property rule and its
+  `visible_when` (`erhe_property/attached_group.hpp`,
+  `doc/erhe/property_system.md` section 4.23) and the node systems and their
+  three change sites (`erhe_scene/node_system.hpp`, `Scene::add_node_system`,
+  `doc/erhe/scene.md` "Node systems").
 
 ## Inventory and verdicts
 
@@ -53,7 +58,9 @@ physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
 
 ## Design
 
-**D1. Value group with a key property.** A retiring class `X` registers its
+**D1. Value group with a key property.** The rule and the helpers that serve
+it stand in `doc/erhe/property_system.md` section 4.23; what follows is the
+per-group application of it. A retiring class `X` registers its
 values with `register_attached`, owner type `X`, holder type
 `erhe::scene::Node`, one UI group, from a holder class with static members
 only (`src/editor/scene/<x>_properties.{hpp,cpp}`; `Layout` stays in
@@ -69,10 +76,6 @@ from its default:
 | `Geometry_graph_mesh` | `Geometry_graph_mesh.graph_mesh` | null |
 | `Node_physics` | `Node_physics.motion_mode` | `none` (new enum value) |
 
-The key property is registered with `inherits = false`. Every other value
-of the group has `visible_when` = "key property effective value is not the
-default", so the D12 listing rule shows the group on exactly the nodes that
-carry the feature and Add Property offers the key property everywhere else.
 One free function per group, `read_<x>(const Node&) -> std::optional<X_data>`,
 returns a plain record when the feature is present; every consumer that
 today calls `get_attachment<X>` reads that record.
@@ -81,24 +84,11 @@ today calls `get_attachment<X>` reads that record.
 because of a value group (physics body, card proxy mesh, layout solve
 registration, graph-controlled meshes) are owned by one system object per
 group per scene, held by `Scene_root` (for `Layout`, by `erhe::scene::Scene`).
-A system keeps its per-node runtime record in a map keyed by `Node*` and is
-driven from three change sites:
-
-1. `Property_metadata::property_changed` on each value of the group: finds
-   the node's host, and calls the system's `on_values_changed(node,
-   property)`. A key-property change creates or destroys the record.
-2. Node registration: `Scene_host::register_node` / `unregister_node` call
-   each system's `on_node_registered` / `on_node_unregistered`, which test
-   the key property. This is the replacement for
-   `Node_attachment::handle_item_host_update`.
-3. The derived `Item_flags::active` bit: the node's
-   `handle_flag_bits_update` forwards to the systems
-   (`Node_physics` and `Draw_mode` use it today).
-
-The system is the only holder of raw pointers into its records, records
-hold no `shared_ptr` to the node, and `on_node_unregistered` erases the
-record, so a scene close releases everything without a `close_scene`
-subscription.
+The interface, the registration and the three change sites that drive a
+system stand in `doc/erhe/scene.md` "Node systems"; each phase writes the
+group's system against them. The systems replace
+`Node_attachment::handle_item_host_update` and the attachment's own flag-bit
+hook.
 
 **D3. A joint is a prim.** `Node_joint` becomes `editor::Joint`, a typed
 prim deriving `erhe::scene::Imageable` - the level `UsdPhysicsJoint`
@@ -169,9 +159,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P1. Key-property listing + node systems (D1, D2 infrastructure).**
-  `erhe::property`: tests for a group whose rows follow the key property.
-  `Scene_host` system hooks; no class retired. Suites: property, item, scene.
 - **P2. `Draw_mode`.** Smallest group with runtime state; proves D2 and
   removes the applied-schema attachment registry's first user (D9). Suites:
   usd, scene; DrawModes.usd survey row stays `works`.
@@ -203,7 +190,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P2-P7 are independent of each other after P1; P9 follows P8; P11 is last.
+P2-P7 are independent of each other; P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

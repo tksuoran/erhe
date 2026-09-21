@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::property ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_property/attached_group.cpp
+    erhe_property/attached_group.hpp
     erhe_property/dependency_object.cpp
     erhe_property/dependency_object.hpp
     erhe_property/dependency_property.cpp

@@ -2387,6 +2387,39 @@ Test: `src/erhe/physics/test/test_joint_settings_properties.cpp` (defaults,
 setter to mirror, untyped access with enum labels, an inherited value reaching
 the mirror, clone).
 
+### 4.23 Attached value groups with a key property
+
+A retiring node attachment becomes a group of attached properties (R7, D3)
+of the node itself, registered by one class on one holder class under one
+UI group, and one value of the group is its KEY property
+(`doc/plans/node_attachments_to_properties.md` D1). The holder carries the
+feature exactly while the key property's effective value on it differs from
+that holder's own default layer (D31) -
+`erhe::property::carries_attached_group(object, key)` in
+`erhe_property/attached_group.hpp`. The key property is registered first and
+with `inherits = false`, so a holder below one carrying the feature does not
+carry it; a Style that supplies the key does give it, like any other value
+source (D25).
+
+Every other value of the group takes
+`erhe::property::attached_group_visible_when(key)` as its
+`Property_ui::visible_when` - or the overload that ANDs a holder predicate
+into it, for a group whose rows belong on some of the holder class's objects
+only. Through the D12 listing rule the group's rows then appear on exactly
+the holders that carry the feature, and Add Property offers the key property
+on every other holder, which is how the feature is added. Clearing the key
+takes the rows away again; a non-key value the holder still holds locally
+stays listed by the local-value half of the rule, so it remains resettable.
+
+`erhe::property::is_attached_property_listed` is the attached half of the
+D12 rule and the one place that states it; the editor's
+`is_extra_property_listed` (D12) answers through it and adds the secondary
+branch (D30). The runtime state a group implies is owned by a node system
+per scene (`doc/erhe/scene.md` "Node systems"), which is driven by the key
+property through that system's `on_values_changed`.
+
+Tests: `src/erhe/property/test/test_attached_group.cpp`.
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

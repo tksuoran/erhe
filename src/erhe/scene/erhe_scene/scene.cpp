@@ -4,6 +4,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_system.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene/skin.hpp"
@@ -488,6 +489,11 @@ void Scene::register_node(const std::shared_ptr<erhe::scene::Node>& node)
         // node_data wholesale); reset it so the node can be enqueued here.
         node->node_data.transforms.scene_transform_dirty = false;
         mark_node_transform_dirty(*node);
+
+        std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+        for (INode_system* const system : m_node_systems) {
+            system->on_node_registered(*node);
+        }
     }
 
     ERHE_VERIFY(!node->get_parent().expired());
@@ -513,6 +519,7 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
     // hosted (the flag-change hook only notifies the hosting scene).
     auto* primary_bucket   = node->is_no_transform_update() ? &m_no_transform_update_nodes : &m_transform_update_nodes;
     auto* secondary_bucket = node->is_no_transform_update() ? &m_transform_update_nodes    : &m_no_transform_update_nodes;
+    bool removed = true;
     auto i = std::remove(primary_bucket->begin(), primary_bucket->end(), node);
     if (i != primary_bucket->end()) {
         node->node_data.host = nullptr;
@@ -523,7 +530,17 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
             node->node_data.host = nullptr;
             secondary_bucket->erase(i, secondary_bucket->end());
         } else {
+            removed = false;
             log->error("Node {} not in scene nodes", node->get_name());
+        }
+    }
+
+    // After the removal, so a system that was never told about the node is
+    // not told about its departure either.
+    if (removed) {
+        std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+        for (INode_system* const system : m_node_systems) {
+            system->on_node_unregistered(*node);
         }
     }
 
@@ -669,6 +686,50 @@ void Scene::unregister_layout(const std::shared_ptr<Layout>& layout)
 auto Scene::get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&
 {
     return m_layouts;
+}
+
+void Scene::add_node_system(INode_system& system)
+{
+    std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+    const auto i = std::find(m_node_systems.begin(), m_node_systems.end(), &system);
+    if (i != m_node_systems.end()) {
+        log->error("node system already added to scene {}", get_name());
+        return;
+    }
+    m_node_systems.push_back(&system);
+}
+
+void Scene::remove_node_system(INode_system& system)
+{
+    std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+    const auto i = std::remove(m_node_systems.begin(), m_node_systems.end(), &system);
+    if (i == m_node_systems.end()) {
+        log->error("node system not in scene {}", get_name());
+        return;
+    }
+    m_node_systems.erase(i, m_node_systems.end());
+}
+
+auto Scene::get_node_system_count() const -> std::size_t
+{
+    std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+    return m_node_systems.size();
+}
+
+void Scene::on_node_values_changed(Node& node, const erhe::property::Dependency_property& property)
+{
+    std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+    for (INode_system* const system : m_node_systems) {
+        system->on_values_changed(node, property);
+    }
+}
+
+void Scene::on_node_active_changed(Node& node)
+{
+    std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
+    for (INode_system* const system : m_node_systems) {
+        system->on_node_active_changed(node);
+    }
 }
 
 void Scene::update_layouts()

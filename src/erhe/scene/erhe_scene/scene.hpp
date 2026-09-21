@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -18,6 +19,7 @@ namespace erhe { class Hierarchy; }
 namespace erhe::scene {
 
 class Camera;
+class INode_system;
 class Layout;
 class Light;
 class Mesh;
@@ -241,6 +243,23 @@ public:
     void unregister_layout(const std::shared_ptr<Layout>& layout);
     [[nodiscard]] auto get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&;
 
+    // Node systems (node_system.hpp, doc/erhe/scene.md "Node systems"): the
+    // owners of the runtime state a node value group implies. The list holds
+    // non-owning pointers - a system is owned by whoever created it, the
+    // editor's Scene_root for its own groups and this Scene for a group of
+    // its own - and each entry is added once, before the scene holds nodes
+    // the system cares about, and removed before the system is destroyed.
+    void add_node_system   (INode_system& system);
+    void remove_node_system(INode_system& system);
+    [[nodiscard]] auto get_node_system_count() const -> std::size_t;
+
+    // Dispatch of the three D2 change sites to every system. register_node /
+    // unregister_node call the first pair themselves,
+    // node_system_property_changed calls on_node_values_changed, and
+    // Xformable::handle_flag_bits_update calls on_node_active_changed.
+    void on_node_values_changed(Node& node, const erhe::property::Dependency_property& property);
+    void on_node_active_changed(Node& node);
+
     // Arrange the children of every registered layout node, shallow-to-deep
     // so a parent layout runs before any nested child layout (a nested
     // layout then re-runs later in the same pass). Call once per frame
@@ -289,6 +308,13 @@ private:
     // Registered Layout attachments (register_layout / unregister_layout,
     // fed by Layout::handle_item_host_update through the Scene_host).
     std::vector<std::shared_ptr<Layout>>      m_layouts;
+
+    // Node systems and the lock taken for both mutation and dispatch. The
+    // mutex is recursive because a system's callback may write another value
+    // of the same scene, which routes back into the dispatch on the same
+    // thread.
+    mutable std::recursive_mutex              m_node_systems_mutex;
+    std::vector<INode_system*>                m_node_systems;
 
     // Pending transform propagation (see mark_node_transform_dirty). Raw
     // pointers are safe: unregister_node() removes the node from the list,

@@ -29,6 +29,7 @@ add_executable(${_target}
     test_node_computed.cpp
     test_node_expressions.cpp
     test_node_properties.cpp
+    test_node_systems.cpp
     test_optimized_variant_invalidation.cpp
     test_prim_levels.cpp
     test_resource_prim_tokens.cpp

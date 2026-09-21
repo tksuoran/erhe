@@ -1,5 +1,6 @@
 #include "windows/attached_property_listing.hpp"
 
+#include "erhe_property/attached_group.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
@@ -16,11 +17,7 @@ auto is_extra_property_listed(
             erhe::property::Property_registry::get().is_secondary_property(object, property) &&
             object.has_own_value(property);
     }
-    if (!property.applies_to(object.get_property_owner_type())) {
-        return false;
-    }
-    const erhe::property::Property_ui::Visible_when& visible_when = property.get_metadata(object.get_property_owner_type()).ui.visible_when;
-    return (visible_when && visible_when(object)) || object.has_local_value(property);
+    return erhe::property::is_attached_property_listed(object, property);
 }
 
 void collect_addable_properties(

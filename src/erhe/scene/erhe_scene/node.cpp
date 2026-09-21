@@ -441,10 +441,18 @@ void Xformable::handle_remove_attachment(Node_attachment* const attachment_to_re
 
 void Xformable::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
-    if (((old_flag_bits ^ new_flag_bits) & erhe::Item_flags::no_transform_update) != 0) {
+    const uint64_t changed_flag_bits = old_flag_bits ^ new_flag_bits;
+    if ((changed_flag_bits & (erhe::Item_flags::no_transform_update | erhe::Item_flags::active)) != 0) {
         Scene* const scene = get_scene();
         if (scene != nullptr) {
-            scene->handle_node_no_transform_update_changed(*this);
+            if ((changed_flag_bits & erhe::Item_flags::no_transform_update) != 0) {
+                scene->handle_node_no_transform_update_changed(*this);
+            }
+            // D2 change site 3: the node and its subtree entered or left
+            // rendering, picking and simulation.
+            if ((changed_flag_bits & erhe::Item_flags::active) != 0) {
+                scene->on_node_active_changed(*this);
+            }
         }
     }
     for (const auto& attachment : get_attachments()) {
