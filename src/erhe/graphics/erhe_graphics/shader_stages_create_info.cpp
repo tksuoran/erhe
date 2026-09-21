@@ -466,8 +466,14 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
-    sb << struct_types_source();
-    sb << interface_blocks_source();
+    {
+        ERHE_PROFILE_SCOPE("struct_types_source");
+        sb << struct_types_source();
+    }
+    {
+        ERHE_PROFILE_SCOPE("interface_blocks_source");
+        sb << interface_blocks_source();
+    }
 
     // Default uniform block: the sampler declarations are owned by the
     // bind_group_layout and synthesized from its create_info bindings.

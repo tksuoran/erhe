@@ -194,7 +194,18 @@ auto Shader_key::derive(
     // the record says.
     {
         static const erhe::primitive::Material_texture_samplers s_no_samplers{};
-        const erhe::primitive::Material_values            data     = (material != nullptr) ? material->get_values()           : erhe::primitive::Material_values{};
+        // Only the fields the key is derived from are read: get_values()
+        // resolves every layered material property, and this runs per
+        // material per draw-list change and per prewarmed variant.
+        erhe::primitive::Material_values data{};
+        if (material != nullptr) {
+            data.normalmap_encoding                 = material->get_normalmap_encoding();
+            data.bxdf_model                         = material->get_bxdf_model();
+            data.blending_mode                      = material->get_blending_mode();
+            data.use_circular_brushed_metal         = material->get_use_circular_brushed_metal();
+            data.circular_brushed_metal_texgen_mode = material->get_circular_brushed_metal_texgen_mode();
+            data.use_aniso_control                  = material->get_use_aniso_control();
+        }
         const erhe::primitive::Material_texture_samplers& samplers = (material != nullptr) ? material->get_data().texture_samplers : s_no_samplers;
 
         key.blending_mode = data.blending_mode;

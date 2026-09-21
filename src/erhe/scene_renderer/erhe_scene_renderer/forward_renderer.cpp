@@ -507,7 +507,11 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                     };
                     for (const erhe::dataformat::Vertex_format* const vertex_format : vertex_formats) {
                         ERHE_PROFILE_SCOPE("extra material variant");
-                        Shader_key derived = environment_key.derive(material.get(), vertex_format, has_skin);
+                        Shader_key derived{};
+                        {
+                            ERHE_PROFILE_SCOPE("Shader_key::derive");
+                            derived = environment_key.derive(material.get(), vertex_format, has_skin);
+                        }
                         derived.bool_mask |=  parameters.shader_key_force_enable_mask;
                         derived.bool_mask &= ~parameters.shader_key_force_disable_mask;
 
