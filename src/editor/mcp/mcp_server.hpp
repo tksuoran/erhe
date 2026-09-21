@@ -199,6 +199,8 @@ private:
     auto query_material_details (const nlohmann::json& args) -> std::string;
     auto query_scene_textures   (const nlohmann::json& args) -> std::string;
     auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
+    auto query_brush_geometry_states  (const nlohmann::json& args) -> std::string;
+    auto action_request_brush_geometry(const nlohmann::json& args) -> std::string;
     auto query_scene_settings   (const nlohmann::json& args) -> std::string;
     auto query_scene_variants   (const nlohmann::json& args) -> std::string;
     auto query_viewports        (const nlohmann::json& args) -> std::string;

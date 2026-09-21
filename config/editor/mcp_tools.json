@@ -189,6 +189,52 @@
     "name": "get_scene_brushes"
   },
   {
+    "description": "Report the geometry preparation state of a scene's palette brushes WITHOUT preparing any of them: per-state counts (unprepared / queued / preparing / ready / failed) plus the state of each named brush. Brush geometry is prepared on demand (tier 1 consumers prepare and wait, tier 2 consumers request and poll), so this is how a caller waits for a request_brush_geometry batch to finish.",
+    "inputSchema": {
+      "properties": {
+        "brush_names": {
+          "description": "Names of the brushes to report on; omit or leave empty for every brush of the scene's content library",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_brush_geometry_states"
+  },
+  {
+    "description": "Ask the brush preparation queue to build the geometry of a scene's palette brushes on worker threads and return at once (tier 2). The most recently requested brush is prepared first, and a brush already queued moves to the front. Returns the same per-state counts as get_brush_geometry_states, taken right after the requests were made; poll get_brush_geometry_states until nothing is queued or preparing.",
+    "inputSchema": {
+      "properties": {
+        "brush_names": {
+          "description": "Names of the brushes to request; omit or leave empty to request every brush of the scene's content library",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "request_brush_geometry"
+  },
+  {
     "description": "List the node graphs a scene's content library holds - texture graphs (Graph_texture assets) and geometry graphs (Graph_mesh assets): each graph's name, its content-library path, its format token, its nodes (name, factory type, canvas x / y, parameters) and the links between them named by node and pin, plus the material slots fed from a texture graph (material_bindings) or the prims bound to a geometry graph (node_bindings). Names rather than ids, so a saved and reloaded scene compares directly.",
     "inputSchema": {
       "properties": {

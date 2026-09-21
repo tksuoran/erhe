@@ -71,6 +71,16 @@ auto Brush_geometry_slot::request() -> Brush_geometry_request_outcome
     }
 }
 
+auto Brush_geometry_slot::prepare_if_queued(const std::string_view name) -> Brush_geometry_worker_outcome
+{
+    std::unique_lock<std::mutex> lock{m_mutex};
+    if (m_state != Brush_geometry_state::queued) {
+        return Brush_geometry_worker_outcome::skipped;
+    }
+    prepare_locked(lock, name);
+    return Brush_geometry_worker_outcome::prepared;
+}
+
 void Brush_geometry_slot::prepare_locked(std::unique_lock<std::mutex>& lock, const std::string_view name)
 {
     m_state = Brush_geometry_state::preparing;

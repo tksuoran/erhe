@@ -2197,7 +2197,8 @@ public:
                     m_default_content_library,                //std::shared_ptr<Content_library>   content_library
                     m_app_context,                            //App_context&                       app_context
                     m_app_settings,                           //App_settings&                      app_settings
-                    *m_mesh_memory.get()                      //erhe::scene_renderer::Mesh_memory& mesh_memory
+                    *m_mesh_memory.get(),                     //erhe::scene_renderer::Mesh_memory& mesh_memory
+                    *m_executor.get()                         //tf::Executor&                      executor
                 );
                 // The scene_root is assigned to Scene_builder later, by
                 // create_default_scene() (the scene.create startup command).

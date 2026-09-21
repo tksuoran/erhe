@@ -36,6 +36,8 @@ namespace erhe::scene {
 
 namespace editor {
 
+class Brush_geometry_queue_state;
+
 class Brush_data
 {
 public:
@@ -48,6 +50,11 @@ public:
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<erhe::geometry::Geometry>        geometry                   {};
     Geometry_generator                               geometry_generator         {};
+    // The preparation queue a tier 2 request goes to
+    // (doc/plans/deferred_brush_geometry.md D4, D8). Weak: the queue is owned
+    // by Scene_builder and a brush may outlive it, in which case tier 1
+    // preparation on the calling thread is all that is left.
+    std::weak_ptr<Brush_geometry_queue_state>        geometry_queue             {};
     float                                            density                    {1.0f};
     float                                            volume                     {1.0f};
     Collision_volume_calculator                      collision_volume_calculator{};
@@ -121,8 +128,13 @@ public:
     // Tier 1 (doc/plans/deferred_brush_geometry.md R3): prepares or waits as
     // needed and returns the ready geometry, or null when preparation failed.
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
-    // Tier 2: asks for preparation and returns at once.
+    // Tier 2: asks for preparation and returns at once, after putting the
+    // brush at the front of the preparation queue.
     auto               request_geometry          () -> Brush_geometry_request_outcome;
+    // The preparation queue's worker entry point: prepares the geometry only
+    // while the brush is still `queued`. `name` is the copy the requesting
+    // thread made of the brush's name.
+    auto               prepare_geometry_if_queued(std::string_view name) -> Brush_geometry_worker_outcome;
     [[nodiscard]] auto get_geometry_state        () const -> Brush_geometry_state;
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () -> GEO::index_t;

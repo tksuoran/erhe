@@ -339,6 +339,111 @@ TEST(Brush_geometry_slot_test, request_on_a_ready_slot_is_not_applicable)
     EXPECT_EQ(slot.get_state(), Brush_geometry_state::ready);
 }
 
+TEST(Brush_geometry_slot_test, worker_prepares_a_queued_slot)
+{
+    Run_counter counter;
+    Brush_geometry_slot slot{
+        {},
+        [&counter]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            counter.increment();
+            return make_triangle_geometry();
+        }
+    };
+    // A worker only takes a slot a tier 2 request has queued.
+    EXPECT_EQ(slot.prepare_if_queued("unqueued brush"), editor::Brush_geometry_worker_outcome::skipped);
+    EXPECT_EQ(slot.get_state(), Brush_geometry_state::unprepared);
+    EXPECT_EQ(counter.get(), 0);
+
+    EXPECT_EQ(slot.request(), Brush_geometry_request_outcome::newly_queued);
+    EXPECT_EQ(slot.prepare_if_queued("queued brush"), editor::Brush_geometry_worker_outcome::prepared);
+    EXPECT_EQ(slot.get_state(), Brush_geometry_state::ready);
+    EXPECT_EQ(counter.get(), 1);
+
+    // A second worker finds the slot ready and leaves it alone.
+    EXPECT_EQ(slot.prepare_if_queued("queued brush"), editor::Brush_geometry_worker_outcome::skipped);
+    EXPECT_EQ(counter.get(), 1);
+}
+
+TEST(Brush_geometry_slot_test, tier_1_overtakes_a_queued_slot_and_the_worker_skips_it)
+{
+    Run_counter counter;
+    Brush_geometry_slot slot{
+        {},
+        [&counter]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            counter.increment();
+            return make_triangle_geometry();
+        }
+    };
+    EXPECT_EQ(slot.request(), Brush_geometry_request_outcome::newly_queued);
+
+    // The main thread reaches the queued brush first and prepares it itself.
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = slot.get_geometry("overtaken brush");
+    ASSERT_NE(geometry, nullptr);
+    EXPECT_EQ(counter.get(), 1);
+
+    // The task that pops the same brush afterwards runs no generator.
+    EXPECT_EQ(slot.prepare_if_queued("overtaken brush"), editor::Brush_geometry_worker_outcome::skipped);
+    EXPECT_EQ(counter.get(), 1);
+    EXPECT_EQ(slot.get_geometry("overtaken brush"), geometry);
+}
+
+TEST(Brush_geometry_slot_test, worker_skips_a_slot_another_thread_is_preparing)
+{
+    Latch       latch;
+    Run_counter counter;
+    Brush_geometry_slot slot{
+        {},
+        [&latch, &counter]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            counter.increment();
+            latch.notify_entered();
+            latch.wait();
+            return make_triangle_geometry();
+        }
+    };
+    EXPECT_EQ(slot.request(), Brush_geometry_request_outcome::newly_queued);
+
+    std::shared_ptr<erhe::geometry::Geometry> worker_result;
+    std::thread worker_thread{
+        [&slot, &worker_result]() -> void
+        {
+            EXPECT_EQ(slot.prepare_if_queued("busy brush"), editor::Brush_geometry_worker_outcome::prepared);
+            worker_result = slot.get_geometry_if_ready();
+        }
+    };
+
+    latch.wait_entered();
+    EXPECT_EQ(slot.get_state(), Brush_geometry_state::preparing);
+    // A second worker must not wait and must not run the generator again.
+    EXPECT_EQ(slot.prepare_if_queued("busy brush"), editor::Brush_geometry_worker_outcome::skipped);
+
+    latch.open();
+    worker_thread.join();
+    EXPECT_EQ(counter.get(), 1);
+    EXPECT_NE(worker_result, nullptr);
+    EXPECT_EQ(slot.get_state(), Brush_geometry_state::ready);
+}
+
+TEST(Brush_geometry_slot_test, worker_skips_a_failed_slot)
+{
+    Run_counter counter;
+    Brush_geometry_slot slot{
+        {},
+        [&counter]() -> std::shared_ptr<erhe::geometry::Geometry>
+        {
+            counter.increment();
+            return {};
+        }
+    };
+    EXPECT_EQ(slot.request(), Brush_geometry_request_outcome::newly_queued);
+    EXPECT_EQ(slot.prepare_if_queued("failing brush"), editor::Brush_geometry_worker_outcome::prepared);
+    EXPECT_EQ(slot.get_state(), Brush_geometry_state::failed);
+    EXPECT_EQ(slot.prepare_if_queued("failing brush"), editor::Brush_geometry_worker_outcome::skipped);
+    EXPECT_EQ(counter.get(), 1);
+}
+
 TEST(Brush_geometry_slot_test, state_names)
 {
     EXPECT_EQ(editor::to_string(Brush_geometry_state::unprepared), "unprepared");

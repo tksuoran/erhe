@@ -39,6 +39,16 @@ enum class Brush_geometry_request_outcome : unsigned int
     not_applicable  // preparing, ready or failed: nothing for the queue to do
 };
 
+// What a preparation task found when it reached the brush
+// (Brush_geometry_slot::prepare_if_queued): a brush that the main thread or
+// another task has already taken is left alone, so every brush is prepared
+// exactly once whichever side gets there first (D4).
+enum class Brush_geometry_worker_outcome : unsigned int
+{
+    prepared, // the slot was `queued`: this call ran the generator
+    skipped   // the slot was unprepared, preparing, ready or failed
+};
+
 // The geometry of a brush plus the state machine that prepares it exactly
 // once, whichever thread gets there first (D3, R8). Holds the one mutex and
 // the one condition variable of its owning brush; the owner delegates
@@ -77,6 +87,13 @@ public:
 
     // Tier 2 (R3): asks for preparation and returns at once.
     auto request() -> Brush_geometry_request_outcome;
+
+    // The preparation queue's worker entry point (D4): prepares the geometry
+    // only while the slot is still `queued` and skips it in every other state,
+    // so a brush a tier 1 consumer has already taken is left alone. `name`
+    // names the brush in the failure log line; it is a copy the requesting
+    // thread made, not the brush's own string.
+    auto prepare_if_queued(std::string_view name) -> Brush_geometry_worker_outcome;
 
     // The geometry only if it is already `ready`; never prepares, never waits.
     [[nodiscard]] auto get_geometry_if_ready() const -> std::shared_ptr<erhe::geometry::Geometry>;

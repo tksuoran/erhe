@@ -533,6 +533,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_scene_materials",            &Mcp_server::query_scene_materials                },
         { "get_scene_textures",             &Mcp_server::query_scene_textures                 },
         { "get_scene_brushes",              &Mcp_server::query_scene_brushes                  },
+        { "get_brush_geometry_states",      &Mcp_server::query_brush_geometry_states          },
+        { "request_brush_geometry",         &Mcp_server::action_request_brush_geometry        },
         { "get_scene_settings",             &Mcp_server::query_scene_settings                 },
         { "get_scene_variants",             &Mcp_server::query_scene_variants                 },
         { "get_material_details",           &Mcp_server::query_material_details               },

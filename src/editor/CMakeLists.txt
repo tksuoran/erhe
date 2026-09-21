@@ -133,6 +133,8 @@ erhe_target_sources_grouped(
     assets/gltf_load_task.hpp
     brushes/brush.cpp
     brushes/brush.hpp
+    brushes/brush_geometry_queue.cpp
+    brushes/brush_geometry_queue.hpp
     brushes/brush_geometry_slot.cpp
     brushes/brush_geometry_slot.hpp
     brushes/brush_placement.cpp

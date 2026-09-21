@@ -1,4 +1,5 @@
 #include "brushes/brush.hpp"
+#include "brushes/brush_geometry_queue.hpp"
 #include "brushes/brush_placement.hpp"
 
 #include "app_context.hpp"
@@ -377,7 +378,29 @@ auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
 
 auto Brush::request_geometry() -> Brush_geometry_request_outcome
 {
-    return m_geometry_slot.request();
+    const Brush_geometry_request_outcome outcome = m_geometry_slot.request();
+    if (outcome == Brush_geometry_request_outcome::not_applicable) {
+        return outcome;
+    }
+    // `newly_queued` puts the brush in the queue, `already_queued` moves it to
+    // the front (R5). A brush whose queue is gone, or that no shared_ptr owns,
+    // stays `queued` until a tier 1 consumer prepares it on its own thread.
+    const std::shared_ptr<Brush_geometry_queue_state> queue = m_data.geometry_queue.lock();
+    if (!queue) {
+        return outcome;
+    }
+    const std::shared_ptr<erhe::Item_base> self_item = weak_from_this().lock();
+    const std::shared_ptr<Brush>           self      = std::dynamic_pointer_cast<Brush>(self_item);
+    if (!self) {
+        return outcome;
+    }
+    queue->request(self, get_name());
+    return outcome;
+}
+
+auto Brush::prepare_geometry_if_queued(const std::string_view name) -> Brush_geometry_worker_outcome
+{
+    return m_geometry_slot.prepare_if_queued(name);
 }
 
 auto Brush::get_geometry_state() const -> Brush_geometry_state

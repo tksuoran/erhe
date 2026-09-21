@@ -1841,6 +1841,124 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
     return make_json_content({{"brushes", brushes}}).dump();
 }
 
+namespace {
+
+// The brushes a `request_brush_geometry` / `get_brush_geometry_states` call
+// names: every brush of the scene's palette when no name list is given, and
+// otherwise the named ones, in the order they were named.
+void collect_named_brushes(
+    const Content_library&               library,
+    const json&                          args,
+    std::vector<std::shared_ptr<Brush>>& brushes,
+    std::vector<std::string>&            missing
+)
+{
+    const std::vector<std::shared_ptr<Brush>>& all = library.get_all<Brush>();
+    if (!args.contains("brush_names") || !args.at("brush_names").is_array() || args.at("brush_names").empty()) {
+        for (const std::shared_ptr<Brush>& brush : all) {
+            if (brush) {
+                brushes.push_back(brush);
+            }
+        }
+        return;
+    }
+    for (const json& entry : args.at("brush_names")) {
+        if (!entry.is_string()) {
+            continue;
+        }
+        const std::string name = entry.get<std::string>();
+        bool              found = false;
+        for (const std::shared_ptr<Brush>& brush : all) {
+            if (brush && (brush->get_name() == name)) {
+                brushes.push_back(brush);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            missing.push_back(name);
+        }
+    }
+}
+
+// The per-state counts plus the per-brush states, which is all a tier 2 caller
+// (or a test driving the preparation queue) needs. Reading a state never
+// prepares a geometry.
+[[nodiscard]] auto make_brush_geometry_state_reply(
+    const std::vector<std::shared_ptr<Brush>>& brushes,
+    const std::vector<std::string>&            missing
+) -> std::string
+{
+    json counts = json::object();
+    json states = json::array();
+    for (const Brush_geometry_state state : {
+        Brush_geometry_state::unprepared,
+        Brush_geometry_state::queued,
+        Brush_geometry_state::preparing,
+        Brush_geometry_state::ready,
+        Brush_geometry_state::failed
+    }) {
+        counts[std::string{to_string(state)}] = 0;
+    }
+    for (const std::shared_ptr<Brush>& brush : brushes) {
+        const std::string state_name{to_string(brush->get_geometry_state())};
+        counts[state_name] = counts[state_name].get<int>() + 1;
+        states.push_back({{"name", brush->get_name()}, {"state", state_name}});
+    }
+    json reply{
+        {"brush_count", brushes.size()},
+        {"counts",      counts},
+        {"states",      states}
+    };
+    if (!missing.empty()) {
+        reply["not_found"] = missing;
+    }
+    return make_json_content(reply).dump();
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_brush_geometry_states(const json& args) -> std::string
+{
+    Scene_root* sr = find_scene(args.value("scene_name", ""));
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_brush_geometry_state_reply({}, {});
+    }
+    std::vector<std::shared_ptr<Brush>> brushes;
+    std::vector<std::string>            missing;
+    collect_named_brushes(*library.get(), args, brushes, missing);
+    return make_brush_geometry_state_reply(brushes, missing);
+}
+
+auto Mcp_server::action_request_brush_geometry(const json& args) -> std::string
+{
+    Scene_root* sr = find_scene(args.value("scene_name", ""));
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_brush_geometry_state_reply({}, {});
+    }
+    std::vector<std::shared_ptr<Brush>> brushes;
+    std::vector<std::string>            missing;
+    collect_named_brushes(*library.get(), args, brushes, missing);
+    // Tier 2 (doc/plans/deferred_brush_geometry.md R3): each call returns at
+    // once, having put the brushes in the preparation queue.
+    for (const std::shared_ptr<Brush>& brush : brushes) {
+        static_cast<void>(brush->request_geometry());
+    }
+    return make_brush_geometry_state_reply(brushes, missing);
+}
+
 auto Mcp_server::query_selection(const json& args) -> std::string
 {
     static_cast<void>(args);

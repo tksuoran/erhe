@@ -4,6 +4,7 @@
 
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_geometry_queue.hpp"
 #include "brushes/brush_placement.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/compound_operation.hpp"
@@ -83,11 +84,13 @@ Scene_builder::Scene_builder(
     std::shared_ptr<Content_library>   content_library,
     App_context&                       context,
     App_settings&                      app_settings,
-    erhe::scene_renderer::Mesh_memory& mesh_memory
+    erhe::scene_renderer::Mesh_memory& mesh_memory,
+    tf::Executor&                      executor
 )
     : m_context                {context}
     , m_scene_config           {scene_config}
     , m_enable_post_processing{enable_post_processing}
+    , m_brush_geometry_queue   {std::make_unique<Brush_geometry_queue>(executor)}
 {
     ERHE_PROFILE_FUNCTION();
     // The scene_root is assigned later via set_scene_root() (the scene.create
@@ -267,6 +270,10 @@ auto Scene_builder::make_brush(erhe::Scope& scope, Brush_data&& brush_create_inf
     ERHE_PROFILE_SCOPE("Scene_builder::make_brush (lock + construct)");
     const std::shared_ptr<Content_library>& content_library = m_content_library;
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+
+    // Every palette brush knows the preparation queue a tier 2 request goes to
+    // (doc/plans/deferred_brush_geometry.md D4); the brush holds it weakly.
+    brush_create_info.geometry_queue = m_brush_geometry_queue->get_state();
 
     std::shared_ptr<Brush> brush;
     {
@@ -1066,6 +1073,19 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
             return lhs->get_name() < rhs->get_name();
         }
     );
+
+    // A command that places more than a handful of brushes asks for all of
+    // them first and instantiates them afterwards
+    // (doc/plans/deferred_brush_geometry.md D7): the queue serves the most
+    // recently requested brush first, so the workers prepare the tail of this
+    // sorted list while the main thread prepares the head below.
+    constexpr std::size_t c_pre_request_threshold = 4;
+    if (brushes.size() > c_pre_request_threshold) {
+        ERHE_PROFILE_SCOPE("request brush geometries");
+        for (const std::shared_ptr<Brush>& brush : brushes) {
+            static_cast<void>(brush->request_geometry());
+        }
+    }
 
     std::vector<Pack_entry> pack_entries;
 

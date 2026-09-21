@@ -14,6 +14,9 @@
 
 class btCollisionShape;
 
+namespace tf {
+    class Executor;
+}
 namespace GEO {
     class Mesh;
 }
@@ -53,6 +56,7 @@ namespace editor {
 
 class Brush;
 class Brush_data;
+class Brush_geometry_queue;
 class Content_library;
 
 class Depth_visualization_window;
@@ -80,7 +84,8 @@ public:
         std::shared_ptr<Content_library>   content_library,
         App_context&                       app_context,
         App_settings&                      app_settings,
-        erhe::scene_renderer::Mesh_memory& mesh_memory
+        erhe::scene_renderer::Mesh_memory& mesh_memory,
+        tf::Executor&                      executor
     );
     ~Scene_builder() noexcept;
 
@@ -218,6 +223,13 @@ private:
     App_context&          m_context;
     const Scene_config&   m_scene_config;
     bool                  m_enable_post_processing;
+
+    // The preparation queue of the palette brushes
+    // (doc/plans/deferred_brush_geometry.md D4). Declared before the brushes so
+    // that it is destroyed after them (D8): its destructor only stops the
+    // queue, and a task still in flight keeps the shared state alive on its
+    // own.
+    std::unique_ptr<Brush_geometry_queue> m_brush_geometry_queue;
 
     // Self owned parts
     ERHE_PROFILE_MUTEX(std::mutex,      m_brush_mutex);
