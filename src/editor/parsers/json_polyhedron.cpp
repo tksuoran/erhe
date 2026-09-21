@@ -47,6 +47,21 @@ Json_library::Json_library(const std::filesystem::path& path)
     }
 }
 
+auto Json_library::get_display_name(const std::string& key_name) const -> std::string
+{
+    const auto json_mesh = m_json.FindMember(key_name.c_str());
+    if (json_mesh == m_json.MemberEnd()) {
+        return std::string{};
+    }
+
+    const auto json_name = (*json_mesh).value.FindMember("name");
+    if ((json_name == (*json_mesh).value.MemberEnd()) || !(*json_name).value.IsString()) {
+        return std::string{};
+    }
+
+    return std::string{(*json_name).value.GetString()};
+}
+
 auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::string& key_name) const -> bool
 {
     ERHE_PROFILE_FUNCTION();

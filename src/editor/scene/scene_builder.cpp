@@ -654,8 +654,9 @@ void Scene_builder::make_json_brushes(
     m_johnson_solids_folder->set_parent(&brushes);
     auto& folder = *m_johnson_solids_folder.get();
 
-    for (const auto& key_name : library.names) {
-        auto op = [this, &app_settings, &brush_build_info, &library, &key_name, &folder]() {
+    for (const std::string& key_name : library.names) {
+        const std::string brush_name = library.get_display_name(key_name);
+        auto op = [this, &app_settings, &brush_build_info, &library, &key_name, brush_name, &folder]() {
             std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(key_name);
             const bool ok = library.make_geometry(*geometry.get(), key_name);
             if (!ok || (geometry->get_mesh().facets.nb() == 0)) {
@@ -672,7 +673,7 @@ void Scene_builder::make_json_brushes(
                 Brush_data{
                     .context      = m_context,
                     .app_settings = app_settings,
-                    .name         = "", //// TODO shared_geometry->name,
+                    .name         = brush_name,
                     .build_info   = brush_build_info,
                     .normal_style = Normal_style::polygon_normals,
                     .geometry     = geometry,

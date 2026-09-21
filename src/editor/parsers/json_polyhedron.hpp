@@ -27,6 +27,11 @@ public:
     Json_library();
     explicit Json_library(const std::filesystem::path& path);
 
+    // Display name of a key, read from the JSON "name" member without
+    // building a mesh. Returns an empty string when the key is not in the
+    // library or carries no "name" member.
+    [[nodiscard]] auto get_display_name(const std::string& key_name) const -> std::string;
+
     auto make_geometry(erhe::geometry::Geometry& geometry, const std::string& key_name) const -> bool;
 
     std::vector<std::string> names;       // all meshes
