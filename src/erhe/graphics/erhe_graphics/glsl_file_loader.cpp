@@ -160,28 +160,25 @@ auto Glsl_file_loader::read_shader_source_file(
         }
     }
 
-    // Use erhe::file's existence helper rather than std::filesystem::exists
-    // directly: on Android the helper probes via SDL_IOFromFile so APK
-    // assets are visible (std::filesystem cannot see them).
+    // The path itself, then the same file name under each extra include
+    // path. Through the Device's source cache: every variant and stage of a
+    // program reads the same few dozen files.
     std::filesystem::path resolved_path = path;
     std::optional<std::string> source;
     {
         ERHE_PROFILE_SCOPE("Glsl_file_loader: find and read file");
-        if (!erhe::file::check_is_existing_non_empty_regular_file(
-                "Glsl_file_loader::read_shader_source_file", resolved_path,
-                /*silent_if_not_exists=*/true)) {
+        Shader_source_cache& source_cache = m_device.get_shader_source_cache();
+        source = source_cache.find_or_read(path);
+        if (!source.has_value()) {
             for (const std::filesystem::path& extra : m_extra_include_paths) {
                 const std::filesystem::path candidate = extra / path.filename();
-                if (erhe::file::check_is_existing_non_empty_regular_file(
-                        "Glsl_file_loader::read_shader_source_file", candidate,
-                        /*silent_if_not_exists=*/true)) {
+                source = source_cache.find_or_read(candidate);
+                if (source.has_value()) {
                     resolved_path = candidate;
                     break;
                 }
             }
         }
-
-        source = erhe::file::read("Shader_stages_create_info::final_source", resolved_path);
     }
     if (!source.has_value()) {
         // Loud failure: previously this returned a "// Source load

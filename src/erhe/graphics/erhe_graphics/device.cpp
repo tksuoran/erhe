@@ -285,6 +285,10 @@ auto Device::get_spirv_cache() -> Spirv_cache&
     return m_spirv_cache;
 }
 #endif
+auto Device::get_shader_source_cache() -> Shader_source_cache&
+{
+    return m_shader_source_cache;
+}
 void Device::set_shader_error_callback(Shader_error_callback callback)
 {
     m_shader_error_callback = std::move(callback);

@@ -31,6 +31,8 @@ erhe_target_sources_grouped(
     erhe_graphics/fragment_outputs.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
+    erhe_graphics/shader_source_cache.cpp
+    erhe_graphics/shader_source_cache.hpp
     erhe_graphics/glsl_format_source.cpp
     erhe_graphics/glsl_format_source.hpp
     erhe_graphics/gpu_timer.cpp

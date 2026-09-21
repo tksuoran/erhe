@@ -3,6 +3,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/shader_source_cache.hpp"
 #if defined(ERHE_SPIRV)
 #   include "erhe_graphics/spirv_cache.hpp"
 #endif
@@ -650,6 +651,7 @@ public:
 #if defined(ERHE_SPIRV)
     [[nodiscard]] auto get_spirv_cache                    () -> Spirv_cache&;
 #endif
+    [[nodiscard]] auto get_shader_source_cache            () -> Shader_source_cache&;
     void               set_shader_error_callback          (Shader_error_callback callback);
     void               set_state_dump_callback            (State_dump_callback callback);
     void               set_trace_callback                 (Trace_callback callback);
@@ -709,6 +711,7 @@ private:
 #if defined(ERHE_SPIRV)
     Spirv_cache                  m_spirv_cache;
 #endif
+    Shader_source_cache          m_shader_source_cache;
     Shader_error_callback        m_shader_error_callback  {};
     State_dump_callback          m_state_dump_callback    {};
     Trace_callback               m_trace_callback         {};

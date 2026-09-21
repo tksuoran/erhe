@@ -25,6 +25,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Render_command_encoder` -- Records draw commands: set pipeline, bind buffers, bind sampled images via `set_sampled_image()`, draw primitives (including multi-draw indirect).
 - `Ring_buffer` -- Circular GPU buffer for streaming per-frame data with fence-based synchronization.
 - `Shader_monitor` -- Watches shader source files and hot-reloads programs when files change.
+- `Shader_source_cache` -- Text of shader source files by path, owned by the `Device` (`get_shader_source_cache()`). `Glsl_file_loader` reads every source and include through it, `preload(directory)` fills it for a whole shader directory before the first program is built (`Program_interface` does this for its `shader_paths`), and `Shader_monitor` erases the entry of a changed file before it rebuilds the stages that use it.
 - `Fragment_outputs` -- Describes fragment shader output declarations.
 - `Surface` / `Swapchain` -- Window surface and swapchain management.
 

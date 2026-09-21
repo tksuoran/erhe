@@ -37,6 +37,11 @@ Program_interface::Program_interface(
     , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
 {
+    // Every shader source is in memory before the first program is built.
+    for (const std::filesystem::path& shader_path : config.shader_paths) {
+        graphics_device.get_shader_source_cache().preload(shader_path);
+    }
+
     // Write clamped values back to config so callers see actual UBO limits
     config.max_camera_count    = static_cast<int>(camera_interface.max_camera_count);
     config.view_count      = static_cast<int>(camera_interface.view_count);

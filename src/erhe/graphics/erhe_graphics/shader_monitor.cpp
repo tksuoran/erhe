@@ -222,6 +222,12 @@ void Shader_monitor::update_once_per_frame()
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
+    // Every changed file leaves the source cache before any stages are
+    // rebuilt: a rebuild reads all of its sources, changed or not.
+    for (const File* f : m_reload_list) {
+        m_device.get_shader_source_cache().erase(f->path);
+    }
+
     bool any_reloaded = false;
     for (auto* f : m_reload_list) {
         for (auto& entry : f->reload_entries) {
