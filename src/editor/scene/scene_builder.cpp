@@ -267,10 +267,15 @@ auto Scene_builder::make_brush(erhe::Scope& scope, Brush_data&& brush_create_inf
 {
     // TODO This is very crude locking.
     //      We could be able to do more in parallel - check if we can do more fine grained locking.
+    ERHE_PROFILE_SCOPE("Scene_builder::make_brush (lock + construct)");
     const std::shared_ptr<Content_library>& content_library = m_content_library;
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
-    std::shared_ptr<Brush> brush = std::make_shared<Brush>(std::move(brush_create_info));
+    std::shared_ptr<Brush> brush;
+    {
+        ERHE_PROFILE_SCOPE("make_shared<Brush>");
+        brush = std::make_shared<Brush>(std::move(brush_create_info));
+    }
     brush->set_parent(&scope);
     return brush;
 }

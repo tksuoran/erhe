@@ -687,10 +687,10 @@ auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geom
     Element_mappings element_mappings;
     GEO::Mesh& mesh = geometry->get_mesh();
 
-    // Geogram concurrency: mesh_from_triangle_soup (colocate) and
-    // Geometry::process serialize themselves internally on
-    // erhe::geometry::geogram_lock(); compute_mesh_tangents is
-    // mesh-local erhe code and needs no lock.
+    // Geogram concurrency: mesh_from_triangle_soup (colocate) serializes
+    // itself internally on erhe::geometry::geogram_lock();
+    // Geometry::process and compute_mesh_tangents are mesh-local and need
+    // no lock.
     mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, element_mappings);
 
     const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);

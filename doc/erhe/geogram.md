@@ -71,7 +71,6 @@ cost is small. Lock order: it is the innermost lock - never acquire a scene
 
 Guarded choke points (each takes the lock internally):
 
-- `Geometry::process()` (xatlas atlas generation, repair-ish steps)
 - `erhe::primitive::mesh_from_triangle_soup()` (colocate)
 - `erhe::geometry::make_convex_hull()` (Delaunay branch)
 - `operation::Repair/Weld/Remesh/Decimate/Smooth::build()` (mesh_repair,
@@ -94,8 +93,17 @@ NOT guarded (mesh-local, no geogram algorithm): element/attribute
 construction, `facets.connect()`, `geometry_from_flat_data`,
 `compute_mesh_tangents`, plain mesh reads (buffer-mesh and raytrace builds),
 `operation::bake_transform()` and `operation::clip_by_tile_tree()` (pure
-per-invocation clipping state; their piece post_processing self-locks via
-`Geometry::process()` - see the thread-safety note in `clip_tile_tree.hpp`).
+per-invocation clipping state), and `Geometry::process()`: its steps are erhe
+code plus `GEO::MeshFacets::connect` / `delete_elements` / `create_polygon`
+(`mesh.cpp`: no `parallel_for`, progress task or `Process::` use),
+`GEO::Geom::mesh_facet_normal` and attribute access (`attributes.cpp`:
+per-store spinlocks only), so `process()` of different meshes runs in parallel
+on worker threads; its atlas step is the `generate_mesh_atlas_texture_coordinates()`
+choke point above. The audit holds at the geogram pin `erhe-2026-09-21`; repeat
+it when a `process()` step is added or the pin moves. Geogram's `parallel_for`
+users at that pin: `delaunay`, `periodic_delaunay_3d`, `boxes_intersections`,
+`mesh_AABB`, `mesh_baking`, `mesh_reorder`, `mesh_repair`,
+`mesh_surface_intersection`, `colocate`, `kd_tree`, `RVD`.
 
 `make_convex_hull()` uses the sequential `"BDEL"` Delaunay for the same
 reason: it runs on async operation workers while other geogram work may be in

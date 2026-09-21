@@ -55,8 +55,8 @@ public:
 // reaches no Geogram algorithm (pure per-invocation clipping state +
 // mesh-local attribute work; GEO attribute stores are per-mesh with
 // spinlocked observer registration and read-only type registries at the
-// geogram pin), and the piece post_processing self-locks through
-// Geometry::process() (see erhe::geometry::geogram_lock()). Concurrent
+// geogram pin), and the piece post_processing is Geometry::process(), which
+// is mesh-local too (see erhe::geometry::geogram_lock()). Concurrent
 // reads of one shared source geometry are fine; nothing mutates it.
 void clip_by_tile_tree(
     const erhe::geometry::Geometry&    source_world,

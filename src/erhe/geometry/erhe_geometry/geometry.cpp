@@ -1336,6 +1336,8 @@ void Geometry::clear_edge_sharpness(const GEO::index_t v0, const GEO::index_t v1
 
 void Geometry::build_edges()
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Geogram's edges.clear() keeps attribute bindings but wipes the values,
     // and the rebuild below may enumerate edges in a different order. Edge
     // identity is the canonical vertex pair (vertex indices are not touched
@@ -1361,6 +1363,21 @@ void Geometry::build_edges()
     m_vertex_to_edges.resize(m_mesh.vertices.nb());
 
     // First pass - shared edges
+    {
+    ERHE_PROFILE_SCOPE("build_edges: first pass");
+    // The shared edges are counted first and created in one call:
+    // create_edge() resizes every edge attribute store once per edge.
+    GEO::index_t shared_edge_count = 0;
+    for (GEO::index_t facet : m_mesh.facets) {
+        for (GEO::index_t corner : m_mesh.facets.corners(facet)) {
+            const GEO::index_t next_corner = m_mesh.facets.next_corner_around_facet(facet, corner);
+            if (m_mesh.facet_corners.vertex(corner) < m_mesh.facet_corners.vertex(next_corner)) {
+                ++shared_edge_count;
+            }
+        }
+    }
+    m_vertex_pair_to_edge.reserve(shared_edge_count);
+    GEO::index_t next_shared_edge = (shared_edge_count > 0) ? m_mesh.edges.create_edges(shared_edge_count) : 0;
     for (GEO::index_t facet : m_mesh.facets) {
         const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
         for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
@@ -1373,7 +1390,9 @@ void Geometry::build_edges()
             ++facet_edge_count;
             ERHE_VERIFY(a != b);
             if (a < b) { // This does not work for non-shared edges going wrong direction
-                const GEO::index_t edge = m_mesh.edges.create_edge(a, b);
+                const GEO::index_t edge = next_shared_edge++;
+                m_mesh.edges.set_vertex(edge, 0, a);
+                m_mesh.edges.set_vertex(edge, 1, b);
                 const std::pair<GEO::index_t, GEO::index_t> key{a, b};
                 m_vertex_pair_to_edge.insert({key, edge});
                 m_vertex_to_edges[a].push_back(edge);
@@ -1392,7 +1411,11 @@ void Geometry::build_edges()
         }
     }
 
+    }
+
     // Second pass - non-shared edges wrong direction or non-manifold wrong direction
+    {
+    ERHE_PROFILE_SCOPE("build_edges: second pass");
         for (GEO::index_t facet : m_mesh.facets) {
             const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
             for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
@@ -1425,6 +1448,9 @@ void Geometry::build_edges()
         }
     }
 
+    }
+    {
+    ERHE_PROFILE_SCOPE("build_edges: edge_to_facets");
     m_edge_to_facets.clear();
     const GEO::index_t edge_count = m_mesh.edges.nb();
     m_edge_to_facets.resize(edge_count);
@@ -1449,6 +1475,8 @@ void Geometry::build_edges()
         }
     }
 
+    }
+
     // Reapply snapshotted edge sharpness values (see snapshot at the top).
     // An edge whose vertex pair no longer exists (facet changes between
     // build_edges() calls) silently drops its value.
@@ -1462,9 +1490,18 @@ void Geometry::build_edges()
 
 void Geometry::process(const Geometry_process_parameters& parameters)
 {
-    // See geogram_lock(): xatlas / repair / parallel_for-using steps below
-    // must not run concurrently with other geogram algorithm invocations.
-    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+    // No geogram_lock() here: every step below is mesh-local - erhe code,
+    // GEO::MeshFacets::connect / delete_elements / create_polygon
+    // (mesh.cpp), GEO::Geom::mesh_facet_normal (mesh_geometry.cpp) and
+    // attribute access (attributes.cpp, per-store spinlocks), none of which
+    // holds a parallel_for, a progress task or process-global state - except
+    // the atlas step, which takes the lock itself around its Geogram branch
+    // (generate_mesh_atlas_texture_coordinates). Audited at the geogram pin
+    // erhe-2026-09-21; repeat the audit when a step is added or the pin
+    // moves. Holding the lock for the whole function serialized the brush
+    // and async mesh builds of every worker thread.
+
+    ERHE_PROFILE_FUNCTION();
 
     const uint64_t flags = parameters.flags;
     //GEO::mesh_reorder(m_mesh);
@@ -1477,34 +1514,41 @@ void Geometry::process(const Geometry_process_parameters& parameters)
 
     if (flags & process_flag_connect) {
         erhe::log::set_breadcrumb("geometry: facets.connect");
+        ERHE_PROFILE_SCOPE("process: facets.connect");
         m_mesh.facets.connect();
     }
 
     if (flags & process_flag_merge_coplanar_neighbors) {
         erhe::log::set_breadcrumb("geometry: merge_coplanar + update_connectivity");
+        ERHE_PROFILE_SCOPE("process: merge_coplanar + update_connectivity");
         merge_coplanar_neighbors();
         update_connectivity();
         build_edges();
     } else if (flags & process_flag_build_edges) {
         erhe::log::set_breadcrumb("geometry: update_connectivity + build_edges");
+        ERHE_PROFILE_SCOPE("process: update_connectivity + build_edges");
         update_connectivity();
         build_edges();
     }
 
     if (flags & process_flag_compute_smooth_vertex_normals) {
         erhe::log::set_breadcrumb("geometry: compute_smooth_vertex_normals");
+        ERHE_PROFILE_SCOPE("process: compute_smooth_vertex_normals");
         compute_mesh_vertex_normal_smooth(m_mesh, m_attributes);
     }
     if (flags & process_flag_compute_facet_centroids) {
         erhe::log::set_breadcrumb("geometry: compute_facet_centroids");
+        ERHE_PROFILE_SCOPE("process: compute_facet_centroids");
         compute_facet_centroids(m_mesh, m_attributes);
     }
     if (flags & process_flag_generate_facet_texture_coordinates) {
         erhe::log::set_breadcrumb("geometry: generate_facet_texture_coordinates");
+        ERHE_PROFILE_SCOPE("process: generate_facet_texture_coordinates");
         generate_mesh_facet_texture_coordinates(parameters.facet_texcoord_usage_index);
     }
     if (flags & process_flag_generate_atlas_texture_coordinates) {
         erhe::log::set_breadcrumb("geometry: generate_atlas_texture_coordinates");
+        ERHE_PROFILE_SCOPE("process: generate_atlas_texture_coordinates");
         // mesh_make_atlas() mutates attribute stores, so m_attributes must be
         // unbound across the call; the core rebinds before writing UVs back.
         // Projection keeps each flat face undistorted; xatlas packs the charts.
@@ -1520,10 +1564,12 @@ void Geometry::process(const Geometry_process_parameters& parameters)
     }
     if (flags & process_flag_generate_tangents_ortho) {
         erhe::log::set_breadcrumb("geometry: compute_mesh_tangents (ortho)");
+        ERHE_PROFILE_SCOPE("process: compute_mesh_tangents (ortho)");
         compute_mesh_tangents(m_mesh, {.orthonormalize = true, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     } else
     if (flags & process_flag_generate_tangents) {
         erhe::log::set_breadcrumb("geometry: compute_mesh_tangents");
+        ERHE_PROFILE_SCOPE("process: compute_mesh_tangents");
         compute_mesh_tangents(m_mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     }
     if (flags & process_flag_debug_trace) {
@@ -1643,6 +1689,8 @@ void build_extra_connectivity(
 
 void Geometry::update_connectivity()
 {
+    ERHE_PROFILE_FUNCTION();
+
     build_extra_connectivity(m_mesh, m_vertex_to_corners, m_corner_to_facet);
 }
 

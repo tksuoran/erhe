@@ -50,9 +50,11 @@ namespace erhe::geometry {
 // assignment when parallel_for is entered from two threads at once
 // (process_win.cpp static threadCounter_; observed as GEO::Geom::colocate()
 // old2new corruption). Every erhe entry point that reaches a geogram
-// *algorithm* (parallel_for users, Delaunay, mesh_repair, CVT, xatlas via
-// process(), colocate via mesh_from_triangle_soup, make_convex_hull, the
-// geometry-operation implementations) must hold this lock. Pure per-mesh
+// *algorithm* (parallel_for users, Delaunay, mesh_repair, CVT, mesh_make_atlas
+// via generate_mesh_atlas_texture_coordinates, colocate via
+// mesh_from_triangle_soup, make_convex_hull, the geometry-operation
+// implementations) must hold this lock. Geometry::process() itself does not:
+// its steps are mesh-local apart from the atlas step, which locks itself. Pure per-mesh
 // element/attribute construction (create_vertices, facets.connect, attribute
 // binds) is mesh-local and does not need it. Recursive so the choke points
 // can nest (a geometry operation that calls Geometry::process()). Geogram
