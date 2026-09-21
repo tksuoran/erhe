@@ -21,8 +21,8 @@ recordings are collected in the
 This document maps the creation features to the editor features they are
 built on. The **canonical workflow guide** (read before building or
 revising a creation) is the `erhe-creations` skill:
-`.agents/skills/erhe-creations/SKILL.md` plus its domain recipe files in
-`.agents/skills/erhe-creations/references/`. The MCP server itself is
+`.claude/skills/erhe-creations/SKILL.md` plus its domain recipe files in
+`.claude/skills/erhe-creations/references/`. The MCP server itself is
 documented in `AGENTS.md` ("In-editor MCP server") and
 `doc/agents/mcp_server_usage.md`.
 
@@ -497,7 +497,7 @@ geometry-node sculpture built from a different Conway operator chain
 
 ## Pointers
 
-- `.agents/skills/erhe-creations/SKILL.md` - canonical workflow,
+- `.claude/skills/erhe-creations/SKILL.md` - canonical workflow,
   hierarchy rules, gotcha index; domain recipes in
   `references/{vegetation,physics_rigs,csg_hulls,settling_rock_piles,blades_sweep}.md`.
 - `AGENTS.md` "In-editor MCP server" + `doc/agents/mcp_server_usage.md` -

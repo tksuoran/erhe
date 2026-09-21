@@ -5,7 +5,7 @@ Status: in progress
 This plan extends `doc/editor/geometry_nodes.md` and
 `doc/editor/geometry_graph_transform_from_node.md`. It lists what the AI-creation
 workflow still lacks; the workflow itself and its recipes live in
-`.agents/skills/erhe-creations/SKILL.md` and its
+`.claude/skills/erhe-creations/SKILL.md` and its
 `references/geometry_graph_sculpt.md`, which are the canonical sources to read
 before any creation work.
 

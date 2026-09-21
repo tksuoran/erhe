@@ -191,4 +191,4 @@ settings are ever left set, every subsequent launch crashes this way;
 
 - [`renderdoc_fork.md`](renderdoc_fork.md) - the desktop Windows/Vulkan MCP
   capture workflow.
-- `.agents/skills/erhe-quest-launch` - build / install / launch protocol.
+- `.claude/skills/erhe-quest-launch` - build / install / launch protocol.

@@ -75,7 +75,7 @@ Blender `code_artifact` play the same role.
 | Formats | GLB in/out only | glTF import/export with `ERHE_brushes`/`ERHE_physics`/`ERHE_scene` extensions, prefabs, asset manager |
 | Headless operation | Server-side (closed) | First-class: headless build runs full pipeline + MCP + screenshots |
 | DCC integration | Blender add-on (import as named meshes, code in Text Editor, crash-resumable jobs, safe self-update) | None |
-| Agent-facing docs | FastMCP `instructions`, `llms.txt`, README decision tree keyed on `next_action` | `AGENTS.md`, `.agents/skills/erhe-creations/` with maintenance contract, `doc/agents/mcp_api_guidelines.md` |
+| Agent-facing docs | FastMCP `instructions`, `llms.txt`, README decision tree keyed on `next_action` | `AGENTS.md`, `.claude/skills/erhe-creations/` with maintenance contract, `doc/agents/mcp_api_guidelines.md` |
 | Multi-object scenes | No — one asset per conversation | Yes — full scene composition is the native mode |
 | Generative geometry (diffusion/learned) | No (code-native by design) | No (parametric/CSG/L-systems by design) |
 

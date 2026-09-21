@@ -216,7 +216,6 @@ Every document states its standing in its first ten lines:
 
 ### Agents (`agents/`)
 
-- [agents/cppskills.md](agents/cppskills.md) (mostly stable): C++ agent commands under `.agents/commands/` (debug, audit, TDDAB plan / review / develop) and how they fit together
 - [agents/creations.md](agents/creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
 - [agents/lsai_usage_playbook.md](agents/lsai_usage_playbook.md) (mostly stable): LSAI usage playbook (erhe, C++)
 - [agents/mcp_api_guidelines.md](agents/mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
