@@ -512,7 +512,6 @@ void Asset_browser::apply_scan_progress()
     {
         std::lock_guard<std::mutex> lock{request.mutex};
         working_directory = request.working_directory;
-        m_scan_entry_scratch.clear(); // capacity kept
         m_scan_entry_scratch.insert(
             m_scan_entry_scratch.end(),
             std::make_move_iterator(request.published_entries.begin()),
@@ -521,7 +520,16 @@ void Asset_browser::apply_scan_progress()
         request.published_entries.clear();
     }
 
-    for (const Asset_scan_entry& entry : m_scan_entry_scratch) {
+    // Building a node costs tens of microseconds, so a whole walk's worth in
+    // one call is a visible stall: each call applies entries for
+    // c_scan_apply_budget and the next call continues.
+    const std::chrono::steady_clock::time_point apply_start_time = std::chrono::steady_clock::now();
+    while (m_scan_entry_cursor < m_scan_entry_scratch.size()) {
+        if ((std::chrono::steady_clock::now() - apply_start_time) >= c_scan_apply_budget) {
+            return;
+        }
+        const Asset_scan_entry& entry = m_scan_entry_scratch[m_scan_entry_cursor];
+        ++m_scan_entry_cursor;
         if (entry.parent_path_key.empty()) {
             // The walk's synthetic root: the new tree replaces the shown one
             // here and grows in place from now on (D3).
@@ -545,6 +553,7 @@ void Asset_browser::apply_scan_progress()
         editor::make_node(m_tree, entry.path, entry.path_key, entry.kind, parent_node.get(), {});
     }
     m_scan_entry_scratch.clear(); // capacity kept
+    m_scan_entry_cursor = 0;
 
     if (!finished) {
         return;

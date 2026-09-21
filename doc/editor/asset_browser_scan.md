@@ -19,9 +19,10 @@ executor workers; the main thread only picks results up.
   entries found since the previous one, so the main thread can attach them
   in walk order (a parent always precedes its children).
 - R3. The main thread turns published entries into `Asset_node` objects and
-  attaches them to the shown tree the frame it picks them up, so the
-  window shows the tree growing while the walk runs. The "Scanning..."
-  label stays until the walk's last publication has been applied.
+  attaches them to the shown tree in walk order, spending at most 4 ms per
+  frame on it, so the window shows the tree growing and no frame stalls
+  however many entries a publication holds. The "Scanning..." label stays
+  until the walk's last publication has been applied.
 - R4. The main thread performs no filesystem call when it applies a
   publication: the entry carries the classification the walk made.
 - R5. A file saved while a walk is in flight is refreshed against the tree
@@ -59,9 +60,15 @@ executor workers; the main thread only picks results up.
   window; later entries attach to it through its `nodes_by_path`.
   `Asset_tree` is main-thread owned throughout; the worker never holds a
   node.
-- D4. `apply_finished_scan` becomes `apply_scan_progress`: it applies every
-  publication available now, and when the request is finished after the
-  last one, drops the request and replays the pending refresh paths (R5).
+- D4. `apply_scan_progress` moves every publication available now to the
+  end of the scratch vector and applies entries from `m_scan_entry_cursor`
+  on until `c_scan_apply_budget` (4 ms) has elapsed; the next call
+  continues from the cursor. When the scratch is fully applied it is
+  cleared, and when the request is finished as well, the request is dropped
+  and the pending refresh paths are replayed (R5). Building a node costs
+  tens of microseconds in a Debug build (item construction, the
+  sibling-unique-name check, the inheritance snapshot of `set_parent`), so
+  a whole walk applied in one call is a stall of over 100 ms.
   Its callers stay: the window's `imgui()` each frame and `refresh_file`.
 - D5. The walk logs one info line per publication (entries in the batch,
   elapsed ms since the walk started) and one when it finishes (total

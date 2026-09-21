@@ -18,6 +18,7 @@
 #include <string>
 #include <functional>
 #include <optional>
+#include <chrono>
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
@@ -370,9 +371,13 @@ private:
     // Non-null while a directory walk is in flight.
     std::shared_ptr<Asset_scan_request> m_scan_request;
 
-    // Entries swapped out from under the request's mutex and applied outside the
-    // lock. A member so its capacity survives the walk's publications.
+    // Entries moved out from under the request's mutex and applied outside the
+    // lock, c_scan_apply_budget of them per call: m_scan_entry_cursor is the
+    // first entry not applied yet. A member so its capacity survives the
+    // walk's publications.
+    static constexpr std::chrono::milliseconds c_scan_apply_budget{4};
     std::vector<Asset_scan_entry> m_scan_entry_scratch;
+    std::size_t                   m_scan_entry_cursor{0};
 
     // Files saved while a walk was in flight: refreshed against the tree the
     // walk lands, since that tree replaces whatever a refresh would touch now.
