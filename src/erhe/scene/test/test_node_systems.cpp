@@ -143,8 +143,6 @@ public:
     void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&)          override {}
     void register_light   (const std::shared_ptr<erhe::scene::Light>&)         override {}
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&)         override {}
-    void register_layout  (const std::shared_ptr<erhe::scene::Layout>&)        override {}
-    void unregister_layout(const std::shared_ptr<erhe::scene::Layout>&)        override {}
 
     void on_mesh_primitives_changed    (const std::shared_ptr<erhe::scene::Mesh>&) override {}
     void on_mesh_material_changed      (const std::shared_ptr<erhe::scene::Mesh>&) override {}
@@ -171,11 +169,12 @@ TEST(Node_systems, a_system_is_added_and_removed)
     Test_scene_host     host;
     Test_feature_system system;
 
-    EXPECT_EQ(host.scene.get_node_system_count(), std::size_t{0});
+    // A scene starts with its own Layout_system already added.
+    const std::size_t own_systems = host.scene.get_node_system_count();
     host.scene.add_node_system(system);
-    EXPECT_EQ(host.scene.get_node_system_count(), std::size_t{1});
+    EXPECT_EQ(host.scene.get_node_system_count(), own_systems + 1);
     host.scene.remove_node_system(system);
-    EXPECT_EQ(host.scene.get_node_system_count(), std::size_t{0});
+    EXPECT_EQ(host.scene.get_node_system_count(), own_systems);
 }
 
 TEST(Node_systems, the_key_property_creates_and_destroys_the_record)

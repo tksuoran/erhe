@@ -40,7 +40,6 @@ namespace erhe::rendergraph {
 }
 namespace erhe::scene {
     class Camera;
-    class Layout;
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;
@@ -122,16 +121,6 @@ class Create_new_rendertarget_command : public erhe::commands::Command
 {
 public:
     Create_new_rendertarget_command(erhe::commands::Commands& commands, App_context& context);
-    auto try_call() -> bool override;
-
-private:
-    App_context& m_context;
-};
-
-class Create_new_layout_command : public erhe::commands::Command
-{
-public:
-    Create_new_layout_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -300,8 +289,6 @@ public:
     // operation; returns the number of tip nodes created.
     auto add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
     auto create_new_light       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
-    // An Xform carrying a Layout attachment.
-    auto create_new_layout      (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Layout>;
     // An Xform holding a Rendertarget_mesh showing a viewport of the selected
     // camera; returns empty when no camera is selected.
     auto create_new_rendertarget(erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
@@ -352,7 +339,6 @@ public:
     // node's item host). See scene/attachment_types.{hpp,cpp} for the user
     // catalog that drives them; Rigid Body / Joint reuse create_new_rigid_body
     // / create_new_joint above.
-    auto attach_new_layout         (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>;
     auto attach_new_grid            (erhe::scene::Node& node) -> std::shared_ptr<Grid>;
     auto attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>;
 
@@ -393,7 +379,6 @@ private:
     Create_new_xform_command   m_create_new_xform_command;
     Create_new_scope_command        m_create_new_scope_command;
     Create_new_light_command        m_create_new_light_command;
-    Create_new_layout_command       m_create_new_layout_command;
     Create_new_rendertarget_command m_create_new_rendertarget_command;
     Create_new_rigid_body_command   m_create_new_rigid_body_command;
     Create_new_joint_command        m_create_new_joint_command;

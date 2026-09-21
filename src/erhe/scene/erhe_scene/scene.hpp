@@ -3,6 +3,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/unique_id.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_scene/layout_system.hpp"
 
 #include <glm/glm.hpp>
 
@@ -20,7 +21,6 @@ namespace erhe::scene {
 
 class Camera;
 class INode_system;
-class Layout;
 class Light;
 class Mesh;
 class Xformable; using Node = Xformable;
@@ -239,9 +239,6 @@ public:
     auto unregister_skin  (const std::shared_ptr<Skin>& skin) -> Skin_registry_change;
     void register_light   (const std::shared_ptr<Light>& light);
     void unregister_light (const std::shared_ptr<Light>& light);
-    void register_layout  (const std::shared_ptr<Layout>& layout);
-    void unregister_layout(const std::shared_ptr<Layout>& layout);
-    [[nodiscard]] auto get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&;
 
     // Node systems (node_system.hpp, doc/erhe/scene.md "Node systems"): the
     // owners of the runtime state a node value group implies. The list holds
@@ -260,11 +257,17 @@ public:
     void on_node_values_changed(Node& node, const erhe::property::Dependency_property& property);
     void on_node_active_changed(Node& node);
 
-    // Arrange the children of every registered layout node, shallow-to-deep
+    // Arrange the children of every layout node of this scene, shallow-to-deep
     // so a parent layout runs before any nested child layout (a nested
     // layout then re-runs later in the same pass). Call once per frame
     // before update_node_transforms(). No-op when no layouts are hosted.
     void update_layouts();
+
+    // The scene's own node system for the `Layout` value group
+    // (doc/erhe/property_system.md section 4.13): the layout nodes and their
+    // effective container values, for update_layouts() and for the readers
+    // that draw or report a layout.
+    [[nodiscard]] auto get_layout_system() const -> const Layout_system&;
 
     // Scene-wide ambient light color (issues #237 / #240), a registered
     // property (doc/erhe/property_system.md section 4.20). Fed to the forward
@@ -305,9 +308,9 @@ private:
     std::vector<std::size_t>                  m_skin_use_counts;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
-    // Registered Layout attachments (register_layout / unregister_layout,
-    // fed by Layout::handle_item_host_update through the Scene_host).
-    std::vector<std::shared_ptr<Layout>>      m_layouts;
+    // The scene's own node system (D2): the layout nodes it hosts. Added to
+    // m_node_systems in the constructor and removed in the destructor.
+    Layout_system                             m_layout_system;
 
     // Node systems and the lock taken for both mutation and dispatch. The
     // mutex is recursive because a system's callback may write another value

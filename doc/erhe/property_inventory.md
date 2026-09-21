@@ -243,10 +243,13 @@ and each is listed on a node carrying `Item_flags::bone`.
 
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 
+Container values, attached to Node, UI group `Layout`:
+
 | Property | Storage | Notes |
 |---|---|---|
-| type, primary, secondary, tertiary, volume_min, volume_max, gap, grid_track_count | entry | inherits (D30, from the node chain); the members update() reads mirror the effective values; track count validated to at least 1 per axis, visible for grid |
-| grid_track_extent_x, grid_track_extent_y, grid_track_extent_z | entry | float_array, inherits, visible for grid; empty = uniform tracks, a non-empty list is coerced to the axis track count; a "Custom track sizes on / off" row action seeds it from the volume |
+| type | attached | the group's KEY property; `none` (the default) means the node is no layout node; does not inherit |
+| primary, secondary, tertiary, volume_min, volume_max, gap, grid_track_count | attached | inherits (D30, from the node chain), listed on layout nodes; track count validated to at least 1 per axis, visible for grid |
+| grid_track_extent_x, grid_track_extent_y, grid_track_extent_z | attached | float_array, inherits, visible for grid; empty = uniform tracks, a non-empty list held by a layout node is coerced to the axis track count; a "Custom track sizes on / off" row action seeds it from the volume |
 
 Per-child hints, attached (section 4.14), set on the child Node:
 

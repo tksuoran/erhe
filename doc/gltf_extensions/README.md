@@ -34,7 +34,6 @@ importing it as an asset).
 | [`ERHE_material`](ERHE_material.md) | material | roughness_y, bxdf_model, blending_mode, brushed-metal fields |
 | [`ERHE_physics`](ERHE_physics.md) | node (rigid-body-carrying) | motion_mode, Node_physics local property values |
 | [`ERHE_scene`](ERHE_scene.md) | scene | per-scene settings, ambient light, enable_physics |
-| [`ERHE_layout`](ERHE_layout.md) | node | Layout / Layout_item attachment fields |
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |

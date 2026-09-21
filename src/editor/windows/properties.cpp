@@ -136,10 +136,10 @@ Properties::Properties(
         }
     );
 
-    // Below each "Sizes X/Y/Z" row of a grid layout: the toggle between
+    // Below each "Sizes X/Y/Z" row of a grid layout node: the toggle between
     // uniform tracks (the empty list) and per-track sizes seeded from the
-    // layout's volume (doc/erhe/property_system.md section 4.13). It records
-    // the same Property_set_operation the generic row and MCP
+    // node's layout volume (doc/erhe/property_system.md section 4.13). It
+    // records the same Property_set_operation the generic row and MCP
     // set_item_property record.
     for (int axis = 0; axis < 3; ++axis) {
         static const char* const c_axis_labels[3] = {"Custom Sizes X", "Custom Sizes Y", "Custom Sizes Z"};
@@ -153,20 +153,24 @@ Properties::Properties(
                     const erhe::property::Dependency_property& property = erhe::scene::Layout::grid_track_extent_property(axis).get();
                     Compound_operation::Parameters parameters;
                     for (const std::shared_ptr<erhe::Item_base>& item : items) {
-                        const std::shared_ptr<erhe::scene::Layout> layout = std::dynamic_pointer_cast<erhe::scene::Layout>(item);
-                        if (!layout) {
-                            continue; // a node or a style holding the list has no volume to seed from
+                        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                        if (!node) {
+                            continue; // a style holding the list has no layout volume to seed from
+                        }
+                        const std::optional<erhe::scene::Layout_data> data = erhe::scene::read_layout(*node.get());
+                        if (!data.has_value()) {
+                            continue; // not a layout node
                         }
                         std::vector<float> after;
-                        if (layout->get_grid_track_extent(axis).empty()) {
-                            const int   track_count = layout->get_grid_track_count()[axis];
+                        if (data.value().grid_track_extent[static_cast<std::size_t>(axis)].empty()) {
+                            const int   track_count = data.value().grid_track_count[axis];
                             const int   count       = (track_count > 1) ? track_count : 1;
-                            const float total       = layout->get_volume().max[axis] - layout->get_volume().min[axis];
+                            const float total       = data.value().volume.max[axis] - data.value().volume.min[axis];
                             const float per         = (total > 0.0f) ? (total / static_cast<float>(count)) : 0.0f;
                             after.assign(static_cast<std::size_t>(count), per);
                         }
                         parameters.operations.push_back(
-                            std::make_shared<Property_set_operation>(layout, property, layout->read_local_state(property), to_local_state(erhe::property::Property_value{after}))
+                            std::make_shared<Property_set_operation>(node, property, node->read_local_state(property), to_local_state(erhe::property::Property_value{after}))
                         );
                     }
                     if (parameters.operations.size() == 1) {

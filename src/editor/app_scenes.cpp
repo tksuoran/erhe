@@ -23,7 +23,6 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_scene/layout.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -590,9 +589,9 @@ void App_scenes::update_layout_nodes()
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Each Scene keeps its registered Layout attachments (Scene_host
-    // register_layout / unregister_layout hooks), so this touches only the
-    // layout nodes - no per-frame hierarchy scan.
+    // Each Scene keeps its layout nodes in its own Layout_system (the node
+    // system of the Layout value group), so this touches only the layout
+    // nodes - no per-frame hierarchy scan.
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
         scene_root->get_scene().update_layouts();
     }

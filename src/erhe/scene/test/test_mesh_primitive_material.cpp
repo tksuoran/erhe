@@ -47,8 +47,6 @@ public:
     void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&)          override {}
     void register_light   (const std::shared_ptr<erhe::scene::Light>&)         override {}
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&)         override {}
-    void register_layout  (const std::shared_ptr<erhe::scene::Layout>&)        override {}
-    void unregister_layout(const std::shared_ptr<erhe::scene::Layout>&)        override {}
 
     void on_mesh_primitives_changed    (const std::shared_ptr<erhe::scene::Mesh>&) override {}
     void on_mesh_material_changed      (const std::shared_ptr<erhe::scene::Mesh>& mesh) override { material_changed.push_back(mesh.get()); }

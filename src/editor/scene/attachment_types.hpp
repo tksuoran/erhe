@@ -31,20 +31,20 @@ public:
 };
 
 // One user-addable Node_attachment kind, applied to a node the way USD applies
-// an API schema to a prim: rigid body, joint, layout, grid, frame controller.
+// an API schema to a prim: rigid body, joint, grid, frame controller.
 // The Hierarchy context menu "Add Attachment" lists these, and the
 // add_node_attachment MCP tool accepts them.
 //
 // can_add / make are stateless free functions (function pointers, no heap):
 //   can_add(node) gates the entry (duplicate / precondition, e.g. a node may
-//                 hold at most one Layout).
+//                 hold at most one Grid).
 //   make(scene_commands, node) queues the undoable operation(s) via
 //                 Scene_commands.
 class Attachment_type_info
 {
 public:
-    std::string_view key;          // stable catalog key (MCP argument, e.g. "layout")
-    std::string_view display_name; // menu label (e.g. "Layout")
+    std::string_view key;          // stable catalog key (MCP argument, e.g. "grid")
+    std::string_view display_name; // menu label (e.g. "Grid")
     bool (*can_add)(const erhe::scene::Node& node);
     void (*make)   (Scene_commands& scene_commands, erhe::scene::Node& node);
 };

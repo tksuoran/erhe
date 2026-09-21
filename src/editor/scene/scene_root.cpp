@@ -602,8 +602,6 @@ auto Scene_root::make_browser_window(
                     entry(std::string{type_info.display_name}.c_str(), type_info.make);
                 }
                 entry("Rendertarget", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_rendertarget(&p)); });
-                // An Xform carrying a Layout attachment.
-                entry("Layout", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_layout(&p)); });
                 ImGui::Separator();
                 entry("Material",               [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_material        (&p)); });
                 entry("Physics Material",       [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_physics_material(&p)); });
@@ -1523,20 +1521,6 @@ void Scene_root::unregister_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
                 .registered = false
             }
         );
-    }
-}
-
-void Scene_root::register_layout(const std::shared_ptr<erhe::scene::Layout>& layout)
-{
-    if (m_scene) {
-        m_scene->register_layout(layout);
-    }
-}
-
-void Scene_root::unregister_layout(const std::shared_ptr<erhe::scene::Layout>& layout)
-{
-    if (m_scene) {
-        m_scene->unregister_layout(layout);
     }
 }
 

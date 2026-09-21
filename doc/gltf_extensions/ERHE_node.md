@@ -17,8 +17,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
 - `properties`: the node's local property values as a name to text map
   (`doc/erhe/property_system.md` D14): the registered properties of `Node`
   by name, attached properties (D3) by their qualified
-  `<owner>.<name>`, such as the `Layout.*` per-child layout hints
-  (`ERHE_layout` names the layout itself), and the attachment-class
+  `<owner>.<name>`, such as the `Layout.*` container values and per-child
+  layout hints, and the attachment-class
   values the node holds for the attachments below it (D30, `Light.color`)
   by the same qualified form. Enumerations travel as their labels; an
   object reference travels as the referenced item's name and is resolved

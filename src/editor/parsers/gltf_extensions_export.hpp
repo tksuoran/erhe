@@ -25,7 +25,6 @@ class Scene_root;
 // - ERHE_physics node payloads: motion_mode (both kinematic modes),
 //   per-body friction / restitution, linear / angular damping -
 //   KHR_physics_rigid_bodies has no carrier for these.
-// - ERHE_layout node payloads: Layout attachment fields (a child's layout hints are Layout.* attached properties in ERHE_node)
 //   with their Item flags.
 // - ERHE_scene scene payload: per-scene settings (#239), ambient light
 //   (#237), enable_physics.

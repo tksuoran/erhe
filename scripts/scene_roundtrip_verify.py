@@ -8,11 +8,11 @@ verification of doc/editor/gltf_scene_roundtrip.md:
    meshes), an imported textured glTF asset (triangle soup + embedded
    images), an imported skinned + animated asset, physics bodies + a joint,
    a brush placement, a graph mesh binding, a graph texture bound to a
-   material slot, a layout attachment, tags, a locked node, authored
+   material slot, a layout node, tags, a locked node, authored
    animation keys, and an external-asset prefab instance.
 2. Saves the scene and validates every ERHE_* extension payload in the
    .glb against its JSON schema (doc/gltf_extensions/schema/), asserting
-   full extension coverage (all 11 ERHE_* extensions present) and clean
+   full extension coverage (all 10 ERHE_* extensions present) and clean
    extensionsUsed / extensionsRequired conventions. Then asserts the R5
    data-loss tripwire (asset-manager plan step R5.1): every
    library-DEFINED material / brush / animation appears in the file with
@@ -68,7 +68,6 @@ ALL_ERHE_EXTENSIONS = [
     "ERHE_camera",
     "ERHE_collections",
     "ERHE_geometry",
-    "ERHE_layout",
     "ERHE_light",
     "ERHE_material",
     "ERHE_node",
@@ -862,9 +861,13 @@ def section_build_scene():
         check(S, "place_brush", bool(placed) and placed.get("node_id") is not None, str(placed))
 
     def block_layout():
-        # Layout on a node (ERHE_layout); attached layout hints on a child of that node.
-        layout = mutate("add_node_attachment", {"scene_name": scene, "node_name": "P6 Torus", "type": "layout"})
-        check(S, "add layout attachment", bool(layout) and layout.get("added"), str(layout))
+        # A layout is the Layout value group of the node itself: setting the key
+        # property Layout.type makes the node a layout node, and both the
+        # container values and a child's hints ride ERHE_node properties.
+        layout = mutate("set_item_property", {"scene_name": scene, "item_name": "P6 Torus", "property": "Layout.type", "value": "Grid"})
+        check(S, "set Layout.type on the layout node", bool(layout) and layout.get("after") == "Grid", str(layout))
+        gapped = mutate("set_item_property", {"scene_name": scene, "item_name": "P6 Torus", "property": "Layout.gap", "value": "0.25 0 0"})
+        check(S, "set Layout.gap on the layout node", bool(gapped) and gapped.get("after") == "0.25 0 0", str(gapped))
         mutate("create_node", {
             "scene_name": scene, "name": "P6 Layout Child",
             "parent_node_name": "P6 Torus", "position": [4.0, 1.0, 0.0],

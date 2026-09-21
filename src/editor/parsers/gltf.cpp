@@ -1240,7 +1240,7 @@ auto make_import_gltf_operation(
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
 
     // Editor-domain ERHE_* extensions (doc/editor/gltf_scene_roundtrip.md
-    // phase 3): ERHE_layout / ERHE_collections onto the imported nodes,
+    // phase 3): ERHE_collections onto the imported nodes,
     // ERHE_brushes / ERHE_node_graphs into the content library. ERHE_scene
     // is deliberately NOT applied here - importing an asset must not
     // clobber the target scene's settings (the phase-4 Open-Scene path

@@ -56,7 +56,6 @@
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
-#include "erhe_scene/layout.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/light.hpp"
@@ -148,17 +147,6 @@ Create_new_rendertarget_command::Create_new_rendertarget_command(erhe::commands:
 auto Create_new_rendertarget_command::try_call() -> bool
 {
     return m_context.scene_commands->create_new_rendertarget().operator bool();
-}
-
-Create_new_layout_command::Create_new_layout_command(erhe::commands::Commands& commands, App_context& context)
-    : Command  {commands, "scene.create_new_layout"}
-    , m_context{context}
-{
-}
-
-auto Create_new_layout_command::try_call() -> bool
-{
-    return m_context.scene_commands->create_new_layout().operator bool();
 }
 
 Create_new_rigid_body_command::Create_new_rigid_body_command(erhe::commands::Commands& commands, App_context& context)
@@ -373,7 +361,6 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_xform_command  {commands, context}
     , m_create_new_scope_command       {commands, context}
     , m_create_new_light_command       {commands, context}
-    , m_create_new_layout_command      {commands, context}
     , m_create_new_rendertarget_command{commands, context}
     , m_create_new_rigid_body_command  {commands, context}
     , m_create_new_joint_command       {commands, context}
@@ -391,7 +378,6 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_create_new_xform_command);
     commands.register_command   (&m_create_new_scope_command);
     commands.register_command   (&m_create_new_light_command);
-    commands.register_command   (&m_create_new_layout_command);
     commands.register_command   (&m_create_new_rendertarget_command);
     commands.register_command   (&m_create_new_rigid_body_command);
     commands.register_command   (&m_create_new_joint_command);
@@ -407,13 +393,11 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_key(&m_create_new_xform_command,   erhe::window::Key_f3, true);
     commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
     commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5, true);
-    commands.bind_command_to_key(&m_create_new_layout_command,       erhe::window::Key_f6, true);
     commands.bind_command_to_menu(&m_create_new_scene_command,        "Create.Scene");
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
     commands.bind_command_to_menu(&m_create_new_xform_command,   "Create.Xform");
     commands.bind_command_to_menu(&m_create_new_scope_command,        "Create.Scope");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
-    commands.bind_command_to_menu(&m_create_new_layout_command,       "Create.Layout");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
     commands.bind_command_to_menu(&m_create_new_rigid_body_command,   "Create.Rigid Body");
     commands.bind_command_to_menu(&m_create_new_joint_command,        "Create.Joint");
@@ -905,39 +889,6 @@ auto Scene_commands::create_new_light(erhe::Hierarchy* parent) -> std::shared_pt
     return new_light;
 }
 
-auto Scene_commands::create_new_layout(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Layout>
-{
-    Scene_root* scene_root = get_scene_root(parent);
-    if (scene_root == nullptr) {
-        return {};
-    }
-
-    auto new_node   = std::make_shared<erhe::scene::Xform>("new layout node");
-    auto new_layout = std::make_shared<erhe::scene::Layout>("new layout");
-    new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    new_layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(
-            Compound_operation::Parameters{
-                .operations = {
-                    std::make_shared<Item_insert_remove_operation>(
-                        Item_insert_remove_operation::Parameters{
-                            .context         = m_context,
-                            .item            = new_node,
-                            .parent          = get_insert_parent(*scene_root, parent),
-                            .mode            = Item_insert_remove_operation::Mode::insert,
-                            .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
-                        }
-                    ),
-                    std::make_shared<Node_attach_operation>(new_layout, new_node)
-                }
-            }
-        )
-    );
-
-    return new_layout;
-}
-
 auto Scene_commands::get_resource_scene_root(erhe::Hierarchy* parent) const -> Scene_root*
 {
     if (parent != nullptr) {
@@ -1205,18 +1156,6 @@ auto Scene_commands::create_new_joint(
         )
     );
     return node_joint;
-}
-
-auto Scene_commands::attach_new_layout(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>
-{
-    if (erhe::scene::get_attachment<erhe::scene::Layout>(&node)) {
-        log_scene->warn("Node '{}' already has a layout attachment", node.get_name());
-        return {};
-    }
-    auto layout = std::make_shared<erhe::scene::Layout>("new layout");
-    layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(layout, node.shared_node_from_this()));
-    return layout;
 }
 
 auto Scene_commands::attach_new_grid(erhe::scene::Node& node) -> std::shared_ptr<Grid>

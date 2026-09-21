@@ -432,6 +432,10 @@ Scene::Scene(const std::string_view name, Scene_host* const host)
     m_root_node->node_data.host = host;
     m_root_node->node_data.transforms.parent_from_node_serial = 1;
     m_root_node->node_data.transforms.world_from_node_serial  = 1;
+
+    // The scene's own node system, added before the scene holds any node so
+    // every layout node reaches it through register_node().
+    add_node_system(m_layout_system);
 }
 
 Scene::~Scene() noexcept
@@ -440,6 +444,8 @@ Scene::~Scene() noexcept
     sanity_check();
 
     m_root_node->recursive_remove();
+
+    remove_node_system(m_layout_system);
 
     m_transform_dirty_nodes.clear();
     m_transform_update_nodes.clear();
@@ -658,36 +664,6 @@ auto Scene::unregister_skin(const std::shared_ptr<Skin>& skin) -> Skin_registry_
     return Skin_registry_change::changed;
 }
 
-void Scene::register_layout(const std::shared_ptr<Layout>& layout)
-{
-    ERHE_VERIFY(layout);
-#ifndef NDEBUG
-    const auto i = std::find(m_layouts.begin(), m_layouts.end(), layout);
-    if (i != m_layouts.end()) {
-        log->error("layout {} already in scene layouts", layout->get_name());
-    } else
-#endif
-    {
-        m_layouts.push_back(layout);
-    }
-}
-
-void Scene::unregister_layout(const std::shared_ptr<Layout>& layout)
-{
-    ERHE_VERIFY(layout);
-    const auto i = std::remove(m_layouts.begin(), m_layouts.end(), layout);
-    if (i == m_layouts.end()) {
-        log->error("layout {} not in scene layouts", layout->get_name());
-    } else {
-        m_layouts.erase(i, m_layouts.end());
-    }
-}
-
-auto Scene::get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&
-{
-    return m_layouts;
-}
-
 void Scene::add_node_system(INode_system& system)
 {
     std::lock_guard<std::recursive_mutex> lock{m_node_systems_mutex};
@@ -734,33 +710,12 @@ void Scene::on_node_active_changed(Node& node)
 
 void Scene::update_layouts()
 {
-    if (m_layouts.empty()) {
-        return;
-    }
-    ERHE_PROFILE_FUNCTION();
+    m_layout_system.update();
+}
 
-    // Sort by hierarchy depth so a parent layout runs before any nested
-    // child layout. Depth changes with reparenting, so the (small) list is
-    // sorted every pass rather than cached.
-    std::vector<std::pair<std::size_t, Layout*>> layouts;
-    layouts.reserve(m_layouts.size());
-    for (const std::shared_ptr<Layout>& layout : m_layouts) {
-        Node* const node = layout->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-        layouts.emplace_back(node->get_depth(), layout.get());
-    }
-    std::stable_sort(
-        layouts.begin(),
-        layouts.end(),
-        [](const std::pair<std::size_t, Layout*>& lhs, const std::pair<std::size_t, Layout*>& rhs) -> bool {
-            return lhs.first < rhs.first;
-        }
-    );
-    for (const std::pair<std::size_t, Layout*>& entry : layouts) {
-        entry.second->update();
-    }
+auto Scene::get_layout_system() const -> const Layout_system&
+{
+    return m_layout_system;
 }
 
 void Scene::register_light(const std::shared_ptr<Light>& light)

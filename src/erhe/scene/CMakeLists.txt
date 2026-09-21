@@ -19,6 +19,8 @@ erhe_target_sources_grouped(
     erhe_scene/instance_override.hpp
     erhe_scene/layout.cpp
     erhe_scene/layout.hpp
+    erhe_scene/layout_system.cpp
+    erhe_scene/layout_system.hpp
     erhe_scene/light.cpp
     erhe_scene/light.hpp
     erhe_scene/light_frustum_fit.cpp

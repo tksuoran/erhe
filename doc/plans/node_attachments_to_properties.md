@@ -30,6 +30,12 @@ attachment has no path; a value on the node is overridable as it stands.
   extent and the card proxy in a per-scene `Draw_mode_system`
   (`doc/erhe/property_system.md` section 4.24, `doc/editor/scene.md`). Its
   retirement deleted the applied-schema attachment registry (D9).
+- **Layout** (`src/erhe/scene/erhe_scene/layout.{hpp,cpp}`,
+  `layout_system.{hpp,cpp}`): the container values as a group of the node
+  keyed on `Layout.type`, with the solve registration in a per-scene
+  `erhe::scene::Layout_system` owned by `Scene`
+  (`doc/erhe/property_system.md` section 4.13, `doc/erhe/layout.md`). Its
+  retirement deleted the `ERHE_layout` glTF extension (D8).
 - **P1, the D1 and D2 infrastructure.** The key-property rule and its
   `visible_when` (`erhe_property/attached_group.hpp`,
   `doc/erhe/property_system.md` section 4.23) and the node systems and their
@@ -50,7 +56,6 @@ class's own shape, stated in the row.
 | `Node_physics` | `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI`, `PhysicsMaterialAPI` binding (all applied API schemas) | property | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
 | `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
-| `erhe::scene::Layout` | none; `doc/erhe/usd_compatibility.md` already maps its child hints to applied-API-schema attributes (`layout:alignY`), and the container values take the same spelling | property | `Scene::update_layouts` registration, mirrors | 1 | glTF `ERHE_layout` | D1 + D2 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
 | `Brush_placement` | none; three session values about the node | property | none | 1 | nothing | D1, session values (D5) |
 | `Grid` | none; editor-settings content that outlives every scene, so it has no scene to be a prim of | item outside the hierarchy | settings-store autosave, matrices | 1 | editor settings | D6 |
@@ -164,9 +169,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P3. `Layout`.** `Layout.type = none`; `Scene::update_layouts` iterates
-  the layout system's records. Deletes `ERHE_layout` (D8). Suites: scene;
-  roundtrip layout leg.
 - **P4. `Brush_placement`** (D5). Suites: Mcp_ brush cases,
   `undo_reference_clearing_smoke_test.py`.
 - **P5. `Frame_controller`, `Four_view_link`** (D7), including `src/example`.
@@ -192,7 +194,7 @@ reopens.
   sections, `Item_type::node_attachment`. Feature icons in the Hierarchy row
   are drawn from each group's key property.
 
-P3-P7 are independent of each other; P9 follows P8; P11 is last.
+P4-P7 are independent of each other; P9 follows P8; P11 is last.
 
 ## Decision to confirm before P10
 

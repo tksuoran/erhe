@@ -109,7 +109,6 @@ public:
 
 // Applies the editor-domain payloads that make sense on import into an
 // existing scene:
-// - ERHE_layout: Layout attachments on the imported nodes (legacy layout_item blocks become Layout.* attached properties)
 //   (attached directly, entering the scene with the node insert operation,
 //   like Node_physics).
 // - ERHE_collections: item tags on the imported nodes.

@@ -604,6 +604,28 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         };
     };
 
+    // Layout: the effective container values of a layout node
+    // (doc/erhe/property_system.md section 4.13). A value group of the node
+    // itself, so it is reported on the node's own entry.
+    const auto layout_details = [](const std::shared_ptr<erhe::scene::Node>& node) -> json
+    {
+        const std::optional<erhe::scene::Layout_data> data = erhe::scene::read_layout(*node.get());
+        if (!data.has_value()) {
+            return json(nullptr);
+        }
+        const erhe::scene::Layout_data& layout = data.value();
+        json layout_json = json::object();
+        layout_json["layout_type"]      = erhe::scene::c_layout_type_strings[static_cast<std::size_t>(layout.type)];
+        layout_json["volume_min"]       = {layout.volume.min.x, layout.volume.min.y, layout.volume.min.z};
+        layout_json["volume_max"]       = {layout.volume.max.x, layout.volume.max.y, layout.volume.max.z};
+        layout_json["primary"]          = erhe::scene::c_axis_direction_strings[static_cast<std::size_t>(layout.primary)];
+        layout_json["secondary"]        = erhe::scene::c_axis_direction_strings[static_cast<std::size_t>(layout.secondary)];
+        layout_json["tertiary"]         = erhe::scene::c_axis_direction_strings[static_cast<std::size_t>(layout.tertiary)];
+        layout_json["gap"]              = {layout.gap.x, layout.gap.y, layout.gap.z};
+        layout_json["grid_track_count"] = {layout.grid_track_count.x, layout.grid_track_count.y, layout.grid_track_count.z};
+        return layout_json;
+    };
+
     // Draw mode: the prim's own opinion, what it resolves to and the box the
     // proxy is sized from (doc/erhe/usd_compatibility.md, "Draw modes"). A
     // value group of the prim itself, so it is reported on the prim's own
@@ -711,21 +733,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["constraint"]       = (node_joint->get_constraint() != nullptr) ? "created" : "pending";
         }
 
-        // Layout: the mirror update() reads (the effective values of the
-        // Layout properties, doc/erhe/property_system.md section 4.13).
-        auto layout = std::dynamic_pointer_cast<erhe::scene::Layout>(att);
-        if (layout) {
-            const erhe::math::Aabb& volume = layout->get_volume();
-            att_json["layout_type"]      = erhe::scene::Layout::c_type_strings[static_cast<std::size_t>(layout->get_layout_type())];
-            att_json["volume_min"]       = {volume.min.x, volume.min.y, volume.min.z};
-            att_json["volume_max"]       = {volume.max.x, volume.max.y, volume.max.z};
-            att_json["primary"]          = erhe::scene::Layout::c_axis_direction_strings[static_cast<std::size_t>(layout->get_primary())];
-            att_json["secondary"]        = erhe::scene::Layout::c_axis_direction_strings[static_cast<std::size_t>(layout->get_secondary())];
-            att_json["tertiary"]         = erhe::scene::Layout::c_axis_direction_strings[static_cast<std::size_t>(layout->get_tertiary())];
-            att_json["gap"]              = {layout->get_gap().x, layout->get_gap().y, layout->get_gap().z};
-            att_json["grid_track_count"] = {layout->get_grid_track_count().x, layout->get_grid_track_count().y, layout->get_grid_track_count().z};
-        }
-
         // Prefab instance: what the carrier instantiates - the source file and,
         // for a USD composition arc, the prim of it the arc named
         // (doc/erhe/usd_compatibility_design.md X1) and the `variants` selection the
@@ -814,6 +821,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             ? light_details(std::static_pointer_cast<erhe::scene::Light>(found_node))
             : json(nullptr)},
         {"draw_mode",      draw_mode_details(found_node)},
+        {"layout",         layout_details(found_node)},
         {"children",       children},
         {"subtree_world_aabb", subtree_aabb.is_valid()
             ? json{

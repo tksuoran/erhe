@@ -1367,23 +1367,18 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     }
 }
 
-void Debug_visualizations::layout_visualization(const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout)
+void Debug_visualizations::layout_visualization(const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout_data& layout)
 {
     const Debug_visualizations_style& style = render_context.app_context.editor_settings->debug_visualizations_style;
     ERHE_PROFILE_FUNCTION();
-
-    using namespace erhe::utility;
-    if (!test_bit_set(layout.get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
-        return;
-    }
 
     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
     line_renderer.set_thickness(style.layout_line_width);
     line_renderer.add_cube(
         node.world_from_node(),
         style.layout_line_color,
-        layout.get_volume().min,
-        layout.get_volume().max
+        layout.volume.min,
+        layout.volume.max
     );
 }
 
@@ -2154,19 +2149,19 @@ void Debug_visualizations::render(const Render_context& context)
         }
     }
 
+    // The scene's layout system holds every layout node with its effective
+    // container values, so this reads the records instead of scanning the
+    // hierarchy and allocates nothing.
     if (m_settings.layouts != Visualization_mode::off) {
-        scene_root->get_hosted_scene()->for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (!node) {
-                return true;
+        for (const std::pair<erhe::scene::Node* const, erhe::scene::Layout_data>& record :
+             scene_root->get_scene().get_layout_system().get_records()
+        ) {
+            erhe::scene::Node* const layout_node = record.first;
+            if (!should_visualize(m_settings.layouts, static_cast<const erhe::Item_base*>(layout_node))) {
+                continue;
             }
-            for (const auto& attachment : node->get_attachments()) {
-                const auto& layout = std::dynamic_pointer_cast<erhe::scene::Layout>(attachment);
-                if (layout && (should_visualize(m_settings.layouts, layout) || should_visualize(m_settings.layouts, node))) {
-                    layout_visualization(context, *node, *layout);
-                }
-            }
-            return true;
-        });
+            layout_visualization(context, *layout_node, record.second);
+        }
     }
 
     // Skins can be shared by multiple meshes.

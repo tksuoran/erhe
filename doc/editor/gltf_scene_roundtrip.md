@@ -59,7 +59,7 @@ it runs, and the list of what is and is not persisted, is
 | prefab instances | glTF 2.1 externalAssets |
 | brushes plus content-library folder tree | `ERHE_brushes` root extension referencing unreferenced meshes |
 | graph textures / graph meshes (node-graph JSON) plus bindings | `ERHE_node_graphs` root extension plus node and material entries |
-| layouts / layout items | `ERHE_layout` node extension |
+| layout nodes and per-child layout hints | the `Layout.*` values of the nodes, in `ERHE_node` `properties` |
 | per-scene settings, ambient light, enable_physics | `ERHE_scene` scene extension |
 | item tags | `ERHE_collections` root extension |
 
@@ -83,8 +83,7 @@ persisted.
   bit positions are not stable across erhe versions. Unknown names are ignored
   on load, so the sets can grow.
 - Attachment Item flags ride the extension that describes the attachment:
-  `ERHE_camera`, `ERHE_light` and `ERHE_layout` each carry an optional `flags`
-  list. Mesh-attachment flags ride `ERHE_node`, because core meshes have no
+  `ERHE_camera` and `ERHE_light` each carry an optional `flags` list. Mesh-attachment flags ride `ERHE_node`, because core meshes have no
   erhe payload of their own and the erhe `Mesh` attachment is per-node while
   glTF meshes are shareable.
 
@@ -249,10 +248,6 @@ editor-controlled attachments.
   blending_mode and the brushed-metal fields.
 - `ERHE_scene` (scene extension): per-scene settings, ambient_light and
   enable_physics.
-- `ERHE_layout` (node extension): `Layout` and `Layout_item` fields as two
-  optional sub-objects on one extension, each with its Item flags. The layout
-  pass skips a prefab instance, as every other save pass does; without that
-  guard it produces dangling node_id references.
 - `ERHE_brushes` (asset-root extension): an array of {name, folder_path, mesh
   index, material index, density, normal_style}. The collision shape is still
   rebuilt at first instantiation (`Brush::late_initialize`).

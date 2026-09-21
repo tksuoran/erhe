@@ -20,7 +20,7 @@ namespace erhe::graphics { class Command_buffer; }
 namespace erhe::imgui    { class Imgui_windows; }
 namespace erhe::scene {
     class Camera;
-    class Layout;
+    class Layout_data;
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;
@@ -129,7 +129,7 @@ private:
     void point_light_visualization       (const Light_visualization_context& context);
     void spot_light_visualization        (const Light_visualization_context& context);
     void camera_visualization            (const Render_context& render_context, const erhe::scene::Camera* camera);
-    void layout_visualization            (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout);
+    void layout_visualization            (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout_data& layout);
     void selection_visualization         (const Render_context& context);
     void physics_nodes_visualization     (const Render_context& context);
     void raytrace_nodes_visualization    (const Render_context& context);

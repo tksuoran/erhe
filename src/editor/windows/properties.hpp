@@ -24,7 +24,6 @@ namespace erhe::imgui {
 namespace erhe::scene {
     class Animation;
     class Camera;
-    class Layout;
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;

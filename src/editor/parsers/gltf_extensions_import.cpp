@@ -26,7 +26,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_scene/layout.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -272,90 +271,6 @@ auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gl
 }
 
 namespace {
-
-void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
-{
-    for (std::size_t i = 0, end = gltf_data.node_extensions.size(); i < end; ++i) {
-        if ((i >= gltf_data.nodes.size()) || !gltf_data.nodes[i]) {
-            continue;
-        }
-        const std::shared_ptr<erhe::scene::Node>& node = gltf_data.nodes[i];
-        const std::string* extension_json = find_extension(gltf_data.node_extensions[i], "ERHE_layout");
-        if (extension_json == nullptr) {
-            continue;
-        }
-        const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_layout", node->get_name());
-        if (payload.is_null()) {
-            continue;
-        }
-        const auto layout_it = payload.find("layout");
-        if ((layout_it != payload.end()) && layout_it->is_object()) {
-            const nlohmann::json& lj = *layout_it;
-            auto layout = std::make_shared<erhe::scene::Layout>(lj.value("name", std::string{"Layout"}));
-            layout->set_layout_type     (layout_type_from_name(lj.value("type", std::string{"stack"})));
-            layout->set_volume_min      (to_vec3(lj.value("volume_min", nlohmann::json{}), layout->get_volume().min));
-            layout->set_volume_max      (to_vec3(lj.value("volume_max", nlohmann::json{}), layout->get_volume().max));
-            layout->set_primary         (axis_direction_from_name(lj.value("primary",   std::string{"pos_x"})));
-            layout->set_secondary       (axis_direction_from_name(lj.value("secondary", std::string{"pos_y"})));
-            layout->set_tertiary        (axis_direction_from_name(lj.value("tertiary",  std::string{"pos_z"})));
-            layout->set_gap             (to_vec3(lj.value("gap", nlohmann::json{}), layout->get_gap()));
-            layout->set_grid_track_count(to_ivec3(lj.value("grid_track_count", nlohmann::json{}), layout->get_grid_track_count()));
-            const char* extent_keys[3] = {"grid_track_extent_x", "grid_track_extent_y", "grid_track_extent_z"};
-            for (int axis = 0; axis < 3; ++axis) {
-                const auto extent_it = lj.find(extent_keys[axis]);
-                if ((extent_it != lj.end()) && extent_it->is_array()) {
-                    std::vector<float> extents;
-                    for (const nlohmann::json& extent : *extent_it) {
-                        if (extent.is_number()) {
-                            extents.push_back(extent.get<float>());
-                        }
-                    }
-                    layout->set_grid_track_extent(axis, extents);
-                }
-            }
-            layout->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);
-            apply_flags(*layout, lj);
-            // The explicit fields above wrote local values; the properties
-            // map is the layout's complete local set (the ERHE_light rule),
-            // so a field it does not name is cleared again and a value
-            // held by the node above inherits after the reload.
-            const auto properties_it = lj.find("properties");
-            if ((properties_it != lj.end()) && properties_it->is_object()) {
-                erhe::gltf::clear_local_properties_not_listed(
-                    *layout,
-                    [properties_it](const std::string_view property_name) -> bool {
-                        return properties_it->contains(std::string{property_name});
-                    }
-                );
-            }
-            node->attach(layout);
-        }
-        // Legacy "layout_item" sub-object (files written before the hints
-        // became attached properties): the values land on the node as the
-        // Layout.* attached properties; the name and flags of the former
-        // attachment are dropped.
-        const auto item_it = payload.find("layout_item");
-        if ((item_it != payload.end()) && item_it->is_object()) {
-            const nlohmann::json& ij = *item_it;
-            const auto align_it = ij.find("align");
-            if ((align_it != ij.end()) && align_it->is_array() && (align_it->size() >= 3)) {
-                const erhe::property::Property<erhe::scene::Layout_alignment>* align_properties[3] = {
-                    &erhe::scene::Layout::align_x_property, &erhe::scene::Layout::align_y_property, &erhe::scene::Layout::align_z_property
-                };
-                for (std::size_t axis = 0; axis < 3; ++axis) {
-                    if ((*align_it)[axis].is_string()) {
-                        node->set_value(*align_properties[axis], layout_alignment_from_name((*align_it)[axis].get<std::string>()));
-                    }
-                }
-            }
-            node->set_value(erhe::scene::Layout::margin_min_property,     to_vec3 (ij.value("margin_min", nlohmann::json{}), node->get_value(erhe::scene::Layout::margin_min_property)));
-            node->set_value(erhe::scene::Layout::margin_max_property,     to_vec3 (ij.value("margin_max", nlohmann::json{}), node->get_value(erhe::scene::Layout::margin_max_property)));
-            node->set_value(erhe::scene::Layout::grid_cell_auto_property, ij.value("grid_cell_auto", node->get_value(erhe::scene::Layout::grid_cell_auto_property)));
-            node->set_value(erhe::scene::Layout::grid_cell_property,      to_ivec3(ij.value("grid_cell", nlohmann::json{}), node->get_value(erhe::scene::Layout::grid_cell_property)));
-            node->set_value(erhe::scene::Layout::grid_span_property,      to_ivec3(ij.value("grid_span", nlohmann::json{}), node->get_value(erhe::scene::Layout::grid_span_property)));
-        }
-    }
-}
 
 void import_collections(const erhe::gltf::Gltf_data& gltf_data)
 {
@@ -1267,7 +1182,6 @@ void import_gltf_editor_state(
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     const std::string gltf_path_str = path.generic_string();
 
-    import_layouts(gltf_data);
     import_collections(gltf_data);
     // Styles first: the material and folder assignments below name them.
     import_styles(context, gltf_data, content_library, gltf_path_str, operations);

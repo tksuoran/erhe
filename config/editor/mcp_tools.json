@@ -1646,7 +1646,7 @@
     "name": "advance_time"
   },
   {
-    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, layout, grid and frame_controller apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). Verify with get_node_details / get_scene_nodes.",
+    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera and light insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. The attachment kinds rigid_body, joint, grid and frame_controller apply to an Xformable node; all of them except joint are single-instance (refused if the node already has one). Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1669,7 +1669,6 @@
             "light",
             "rigid_body",
             "joint",
-            "layout",
             "grid",
             "frame_controller"
           ],
@@ -2978,7 +2977,7 @@
     "name": "create_scene"
   },
   {
-    "description": "Export a scene to a glTF file, without a file dialog. By default a plain interchange export; with editor_state=true the file additionally carries the editor-domain ERHE_* extensions (ERHE_scene settings, ERHE_physics, ERHE_layout, ERHE_brushes, ERHE_node_graphs, ERHE_collections) for full scene persistence, and baked graph-mesh products are excluded (rebuilt on load).",
+    "description": "Export a scene to a glTF file, without a file dialog. By default a plain interchange export; with editor_state=true the file additionally carries the editor-domain ERHE_* extensions (ERHE_scene settings, ERHE_physics, ERHE_brushes, ERHE_node_graphs, ERHE_collections) for full scene persistence, and baked graph-mesh products are excluded (rebuilt on load).",
     "inputSchema": {
       "properties": {
         "binary": {

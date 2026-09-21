@@ -3,7 +3,7 @@
 Stability: mostly stable
 
 ## Purpose
-A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), node attachments (physics, layout, grid, ...), animations, and scene management. Nodes form a parent-child tree with automatic world transform propagation. The library is graphics-API-agnostic and does not perform any rendering itself.
+A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), node attachments (physics, grid, ...), animations, and scene management. Nodes form a parent-child tree with automatic world transform propagation. The library is graphics-API-agnostic and does not perform any rendering itself.
 
 ## Key Types
 - `Scene` -- Top-level container owning the root node, flat node list, mesh layers, light layers, cameras, and skins. Provides `update_node_transforms()` and lookup by ID.
@@ -14,7 +14,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see 
 - `Mesh` -- A geometric prim (`Gprim`, see "Prim levels") holding a vector of `Mesh_primitive`: an `Xformable` with its own transform, name and children, a child prim of its parent, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's mesh layers on top of the node registration the base does, and its override of `handle_transform_update` mirrors the world transform into the raytrace instances, the negative-determinant flag and the computed world bounds. Addresses its primitives as property sub-objects (D29: `get_property_sub_object_count` / `get_property_sub_object` / `get_property_sub_object_label`). Supports raytrace primitives for CPU-side picking. `get_aabb_world()` returns POSED world bounds for a skinned mesh: it unions the primitives' per-joint rest boxes (`Buffer_mesh::joint_bounding_boxes`) transformed by `world_from_bind` (`get_skinned_aabb_world()`), and does NOT apply the mesh's own transform, which skinning ignores. Correct because a skinned position is a convex combination of its per-joint images, so it lies inside the union. Uncached - joints move every frame and primitives can be rebuilt behind the Mesh's back, so there is no reliable invalidation signal. `world_bounds_min_property` / `world_bounds_max_property` are computed properties (D26) reading `get_aabb_world()` (zero for an invalid box), pushed to expressions from `handle_transform_update` and the primitive changes.
 - `Camera` -- A transformable prim (`Xformable`, see "Prim levels") with a `Projection` (perspective/orthogonal/XR): a child prim of its parent with its own transform, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's camera list on top of the node registration the base does. Computes `clip_from_world` transforms. The `Projection` fields are registered as bridged `erhe::property` properties (`Camera::z_far_property`, ...), so `projection()` writes and property writes reach the same state; exposure and shadow range live in the property store (`doc/erhe/property_system.md` section 4.4).
 - `Light` -- A transformable prim (`Xformable`, see "Prim levels") for directional, point and spot lights: a child prim of its parent with its own transform, and a parent holds any number of them. `light_type` picks the UsdLux schema the USD writer emits; one class per schema arrives when a light type needs properties of its own. Its override of the item-host hook registers it with the scene's light layer on top of the node registration the base does. Computes shadow projection transforms. The authored state (`light_type`, `color`, `intensity`, `temperature`, `range`, spot angles, `cast_shadow`) is registered `erhe::property` properties read through `get_color()`-style accessors; every change re-resolves the scene light set through the shared changed callback (`Scene_host::on_light_changed`), so no writer notifies by hand (`doc/erhe/property_system.md` section 4.3, D19).
-- `Layout` -- Node attachment that owns a volume (an `Aabb` in the node's local space) and arranges its node's direct children inside that volume by computing each child's `parent_from_node` (`Layout::update()`). A single class selects between `Layout_type::stack` (one signed axis), `grid` (an X/Y/Z cell grid), and `flow` (children wrapped into lines along the primary axis, lines into sheets along the secondary axis, sheets stacked along the tertiary axis). The layout owns each child's translation and (for `stretch` alignment) scale; child rotation is forced to identity. A child's footprint is measured via `compute_content_local_aabb()` (its own mesh primitives plus descendants); a child that is itself a `Layout` contributes its declared volume instead, which both matches intent and breaks the recursion cycle. The parameters (type, volume, axes, gap, grid track count) are registered `erhe::property` properties (doc/erhe/property_system.md section 4.13) behind typed accessors; the grid track extent lists are not.
+- `Layout` -- a value group of the node itself (`layout.hpp`, doc/erhe/property_system.md section 4.13, doc/erhe/layout.md), not an item: a node whose `Layout.type` is `stack` (one signed axis), `grid` (an X/Y/Z cell grid) or `flow` (children wrapped into lines along the primary axis, lines into sheets along the secondary axis, sheets stacked along the tertiary axis) owns a volume (an `Aabb` in the node's local space) and arranges its direct children inside it by computing each child's `parent_from_node`; `none`, the default, means the node arranges nothing. The layout owns each child's translation and (for `stretch` alignment) scale; child rotation is forced to identity. A child's footprint is measured via `compute_content_local_aabb()` (its own mesh primitives plus descendants); a child that is itself a layout node contributes its declared volume instead, which both matches intent and breaks the recursion cycle. `read_layout(node)` returns the effective container values as a `Layout_data` record, and `Layout_system` (see "Node systems") keeps one record per layout node and runs the solve.
 - Per-child layout hints (alignment `negative`/`positive`/`stretch` per axis, margins, grid cell/span) are attached properties registered by `Layout` and set on the child `Node` (`Layout.align_x` .. `Layout.grid_span`, doc/erhe/property_system.md section 4.14); a child without local values is laid out using the defaults.
 - `Projection` -- Camera projection configuration supporting many types (perspective vertical/horizontal, orthogonal, XR asymmetric, generic frustum).
 - `Transform` -- Matrix + inverse matrix pair with factory methods for projection setups.
@@ -336,9 +336,13 @@ scene close releases what it holds without a `close_scene` subscription.
 A system is added to a scene with `Scene::add_node_system` and removed with
 `Scene::remove_node_system`; the list holds non-owning pointers, so the system
 is owned by whoever created it - the editor's `Scene_root` for the groups it
-serves, the `Scene` itself for a group of its own. Both calls are made while
-no notification is being delivered, because a callback may write values of the
-same scene and reach the systems again on the same thread.
+serves, the `Scene` itself for a group of its own, which today is
+`Layout_system` (`layout_system.hpp`, `doc/erhe/layout.md`): the layout nodes
+of the scene with their effective container values, driven by the key property
+`Layout.type` and run once per frame by `Scene::update_layouts()`. Both
+`add_node_system` and `remove_node_system` are called while no notification is
+being delivered, because a callback may write values of the same scene and
+reach the systems again on the same thread.
 
 The scene drives a system from three change sites:
 
@@ -355,7 +359,8 @@ The scene drives a system from three change sites:
    the derived `erhe::Item_flags::active` bit moves, so the system takes the
    node's subtree out of rendering, picking and simulation with it.
 
-Tests: `src/erhe/scene/test/test_node_systems.cpp`.
+Tests: `src/erhe/scene/test/test_node_systems.cpp` and
+`test_layout_system.cpp`.
 
 ## Physics description
 

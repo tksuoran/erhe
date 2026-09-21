@@ -1873,59 +1873,67 @@ MCP `edit_physics_material` or `set_item_property`, glTF import - reaches
 every live body through the `IRigid_body` interface. The Properties
 window draws the material as generic rows only.
 
-### 4.13 Layout
+### 4.13 Layout (attached to Node)
 
-`Layout` (`erhe::scene`, the node attachment that arranges its node's
-children inside a volume) registers its parameters as entry-stored
-properties, the Material way (section 4.1), every one `inherits` (a
-layout without a local value reads its node chain, section 4.2 / D30, so
-an empty node or a style holds `Layout.gap` for the layouts below it),
-owner type `Layout::property_owner_type()`, UI group `Layout`: `type`
-(`Layout_type`, `Enum_info` `c_layout_type_enum_info` next to the
-enumeration in `erhe_scene/layout.hpp`, defined in `layout.cpp`),
-`volume_min` and `volume_max`, `primary`, `secondary` and `tertiary`
-(`Axis_direction`, `Enum_info` `c_axis_direction_enum_info`, signed axis
-labels `+X` .. `-Z`), `gap` (0..10000 per component) and
-`grid_track_count` (1..1000, validated to at least 1 per axis,
-`visible_when` the type is grid) and the three per-axis grid track extent
-lists `grid_track_extent_x`, `grid_track_extent_y` and
-`grid_track_extent_z` (`float_array`, 0..10000 per element, also
-`visible_when` the type is grid). The private members `Layout::update()`
-reads each frame are a mirror of the effective values:
-`Layout::on_property_changed` refreshes them on every change of a
-`Layout` property, whatever its source. `get_layout_type()`,
-`set_layout_type()` and the other typed accessors read the mirror and
-write the store, so the glTF `ERHE_layout` import, the export and any
-editor writer notify. The accessor is named `get_layout_type()` because
-`get_type()` is the `Item_base` virtual item type. The clone constructor
-copies the mirror; the entries copy through D10. `ERHE_layout` keeps
-writing every field explicitly and the `properties` map of local values;
-on load the map is the layout's complete local set, the same rule as
-`ERHE_light` (`doc/gltf_extensions/ERHE_layout.md`).
+`erhe::scene::Layout` (`src/erhe/scene/erhe_scene/layout.{hpp,cpp}`) registers
+a layout as an attached value group of the node itself (section 4.23,
+`doc/plans/node_attachments_to_properties.md` D1), owner type
+`Layout::property_owner_type()`, holder type `erhe::scene::Node`, UI group
+`Layout`, qualified `Layout.type` .. `Layout.grid_track_extent_z`. Like `Ik`
+and `Draw_mode` it is a registration holder with static members only, not a
+`Dependency_object`, so its owner type sits directly under the root.
 
-An extent list holds one absolute track size per track of its axis, and
-an empty list means uniform tracks. The element count is the axis's own
-`grid_track_count`, which is another property, so it is a `coerce`
-callback (D7): a non-empty list is sized to the track count (cut, or
-padded with zero-size tracks) where the value is produced, and
-`Layout::on_property_changed` re-runs `coerce_value` on the three lists
-when the track count changes, so a stored coerced list follows it. An
-object that is not a `Layout` - a node or a style holding
-`Layout.grid_track_extent_x` for the layouts below it - has no track
-count of its own, so the coerce leaves its value as authored and the
-reading layout coerces it. `get_grid_track_extent(axis)` reads the mirror
-and `set_grid_track_extent(axis, list)` writes the store; there is no
-non-const accessor.
+`Layout.type` (`Layout_type`, `Enum_info` `c_layout_type_enum_info` next to
+the enumeration in `erhe_scene/layout.hpp`) is the group's KEY property, with
+the new enumerator `none` as its default and `inherits = false`: the node
+arranges its children exactly while its effective type is `stack`, `grid` or
+`flow`, and a child of a layout node does not become one. Every other
+container value - `volume_min` and `volume_max`, `primary`, `secondary` and
+`tertiary` (`Axis_direction`, `Enum_info` `c_axis_direction_enum_info`, signed
+axis labels `+X` .. `-Z`), `gap` (0..10000 per component), `grid_track_count`
+(1..1000, validated to at least 1 per axis) and the three per-axis track
+extent lists `grid_track_extent_x`, `grid_track_extent_y` and
+`grid_track_extent_z` (`float_array`, 0..10000 per element) - takes
+`attached_group_visible_when(Layout.type)` as its `visible_when`, the grid
+rows with "the node's type is grid" ANDed in, and every one of them
+`inherits`: a node without a local value reads its node chain (section 4.2 /
+D30), so an empty ancestor node or a Style holds `Layout.gap` for the layout
+nodes below it. Every container value's `property_changed` is
+`erhe::scene::node_system_property_changed`, which is what reaches the scene's
+`Layout_system` (`doc/erhe/scene.md` "Node systems").
 
-The Properties window has no hand-written layout rows. The generic array
-row draws the list (one drag field per element,
-D34), and a
-`Property_row_action` registered by `Properties` below each of the three
-rows is the "Custom track sizes on / off" toggle: on an empty list it
-seeds one equal size per track from the layout's volume along that axis,
-on a non-empty one it sets the empty list, and either way it records the
-`Property_set_operation` the generic row and MCP `set_item_property`
-record.
+Readers go through `read_layout(const erhe::scene::Node&) ->
+std::optional<Layout_data>`, a plain record of the effective container values;
+`carries_layout(node)` is the key test and `get_layout_volume(node, out)` reads
+the declared volume alone without copying the track extent lists.
+`Layout_system` keeps one record per layout node and refreshes it on every
+change, so the per-frame solve reads a record and allocates nothing. The values
+ride the node's `ERHE_node` `properties` map (D14) by their qualified names, so
+glTF carries a layout with no extension of its own; USD carries them as
+`erhe:Layout:<name>` custom attributes through the generic path.
+
+An extent list holds one absolute track size per track of its axis, and an
+empty list means uniform tracks. The element count is the axis's own
+`grid_track_count`, which is another value of the group, so it is a `coerce`
+callback (D7): a non-empty list is sized to the track count (cut, or padded
+with zero-size tracks) where the value is produced, and `grid_track_count`'s
+own `property_changed` re-runs `coerce_value` on the three lists when the
+count changes, so a stored coerced list follows it. A holder that is not a
+layout node - a plain node or a Style holding `Layout.grid_track_extent_x` for
+the layout nodes below it - has no track count of its own to size against, so
+the coerce leaves its value as authored and the layout node reading it coerces
+its own copy.
+
+The Properties window has no hand-written layout rows. The generic array row
+draws the list (one drag field per element, D34), and a `Property_row_action`
+registered by `Properties` below each of the three rows is the "Custom track
+sizes on / off" toggle: on an empty list it seeds one equal size per track from
+the node's layout volume along that axis, on a non-empty one it sets the empty
+list, and either way it records the `Property_set_operation` the generic row
+and MCP `set_item_property` record.
+
+Tests: `src/erhe/scene/test/test_layout_properties.cpp` and
+`test_layout_system.cpp`.
 
 ### 4.14 Layout per-child hints (attached properties)
 
@@ -1936,15 +1944,15 @@ in `erhe_scene/layout.hpp`), `margin_min`, `margin_max`, `grid_cell_auto`,
 `grid_cell` (validated non-negative) and `grid_span` (validated to at
 least 1 per axis), UI group `Layout Item`, qualified `Layout.align_x` ..
 `Layout.grid_span`, holder type `Node`. The value is set on the child
-`Node`; `Node` knows nothing about layouts, and `Layout::update()` reads each direct child's
-values (a child without local values gets the defaults). Each hint's
-`visible_when` is "the object is a Node whose parent node has a Layout",
-the grid hints additionally "that layout is a grid" and `grid_cell` "and
-`grid_cell_auto` is off", so the D12 rule lists the rows on exactly the
-children a layout arranges. There is no per-child attachment class,
-catalog entry or hand-written row; a hint rides the child node's `ERHE_node` properties map (D14) by
-its qualified name, and the glTF importer reads a legacy `ERHE_layout`
-`layout_item` block into the attached values.
+`Node`; `Node` knows nothing about layouts, and the layout solve
+(`Layout_system`) reads each direct child's values (a child without local
+values gets the defaults). Each hint's `visible_when` is "the object is a Node
+whose parent node is a layout node" (section 4.13), the grid hints
+additionally "that layout is a grid" and `grid_cell` "and `grid_cell_auto` is
+off", so the D12 rule lists the rows on exactly the children a layout
+arranges. There is no per-child attachment class, catalog entry or
+hand-written row; a hint rides the child node's `ERHE_node` properties map
+(D14) by its qualified name.
 
 ### 4.15 Rendertarget_mesh
 

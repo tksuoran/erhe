@@ -30,8 +30,8 @@ flexbox / grid. Three layout types exist: Stack, Grid and Flow.
 - Parameters: number of columns / rows / slices, and the extent of each.
 - Each node selects: cell, cell span, alignment (pos/neg/stretch per axis),
   margin (per axis).
-- Auto placement: a child without an explicit cell (no `Layout_item`, or
-  `grid_cell_auto` true) flows into successive cells in document order -
+- Auto placement: a child without an explicit cell (`grid_cell_auto` true)
+  flows into successive cells in document order -
   primary axis fastest, wrapping into secondary, then tertiary; spans are
   honored. Explicitly placed children do not move the auto cursor and there is
   no occupancy tracking, so mixing explicit and auto children can overlap.
@@ -42,11 +42,18 @@ flexbox / grid. Three layout types exist: Stack, Grid and Flow.
 
 ## Design
 
-A layout node is an ordinary `erhe::scene::Node` carrying a **`Layout`** node
-attachment, modeled on `erhe::scene::Light`: a single class with a
-`Layout_type { stack, grid, flow }` enum and per-type fields. Per-child overrides
-live in a second attachment, **`Layout_item`** (alignment per axis, margins, grid
-cell + span); a child without one uses default values.
+A layout node is an ordinary `erhe::scene::Node` that carries the **`Layout`
+value group** - attached properties of the node itself, keyed on
+`Layout.type` (`none` / `stack` / `grid` / `flow`), with `none` the default
+(`doc/erhe/property_system.md` section 4.13). A node becomes a layout node by
+being given a `Layout.type` other than `none` - Add Property in the Properties
+window, or MCP `set_item_property` - and stops being one when the value goes
+back to `none`. Per-child overrides are the `Layout.*` per-child hints
+(alignment per axis, margins, grid cell + span) set on the child node itself
+(section 4.14); a child without them uses default values.
+
+`read_layout(node)` returns the effective container values as a plain
+`Layout_data` record, which is what every consumer reads.
 
 - The layout owns each child's **translation** and (for `stretch` alignment)
   **scale**; child **rotation is forced to identity** (keeps the result a clean
@@ -61,13 +68,17 @@ cell + span); a child without one uses default values.
   stretch -> scale to fill, guarded against zero-extent axes). Off-origin and
   empty/degenerate content are handled without NaN.
 - Re-flow runs once per frame from the editor
-  (`App_scenes::update_layout_nodes` -> `Scene::update_layouts`), before the
-  world-transform passes. Each `Scene` keeps its registered `Layout`
-  attachments through the `Scene_host` register / unregister hooks, so the pass
-  touches the layout nodes alone and never scans the hierarchy. The list is
-  sorted by node depth every pass, so a parent layout runs before a nested
-  child layout; depth changes with reparenting, which is why the (small) list
-  is sorted rather than cached. Every layout is recomputed each pass.
+  (`App_scenes::update_layout_nodes` -> `Scene::update_layouts` ->
+  `Layout_system::update`), before the world-transform passes. Each `Scene`
+  owns one `erhe::scene::Layout_system`, the node system of the `Layout` value
+  group (`doc/erhe/scene.md` "Node systems"): it keeps one `Layout_data` record
+  per layout node, refreshed whenever a value of the group changes, so the pass
+  touches the layout nodes alone, never scans the hierarchy and reads no
+  property store. The records are sorted by node depth every pass, so a parent
+  layout runs before a nested child layout; depth changes with reparenting,
+  which is why the (small) list is sorted rather than cached. Every container
+  the pass uses is a member cleared at the start of its use, so a steady-state
+  pass allocates nothing. Every layout is recomputed each pass.
 
 ### Algorithms
 - **Stack**: children packed along the signed primary axis; each child's cell is
@@ -88,42 +99,42 @@ cell + span); a child without one uses default values.
 
 ## Key files / symbols
 
-- `src/erhe/scene/erhe_scene/layout.hpp` / `layout.cpp` - `Layout` class,
-  `Layout_type`, `Axis_direction` (+ `axis_index`/`axis_sign`/`axis_vector`),
-  `compute_content_local_aabb`, and the anonymous-namespace helpers
-  `is_empty`, `node_own_local_aabb`, `compute_child_placement`,
-  `measure_child_content`, `build_track_edges`, `resolve_item`, `advance`,
-  `Flow_line`, `Flow_sheet`. Algorithms: `layout_stack`, `layout_grid`, `layout_flow`.
-- `src/erhe/scene/erhe_scene/layout_item.hpp` / `layout_item.cpp` - `Layout_item`,
-  `Layout_alignment`.
-- `doc/erhe/scene.md` - the library document.
-- `src/erhe/item/erhe_item/item.hpp` - item-type registration (`index_layout` = 36,
-  `index_layout_item` = 37, `count` = 38, bits, and `c_bit_labels`).
-- `src/editor/scene/scene_commands.hpp` / `.cpp` - `Create_new_layout_command` +
-  `create_new_layout()`; menu "Create.Layout" and key F6.
+- `src/erhe/scene/erhe_scene/layout.hpp` / `layout.cpp` - the `Layout`
+  registration holder, `Layout_data`, `Layout_type`, `Layout_alignment`,
+  `Axis_direction` (+ `axis_index`/`axis_sign`/`axis_vector`),
+  `carries_layout`, `read_layout`, `get_layout_volume`,
+  `measure_child_content` and `compute_content_local_aabb`.
+- `src/erhe/scene/erhe_scene/layout_system.hpp` / `layout_system.cpp` -
+  `Layout_system` (the per-scene node system and the solve), with the
+  anonymous-namespace helpers `is_empty`, `measured_content`,
+  `compute_child_placement`, `build_track_edges`, `resolve_item`, `advance`.
+  Algorithms: `layout_stack`, `layout_grid`, `layout_flow`.
+- `doc/erhe/scene.md` - the library document; `doc/erhe/property_system.md`
+  sections 4.13 and 4.14 - the value group and the per-child hints.
 - `src/editor/app_scenes.hpp` / `.cpp` - `update_layout_nodes()` driver.
 - `src/editor/editor.cpp` - the per-frame hook, before `update_transforms` in
   the "Update scene transforms" block.
-- `doc/gltf_extensions/ERHE_layout.md` - the `ERHE_layout` extension that
-  persists a `Layout` / `Layout_item` attachment's fields.
+- The values are persisted by the node's `ERHE_node` `properties` map
+  (`doc/gltf_extensions/ERHE_node.md`) in glTF and by `erhe:Layout:<name>`
+  custom attributes in USD; there is no extension of their own.
 
 ## Verification
 
-- Create a layout node: Commands > Create > Layout in the main menu bar, or
-  right-click a node in the Hierarchy window and pick Create > Layout. The
-  Hierarchy context menu's Create list is authored in `Scene_root`, separately
-  from the `bind_command_to_menu` registry that feeds the Commands menu.
-- Parent a few meshes under it; with the default Stack / +X they line up
-  along X.
+- Make a layout node: select any node, use Add Property in the Properties
+  window to add `Layout.type`, and set it to Stack, Grid or Flow (MCP:
+  `set_item_property` with property `Layout.type`). The rest of the Layout
+  rows appear as soon as the node carries the group.
+- Parent a few meshes under it; with Stack / +X they line up along X.
 - Select the layout node in Properties and change Type, Volume Min / Max, the
   primary / secondary / tertiary axes and Gap; for Grid set the grid tracks and
   their optional custom sizes. Select a child to set Align X / Y / Z, Margin
   and, for Grid, Grid Cell / Grid Span.
 - Nest a layout under another layout and confirm the inner one arranges its own
   children - the depth-sorted pass check.
-- A layout's volume is drawn by `Debug_visualizations` (`create_new_layout`
-  sets `show_debug_visualizations`), which is how a misconfigured volume shows
-  up at a glance.
+- A layout's volume is drawn by `Debug_visualizations` from the scene's
+  layout-system records, under the Layouts visualization mode (off / all /
+  selected / hovered), which is how a misconfigured volume shows up at a
+  glance.
 
 ## Known behaviors
 

@@ -22,6 +22,7 @@ add_executable(${_target}
     test_instance_override_material.cpp
     test_instance_override_nested.cpp
     test_layout_properties.cpp
+    test_layout_system.cpp
     test_light_frame.cpp
     test_light_properties.cpp
     test_mesh_primitive_material.cpp

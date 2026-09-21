@@ -31,7 +31,6 @@
 #include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
-#include "erhe_scene/layout.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -411,7 +410,6 @@ void add_gltf_editor_state(
     const std::shared_ptr<Asset_payload_data> data = std::make_shared<Asset_payload_data>();
 
     bool used_physics    = false;
-    bool used_layout     = false;
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node == scene_root_node) {
@@ -463,34 +461,6 @@ void add_gltf_editor_state(
             used_physics = true;
         }
 
-        // ERHE_layout: the Layout attachment fields with Item flags. A child's
-        // layout hints are attached properties (Layout.align_x, ...) and ride
-        // the node's ERHE_node properties map like any local value.
-        const std::shared_ptr<erhe::scene::Layout> layout = erhe::scene::get_attachment<erhe::scene::Layout>(node.get());
-        if (layout) {
-            nlohmann::json layout_json = nlohmann::json::object();
-            if (layout) {
-                layout_json["layout"] = nlohmann::json{
-                    {"name",             layout->get_name()},
-                    {"type",             layout_type_name(layout->get_layout_type())},
-                    {"volume_min",       json_vec3(layout->get_volume().min)},
-                    {"volume_max",       json_vec3(layout->get_volume().max)},
-                    {"primary",          axis_direction_name(layout->get_primary())},
-                    {"secondary",        axis_direction_name(layout->get_secondary())},
-                    {"tertiary",         axis_direction_name(layout->get_tertiary())},
-                    {"gap",              json_vec3(layout->get_gap())},
-                    {"grid_track_count", json_ivec3(layout->get_grid_track_count())},
-                    {"grid_track_extent_x", json_float_array(layout->get_grid_track_extent(0))},
-                    {"grid_track_extent_y", json_float_array(layout->get_grid_track_extent(1))},
-                    {"grid_track_extent_z", json_float_array(layout->get_grid_track_extent(2))},
-                    {"flags",            json_flags(*layout)},
-                    {"properties",       json_properties(*layout)},
-                };
-            }
-            append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_layout\":{}", layout_json.dump()));
-            used_layout = true;
-        }
-
         // ERHE_collections: item tags (runtime-only Item_base state; never
         // persisted before).
         for (const std::string& tag : node->get_tags()) {
@@ -501,9 +471,6 @@ void add_gltf_editor_state(
 
     if (used_physics) {
         arguments.extensions_used.push_back("ERHE_physics");
-    }
-    if (used_layout) {
-        arguments.extensions_used.push_back("ERHE_layout");
     }
     // ERHE_scene: per-scene settings (#239), ambient light (#237),
     // enable_physics. Always emitted - its presence in extensionsUsed marks

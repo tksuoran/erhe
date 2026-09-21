@@ -312,31 +312,29 @@ public:
     static constexpr uint64_t index_graph_node             = 33;
     static constexpr uint64_t index_graph_link             = 34;
     static constexpr uint64_t index_rendergraph_node       = 35;
-    static constexpr uint64_t index_layout                 = 36;
-    static constexpr uint64_t index_layout_item            = 37;
-    static constexpr uint64_t index_physics_material       = 38;
-    static constexpr uint64_t index_collision_filter       = 39;
-    static constexpr uint64_t index_physics_joint_settings = 40;
-    static constexpr uint64_t index_asset_file_scene       = 41;
-    static constexpr uint64_t index_graph_texture          = 42;
-    static constexpr uint64_t index_graph_mesh             = 43;
-    static constexpr uint64_t index_geometry_graph_mesh    = 44;
-    static constexpr uint64_t index_prefab_instance        = 45;
-    static constexpr uint64_t index_asset_file_texture     = 46;
-    static constexpr uint64_t index_style                  = 47;
-    static constexpr uint64_t index_asset_file_usd         = 48;
+    static constexpr uint64_t index_physics_material       = 36;
+    static constexpr uint64_t index_collision_filter       = 37;
+    static constexpr uint64_t index_physics_joint_settings = 38;
+    static constexpr uint64_t index_asset_file_scene       = 39;
+    static constexpr uint64_t index_graph_texture          = 40;
+    static constexpr uint64_t index_graph_mesh             = 41;
+    static constexpr uint64_t index_geometry_graph_mesh    = 42;
+    static constexpr uint64_t index_prefab_instance        = 43;
+    static constexpr uint64_t index_asset_file_texture     = 44;
+    static constexpr uint64_t index_style                  = 45;
+    static constexpr uint64_t index_asset_file_usd         = 46;
     // A more specific class takes the LOWER index: the editor's icon set
     // picks the icon of the lowest set type bit that has one, so a Scope
     // shows the scope icon rather than the icon of the Typed level it also
     // carries (src/editor/graphics/icon_set.cpp).
-    static constexpr uint64_t index_scope                  = 49;
-    static constexpr uint64_t index_typed                  = 50;
-    static constexpr uint64_t index_imageable              = 51;
-    static constexpr uint64_t index_xform                  = 52;
-    static constexpr uint64_t index_boundable              = 53;
-    static constexpr uint64_t index_gprim                  = 54;
-    static constexpr uint64_t index_point_instancer        = 55;
-    static constexpr uint64_t count                        = 56; // index 56 is free
+    static constexpr uint64_t index_scope                  = 47;
+    static constexpr uint64_t index_typed                  = 48;
+    static constexpr uint64_t index_imageable              = 49;
+    static constexpr uint64_t index_xform                  = 50;
+    static constexpr uint64_t index_boundable              = 51;
+    static constexpr uint64_t index_gprim                  = 52;
+    static constexpr uint64_t index_point_instancer        = 53;
+    static constexpr uint64_t count                        = 54; // index 54 is free
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -374,8 +372,6 @@ public:
     static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
     static constexpr uint64_t graph_link             = (uint64_t{1} << index_graph_link            );
     static constexpr uint64_t rendergraph_node       = (uint64_t{1} << index_rendergraph_node      );
-    static constexpr uint64_t layout                 = (uint64_t{1} << index_layout                );
-    static constexpr uint64_t layout_item            = (uint64_t{1} << index_layout_item           );
     static constexpr uint64_t physics_material       = (uint64_t{1} << index_physics_material      );
     static constexpr uint64_t collision_filter       = (uint64_t{1} << index_collision_filter      );
     static constexpr uint64_t physics_joint_settings = (uint64_t{1} << index_physics_joint_settings);
@@ -433,8 +429,6 @@ public:
         "Graph_node",
         "Graph_link",
         "Rendergraph_node",
-        "Layout",
-        "Layout_item",
         "Physics_material",
         "Collision_filter",
         "Physics_joint_settings",
