@@ -240,7 +240,7 @@ erhe stands on many excellent open-source projects. Most are fetched at configur
 | [fpng](https://github.com/richgel999/fpng) | PNG encoding | Public domain (Unlicense) |
 | [dds_image](https://github.com/spnda/dds_image) | DDS texture loading | MIT |
 | [Basis Universal](https://github.com/BinomialLLC/basis_universal) | KTX2 / Basis texture transcoding | Apache-2.0 |
-| [mango](https://github.com/t0rakka/mango) | Image codecs (in-tree fork) | Zlib |
+| [mango](https://github.com/t0rakka/mango) | Cross-platform memory-mapped file API (in-tree fork) | Zlib |
 | [FreeType](https://www.freetype.org/) | Glyph rasterization | FTL OR GPL-2.0 |
 | [HarfBuzz](https://github.com/harfbuzz/harfbuzz) | Text shaping | MIT (Old MIT) |
 | [PlutoSVG](https://github.com/sammycage/plutosvg) | SVG icons and color emoji glyphs | MIT |
