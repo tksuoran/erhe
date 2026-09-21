@@ -1,5 +1,6 @@
 #pragma once
 
+#include "brushes/brush_geometry_slot.hpp"
 #include "brushes/reference_frame.hpp"
 #include "physics/collision_generator.hpp"
 #include "scene/scene_root.hpp"
@@ -34,8 +35,6 @@ namespace erhe::scene {
 }
 
 namespace editor {
-
-using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometry>()>;
 
 class Brush_data
 {
@@ -90,7 +89,9 @@ public:
     explicit Brush(const Brush_data& create_info);
     Brush           (const Brush&) = delete;
     Brush& operator=(const Brush&) = delete;
-    Brush           (Brush&& other) noexcept;
+    // A brush owns the mutex and the condition variable of its geometry slot,
+    // so it does not move.
+    Brush           (Brush&&) = delete;
     Brush& operator=(Brush&&) = delete;
 
     // Implements Item_base
@@ -111,13 +112,20 @@ public:
     void late_initialize();
 
     [[nodiscard]] auto get_reference_frame       (GEO::index_t corner_count, GEO::index_t face_offset, GEO::index_t corner_offset) -> Reference_frame;
-    [[nodiscard]] auto get_scaled                (double scale) -> const Scaled&;
+    // Null when the brush has no geometry (Brush_geometry_state::failed): the
+    // caller refuses the placement instead of dereferencing it.
+    [[nodiscard]] auto get_scaled                (double scale) -> const Scaled*;
     [[nodiscard]] auto create_scaled             (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance             (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_bounding_box          () -> erhe::math::Aabb;
+    // Tier 1 (doc/plans/deferred_brush_geometry.md R3): prepares or waits as
+    // needed and returns the ready geometry, or null when preparation failed.
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
+    // Tier 2: asks for preparation and returns at once.
+    auto               request_geometry          () -> Brush_geometry_request_outcome;
+    [[nodiscard]] auto get_geometry_state        () const -> Brush_geometry_state;
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
-    [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
+    [[nodiscard]] auto get_max_corner_count      () -> GEO::index_t;
     // The material a placed instance gets (member-backed object property,
     // doc/erhe/property_system.md D18 / D28; a brush keeps a material, no clear).
     static const erhe::property::Property<erhe::property::Object_reference> material_property;
@@ -129,9 +137,15 @@ public:
     [[nodiscard]] auto make_shared_payload_copy  () const -> std::shared_ptr<Brush>;
 
 private:
-    void update_facet_statistics();
+    // Called by the geometry slot under the brush mutex, right after the
+    // geometry is stored and before the state becomes ready (D3), so a thread
+    // that has observed `ready` also sees the statistics.
+    void update_facet_statistics(const erhe::geometry::Geometry& geometry);
 
+    // The create info as given, minus the geometry and the generator, which
+    // the slot owns: the slot is the single source of truth for both.
     Brush_data                                         m_data;
+    Brush_geometry_slot                                m_geometry_slot;
     std::shared_ptr<erhe::primitive::Material>         m_material;
     std::shared_ptr<erhe::primitive::Primitive>        m_primitive;
     std::vector<Reference_frame>                      m_reference_frames;

@@ -854,6 +854,12 @@ void fork_brush_with_material(
 )
 {
     const std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
+    if (!original_geometry) {
+        // A brush whose geometry preparation failed has nothing to fork: a
+        // null geometry would match every other failed brush.
+        log_brush->warn("Brush '{}' has no geometry: not forked with material '{}'", target_brush->get_name(), material->get_name());
+        return;
+    }
     for (const std::shared_ptr<Brush>& existing_brush : library.get_all<Brush>()) {
         if ((existing_brush->get_geometry() == original_geometry) && (existing_brush->get_material() == material)) {
             return;

@@ -594,6 +594,13 @@ auto Brush_tool::update_brush_frame(Brush& brush) -> bool
         );
     }
 
+    // A brush whose geometry preparation failed yields a default frame; the
+    // placement is refused rather than continuing with a zero scale.
+    if (!m_brush_placement_frame.value().is_valid()) {
+        m_brush_placement_frame.reset();
+        return false;
+    }
+
     Reference_frame& brush_frame = m_brush_placement_frame.value();
 
     ERHE_VERIFY(brush_frame.scale() != 0.0f);
@@ -686,7 +693,11 @@ void Brush_tool::update_preview_mesh_node_transform()
         return;
     }
 
-    const Brush::Scaled& brush_scaled = brush.get_scaled(m_transform_scale);
+    const Brush::Scaled* brush_scaled_pointer = brush.get_scaled(m_transform_scale);
+    if (brush_scaled_pointer == nullptr) {
+        return;
+    }
+    const Brush::Scaled& brush_scaled = *brush_scaled_pointer;
     const glm::mat4&     transform    = m_align_transform.value();
 
     // TODO Unparent, to remove raytrace primitives to raytrace scene.
@@ -792,7 +803,12 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     ERHE_VERIFY(scene_root);
 
     brush.late_initialize();
-    const auto& brush_scaled = brush.get_scaled(m_transform_scale);
+    const Brush::Scaled* brush_scaled_pointer = brush.get_scaled(m_transform_scale);
+    if (brush_scaled_pointer == nullptr) {
+        // get_scaled() has already named the brush in the log.
+        return;
+    }
+    const Brush::Scaled& brush_scaled = *brush_scaled_pointer;
     const std::string name = fmt::format("brush-{}", brush.get_name());
     m_preview_node = std::make_shared<erhe::scene::Xform>(name);
     m_preview_mesh = std::make_shared<erhe::scene::Mesh>(name);

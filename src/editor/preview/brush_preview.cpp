@@ -256,7 +256,13 @@ void Brush_preview::render_preview(
     // built, so the watchdog can identify the culprit if build_polygon_fill
     // spins on a corrupt mesh. See doc/erhe/geogram.md.
     erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
-    const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
+    const Brush::Scaled* brush_scaled_pointer = brush->get_scaled(1.0);
+    if (brush_scaled_pointer == nullptr) {
+        // get_scaled() has already named the brush in the log: a brush whose
+        // geometry preparation failed has no preview.
+        return;
+    }
+    const Brush::Scaled& brush_scaled = *brush_scaled_pointer;
     const float time_s = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);
     const Preview_edge_lines_config* edge_lines = (m_context.editor_settings != nullptr)
         ? &m_context.editor_settings->brush_preview_edge_lines

@@ -133,6 +133,8 @@ erhe_target_sources_grouped(
     assets/gltf_load_task.hpp
     brushes/brush.cpp
     brushes/brush.hpp
+    brushes/brush_geometry_slot.cpp
+    brushes/brush_geometry_slot.hpp
     brushes/brush_placement.cpp
     brushes/brush_placement.hpp
     brushes/brush_tool.cpp
@@ -1234,6 +1236,7 @@ endif ()
 
 if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
+    add_subdirectory(brushes/test)
     add_subdirectory(mcp/test)
     add_subdirectory(transform/test)
 endif ()

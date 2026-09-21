@@ -8,6 +8,7 @@
 #include "assets/asset_reference_config.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
 #include "graph_editor/graph_node_drag_payload.hpp"
@@ -558,6 +559,15 @@ auto Inventory_window::find_or_create_brush_with_material(
 ) -> std::shared_ptr<Brush>
 {
     const std::shared_ptr<erhe::geometry::Geometry> original_geometry = original_brush->get_geometry();
+    if (!original_geometry) {
+        // A brush whose geometry preparation failed has nothing to fork: a
+        // null geometry would match every other failed brush.
+        log_brush->warn(
+            "Brush '{}' has no geometry: not forked with material '{}'",
+            original_brush->get_name(), material->get_name()
+        );
+        return {};
+    }
 
     // Search all content libraries for the original brush and a matching fork
     for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {

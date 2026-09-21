@@ -871,6 +871,10 @@ auto Scene_builder::add_room(const Add_room_args& args) -> bool
     std::shared_ptr<erhe::scene::Node> floor_instance_node = floor_brush->make_instance(
         floor_brush_instance_create_info
     );
+    if (!floor_instance_node) {
+        // make_instance() has already named the brush in the log.
+        return false;
+    }
     floor_instance_node->set_lock_edit(true);
 
     std::vector<std::shared_ptr<Operation>> operations;
@@ -1008,6 +1012,10 @@ auto Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
             .scale           = config.object_scale
         };
         std::shared_ptr<erhe::scene::Node> instance_node = brush->make_instance(brush_instance_create_info);
+        if (!instance_node) {
+            // make_instance() has already named the brush in the log.
+            break;
+        }
         instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), i + 1));
         operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
@@ -1178,6 +1186,10 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
                 .scale           = config.object_scale
             };
             std::shared_ptr<erhe::scene::Node> instance_node = brush->make_instance(brush_instance_create_info);
+            if (!instance_node) {
+                // make_instance() has already named the brush in the log.
+                continue;
+            }
 
             std::shared_ptr<erhe::Item_base> shared_brush_item_base = brush->shared_from_this();
             std::shared_ptr<Brush>           shared_brush           = std::dynamic_pointer_cast<Brush>(shared_brush_item_base);

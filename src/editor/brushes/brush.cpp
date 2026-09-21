@@ -47,17 +47,36 @@ const erhe::property::Property<erhe::property::Object_reference> Brush::material
     );
 
 Brush::Brush(const Brush_data& create_info)
-    : Item  {create_info.get_name()}
-    , m_data{create_info}
+    : Item           {create_info.get_name()}
+    , m_data         {create_info}
+    , m_geometry_slot{create_info.geometry, create_info.geometry_generator}
 {
+    // The slot owns the geometry and the generator from here on; the copies in
+    // m_data would be a second, stale source of truth.
+    const std::shared_ptr<erhe::geometry::Geometry> initial_geometry = m_data.geometry;
+    m_data.geometry           = {};
+    m_data.geometry_generator = {};
+
     enable_flag_bits(erhe::Item_flags::brush | erhe::Item_flags::show_in_ui);
-    if (m_data.geometry) {
-        update_facet_statistics();
+
+    m_geometry_slot.set_prepared_callback(
+        [this](const erhe::geometry::Geometry& geometry) -> void
+        {
+            update_facet_statistics(geometry);
+        }
+    );
+
+    // A brush constructed with a finished geometry is ready right away, so its
+    // statistics are filled here instead of by the prepared callback.
+    if (initial_geometry) {
+        update_facet_statistics(*initial_geometry);
     }
 }
 
-auto Brush::get_max_corner_count() const -> GEO::index_t
+auto Brush::get_max_corner_count() -> GEO::index_t
 {
+    // Tier 1: the statistics exist only once the geometry has been prepared.
+    static_cast<void>(get_geometry());
     return m_max_corner_count;
 }
 
@@ -85,6 +104,10 @@ auto Brush::make_with_material(const std::shared_ptr<erhe::primitive::Material>&
 {
     Brush_data data_copy = m_data;
     data_copy.name = get_name() + " (" + material->get_name() + ")";
+    // The fork shares the geometry when this brush is ready and repeats the
+    // recipe otherwise, the way a copy of the create info used to.
+    data_copy.geometry           = m_geometry_slot.get_geometry_if_ready();
+    data_copy.geometry_generator = data_copy.geometry ? Geometry_generator{} : m_geometry_slot.get_generator();
     std::shared_ptr<Brush> result = std::make_shared<Brush>(data_copy);
     result->set_material(material);
     return result;
@@ -99,21 +122,21 @@ auto Brush::make_shared_payload_copy() const -> std::shared_ptr<Brush>
     // material is intentionally NOT carried over: it would point into the
     // source scene's content library; the destination scene supplies
     // materials at placement time.
-    std::shared_ptr<Brush> result = std::make_shared<Brush>(m_data);
+    Brush_data data_copy = m_data;
+    data_copy.geometry           = m_geometry_slot.get_geometry_if_ready();
+    data_copy.geometry_generator = data_copy.geometry ? Geometry_generator{} : m_geometry_slot.get_generator();
+    std::shared_ptr<Brush> result = std::make_shared<Brush>(data_copy);
     result->m_primitive        = m_primitive;
     result->m_reference_frames = m_reference_frames;
     result->m_scaled_entries   = m_scaled_entries;
     return result;
 }
 
-void Brush::update_facet_statistics()
+void Brush::update_facet_statistics(const erhe::geometry::Geometry& geometry)
 {
-    const auto geometry = get_geometry();
-    ERHE_VERIFY(geometry);
-
     m_corner_count_to_facets.clear();
     m_max_corner_count = 0;
-    GEO::Mesh& geo_mesh = geometry->get_mesh();
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
     for (GEO::index_t facet : geo_mesh.facets) {
         const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
         m_max_corner_count = std::max(m_max_corner_count, corner_count);
@@ -123,16 +146,19 @@ void Brush::update_facet_statistics()
 
 auto Brush::get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&
 {
-    if (!m_data.geometry) {
-        late_initialize();
-    }
+    // Tier 1: the statistics are filled during preparation. A failed brush
+    // keeps the empty map.
+    static_cast<void>(get_geometry());
     return m_corner_count_to_facets;
 }
 
 void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
-    ERHE_VERIFY(geometry);
+    if (!geometry) {
+        log_brush->warn("Brush '{}' has no geometry: not initialized", get_name());
+        return;
+    }
     if (!m_primitive) {
         m_primitive = std::make_shared<erhe::primitive::Primitive>(geometry);
     }
@@ -186,8 +212,6 @@ void Brush::late_initialize()
     }
 }
 
-Brush::Brush(Brush&& old) noexcept = default;
-
 auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::index_t in_face_offset, const GEO::index_t corner_offset) -> Reference_frame
 {
     for (const auto& reference_frame : m_reference_frames) {
@@ -201,6 +225,10 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
     }
 
     const auto geometry = get_geometry();
+    if (!geometry) {
+        log_brush->warn("Brush '{}' has no geometry: no reference frame", get_name());
+        return Reference_frame{};
+    }
     GEO::Mesh& geo_mesh = geometry->get_mesh();
 
     GEO::index_t face_offset = 0;
@@ -219,25 +247,28 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
     return m_reference_frames.emplace_back(geo_mesh, selected_facet, in_face_offset, corner_offset, Frame_orientation::in);
 }
 
-auto Brush::get_scaled(const double scale) -> const Scaled&
+auto Brush::get_scaled(const double scale) -> const Scaled*
 {
     if (!m_primitive || !m_primitive->render_shape) {
         late_initialize();
     }
+    if (!m_primitive || !m_primitive->render_shape) {
+        // late_initialize() has already named the brush in the log.
+        return nullptr;
+    }
     const int scale_key = static_cast<int>(scale * c_scale_factor);
     for (const auto& scaled : m_scaled_entries) {
         if (scaled.scale_key == scale_key) {
-            return scaled;
+            return &scaled;
         }
     }
     Scaled& scaled = m_scaled_entries.emplace_back(create_scaled(scale_key));
 
-    ERHE_VERIFY(m_primitive->render_shape);
     const std::shared_ptr<erhe::primitive::Primitive_render_shape>& scaled_render_shape = scaled.primitive->render_shape;
     if (!scaled_render_shape->has_raytrace_triangles()) {
         scaled_render_shape->make_raytrace();
     }
-    return scaled;
+    return &scaled;
 }
 
 auto Brush::create_scaled(const int scale_key) -> Scaled
@@ -341,12 +372,17 @@ const std::string empty_string = {};
 
 auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
 {
-    if (!m_data.geometry) {
-        m_data.geometry = m_data.geometry_generator();
-        m_data.geometry_generator = {};
-        update_facet_statistics();
-    }
-    return m_data.geometry;
+    return m_geometry_slot.get_geometry(get_name());
+}
+
+auto Brush::request_geometry() -> Brush_geometry_request_outcome
+{
+    return m_geometry_slot.request();
+}
+
+auto Brush::get_geometry_state() const -> Brush_geometry_state
+{
+    return m_geometry_slot.get_state();
 }
 
 auto Brush::make_instance(const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>
@@ -355,7 +391,12 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
 
     late_initialize();
 
-    const Scaled& scaled = get_scaled(instance_create_info.scale);
+    const Scaled* scaled_pointer = get_scaled(instance_create_info.scale);
+    if (scaled_pointer == nullptr) {
+        log_brush->warn("Brush '{}' has no geometry: not placed in the scene", get_name());
+        return {};
+    }
+    const Scaled& scaled = *scaled_pointer;
 
     const std::string_view name = this->get_name();
 
@@ -422,6 +463,10 @@ auto Brush::get_bounding_box() -> erhe::math::Aabb
     ) {
         late_initialize();
     }
+    if (!m_primitive) {
+        // late_initialize() has already named the brush in the log.
+        return erhe::math::Aabb{};
+    }
     return m_primitive->get_bounding_box();
 }
 
@@ -459,6 +504,10 @@ auto place_brush_in_scene(
     };
 
     auto instance_node = brush.make_instance(create_info);
+    if (!instance_node) {
+        // make_instance() has already named the brush in the log.
+        return {};
+    }
 
     auto shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
     auto brush_placement = std::make_shared<Brush_placement>(shared_brush, GEO::NO_FACET, GEO::NO_CORNER);

@@ -68,6 +68,9 @@ void Brush_geometry_node::set_brush(const std::shared_ptr<Brush>& brush)
     // Main thread: get_geometry() may lazily run the brush's geometry
     // generator, which is not safe on the evaluation worker.
     m_source_geometry = brush ? brush->get_geometry() : std::shared_ptr<erhe::geometry::Geometry>{};
+    if (brush && !m_source_geometry) {
+        log_graph_editor->warn("Brush '{}' has no geometry: the graph source node has no geometry", brush->get_name());
+    }
     mark_dirty();
 }
 

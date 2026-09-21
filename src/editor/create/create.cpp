@@ -220,16 +220,19 @@ void Create::window_imgui()
                     .scale           = 1.0
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
-
-                auto op = std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = instance_node,
-                        .parent  = parent,
-                        .mode    = Item_insert_remove_operation::Mode::insert
-                    }
-                );
-                m_context.operation_stack->queue(op);
+                // A brush whose geometry preparation failed has no instance;
+                // make_instance() has already named it in the log.
+                if (instance_node) {
+                    auto op = std::make_shared<Item_insert_remove_operation>(
+                        Item_insert_remove_operation::Parameters{
+                            .context = m_context,
+                            .item    = instance_node,
+                            .parent  = parent,
+                            .mode    = Item_insert_remove_operation::Mode::insert
+                        }
+                    );
+                    m_context.operation_stack->queue(op);
+                }
             }
             m_create_shape = nullptr;
         }
