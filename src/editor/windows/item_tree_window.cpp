@@ -10,6 +10,7 @@
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_thumbnail.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
@@ -1783,17 +1784,16 @@ void Item_tree::imgui_row(const Flat_row& row)
         bool thumbnail_drawn = false;
         if (row.brush && m_context.thumbnails) {
             ImGui::SameLine();
-            const std::shared_ptr<Brush>& brush = row.brush;
-            // Deferred callback (see Thumbnails::draw): must not capture
-            // this -- the Item_tree of a scene browser window is destroyed
-            // by scene close while the callback can still be pending.
-            thumbnail_drawn = m_context.thumbnails->draw(
-                brush,
-                [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                    context.brush_preview->render_preview(texture, texture_layer, brush, time);
-                },
-                m_cached_icon_font_size // keep row height identical to icon-only rows
-            );
+            // Tier 2 (doc/plans/deferred_brush_geometry.md D5): the shared
+            // helper requests the geometry and draws the preview only once the
+            // brush is ready, spinning in the icon square until then. The
+            // spinner goes on the row's own draw list at the icon position, so
+            // the row keeps the height it has with an icon.
+            const Brush_thumbnail_placement placement{
+                .size     = m_cached_icon_font_size,
+                .top_left = ImVec2{row_pos.x + row.icon_x_offset, row_pos.y + m_icon_y_offset}
+            };
+            thumbnail_drawn = (draw_brush_thumbnail(m_context, row.brush, placement) != Brush_thumbnail_result::icon);
         }
         if (!thumbnail_drawn && (row.primary_icon.code != nullptr)) {
             const Row_icon& icon  = row.primary_icon;

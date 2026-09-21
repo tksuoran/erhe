@@ -3,6 +3,8 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#include <cmath>
+
 namespace erhe::imgui {
 
 const ImVec4 c_color                  = ImVec4{0.30f, 0.40f, 0.80f, 1.0f};
@@ -275,6 +277,28 @@ auto combo_fit_width(const char* label, int* current_item, const char* const ite
         ImGui::EndCombo();
     }
     return changed;
+}
+
+void draw_spinner(const ImVec2 center, const float radius, const float thickness, const ImU32 color)
+{
+    if (radius <= 0.0f) {
+        return;
+    }
+    ImDrawList* const draw_list = ImGui::GetWindowDrawList();
+    if (draw_list == nullptr) {
+        return;
+    }
+    // One turn per c_period_s, an arc covering c_arc_turns of the circle.
+    constexpr float c_period_s   = 1.2f;
+    constexpr float c_arc_turns  = 0.72f;
+    constexpr int   c_segments   = 24;
+    constexpr float c_two_pi     = 6.28318530718f;
+    const float time_s     = static_cast<float>(ImGui::GetTime());
+    const float turns      = time_s / c_period_s;
+    const float start_angle = (turns - std::floor(turns)) * c_two_pi;
+    draw_list->PathClear();
+    draw_list->PathArcTo(center, radius, start_angle, start_angle + (c_arc_turns * c_two_pi), c_segments);
+    draw_list->PathStroke(color, thickness, ImDrawFlags_None);
 }
 
 } // namespace erhe::imgui

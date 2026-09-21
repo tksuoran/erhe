@@ -7,6 +7,7 @@
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference_config.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_thumbnail.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
@@ -256,13 +257,10 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     // Brush slot: render thumbnail
     if (slot_brush && m_context.thumbnails && m_context.brush_preview) {
         std::shared_ptr<Brush> brush = slot_brush;
-        thumbnail_drawn = m_context.thumbnails->draw(
-            brush,
-            [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                context.brush_preview->render_preview(texture, texture_layer, brush, time);
-            },
-            c_slot_size
-        );
+        // Tier 2 (doc/plans/deferred_brush_geometry.md D5): the slot spins
+        // while the brush geometry is being prepared and keeps its size.
+        const Brush_thumbnail_placement placement{.size = c_slot_size};
+        thumbnail_drawn = (draw_brush_thumbnail(m_context, brush, placement) != Brush_thumbnail_result::icon);
         if (thumbnail_drawn && ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", brush->get_name().c_str());
         }

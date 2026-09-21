@@ -136,6 +136,10 @@ public:
     // thread made of the brush's name.
     auto               prepare_geometry_if_queued(std::string_view name) -> Brush_geometry_worker_outcome;
     [[nodiscard]] auto get_geometry_state        () const -> Brush_geometry_state;
+    // The geometry only while the brush is `ready`; never prepares, never
+    // waits. A tier 2 consumer that wants to report the geometry's statistics
+    // reads it through this, so that reporting never becomes a tier 1 wait.
+    [[nodiscard]] auto get_geometry_if_ready     () const -> std::shared_ptr<erhe::geometry::Geometry>;
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () -> GEO::index_t;
     // The material a placed instance gets (member-backed object property,

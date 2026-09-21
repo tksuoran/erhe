@@ -408,6 +408,11 @@ auto Brush::get_geometry_state() const -> Brush_geometry_state
     return m_geometry_slot.get_state();
 }
 
+auto Brush::get_geometry_if_ready() const -> std::shared_ptr<erhe::geometry::Geometry>
+{
+    return m_geometry_slot.get_geometry_if_ready();
+}
+
 auto Brush::make_instance(const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>
 {
     ERHE_PROFILE_FUNCTION();

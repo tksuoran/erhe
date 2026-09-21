@@ -172,7 +172,7 @@
     "name": "get_scene_textures"
   },
   {
-    "description": "List all brushes in a scene's content library, each with its folder_path (slash-separated content-library folder hierarchy, '' = directly under the Brushes root)",
+    "description": "List all brushes in a scene's content library, each with its folder_path (slash-separated content-library folder hierarchy, '' = directly under the Brushes root) and its geometry_state (unprepared / queued / preparing / ready / failed). Brush geometry is prepared on demand: this query is a tier 2 consumer, so it ASKS the preparation queue for every listed brush and returns at once without waiting. vertex_count and facet_count are reported only for a brush that is already 'ready' and are null otherwise - a caller that needs the counts calls this again, or polls get_brush_geometry_states (which requests nothing), until the brushes it cares about are 'ready'.",
     "inputSchema": {
       "properties": {
         "scene_id": {

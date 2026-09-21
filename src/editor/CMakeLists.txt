@@ -137,6 +137,8 @@ erhe_target_sources_grouped(
     brushes/brush_geometry_queue.hpp
     brushes/brush_geometry_slot.cpp
     brushes/brush_geometry_slot.hpp
+    brushes/brush_thumbnail.cpp
+    brushes/brush_thumbnail.hpp
     brushes/brush_placement.cpp
     brushes/brush_placement.hpp
     brushes/brush_tool.cpp

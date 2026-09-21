@@ -1822,19 +1822,25 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
         if (!brush) {
             continue;
         }
-        const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
-        const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
-        const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
+        // Tier 2 (doc/plans/deferred_brush_geometry.md R3): the query asks for
+        // the geometry and returns at once, reporting the state it found. The
+        // counts come from the geometry only while the brush is `ready`, so
+        // listing a palette never waits for 104 geometries to be built; a
+        // caller that needs the counts polls until `geometry_state` is `ready`.
+        static_cast<void>(brush->request_geometry());
+        const Brush_geometry_state                      state    = brush->get_geometry_state();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry_if_ready();
         const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
         brushes.push_back({
-            {"name",         brush->get_name()},
-            {"id",           brush->get_id()},
-            {"folder_path",  brush_folder_path(*brush.get(), brushes_scope.get())},
-            {"vertex_count", vertex_count},
-            {"facet_count",  facet_count},
-            {"material",     material ? json(material->get_name()) : json(nullptr)},
-            {"density",      brush->get_density()},
-            {"normal_style", normal_style_name(brush->get_normal_style())}
+            {"name",           brush->get_name()},
+            {"id",             brush->get_id()},
+            {"folder_path",    brush_folder_path(*brush.get(), brushes_scope.get())},
+            {"geometry_state", std::string{to_string(state)}},
+            {"vertex_count",   geometry ? json(geometry->get_mesh().vertices.nb()) : json(nullptr)},
+            {"facet_count",    geometry ? json(geometry->get_mesh().facets.nb())   : json(nullptr)},
+            {"material",       material ? json(material->get_name()) : json(nullptr)},
+            {"density",        brush->get_density()},
+            {"normal_style",   normal_style_name(brush->get_normal_style())}
         });
     }
 

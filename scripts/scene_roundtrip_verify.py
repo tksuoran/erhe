@@ -143,6 +143,26 @@ def mutate(tool, args=None, deadline_s=900):
                 time.sleep(5.0)
 
 
+def scene_brushes_prepared(scene_name, deadline_s=300):
+    """get_scene_brushes with every brush 'ready'.
+
+    Brush geometry is prepared on demand (doc/plans/deferred_brush_geometry.md):
+    get_scene_brushes is a tier 2 consumer, so it requests preparation and
+    returns at once, reporting facet_count / vertex_count only for brushes that
+    are already ready. The snapshot diff compares those counts, so it waits for
+    the queue to drain first. get_brush_geometry_states requests nothing, which
+    is why the poll goes through it rather than through repeated listings.
+    """
+    brushes = call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
+    deadline = time.time() + deadline_s
+    while time.time() < deadline:
+        counts = call("get_brush_geometry_states", {"scene_name": scene_name}).get("counts", {})
+        if (counts.get("queued", 0) == 0) and (counts.get("preparing", 0) == 0):
+            break
+        time.sleep(0.2)
+    return call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", brushes)
+
+
 def check(section, name, condition, detail=""):
     RESULTS.append((section, name, bool(condition), detail))
     status = "PASS" if condition else "FAIL"
@@ -594,7 +614,7 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
     animations = call("get_scene_animations", {"scene_name": scene_name}).get("animations", [])
     snap["animations"] = sorted((norm_animation(a) for a in animations), key=lambda a: a["name"])
 
-    brushes = call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
+    brushes = scene_brushes_prepared(scene_name)
     snap["brushes"] = sorted(
         (
             {
@@ -1754,7 +1774,7 @@ def usd_snapshot(scene_name):
 
     # The brushes the scene carries (doc/erhe/usd_compatibility_design.md E4a): the
     # same keys the glTF leg diffs, plus what a Brush prim authors of its own.
-    brushes = call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
+    brushes = scene_brushes_prepared(scene_name)
     snap["brushes"] = sorted(
         (
             {

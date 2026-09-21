@@ -1058,10 +1058,26 @@ class SmokeTestRunner:
                 return True
             self.scene_name = scenes[0]["name"]
 
+            # Brush geometry is prepared on demand
+            # (doc/plans/deferred_brush_geometry.md): the first listing requests
+            # preparation of every palette brush and returns at once, reporting
+            # facet_count / vertex_count only for the brushes already ready. The
+            # size filter below needs those counts, so wait for the preparation
+            # queue to drain (get_brush_geometry_states requests nothing) and
+            # list again.
+            brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+            deadline = time.time() + 120.0
+            while time.time() < deadline:
+                counts = self.client.call_ok("get_brush_geometry_states", {"scene_name": self.scene_name})["counts"]
+                if (counts.get("queued", 0) == 0) and (counts.get("preparing", 0) == 0):
+                    break
+                time.sleep(0.2)
             brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
             small_brushes = [b for b in brushes
-                            if b.get("facet_count", 0) <= self.max_brush_faces
-                            and b.get("vertex_count", 0) <= self.max_brush_vertices]
+                            if (b.get("facet_count") is not None)
+                            and (b.get("vertex_count") is not None)
+                            and b["facet_count"] <= self.max_brush_faces
+                            and b["vertex_count"] <= self.max_brush_vertices]
             if not small_brushes:
                 small_brushes = brushes  # fallback if no brushes match
             self.brush_ids = [b["id"] for b in small_brushes]

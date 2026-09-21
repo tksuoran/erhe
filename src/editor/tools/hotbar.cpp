@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_thumbnail.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -1068,13 +1069,10 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         Tool* tool = entry.tool;
         const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
         std::shared_ptr<Brush> brush = entry_brush;
-        const bool thumbnail_drawn = m_context.thumbnails->draw(
-            brush,
-            [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                context.brush_preview->render_preview(texture, texture_layer, brush, time);
-            },
-            icon_size
-        );
+        // Tier 2 (doc/plans/deferred_brush_geometry.md D5): the slot spins
+        // while the brush geometry is being prepared and keeps its size.
+        const Brush_thumbnail_placement placement{.size = icon_size};
+        const bool thumbnail_drawn = (draw_brush_thumbnail(m_context, brush, placement) != Brush_thumbnail_result::icon);
         if (!thumbnail_drawn) {
             if ((tool != nullptr) && (tool->get_icon() != nullptr)) {
                 const auto& icon_set = m_context.icon_set;

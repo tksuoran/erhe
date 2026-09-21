@@ -87,6 +87,16 @@ auto make_angle_button(
 
 auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool;
 
+// Indeterminate progress spinner: an arc of `radius` centred at `center`,
+// `thickness` pixels wide, added to the current window's draw list. The start
+// angle is a function of ImGui::GetTime(), so the spinner animates from the
+// draws that are already happening and holds no state of its own - there is
+// nothing to reset, nothing to tick and nothing to keep alive between frames.
+// It emits no ImGui item either, so the caller owns the layout: it decides
+// what square the spinner sits in and keeps the row height it would have had.
+// `color` is an ImGui packed color (ImGui::GetColorU32).
+void draw_spinner(ImVec2 center, float radius, float thickness, ImU32 color);
+
 // True once any value widget (checkbox, slider, drag, input text, color edit,
 // combo selectable, ...) has been edited during the current ImGui frame - plain
 // buttons do not count. Sample before and after a UI region to detect "an edit

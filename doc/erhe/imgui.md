@@ -17,7 +17,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - `Imgui_settings` -- font paths, sizes, scale factor configuration
 - `Scoped_imgui_context` -- RAII guard for switching the active ImGui context
 - `File_dialog_window` -- simple file browser dialog window
-- Helper functions in `imgui_helpers.hpp`: `make_button()`, `make_combo()`, `make_scalar_button()`, etc.
+- Helper functions in `imgui_helpers.hpp`: `make_button()`, `make_combo()`, `make_scalar_button()`, `draw_spinner()`, etc.
 
 ## Public API
 - Create an `Imgui_renderer`, then create `Imgui_host` subclasses (each gets its own ImGuiContext).
@@ -38,6 +38,15 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - The renderer uses indirect draw calls with a ring buffer strategy for vertex/index/draw-parameter data.
 - Font atlas is shared across all hosts.
 - The `windows/` subdirectory has reusable utility windows (performance, log, pipeline inspector, graph plotter, framebuffer viewer).
+- `draw_spinner(center, radius, thickness, color)` is the indeterminate
+  progress spinner: an arc added to the current window's draw list whose start
+  angle is a function of `ImGui::GetTime()`. It holds no state and emits no
+  ImGui item, so it animates from the draws that are already happening and the
+  caller keeps ownership of the layout - a row that spins instead of showing
+  its content keeps the height it would have had. It works in every host,
+  including the editor's `Rendertarget_imgui_host` (the hotbar in the 3D
+  viewport), because each host sets `io.DeltaTime` and renders every frame, so
+  nothing has to force a redraw for the animation.
 
 ## Cross splitter (Dear ImGui fork feature)
 
