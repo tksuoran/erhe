@@ -995,7 +995,7 @@ auto Item_tree::action_drop_target(
     const std::shared_ptr<Content_library>           target_library = find_owning_library(m_context, item);
 
     // Graph Mesh onto a scene node: source the node's mesh from the graph by
-    // creating (or retargeting) a Geometry_graph_mesh attachment - same bind
+    // writing the node's Geometry_graph_mesh.graph_mesh value - same bind
     // logic as Properties and MCP set_node_graph_mesh. The graph mesh comes
     // from the node's own scene content library; the scene file resolves the
     // binding by name in that library on load, so a cross-scene bind would
@@ -1005,16 +1005,10 @@ auto Item_tree::action_drop_target(
             row,
             payload_type,
             [&node, &graph_mesh]() {
-                std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-                if (!attachment) {
-                    attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
-                    node->attach(attachment);
-                } else {
-                    attachment->set_graph_mesh(graph_mesh);
-                }
-                // Materialize the asset's latest bake immediately; a
-                // never-baked asset applies on its first evaluation push.
-                attachment->apply_baked_products();
+                // Writing the value materializes the asset's latest bake
+                // immediately; a never-baked asset applies on its first
+                // evaluation push.
+                set_geometry_graph_mesh(*node.get(), graph_mesh);
             }
         );
     }

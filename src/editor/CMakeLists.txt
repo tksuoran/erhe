@@ -214,6 +214,8 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph.hpp
     geometry_graph/geometry_graph_mesh.cpp
     geometry_graph/geometry_graph_mesh.hpp
+    geometry_graph/geometry_graph_mesh_system.cpp
+    geometry_graph/geometry_graph_mesh_system.hpp
     geometry_graph/graph_mesh.cpp
     geometry_graph/graph_mesh.hpp
     geometry_graph/graph_mesh_serialization.cpp

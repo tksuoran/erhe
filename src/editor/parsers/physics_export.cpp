@@ -2,7 +2,7 @@
 
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
-#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 
@@ -344,14 +344,15 @@ auto build_physics_description(
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        // A Node_physics controlled by a Geometry Graph Mesh attachment is a
-        // baked artifact the graph rebuilds on load - persisting it would
-        // duplicate the rigid body on every save/load round-trip (same check
-        // as save_scene; doc/editor/gltf_scene_roundtrip.md phase 3 exclusion
-        // hook).
+        // A Node_physics a node's geometry graph controls is a baked artifact
+        // the graph rebuilds on load - persisting it would duplicate the rigid
+        // body on every save/load round-trip (same check as save_scene;
+        // doc/editor/gltf_scene_roundtrip.md phase 3 exclusion hook).
         if (node_physics) {
-            const std::shared_ptr<Geometry_graph_mesh> graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-            if (graph_mesh_attachment && (graph_mesh_attachment->get_controlled_node_physics() == node_physics)) {
+            const Geometry_graph_mesh_system* const system = find_geometry_graph_mesh_system(*node.get());
+            const Geometry_graph_mesh_entry*  const entry  =
+                (system != nullptr) ? system->find_entry(*node.get()) : nullptr;
+            if ((entry != nullptr) && (entry->node_physics == node_physics)) {
                 node_physics.reset();
             }
         }

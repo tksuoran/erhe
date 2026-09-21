@@ -279,9 +279,11 @@ inheriting and none of them serialized (session values, D5).
 
 ### Geometry_graph_mesh (`src/editor/geometry_graph/geometry_graph_mesh.cpp`)
 
+Attached to `erhe::scene::Node` (section 4.25), group "Geometry Graph Mesh".
+
 | Property | Storage | Notes |
 |---|---|---|
-| graph_mesh | member | object reference, a Graph_mesh asset; after_set releases the controlled products and applies the new bake |
+| Geometry_graph_mesh.graph_mesh | attached | KEY property; strong object reference, a Graph_mesh asset; no serialize flag (the native carriers hold the binding); a write reaches the scene's Geometry_graph_mesh_system, which releases the old products and applies the new bake |
 
 ### Geometry graph nodes (`src/editor/geometry_graph/nodes/`, section 4.5)
 

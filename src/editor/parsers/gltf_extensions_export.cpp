@@ -10,6 +10,7 @@
 #include "content_library/style.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "parsers/gltf.hpp"
@@ -422,29 +423,31 @@ void add_gltf_editor_state(
             return true;
         }
 
-        // Exclusion hook + ERHE_node_graphs node bindings: a Geometry Graph
-        // Mesh attachment's controlled products are baked artifacts the
-        // graph rebuilds on load.
+        // Exclusion hook + ERHE_node_graphs node bindings: the products a
+        // node's geometry graph controls are baked artifacts the graph
+        // rebuilds on load.
         std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-        const std::shared_ptr<Geometry_graph_mesh> graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-        if (graph_mesh_attachment) {
-            if (graph_mesh_attachment->get_controlled_mesh()) {
-                arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_mesh().get());
+        const Geometry_graph_mesh_entry* const graph_mesh_entry =
+            scene_root.get_geometry_graph_mesh_system().find_entry(*node.get());
+        if (graph_mesh_entry != nullptr) {
+            if (graph_mesh_entry->mesh) {
+                arguments.excluded_meshes.insert(graph_mesh_entry->mesh.get());
             }
-            if (graph_mesh_attachment->get_controlled_ghost_mesh()) {
-                arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_ghost_mesh().get());
+            if (graph_mesh_entry->ghost_mesh) {
+                arguments.excluded_meshes.insert(graph_mesh_entry->ghost_mesh.get());
             }
-            if (graph_mesh_attachment->get_controlled_node_physics() == node_physics) {
+            if (graph_mesh_entry->node_physics == node_physics) {
                 node_physics.reset(); // build_physics_description skips it too
             }
-            if (graph_mesh_attachment->get_graph_mesh()) {
-                data->node_bindings.push_back(
-                    Node_binding_record{
-                        .node            = node.get(),
-                        .graph_mesh_name = graph_mesh_attachment->get_graph_mesh()->get_name(),
-                    }
-                );
-            }
+        }
+        const std::optional<Geometry_graph_mesh_data> graph_mesh_data = read_geometry_graph_mesh(*node.get());
+        if (graph_mesh_data.has_value() && graph_mesh_data.value().graph_mesh) {
+            data->node_bindings.push_back(
+                Node_binding_record{
+                    .node            = node.get(),
+                    .graph_mesh_name = graph_mesh_data.value().graph_mesh->get_name(),
+                }
+            );
         }
 
         // ERHE_physics: erhe rigid-body state KHR_physics_rigid_bodies

@@ -328,7 +328,8 @@ owner of node runtime state implements
 attached properties one class registers on `Node`, keyed on one of them
 (`doc/erhe/property_system.md` section 4.23) - states what the user authored;
 the objects that exist because of it (a physics body, a card proxy mesh, a
-layout solve registration) are owned by one system per group per scene. The
+layout solve registration, the mesh a geometry graph bakes) are owned by one
+system per group per scene. The
 system keeps its record per node in a container keyed by `Node*`, holds no
 `shared_ptr` to a node, and erases the record in `on_node_unregistered`, so a
 scene close releases what it holds without a `close_scene` subscription.

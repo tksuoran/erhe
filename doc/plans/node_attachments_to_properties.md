@@ -30,6 +30,17 @@ attachment has no path; a value on the node is overridable as it stands.
   extent and the card proxy in a per-scene `Draw_mode_system`
   (`doc/erhe/property_system.md` section 4.24, `doc/editor/scene.md`). Its
   retirement deleted the applied-schema attachment registry (D9).
+- **Geometry_graph_mesh**
+  (`src/editor/geometry_graph/geometry_graph_mesh.{hpp,cpp}`,
+  `geometry_graph_mesh_system.{hpp,cpp}`): the geometry graph a node sources
+  its mesh from as a one-value group keyed on
+  `Geometry_graph_mesh.graph_mesh`, with the controlled mesh, ghost mesh,
+  rigid body and applied bake revision in a per-scene
+  `Geometry_graph_mesh_system` (`doc/erhe/property_system.md` section 4.25,
+  `doc/editor/geometry_graph_mesh.md`). The binding's native carriers -
+  `ERHE_node_graphs` `node_bindings` and the USD `erhe:scene` block's
+  `graph_meshes.bound_prims` - stay, so the value is registered without the
+  serialize flag (D5 + D8).
 - **Layout** (`src/erhe/scene/erhe_scene/layout.{hpp,cpp}`,
   `layout_system.{hpp,cpp}`): the container values as a group of the node
   keyed on `Layout.type`, with the solve registration in a per-scene
@@ -72,7 +83,6 @@ class's own shape, stated in the row.
 |-------|-----------------|---------|---------------|----------|----------|------|
 | `Node_physics` | `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI`, `PhysicsMaterialAPI` binding (all applied API schemas) | property | body, create-info mirror, world registration | 1 | `KHR_physics_rigid_bodies`, `ERHE_physics`, UsdPhysics | D1 + D2 |
 | `Node_joint` | `UsdPhysicsJoint` and its subclasses: typed prims deriving `UsdGeomImageable`, `physics:body0` / `body1` relationships | **type** | constraint, body pointers | many | `physicsJoints`, UsdPhysics joint prim | D3 |
-| `Geometry_graph_mesh` | none of its own; the same shape as `material:binding`, a relationship from the prim to a resource prim | property | controlled mesh, ghost mesh, controlled body, applied revision | 1 | `ERHE_node_graphs` bindings, USD `erhe:scene` block | D1 + D2 |
 | `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
 
 `Joint` is the only new prim type. The typed prims USD has for the other
@@ -179,7 +189,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P7. `Geometry_graph_mesh`.** Roundtrip geometry-graph leg.
 - **P8. `Node_physics`.** ~35 `get_attachment<Node_physics>` sites move to
   `read_node_physics` / the physics system. Deletes `ERHE_physics`. Suites:
   physics (both backends), usd, `physics_drag_joint_sweep.py` 16/16.

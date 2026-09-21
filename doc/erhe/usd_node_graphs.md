@@ -192,7 +192,7 @@ parameter key would take.
 Two things a `NodeGraph` prim has no form for ride the `erhe:scene`
 `customLayerData` block instead, one entry per graph under
 `graph_meshes`: the scene prims bound to the graph (a
-`Geometry_graph_mesh` attachment, an object reference no `erhe:` custom
+node's `Geometry_graph_mesh.graph_mesh` value, an object reference no `erhe:` custom
 attribute can carry), and the graph's Houdini-style display / ghost node
 designations, which USD has no counterpart for. Each entry names a prim
 by the path `erhe::usd::plan_usd_prim_paths` plans for it, in the

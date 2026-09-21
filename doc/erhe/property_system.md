@@ -2498,6 +2498,37 @@ the group implies - the pruning of the prim's children, the cached extent and
 the card proxy - is owned by `editor::Draw_mode_system`, one per scene
 (`doc/erhe/scene.md` "Node systems", `doc/editor/scene.md`).
 
+### 4.25 Geometry_graph_mesh (attached to Node)
+
+`editor::Geometry_graph_mesh`
+(`src/editor/geometry_graph/geometry_graph_mesh.{hpp,cpp}`) registers the
+geometry graph a node sources its mesh from as an attached value group of the
+node (section 4.23, `doc/plans/node_attachments_to_properties.md` D1), owner
+type `Geometry_graph_mesh`, holder type `erhe::scene::Node`, qualified
+`Geometry_graph_mesh.graph_mesh`. Like `Ik` and `Draw_mode` it is a
+registration holder with static members only, not a `Dependency_object`, so
+its owner type sits directly under the root.
+
+`Geometry_graph_mesh.graph_mesh` is the group's only value and its KEY
+property: a strong object reference (D18) validated to null or a `Graph_mesh`,
+with the null reference as its default, so the node sources its mesh from a
+graph exactly while something names one on it. Holding the asset strongly is
+what makes the node a registered user of it, the rule every reference naming a
+content-library resource follows. It does not inherit: a binding is a
+per-instance value. Readers go through
+`read_geometry_graph_mesh(const erhe::scene::Node&) -> std::optional<Geometry_graph_mesh_data>`
+and writers through `set_geometry_graph_mesh(node, graph_mesh)`.
+
+The value carries no `Property_flags::serialize` (D5), because the binding's
+file carriers are the native ones - `ERHE_node_graphs` `node_bindings` in
+glTF, the `erhe:scene` block's `graph_meshes.bound_prims` in USD - which are
+fed from `read_geometry_graph_mesh()` and consumed by writing the value (D8).
+Its `property_changed` is `erhe::scene::node_system_property_changed`: the
+runtime state the group implies - the controlled mesh, the ghost mesh, the
+controlled rigid body and the applied bake revision - is owned by
+`editor::Geometry_graph_mesh_system`, one per scene (`doc/erhe/scene.md`
+"Node systems", `doc/editor/geometry_graph_mesh.md`).
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

@@ -6,7 +6,6 @@
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
-#include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "content_library/brdf_slice.hpp"
 #include "content_library/content_library.hpp"

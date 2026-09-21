@@ -1201,9 +1201,8 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
             json node_bindings = json::array();
             scene_root.get_scene().for_each_node(
                 [&graph_mesh, &node_bindings](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
-                    const std::shared_ptr<Geometry_graph_mesh> attachment =
-                        erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-                    if (attachment && (attachment->get_graph_mesh() == graph_mesh)) {
+                    const std::optional<Geometry_graph_mesh_data> data = read_geometry_graph_mesh(*node.get());
+                    if (data.has_value() && (data.value().graph_mesh == graph_mesh)) {
                         node_bindings.push_back({{"prim", node->get_reference_path()}});
                     }
                     return true;
@@ -1302,15 +1301,10 @@ auto Mcp_server::action_set_node_graph_mesh(const json& args) -> std::string
         return make_error_content("Node not found: " + node_name);
     }
 
-    const std::shared_ptr<Geometry_graph_mesh> existing = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-
     if (graph_mesh_name.empty()) {
-        if (existing) {
-            // set_graph_mesh(nullptr) releases the controlled mesh/physics;
-            // the shared_ptr keeps the attachment alive across detach.
-            existing->set_graph_mesh({});
-            node->detach(existing.get());
-        }
+        // Clearing the value releases the controlled mesh / physics through
+        // the scene's geometry-graph-mesh system.
+        set_geometry_graph_mesh(*node.get(), {});
         return make_json_content({
             {"cleared", true},
             {"node",    node_name}
@@ -1326,16 +1320,10 @@ auto Mcp_server::action_set_node_graph_mesh(const json& args) -> std::string
         return make_error_content("Graph mesh not found: " + graph_mesh_name);
     }
 
-    std::shared_ptr<Geometry_graph_mesh> attachment = existing;
-    if (!attachment) {
-        attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
-        node->attach(attachment);
-    } else {
-        attachment->set_graph_mesh(graph_mesh);
-    }
-    // Materialize the asset's latest bake immediately; a never-baked asset
-    // applies on its first evaluation push (get_geometry_graph barrier).
-    attachment->apply_baked_products();
+    // Writing the value materializes the asset's latest bake immediately; a
+    // never-baked asset applies on its first evaluation push
+    // (get_geometry_graph barrier).
+    set_geometry_graph_mesh(*node.get(), graph_mesh);
     return make_json_content({
         {"bound",         true},
         {"node",          node_name},

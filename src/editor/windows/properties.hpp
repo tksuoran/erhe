@@ -44,7 +44,6 @@ namespace editor {
 class Brush;
 class App_context;
 class App_message_bus;
-class Geometry_graph_mesh;
 class Node_joint;
 class Node_physics;
 class Rendertarget_mesh;

@@ -148,7 +148,7 @@ void Geometry_output_node::on_removed_from_graph()
     const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
     if (owning_graph_mesh) {
         owning_graph_mesh->set_baked_products(Graph_mesh_baked_products{});
-        owning_graph_mesh->request_attachment_push();
+        owning_graph_mesh->request_node_push();
     }
 }
 
@@ -324,7 +324,7 @@ void Geometry_output_node::apply_evaluated_to_scene()
     m_evaluated_valid = false;
 
     // Publish the products to the owning Graph_mesh asset (bound
-    // Geometry_graph_mesh attachments consume them; the evaluation engine
+    // The nodes bound to the asset consume them; the evaluation engine
     // pushes right after this). The node never creates scene content
     // itself: an asset with no bound node renders nothing - exactly like
     // a Graph_texture no material samples. A null geometry publish tells
@@ -461,7 +461,8 @@ void Geometry_output_node::read_parameters(const nlohmann::json& in)
 {
     // Legacy files may carry a "scene" key (the removed direct-to-scene
     // output path targeted a scene); it is ignored - the consuming
-    // Geometry_graph_mesh attachment decides where the bake lands.
+    // Geometry_graph_mesh.graph_mesh value of a node decides where the bake
+    // lands.
     m_name = in.value("name", m_name);
     if (in.contains("material")) {
         // Store the key only; resolution is deferred to the main thread

@@ -23,11 +23,10 @@ namespace erhe::primitive {
 namespace editor {
 
 // The products of the most recent evaluation of a Graph_mesh's output
-// node: everything a bound Geometry_graph_mesh attachment needs to
-// materialize the graph's result on its scene node. All heavy members
-// are shared - N attachments bound to the same asset share one GPU
-// primitive. A set revision with a null geometry means the graph
-// evaluated to "empty / disconnected" (attachments clear their mesh).
+// node: everything a bound node needs to materialize the graph's result.
+// All heavy members are shared - N nodes bound to the same asset share
+// one GPU primitive. A set revision with a null geometry means the graph
+// evaluated to "empty / disconnected" (bound nodes clear their mesh).
 class Graph_mesh_baked_products
 {
 public:
@@ -39,7 +38,7 @@ public:
     erhe::physics::Motion_mode                       physics_motion_mode{erhe::physics::Motion_mode::e_static};
     // The graph's ghost node (Houdini template flag), baked as an
     // edge-lines-only companion mesh: no raytrace / picking, no shadow,
-    // no physics. Null when no ghost node is designated (attachments
+    // no physics. Null when no ghost node is designated (bound nodes
     // then clear their ghost mesh).
     std::shared_ptr<erhe::geometry::Geometry>        ghost_geometry;
     std::shared_ptr<erhe::primitive::Primitive>      ghost_primitive;
@@ -50,8 +49,8 @@ public:
 // Graph_mesh is the content-library home of a geometry node graph: it owns
 // the Geometry_graph (links + evaluation state) and the node objects, plus
 // the baked products its output node publishes after each (background)
-// evaluation. Scene nodes consume the asset through the Geometry_graph_mesh
-// Node_attachment, which points back here and swaps its controlled Mesh's
+// evaluation. Scene nodes consume the asset through their own
+// Geometry_graph_mesh.graph_mesh value, whose per-scene system swaps the
 // primitives whenever the baked revision advances - the scene-side analogue
 // of Graph_texture + Material::texture_reference.
 //
@@ -77,19 +76,19 @@ public:
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Graph_mesh"; }
 
     // Published by the asset-owned Geometry_output_node from
-    // apply_evaluated_to_scene() (main thread); consumed by bound
-    // Geometry_graph_mesh attachments. Every publish advances the
-    // revision so late binders can apply the latest bake immediately.
+    // apply_evaluated_to_scene() (main thread); consumed by the bound
+    // nodes. Every publish advances the revision so late binders can apply
+    // the latest bake immediately.
     void set_baked_products(const Graph_mesh_baked_products& products);
     [[nodiscard]] auto get_baked_products() const -> const Graph_mesh_baked_products&;
     [[nodiscard]] auto get_baked_revision() const -> uint64_t;
 
-    // Out-of-band request to re-push the current baked products to bound
-    // attachments (set when a bound node re-enters a scene after missing
-    // a push, or when the output node leaves the graph). Consumed by
+    // Out-of-band request to re-push the current baked products to the bound
+    // nodes (set when a bound node re-enters a scene after missing a push,
+    // or when the output node leaves the graph). Consumed by
     // Geometry_graph_window::update_evaluation() each frame.
-    void request_attachment_push();
-    [[nodiscard]] auto consume_attachment_push_request() -> bool;
+    void request_node_push();
+    [[nodiscard]] auto consume_node_push_request() -> bool;
 
     // Per-node mesh preview thumbnails are an editor-global setting now
     // (Editor_settings_config::graph_node_previews); see
@@ -98,7 +97,7 @@ public:
 private:
     Graph_mesh_baked_products                         m_baked_products;
     uint64_t                                          m_baked_revision{0};
-    bool                                              m_attachment_push_requested{false};
+    bool                                              m_node_push_requested{false};
 };
 
 } // namespace editor

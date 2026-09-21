@@ -396,7 +396,8 @@ can be shared across node trees via asset libraries.
 ```
 src/editor/geometry_graph/
     geometry_graph.hpp / .cpp             -- Geometry_graph (extends erhe::graph::Graph, dirty-flag evaluation)
-    geometry_graph_mesh.hpp / .cpp        -- Geometry_graph_mesh node attachment (doc/editor/geometry_graph_mesh.md)
+    geometry_graph_mesh.hpp / .cpp        -- Geometry_graph_mesh attached node values (doc/editor/geometry_graph_mesh.md)
+    geometry_graph_mesh_system.hpp / .cpp -- Per-scene owner of the mesh / ghost mesh / rigid body a graph controls
     geometry_graph_node.hpp / .cpp        -- Base class + stepper widgets + JSON vec3 helpers
     geometry_graph_node_factory.hpp / .cpp -- make_geometry_graph_node(), shared by windows and group assets
     geometry_graph_operations.hpp         -- Undoable node / link / whole-graph-replace / parameter operations

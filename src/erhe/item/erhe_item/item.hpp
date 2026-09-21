@@ -316,23 +316,22 @@ public:
     static constexpr uint64_t index_asset_file_scene       = 37;
     static constexpr uint64_t index_graph_texture          = 38;
     static constexpr uint64_t index_graph_mesh             = 39;
-    static constexpr uint64_t index_geometry_graph_mesh    = 40;
-    static constexpr uint64_t index_prefab_instance        = 41;
-    static constexpr uint64_t index_asset_file_texture     = 42;
-    static constexpr uint64_t index_style                  = 43;
-    static constexpr uint64_t index_asset_file_usd         = 44;
+    static constexpr uint64_t index_prefab_instance        = 40;
+    static constexpr uint64_t index_asset_file_texture     = 41;
+    static constexpr uint64_t index_style                  = 42;
+    static constexpr uint64_t index_asset_file_usd         = 43;
     // A more specific class takes the LOWER index: the editor's icon set
     // picks the icon of the lowest set type bit that has one, so a Scope
     // shows the scope icon rather than the icon of the Typed level it also
     // carries (src/editor/graphics/icon_set.cpp).
-    static constexpr uint64_t index_scope                  = 45;
-    static constexpr uint64_t index_typed                  = 46;
-    static constexpr uint64_t index_imageable              = 47;
-    static constexpr uint64_t index_xform                  = 48;
-    static constexpr uint64_t index_boundable              = 49;
-    static constexpr uint64_t index_gprim                  = 50;
-    static constexpr uint64_t index_point_instancer        = 51;
-    static constexpr uint64_t count                        = 52; // index 52 is free
+    static constexpr uint64_t index_scope                  = 44;
+    static constexpr uint64_t index_typed                  = 45;
+    static constexpr uint64_t index_imageable              = 46;
+    static constexpr uint64_t index_xform                  = 47;
+    static constexpr uint64_t index_boundable              = 48;
+    static constexpr uint64_t index_gprim                  = 49;
+    static constexpr uint64_t index_point_instancer        = 50;
+    static constexpr uint64_t count                        = 51; // index 51 is free
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -374,7 +373,6 @@ public:
     static constexpr uint64_t asset_file_scene       = (uint64_t{1} << index_asset_file_scene      );
     static constexpr uint64_t graph_texture          = (uint64_t{1} << index_graph_texture         );
     static constexpr uint64_t graph_mesh             = (uint64_t{1} << index_graph_mesh            );
-    static constexpr uint64_t geometry_graph_mesh    = (uint64_t{1} << index_geometry_graph_mesh   );
     static constexpr uint64_t prefab_instance        = (uint64_t{1} << index_prefab_instance       );
     static constexpr uint64_t asset_file_texture     = (uint64_t{1} << index_asset_file_texture    );
     static constexpr uint64_t style                  = (uint64_t{1} << index_style                 );
@@ -429,7 +427,6 @@ public:
         "Asset_file_scene",
         "Graph_texture",
         "Graph_mesh",
-        "Geometry_graph_mesh",
         "Prefab_instance",
         "Asset_file_texture",
         "Style",

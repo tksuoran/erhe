@@ -32,6 +32,7 @@
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
+#include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
@@ -188,6 +189,8 @@ Scene_root::Scene_root(
     // (doc/erhe/scene.md "Node systems").
     m_draw_mode_system = std::make_unique<Draw_mode_system>();
     m_scene->add_node_system(*m_draw_mode_system.get());
+    m_geometry_graph_mesh_system = std::make_unique<Geometry_graph_mesh_system>();
+    m_scene->add_node_system(*m_geometry_graph_mesh_system.get());
 
     // The scene owns its content library: its resources are prims of this
     // scene's tree, under the kind scopes the library keeps below the root
@@ -397,8 +400,12 @@ Scene_root::~Scene_root() noexcept
         if (m_draw_mode_system) {
             m_scene->remove_node_system(*m_draw_mode_system.get());
         }
+        if (m_geometry_graph_mesh_system) {
+            m_scene->remove_node_system(*m_geometry_graph_mesh_system.get());
+        }
     }
     m_draw_mode_system.reset();
+    m_geometry_graph_mesh_system.reset();
 
     // Library items (and possibly the library itself, via browser windows or
     // clipboard/selection references) can outlive this host; detach them now
@@ -1698,6 +1705,11 @@ void Scene_root::flush_draw_lists()
 auto Scene_root::get_draw_mode_system() -> Draw_mode_system&
 {
     return *m_draw_mode_system.get();
+}
+
+auto Scene_root::get_geometry_graph_mesh_system() -> Geometry_graph_mesh_system&
+{
+    return *m_geometry_graph_mesh_system.get();
 }
 
 auto Scene_root::find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>

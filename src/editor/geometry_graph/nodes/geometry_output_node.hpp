@@ -23,13 +23,14 @@ class App_context;
 // Terminal node publishing the input geometry as the owning Graph_mesh
 // asset's baked products (render geometry, renderable / raytrace
 // primitive, material, optional convex-hull collision shape + physics
-// flags). The node never creates scene content itself: bound
-// Geometry_graph_mesh attachments consume the published bake, and an
-// asset with no bound scene node renders nothing - exactly like a
-// Graph_texture no material samples.
+// flags). The node never creates scene content itself: the nodes bound
+// to the asset consume the published bake, and an asset with no bound
+// scene node renders nothing - exactly like a Graph_texture no material
+// samples.
 //
 // Material defaults to the first material in the scene's content
-// library (resolved by the consuming attachment when unset here).
+// library (resolved by the scene's geometry-graph-mesh system when unset
+// here).
 //
 // Evaluation is two-phase so the graph can be evaluated on a worker
 // thread (following the async Mesh_operation pattern: heavy work on the

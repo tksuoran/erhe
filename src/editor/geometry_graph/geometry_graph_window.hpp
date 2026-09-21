@@ -265,14 +265,14 @@ private:
     [[nodiscard]] auto is_evaluation_run_done() -> bool;
 
     // Pushes the graph's freshly published baked products to every
-    // Geometry_graph_mesh attachment bound to it, in every scene. Called
+    // node bound to it, in every scene. Called
     // at the end of finish_evaluation(); main thread.
-    void apply_baked_products_to_attachments(const std::shared_ptr<Graph_mesh>& graph_mesh);
+    void apply_baked_products_to_bound_nodes(const std::shared_ptr<Graph_mesh>& graph_mesh);
 
-    // Honors Graph_mesh::request_attachment_push() flags once per frame
+    // Honors Graph_mesh::request_node_push() flags once per frame
     // (pushes that need no evaluation - node re-entered a scene, output
     // node removed).
-    void process_attachment_push_requests();
+    void process_node_push_requests();
 
     // Renders pending per-node preview thumbnails (Graph_mesh assets with
     // node previews enabled) into per-node textures via Brush_preview, a

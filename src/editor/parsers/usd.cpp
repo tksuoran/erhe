@@ -1512,9 +1512,9 @@ void apply_usd_graph_mesh_result(
 
 // What the `erhe:scene` customLayerData block carries for one geometry graph
 // asset: the state of a `Graph_mesh` a `NodeGraph` prim has no form for. The
-// prims bound to the graph are the scene prims carrying a
-// Geometry_graph_mesh attachment naming it - an object reference, which no
-// `erhe:` custom attribute can carry (doc/erhe/usd_compatibility.md, property
+// prims bound to the graph are the scene prims whose
+// Geometry_graph_mesh.graph_mesh value names it - an object reference, which
+// no `erhe:` custom attribute can carry (doc/erhe/usd_compatibility.md, property
 // system) - and the display / ghost designations are the graph's own
 // (Houdini flags, which USD has no counterpart for). Paths are item
 // reference paths (M1), the form every prim is addressed by.
@@ -1641,9 +1641,9 @@ void resolve_usd_node_graphs(
     }
 
     // The scene block's geometry graph state: every prim bound to a graph
-    // gets its Geometry_graph_mesh attachment back, and the graph gets its
-    // display / ghost designation back. The attachment applies nothing here -
-    // a loaded graph is born dirty, so the first evaluation pushes the bake,
+    // gets its Geometry_graph_mesh.graph_mesh value back, and the graph gets
+    // its display / ghost designation back. Nothing is applied here - a
+    // loaded graph is born dirty, so the first evaluation pushes the bake,
     // the way the glTF load leaves it.
     for (const Usd_graph_mesh_state& state : graph_mesh_states) {
         const std::map<std::string, std::shared_ptr<Graph_mesh>>::const_iterator graph =
@@ -1666,7 +1666,7 @@ void resolve_usd_node_graphs(
                 );
                 continue;
             }
-            node->attach(std::make_shared<Geometry_graph_mesh>(graph_mesh));
+            set_geometry_graph_mesh(*node.get(), graph_mesh);
         }
         const auto node_id_by_name = [&graph_mesh, &state](const std::string& name) -> std::size_t {
             if (name.empty()) {
@@ -1907,17 +1907,16 @@ void collect_usd_node_graphs(
         for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
             const erhe::scene::Node* node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if (node != nullptr) {
-                const std::shared_ptr<Geometry_graph_mesh> attachment =
-                    erhe::scene::get_attachment<Geometry_graph_mesh>(node);
-                if (attachment && attachment->get_graph_mesh()) {
+                const std::optional<Geometry_graph_mesh_data> data = read_geometry_graph_mesh(*node);
+                if (data.has_value() && data.value().graph_mesh) {
                     const std::string prim_path = planned_item_path(planned_paths, *node);
                     if (prim_path.empty()) {
                         log_parsers->warn(
                             "save_scene_usd '{}': prim '{}' sources its mesh from geometry graph '{}' and is not written - the binding is dropped",
-                            erhe::file::to_string(path), node->get_name(), attachment->get_graph_mesh()->get_name()
+                            erhe::file::to_string(path), node->get_name(), data.value().graph_mesh->get_name()
                         );
                     } else {
-                        bound_prims[attachment->get_graph_mesh().get()].push_back(prim_path);
+                        bound_prims[data.value().graph_mesh.get()].push_back(prim_path);
                     }
                 }
             }

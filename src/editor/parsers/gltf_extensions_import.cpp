@@ -620,10 +620,10 @@ void import_node_graphs(
         }
     }
 
-    // Node bindings: Geometry_graph_mesh attachments (attached directly,
-    // entering the scene with the node insert operation). Scene load
-    // attaches without applying - loaded graphs are born dirty, the first
-    // evaluation pushes the baked products.
+    // Node bindings: the Geometry_graph_mesh.graph_mesh value of each bound
+    // node, written directly (the node enters the scene with the node insert
+    // operation). A loaded graph is born dirty, so nothing is applied here -
+    // the first evaluation pushes the baked products.
     const auto node_bindings_it = payload.find("node_bindings");
     if ((node_bindings_it != payload.end()) && node_bindings_it->is_array()) {
         for (const nlohmann::json& binding : *node_bindings_it) {
@@ -643,8 +643,7 @@ void import_node_graphs(
                 log_parsers->warn("glTF editor state: graph mesh binding node {} -> '{}' not resolved", node_index, graph_mesh_name);
                 continue;
             }
-            const std::shared_ptr<Geometry_graph_mesh> attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
-            gltf_data.nodes[node_index]->attach(attachment);
+            set_geometry_graph_mesh(*gltf_data.nodes[node_index].get(), graph_mesh);
         }
     }
 }

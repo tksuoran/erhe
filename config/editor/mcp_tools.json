@@ -6320,7 +6320,7 @@
     "name": "create_graph_mesh"
   },
   {
-    "description": "Bind a scene Node to a Graph Mesh asset via a Geometry Graph Mesh attachment: the node's renderable mesh (and optional physics) is sourced from the graph's baked output, and the attachment points back at the asset (the node->graph back-reference; editing the graph updates the node's mesh live). Creates the attachment when missing; omit or empty 'graph_mesh' to remove the attachment and its controlled mesh. Scene state reflects the bake after the next evaluation completes (get_geometry_graph is the barrier).",
+    "description": "Bind a scene Node to a Graph Mesh asset by writing the node's Geometry_graph_mesh.graph_mesh value: the node's renderable mesh (and optional physics) is sourced from the graph's baked output, and the value points back at the asset (the node->graph back-reference; editing the graph updates the node's mesh live). Omit or empty 'graph_mesh' to clear the value and release the controlled mesh. Scene state reflects the bake after the next evaluation completes (get_geometry_graph is the barrier). This tool is not undoable; set_item_property on Geometry_graph_mesh.graph_mesh writes the same value through the undo stack.",
     "inputSchema": {
       "properties": {
         "graph_mesh": {

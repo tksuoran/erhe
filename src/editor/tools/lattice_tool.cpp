@@ -119,11 +119,11 @@ auto Lattice_tool::update_active_lattice() -> const Active_lattice&
         return m_active;
     }
     scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-        if (!attachment) {
+        const std::optional<Geometry_graph_mesh_data> data = read_geometry_graph_mesh(*node.get());
+        if (!data.has_value()) {
             return true;
         }
-        const std::shared_ptr<Graph_mesh>& graph_mesh = attachment->get_graph_mesh();
+        const std::shared_ptr<Graph_mesh>& graph_mesh = data.value().graph_mesh;
         if (!graph_mesh) {
             return true;
         }

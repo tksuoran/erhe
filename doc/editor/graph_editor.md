@@ -10,8 +10,8 @@ layer:
 - **Geometry graph** (`src/editor/geometry_graph/`) - authors procedural mesh
   geometry (primitives, Catmull-Clark / Conway operators, CSG, point
   distribution / instancing). Its output is a **`Graph_mesh`** content-library
-  asset; a scene `Node` consumes it through a **Geometry Graph Mesh**
-  attachment. See [`geometry-nodes-plan.md`](geometry_nodes.md) and
+  asset; a scene `Node` consumes it through its own
+  **`Geometry_graph_mesh.graph_mesh`** value. See [`geometry-nodes-plan.md`](geometry_nodes.md) and
   [`geometry-graph-mesh-plan.md`](geometry_graph_mesh.md).
 - **Texture graph** (`src/editor/texture_graph/`) - authors procedural textures
   by Material-Maker-style GLSL composition. Its output is a **`Graph_texture`**
@@ -138,8 +138,8 @@ geometry_graph/          texture_graph/            <- per-feature code
    |                          |
 Graph_mesh asset          Graph_texture asset       <- content-library assets
    |                          |
-Geometry Graph Mesh       Material texture slot      <- scene consumers
- node attachment           (texture_source)
+Node graph_mesh value     Material texture slot      <- scene consumers
+  (an attached value)        (texture_source)
 ```
 
 The split follows one rule: **payload-blind machinery is shared; the payload and
@@ -306,12 +306,13 @@ with no push logic - a texture reference is cheap to resolve per frame.
 primitive build + optional collision shape) is expensive and runs through an
 explicit push pipeline. `Graph_mesh` stores the **baked products**
 (`geometry`, `primitive`, `material`, `collision_shape`, physics settings) plus a
-**revision** counter. A scene `Node` gets an editor-defined
-**`Geometry_graph_mesh`** `Node_attachment` (the `Node_physics` precedent) that
-points back at the `Graph_mesh` and swaps its controlled `Mesh`'s primitives (and
-keeps `Node_physics` in sync) whenever the revision advances. N scene nodes can
-share one graph asset (the products are shared `shared_ptr`s). `erhe::scene` is
-untouched - the attachment lives entirely in `src/editor/`.
+**revision** counter. A scene `Node` names the `Graph_mesh` in its own
+**`Geometry_graph_mesh.graph_mesh`** value, and the scene's
+`Geometry_graph_mesh_system` swaps the node's controlled `Mesh`'s primitives
+(and keeps `Node_physics` in sync) whenever the revision advances. N scene
+nodes can share one graph asset (the products are shared `shared_ptr`s).
+`erhe::scene` is untouched - the value group and its system live entirely in
+`src/editor/`.
 
 `Item_type` indices: `graph_texture` = 42, `graph_mesh` = 43,
 `geometry_graph_mesh` = 44 (`src/erhe/item/erhe_item/item.hpp`).

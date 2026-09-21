@@ -5,7 +5,7 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_node_factory.hpp"
-#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
@@ -181,7 +181,7 @@ void Geometry_graph_window::insert_node(Graph_mesh& graph_mesh, const std::share
     constexpr uint64_t flags = erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
     // The output node of a graph publishes to the owning asset (consumed
-    // by Geometry_graph_mesh attachments); graphs only live in the content
+    // by the nodes bound to it); graphs only live in the content
     // library, so every node has an owning asset.
     node->set_owning_graph_mesh(std::dynamic_pointer_cast<Graph_mesh>(graph_mesh.shared_from_this()));
     graph_mesh.nodes().push_back(node);
@@ -806,22 +806,16 @@ void Geometry_graph_window::finish_evaluation()
     // An asset-owned output node just published fresh baked products to
     // the target asset; push them to every bound attachment. Evaluation
     // finishes are rare, so the scene sweep costs nothing per frame.
-    apply_baked_products_to_attachments(run->target);
+    apply_baked_products_to_bound_nodes(run->target);
 }
 
-void Geometry_graph_window::apply_baked_products_to_attachments(const std::shared_ptr<Graph_mesh>& graph_mesh)
+void Geometry_graph_window::apply_baked_products_to_bound_nodes(const std::shared_ptr<Graph_mesh>& graph_mesh)
 {
     if (m_app_context.app_scenes == nullptr) {
         return;
     }
     for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
-        scene_root->get_scene().for_each_node([&graph_mesh](const std::shared_ptr<erhe::scene::Node>& node) {
-            const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-            if (attachment && (attachment->get_graph_mesh() == graph_mesh)) {
-                attachment->apply_baked_products();
-            }
-            return true;
-        });
+        scene_root->get_geometry_graph_mesh_system().apply_for_graph(graph_mesh);
     }
 }
 
@@ -864,7 +858,7 @@ void Geometry_graph_window::update_evaluation()
 
     update_graph_hover_flags();
 
-    process_attachment_push_requests();
+    process_node_push_requests();
 
     if (m_evaluation_run) {
         if (is_evaluation_run_done()) {
@@ -1109,15 +1103,15 @@ void Geometry_graph_window::update_node_previews()
     }
 }
 
-void Geometry_graph_window::process_attachment_push_requests()
+void Geometry_graph_window::process_node_push_requests()
 {
     // Out-of-band pushes (no evaluation involved): a bound node re-entered
     // a scene after missing a push, or an output node left an asset graph
     // publishing an empty bake. Steady-state cost is one bool per graph.
     // The currently edited graph is checked directly because it may be a
     // library orphan (asset removed by undo/delete while still selected).
-    if (m_graph_mesh && m_graph_mesh->consume_attachment_push_request()) {
-        apply_baked_products_to_attachments(m_graph_mesh);
+    if (m_graph_mesh && m_graph_mesh->consume_node_push_request()) {
+        apply_baked_products_to_bound_nodes(m_graph_mesh);
     }
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
@@ -1126,8 +1120,8 @@ void Geometry_graph_window::process_attachment_push_requests()
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
-                if (graph_mesh->consume_attachment_push_request()) {
-                    apply_baked_products_to_attachments(graph_mesh);
+                if (graph_mesh->consume_node_push_request()) {
+                    apply_baked_products_to_bound_nodes(graph_mesh);
                 }
             }
         }

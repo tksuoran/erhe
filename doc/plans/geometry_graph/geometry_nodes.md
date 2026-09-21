@@ -73,16 +73,17 @@ gesture operation).
    Set Position.
 4. The selection field input on `Set_position_node`.
 
-## Graph mesh asset and attachment gaps
+## Graph mesh asset and binding gaps
 
 `doc/editor/geometry_graph_mesh.md` describes the `Graph_mesh` asset and the
-`Geometry Graph Mesh` attachment. These are open:
+`Geometry_graph_mesh.graph_mesh` binding. These are open:
 
-- **Binding is not undoable.** Binding an attachment to an asset from the
-  Properties panel or over MCP records no operation, the same way setting a
-  material's texture reference does not. Both should.
+- **Two binding paths record no operation.** The Properties row and MCP
+  `set_item_property` write the value through `Property_set_operation`, so
+  they are undoable; MCP `set_node_graph_mesh` and the Hierarchy drag-drop
+  still write the value directly. Both should record the operation too.
 - **Undoing the creation of a bound asset orphans it.** Undoing
-  `create_graph_mesh` while a node is bound leaves the attachment holding the
+  `create_graph_mesh` while a node is bound leaves the node holding the
   orphaned asset, which keeps rendering.
 - **`find_scene("")` does not default to the single scene**, so MCP calls have
   to pass `scene_name` explicitly.

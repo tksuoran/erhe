@@ -26,8 +26,7 @@ stateless `can_add(const Node&)` gate (a node holds at most one `Node_physics`;
 `find_child_prim_type()` / `find_attachment_type()` resolve a key.
 
 An attachment the user does not create stays out of the add catalog and
-remains removable: `Geometry_graph_mesh` comes from dropping a `Graph_mesh`
-asset, `Rendertarget_mesh`
+remains removable: `Rendertarget_mesh` comes
 from the node-creating rendertarget command (its construction needs the
 graphics device, the command buffer and the DPI).
 
@@ -45,10 +44,11 @@ The additive half is `Scene_commands::attach_new_grid()`, a bare
 node, plus `create_new_rigid_body()` / `create_new_joint()`, which the rigid
 body and joint entries reuse.
 
-Detaching a `Mesh` a `Geometry_graph_mesh` controls is a legal state: the pure
+Detaching a `Mesh` a node's geometry graph controls is a legal state: the pure
 detach keeps the removed `Mesh` alive, so the bound graph mesh neither
 recreates it nor writes visible output, and an undo re-attaches the same
-`Mesh` object with its baked geometry intact.
+`Mesh` object with its baked geometry intact
+(`doc/editor/geometry_graph_mesh.md`).
 
 ## User interface
 
@@ -86,6 +86,6 @@ refuses a second add, remove each and assert it is gone, and round-trip
 undo / redo through `get_undo_redo_stack` (for a rigid body, with
 `get_physics_items` before and after). The cases worth keeping: removing a
 `Node_physics` from a node with live physics and undoing it returns the body
-to the world; the `Geometry_graph_mesh` missing-Mesh tolerance; a clean
+to the world; the geometry-graph missing-Mesh tolerance; a clean
 `capture_screenshot` after adding a light, a camera and a grid. Restore
 `config/editor/desktop_window_imgui_host_imgui.ini` after a run.

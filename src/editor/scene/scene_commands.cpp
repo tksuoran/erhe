@@ -658,7 +658,7 @@ auto Scene_commands::create_new_xform(erhe::Hierarchy* parent) -> std::shared_pt
     }
 
     // visible: inert while the node is empty, but attachments added later
-    // (Mesh, Light, Geometry_graph_mesh, ...) sync their visibility from
+    // (Mesh, Light, ...) sync their visibility from
     // the node - without it anything attached to an "empty" node would be
     // invisibly stuck.
     auto new_xform = std::make_shared<erhe::scene::Xform>("new xform");

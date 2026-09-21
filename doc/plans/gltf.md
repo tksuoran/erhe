@@ -58,6 +58,6 @@ drops. Three items there are worth closing rather than accepting:
 - A prefab instance parses only the render and physics content of its source,
   so the source's `ERHE_*` payloads (layouts, tags, brushes, node graphs) do
   not transfer into instances. In particular a mesh controlled by a
-  `Geometry_graph_mesh` attachment is excluded from the save and is not
+  node's geometry graph is excluded from the save and is not
   rebuilt in an instance, so graph-baked products are missing from instances
   of such a prefab.

@@ -168,7 +168,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      `material_bindings` / `node_bindings`), `ERHE_collections` (item
      tags);
    - the **exclusion hook**: meshes and physics controlled by a
-     `Geometry_graph_mesh` attachment are excluded from plain export - they
+     node's geometry graph are excluded from plain export - they
      are baked products, re-derived from the graph on load, and must not be
      double-persisted. An excluded mesh is a prim, so the writer skips the
      whole prim rather than only its glTF `mesh`; writing it as a
@@ -324,7 +324,7 @@ keep their state on import.
   only the render and physics content -
   `ERHE_*` payloads (layouts, tags, brushes, node graphs) do not transfer
   into instances. In particular, a mesh controlled by a
-  `Geometry_graph_mesh` attachment is excluded from the save (re-derived
+  node's geometry graph is excluded from the save (re-derived
   from the graph on scene load) and prefab instances do not rebuild it, so
   graph-baked products are missing from instances of such a prefab.
 

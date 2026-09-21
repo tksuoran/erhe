@@ -1,267 +1,98 @@
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 
-#include "content_library/content_library.hpp"
-#include "scene/node_physics.hpp"
-#include "scene/scene_root.hpp"
-
-#include "erhe_physics/icollision_shape.hpp"
-#include "erhe_primitive/material.hpp"
-#include "erhe_primitive/primitive.hpp"
-#include "erhe_profile/profile.hpp"
-#include "erhe_scene/mesh.hpp"
+#include "erhe_property/attached_group.hpp"
+#include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/scene.hpp"
-
-#include <mutex>
+#include "erhe_scene/node_system.hpp"
 
 namespace editor {
 
-const erhe::property::Property<erhe::property::Object_reference> Geometry_graph_mesh::graph_mesh_property =
-    erhe::property::Property<erhe::property::Object_reference>::register_member(
-        "graph_mesh", Geometry_graph_mesh::property_owner_type(), &Geometry_graph_mesh::m_graph_mesh,
-        erhe::property::Property_metadata{
-            .ui = erhe::property::Property_ui{
-                .tooltip              = "The geometry graph asset whose bake this node shows",
-                .label                = "Graph Mesh",
-                .reference_item_types = erhe::Item_type::graph_mesh
-            }
-        },
-        &Geometry_graph_mesh::on_graph_mesh_set
+namespace {
+
+using erhe::property::Dependency_property;
+using erhe::property::Object_reference;
+using erhe::property::Property;
+using erhe::property::Property_flags;
+using erhe::property::Property_metadata;
+using erhe::property::Property_ui;
+using erhe::property::Property_value;
+
+constexpr std::string_view c_group = "Geometry Graph Mesh";
+
+// The graph reference is null or names a Graph_mesh.
+[[nodiscard]] auto validate_graph_mesh(const Property_value& value) -> bool
+{
+    const Object_reference& reference = std::get<Object_reference>(value);
+    return !reference.object || (dynamic_cast<const Graph_mesh*>(reference.object.get()) != nullptr);
+}
+
+} // anonymous namespace
+
+auto Geometry_graph_mesh::property_owner_type() -> erhe::property::Owner_type
+{
+    // Geometry_graph_mesh is not a Dependency_object, so there is no Item<> to
+    // allocate the id: the registering class's own id sits directly under the
+    // root and serves only to qualify the name
+    // (Geometry_graph_mesh.graph_mesh).
+    static const erhe::property::Owner_type s_id = erhe::property::allocate_owner_type(
+        erhe::property::root_owner_type, "Geometry_graph_mesh"
     );
-
-void Geometry_graph_mesh::on_graph_mesh_set(Geometry_graph_mesh& attachment)
-{
-    attachment.release_controlled_products();
-    attachment.apply_baked_products();
+    return s_id;
 }
 
-Geometry_graph_mesh::Geometry_graph_mesh()
-    : Item{"Geometry Graph Mesh"}
-{
-    enable_flag_bits(erhe::Item_flags::show_in_ui);
-}
-
-Geometry_graph_mesh::Geometry_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh)
-    : Item        {"Geometry Graph Mesh"}
-    , m_graph_mesh{graph_mesh}
-{
-    enable_flag_bits(erhe::Item_flags::show_in_ui);
-}
-
-Geometry_graph_mesh::~Geometry_graph_mesh() noexcept
-{
-    release_controlled_products();
-    set_node(nullptr);
-}
-
-void Geometry_graph_mesh::handle_node_update(erhe::scene::Node* const old_node, erhe::scene::Node* const new_node)
-{
-    Node_attachment::handle_node_update(old_node, new_node);
-    // Attach / move only (the base never fires this for a detach to
-    // null): products following us to a different node are released from
-    // the node that held them; apply_baked_products() then re-creates
-    // them on the new node.
-    if ((old_node != nullptr) && (old_node != new_node)) {
-        release_controlled_products();
-    }
-}
-
-void Geometry_graph_mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
-{
-    static_cast<void>(old_item_host);
-    if (get_node() == nullptr) {
-        // This attachment was just detached from an in-scene node
-        // (set_node(nullptr) nulled the node before firing this hook);
-        // the controlled products must not stay behind on it. Callers
-        // hold a shared_ptr to this attachment across detach (the
-        // Node_attachment::set_node contract).
-        release_controlled_products();
-        return;
-    }
-    if ((new_item_host != nullptr) && m_graph_mesh && (m_graph_mesh->get_baked_revision() != m_applied_revision)) {
-        m_graph_mesh->request_attachment_push();
-    }
-}
-
-auto Geometry_graph_mesh::get_graph_mesh() const -> const std::shared_ptr<Graph_mesh>&
-{
-    return m_graph_mesh;
-}
-
-auto Geometry_graph_mesh::get_controlled_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&
-{
-    return m_mesh;
-}
-
-auto Geometry_graph_mesh::get_controlled_ghost_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&
-{
-    return m_ghost_mesh;
-}
-
-auto Geometry_graph_mesh::get_controlled_node_physics() const -> const std::shared_ptr<Node_physics>&
-{
-    return m_node_physics;
-}
-
-void Geometry_graph_mesh::set_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh)
-{
-    set_value(graph_mesh_property, erhe::property::Object_reference{graph_mesh});
-}
-
-void Geometry_graph_mesh::release_controlled_products()
-{
-    const std::shared_ptr<erhe::scene::Node> node = m_controlled_node.lock();
-    if (node && m_node_physics) {
-        // An attachment is released through the node that holds it.
-        node->detach(m_node_physics.get());
-    }
-    // A Mesh is a child prim (doc/erhe/usd_compatibility_design.md C5), so it is
-    // released from whatever parent holds it - reaching the controlled node
-    // is neither needed nor sufficient, and a mesh left behind here comes
-    // back as a second, name-suffixed sibling on the next bake.
-    if (m_mesh) {
-        erhe::scene::set_mesh_parent(m_mesh, {});
-    }
-    if (m_ghost_mesh) {
-        erhe::scene::set_mesh_parent(m_ghost_mesh, {});
-    }
-    m_controlled_node.reset();
-    m_node_physics.reset();
-    m_mesh.reset();
-    m_ghost_mesh.reset();
-    m_applied_revision = 0;
-}
-
-void Geometry_graph_mesh::apply_baked_products()
-{
-    erhe::scene::Node* node = get_node();
-    if ((node == nullptr) || !m_graph_mesh) {
-        return;
-    }
-    // If the products are still attached to a previous node (detach path
-    // that fired no hook, e.g. detached from a node outside any scene),
-    // reclaim them before materializing on the current node.
-    if ((m_mesh || m_ghost_mesh) && (m_controlled_node.lock().get() != node)) {
-        release_controlled_products();
-    }
-    const uint64_t revision = m_graph_mesh->get_baked_revision();
-    if ((revision == 0) || (revision == m_applied_revision)) {
-        return; // never baked, or latest bake already applied
-    }
-    erhe::Item_host* item_host = node->get_item_host();
-    if (item_host == nullptr) {
-        return; // not in a scene; applied on the next push once attached
-    }
-    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-    const Graph_mesh_baked_products& products = m_graph_mesh->get_baked_products();
-
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
-
-    // The node may already carry a Mesh child or a Node_physics attachment
-    // (e.g. the Graph_mesh was dropped onto an existing mesh node): adopt
-    // them as the controlled products - the bake replaces the mesh's
-    // primitives and dictates the physics state from here on - instead of
-    // adding duplicates.
-    if (!m_mesh) {
-        m_mesh = erhe::scene::get_mesh(node);
-    }
-    if (!m_node_physics) {
-        m_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-    }
-    if ((m_mesh || m_node_physics) && m_controlled_node.expired()) {
-        m_controlled_node = node->shared_node_from_this();
-    }
-
-    // The graph's output node may not have selected a material (it needs
-    // no scene of its own); fall back to the first material of THIS
-    // node's scene, the same default the legacy scratch path uses.
-    std::shared_ptr<erhe::primitive::Material> material = products.material;
-    if (!material) {
-        const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library) {
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
-            if (!materials.empty()) {
-                material = materials.front();
-            }
+// The group's only value, and its key (D1). It carries no serialize flag: the
+// binding's file carriers are the native ones (D8), so writing it here too
+// would give one binding two authorities that drift apart.
+const Property<Object_reference> Geometry_graph_mesh::graph_mesh_property = Property<Object_reference>::register_attached(
+    "graph_mesh", Geometry_graph_mesh::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    Property_metadata{
+        .default_value    = Object_reference{},
+        .property_changed = erhe::scene::node_system_property_changed,
+        .inherits         = false,
+        .flags            = Property_flags::none,
+        .ui               = Property_ui{
+            .group                = c_group,
+            .tooltip              = "The geometry graph asset whose bake this node shows",
+            .label                = "Graph Mesh",
+            .reference_item_types = erhe::Item_type::graph_mesh
         }
-    }
+    },
+    validate_graph_mesh
+);
 
-    // Ghost-node companion mesh (edge lines only). Applied in both the
-    // empty and the regular path: the display node baking empty does not
-    // clear a designated ghost, and vice versa.
-    if (products.ghost_primitive) {
-        if (!m_ghost_mesh) {
-            m_ghost_mesh = std::make_shared<erhe::scene::Mesh>(node->get_name() + " Ghost Mesh");
-            m_ghost_mesh->layer_id = scene_root->layers().content()->id;
-            // visible + render_wireframe only: no `content` (skipped by all
-            // fill / point passes), no shadow_cast, no id (not pickable);
-            // the primitive has no raytrace shape, so hover misses it too.
-            m_ghost_mesh->enable_flag_bits(erhe::Item_flags::render_wireframe);
-            erhe::scene::set_mesh_parent(m_ghost_mesh, node->shared_node_from_this());
-            m_controlled_node = node->shared_node_from_this();
-        }
-        m_ghost_mesh->clear_primitives();
-        m_ghost_mesh->add_primitive(products.ghost_primitive, material);
-    } else if (m_ghost_mesh) {
-        erhe::scene::set_mesh_parent(m_ghost_mesh, {});
-        m_ghost_mesh.reset();
-    }
-
-    if (!products.primitive) {
-        // The graph evaluated to empty / disconnected: keep the node but
-        // show nothing (mirrors the output node's empty handling).
-        if (m_mesh) {
-            scene_root->begin_mesh_rt_update(m_mesh);
-            m_mesh->clear_primitives();
-            scene_root->end_mesh_rt_update(m_mesh);
-        }
-        if (m_node_physics) {
-            node->detach(m_node_physics.get());
-            m_node_physics.reset();
-        }
-        m_applied_revision = revision;
-        return;
-    }
-
-    if (!m_mesh) {
-        m_mesh = std::make_shared<erhe::scene::Mesh>(node->get_name() + " Mesh");
-        m_mesh->layer_id = scene_root->layers().content()->id;
-        m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::id);
-        m_mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
-        erhe::scene::set_mesh_parent(m_mesh, node->shared_node_from_this());
-        m_controlled_node = node->shared_node_from_this();
-    }
-    // The mesh is registered in the scene at this point (node->attach()
-    // above, or adopted from an in-scene node), so its raytrace instances
-    // are already attached to the scene's raytrace world. Swapping the
-    // primitives rebuilds the instances; without the rt-update bracket
-    // the new instances would never be attached (or masked) and hover /
-    // ray picking would pass straight through the mesh.
-    scene_root->begin_mesh_rt_update(m_mesh);
-    m_mesh->clear_primitives();
-    m_mesh->add_primitive(products.primitive, material);
-    scene_root->end_mesh_rt_update(m_mesh);
-
-    if (products.physics_enabled && products.collision_shape) {
-        if (!m_node_physics) {
-            const erhe::physics::IRigid_body_create_info create_info{
-                .collision_shape = products.collision_shape,
-                .debug_label     = node->get_name(),
-                .motion_mode     = products.physics_motion_mode
-            };
-            m_node_physics = std::make_shared<Node_physics>(create_info);
-            node->attach(m_node_physics);
-        } else {
-            m_node_physics->set_collision_shape(products.collision_shape);
-            m_node_physics->set_motion_mode(products.physics_motion_mode);
-        }
-    } else if (m_node_physics) {
-        node->detach(m_node_physics.get());
-        m_node_physics.reset();
-    }
-
-    m_applied_revision = revision;
+auto Geometry_graph_mesh::all_properties() -> const std::vector<const Dependency_property*>&
+{
+    static const std::vector<const Dependency_property*> s_properties{
+        graph_mesh_property.get_ptr()
+    };
+    return s_properties;
 }
 
+auto carries_geometry_graph_mesh(const erhe::scene::Node& node) -> bool
+{
+    return erhe::property::carries_attached_group(node, Geometry_graph_mesh::graph_mesh_property.get());
 }
+
+auto read_geometry_graph_mesh(const erhe::scene::Node& node) -> std::optional<Geometry_graph_mesh_data>
+{
+    if (!carries_geometry_graph_mesh(node)) {
+        return {};
+    }
+    Geometry_graph_mesh_data data{};
+    data.graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(node.get_value(Geometry_graph_mesh::graph_mesh_property).object);
+    return data;
+}
+
+void set_geometry_graph_mesh(erhe::scene::Node& node, const std::shared_ptr<Graph_mesh>& graph_mesh)
+{
+    if (graph_mesh) {
+        node.set_value(Geometry_graph_mesh::graph_mesh_property, Object_reference{graph_mesh});
+    } else {
+        // Back to the default layer, so the node holds no reference at all and
+        // Add Property offers the key again.
+        node.clear_value(Geometry_graph_mesh::graph_mesh_property);
+    }
+}
+
+} // namespace editor

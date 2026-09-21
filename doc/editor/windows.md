@@ -30,7 +30,7 @@ The scene hierarchy is USD-like: every `erhe::Typed` item - `Scope`, the `Xforma
 
 - **Move.** A prim row dragged from any scene's hierarchy and dropped on a prim row moves: the top third of the target row places it as the sibling before the row, the middle third as the row's last child, the bottom third as the sibling after the row, each zone with its own preview. When the dragged row is selected, the whole selection moves (selected prims whose ancestor is selected move with that ancestor). A move is `Item_parent_change_operation` or `Item_reposition_in_parent_operation`, one compound per drop; `erhe::Typed::handle_item_host_update` carries a prim moved to another scene over to that scene's content library.
 - **Action (Alt held).** While Alt is held, the action the dragged prim has on the hovered row is offered in place of the move. The actions, in the order they are considered:
-  - a `Graph_mesh` of the node's own scene onto a node: bind it through a `Geometry_graph_mesh` attachment (whole row);
+  - a `Graph_mesh` of the node's own scene onto a node: bind it by writing the node's `Geometry_graph_mesh.graph_mesh` value (whole row);
   - a `Material` onto a node holding a mesh with primitives: assign it to every primitive (whole row);
   - a `Material` onto a brush of this scene: fork the brush with that material (whole row);
   - a `Brush` onto any prim: place a brush instance before / under / after the prim (three zones);

@@ -644,6 +644,22 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         return placement_json;
     };
 
+    // Geometry graph mesh: the graph asset whose bake the node shows
+    // (doc/editor/geometry_graph_mesh.md). A value group of the node itself,
+    // so it is reported on the node's own entry.
+    const auto geometry_graph_mesh_details = [](const std::shared_ptr<erhe::scene::Node>& node) -> json
+    {
+        const std::optional<Geometry_graph_mesh_data> data = read_geometry_graph_mesh(*node.get());
+        if (!data.has_value()) {
+            return json(nullptr);
+        }
+        const std::shared_ptr<Graph_mesh>& graph_mesh = data.value().graph_mesh;
+        json graph_mesh_json = json::object();
+        graph_mesh_json["graph_mesh"]    = graph_mesh ? graph_mesh->get_name() : std::string{};
+        graph_mesh_json["graph_mesh_id"] = graph_mesh ? json(graph_mesh->get_id()) : json(nullptr);
+        return graph_mesh_json;
+    };
+
     // Draw mode: the prim's own opinion, what it resolves to and the box the
     // proxy is sized from (doc/erhe/usd_compatibility.md, "Draw modes"). A
     // value group of the prim itself, so it is reported on the prim's own
@@ -698,13 +714,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"name", att->get_name()},
             {"id",   att->get_id()}
         };
-
-        auto geometry_graph_mesh = std::dynamic_pointer_cast<Geometry_graph_mesh>(att);
-        if (geometry_graph_mesh) {
-            const std::shared_ptr<Graph_mesh>& graph_mesh = geometry_graph_mesh->get_graph_mesh();
-            att_json["graph_mesh"]    = graph_mesh ? graph_mesh->get_name() : "";
-            att_json["graph_mesh_id"] = graph_mesh ? json(graph_mesh->get_id()) : json(nullptr);
-        }
 
         auto node_physics = std::dynamic_pointer_cast<Node_physics>(att);
         if (node_physics) {
@@ -830,6 +839,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             ? light_details(std::static_pointer_cast<erhe::scene::Light>(found_node))
             : json(nullptr)},
         {"brush_placement", brush_placement_details(found_node)},
+        {"geometry_graph_mesh", geometry_graph_mesh_details(found_node)},
         {"draw_mode",      draw_mode_details(found_node)},
         {"layout",         layout_details(found_node)},
         {"children",       children},

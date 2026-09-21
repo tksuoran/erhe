@@ -124,8 +124,8 @@ passes through with a warning.
 Control points are editable directly in the viewport. The activation contract
 is that the graph's **display or ghost designation is on the Lattice node** -
 that is what puts the lattice-deformed geometry in the viewport - **and** the
-graph's output is bound to a scene node through a `Geometry_graph_mesh`
-attachment in the active scene. While active:
+graph's output is bound to a scene node through that node's
+`Geometry_graph_mesh.graph_mesh` value in the active scene. While active:
 
 - `Lattice_tool` (a background tool, priority 4) finds the designated lattice
   and the bound scene node, draws the deformed cage wireframe and a billboard
