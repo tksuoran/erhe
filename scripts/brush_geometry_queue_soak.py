@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Concurrency soak for the brush geometry preparation queue.
 
-doc/plans/deferred_brush_geometry.md, Verification / "Concurrency": start the
-editor with ERHE_DEBUG_VALIDATE_GEOMETRY=1 and, right after frame 12, request
+doc/editor/brushes.md, "Verification": start the editor built with
+ERHE_DEBUG_VALIDATE_GEOMETRY set to 1 and, right after frame 12, request
 every palette brush (tier 2, worker preparation) and immediately place ten
 different brushes (tier 1, preparation on the calling thread) while the queue
 is busy. The two tiers then race for the same brushes, which is exactly the
@@ -29,8 +29,8 @@ from erhe_mcp import McpClient, wait_for_server  # noqa: E402
 
 
 # Error lines every startup emits today; they predate this queue and are not
-# what the soak is looking for (see doc/plans/deferred_brush_geometry.md and
-# the "startup-log-error" notes in the memory bank).
+# what the soak is looking for (see the "startup-log-error" notes in the
+# memory bank).
 KNOWN_ERROR_SUBSTRINGS = (
     "property 'mass': value rejected by validate callback",
     "property 'lightmapped': object is sealed",

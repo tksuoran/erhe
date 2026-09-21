@@ -146,7 +146,7 @@ def mutate(tool, args=None, deadline_s=900):
 def scene_brushes_prepared(scene_name, deadline_s=300):
     """get_scene_brushes with every brush 'ready'.
 
-    Brush geometry is prepared on demand (doc/plans/deferred_brush_geometry.md):
+    Brush geometry is prepared on demand (doc/editor/brushes.md):
     get_scene_brushes is a tier 2 consumer, so it requests preparation and
     returns at once, reporting facet_count / vertex_count only for brushes that
     are already ready. The snapshot diff compares those counts, so it waits for

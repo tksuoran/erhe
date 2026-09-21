@@ -107,7 +107,7 @@ Scene_builder::Scene_builder(
     // library only (no scene instances, no Operation_stack involvement), so
     // they are safe to construct at this point. Each palette brush gets its
     // name, flags and folder placement now and its geometry on first use
-    // (doc/plans/deferred_brush_geometry.md R1, D1), so nothing is built and
+    // (doc/editor/brushes.md G8), so nothing is built and
     // nothing is uploaded here - no mesh memory flush is needed. Which brush
     // families get created is gated by scene_config flags
     // (make_platonic_solid_brushes / make_johnson_solid_brushes /
@@ -272,7 +272,7 @@ auto Scene_builder::make_brush(erhe::Scope& scope, Brush_data&& brush_create_inf
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
     // Every palette brush knows the preparation queue a tier 2 request goes to
-    // (doc/plans/deferred_brush_geometry.md D4); the brush holds it weakly.
+    // (doc/editor/brushes.md G5); the brush holds it weakly.
     brush_create_info.geometry_queue = m_brush_geometry_queue->get_state();
 
     std::shared_ptr<Brush> brush;
@@ -1076,7 +1076,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
 
     // A command that places more than a handful of brushes asks for all of
     // them first and instantiates them afterwards
-    // (doc/plans/deferred_brush_geometry.md D7): the queue serves the most
+    // (doc/editor/scene.md, Scene_builder): the queue serves the most
     // recently requested brush first, so the workers prepare the tail of this
     // sorted list while the main thread prepares the head below.
     constexpr std::size_t c_pre_request_threshold = 4;

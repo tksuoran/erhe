@@ -1069,7 +1069,7 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         Tool* tool = entry.tool;
         const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
         std::shared_ptr<Brush> brush = entry_brush;
-        // Tier 2 (doc/plans/deferred_brush_geometry.md D5): the slot spins
+        // Tier 2 (doc/editor/brushes.md G3): the slot spins
         // while the brush geometry is being prepared and keeps its size.
         const Brush_thumbnail_placement placement{.size = icon_size};
         const bool thumbnail_drawn = (draw_brush_thumbnail(m_context, brush, placement) != Brush_thumbnail_result::icon);

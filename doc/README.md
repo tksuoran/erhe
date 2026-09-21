@@ -260,13 +260,13 @@ Every document states its standing in its first ten lines:
 - [plans/android.md](plans/android.md) (proposed): Android: full editor on a phone
 - [plans/animation_keyframing.md](plans/animation_keyframing.md) (proposed): Keyframing and timeline for the Animation window
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
+- [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
 - [plans/build_tooling.md](plans/build_tooling.md) (proposed): Build tooling: make a stale VS build fail loudly
 - [plans/catmull_clark.md](plans/catmull_clark.md) (proposed): Catmull-Clark optimization candidates
 - [plans/command_script.md](plans/command_script.md) (proposed): Editor command scripts: outstanding work
 - [plans/content_library.md](plans/content_library.md) (proposed): Content library: outstanding work
 - [plans/crash_signal.md](plans/crash_signal.md) (proposed): Positive crash signal for harness-run apps
 - [plans/ddgi.md](plans/ddgi.md) (proposed): DDGI follow-ups
-- [plans/deferred_brush_geometry.md](plans/deferred_brush_geometry.md) (proposed): Deferred brush geometry: prepare a palette brush when a scene placement or the UI needs it
 - [plans/draw_list_renderer.md](plans/draw_list_renderer.md) (proposed): Draw list renderer: outstanding work
 - [plans/editor.md](plans/editor.md) (proposed): Editor: outstanding feature work
 - [plans/editor_improvements.md](plans/editor_improvements.md) (proposed): Prioritized backlog of editor architecture improvements

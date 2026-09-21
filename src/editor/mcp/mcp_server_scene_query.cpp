@@ -1822,7 +1822,7 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
         if (!brush) {
             continue;
         }
-        // Tier 2 (doc/plans/deferred_brush_geometry.md R3): the query asks for
+        // Tier 2 (doc/editor/brushes.md G3): the query asks for
         // the geometry and returns at once, reporting the state it found. The
         // counts come from the geometry only while the brush is `ready`, so
         // listing a palette never waits for 104 geometries to be built; a
@@ -1957,7 +1957,7 @@ auto Mcp_server::action_request_brush_geometry(const json& args) -> std::string
     std::vector<std::shared_ptr<Brush>> brushes;
     std::vector<std::string>            missing;
     collect_named_brushes(*library.get(), args, brushes, missing);
-    // Tier 2 (doc/plans/deferred_brush_geometry.md R3): each call returns at
+    // Tier 2 (doc/editor/brushes.md G3): each call returns at
     // once, having put the brushes in the preparation queue.
     for (const std::shared_ptr<Brush>& brush : brushes) {
         static_cast<void>(brush->request_geometry());

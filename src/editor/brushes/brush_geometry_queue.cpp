@@ -13,7 +13,7 @@ namespace editor {
 Brush_geometry_queue_state::Brush_geometry_queue_state(tf::Executor& executor)
     : m_executor{executor}
 {
-    // One worker is left for the rest of the editor's task work (D4).
+    // One worker is left for the rest of the editor's task work (doc/editor/brushes.md G5).
     const std::size_t worker_count = static_cast<std::size_t>(executor.num_workers());
     m_max_in_flight = (worker_count > 1) ? (worker_count - 1) : std::size_t{1};
 }
@@ -29,7 +29,7 @@ void Brush_geometry_queue_state::request(const std::shared_ptr<Brush>& brush, co
         if (m_stopped) {
             return;
         }
-        // A brush that is already queued moves to the front (R5); entries whose
+        // A brush that is already queued moves to the front; entries whose
         // brush is gone are dropped while the list is walked anyway.
         for (std::deque<Brush_geometry_request>::iterator i = m_pending.begin(); i != m_pending.end(); ) {
             const std::shared_ptr<Brush> pending = i->brush.lock();
@@ -54,7 +54,7 @@ void Brush_geometry_queue_state::spawn_tasks(const std::size_t task_count)
         return;
     }
     // Every task co-owns the state, so the state outlives the queue whenever a
-    // task is still running (D8).
+    // task is still running (doc/editor/brushes.md G6).
     const std::shared_ptr<Brush_geometry_queue_state> self = shared_from_this();
     for (std::size_t i = 0; i < task_count; ++i) {
         erhe::task::spawn(
@@ -90,7 +90,7 @@ void Brush_geometry_queue_state::work()
         }
         // Outside the queue mutex: the brush's own mutex is the only lock held
         // while its generator runs, and the slot skips a brush that the main
-        // thread or another task has already taken (R8).
+        // thread or another task has already taken (doc/editor/brushes.md G7).
         static_cast<void>(brush->prepare_geometry_if_queued(name));
     }
 }

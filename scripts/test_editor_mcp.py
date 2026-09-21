@@ -1059,7 +1059,7 @@ class SmokeTestRunner:
             self.scene_name = scenes[0]["name"]
 
             # Brush geometry is prepared on demand
-            # (doc/plans/deferred_brush_geometry.md): the first listing requests
+            # (doc/editor/brushes.md): the first listing requests
             # preparation of every palette brush and returns at once, reporting
             # facet_count / vertex_count only for the brushes already ready. The
             # size filter below needs those counts, so wait for the preparation

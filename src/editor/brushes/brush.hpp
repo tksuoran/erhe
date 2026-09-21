@@ -51,7 +51,7 @@ public:
     std::shared_ptr<erhe::geometry::Geometry>        geometry                   {};
     Geometry_generator                               geometry_generator         {};
     // The preparation queue a tier 2 request goes to
-    // (doc/plans/deferred_brush_geometry.md D4, D8). Weak: the queue is owned
+    // (doc/editor/brushes.md G5, G6). Weak: the queue is owned
     // by Scene_builder and a brush may outlive it, in which case tier 1
     // preparation on the calling thread is all that is left.
     std::weak_ptr<Brush_geometry_queue_state>        geometry_queue             {};
@@ -125,7 +125,7 @@ public:
     [[nodiscard]] auto create_scaled             (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance             (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_bounding_box          () -> erhe::math::Aabb;
-    // Tier 1 (doc/plans/deferred_brush_geometry.md R3): prepares or waits as
+    // Tier 1 (doc/editor/brushes.md G2): prepares or waits as
     // needed and returns the ready geometry, or null when preparation failed.
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
     // Tier 2: asks for preparation and returns at once, after putting the
@@ -154,8 +154,9 @@ public:
 
 private:
     // Called by the geometry slot under the brush mutex, right after the
-    // geometry is stored and before the state becomes ready (D3), so a thread
-    // that has observed `ready` also sees the statistics.
+    // geometry is stored and before the state becomes ready
+    // (doc/editor/brushes.md G1), so a thread that has observed `ready` also
+    // sees the statistics.
     void update_facet_statistics(const erhe::geometry::Geometry& geometry);
 
     // The create info as given, minus the geometry and the generator, which

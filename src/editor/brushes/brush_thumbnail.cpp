@@ -44,13 +44,13 @@ auto draw_brush_thumbnail(
         return Brush_thumbnail_result::icon;
     }
 
-    // Tier 2 (R3, R7): ask and return. A brush that is already ready, failed or
+    // Tier 2 (doc/editor/brushes.md G3): ask and return. A brush that is already ready, failed or
     // preparing is left alone by the request.
     static_cast<void>(brush->request_geometry());
 
     const Brush_geometry_state state = brush->get_geometry_state();
     if (state == Brush_geometry_state::failed) {
-        // R9: the caller's icon stands for a brush that has no geometry at all.
+        // The caller's icon stands for a brush that has no geometry at all (G4).
         return Brush_thumbnail_result::icon;
     }
     if (state != Brush_geometry_state::ready) {
@@ -61,7 +61,7 @@ auto draw_brush_thumbnail(
         return Brush_thumbnail_result::spinner;
     }
 
-    // Ready: the preview render (tier 1 internally, D6) is reached only from
+    // Ready: the preview render (tier 1 internally) is reached only from
     // here, and only for a brush whose geometry is already built. No thumbnail
     // slot was claimed for the waiting brush above, because Thumbnails::draw is
     // what claims one and the not-ready branch never calls it.

@@ -204,7 +204,7 @@ private:
 
     // The brush makers below make_brushes() create every palette brush with a
     // Brush_data::geometry_generator and no geometry
-    // (doc/plans/deferred_brush_geometry.md D1), so make_brushes() builds no
+    // (doc/editor/brushes.md G8), so make_brushes() builds no
     // mesh and uploads nothing: it names the brushes, places them in their
     // folders and returns. build_info() reads Mesh_memory vertex-input state,
     // so the Build_info is built once here and the makers receive it by const
@@ -225,8 +225,8 @@ private:
     bool                  m_enable_post_processing;
 
     // The preparation queue of the palette brushes
-    // (doc/plans/deferred_brush_geometry.md D4). Declared before the brushes so
-    // that it is destroyed after them (D8): its destructor only stops the
+    // (doc/editor/brushes.md G5). Declared before the brushes so
+    // that it is destroyed after them (G6): its destructor only stops the
     // queue, and a task still in flight keeps the shared state alive on its
     // own.
     std::unique_ptr<Brush_geometry_queue> m_brush_geometry_queue;
@@ -253,11 +253,12 @@ private:
     // The polyhedron source of the Johnson solid brushes. Read-only after
     // construction and shared with every Johnson brush's geometry generator,
     // which may run long after make_brushes() returned
-    // (doc/plans/deferred_brush_geometry.md D1, R6).
+    // (doc/editor/brushes.md G7, G8).
     std::shared_ptr<const Json_library> m_json_library;
 
-    // Brushes are built eagerly in the Scene_builder constructor using
-    // these defaults. ensure_brushes() guards on m_brushes_built and is
+    // Brushes are created in the Scene_builder constructor and their
+    // generators read these defaults by value at that point
+    // (doc/editor/brushes.md G7). ensure_brushes() guards on m_brushes_built and is
     // therefore a no-op for any later scene.add_* invocation -- the args
     // it passes for mass_scale / detail are ignored.
     float m_mass_scale    {1.0f};

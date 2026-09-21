@@ -1784,7 +1784,7 @@ void Item_tree::imgui_row(const Flat_row& row)
         bool thumbnail_drawn = false;
         if (row.brush && m_context.thumbnails) {
             ImGui::SameLine();
-            // Tier 2 (doc/plans/deferred_brush_geometry.md D5): the shared
+            // Tier 2 (doc/editor/brushes.md G3): the shared
             // helper requests the geometry and draws the preview only once the
             // brush is ready, spinning in the icon square until then. The
             // spinner goes on the row's own draw list at the icon position, so

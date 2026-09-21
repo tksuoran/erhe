@@ -14,7 +14,7 @@ namespace editor {
 
 using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometry>()>;
 
-// The geometry state of one brush (doc/plans/deferred_brush_geometry.md R2).
+// The geometry state of one brush (doc/editor/brushes.md G1).
 // `ready` means the Geometry is built, Geometry::process() has run and the
 // owner's facet statistics are filled; `failed` means the generator produced
 // no usable geometry and every consumer gets a null geometry from now on.
@@ -42,7 +42,7 @@ enum class Brush_geometry_request_outcome : unsigned int
 // What a preparation task found when it reached the brush
 // (Brush_geometry_slot::prepare_if_queued): a brush that the main thread or
 // another task has already taken is left alone, so every brush is prepared
-// exactly once whichever side gets there first (D4).
+// exactly once whichever side gets there first (doc/editor/brushes.md G5).
 enum class Brush_geometry_worker_outcome : unsigned int
 {
     prepared, // the slot was `queued`: this call ran the generator
@@ -50,8 +50,9 @@ enum class Brush_geometry_worker_outcome : unsigned int
 };
 
 // The geometry of a brush plus the state machine that prepares it exactly
-// once, whichever thread gets there first (D3, R8). Holds the one mutex and
-// the one condition variable of its owning brush; the owner delegates
+// once, whichever thread gets there first (doc/editor/brushes.md G1, G7).
+// Holds the one mutex and the one condition variable of its owning brush;
+// the owner delegates
 // get_geometry() / request_geometry() / get_geometry_state() to it and uses
 // the prepared callback to fill state that is derived from the geometry
 // (the facet statistics), under that same mutex.
@@ -78,17 +79,19 @@ public:
 
     [[nodiscard]] auto get_state() const -> Brush_geometry_state;
 
-    // Tier 1 (R3): returns the geometry once it is `ready`, preparing it on
+    // Tier 1 (doc/editor/brushes.md G2): returns the geometry once it is
+    // `ready`, preparing it on
     // the calling thread when the slot is `unprepared` or `queued` and waiting
     // on the condition variable when another thread is already `preparing`.
     // Returns null when the slot is `failed`; `name` names the brush in the
     // log line that reports the failure.
     [[nodiscard]] auto get_geometry(std::string_view name) -> std::shared_ptr<erhe::geometry::Geometry>;
 
-    // Tier 2 (R3): asks for preparation and returns at once.
+    // Tier 2 (doc/editor/brushes.md G3): asks for preparation and returns at once.
     auto request() -> Brush_geometry_request_outcome;
 
-    // The preparation queue's worker entry point (D4): prepares the geometry
+    // The preparation queue's worker entry point (doc/editor/brushes.md G5):
+    // prepares the geometry
     // only while the slot is still `queued` and skips it in every other state,
     // so a brush a tier 1 consumer has already taken is left alone. `name`
     // names the brush in the failure log line; it is a copy the requesting

@@ -14,8 +14,8 @@ namespace editor {
 
 class Brush;
 
-// One pending tier 2 preparation request (doc/plans/deferred_brush_geometry.md
-// R6): the brush is held weakly, so a task that finds it gone returns, and the
+// One pending tier 2 preparation request (doc/editor/brushes.md G7): the
+// brush is held weakly, so a task that finds it gone returns, and the
 // name is copied on the requesting thread, so the task never reads the brush's
 // name string while another thread may be renaming it.
 class Brush_geometry_request final
@@ -25,7 +25,7 @@ public:
     std::string          name;
 };
 
-// The queue's shared state (D4, D8). It is held by a shared_ptr from two
+// The queue's shared state (doc/editor/brushes.md G5, G6). It is held by a shared_ptr from two
 // sides: the Brush_geometry_queue that owns the queue, and every preparation
 // task in flight. A task therefore never touches a destroyed queue - the queue
 // destructor only calls stop(), which refuses further requests and drops the
@@ -45,7 +45,7 @@ public:
     Brush_geometry_queue_state& operator=(Brush_geometry_queue_state&&)      = delete;
 
     // Puts the brush at the front of the queue - most recently requested is
-    // served first (R5) - removing an entry it already had, and starts a task
+    // served first - removing an entry it already had, and starts a task
     // when fewer than max_in_flight are running.
     void request(const std::shared_ptr<Brush>& brush, const std::string& name);
 
@@ -74,7 +74,7 @@ private:
     bool                              m_stopped      {false};
 };
 
-// The preparation queue of the brush palette (D4), owned by Scene_builder next
+// The preparation queue of the brush palette (doc/editor/brushes.md G5), owned by Scene_builder next
 // to the palette. Tier 2 consumers reach it through Brush::request_geometry().
 class Brush_geometry_queue final
 {

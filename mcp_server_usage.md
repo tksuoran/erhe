@@ -206,12 +206,38 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_brushes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{brushes: [{name, id, folder_path, vertex_count, facet_count, material, density, normal_style}]}` -
+Returns: `{brushes: [{name, id, folder_path, geometry_state, vertex_count, facet_count, material, density, normal_style}]}` -
 `material` is the name of the material a placed instance gets, or `null`;
 `normal_style` is the token a USD `erhe:Brush:normal_style` attribute and the
 glTF `ERHE_brushes` field are spelled with.
 `folder_path` is the scope path below the `Brushes` scope, empty for a brush
 directly under it.
+`geometry_state` is `unprepared`, `queued`, `preparing`, `ready` or `failed`
+(`doc/editor/brushes.md` G1). Brush geometry is prepared on demand, and this
+query is a tier 2 consumer (G3): it asks the preparation queue for every
+listed brush and returns at once, so `vertex_count` and `facet_count` carry
+counts only for a brush that is already `ready` and are `null` otherwise.
+
+### get_brush_geometry_states
+
+Report the geometry state of a scene's palette brushes without preparing any
+of them: per-state counts plus the state of each brush named in the optional
+`brush_names` array (every brush of the palette when it is absent). This is
+how a caller waits for a `request_brush_geometry` batch to finish.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_brush_geometry_states","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+### request_brush_geometry
+
+Ask the preparation queue to build the geometry of a scene's palette brushes
+on worker threads and return at once (tier 2). Takes the same `scene_name` and
+optional `brush_names`, and returns the same counts as
+`get_brush_geometry_states`, taken right after the requests were made; poll
+`get_brush_geometry_states` until nothing is `queued` or `preparing`.
 
 ### get_scene_variants
 
@@ -630,7 +656,7 @@ returns the number -> item table.
 
 - `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count`
 - `get_scene_nodes` includes `locked` and `tags` fields per node
-- `get_scene_brushes` includes `vertex_count` and `facet_count` per brush
+- `get_scene_brushes` includes `geometry_state` per brush, and `vertex_count` / `facet_count` for the brushes that are `ready`
 - Brush instance scale is baked into the geometry at placement time and not stored separately - it cannot be queried back from existing nodes
 - Operations that fail set an `error` field visible in `get_undo_redo_stack`
 
