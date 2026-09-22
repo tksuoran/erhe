@@ -1,6 +1,6 @@
 §MBEL:5.0
 
-[TASK::node-attachments-to-properties]{started-2026-09-21;via-harness}
+[TASK::node-attachments-to-properties]{DONE-2026-09-22;via-harness;P1-P11-landed}
 ✓P1{3ccaea2e1:key-property-groups+node-systems;property-147,scene-154}
 ✓P2{8b96a76c2:Draw_mode}
 ✓P3{fc31543e7:Layout;ERHE_layout-deleted;scene-158;roundtrip-468/465}
@@ -11,7 +11,13 @@
 ✓P8-main{beb405148:Node_physics+Node_physics_system}
 ✓P8b{69d514288+7743095c7:ERHE_physics-deleted}
 ✓P9{5cf5ab676:Joint-prim+Joint_system}
-?P10-Prefab_instance{confirm-D4-with-user-first}->P11-delete-infrastructure;handoff=prompt_queue.txt-item-0+plan-section-'How the remaining phases are worked'
+✓D4-decided{1db018267;record-on-Typed,option-3}
+✓P10a{90ba6dd4c:Composition_arc+Typed-unique_ptr-storage+computed-Typed.composition_arcs+instance_override-null-check;item-195}
+✓openxr-build-fix{b900c8bfe:hand-tracking-Joint->Hand_joint;P9-collided-with-Joint-prim-in-OpenXR-trees-only}
+✓P10b{2a239b966:editor-on-record;Prefab_instance+bit-40-deleted;refresh-re-authors-whole-arc-list;usd-405/scene-167/item-195;roundtrip-466/463=468-minus-2-usdchecker-checks{ERHE_USDCHECKER-unset};smoke-59}
+✓P11a{e27c8197b:editor-half;feature-icons-from-key-properties-per-visible-row;attachment_types->child_prim_types;MCP-add_node_attachment->create_child_prim,remove_node_attachment-gone;get_node_details.attachments-gone;roundtrip-468/465;Mcp_-69/73=pristine-same-layout}
+✓P11b{6a977a0f4:Node_attachment+attach-API+Node_data.attachments+Item_type-bit-28-deleted;for_each_inheritance_child-override-gone;find_override_property_target=item-alone;suites-at-baseline;roundtrip-468/465;sweep-16/16}
+✓P11c{plan-doc-deleted;standing-text->property_system.md-4.23+item.md+scene_serialization.md-Native-carriers;citations-rewritten}-delete-infrastructure;handoff=prompt_queue.txt-item-0+plan-section-'How the remaining phases are worked'
 
 [TASK::agent-files-relocation]{DONE-2026-09-21;4-commits;detail=activeContext;?verify-after-restart{prompt_queue.txt-item-1}}
 
