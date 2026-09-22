@@ -90,6 +90,14 @@ attachment has no path; a value on the node is overridable as it stands.
   and following its transform through
   `Xformable::add_transform_observer` (`doc/erhe/scene.md` "Transform
   observers", `doc/editor/scene.md`, `doc/editor/four_view.md`).
+- **`Prefab_instance` -> composition arc record** (D4): the arcs a carrier
+  prim holds are its own record on `erhe::Typed`
+  (`erhe_item/composition_arc.hpp`, `doc/erhe/item.md` "Composition arcs",
+  `doc/erhe/property_system.md` section 4.27), read by
+  `src/editor/prefabs/instance_structure.{hpp,cpp}` (carrier and seal
+  predicates), the prefab library, both exporters, the provenance and MCP
+  `get_node_details.composition_arcs`. Its retirement deleted the class, its
+  icon entry and the `Item_type::prefab_instance` bit.
 - **P1, the D1 and D2 infrastructure.** The key-property rule and its
   `visible_when` (`erhe_property/attached_group.hpp`,
   `doc/erhe/property_system.md` section 4.23) and the node systems and their
@@ -105,9 +113,7 @@ on the prim becomes a value group (D1); prim metadata stays prim-held
 structure (D4). Where USD has no counterpart the verdict rests on the
 class's own shape, stated in the row.
 
-| Class | USD counterpart | Verdict | Runtime state | Per node | Saved in | Form |
-|-------|-----------------|---------|---------------|----------|----------|------|
-| `Prefab_instance` | `references` / `payload` list ops and `variants`: prim metadata, neither a prim nor an attribute | prim-held structure | none | many (one per arc) | glTF `externalAsset`, USD arcs | D4 |
+Every class the inventory listed is retired (see "Done").
 
 `Joint` was the only new prim type. The typed prims USD has for the other
 physics and imaging concepts (`Mesh`, `Camera`, the lights, `Scope`,
@@ -221,13 +227,6 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P10. `Prefab_instance`** (D4), two commits. P10a, the record:
-  `Composition_arc` and the `Typed` storage, clone, the computed property,
-  `erhe::scene::instance_override` reading it, item and scene tests. P10b,
-  the editor: every `Prefab_instance` reader and writer moved onto the
-  record, the class, its catalog entry and its `Item_type` bit deleted,
-  documents. Suites: item, scene, usd, gltf; roundtrip references, variants
-  and override legs.
 - **P11. Delete the attachment infrastructure.** `Node_attachment`,
   `Node::attach` / `detach` / `get_attachments` / `get_attachment<T>`,
   `Node_attach_operation`, `Scene_commands::remove_attachment`, the
@@ -241,7 +240,7 @@ P11 is last.
 
 ## How the remaining phases are worked
 
-P10 and P11 remain. Each is worked through
+P11 remains. It is worked through
 `doc/agents/orchestration_harness.md` on `build_vs2026_vulkan_headless`
 (tests on), one coder per commit, the orchestrator reviewing and committing.
 
@@ -257,8 +256,9 @@ P10 and P11 remain. Each is worked through
   system with every consumer, then the file carriers, then deletions, scripts
   and documents.
 - Baselines a phase must hold: `erhe_property_tests` 147, `erhe_item_tests`
-  188, `erhe_scene_tests` 167, `erhe_usd_tests` 405, `erhe_physics_tests` 34
-  (Jolt) and 85 (Box3D tree); `scripts/scene_roundtrip_verify.py` total 468,
+  195, `erhe_scene_tests` 167, `erhe_usd_tests` 405, `erhe_physics_tests` 34
+  (Jolt) and 85 (Box3D tree); `scripts/scene_roundtrip_verify.py` total 468 with `ERHE_USDCHECKER` set (466 without: the usdchecker
+  section is two checks),
   pass 465, the three failures being the falling-body positions of the P6
   bodies, `textured ... local_property_names` and `references_override: the
   def below a carrier authored nothing`; `ctest -R "Mcp_"` 72 of 73, the
