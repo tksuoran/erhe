@@ -22,7 +22,7 @@ during planning:
 
 - **One extension per item type**: `ERHE_node_properties`,
   `ERHE_mesh_properties`, `ERHE_light_properties` (all three on the glTF
-  node, since erhe meshes / lights are node attachments),
+  node, since erhe meshes / lights are child prims of the node),
   `ERHE_camera_properties` (on the camera) and `ERHE_material_properties`
   (on the material) - not a single `ERHE_properties` with sub-objects.
 - **Import semantics: default-elision.** After native-field import, a local
@@ -52,7 +52,7 @@ during planning:
 Each extension's payload is the name->entry map directly (no `"properties"`
 nesting; a future non-property member, if one is ever demonstrated to be
 needed, uses a reserved `$`-prefixed key - property names never start with
-`$`). On a glTF node (attachments ride the node, as `ERHE_light` does):
+`$`). On a glTF node (a child prim's values ride the node, as `ERHE_light` does):
 
 ```json
 "ERHE_node_properties":  { "visible": "false", "translation": {"expression": "{cube/translation}", "value": "1 2 3"} },
@@ -146,7 +146,7 @@ library-domain extension pass (:3779-3944), so it runs after native
 fields, flags, legacy `properties` members and the `ERHE_camera` /
 `ERHE_material` typed fields.
 
-For every imported item (each node, its Mesh / Light attachments, each
+For every imported item (each node, its Mesh / Light child prims, each
 camera, each material):
 
 1. The elision pass already runs before this point (D32). Legacy-file

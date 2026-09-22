@@ -400,7 +400,7 @@ void append_content_library_attach_operations(
 }
 
 // World-space bounds of the parsed glTF content: the primitive bounding
-// boxes of the mesh attachments, transformed by their node's world
+// boxes of the mesh prims, transformed by their node's world
 // transform. At the point this runs the parsed nodes still hang under the
 // (unparented, identity) import root, so this is the space they enter the
 // scene in. Invalid (default-constructed) when the file has no meshes.
@@ -979,7 +979,7 @@ auto make_import_gltf_operation(
         root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
         // Container parses use mesh layer 0 (their node trees are never
         // rendered); scene content draws the content layer. Walk the node
-        // attachments, not gltf_data.meshes: the parse clones the template
+        // prims, not gltf_data.meshes: the parse clones the template
         // mesh per instantiating node, and the clones are what enter the
         // scene.
         const erhe::scene::Layer_id content_layer_id = scene_root->layers().content()->id;
@@ -1233,9 +1233,9 @@ auto make_import_gltf_operation(
     append_content_library_attach_operations(context, scene_root->get_content_library(), gltf_data, path.generic_string(), material_reference_keys, operations);
 
     // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
-    // through content-library attach operations; Node_physics values / Joint prims
-    // attachments are attached directly to the imported nodes (like meshes)
-    // and enter the scene with the insert operation below. Must run after
+    // through content-library attach operations; Node_physics values and Joint
+    // prims go straight onto the imported nodes (like meshes) and enter the
+    // scene with the insert operation below. Must run after
     // mesh finalization above (mesh-sourced collision shapes need Geometry).
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
 
@@ -1805,7 +1805,7 @@ auto open_scene_gltf(
 
     // Container parses use mesh layer 0 (their node trees are never
     // rendered); scene content draws the content layer. Walk the node
-    // attachments, not gltf_data.meshes: the parse clones the template mesh
+    // prims, not gltf_data.meshes: the parse clones the template mesh
     // per instantiating node, and the clones are what enter the scene.
     if (adoptable_record) {
         for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {

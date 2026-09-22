@@ -28,9 +28,8 @@ than restating an item.
    Windows and Android only.
 5. Composition beyond what erhe resolves ("Layer-stack editing", "inherits and
    specializes arcs whose target is not a class prim", the `over`-child and
-   `.usdz` forms of "Variant opinions a variant set does not carry",
-   "Overrides on applied API schemas inside an instance"). Each is a real USD
-   feature with no surveyed asset that visibly depends on it, so they wait for
+   `.usdz` forms of "Variant opinions a variant set does not carry"). Each is a
+   real USD feature with no surveyed asset that visibly depends on it, so they wait for
    a file that does.
 
 The items have no ordering constraint among them; each is taken through the
@@ -144,17 +143,6 @@ system - and a property the value reader cannot express. Each is counted in
 `Usd_variant_set::unsupported_opinion_count`, reported per set, and named by
 the save warning. Taking the first up means hoisting through the `over`
 children too, and the last is the value reader's own coverage.
-
-### Overrides on applied API schemas inside an instance
-
-A carrier prim reads its arc target's values through the reference layer (the
-design record's C10), and the override walk of
-`erhe::scene::instance_override` visits prims only, so a local value on a
-`Node_physics`, a `Joint` prim or another attachment below a carrier is neither
-written as part of the carrier's `over` prims nor kept across a prefab reload.
-Taking it up means walking the attachments in the same lockstep the
-counterpart link uses and giving each an `over` path (USD authors an applied
-schema's attributes on the prim itself).
 
 ### Layer-stack editing
 

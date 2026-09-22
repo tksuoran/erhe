@@ -217,7 +217,7 @@ public:
 
     // Implements erhe::Item_host
     auto get_host_name() const -> const char* override;
-    // Scene nodes and attachments (Scene_host) plus the content library's
+    // Scene prims (Scene_host) plus the content library's
     // materials (expression references, D22).
     auto find_hosted_item(std::string_view name_or_path) -> erhe::Item_base* override;
 
@@ -345,7 +345,7 @@ public:
     [[nodiscard]] auto get_node_physics_system() -> Node_physics_system&;
 
     // The card images the draw-mode proxies of this scene read, keyed by the
-    // file each was read from, so two attachments naming the same file share
+    // file each was read from, so two prims naming the same file share
     // one texture. Weakly held: the proxy materials own the textures, the
     // cache only finds them, and it dies with the scene.
     [[nodiscard]] auto find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -504,7 +504,7 @@ private:
     void add_trigger_event(bool enter, const erhe::physics::Trigger_event& event);
 
     // Returns the raytrace IInstance mask for a mesh: the role bits of the
-    // mesh's own flags and of its attachments. Skinned meshes get the
+    // mesh's own flags. Skinned meshes get the
     // Raytrace_node_mask::skinned bit in lieu of the role bits, so
     // picking-tool rays (which use role bits) skip them and the ID renderer
     // handles them instead. See Raytrace_node_mask::skinned.

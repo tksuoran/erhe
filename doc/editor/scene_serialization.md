@@ -42,7 +42,7 @@ JSON, erhe state attaches at three levels:
 A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
 that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
 (`doc/erhe/usd_compatibility_design.md` C5): the glTF node's name, transform, children
-and remaining attachments are the prim's, and the writer inverts it - such a
+and children are the prim's, and the writer inverts it - such a
 prim is written as one glTF node with `mesh` / `camera` / the light
 extension set, and a `Mesh`, `Camera` or `Light` child of another prim as a
 child node of its own. A node that carries two of the three is the prim of

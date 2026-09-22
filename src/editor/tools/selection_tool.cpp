@@ -698,15 +698,6 @@ auto Selection::duplicate_selection() -> bool
                 )
             );
         }
-            //if (node_attachment) {
-            //    compound_parameters.operations.push_back(
-            //        std::make_shared<Node_attach_operation>(
-            //            node_attachment,
-            //            target_node
-            //        )
-            //    );
-            //}
-        //}
     }
     if (compound_parameters.operations.empty()) {
         return false;

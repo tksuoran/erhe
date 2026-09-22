@@ -189,7 +189,7 @@ public:
 {
     // R10b: sample from the node's current world transform, not from
     // Item_flags::negative_determinant, which is maintained by
-    // handle_node_transform_update() and lags behind at attach time.
+    // handle_transform_update() and lags behind when a mesh is parented.
     const erhe::scene::Node* node = &mesh;
     if (node == nullptr) {
         return false;
@@ -1237,7 +1237,7 @@ void Draw_list_scene::flush_pending()
                     break; // flags set before attach / after detach: ignore
                 }
                 // R10b: the negative_determinant flag is maintained by
-                // handle_node_transform_update(); a change relative to the
+                // handle_transform_update(); a change relative to the
                 // value sampled at registration means the object was
                 // mirrored at runtime, which the initial scope does not
                 // support (assert in debug, log otherwise).

@@ -84,7 +84,7 @@ Move `m_rendertarget_meshes`, `m_rendertarget_meshes_mutex`, the
 
 The Jolt body activation / deactivation callbacks in `scene_root.cpp`
 `reinterpret_cast<Node_physics*>(owner)` with no validation. Carry a tagged
-handle, or validate the pointer against the scene's registered attachments,
+handle, or validate the pointer against the scene's registered prims,
 so a stale or foreign owner is rejected rather than dereferenced.
 
 ## 11. Initialize the first-frame time baseline (small effort, low impact)

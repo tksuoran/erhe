@@ -3872,7 +3872,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     collect_usd_physics(scene_root, physics_description, physics_items, save_arguments.physics);
 
     // The draw modes of the tree (doc/erhe/usd_compatibility.md, "Draw modes"):
-    // one `GeomModelAPI` per prim carrying the attachment, complete before
+    // one `GeomModelAPI` per prim carrying the draw-mode values, complete before
     // the plan below, which turns each item into a path.
     collect_usd_draw_modes(*root_node.get(), save_arguments.draw_modes);
 

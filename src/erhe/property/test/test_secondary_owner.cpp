@@ -15,7 +15,7 @@ const Property<float> sec_tint  = Property<float>::register_property("sec_tint",
 const Property<float> sec_plain = Property<float>::register_property("sec_plain", type_b(), Property_metadata{.default_value = 3.0f});
 
 // A property of a descendant of the secondary type: a holder of type_b
-// values holds it too (a node holds the values of every attachment class).
+// values holds it too (a node holds the values of every item class).
 // Its property_changed callback belongs to type_b_child objects.
 const Property<float> sec_child_computed = Property<float>::register_computed(
     "sec_child_computed", type_b_child(),

@@ -28,8 +28,8 @@ public:
     std::vector<std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_settings;
 };
 
-// Builds the format-neutral description of a scene's Node_physics values / Joint prims
-// attachments (erhe_scene/physics_description.hpp), which the glTF writer
+// Builds the format-neutral description of a scene's Node_physics values and
+// Joint prims (erhe_scene/physics_description.hpp), which the glTF writer
 // takes as KHR_implicit_shapes + KHR_physics_rigid_bodies and the USD writer
 // as the UsdPhysics prims and API schemas of the mapping. The result
 // references erhe nodes / meshes; each writer maps those to its own form and

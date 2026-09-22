@@ -35,7 +35,7 @@ private:
 
 // Viewport editing of a Lattice_node's control points.
 //
-// Active when a Geometry_graph_mesh attachment in the active scene binds a
+// Active when a Geometry_graph_mesh value group in the active scene binds a
 // Graph_mesh whose display or ghost designated node is a Lattice_node (the
 // designation is what puts the lattice-deformed geometry in the viewport, so
 // it doubles as the edit-mode switch). While active:

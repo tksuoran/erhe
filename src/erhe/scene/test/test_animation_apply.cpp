@@ -3,8 +3,9 @@
 // Animation_sampler::apply() writes the sampled TRS component straight into the
 // target node's parent_from_node, bypassing the Node transform setters.
 // Animation::apply() is therefore responsible for updating the target's world
-// transform and calling handle_transform_update() - which notifies attachments
-// and marks the node dirty for Scene::update_node_transforms(). Since transform
+// transform and calling handle_transform_update() - which notifies the
+// transform observers and marks the node dirty for
+// Scene::update_node_transforms(). Since transform
 // propagation became dirty-list driven, skipping that notification leaves both
 // the animated node and its descendants at their previous pose, so the viewport
 // keeps rendering the old frame no matter which renderer draws it.

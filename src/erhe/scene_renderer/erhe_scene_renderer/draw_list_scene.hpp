@@ -187,7 +187,7 @@ public:
     void enqueue_unregister(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_reregister(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_set_flags (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t item_flag_bits);
-    // The mesh node's world transform changed (Mesh::handle_node_transform_update
+    // The mesh node's world transform changed (Mesh::handle_transform_update
     // hook). Applied in flush_pending(): the object's records get the new
     // world_from_node / normal_transform once per frame, however many
     // updates the node saw (dedup by Node_transforms::world_from_node_serial).

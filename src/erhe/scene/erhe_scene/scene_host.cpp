@@ -1,7 +1,6 @@
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 
 namespace erhe::scene {
@@ -35,12 +34,6 @@ auto Scene_host::find_hosted_item(const std::string_view name_or_path) -> erhe::
             if (node->get_name() == name) {
                 result = node.get();
                 return false;
-            }
-            for (const std::shared_ptr<Node_attachment>& attachment : node->get_attachments()) {
-                if (attachment && (attachment->get_name() == name)) {
-                    result = attachment.get();
-                    return false;
-                }
             }
             return true;
         }

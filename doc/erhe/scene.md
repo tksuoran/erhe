@@ -3,13 +3,12 @@
 Stability: mostly stable
 
 ## Purpose
-A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), node attachments (physics, grid, ...), animations, and scene management. Nodes form a parent-child tree with automatic world transform propagation. The library is graphics-API-agnostic and does not perform any rendering itself.
+A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), per-node value groups (physics, layout, grid, ...), animations, and scene management. Nodes form a parent-child tree with automatic world transform propagation. The library is graphics-API-agnostic and does not perform any rendering itself.
 
 ## Key Types
 - `Scene` -- Top-level container owning the root node, flat node list, mesh layers, light layers, cameras, and skins. Provides `update_node_transforms()` and lookup by ID.
-- `Xformable` (`Node`) -- The transform level of the prim class hierarchy, see "Prim levels". Holds `Node_transforms` (parent-from-node and world-from-node `Trs_transform`), attachments, and a `Scene_host` pointer. Supports cloning. Registers `translation`, `rotation` and `scale` as erhe::property properties bridged onto the parent-from-node `Trs_transform` (`Node::translation_property` etc.; writes run the same world-transform update as `set_parent_from_node`), so the editor's generic property rows, undo and MCP reach the transform without a second copy of it (doc/erhe/property_system.md section 4.2). `world_translation_property` / `world_rotation_property` / `world_scale_property` are computed properties (D26) reading `world_from_node_transform()`; `handle_transform_update` pushes them to expressions, so a descendant's values follow a parent move when `Scene::update_node_transforms` recomputes it.
+- `Xformable` (`Node`) -- The transform level of the prim class hierarchy, see "Prim levels". Holds `Node_transforms` (parent-from-node and world-from-node `Trs_transform`) and a `Scene_host` pointer. Supports cloning. Registers `translation`, `rotation` and `scale` as erhe::property properties bridged onto the parent-from-node `Trs_transform` (`Node::translation_property` etc.; writes run the same world-transform update as `set_parent_from_node`), so the editor's generic property rows, undo and MCP reach the transform without a second copy of it (doc/erhe/property_system.md section 4.2). `world_translation_property` / `world_rotation_property` / `world_scale_property` are computed properties (D26) reading `world_from_node_transform()`; `handle_transform_update` pushes them to expressions, so a descendant's values follow a parent move when `Scene::update_node_transforms` recomputes it.
 - `Imageable` / `Xform` / `Boundable` / `Gprim` -- The other prim levels this library owns, see "Prim levels".
-- `Node_attachment` -- Base class for what USD applies to a prim as an API schema and erhe attaches to a node. `Mesh`, `Camera` and `Light` are prims, not attachments. Receives notifications on node transform changes and scene host changes. Its property inheritance parent is its node (`visible`, `shadow_cast`, `lightmapped` flow node -> attachment; `set_node` brackets the move with the inheritance snapshot and keeps the attachment alive while the old node's list releases it).
 - `Mesh_primitive` -- Primitive + Material pair, a `Dependency_object` with its own owner type: `material` is an object property (`Mesh_primitive::material_property`, `register_member` over the member, `doc/erhe/property_system.md` D28 / section 4.9) whose `after_set` notifies the owning mesh's scene host; `Mesh::set_primitive_material` writes it and stays the one writer. Carries an owner link (mesh, index) the mesh stamps after every primitive-list change. Registers member-backed properties only and is never observed: the mesh holds primitives by value, and a vector reallocation copy-constructs the base.
 - `Mesh` -- A geometric prim (`Gprim`, see "Prim levels") holding a vector of `Mesh_primitive`: an `Xformable` with its own transform, name and children, a child prim of its parent, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's mesh layers on top of the node registration the base does, and its override of `handle_transform_update` mirrors the world transform into the raytrace instances, the negative-determinant flag and the computed world bounds. Addresses its primitives as property sub-objects (D29: `get_property_sub_object_count` / `get_property_sub_object` / `get_property_sub_object_label`). Supports raytrace primitives for CPU-side picking. `get_aabb_world()` returns POSED world bounds for a skinned mesh: it unions the primitives' per-joint rest boxes (`Buffer_mesh::joint_bounding_boxes`) transformed by `world_from_bind` (`get_skinned_aabb_world()`), and does NOT apply the mesh's own transform, which skinning ignores. Correct because a skinned position is a convex combination of its per-joint images, so it lies inside the union. Uncached - joints move every frame and primitives can be rebuilt behind the Mesh's back, so there is no reliable invalidation signal. `world_bounds_min_property` / `world_bounds_max_property` are computed properties (D26) reading `get_aabb_world()` (zero for an invalid box), pushed to expressions from `handle_transform_update` and the primitive changes.
 - `Camera` -- A transformable prim (`Xformable`, see "Prim levels") with a `Projection` (perspective/orthogonal/XR): a child prim of its parent with its own transform, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's camera list on top of the node registration the base does. Computes `clip_from_world` transforms. The `Projection` fields are registered as bridged `erhe::property` properties (`Camera::z_far_property`, ...), so `projection()` writes and property writes reach the same state; exposure and shadow range live in the property store (`doc/erhe/property_system.md` section 4.4).
@@ -106,7 +105,7 @@ the tree of prims it is:
 - `Scene::update_subtree_transforms()` recurses THROUGH a prim that has no
   transform, so an `Xform` under a `Scope` follows its ancestor's move.
 - `Xformable::handle_item_host_update()` registers the node with the scene host
-  and carries the host to its attachments and to every prim child, `Scope`
+  and carries the host to every prim child, `Scope`
   children included; `erhe::Typed` owns the hook and the parent-update rule
   that drives it (see `doc/erhe/item.md`), so a `Scope` attached under a
   hosted prim registers every `Xformable` in its subtree with the scene, and
@@ -119,8 +118,7 @@ the ordinary subset test and the property owner-type chain
 (`doc/erhe/property_system.md` D27) follows the same levels: a node's registered
 properties sit on `Xformable`, under `Imageable`, under `Typed`. A level below
 `Xformable` clones through its `(src, for_clone)` constructor, because the
-transform level owns attachments and a scene host that a plain copy does not
-reproduce.
+transform level owns a scene host that a plain copy does not reproduce.
 
 ## Authored xformOp stacks
 
@@ -286,13 +284,7 @@ through `find_override_property`: USD authors such a schema's attributes on
 the prim, and so does erhe. A prim need hold no value of the group yet -
 `prepend apiSchemas` in a variant block is what makes the schema present, and
 an opinion naming one of its values is authored on the prim as any other value
-is. A name qualified with the class name of an ATTACHMENT of the prim resolves
-to that attachment's property, and every other name resolves on the item
-itself. The collectors walk prims only, so an attachment's own local
-value is not yet reported as an override
-(`doc/erhe/usd_compatibility_design.md` section 6, "Overrides on applied API schemas
-inside an instance"); what the resolution serves today is a value a file
-authors.
+is. Every name resolves on the item itself.
 
 A binding that covers one group of facets rather than the whole mesh is an
 entry of its own whose relative path ends in the name of the group, the way a
@@ -313,7 +305,7 @@ mode, the apply flag, the card geometry and visibility, the six card texture
 paths, the draw-mode color and the extents hint, each with the flag that says
 whether the file authored it. The three enumerations spell USD's tokens
 verbatim (`c_str` / `*_from_string`, and one `Enum_info` table each for the
-property registration of the attachment that holds them), so a value travels
+property registration of the prim that holds them), so a value travels
 as that token wherever it travels as text. The header holds plain data and the
 enumerator tables and nothing else; the mapping is the "Draw modes" table of
 `doc/erhe/usd_compatibility.md`, the reader and writer are `erhe::usd`, and what
@@ -422,6 +414,5 @@ readers and the editor's export builder need it and `erhe::usd` does not link
 
 ## Notes
 - Transform updates use a global serial number to avoid redundant recomputation.
-- `get_attachment<T>(node)` is a convenience template for finding typed attachments.
 - `get_mesh(item)` answers the one-mesh case: the item when it is a `Mesh`, else its first `Mesh` child. `get_camera(item)` and `get_light(item)` answer the same question for a `Camera` and a `Light`. `for_each_mesh_child(item, callback)` visits every `Mesh` child and allocates nothing, so per-frame code can use it. `set_prim_parent(prim, parent)` makes any `Xformable` a child prim keeping its LOCAL transform - `Xformable::set_parent` preserves the WORLD transform, which would give a prim created at the origin a local transform cancelling its new parent's; `set_mesh_parent(mesh, parent)` is the name the mesh call sites spell it with.
 - Mesh layers use a `Layer_id` (uint64) and flag bits for filtering during rendering.

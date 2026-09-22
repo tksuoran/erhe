@@ -12,7 +12,6 @@ namespace erhe::scene {
 
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
-using erhe::scene::Node_attachment;
 using erhe::Item_flags;
 
 Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&) noexcept            = default;

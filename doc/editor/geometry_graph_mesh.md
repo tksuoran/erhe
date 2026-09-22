@@ -90,7 +90,7 @@ through serialization, as it does for `Graph_texture`.
 It owns the `Geometry_graph` by value and the node `shared_ptr` vector, plus
 the **baked products** its output node publishes after each evaluation:
 `{shared_ptr<Geometry>, shared_ptr<Primitive>, shared_ptr<ICollision_shape>,
-uint64_t revision}`. Bound attachments consume those products, and the revision
+uint64_t revision}`. Bound nodes consume those products, and the revision
 lets a bind apply the latest bake without re-evaluating.
 
 That is the payoff over the texture case: **N scene nodes can source one graph
@@ -191,4 +191,4 @@ evaluation populate the mesh. An orphan asset with no binding is preserved.
 ## Future work
 
 - [plans/geometry_graph/geometry_nodes.md](../plans/geometry_graph/geometry_nodes.md) -
-  the open gaps of the asset and attachment, and parallel per-asset evaluation.
+  the open gaps of the asset and the binding, and parallel per-asset evaluation.

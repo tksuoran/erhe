@@ -226,15 +226,13 @@ TEST_F(Cube_round_trip, material_local_sets_survive)
 }
 
 // A `Camera` prim and a UsdLux prim of the stage are erhe Camera / Light
-// prims with their own xformOps, not Xforms carrying an attachment
-// (doc/erhe/usd_compatibility_design.md C5).
+// prims with their own xformOps (doc/erhe/usd_compatibility_design.md C5).
 TEST_F(Cube_round_trip, camera_and_light_prims_round_trip_with_their_own_xform_ops)
 {
     const std::shared_ptr<erhe::scene::Node> cam = find_node(trip->reloaded.data, "cam");
     ASSERT_TRUE(cam.operator bool());
     EXPECT_TRUE(erhe::is<erhe::scene::Camera>(cam.get()));
     EXPECT_EQ(cam->get_class_type_name(), "Camera");
-    EXPECT_TRUE(cam->get_attachments().empty());
     const glm::vec3 cam_translation = cam->parent_from_node_transform().get_translation();
     EXPECT_NEAR(cam_translation.x, 0.0f, 1e-5f);
     EXPECT_NEAR(cam_translation.y, 1.0f, 1e-5f);
@@ -244,7 +242,6 @@ TEST_F(Cube_round_trip, camera_and_light_prims_round_trip_with_their_own_xform_o
     ASSERT_TRUE(sun.operator bool());
     EXPECT_TRUE(erhe::is<erhe::scene::Light>(sun.get()));
     EXPECT_EQ(sun->get_class_type_name(), "Light");
-    EXPECT_TRUE(sun->get_attachments().empty());
     const glm::vec3 sun_translation = sun->parent_from_node_transform().get_translation();
     EXPECT_NEAR(sun_translation.x, 3.0f, 1e-5f);
     EXPECT_NEAR(sun_translation.y, 4.0f, 1e-5f);

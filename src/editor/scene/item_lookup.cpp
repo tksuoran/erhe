@@ -18,7 +18,6 @@
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/scene.hpp"
@@ -27,7 +26,7 @@ namespace editor {
 
 namespace {
 
-// The prims of a subtree, and the attachments of the transformable ones.
+// The prims of a subtree.
 // The scene TREE is walked rather than the registered node buckets: any prim
 // may parent any other prim (doc/erhe/usd_compatibility_design.md C5), and only the
 // transformable prims are registered, so a Scope - and everything below one -

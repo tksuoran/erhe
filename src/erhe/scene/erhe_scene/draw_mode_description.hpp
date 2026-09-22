@@ -4,14 +4,14 @@
 // `UsdGeomModelAPI` attributes that ask the imaging layer to draw a subtree as
 // a proxy (doc/erhe/usd_compatibility.md, "Draw modes"). The USD reader fills it
 // from the schema and the USD writer authors it back; the editor turns each
-// record into the `Draw_mode` attachment of the prim it names.
+// record into the `Draw_mode` values of the prim it names.
 //
 // The vocabulary is USD's own: every enumerator's label is the schema token
 // the file spells, so a value travels as that token wherever it travels as
 // text - an override opinion, a property row, a written attribute.
 //
 // This header stays data-only: glm + std types plus the enumerator tables the
-// property registration of the attachment uses.
+// property registration of the draw-mode values uses.
 
 #include "erhe_property/enum_info.hpp"
 

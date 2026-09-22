@@ -632,7 +632,7 @@ table, see D2a), and references to other objects (D28).
     the object itself). `Item_base` resolves `..` to
     `get_inheritance_parent()` and a name through its `Item_host`
     (`Item_host::find_hosted_item(name)`, implemented by `Scene_host`
-    over the scene's nodes and attachments and extended by the editor's
+    over the scene's prims and extended by the editor's
     `Scene_root` with the content library's materials), so a source is
     always hosted by the target's own host and evaluation runs under the
     target's item-host lock without a cross-host read order. A property
@@ -682,13 +682,7 @@ table, see D2a), and references to other objects (D28).
     property serialization work of section 6 lands.
 
 - D23 Inherited flags (`visible`, `shadow_cast`, `lightmapped`).
-  - Before the change. `Item_flags::visible` was a self bit; the only
-    propagation was `Node_attachment::handle_node_update` /
-    `handle_node_flag_bits_update` copying the node's bit onto each
-    attachment, so a mesh was visible exactly when its node was and a hidden
-    node did not hide its child nodes. `shadow_cast` and `lightmapped` were
-    self bits on meshes with no propagation. `Item_flags::invisible_parent`
-    is not visibility propagation: `Scene_root` sets it on the scene root
+  - `Item_flags::invisible_parent` is not visibility propagation: `Scene_root` sets it on the scene root
     node and the item tree skips that row and lists its children in its
     place; it stays as it is.
   - Properties. `Item_base` registers `visible` (default `true`) with
@@ -712,16 +706,12 @@ table, see D2a), and references to other objects (D28).
     `Mesh::on_render_flag_property_changed`); a copy rederives the bits
     from the copied entries (`Item_base::rederive_flag_bits`,
     `Mesh::rederive_render_flag_bits`).
-  - Inheritance tree. A `Node_attachment` is not a `Hierarchy`; it overrides
-    `get_inheritance_parent()` to return its node and `Node::
-    for_each_inheritance_child` visits child nodes, then attachments.
-    `Node_attachment::set_node` (the one path that changes the node
-    pointer) captures the attachment's inheritance snapshot before the move
-    and applies it after, the way `Hierarchy::set_parent` does for a
-    subtree, so a mesh moved between nodes is notified of its new
-    inherited visibility.
-    This replaces the `visible` half of the attachment flag mirroring; the
-    `selected` / `hovered_*` mirroring stays (those are not properties).
+  - Inheritance tree. Every inheriting item is a `Hierarchy`, so
+    `Hierarchy::set_parent` is the one path that changes the inheritance
+    parent: it captures the subtree's inheritance snapshot before the move
+    and applies it after, so a mesh moved between nodes is notified of its
+    new inherited visibility. The `selected` / `hovered_*` bits are
+    mirrored by hand, as they are not properties.
   - Derived bits (R14). The three bits stay in the flag word as derived
     bits: the properties' shared changed callback writes the new effective
     value into the item's bit through a private `Item_base::
@@ -1010,7 +1000,7 @@ table, see D2a), and references to other objects (D28).
   Intermediate, Self>` allocates `Self`'s id under
   `Intermediate::property_owner_type()` in a function-local static, so
   every class in an `Item<>` chain has an id that follows its C++
-  inheritance with no code of its own (`Mesh` -> `Node_attachment` ->
+  inheritance with no code of its own (`Mesh` -> `Gprim` -> ... ->
   `Item_base` -> root, `Node` -> `Hierarchy` -> `Item_base` -> root);
   `Item_base::property_owner_type()` is the id under the root that every
   item descends from. A class outside an `Item<>` chain (the geometry
@@ -1085,7 +1075,7 @@ table, see D2a), and references to other objects (D28).
   - Rows (D12). The row is `item_reference_imgui`: a drop target
     filtered by `reference_item_types`, a drag source, a picker over the
     target scene's items of that mask - the content library items, and
-    the scene's nodes and node attachments for a node-typed reference
+    the scene's prims for a node-typed reference
     (`collect_reference_candidates`, a caller-owned scratch cleared after
     the draw) - and a clear button when `show_clear_button` holds; it
     commits on selection like the enumeration combo.
@@ -1160,11 +1150,10 @@ table, see D2a), and references to other objects (D28).
   and the scene node (section 4.2), whose secondary owner type is
   `Item_base` so that it holds the values of every other item class
   (`Light.color` on an empty node, `Mesh.shadow_cast` on a group) for the
-  prims and attachments below it, which is why every `Light` property of
+  prims below it, which is why every `Light` property of
   section 4.3 is registered `inherits`. `Item_base` rather than a narrower
-  type because those classes no longer share one base: a `Mesh` is a prim
-  under `Xformable` (`doc/erhe/usd_compatibility_design.md` C5) while `Light` and
-  `Camera` are attachments. Section 6 records the registration-time check this makes
+  type because those classes share no other base
+  (`doc/erhe/usd_compatibility_design.md` C5). Section 6 records the registration-time check this makes
   wanted.
 - D31 Per-object default. `Property_metadata::compute_default`, when
   bound, is the property's DEFAULT layer for an object: the value it
@@ -1439,15 +1428,13 @@ R14 holds by construction: an animated component write only stores, so a
 playing node still updates its world transform and notifies once per frame,
 as it did when playback wrote the `Trs_transform` directly.
 
-`Node::get_secondary_property_owner_type()` is `Node_attachment::
-property_owner_type()` (D30): a node holds the properties of every
-attachment class by qualified name (`Light.color`, `Camera.fov_y`) for
-the attachments below it - directly on it and on its descendant nodes -
-to inherit, and takes a style whose target is an attachment class
-(`Item_base::style_applies`, `doc/editor/style_library.md` D3). The
-`Item_base` chain is the node's own, so `visible` and its siblings stay
-plain node properties, and `Mesh`'s computed world bounds are left out
-by the D30 rule. The editor's `Style` item names the root type the same
+`Node::get_secondary_property_owner_type()` is
+`Item_base::property_owner_type()` (D30): a node holds the properties of
+every item class by qualified name (`Light.color`, `Camera.fov_y`) for the
+prims below it - directly on it and on its descendant nodes - to inherit,
+and takes a style whose target is any of those classes
+(`Item_base::style_applies`, `doc/editor/style_library.md` D3). `Mesh`'s
+computed world bounds are left out by the D30 rule. The editor's `Style` item names the root type the same
 way and so holds every class's values (`doc/editor/style_library.md` D2). `ERHE_node` carries the held values in its `properties`
 map by qualified name and the node's style by name (`style`).
 
@@ -1649,7 +1636,7 @@ Gradient and curve parameters have no `Property_value` form and stay in
   `Hierarchy`, reparent, clone), `test_item_visibility.cpp` (derived
   bits), `test_item_sealing.cpp` (`lock_edit` seal sync).
 - `src/erhe/scene/test/`: `test_node_properties.cpp` (bridged transform),
-  `test_attachment_inheritance.cpp` (mesh inherits from its node),
+  `test_prim_inheritance.cpp` (mesh inherits from its node),
   `test_light_properties.cpp`, `test_camera_properties.cpp`,
   `test_node_computed.cpp` (world properties, `child_count`, mesh bounds).
 - `src/erhe/primitive/test/test_material_style.cpp` (the `Brushed metal`
@@ -1664,11 +1651,6 @@ Gradient and curve parameters have no `Property_value` form and stay in
   `erhe::property::initialize_logging()` first; the first library log
   call otherwise dereferences a null logger (bit the editor, the example
   and the test mains).
-- `Node_attachment::set_node` holds a `shared_ptr` to itself for its
-  duration: `Node::~Node` / `Node::detach` reach it through a raw pointer
-  and `handle_remove_attachment` can erase the last owning `shared_ptr`
-  mid-call, and the inheritance snapshot apply touches the object after
-  that point.
 - `Material_preview::render_preview(texture, material)` generates the
   mipmap levels below the rendered one after the render; without that a
   thumbnail sampled at a fraction of its size reads uninitialized memory
@@ -1826,8 +1808,8 @@ the reference pushes it again: the editor's `Node_physics` subscribes an
 any-property observer (D21) to its material whenever its
 `physics_material` property is set (and in its constructors, which copy
 the create info), with `reapply_physics_material()` as the callback; the
-token lives in the attachment, so the callback never outlives it, and a
-material edit from any writer - Properties row, `Property_set_operation`,
+token lives in the scene's node physics system, so the callback never
+outlives the body, and a material edit from any writer - Properties row, `Property_set_operation`,
 MCP `edit_physics_material` or `set_item_property`, glTF import - reaches
 every live body through the `IRigid_body` interface. The Properties
 window draws the material as generic rows only.
@@ -1909,8 +1891,7 @@ values gets the defaults). Each hint's `visible_when` is "the object is a Node
 whose parent node is a layout node" (section 4.13), the grid hints
 additionally "that layout is a grid" and `grid_cell` "and `grid_cell_auto` is
 off", so the D12 rule lists the rows on exactly the children a layout
-arranges. There is no per-child attachment class, catalog entry or
-hand-written row; a hint rides the child node's `ERHE_node` properties map
+arranges. There is no per-child class or hand-written row; a hint rides the child node's `ERHE_node` properties map
 (D14) by its qualified name.
 
 ### 4.15 Rendertarget_mesh
@@ -1987,7 +1968,7 @@ The Light (section 4.3), Camera (section 4.4), Node_physics (section
 member-backed (bridged, D18) registration is always local, so no node,
 folder or style can hold it and no descendant inherits it, and moving it
 to the entry store is what makes it holdable. A property that models "this body
-instance" belongs to the attachment; one that models "what kind of matter
+instance" belongs to the node; one that models "what kind of matter
 this is" belongs to the shared material (Node_physics kept the KHR motion
 fields and its role, the physics material took damping, wind receptivity
 and density) - settle that split before registering anything.
@@ -2067,10 +2048,10 @@ every migration:
    is required by the node tools, item ids reshuffle per launch):
    `get_addable_item_properties` on an empty node lists `<Owner>.<name>`
    for every migrated field; `set_item_property` of one on the node and
-   `null` on the attachment below makes the attachment read it with
+   `null` on the prim below makes that prim read it with
    source `inherited`; `create_style` plus `set_item_property` of
    `<Owner>.<name>` on the style and the style on the node reads
-   `inherited` on the attachment too; the engineered struct reflects it
+   `inherited` on the prim too; the engineered struct reflects it
    (`get_node_details` / the owner's query tool); `save_scene`,
    `open_scene`: sources are still `inherited`; `close_scene` and
    `scene-close check: all N released` in the log.
@@ -2116,8 +2097,8 @@ are its own, and a limit set shared by several bones is a Style holding the
 `Ik.*` values, which D30 makes possible on any item. Each carries the same
 `visible_when` - "the object is a Node carrying `Item_flags::bone`" - so
 the D12 listing rule offers the rows on bones, and a node that holds a
-local value still lists it. There is no attachment class, no catalog entry
-and no `can_add` gate.
+local value still lists it. There is no class of its own and no `can_add`
+gate.
 
 `pole_target` is the weak reference kind (D28,
 `reference_item_types = erhe::Item_type::xformable`), so a pole is a
@@ -2358,7 +2339,7 @@ the mirror, clone).
 
 ### 4.23 Attached value groups with a key property
 
-A retiring node attachment becomes a group of attached properties (R7, D3)
+A feature a node carries is a group of attached properties (R7, D3)
 of the node itself, registered by one class on one holder class under one
 UI group, and one value of the group is its KEY property
 (`doc/plans/node_attachments_to_properties.md` D1). The holder carries the
@@ -2557,7 +2538,7 @@ style layer is D25 and the reference layer is D33.
 - [plans/gltf_properties_extension.md](../plans/gltf_properties_extension.md) -
   the draft `ERHE_*_properties` extensions the serialization work needs.
 - [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
-  retiring the node attachments in favor of attached properties of the node.
+  the per-node features that are groups of attached properties of the node.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 
@@ -2577,7 +2558,7 @@ style layer is D25 and the reference layer is D33.
   `MCP server: listening` in `logs/log.txt`, then drive it with
   `python3 scripts/mcp_call.py <tool> '<json>'`. Useful id sources:
   `list_scenes`, `get_scene_nodes`, `get_scene_materials`,
-  `get_scene_lights`, `get_scene_cameras`, `get_node_details` (attachment
+  `get_scene_lights`, `get_scene_cameras`, `get_node_details` (child prim
   ids). `reparent_item` builds subtrees; `get_undo_redo_stack` shows the
   operations a check queued.
 - `capture_screenshot` works on the Metal swapchain (the same one-frame

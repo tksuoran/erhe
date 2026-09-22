@@ -224,7 +224,7 @@ public:
 // CSG boolean over parameters.items in order: the FIRST mesh-carrying content
 // node is the target (lhs), every following one is a tool (rhs). The result
 // geometry - composed in the target node's local space - REPLACES the target
-// mesh's primitives (node id, name, transform, children and physics attachment
+// mesh's primitives (node id, name, transform, children and rigid body
 // all survive), and the tool nodes are removed (their children reparent up,
 // like delete). Everything is one undoable compound operation.
 class Binary_mesh_operation : public Compound_operation

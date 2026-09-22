@@ -88,7 +88,7 @@ gesture operation).
 - **`find_scene("")` does not default to the single scene**, so MCP calls have
   to pass `scene_name` explicitly.
 - **`create_new_camera` and `create_new_light` omit `Item_flags::visible`** on
-  the nodes they create. `create_new_xform` had the same defect: an attachment
+  the nodes they create. `create_new_xform` had the same defect: a child prim
   syncs its visibility from the node on attach, so anything attached to an
   invisible empty node was invisibly stuck.
 - **Parallel per-asset evaluation.** The engine runs at most one

@@ -717,7 +717,7 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
         applied.push_back("new_name");
     }
     // Every list is a property, so the write reaches the bodies that use
-    // this filter through the attachment's observer (section 4.21); this
+    // this filter through the body's own observer (section 4.21); this
     // tool re-applies nothing of its own.
     if (args.contains("collision_systems")) {
         item->set_collision_systems(args["collision_systems"].get<std::vector<std::string>>());

@@ -66,7 +66,7 @@ fallback only.
   projection field of this extension or of the core camera that the map
   does not name is cleared again, so a camera that inherits it from its
   node (`doc/erhe/property_system.md` D30) still does after a reload.
-- `flags`: the camera attachment's persistent Item flags
+- `flags`: the camera prim's persistent Item flags
   (see [flags.md](flags.md)).
 
 ## Schema

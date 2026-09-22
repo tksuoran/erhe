@@ -80,7 +80,7 @@ constexpr std::string_view c_usd_card_visibility_attribute {"model:cardVisibilit
 constexpr std::string_view c_usd_draw_mode_color_attribute {"model:drawModeColor"};
 constexpr std::string_view c_usd_extents_hint_attribute    {"extentsHint"};
 
-// The class name of the erhe attachment a draw-mode record becomes, which is
+// The class name of the erhe value group a draw-mode record becomes, which is
 // what qualifies the record's properties wherever a value of one travels by
 // name - an instance override, a variant opinion, a class prim's opinions
 // (erhe::scene::find_override_property_target).

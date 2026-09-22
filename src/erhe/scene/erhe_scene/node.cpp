@@ -1,5 +1,4 @@
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
@@ -222,7 +221,6 @@ Node_data::Node_data(const Node_data& src, for_clone)
     : transforms{src.transforms}
     , host      {nullptr} // clone is created as not attached to anything
 {
-    // Attachments are handled in Xformable(const Xformable&)
 }
 
 Xformable::Xformable() = default;
@@ -241,22 +239,6 @@ Xformable::Xformable(const Xformable& src, for_clone)
     if (src.m_xform_op_stack) {
         m_xform_op_stack = std::make_unique<Xform_op_stack>(*src.m_xform_op_stack);
     }
-    for (const auto& src_attachment : src.get_attachments()) {
-        auto attachment_clone_item = src_attachment->clone_attachment();
-        auto attachment_clone = std::dynamic_pointer_cast<Node_attachment>(attachment_clone_item);
-        if (attachment_clone) {
-            // set_node(), not attach(): attach() ends in node_sanity_check(),
-            // and this object is still being constructed. Hierarchy's copy
-            // constructor has already deep-copied the children, and it cannot
-            // give them their back-link to this - no shared_ptr owns this yet,
-            // so shared_from_this() is unavailable. The back-links are wired by
-            // adopt_orphan_children() at the clone's first set_parent(), and
-            // until then the whole-subtree invariant the check tests simply
-            // does not hold: running it here reported every cloned child as
-            // "child <name> parent == (none)".
-            attachment_clone->set_node(this);
-        }
-    }
 }
 
 Xformable::~Xformable() noexcept
@@ -269,11 +251,6 @@ Xformable::~Xformable() noexcept
         get_depth(),
         get_child_count()
     );
-
-    while (!node_data.attachments.empty()) {
-        // Causes trigger Xformable::handle_remove_attachment() calls to this Xformable
-        node_data.attachments.back()->set_node(nullptr);
-    }
 }
 
 auto Xformable::shared_node_from_this() -> std::shared_ptr<Xformable>
@@ -331,112 +308,9 @@ void Xformable::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_it
     }
 }
 
-#pragma region Xformable attachments
-void Xformable::attach(const std::shared_ptr<Node_attachment>& attachment)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(attachment);
-
-    log->trace("{} (attach({} {})", describe(), attachment->get_type_name(), attachment->get_name());
-
-    attachment->set_node(this);
-    node_sanity_check();
-}
-
-auto Xformable::detach(Node_attachment* attachment) -> bool
-{
-    ERHE_PROFILE_FUNCTION();
-
-    if (!attachment) {
-        log->warn("empty attachment, cannot detach");
-        return false;
-    }
-
-    log->trace("{} (detach({} {})", get_name(), attachment->get_type_name(), attachment->get_name());
-
-    auto* node = attachment->get_node();
-    if (node != this) {
-        log->warn(
-            "Attachment {} {} node {} != this {}",
-            attachment->get_type_name(),
-            attachment->get_name(),
-            node ? node->get_name() : "(none)",
-            get_name()
-        );
-        return false;
-    }
-
-    attachment->set_node(nullptr);
-    return true;
-}
-
-auto Xformable::get_attachment_count(const erhe::Item_filter& filter) const -> std::size_t
-{
-    std::size_t result{};
-    for (const auto& attachment : node_data.attachments) {
-        if (filter(attachment->get_flag_bits())) {
-            ++result;
-        }
-    }
-    return result;
-}
-
-void Xformable::for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback)
-{
-    Hierarchy::for_each_inheritance_child(callback);
-    for (const std::shared_ptr<Node_attachment>& attachment : node_data.attachments) {
-        if (attachment) {
-            callback(*attachment);
-        }
-    }
-}
-
 auto Xformable::get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type>
 {
     return erhe::Item_base::property_owner_type();
-}
-
-void Xformable::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachment, std::size_t position)
-{
-    ERHE_VERIFY(attachment);
-
-#ifndef NDEBUG
-    const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
-    if (i != node_data.attachments.end()) {
-        log->error("Xformable {} already has attachment {}", describe(), attachment->get_name());
-        return;
-    }
-#endif
-
-    log->trace("'{}'::handle_add_attachment '{}'", describe(), attachment->get_name());
-    position = std::min(node_data.attachments.size(), position);
-    node_data.attachments.insert(node_data.attachments.begin() + position, attachment);
-    erhe::bump_item_mutation_serial();
-}
-
-void Xformable::handle_remove_attachment(Node_attachment* const attachment_to_remove)
-{
-    ERHE_VERIFY(attachment_to_remove != nullptr);
-
-    const auto i = std::remove_if(
-        node_data.attachments.begin(),
-        node_data.attachments.end(),
-        [attachment_to_remove](const std::shared_ptr<Node_attachment>& entry) {
-            return entry.get() == attachment_to_remove;
-        }
-    );
-    if (i != node_data.attachments.end()) {
-        log->trace("Removing attachment '{}' from node '{}'", attachment_to_remove->get_name(), get_name());
-        node_data.attachments.erase(i, node_data.attachments.end());
-        erhe::bump_item_mutation_serial();
-    } else {
-        log->error(
-            "attachment '{}' cannot be removed from node '{}': attachment not found",
-            attachment_to_remove->get_name(),
-            get_name()
-        );
-    }
 }
 
 void Xformable::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
@@ -455,17 +329,7 @@ void Xformable::handle_flag_bits_update(const uint64_t old_flag_bits, const uint
             }
         }
     }
-    for (const auto& attachment : get_attachments()) {
-        attachment->handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
-    }
 }
-
-auto Xformable::get_attachments() const -> const std::vector<std::shared_ptr<Node_attachment>>&
-{
-    return node_data.attachments;
-}
-
-#pragma endregion Xformable attachments
 
 auto Xformable::get_item_host() const -> erhe::Item_host*
 {
@@ -492,12 +356,12 @@ void Xformable::handle_parent_update(erhe::Hierarchy* const old_parent_item, erh
     Typed::handle_parent_update(old_parent_item, new_parent_item);
 
     // A plain reparent keeps parent_from_node, so world_from_node changes:
-    // refresh it eagerly and notify attachments / queue the subtree for
-    // propagation, like the transform setters do. (World-preserving reparent
-    // flows adjust the local transform afterwards through a setter, which
-    // repeats this - harmless.) Skipped when detaching (new parent null,
-    // e.g. scene teardown): attachments may already be severed from their
-    // host resources there.
+    // refresh it eagerly and notify the transform observers / queue the
+    // subtree for propagation, like the transform setters do. (World-
+    // preserving reparent flows adjust the local transform afterwards through
+    // a setter, which repeats this - harmless.) Skipped when detaching (new
+    // parent null, e.g. scene teardown): the prims below may already be
+    // severed from their host resources there.
     if (new_parent_item != nullptr) {
         update_world_from_node();
         handle_transform_update(0);
@@ -526,11 +390,7 @@ void Xformable::handle_item_host_update(erhe::Item_host* const old_item_host, er
         node_data.host = nullptr; // Orphan
     }
 
-    // This must come *after* node_data.host has been updated
-    for (const auto& attachment : node_data.attachments) {
-        attachment->handle_item_host_update(old_item_host, new_item_host);
-    }
-
+    // This must come *after* node_data.host has been updated.
     // Every prim child, not only the transformable ones: a Scope between this
     // node and a node below it carries the host through (C5).
     for (const auto& child : get_children()) {
@@ -560,9 +420,6 @@ void Xformable::handle_transform_update(const uint64_t serial)
 
     node_data.transforms.parent_from_node_serial = effective_serial;
     node_data.transforms.world_from_node_serial  = effective_serial;
-    for (const auto& attachment : node_data.attachments) {
-        attachment->handle_node_transform_update();
-    }
     if (m_transform_observers) {
         m_transform_observers->notify(*this);
     }
@@ -691,21 +548,6 @@ void Xformable::node_sanity_check(bool destruction_in_progress) const
                 child->get_name(),
                 (child_host  != nullptr) ? child_host ->get_host_name() : "(none)",
                 (child_scene != nullptr) ? child_scene->get_name() : "(none)"
-            );
-        }
-    }
-
-    for (const auto& attachment : node_data.attachments) {
-        auto* node = attachment->get_node();
-        if (node != this) {
-            log->error(
-                "Xformable '{}' attachment {} '{}' node == '{}'",
-                get_name(),
-                attachment->get_type_name(),
-                attachment->get_name(),
-                (node != nullptr)
-                    ? node->get_name()
-                    : "(none)"
             );
         }
     }

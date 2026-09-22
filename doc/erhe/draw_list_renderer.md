@@ -428,7 +428,7 @@ Drawing:
 - R10b (determinant stability, resolves Q11): `negative_determinant` is baked
   into list identity. Registration samples it from the node's current world
   transform (`world_from_node()` determinant), not from the mesh's
-  `Item_flags::negative_determinant` bit: `Node_attachment::set_node` calls
+  `Item_flags::negative_determinant` bit: the mesh's own parenting calls
   `handle_item_host_update` (and thus `register_mesh`) *before*
   `handle_node_transform_update` (which sets the flag), so a mesh attached
   under a mirrored parent would otherwise register with the flag clear and flip

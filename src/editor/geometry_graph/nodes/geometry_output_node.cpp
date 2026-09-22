@@ -143,7 +143,7 @@ void Geometry_output_node::on_removed_from_graph()
 {
     Geometry_graph_node::on_removed_from_graph();
     // An output leaving the graph must not strand its last bake on bound
-    // attachments: publish an empty bake (attachments clear their mesh on
+    // bound nodes: publish an empty bake (a bound node clears its mesh on
     // the next push).
     const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
     if (owning_graph_mesh) {
@@ -283,7 +283,7 @@ void Geometry_output_node::evaluate(Geometry_graph& graph)
 
     // Houdini template flag: bake the ghost node's geometry as an
     // edge-lines-only companion. No raytrace (invisible to hover /
-    // picking) and no physics; the consuming attachment renders it
+    // picking) and no physics; the consuming node renders it
     // through the dedicated ghost edge-lines pass (render_wireframe
     // flag). The fill primitive types are built too - the primitive
     // builder's fill path is its primary path - but no composition pass
@@ -328,8 +328,8 @@ void Geometry_output_node::apply_evaluated_to_scene()
     // pushes right after this). The node never creates scene content
     // itself: an asset with no bound node renders nothing - exactly like
     // a Graph_texture no material samples. A null geometry publish tells
-    // attachments to clear their mesh. Publishing needs no scene root
-    // (attachments resolve a material fallback from their own scene);
+    // bound nodes to clear their mesh. Publishing needs no scene root
+    // (a bound node resolves a material fallback from its own scene);
     // m_material stays whatever the node's parameter selected, if any.
     // Graphs only live in the content library, so the owner is always
     // set for a node in a graph.

@@ -1,7 +1,7 @@
 // A prim inherits visible / shadow_cast / lightmapped from its parent prim
-// (D23 in doc/erhe/property_system.md), and a node's attachments inherit from
-// their node. A Mesh is a child prim (doc/erhe/usd_compatibility_design.md C5), so
-// its inheritance parent is the prim it is parented to.
+// (D23 in doc/erhe/property_system.md). A Mesh is a child prim
+// (doc/erhe/usd_compatibility_design.md C5), so its inheritance parent is the
+// prim it is parented to.
 
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -36,7 +36,7 @@ public:
 
 } // namespace
 
-TEST(Attachment_inheritance, mesh_inherits_from_its_node)
+TEST(Prim_inheritance, mesh_inherits_from_its_node)
 {
     auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
@@ -54,7 +54,7 @@ TEST(Attachment_inheritance, mesh_inherits_from_its_node)
     EXPECT_EQ(mesh->visible_updates, 2);
 }
 
-TEST(Attachment_inheritance, mesh_follows_an_ancestor_hide)
+TEST(Prim_inheritance, mesh_follows_an_ancestor_hide)
 {
     auto root  = std::make_shared<Xform>("root");
     auto child = std::make_shared<Xform>("child");
@@ -68,7 +68,7 @@ TEST(Attachment_inheritance, mesh_follows_an_ancestor_hide)
     EXPECT_EQ(mesh->visible_updates, 1);
 }
 
-TEST(Attachment_inheritance, local_true_on_mesh_survives_node_hide)
+TEST(Prim_inheritance, local_true_on_mesh_survives_node_hide)
 {
     auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
@@ -80,7 +80,7 @@ TEST(Attachment_inheritance, local_true_on_mesh_survives_node_hide)
     EXPECT_EQ   (mesh->visible_updates, 0);
 }
 
-TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
+TEST(Prim_inheritance, moving_between_nodes_notifies_once_with_old_value)
 {
     auto hidden = std::make_shared<Xform>("hidden");
     auto shown  = std::make_shared<Xform>("shown");
@@ -128,7 +128,7 @@ TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
     EXPECT_FALSE(seen); // default true, unchanged
 }
 
-TEST(Attachment_inheritance, shadow_cast_on_group_reaches_meshes_without_local_value)
+TEST(Prim_inheritance, shadow_cast_on_group_reaches_meshes_without_local_value)
 {
     auto group    = std::make_shared<Xform>("group");
     auto node_a   = std::make_shared<Xform>("a");

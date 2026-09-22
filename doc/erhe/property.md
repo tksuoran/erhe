@@ -284,15 +284,14 @@ registrations), and the object forms `find_for_object(object, name)` /
 owning type. A holder never runs a secondary property's `property_changed`
 metadata callback (it belongs to the registering class); the virtual hook
 and observers run as usual. The editor's content-library folder and
-`erhe::scene::Node` (secondary type `Node_attachment`) are the users.
+`erhe::scene::Node` (secondary type `Item_base`) are the users.
 
 ## Inheritance
 
 `inherits` metadata makes a property without a local value read the closest
 ancestor's effective value through two virtuals the object provides
 (`get_inheritance_parent`, `for_each_inheritance_child`; `erhe::Hierarchy`
-implements them, `erhe::scene::Node` adds its attachments as children,
-`Node_attachment` names its node as parent, and an `Item_base` with no
+implements them, and an `Item_base` with no
 structural parent names the container that holds it -
 `set_inheritance_container`, maintained by the editor's content-library
 node, which visits the item as a child). Inherited values are not cached: a read walks up until an

@@ -41,7 +41,7 @@ it runs, and the list of what is and is not persisted, is
 | erhe state | glTF mechanism |
 |---|---|
 | node tree, TRS, names | core |
-| node Item flags plus mesh-attachment Item flags | `ERHE_node` extension |
+| node Item flags plus mesh-prim Item flags | `ERHE_node` extension |
 | cameras (interchange approximation) | core cameras, lossy by design |
 | camera full projection (all 9 `Projection::Type`s, asymmetric fov / ortho / frustum fields, z_near / z_far), exposure, shadow_range, Item flags | `ERHE_camera` extension; core cameras carry only yfov / aspect plus xmag / ymag and cannot express erhe's `Projection` |
 | lights (type, color, intensity, range, spot angles) | KHR_lights_punctual |
@@ -82,10 +82,10 @@ persisted.
 - Item flags serialize as name lists, never as raw bit values: `Item_flags`
   bit positions are not stable across erhe versions. Unknown names are ignored
   on load, so the sets can grow.
-- Attachment Item flags ride the extension that describes the attachment:
-  `ERHE_camera` and `ERHE_light` each carry an optional `flags` list. Mesh-attachment flags ride `ERHE_node`, because core meshes have no
-  erhe payload of their own and the erhe `Mesh` attachment is per-node while
-  glTF meshes are shareable.
+- A child prim's Item flags ride the extension that describes it:
+  `ERHE_camera` and `ERHE_light` each carry an optional `flags` list. Mesh
+  flags ride `ERHE_node`, because core meshes have no erhe payload of their
+  own and the erhe `Mesh` prim is per-node while glTF meshes are shareable.
 
 ## Phase 0 - Exporter completeness
 
@@ -221,12 +221,12 @@ All payloads are built by the editor layer (as `build_gltf_physics_data` is)
 and carried through the phase-1 generic extension passthrough, so `erhe::gltf`
 stays editor-agnostic. The exporter offers a hook so the editor can attach
 extension JSON to an arbitrary exported object and can exclude
-editor-controlled attachments.
+editor-controlled meshes.
 
 - **Exclusion hook**: graph-mesh-controlled meshes and the rigid bodies they gave their nodes
   are baked artifacts, rebuilt on load, and are not exported.
 - `ERHE_node` (node extension): node Item flags as a name list, plus the
-  node's mesh-attachment Item flags.
+  node's mesh-prim Item flags.
 - `ERHE_camera` (camera extension): the FULL `erhe::scene::Projection`
   (projection_type, all 9 values; fov_x / fov_y / fov_left / right / up / down;
   ortho_left / width / bottom / height; frustum_left / right / bottom / top;

@@ -341,6 +341,6 @@ Rows that are not properties and stay hand-written: read-only
 diagnostics (geometry and buffer mesh counts, texture dimensions,
 raytrace state, skin joints, rigid body label / position / activity /
 shape / inertia, brush polygon counts, the id and the flag word), and list
-editors of records (attachments, samplers, animation channels and
+editors of records (value groups, samplers, animation channels and
 samplers). A list of scalars is not one of them:
 it is an array property (D34).

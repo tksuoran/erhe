@@ -200,7 +200,7 @@ void Ik_drag::discover_pole()
 {
     // R10: a two-joint chain has no intermediate joint, so a pole could not
     // act on it. That is a legitimate short chain, so it is left unpoled
-    // without a warning and without reading any attachment.
+    // without a warning and without reading any pole value.
     if (m_joints.size() < 3) {
         return;
     }

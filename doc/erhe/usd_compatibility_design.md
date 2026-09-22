@@ -63,16 +63,18 @@ Constraints every step respects:
   may parent any other prim, and a resource (a material, a texture, a
   brush, a style, a physics material, a node graph) is a prim in that
   same tree, conventionally gathered under a `Scope`. A typed prim is a
-  child prim of its parent, never an attachment of it, and a parent may
-  hold several `Mesh` children. Every class under `Xformable` carries a
+  child prim of its parent, and a parent may hold several `Mesh`
+  children. Every class under `Xformable` carries a
   transform, as erhe's `Node` does today (a `Mesh` under an `Xform`
   composes its own transform, identity unless authored, with its
   parent's); every class outside `Xformable` has none, and a prim's
   world transform composes with its nearest `Xformable` ancestor, so a
-  transform passes through the prims that have none. What stays on a
-  prim as an attachment is exactly what USD applies to a prim as an API
-  schema (physics body and joint, layout hints, brush placement, prefab
-  instance carrier). glTF is a serialization of that tree, as USD is
+  transform passes through the prims that have none. What USD applies to a
+  prim as an API schema is a group of values of that prim itself
+  (physics body, layout, brush placement, draw mode;
+  `doc/plans/node_attachments_to_properties.md` D1), and a composition
+  arc is a record the carrier prim holds (D4). glTF is a serialization
+  of that tree, as USD is
   (G3): the glTF reader and writer map their node + mesh + flat resource
   lists onto it and back. The U steps of section 2 brought the model to
   this shape; an `Xformable`'s transform is the TRS its authored xformOp
@@ -146,7 +148,7 @@ now owns its behavior; `git log` on that record has the history.
 - U2 Mesh is a Gprim: `erhe::scene::Mesh` is `erhe::Item<Item_base,
   Gprim, Mesh>`, a child prim with its own transform; a parent holds any
   number of `Mesh` children; `get_mesh()`, `for_each_mesh_child()` and
-  `set_mesh_parent()` replace the attachment accessors
+  `set_mesh_parent()` are the accessors
   (`doc/erhe/scene.md`); the glTF reader folds a node with a mesh
   into one `Mesh` prim and the writer inverts it
   (`doc/editor/scene_serialization.md`); USD takes a `Mesh` prim as it stands
@@ -159,8 +161,7 @@ now owns its behavior; `git log` on that record has the history.
   `get_camera()` and `get_light()` are the helpers and no typed prim has
   a `get_node()` (`doc/erhe/scene.md`); the hierarchy
   context menu's "Create" lists every creatable prim kind, resources
-  included, on every prim row (child of the clicked prim) and "Add
-  Attachment" the API-schema kinds (`scene/attachment_types.hpp`), the
+  included, on every prim row (child of the clicked prim), the
   hierarchy accepts a drag payload named for the prim's class, and MCP
   `get_node_details` carries `mesh` / `camera` / `light` on the node
   entry (`doc/agents/mcp_server_usage.md`). The interactive drag gesture has not
@@ -247,7 +248,7 @@ now owns its behavior; `git log` on that record has the history.
   a carrier without a stack lets the target's transform stand. An arc
   inside a template is instantiated through the same library (a cycle is
   refused); `Prefab_library::reload` refreshes a carrier with several arcs
-  from its first attachment.
+  from its first arc.
 - X2 Editable instances with sparse overrides: a USD reference is a
   composition arc, not a copy. Every item inside an instance names its
   template counterpart as its reference source
@@ -286,9 +287,8 @@ now owns its behavior; `git log` on that record has the history.
   (`doc/erhe/usd.md`); glTF carries the
   list as `ERHE_node.overrides` on the carrier
   (`doc/gltf_extensions/ERHE_node.md`); a prefab reload captures and
-  re-applies them. Attachments inside an instance (applied API schemas)
-  are not walked for overrides (`doc/plans/usd_compatibility.md`,
-  "Overrides on applied API schemas inside an instance"). MCP
+  re-applies them. An applied API schema's attributes are values of the prim
+  itself, so the prim walk covers them. MCP
   `set_prefab_template_property` edits a template in place.
 - X3 Class inheritance: a `class` prim is a Style item. The reader takes
   the class prims off the composed layer's own prim specs (Tydra never walks
@@ -506,7 +506,7 @@ now owns its behavior; `git log` on that record has the history.
   (`link_carrier_values_to_target`, D9). A prim whose own mode asks for a
   proxy takes its children's subtrees out of render, pick and simulation
   (`Item_base::set_prunes_children`, ANDed into the derived active bit;
-  the prim and its attachments stay) and supplies the proxy: `bounds` and
+  the prim itself stays) and supplies the proxy: `bounds` and
   `origin` as lines per viewport from `Draw_mode_renderer` (the authored
   `extentsHint`, else the measured bounds of the meshes below), `cards` as
   a session-only child `Mesh` flagged `Item_flags::draw_mode_proxy`

@@ -395,9 +395,8 @@ struct Gltf_parse_arguments
 [[nodiscard]] auto sniff_image_mime_type(const std::vector<std::byte>& bytes) -> std::string;
 
 // A glTF 2.1 external-asset reference to write on export: nodes mapped to
-// one of these are written with "externalAsset" (children and attachments
-// are not exported - the instantiated content comes from the referenced
-// file), creating deduplicated "files" / "externalAssets" entries.
+// one of these are written with "externalAsset" (children are not exported -
+// the instantiated content comes from the referenced file), creating deduplicated "files" / "externalAssets" entries.
 class Gltf_export_external_asset
 {
 public:
@@ -522,7 +521,7 @@ public:
     // Extension names to declare in the asset's extensionsUsed (for the
     // extension_payloads above).
     std::vector<std::string> extensions_used{};
-    // Mesh attachments to skip in the node pass (the node exports without
+    // Mesh prims to skip in the node pass (the node exports without
     // its mesh): baked artifacts that are rebuilt on load, e.g. graph-mesh
     // controlled meshes (doc/editor/gltf_scene_roundtrip.md phase 3
     // exclusion hook).

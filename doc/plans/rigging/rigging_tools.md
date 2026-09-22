@@ -260,7 +260,7 @@ Deliverable: build a simple skeleton from scratch in the editor and pose it.
 The architectural core: a persistent, ordered constraint stack evaluated in
 the scene update. Modeled on Blender's proven shape (see survey).
 
-- **Data model**: `Constraint` as a node attachment or per-node ordered list;
+- **Data model**: `Constraint` as a value group of the node or a per-node ordered list;
   common fields: enabled, influence 0..1, target node (+ optional
   space-defining node), owner/target space (world / parent / local). Evaluated
   head-to-tail, each constraint seeing the previous result; influence blends

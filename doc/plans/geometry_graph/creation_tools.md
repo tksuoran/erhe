@@ -48,7 +48,7 @@ the uid-based reference persistence in the same plan.
   shared `item_reference_imgui` widget, which `transform_from_node` already
   uses.
 - Hovering the graph's Output node could highlight the BOUND scene nodes, via
-  the sweep `apply_baked_products_to_attachments` performs (zero or many
+  the sweep `apply_baked_products_to_bound_nodes` performs (zero or many
   nodes). Deliberately skipped in the first cut.
 - The Laplacian `smooth` MCP operation explodes meshes. It is unfiled and
   unusable; fix it when a creation needs it.

@@ -60,7 +60,7 @@ editor subsystems                  scene graph, brushes, geometry,
 | Creation feature | Editor feature underneath |
 |---|---|
 | `create_shape` (box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, regular_polyhedron, convex_hull, sweep) | The Create-window brush generators (`Create_box`, `Create_uv_sphere`, ...) and `erhe_geometry::shapes` generators (`make_convex_hull` via Geogram Delaunay, `make_sweep` - closed profile swept along a bezier spine with parallel-transported frames) |
-| One-call posed placement (`position`, `rotation_xyzw`, `scale`, `mass`, `motion_mode`, `parent_node_id`) | `Brush` instancing (`place_brush_in_scene`), node TRS transforms, rigid-body creation with inertia rescale; `motion_mode: "none"` detaches the physics attachment for pure-visual parts |
+| One-call posed placement (`position`, `rotation_xyzw`, `scale`, `mass`, `motion_mode`, `parent_node_id`) | `Brush` instancing (`place_brush_in_scene`), node TRS transforms, rigid-body creation with inertia rescale; `motion_mode: "none"` removes the rigid body for pure-visual parts |
 | Geometry reuse: pooled brushes, `place_brush`, `place_brush_instances` (N placements, one frame, one undo entry, `parent_index` chaining), pose nodes for scaled parents | The **content library** (per-scene brush/material/texture collections): every placement of one brush shares its `Primitive` (GPU buffers, raytrace shape); brushes persist in saved scenes via the `ERHE_brushes` glTF extension |
 | `create_node` groups / joint anchors (mandatory one-subtree-per-object hierarchy) | Scene graph nodes with world-preserving reparent (`Node::set_parent`), `Item_insert_remove_operation` |
 | `set_node_transform` (absolute, selection-free, undoable) | `Node_transform_operation`; teleports the rigid body to the pose without impulses |
@@ -79,7 +79,7 @@ validated before any placement applies.
 
 | Creation feature | Editor feature underneath |
 |---|---|
-| `csg` (union/intersection/difference, batched tool lists, world-space composed) | The CSG boolean mesh operation: replaces the target's primitives in place (id, transform, children, material, physics attachment survive), removes the tool nodes, rebuilds collision as a convex hull |
+| `csg` (union/intersection/difference, batched tool lists, world-space composed) | The CSG boolean mesh operation: replaces the target's primitives in place (id, transform, children, material, rigid body survive), removes the tool nodes, rebuilds collision as a convex hull |
 | `lattice_deform` (sparse FFD control-point offsets, bezier/linear, auto-fit cage) | Free-form deformation over the mesh's local bounds - billowed sails, bent trim strips, rippled pennants |
 | `chamfer`, `remesh`, `decimate`, `smooth`, `catmull_clark`, `merge_faces`, ... with `node_ids` batches (no selection dance) | The async geometry operation framework (`operations/geometry_operations.*`): queued, undoable, previous selection restored server-side; edited pooled instances silently go private |
 | `merge_static_subtree` | Transform-flattening operation that bakes a subtree into few nodes (built for the 11k-node tree garden -> 372 nodes, ~31 ms -> ~4 ms) |
@@ -118,7 +118,7 @@ with per-course verification and retry.
 | Creation feature | Editor feature underneath |
 |---|---|
 | `capture_screenshot` (both builds) | Headless: synchronous emulated-swapchain readback; windowed: one-shot swapchain copy armed a frame ahead (`Device::request_frame_capture`) - captures the editor's own composited frame, immune to window occlusion |
-| `get_scene_nodes`, `get_node_details` (transforms, attachments, per-mesh `world_aabb`, subtree-merged `subtree_world_aabb`) | Scene graph introspection; the subtree AABB feeds `common.frame()` camera auto-fit in one call |
+| `get_scene_nodes`, `get_node_details` (transforms, child prims, per-mesh `world_aabb`, subtree-merged `subtree_world_aabb`) | Scene graph introspection; the subtree AABB feeds `common.frame()` camera auto-fit in one call |
 | `geometry_query` (batched raycasts + closest-point-on-mesh), `raycast`, `pick_at` | The editor's raytrace scene (same mask as the viewport hover ray) and closest-point queries - probe the *actual* surface instead of guessing offsets (convex hulls bulge past their authored points) |
 | `get_async_status` (pending + running + queued operations) | The async operation queue - `common.settle()` polls it to zero instead of sleeping fixed amounts |
 | `batch` (N tool calls, one request, one frame, one undo entry) | Server-side sub-call dispatch for burst construction |

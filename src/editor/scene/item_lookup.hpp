@@ -13,7 +13,7 @@ namespace editor {
 class App_context;
 class Scene_root;
 
-// Any item of a scene by unique id or by name: nodes, their attachments
+// Any item of a scene by unique id or by name: nodes, their child prims
 // (meshes, lights, cameras, ...), the content library's materials and
 // textures, and its graph assets with their nodes. Name lookup returns the
 // first match in that order.
@@ -45,8 +45,7 @@ class Scene_root;
 // Object reference candidates (doc/erhe/property_system.md D28): the items of
 // the target's scene whose type bit is in item_types and that are shown in
 // the UI (developer-only items in developer mode) - the content library
-// items, and the scene's nodes and node attachments (a node-typed
-// reference lists scene nodes). Clears `out` first; the caller clears it
+// items, and the scene's prims (a node-typed reference lists scene nodes). Clears `out` first; the caller clears it
 // again after the draw so the strong references do not outlive the frame.
 void collect_reference_candidates(
     App_context&                                   context,

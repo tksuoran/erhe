@@ -952,7 +952,7 @@ rest.
 property name any variant of the set authors, read before the selected
 variant's opinions were applied. It is read through the same
 `erhe::scene::find_override_property_target` the application uses, so a value
-of an applied API schema is read off the prim's attachment and put back there,
+of an applied API schema is read off the prim itself and put back there,
 and a `Draw_mode.<property>` name a variant authors is a value of the prim
 whichever variant is selected. A property with no local value there is a
 `cleared` entry, so putting it back clears rather than writes. This is what
@@ -1342,7 +1342,7 @@ is the "Physics" table of `doc/erhe/usd_compatibility.md`; the rules the read
 follows are:
 
 - A joint prim and the `PhysicsScene` prim are physics content rather than
-  prims of the scene tree: a joint is an attachment of the prim it joins and
+  prims of the scene tree: a joint is written below the prim it joins and
   the scene prim is the physics world's gravity, so the conversion leaves
   both out of the tree and the physics record is where they travel. Every
   other physics prim - a body, a collider, a physics material, a collision
@@ -1450,10 +1450,9 @@ is. A card texture's asset path is resolved against the stage file's own
 directory, as an image's is; one packed inside a `.usdz` is named in a warning
 and left as the path beside the archive, since the record carries no bytes.
 
-The attributes are values of the prim's draw-mode attachment rather than of
-the prim, so a variant block or an `over` carries one under the name
-`Draw_mode.<property>` - the spelling `erhe::scene::find_override_property_target`
-resolves through the attachments of the prim. `is_carried_spec_property`
+The attributes are draw-mode values of the prim, so a variant block or an
+`over` carries one under the name `Draw_mode.<property>` - the spelling
+`erhe::scene::find_override_property_target` resolves on the prim. `is_carried_spec_property`
 admits them, so a `GeomModelAPI` opinion inside a variant block is a carried
 opinion rather than one counted in
 `Usd_variant_set::unsupported_opinion_count`. `extentsHint` carries the min
@@ -1462,7 +1461,7 @@ and the max in one `float3[]`, so it reads as the two values
 back from the pair. A value of this family travels in the record's own
 vocabulary - erhe's three draw-mode enumerations spell USD's tokens verbatim -
 so both the read and the write spell the text themselves rather than asking
-the property registry, which the editor's attachment owns.
+the property registry, which the editor owns.
 
 
 ## Export

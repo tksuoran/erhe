@@ -36,7 +36,7 @@ name the shared-layer pieces that source comments cite.
 3. [Canvas rendering (native resolution)](#canvas-rendering-native-resolution)
 4. [The shared layer (`src/editor/graph_editor/`)](#the-shared-layer-srceditorgraph_editor)
 5. [Per-editor code](#per-editor-code)
-6. [Assets, attachments and the consumption model](#assets-attachments-and-the-consumption-model)
+6. [Assets, bindings and the consumption model](#assets-bindings-and-the-consumption-model)
 7. [Evaluation](#evaluation)
 8. [Serialization and persistence](#serialization-and-persistence)
 9. [MCP surface](#mcp-surface)
@@ -290,7 +290,7 @@ What stays specific to each editor:
 
 ---
 
-## Assets, attachments and the consumption model
+## Assets, bindings and the consumption model
 
 Both graphs produce a content-library asset, but they are consumed differently -
 deliberately.
@@ -333,7 +333,7 @@ while clean nodes keep their cached output payloads. The two editors differ in
   interactive during evaluation; on completion the payloads (and the output
   node's evaluated scene products) are copied back on the main thread. The output
   node is two-phase: the worker builds the geometry / primitive / hull, the main
-  thread applies them to the asset and pushes to bound attachments. MCP queries
+  thread applies them to the asset and pushes to bound nodes. MCP queries
   that need settled state (`get_geometry_graph`, save) block on
   `wait_for_idle_evaluation()` - eventual-consistency is the MCP contract.
 - **Texture graph - synchronous.** Composition is cheap (string GLSL assembly);
@@ -412,7 +412,7 @@ in-editor MCP server (headless Vulkan build):
 - `scripts/geometry_nodes_smoke_test.py` - **129 checks** (every node type,
   parameter sweeps with undo/redo, incremental-evaluation proof, multi-link join,
   structural churn with deep undo/redo, invalid-connect rejection, the Graph Mesh
-  asset + attachment create/bind/re-bake/physics/unbind + scene save/load
+  asset + binding create/bind/re-bake/physics/unbind + scene save/load
   round-trip, stress chains).
 - `scripts/texture_graph_smoke_test.py` - **266 checks** (every node's pins +
   defaults, parameter round-trips, connect/disconnect rules, undo/redo, and the
@@ -444,7 +444,7 @@ Shared editor layer: `src/editor/graph_editor/*` (see the table above).
 Geometry graph: `src/editor/geometry_graph/` - `geometry_graph`,
 `geometry_graph_node`, `geometry_graph_node_factory`, `geometry_graph_operations`
 (traits), `geometry_graph_window`, `geometry_payload`, `graph_mesh`,
-`graph_mesh_serialization`, `geometry_graph_mesh` (the attachment), `nodes/*`.
+`graph_mesh_serialization`, `geometry_graph_mesh` (the binding), `nodes/*`.
 
 Texture graph: `src/editor/texture_graph/` - `texture_graph`,
 `texture_graph_node`, `texture_graph_node_factory`, `texture_graph_operations`

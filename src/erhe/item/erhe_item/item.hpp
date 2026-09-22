@@ -308,7 +308,6 @@ public:
     // joins, from the physics description.
     static constexpr uint64_t index_joint                  = 26;
     static constexpr uint64_t index_raytrace               = 27;
-    static constexpr uint64_t index_node_attachment        = 28;
     static constexpr uint64_t index_render_style           = 29;
     static constexpr uint64_t index_graph                  = 30;
     static constexpr uint64_t index_graph_node             = 31;
@@ -364,7 +363,6 @@ public:
     static constexpr uint64_t content_library_node   = (uint64_t{1} << index_content_library_node  );
     static constexpr uint64_t joint                  = (uint64_t{1} << index_joint                 );
     static constexpr uint64_t raytrace               = (uint64_t{1} << index_raytrace              );
-    static constexpr uint64_t node_attachment        = (uint64_t{1} << index_node_attachment       );
     static constexpr uint64_t render_style           = (uint64_t{1} << index_render_style          );
     static constexpr uint64_t graph                  = (uint64_t{1} << index_graph                 );
     static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
@@ -417,7 +415,7 @@ public:
         "Content_library_node",
         "Joint",
         "Raytrace",
-        "Node_attachment",
+        "(unused)", // bit 28 has no type
         "Render_style",
         "Graph",
         "Graph_node",
@@ -458,7 +456,7 @@ public:
 };
 
 // Monotonic counter incremented whenever item state that can affect item tree
-// rows changes: hierarchy children, node attachments, item names, and
+// rows changes: hierarchy children, item names, and
 // non-transient flag bits (see Item_flags::transient). Consumers (the editor
 // item tree) compare it across frames to detect when cached row lists are
 // stale. Item mutations are main-thread only; the counter is intentionally a
@@ -565,7 +563,7 @@ public:
     // For items whose host is tracked by an owning container (e.g. the
     // editor's content library): the container maintains this pointer on
     // add / remove / owner change. Types that derive their host from scene
-    // structure (Node, Node_attachment, Scene) override get_item_host()
+    // structure (Node, Scene) override get_item_host()
     // and do not use this member. Virtual so an item that owns further
     // items outside the container's view forwards the host to them (a
     // graph asset to its nodes).
@@ -575,7 +573,7 @@ public:
     // an item with no structural parent inherits property values from - the
     // content-library node wrapping it. Maintained by the container; null
     // outside one; not copied by copy / clone. Classes whose parent comes
-    // from scene structure (Hierarchy, Node_attachment) override
+    // from scene structure (Hierarchy) override
     // get_inheritance_parent() themselves and never read it.
     void set_inheritance_container(erhe::property::Dependency_object* container);
     [[nodiscard]] auto get_inheritance_container() const -> erhe::property::Dependency_object*;
@@ -736,8 +734,8 @@ public:
     // moved, for the whole subtree below it. Change-driven: called by the
     // changed callbacks of the active and defined properties, and by the
     // structural moves that can change what the parent is
-    // (Hierarchy::set_parent, Node_attachment::set_node,
-    // set_inheritance_container). An item whose bit did not move has a
+    // (Hierarchy::set_parent, set_inheritance_container). An item whose bit
+    // did not move has a
     // subtree that did not move either, so the walk stops there.
     void rederive_active_flag_bits();
 
@@ -748,18 +746,18 @@ public:
     // render, pick and simulation through the derived Item_flags::active bit,
     // the way an inactive prim's does. This is derived state of the item, not
     // an opinion a save persists: the persisted opinion is the draw mode
-    // itself, which the editor's Draw_mode attachment holds and mirrors here.
+    // itself, which the prim's `Draw_mode` values hold and mirror here.
     [[nodiscard]] auto prunes_children() const -> bool { return m_prunes_children; }
 
     // Sets that state and rederives the children's bits. Change-driven: the
-    // one call site is the attachment reacting to its own draw-mode value.
+    // one call site is the scene's draw-mode system reacting to a
+    // draw-mode value of the prim.
     void set_prunes_children(bool value);
 
 protected:
     // True when the item is a child whose parent draws it as part of a proxy
-    // of its own. Only a Hierarchy has such a parent: an attachment is an
-    // inheritance child of its node but not a child prim of it, so a pruning
-    // prim keeps its own attachments - the proxy is one of them.
+    // of its own. Only a Hierarchy has such a parent, so a pruning prim keeps
+    // the child prims it supplies itself - the proxy is one of them.
     [[nodiscard]] virtual auto is_pruned_by_parent() const -> bool { return false; }
 
 private:
@@ -777,7 +775,7 @@ protected:
     Unique_id<Item_base>                   m_id         {};
     uint64_t                               m_flag_bits  {Item_flags::visible | Item_flags::active}; // derived bits start at the property defaults
     // Derived state, not copied: a copy starts outside any tree and draws no
-    // proxy of its own until its draw-mode attachment says so.
+    // proxy of its own until its draw-mode values say so.
     bool                                   m_prunes_children{false};
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};

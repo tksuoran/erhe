@@ -20,7 +20,7 @@ namespace editor {
     bool                     convex_hull
 ) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
-// Convenience wrapper: builds from the Mesh attachment of a node.
+// Convenience wrapper: builds from the Mesh prim of a node.
 [[nodiscard]] auto build_shape_from_node_mesh(
     const erhe::scene::Node* node,
     bool                     convex_hull

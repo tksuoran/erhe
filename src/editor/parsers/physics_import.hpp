@@ -76,9 +76,9 @@ public:
 // Maps a format-neutral physics description onto editor physics: shared
 // Physics_material / Collision_filter / Physics_joint_settings content-library
 // items (placed in the loaded tree, or attached through library attach
-// operations appended to operations), Node_physics attachments (rigid bodies /
-// triggers, with compound folding of descendant colliders) and Joint prims
-// attachments. Must be called after mesh finalization (mesh-sourced collision
+// operations appended to operations), Node_physics values (rigid bodies /
+// triggers, with compound folding of descendant colliders) and Joint prims.
+// Must be called after mesh finalization (mesh-sourced collision
 // shapes need the built Geometry) and before the Compound_operation is
 // composed.
 void import_physics(

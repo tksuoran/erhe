@@ -291,8 +291,8 @@ public:
 
 // Whether a property list may set an object-valued property. A body's object
 // references (its physics material, its collision filter) are what the
-// collider records already gave the create info by identity - the attachment
-// has no item host while it is built, so a name could not resolve - so they
+// collider records already gave the create info by identity - the node has no
+// item host while the body is built, so a name could not resolve - so they
 // are kept and the rest of the list applies.
 enum class Object_property_handling : int {
     apply,
@@ -512,8 +512,8 @@ void import_physics(
     Physics_importer importer{.physics = physics};
 
     // Rigid-body state the neutral description has no field for, applied onto
-    // each body's create info before Node_physics construction and onto the
-    // attachment once it is built.
+    // each body's create info before the body is built and onto the body
+    // once it stands.
     const auto find_body = [&arguments](const erhe::scene::Node* node) -> const Physics_import_body* {
         const std::unordered_map<const erhe::scene::Node*, Physics_import_body>::const_iterator it = arguments.bodies.find(node);
         return (it == arguments.bodies.end()) ? nullptr : &it->second;

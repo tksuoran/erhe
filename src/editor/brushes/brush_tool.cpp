@@ -318,7 +318,7 @@ void Brush_tool::handle_priority_update(int old_priority, int new_priority)
 
 void Brush_tool::remove_preview_mesh()
 {
-    // Remove mesh attachment *before* removing node
+    // Release the mesh prim *before* removing the node
     if (m_preview_mesh) {
         m_preview_mesh.reset();
     }

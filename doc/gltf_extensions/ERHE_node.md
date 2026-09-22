@@ -18,8 +18,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
   (`doc/erhe/property_system.md` D14): the registered properties of `Node`
   by name, attached properties (D3) by their qualified
   `<owner>.<name>`, such as the `Layout.*` container values and per-child
-  layout hints, and the attachment-class
-  values the node holds for the attachments below it (D30, `Light.color`)
+  layout hints, and the other item classes'
+  values the node holds for the prims below it (D30, `Light.color`)
   by the same qualified form. Enumerations travel as their labels; an
   object reference travels as the referenced item's name and is resolved
   in the scene once the file's items exist (`doc/erhe/property_system.md`
@@ -86,8 +86,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
   receive them; a template reload re-reads the overrides off the clones
   and puts them back, so an edit inside an instance survives it.
 - `mesh_flags` (optional): the persistent Item flags of the node's mesh
-  attachment. They ride the node because core glTF meshes have no erhe
-  payload of their own and erhe `Mesh` attachments are per node while glTF
+  prim. They ride the node because core glTF meshes have no erhe
+  payload of their own and erhe `Mesh` prims are per node while glTF
   meshes are shareable.
 
 ## JSON layout

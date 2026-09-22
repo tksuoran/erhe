@@ -720,7 +720,7 @@ public:
     }
     if (owner == "Draw_mode") {
         // An applied API schema authors its attributes on the prim itself, so
-        // the draw-mode attachment's values are native in both forms.
+        // the prim's draw-mode values are native in both forms.
         const std::string_view attribute = usd_draw_mode_attribute_of_value_name(fmt::format("Draw_mode.{}", name));
         return attribute;
     }
@@ -3497,7 +3497,7 @@ private:
             }
             if (write_draw_mode_value(props, value.name, value.text, extents_hint_min, extents_hint_max)) {
                 // A `UsdGeomModelAPI` attribute of the prim's draw-mode
-                // attachment, authored in the schema's spelling.
+                // values, authored in the schema's spelling.
                 continue;
             }
             const erhe::property::Dependency_property* property = find_property_by_qualified_name(value.name);
@@ -6188,7 +6188,7 @@ private:
     // own vocabulary - a token for the three enumerations, `true` / `false`
     // for the flag, three numbers for the color, the authored asset path for
     // a card texture - so the text is spelled again here rather than parsed
-    // through the property registry, which the attachment owns. `extentsHint`
+    // through the property registry, which the editor owns. `extentsHint`
     // carries the min and the max in one array, so the two values are held
     // and written together (write_draw_mode_extents_hint).
     [[nodiscard]] auto write_draw_mode_value(

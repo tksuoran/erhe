@@ -2760,17 +2760,16 @@ private:
     // is spelled `erhe:Owner:name` on a prim (doc/erhe/usd_compatibility.md,
     // property system); `erhe:<name>` without a namespace component names a
     // property of the item's own class. The registry resolves the name
-    // against each item the prim maps to - the attachment the prim's type
-    // made first, then the node that carries it, which is what lets
-    // `erhe:Light:color` name either the light itself or a node-held
-    // attachment value. The USDA literal is converted to the property's text
+    // against each item the prim maps to, which is what lets
+    // `erhe:Light:color` name either the light itself or a node-held value
+    // of the light's class. The USDA literal is converted to the property's text
     // form and parsed with the D16 `from_string` of the property's type. A
     // name that resolves to no property, and a value that fails to parse or
     // to validate, cost one warning each and are skipped.
     // The erhe property one `erhe:` attribute name addresses, and the object
     // that holds it. Each candidate object is asked in turn - for a scene
-    // graph prim the attachment its type made, then the node that carries
-    // it; for a Material prim the material alone - and for each,
+    // graph prim the prim itself; for a Material prim the material alone -
+    // and for each,
     // `Owner.name` resolves either the way an editor holder addresses it (an
     // attached property, R7, or a secondary property the object holds for
     // another class, D30) or as `name` on an object of exactly the class
@@ -5123,8 +5122,8 @@ private:
     }
 
     // A prim that authors a `references` or `payload` arc is a carrier: the
-    // arcs become one prefab instance each, and an instance is a node
-    // attachment, so a carrier has to be transformable
+    // arcs become one prefab instance each, which a node holds, so a carrier
+    // has to be transformable
     // (doc/erhe/usd_compatibility_design.md X1, S1). USD gives a typeless
     // referencing prim the type of the composed target, which LightUSD does
     // not compose at load, so the prim erhe sees is typeless; erhe imports it
@@ -5218,7 +5217,7 @@ private:
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
         // A joint prim and the `PhysicsScene` prim are physics content, not
         // prims of the scene tree (doc/erhe/usd_compatibility.md, "Physics"): a
-        // joint is an attachment of the prim it joins and the scene prim is
+        // joint is written below the prim it joins and the scene prim is
         // the physics world's gravity, both of which read_physics reads and
         // a save writes back from the physics description. Leaving them out
         // here is what makes the round trip a fixed point.
@@ -6446,7 +6445,7 @@ private:
     // A USDA attribute value in erhe's property text form (D16), the way an
     // `erhe:` custom attribute of a composed prim is read.
     // One `UsdGeomModelAPI` attribute of a prim spec as the override value it
-    // is: the draw-mode attachment holds the schema's attributes, so a value
+    // is: the prim's draw-mode values hold the schema's attributes, so a value
     // of one is named `Draw_mode.<property>` (X2's spelling of a value an
     // applied schema authors on the prim itself). `extentsHint` carries the
     // min and the max in one array, so it is two values. False when the
@@ -7424,8 +7423,8 @@ private:
             return read_constant_display_color(property.get_attribute(), display_color);
         }
         if (!usd_draw_mode_value_name_of_attribute(name).empty()) {
-            // A `UsdGeomModelAPI` attribute is a value of the prim's draw-mode
-            // attachment (doc/erhe/usd_compatibility.md, "Draw modes"), which a
+            // A `UsdGeomModelAPI` attribute is a draw-mode value of the prim
+            // (doc/erhe/usd_compatibility.md, "Draw modes"), which a
             // variant block and an `over` carry the way they carry any other.
             return true;
         }
@@ -7696,8 +7695,8 @@ private:
             }
             // The same lookup apply_property_values makes, so the base value
             // is taken from the object the opinion will be applied to - which
-            // for an applied schema's value is the prim's attachment, not the
-            // prim (find_override_property_target).
+            // for an applied schema's value is the prim itself
+            // (find_override_property_target).
             const erhe::scene::Override_property_target property_target = erhe::scene::find_override_property_target(target, value.name);
             if (property_target.property == nullptr) {
                 continue; // apply_property_values warns about the name once

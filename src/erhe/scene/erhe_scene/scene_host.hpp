@@ -20,8 +20,8 @@ class Scene_host : public erhe::Item_host
 public:
     ~Scene_host() noexcept override;
 
-    // Implements erhe::Item_host: the hosted scene's root node, nodes and
-    // their attachments by name (expression references, D22).
+    // Implements erhe::Item_host: the hosted scene's root node and nodes by
+    // name (expression references, D22).
     [[nodiscard]] auto find_hosted_item(std::string_view name_or_path) -> erhe::Item_base* override;
 
     [[nodiscard]] virtual auto get_hosted_scene() -> Scene* = 0;
@@ -46,8 +46,8 @@ public:
     // on_mesh_material_changed: a primitive's material was reassigned
     // (Mesh::set_primitive_material).
     // on_mesh_flags_changed: the mesh Item_flags word changed.
-    // on_mesh_transform_changed: the node the mesh is attached to got a new
-    // world transform (Mesh::handle_node_transform_update; fires for every
+    // on_mesh_transform_changed: the mesh prim got a new
+    // world transform (Mesh::handle_transform_update; fires for every
     // mesh under a moving subtree, possibly several times per frame).
     // on_mesh_primitive_data_changed: a per-primitive upload value that does
     // not affect draw list identity changed

@@ -367,7 +367,7 @@ void capture_variant_base_value(
         }
         // The same lookup apply_property_values makes, so the base value is
         // taken from the object the opinion will be applied to - which for an
-        // applied schema's value is the prim's attachment, not the prim
+        // applied schema's value is the prim itself
         // (erhe::scene::find_override_property_target).
         const erhe::scene::Override_property_target property_target = erhe::scene::find_override_property_target(target, value.name);
         if (property_target.property == nullptr) {

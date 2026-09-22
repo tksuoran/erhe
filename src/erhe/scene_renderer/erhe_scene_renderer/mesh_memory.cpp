@@ -1159,7 +1159,7 @@ void bucket_primitives(
         // Mirrored world transforms reverse apparent triangle winding;
         // partition buckets by the flag so renderers can select a
         // front-face-flipped pipeline variant per bucket. The flag is
-        // maintained on the Mesh item by Mesh::handle_node_transform_update().
+        // maintained on the Mesh item by Mesh::handle_transform_update().
         const bool mesh_negative_determinant = (mesh->get_flag_bits() & erhe::Item_flags::negative_determinant) != 0u;
 
         for (size_t i = 0, count = primitives.size(); i < count; ++i) {

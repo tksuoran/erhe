@@ -104,7 +104,7 @@ public:
 
     // The rest of the container values, UI group "Layout". Each of them
     // inherits: an empty node or a Style holds "Layout.gap" for the layout
-    // nodes below it (D30), which is the behavior the attachment form had.
+    // nodes below it (D30).
     static const erhe::property::Property<glm::vec3>      volume_min_property;
     static const erhe::property::Property<glm::vec3>      volume_max_property;
     static const erhe::property::Property<Axis_direction> primary_property;

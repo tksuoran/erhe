@@ -205,7 +205,7 @@ public:
     [[nodiscard]] auto get_skinned_primitive_aabb_world(const erhe::primitive::Primitive& primitive) const -> erhe::math::Aabb;
 
     Layer_id              layer_id{0xff};
-    std::shared_ptr<Skin> skin; // TODO Make this a separate node attachment
+    std::shared_ptr<Skin> skin; // TODO Make this a separate prim
     float                 point_size{3.0f};
     float                 line_width{1.0f};
 

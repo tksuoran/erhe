@@ -1,7 +1,6 @@
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -456,30 +455,10 @@ auto find_override_property(
 auto find_override_property_target(erhe::Item_base& item, const std::string& name) -> Override_property_target
 {
     const erhe::property::Dependency_property* property = find_override_property(item, name);
-    if (property != nullptr) {
-        return Override_property_target{.object = &item, .property = property};
-    }
-    const std::size_t dot = name.find('.');
-    if (dot == std::string::npos) {
+    if (property == nullptr) {
         return Override_property_target{};
     }
-    const Xformable* const node = dynamic_cast<const Xformable*>(&item);
-    if (node == nullptr) {
-        return Override_property_target{};
-    }
-    const std::string_view class_name = std::string_view{name}.substr(0, dot);
-    const std::string      member     = name.substr(dot + 1);
-    for (const std::shared_ptr<Node_attachment>& attachment : node->get_attachments()) {
-        if (!attachment || (attachment->get_type_name() != class_name)) {
-            continue;
-        }
-        const erhe::property::Dependency_property* attachment_property =
-            erhe::property::Property_registry::get().find_for_object(*attachment.get(), member);
-        if (attachment_property != nullptr) {
-            return Override_property_target{.object = attachment.get(), .property = attachment_property};
-        }
-    }
-    return Override_property_target{};
+    return Override_property_target{.object = &item, .property = property};
 }
 
 void apply_property_values(

@@ -171,7 +171,7 @@ void Geometry_graph_mesh_system::apply(erhe::scene::Node& node, Geometry_graph_m
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
-    // The node may already carry a Mesh child or a Node_physics attachment
+    // The node may already carry a Mesh child or a rigid body
     // (e.g. the graph was dropped onto an existing mesh node): adopt them as
     // the controlled products - the bake replaces the mesh's primitives and
     // dictates the physics state from here on - instead of adding duplicates.

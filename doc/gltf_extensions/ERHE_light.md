@@ -21,7 +21,7 @@ Carries erhe light state `KHR_lights_punctual` cannot express:
 - `infinite_range`: erhe uses range 0 to mean infinite while
   `KHR_lights_punctual` omits `range` for infinite and readers commonly
   default a missing range; this explicit marker resolves the asymmetry.
-- `flags`: the light attachment's persistent Item flags
+- `flags`: the light prim's persistent Item flags
   (see [flags.md](flags.md)).
 - `properties`: the light's local property values as a name to text map
   (`doc/erhe/property_system.md` D14), the registered properties of `Light`

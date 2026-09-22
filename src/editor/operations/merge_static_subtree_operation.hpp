@@ -19,7 +19,7 @@ class App_context;
 // matrix each frame, so fewer nodes = less per-frame work (and fewer draws).
 //
 // Per target root, descendants are classified:
-// - MERGED: nodes whose only attachment is a Mesh, not no_transform_update
+// - MERGED: nodes whose only prim child is a Mesh, not no_transform_update
 //   and without a rigid body. Their primitives are baked into the root's
 //   frame, grouped by material (one combined primitive per material), and
 //   the nodes are removed.
@@ -27,12 +27,12 @@ class App_context;
 //   (nested sway spines, joint carrier sensors). Not merged, not descended
 //   into; with recurse enabled each boundary becomes its own target, so one
 //   call flattens a whole tree rig segment by segment.
-// - PRUNED: attachment-less nodes that HAD children and whose whole subtree
+// - PRUNED: content-less nodes that HAD children and whose whole subtree
 //   was merged/pruned (part pose nodes, chain groups) - removed with the
-//   geometry they carried. Attachment-less LEAF nodes are never pruned:
+//   geometry they carried. Content-less LEAF nodes are never pruned:
 //   zero-child markers (joint pivot anchors) may be referenced from outside
 //   the hierarchy.
-// - KEPT: everything else (joint anchors, attachment-carrying nodes). Not
+// - KEPT: everything else (joint anchors, content-carrying nodes). Not
 //   merged; descended into.
 // Kept and boundary nodes whose parent was merged away are reparented to the
 // target root preserving their world transform.

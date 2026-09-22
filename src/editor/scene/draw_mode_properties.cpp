@@ -31,9 +31,8 @@ constexpr std::string_view c_extent = "Extents Hint";
 // A value of the group implies the prim carries the feature: in USD the
 // `model:` attributes exist because `GeomModelAPI` is applied to the prim, so
 // a file - or a user - that authors one has applied it, and the key property
-// is the erhe form of that application. This is the replacement for the
-// applied-schema attachment registry, which made the attachment on the first
-// opinion naming it (doc/plans/node_attachments_to_properties.md D9).
+// is the erhe form of that application
+// (doc/plans/node_attachments_to_properties.md D9).
 //
 // Delivered callbacks may write values (Dependency_object::deliver), and the
 // key property's own callback is node_system_property_changed alone, so the

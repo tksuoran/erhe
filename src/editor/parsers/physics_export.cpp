@@ -508,7 +508,7 @@ auto build_physics_description(
                         }
                         if (!mesh) {
                             log_parsers->warn(
-                                "physics export: body '{}' has a {} shape but no mesh attachment - skipping collider",
+                                "physics export: body '{}' has a {} shape but no mesh prim - skipping collider",
                                 node->get_name(),
                                 (base_type == erhe::physics::Collision_shape_type::e_convex_hull) ? "convex hull" : "triangle mesh"
                             );

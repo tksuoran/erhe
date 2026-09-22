@@ -90,7 +90,7 @@ TEST(Node_expressions, node_follows_another_node_by_name_through_every_transform
     EXPECT_TRUE(approx(glm::vec3{follower->position_in_world()}, glm::vec3{0.0f}));
 }
 
-TEST(Node_expressions, parent_path_and_attachment_targets)
+TEST(Node_expressions, parent_path_and_child_prim_targets)
 {
     Test_scene_host host;
     auto parent = std::make_shared<erhe::scene::Xform>("Parent");

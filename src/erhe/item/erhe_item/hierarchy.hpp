@@ -39,8 +39,8 @@ public:
 
     // Overrides Item_base: a child prim is drawn by its parent's proxy when
     // the parent's draw mode asks for one (doc/erhe/usd_compatibility.md, "Draw
-    // modes"). Only a child of the hierarchy is: the parent's own
-    // attachments, which supply that proxy, are not children of it.
+    // modes"). Only a child of the hierarchy is: the draw-mode values that
+    // supply that proxy are the parent prim's own.
     [[nodiscard]] auto is_pruned_by_parent() const -> bool override;
 
     // Implements erhe::property::Dependency_object: inherits-flagged

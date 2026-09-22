@@ -134,7 +134,7 @@ private:
     // Items the currently executing code operates on, bound only while
     // add_rows() / add_sub_object_rows() build the rows and while a row
     // lambda runs, and null in between: add_rows() can be called more than
-    // once per frame (the node and each of its attachments), so every row
+    // once per frame (once per item and once per mesh primitive), so every row
     // lambda captures its own call's snapshot and re-binds m_items from it;
     // and a snapshot kept past the draw would hold the items of a closed
     // scene alive (the scene-close leak class, AGENTS.md).

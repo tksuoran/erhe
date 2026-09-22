@@ -3151,7 +3151,7 @@ private:
 
         // A glTF node that carries a mesh, a camera or a light IS that prim
         // (doc/erhe/usd_compatibility_design.md C5): the glTF node's name,
-        // transform, children and remaining attachments are the prim's. A
+        // transform and children are the prim's. A
         // node carrying two of the three is the prim of the first in the
         // order mesh > camera > light, and the others become its child prims
         // with identity transforms (doc/editor/scene_serialization.md).
@@ -6247,9 +6247,9 @@ private:
 
     // ERHE_node (+ ERHE_light for light-carrying nodes) extension members
     // per emitted glTF node (doc/editor/gltf_scene_roundtrip.md phase 3):
-    // persistent Item flags by name, the mesh attachment's Item flags (core
-    // meshes have no erhe payload of their own, and erhe Mesh attachments
-    // are per node), and the light attachment's erhe-only state (per-light
+    // persistent Item flags by name, the mesh prim's Item flags (core
+    // meshes have no erhe payload of their own, and erhe Mesh prims
+    // are per node), and the light prim's erhe-only state (per-light
     // hooks inside KHR_lights_punctual would need extra fork surface; erhe
     // lights are 1:1 with their node). Replaces the legacy erhe_flags node
     // extras writer; the extras are still parsed for older files.
@@ -6471,7 +6471,7 @@ private:
         gltf_node.transform = from_erhe(pre_transform * erhe_node.authored_parent_from_node_transform());
 
         // glTF 2.1: a prefab-instance node is written as an externalAsset
-        // reference. Children and attachments are not exported - the
+        // reference. Children are not exported - the
         // instantiated content comes from the referenced file.
         const auto external_asset_it = m_arguments.external_assets.find(&erhe_node);
         if (external_asset_it != m_arguments.external_assets.end()) {

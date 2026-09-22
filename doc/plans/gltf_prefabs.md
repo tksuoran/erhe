@@ -36,7 +36,7 @@ with independent playback.
 ## Physics inside prefabs
 
 `import_gltf` builds physics through separate operations rather than through
-node attachments that `Node::clone()` copies, so a prefab instance carries no
+node values that `Node::clone()` copies, so a prefab instance carries no
 physics. Instantiating an `erhe::scene::Physics_description` per instance
 needs the same node remap the skins do.
 

@@ -42,7 +42,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Skin"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | Item_type::node_attachment | Item_type::skin; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | Item_type::skin; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim type
     // for this kind, so the token is the erhe class name, written as a custom

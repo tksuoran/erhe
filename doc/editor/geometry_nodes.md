@@ -8,7 +8,7 @@ replicates the core of Blender's Geometry Nodes, scaled down to erhe. All the
 code lives in `src/editor/geometry_graph/`.
 
 Related documents: `doc/editor/geometry_graph_mesh.md` (the `Graph_mesh` asset and the
-node attachment that binds a scene mesh to a graph), `doc/editor/graph_editor.md` (the
+node value group that binds a scene mesh to a graph), `doc/editor/graph_editor.md` (the
 shared graph-editor infrastructure), `doc/editor/texture_graph.md` (the sibling
 texture graph).
 
@@ -134,7 +134,7 @@ ax::NodeEditor, so enum parameters use arrow-stepper widgets
 - **Output**: `Geometry_output_node` pipes the result into the scene as
   ordinary content (selectable and movable with the Transform tool), with an
   editable scene node name and optional physics. A source with no facets is
-  treated like a disconnected input (primitives cleared, physics attachment
+  treated like a disconnected input (primitives cleared, rigid body
   removed) - feeding an empty geometry to `Primitive_builder` otherwise aborts
   on `ERHE_VERIFY(total_index_count > 0)`.
 

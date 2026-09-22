@@ -579,8 +579,8 @@ void Animation::apply(float time_current)
     // Collect the touched nodes so that each one gets exactly one
     // world-transform update and one handle_transform_update() after all of its
     // channels have been applied.
-    // Without that notification the attachments never see the new pose and the
-    // node is never marked dirty, so Scene::update_node_transforms() - dirty-list
+    // Without that notification the transform observers never see the new pose
+    // and the node is never marked dirty, so Scene::update_node_transforms() - dirty-list
     // driven since 1d2375d6a - has nothing to propagate and the viewport keeps
     // rendering the old pose.
     // A channel driving any other property of any other kind of item needs

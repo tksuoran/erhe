@@ -19,7 +19,7 @@ A `Scene_root` constructs its library and gives it the scene root node
 keeps its own detached root scope and hosts its prims itself, so one hook
 maintains the index in both cases. `erhe::Item_base` carries the host pointer
 (`set_item_host`), which is not copied on copy or clone, and the default
-`get_item_host()` returns it; the `Node` / attachment / `Scene` overrides are
+`get_item_host()` returns it; the `Typed` / `Node` / `Scene` overrides are
 unaffected.
 
 There is no cross-scene aliasing of resources. A new scene is seeded with

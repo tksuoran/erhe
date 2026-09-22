@@ -152,8 +152,8 @@ TEST_F(Prim_import, transform_composes_through_a_scope)
     EXPECT_NEAR(world_position.z, 0.0f, 1e-5f);
 }
 
-// A `Mesh` prim of the stage is an erhe::scene::Mesh prim, not an Xform
-// carrying a mesh attachment (doc/erhe/usd_compatibility_design.md C5).
+// A `Mesh` prim of the stage is an erhe::scene::Mesh prim
+// (doc/erhe/usd_compatibility_design.md C5).
 TEST_F(Prim_import, mesh_prim_is_a_mesh)
 {
     const std::shared_ptr<erhe::Hierarchy> cube = find_prim(root, "cube");
@@ -161,7 +161,6 @@ TEST_F(Prim_import, mesh_prim_is_a_mesh)
     EXPECT_TRUE(erhe::is<erhe::scene::Mesh>(cube.get()));
     const erhe::scene::Mesh* mesh = static_cast<const erhe::scene::Mesh*>(cube.get());
     EXPECT_EQ(mesh->get_class_type_name(), "Mesh");
-    EXPECT_TRUE(mesh->get_attachments().empty());
     EXPECT_EQ(mesh->get_primitives().size(), 1u);
 }
 

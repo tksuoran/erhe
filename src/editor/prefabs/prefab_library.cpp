@@ -31,7 +31,6 @@
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/xform.hpp"
@@ -86,7 +85,7 @@ void retarget_meshes(
     }
 }
 
-// Seal a cloned instance subtree: interior nodes and their attachments are
+// Seal a cloned instance subtree: the interior prims are
 // not user-editable (editing prefab content requires opening the prefab's
 // own scene; changes propagate to instances on reload). The instance root
 // node itself stays editable - moving / renaming / deleting the instance as
@@ -157,11 +156,10 @@ void clear_locals_supplied_by_reference(erhe::property::Dependency_object& clone
 
 // Link one cloned instance item to the template item it was cloned from and
 // clear the locals the reference now supplies, then recurse in lockstep
-// through the children and the attachments. The clone is a deep copy of the
-// template item (Hierarchy's copy constructor, child order preserved,
-// attachments cloned by Xformable(src, for_clone)), which drops every entry
-// whose clone() yields nothing, so the walk iterates the TEMPLATE lists and
-// skips the same entries (is_clonable). What is left must pair up exactly:
+// through the children. The clone is a deep copy of the template item
+// (Hierarchy's copy constructor, child order preserved), which drops every
+// entry whose clone() yields nothing, so the walk iterates the TEMPLATE list
+// and skips the same entries (is_clonable). What is left must pair up exactly:
 // any other mismatch is a bug in the clone path, not a case to tolerate.
 void link_instance_to_template(
     const std::shared_ptr<erhe::Item_base>& clone,

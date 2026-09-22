@@ -29,7 +29,6 @@ namespace erhe::property {
 
 namespace erhe::scene {
 
-class Node_attachment;
 
 // Whether an override entry supplies a value at all. `cleared` is the state
 // of a property that has no local value: an override list that describes what
@@ -155,8 +154,7 @@ void apply_property_values(
 // and the property itself, both null when the name reaches neither. An
 // applied API schema's attributes are values of the prim itself
 // (`Draw_mode.card_geometry`), so USD's spelling resolves on the item through
-// find_override_property; a name qualified with the class name of an
-// attachment of the prim resolves to that attachment's property.
+// find_override_property.
 class Override_property_target final
 {
 public:

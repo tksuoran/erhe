@@ -804,7 +804,7 @@ void Geometry_graph_window::finish_evaluation()
         }
     }
     // An asset-owned output node just published fresh baked products to
-    // the target asset; push them to every bound attachment. Evaluation
+    // the target asset; push them to every bound node. Evaluation
     // finishes are rare, so the scene sweep costs nothing per frame.
     apply_baked_products_to_bound_nodes(run->target);
 }
@@ -1380,7 +1380,7 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
         delivery = slot_payload->IsDelivery();
     } else if (item_payload != nullptr) {
         // Hierarchy drag: resolve the mesh from the dragged item (a Mesh
-        // directly, or a Node's mesh attachment).
+        // directly, or a Node's mesh prim).
         erhe::Item_base* const item_base = *(static_cast<erhe::Item_base**>(item_payload->Data));
         mesh = erhe::scene::get_mesh(item_base->shared_from_this());
         delivery = item_payload->IsDelivery();

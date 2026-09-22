@@ -97,7 +97,7 @@ namespace {
 }
 
 // Every draw-mode record of a load, as the writer's argument list: the editor
-// fills this from the attachments it made, and the test from what it read.
+// fills this from the draw-mode values it wrote, and the test from what it read.
 [[nodiscard]] auto to_save_draw_modes(const erhe::usd::Usd_data& data) -> std::vector<erhe::usd::Usd_save_draw_mode>
 {
     std::vector<erhe::usd::Usd_save_draw_mode> result;

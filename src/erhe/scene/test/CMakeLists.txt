@@ -13,7 +13,6 @@ add_executable(${_target}
     main.cpp
     test_animation_apply.cpp
     test_animation_sampler.cpp
-    test_attachment_inheritance.cpp
     test_camera_light_prims.cpp
     test_camera_properties.cpp
     test_gprim_display_color.cpp
@@ -32,6 +31,7 @@ add_executable(${_target}
     test_node_properties.cpp
     test_node_systems.cpp
     test_optimized_variant_invalidation.cpp
+    test_prim_inheritance.cpp
     test_prim_levels.cpp
     test_resource_prim_tokens.cpp
     test_scene_properties.cpp

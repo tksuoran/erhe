@@ -18,7 +18,6 @@ namespace erhe { class Item_host; }
 namespace erhe::scene {
 
 class Xformable;
-class Node_attachment;
 class Scene;
 class Scene_host;
 
@@ -58,11 +57,9 @@ public:
     Node_data(const Node_data& src, for_clone);
 
     Node_transforms                               transforms;
-    Scene_host*                                   host     {nullptr};
-    std::vector<std::shared_ptr<Node_attachment>> attachments;
+    Scene_host* host{nullptr};
 
-    static constexpr unsigned int bit_transform  {1u << 0};
-    static constexpr unsigned int bit_attachments{1u << 1};
+    static constexpr unsigned int bit_transform{1u << 0};
 
     static auto diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int;
 };
@@ -115,14 +112,10 @@ public:
     void set_parent          (const std::shared_ptr<erhe::Hierarchy>& parent, std::size_t position) override;
     void handle_parent_update(erhe::Hierarchy* old_parent, erhe::Hierarchy* new_parent)             override;
 
-    // Inherited properties reach child nodes and then attachments (D23).
-    void for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback) override;
     // A node holds the value properties of every other item class (Light,
-    // Camera, Mesh, ...) for the prims and attachments below it to inherit
-    // (D30). Those classes no longer share one base - Mesh, Camera and Light
-    // are prims under Xformable while the applied-API-schema attachments are
-    // not - so the secondary owner type is Item_base, the type every item
-    // class descends from.
+    // Camera, Mesh, ...) for the prims below it to inherit (D30). Those
+    // classes share no base but Item_base, so the secondary owner type is
+    // Item_base, the type every item class descends from.
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override;
 
     // Public API
@@ -130,21 +123,16 @@ public:
     void set_node_parent(Xformable* parent);
     void set_node_parent(Xformable* parent, std::size_t position);
 
-    void attach                  (const std::shared_ptr<Node_attachment>& attachment);
-    auto detach                  (Node_attachment* attachment) -> bool;
-    auto get_attachment_count    (const erhe::Item_filter& filter) const -> std::size_t;
     // Overrides Typed: registers / unregisters the node with the scene host
-    // and carries the host to the attachments and to the prim subtree.
+    // and carries the host to the prim subtree.
     void handle_item_host_update (erhe::Item_host* old_scene_host, erhe::Item_host* new_scene_host) override;
     // Called wherever this prim's world transform changed: notifies the
-    // attachments, pushes the transform properties to expressions and queues
-    // the subtree for propagation. A subclass that mirrors the transform
-    // elsewhere (Mesh: raytrace instances, world bounds) overrides it.
+    // transform observers, pushes the transform properties to expressions and
+    // queues the subtree for propagation. A subclass that mirrors the
+    // transform elsewhere (Mesh: raytrace instances, world bounds) overrides
+    // it.
     virtual void handle_transform_update(uint64_t serial);
-    void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = std::numeric_limits<std::size_t>::max());
-    void handle_remove_attachment(Node_attachment* attachment);
 
-    [[nodiscard]] auto get_attachments                        () const -> const std::vector<std::shared_ptr<Node_attachment>>&;
     [[nodiscard]] auto parent_from_node_transform             () const -> const Trs_transform&;
     [[nodiscard]] auto parent_from_node_transform             () -> Trs_transform&;
     [[nodiscard]] auto parent_from_node                       () const -> glm::mat4;
@@ -299,24 +287,8 @@ using Node = Xformable;
 // the prim's LOCAL transform. Xformable::set_parent preserves the WORLD
 // transform instead, which would give a prim created at the origin a local
 // transform that cancels its new parent's; a prim that carries no transform
-// of its own belongs at its parent's place. This is the call every site that
-// used to spell `parent->attach(prim)` makes.
+// of its own belongs at its parent's place.
 void set_prim_parent(const std::shared_ptr<Xformable>& prim, const std::shared_ptr<erhe::Hierarchy>& parent);
-
-template <typename T>
-auto get_attachment(const Xformable* node) -> std::shared_ptr<T>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    for (const auto& attachment : node->get_attachments()) {
-        auto result = std::dynamic_pointer_cast<T>(attachment);
-        if (result) {
-            return result;
-        }
-    }
-    return {};
-}
 
 } // namespace erhe::scene
 

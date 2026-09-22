@@ -307,8 +307,8 @@ void Scene::update_node_transforms()
 
     // Worker threads (the editor's async raytrace kickoff and geometry
     // operations) mutate hosted item state under the Item_host mutex, and
-    // the transform-update attachment callbacks read that state (e.g.
-    // Mesh::handle_node_transform_update() iterates the raytrace primitive
+    // the transform-update callbacks read that state (e.g.
+    // Mesh::handle_transform_update() iterates the raytrace primitive
     // vector that Mesh::update_rt_primitives() clears and rebuilds). Hold
     // the same mutex so the update cannot interleave with a worker.
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{
@@ -366,7 +366,7 @@ void Scene::update_node_transforms()
 void Scene::update_subtree_transforms(erhe::Hierarchy& prim, const bool carry_body_driven)
 {
     // The dirty node itself is already up to date: every write path updates
-    // the node's own world transform and notifies its attachments eagerly
+    // the node's own world transform and notifies its observers eagerly
     // (transform setters, Node::handle_parent_update). Only descendants need
     // recomputation.
     //
@@ -578,7 +578,7 @@ void Scene::handle_node_no_transform_update_changed(Node& node)
         // Re-entering the updated set (e.g. physics body deactivated): the
         // parent may have moved while this branch was skipped, so recompute
         // the node's world transform now. update_transform() also notifies
-        // attachments and queues the subtree via handle_transform_update().
+        // the observers and queues the subtree via handle_transform_update().
         moved_node->update_transform(0);
     }
 }

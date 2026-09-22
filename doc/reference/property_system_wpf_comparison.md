@@ -142,11 +142,11 @@ Public reporting: WPF `DependencyPropertyHelper.GetValueSource` returns a
 | WPF | erhe | Status | Notes |
 |---|---|---|---|
 | `FrameworkPropertyMetadataOptions.Inherits` | `Property_metadata::inherits` | ported | |
-| Inheritance parent: logical / visual tree (`FrameworkElement`), `InheritanceContext` for non-tree objects (`Freezable` in a property) | Two virtuals: `get_inheritance_parent()`, `for_each_inheritance_child()`; `Hierarchy` implements them, `Node` adds attachments, `Node_attachment` names its node | adapted | erhe's library knows no tree; the object supplies it (D8). |
+| Inheritance parent: logical / visual tree (`FrameworkElement`), `InheritanceContext` for non-tree objects (`Freezable` in a property) | Two virtuals: `get_inheritance_parent()`, `for_each_inheritance_child()`; `Hierarchy` implements them | adapted | erhe's library knows no tree; the object supplies it (D8). |
 | `InheritanceBehavior` (`SkipToAppNow`, `SkipToThemeNext`, ...) and `OverridesInheritanceBehavior` | none | omitted | |
 | Inherited value **cached** in the child's entry (`BaseValueSourceInternal.Inherited`; `SynchronizeInheritanceParent`, `TreeWalkHelper.InvalidateOnInheritablePropertyChange`) | **Not cached**: a read walks up to the closest ancestor with a local or style value | adapted | erhe trades read cost for no cache invalidation state. |
 | `TreeWalkHelper.InvalidateOnInheritablePropertyChange` (descendant invalidation stopping at a local value) | `propagate_to_descendants` from `set_value` / `clear_value` / `set_style` | ported | Same stopping rule; erhe also treats a style value as a stop. |
-| `TreeWalkHelper.InvalidateOnTreeChange` (reparent notifications) | `capture_inheritance_snapshot` / `apply_inheritance_snapshot` around `Hierarchy::set_parent` and `Node_attachment::set_node` | adapted | erhe diffs a before / after snapshot so descendants see correct old values. |
+| `TreeWalkHelper.InvalidateOnTreeChange` (reparent notifications) | `capture_inheritance_snapshot` / `apply_inheritance_snapshot` around `Hierarchy::set_parent` | adapted | erhe diffs a before / after snapshot so descendants see correct old values. |
 | `IsVisible` = parent AND self (computed, read-only) | `visible` = closest ancestor with a local value wins (CSS `visibility` style) | adapted | Deliberate (D23): a child under a hidden parent can be shown with a local `true`. |
 | Resource inheritance (`InvalidateOnResourcesChange`) | none | omitted | |
 

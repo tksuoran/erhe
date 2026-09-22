@@ -24,8 +24,8 @@ public:
     // nullptr when the host has no such item or does no lookup. A text
     // holding '/' is a path (Hierarchy::get_path()) and a text without one
     // is a name, so both the current and the older stored form resolve.
-    // Scene_host walks the scene's node tree, then its nodes and
-    // attachments by name; the editor's Scene_root adds the content
+    // Scene_host walks the scene's node tree, then its nodes by name;
+    // the editor's Scene_root adds the content
     // library, whose folder paths use the same form.
     [[nodiscard]] virtual auto find_hosted_item(std::string_view name_or_path) -> Item_base* { static_cast<void>(name_or_path); return nullptr; }
 

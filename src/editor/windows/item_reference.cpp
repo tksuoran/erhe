@@ -17,7 +17,7 @@ namespace {
 // Drag sources (item tree, content library) set the payload type to the item's leaf class name and
 // the data to an erhe::Item_base* (see windows/item_tree_window.cpp). Those class names match
 // erhe::Item_type::c_bit_labels[], so each set bit of allowed_types maps to one acceptable payload
-// type string. Note: a mask using a base-type bit (e.g. node_attachment) does not match a leaf
+// type string. Note: a mask using a base-type bit (e.g. imageable) does not match a leaf
 // payload string (e.g. "Mesh"); pass the leaf type bits whose class-name labels you want to accept.
 [[nodiscard]] auto try_accept_item_payload(const uint64_t allowed_types) -> std::shared_ptr<erhe::Item_base>
 {

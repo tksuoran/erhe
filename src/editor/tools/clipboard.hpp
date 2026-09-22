@@ -69,7 +69,7 @@ public:
 
     // Scene-close leak watchdog support: the items the clipboard contents
     // keep alive on purpose - the held items themselves plus, transitively,
-    // their attachments, mesh materials and material textures - so that
+    // their child prims, mesh materials and material textures - so that
     // paste-after-source-scene-close works. The watchdog reports these as
     // intentional pins, not leaks (same contract as the inventory / hotbar
     // slot pins).

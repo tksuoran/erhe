@@ -128,7 +128,7 @@ Every document states its standing in its first ten lines:
 - [erhe/renderer.md](erhe/renderer.md) (stable): GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - [erhe/rendergraph.md](erhe/rendergraph.md) (stable): A directed acyclic graph (DAG) framework for organizing rendering operations
 - [erhe/ring_buffer_memory.md](erhe/ring_buffer_memory.md) (mostly stable): Bounded ring-buffer memory for scene loads
-- [erhe/scene.md](erhe/scene.md) (mostly stable): A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), node attachments (physics, layout, grid, ...), animations, and scene management
+- [erhe/scene.md](erhe/scene.md) (mostly stable): A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see "Prim levels"), per-node value groups (physics, layout, grid, ...), animations, and scene management
 - [erhe/scene_renderer.md](erhe/scene_renderer.md) (stable): Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU
 - [erhe/shader_variants.md](erhe/shader_variants.md) (stable): standard.{vert,frag} uber-shader variant system
 - [erhe/shader_workarounds.md](erhe/shader_workarounds.md) (stable): Driver-capability shader defines and workaround policy

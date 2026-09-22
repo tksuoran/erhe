@@ -28,7 +28,7 @@ importing it as an asset).
 | Extension | Attaches to | Carries |
 |---|---|---|
 | [`ERHE_geometry`](ERHE_geometry.md) | mesh primitive | polygon rings + full geogram attribute dump (bit-exact geometry) |
-| [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-attachment Item flags |
+| [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
 | [`ERHE_camera`](ERHE_camera.md) | camera | full erhe projection, exposure, shadow range, Item flags |
 | [`ERHE_light`](ERHE_light.md) | node (light-carrying) | cast_shadow, infinite_range, Item flags |
 | [`ERHE_material`](ERHE_material.md) | material | roughness_y, bxdf_model, blending_mode, brushed-metal fields |

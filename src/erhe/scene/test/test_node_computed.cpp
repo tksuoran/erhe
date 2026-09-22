@@ -193,7 +193,7 @@ TEST(Node_computed, mesh_world_bounds_follow_the_node_and_the_primitives)
 
     node->set_parent_from_node(translated(glm::vec3{5.0f, 0.0f, 0.0f}));
     // The mesh is a child prim, so its world transform follows in the scene's
-    // propagation pass (an attachment was notified inline).
+    // propagation pass.
     host.scene.update_node_transforms();
     EXPECT_TRUE(approx(mesh->get_value(Mesh::world_bounds_min_property), glm::vec3{4.0f, -1.0f, -1.0f}));
     EXPECT_TRUE(approx(mesh->get_value(Mesh::world_bounds_max_property), glm::vec3{6.0f,  1.0f,  1.0f}));

@@ -19,7 +19,7 @@ namespace editor {
 // This base only unifies the ownership + Item identity that both assets share;
 // how the graph's output is CONSUMED stays in the derived class - Graph_texture
 // exposes a pull erhe::graphics::Texture_reference, Graph_mesh publishes push
-// baked products to its bound attachments.
+// baked products to its bound nodes.
 //
 // Self is threaded to erhe::Item so get_type() / get_type_name() resolve to the
 // concrete asset's get_static_type() / static_type_name.

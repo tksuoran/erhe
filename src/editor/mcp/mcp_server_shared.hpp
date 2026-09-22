@@ -152,7 +152,7 @@ auto transform_reference_mode_lc(const Transform_reference_mode mode) -> const c
 
 // Resolve a node's renderable Geometry for a given primitive, mirroring the path
 // the node-details query and the component-selection tool use:
-// node -> Mesh attachment -> primitive[primitive_index] -> render_shape geometry.
+// node -> Mesh prim -> primitive[primitive_index] -> render_shape geometry.
 auto resolve_mesh_geometry(
     const std::shared_ptr<erhe::scene::Node>&  node,
     const std::size_t                          primitive_index,

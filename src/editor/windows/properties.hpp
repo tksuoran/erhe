@@ -90,7 +90,7 @@ private:
     void target_selector_imgui();
 
     // How a multi-selection is shown (the selector next to Pin): every
-    // item on its own with its diagnostics and attachments, or one section
+    // item on its own with its diagnostics, or one section
     // per property owner type editing the items together (mixed values
     // shown per component, one operation per edit). A single item always
     // draws the individual form.
