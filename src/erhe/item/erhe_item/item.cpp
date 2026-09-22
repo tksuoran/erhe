@@ -100,9 +100,53 @@ auto Item_filter::describe() const -> std::string
 
 // -----------------------------------------------------------------------------
 
+// The name: a bridged property (D18) over the member, registered first so
+// its row leads every item section (rows follow registration order).
+const erhe::property::Property<std::string> Item_base::name_property = erhe::property::Property<std::string>::register_property(
+    "name", Item_base::property_owner_type(),
+    erhe::property::Property_metadata{
+        .ui     = erhe::property::Property_ui{.label = "Name"},
+        .bridge = erhe::property::Property_bridge{
+            .get = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+                return static_cast<const Item_base&>(object).get_name();
+            },
+            .set = [](erhe::property::Dependency_object& object, const erhe::property::Property_value& value) {
+                Item_base&         item = static_cast<Item_base&>(object);
+                const std::string& name = std::get<std::string>(value);
+                if (name != item.get_name()) {
+                    item.set_name(name);
+                }
+            },
+            // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): every
+            // writer of the name - the Properties window row, the MCP
+            // set_item_property - goes through set_value, so the refusal of a
+            // name a sibling already holds lives here alone.
+            .validate = [](
+                const erhe::property::Dependency_object& object,
+                const erhe::property::Property_value&    value,
+                std::string&                             out_error
+            ) -> bool {
+                const Item_base&   item = static_cast<const Item_base&>(object);
+                const std::string& name = std::get<std::string>(value);
+                if ((name == item.get_name()) || item.is_name_available(name)) {
+                    return true;
+                }
+                out_error = fmt::format("'{}' is already the name of a sibling of '{}'", name, item.get_name());
+                return false;
+            }
+        }
+    }
+);
+
 const erhe::property::Property<bool> Item_base::visible_property = erhe::property::Property<bool>::register_property(
     "visible", Item_base::property_owner_type(),
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .inherits = true, .ui = erhe::property::Property_ui{.label = "Visible"}}
+);
+
+// Registered between Visible and Active so the row sits between theirs.
+const erhe::property::Property<bool> Item_base::show_debug_visualizations_property = Item_base::register_flag_bit_property(
+    "show_debug_visualizations", Item_base::property_owner_type(), Item_flags::show_debug_visualizations,
+    erhe::property::Property_ui{.label = "Show Debug Visualizations"}
 );
 
 // USD prim `active` metadata (doc/erhe/usd_compatibility_design.md X2). Not
@@ -186,47 +230,13 @@ const erhe::property::Property<erhe::property::Object_reference> Item_base::styl
     }
 );
 
-// Item-level authored state as bridged properties (D18): the name, the
-// tags and the persistent flag bits stay in their members - every reader
-// is a bit test or a string reference - and the Properties window draws
-// them through the registered path, so a multi-selection edits them
-// together with mixed-value display and one undo entry per edit.
+// Item-level authored state as bridged properties (D18): the tags and the
+// persistent flag bits stay in their members - every reader is a bit test or
+// a string reference - and the Properties window draws them through the
+// registered path, so a multi-selection edits them together with mixed-value
+// display and one undo entry per edit. The name is registered first of all
+// (above), so its row leads every item section.
 
-const erhe::property::Property<std::string> Item_base::name_property = erhe::property::Property<std::string>::register_property(
-    "name", Item_base::property_owner_type(),
-    erhe::property::Property_metadata{
-        .ui     = erhe::property::Property_ui{.label = "Name"},
-        .bridge = erhe::property::Property_bridge{
-            .get = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
-                return static_cast<const Item_base&>(object).get_name();
-            },
-            .set = [](erhe::property::Dependency_object& object, const erhe::property::Property_value& value) {
-                Item_base&         item = static_cast<Item_base&>(object);
-                const std::string& name = std::get<std::string>(value);
-                if (name != item.get_name()) {
-                    item.set_name(name);
-                }
-            },
-            // Sibling-unique names (doc/erhe/usd_compatibility_design.md M2): every
-            // writer of the name - the Properties window row, the MCP
-            // set_item_property - goes through set_value, so the refusal of a
-            // name a sibling already holds lives here alone.
-            .validate = [](
-                const erhe::property::Dependency_object& object,
-                const erhe::property::Property_value&    value,
-                std::string&                             out_error
-            ) -> bool {
-                const Item_base&   item = static_cast<const Item_base&>(object);
-                const std::string& name = std::get<std::string>(value);
-                if ((name == item.get_name()) || item.is_name_available(name)) {
-                    return true;
-                }
-                out_error = fmt::format("'{}' is already the name of a sibling of '{}'", name, item.get_name());
-                return false;
-            }
-        }
-    }
-);
 
 // The tag set as one comma-separated string; set splits on commas and
 // drops surrounding whitespace and empty entries.
@@ -346,10 +356,7 @@ const erhe::property::Property<bool> Item_base::lock_viewport_selection_property
     "lock_viewport_selection", Item_flags::lock_viewport_selection, "Selection", "Locks", "Viewport picking skips the item", false
 );
 const erhe::property::Property<bool> Item_base::show_in_ui_property = register_flag_property(
-    "show_in_ui", Item_flags::show_in_ui, "Show In UI", "", "Listed in the item tree and the pickers", false
-);
-const erhe::property::Property<bool> Item_base::show_debug_visualizations_property = register_flag_property(
-    "show_debug_visualizations", Item_flags::show_debug_visualizations, "Show Debug Visualizations", "", "", false
+    "show_in_ui", Item_flags::show_in_ui, "Show In UI", "", "Listed in the item tree and the pickers", true
 );
 const erhe::property::Property<bool> Item_base::exclude_from_prefab_property = register_flag_property(
     "exclude_from_prefab", Item_flags::exclude_from_prefab, "Exclude From Prefab", "", "Left out when the subtree is saved as a prefab", true
