@@ -19,7 +19,7 @@ const erhe::property::Property<int> Hierarchy::child_count_property = erhe::prop
     },
     erhe::property::Property_metadata{
         .flags = erhe::property::Property_flags::none,
-        .ui    = erhe::property::Property_ui{.tooltip = "Number of direct children (computed)", .label = "Child Count"}
+        .ui    = erhe::property::Property_ui{.tooltip = "Number of direct children (computed)", .developer_only = true, .label = "Child Count"}
     }
 );
 

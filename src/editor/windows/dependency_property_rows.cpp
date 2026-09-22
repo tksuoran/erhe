@@ -25,6 +25,7 @@
 #include "erhe_property/property_style.hpp"
 #include "erhe_property/property_string.hpp"
 
+#include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h> // ImGuiItemFlags_MixedValue (mixed checkbox)
@@ -654,6 +655,93 @@ void Dependency_property_rows::queue_add(const Dependency_property& property)
     m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
 }
 
+namespace {
+
+// Developer mode: every registration fact of the property and the metadata
+// its owner type resolves to, after the per-object lines of the tooltip.
+void append_metadata_tooltip(std::string& tooltip, const Dependency_property& property, const Property_metadata& metadata)
+{
+    using erhe::property::Property_flags;
+    const auto flag = [&tooltip](const bool value, const char* name) {
+        if (value) {
+            tooltip += " ";
+            tooltip += name;
+        }
+    };
+    tooltip += "\n--- metadata ---";
+    tooltip += "\nType: ";
+    tooltip += erhe::property::c_str(property.get_type());
+    tooltip += "\nOwner type: ";
+    tooltip += erhe::property::get_owner_type_name(property.get_owner_type());
+    if (property.is_attached()) {
+        tooltip += "\nAttached, holder type: ";
+        tooltip += erhe::property::get_owner_type_name(property.get_holder_type());
+    }
+    tooltip += "\nIndex: ";
+    tooltip += std::to_string(property.get_index());
+    if (property.is_read_only()) {
+        tooltip += "\nRead-only";
+    }
+    if (property.get_enum_info() != nullptr) {
+        tooltip += "\nEnum: ";
+        tooltip += property.get_enum_info()->get_type_name();
+        tooltip += " (";
+        tooltip += std::to_string(property.get_enum_info()->get_entries().size());
+        tooltip += " entries)";
+    }
+    tooltip += "\nRegistration default: ";
+    tooltip += metadata.default_value.has_value() ? erhe::property::to_string(property, metadata.default_value.value()) : std::string{"(zero / first entry)"};
+    tooltip += "\nInherits: ";
+    tooltip += metadata.inherits ? "yes" : "no";
+    tooltip += "\nFlags:";
+    flag(metadata.flags == Property_flags::none,                              "none");
+    flag((metadata.flags & Property_flags::affects_transform) != 0,           "affects_transform");
+    flag((metadata.flags & Property_flags::affects_draw_list_partition) != 0, "affects_draw_list_partition");
+    flag((metadata.flags & Property_flags::affects_shader_variant) != 0,      "affects_shader_variant");
+    flag((metadata.flags & Property_flags::serialize) != 0,                   "serialize");
+    flag((metadata.flags & Property_flags::writable_when_sealed) != 0,        "writable_when_sealed");
+    flag((metadata.flags & Property_flags::native_gltf) != 0,                 "native_gltf");
+    tooltip += "\nCallbacks:";
+    flag(static_cast<bool>(metadata.property_changed), "property_changed");
+    flag(static_cast<bool>(metadata.coerce),           "coerce");
+    flag(metadata.bridge.is_bound(),                   "bridge");
+    flag(metadata.is_computed(),                       "compute");
+    flag(metadata.is_computed_writable(),              "compute_set");
+    flag(metadata.has_computed_default(),              "compute_default");
+    flag(static_cast<bool>(metadata.ui.visible_when),  "visible_when");
+    tooltip += "\nUI:";
+    if (!metadata.ui.group.empty()) {
+        tooltip += " group=\"";
+        tooltip += metadata.ui.group;
+        tooltip += "\"";
+        flag(metadata.ui.group_state == Property_ui::Group_state::collapsed, "collapsed");
+    }
+    if (metadata.ui.min.has_value()) {
+        tooltip += fmt::format(" min={}", metadata.ui.min.value());
+    }
+    if (metadata.ui.max.has_value()) {
+        tooltip += fmt::format(" max={}", metadata.ui.max.value());
+    }
+    if (metadata.ui.step.has_value()) {
+        tooltip += fmt::format(" step={}", metadata.ui.step.value());
+    }
+    switch (metadata.ui.presentation) {
+        case Property_ui::Presentation::plain:         break;
+        case Property_ui::Presentation::color:         tooltip += " color"; break;
+        case Property_ui::Presentation::angle_degrees: tooltip += " angle_degrees"; break;
+        case Property_ui::Presentation::slider:        tooltip += " slider"; break;
+    }
+    flag(metadata.ui.logarithmic,                                     "logarithmic");
+    flag(metadata.ui.developer_only,                                  "developer_only");
+    flag(metadata.ui.array_size == Property_ui::Array_size::editable, "editable_array");
+    flag(!metadata.ui.show_clear_button,                              "no_clear_button");
+    if (metadata.ui.reference_item_types != 0) {
+        tooltip += fmt::format(" reference_item_types=0x{:x}", metadata.ui.reference_item_types);
+    }
+}
+
+} // anonymous namespace
+
 void Dependency_property_rows::row(Property_editor& editor, const Dependency_property& property)
 {
     const erhe::Item_base&                    first_item = *m_items->front();
@@ -675,7 +763,9 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     if (!tooltip.empty()) {
         tooltip += "\n";
     }
-    tooltip += "Source: ";
+    tooltip += "Property: ";
+    tooltip += qualified;
+    tooltip += "\nSource: ";
     tooltip += erhe::property::c_str(first.get_value_source(property));
     if (metadata.bridge.is_bound()) {
         tooltip += " (member-backed)";
@@ -709,6 +799,10 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     if (property.get_type() == Property_type::quat) {
         tooltip += "\nx y z w: ";
         tooltip += erhe::property::to_string(property, first.get_value(property));
+    }
+
+    if (m_context.developer_mode) {
+        append_metadata_tooltip(tooltip, property, metadata);
     }
 
     const bool sealed = first_item.is_write_sealed(property); // D24: a sealed item's rows are read-only (lock_edit stays writable)

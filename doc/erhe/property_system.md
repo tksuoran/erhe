@@ -365,8 +365,11 @@ table, see D2a), and references to other objects (D28).
   PBR rows for unlit materials, its anisotropy rows for BxDF models
   without anisotropy, and alpha cutoff outside the alpha-test blending
   mode). Each row's tooltip shows
-  its `Value_source` (local, inherited, default), its default value and a
-  quaternion's raw x y z w; the label carries a `*` prefix when a local
+  the property's qualified name, its `Value_source` (local, inherited,
+  default), its default value and a quaternion's raw x y z w, and in
+  developer mode every registration fact and metadata field after them
+  (type, owner and holder type, index, enum, flags, callbacks, the
+  `Property_ui` fields); the label carries a `*` prefix when a local
   value differs from the default; the context menu offers "Reset to default"
   (a clear). Drag edits follow the existing
   begin-edit-snapshot / commit-on-release pattern used by material editing

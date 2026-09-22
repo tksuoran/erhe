@@ -147,7 +147,7 @@ const erhe::property::Property<std::string> Typed::composition_arcs_property =
 const erhe::property::Property<std::string> Typed::type_name_property = erhe::property::Property<std::string>::register_property(
     "type_name", Typed::property_owner_type(),
     erhe::property::Property_metadata{
-        .ui     = erhe::property::Property_ui{.tooltip = "USD typeName token of the prim", .label = "Type Name"},
+        .ui     = erhe::property::Property_ui{.tooltip = "USD typeName token of the prim", .developer_only = true, .label = "Type Name"},
         .bridge = erhe::property::Property_bridge{
             .get = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
                 return std::string{static_cast<const Typed&>(object).get_prim_type_name()};
