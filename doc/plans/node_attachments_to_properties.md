@@ -152,13 +152,31 @@ hook.
 `doc/editor/physics.md` (the constraint and the drag that reads it) and
 `doc/erhe/usd_compatibility.md` (the two file carriers).
 
-**D4. Composition arcs are a node-held record list.** `Xformable` gains
-`get_composition_arcs() -> std::span<const Composition_arc>` (source path,
-prim path, arc kind, variant selections), with a setter used by the prefab
-library and the importers, cloned with the node. A read-only computed
-property `Prefab_instance.arcs` renders the list as text for the Properties
-window and MCP. `instance_structure`, `prefab_library`, the exporters and
-`instance_override` read the span; "is a carrier" is `!arcs.empty()`.
+**D4. Composition arcs are a prim-held record list.** `erhe::Typed` holds
+`std::unique_ptr<Composition_arcs>` (`erhe_item/composition_arc.hpp`), null
+on every prim that carries no arc, so the carrier test
+`has_composition_arcs()` is a null check and a prim without arcs costs one
+pointer. `Composition_arc` is plain data: the source file path, the target
+prim path, the arc kind (`reference` | `payload`) and the `variants`
+selection the arc carries, one record per arc in authored order;
+`get_composition_arcs() -> std::span<const Composition_arc>` is empty when
+null, `set_composition_arcs(std::vector<Composition_arc>)` with an empty
+vector releases the storage, and the clone constructor deep-copies the list
+so a pasted instance is an instance. The record sits on `Typed`, not
+`Xformable`, because a USD arc is applied to a prim of any type (`Scope`,
+`Material`, a typeless `def`); the `Xform` wrapping the USD importer gives
+an arc on a non-`Xformable` prim (`doc/erhe/usd_compatibility_design.md` S1)
+stays, and retiring it is future work outside this plan. A read-only
+computed string property of `Typed`, `Composition.arcs`, renders the list
+for the Properties window and MCP, shown only while the list is non-empty.
+`instance_structure`, `prefab_library`, the selection redirect, the
+Hierarchy row, the exporters and `erhe::scene::instance_override` read the
+prim directly; the `Item_type::prefab_instance` bit is deleted. The record
+is held by the prim rather than a table on the scene or the item host: a
+prefab template tree has no host, a clipboard clone has none until it is
+pasted, and an entry keyed by the item has to outlive the item's scene
+membership for redo, which is the set of rules `Content_library`'s
+metadata table needed and this record does not.
 
 **D5. Session values.** A value that is never saved (`Brush_placement.*`)
 is registered without the serialize flag, and both exporters skip it through
@@ -203,8 +221,13 @@ at its baseline, a scene close with no `scene-close leak` line, and one
 headless MCP session that sets the key property, undoes it, and saves and
 reopens.
 
-- **P10. `Prefab_instance`** (D4). Suites: usd, scene, gltf; roundtrip
-  references, variants and override legs.
+- **P10. `Prefab_instance`** (D4), two commits. P10a, the record:
+  `Composition_arc` and the `Typed` storage, clone, the computed property,
+  `erhe::scene::instance_override` reading it, item and scene tests. P10b,
+  the editor: every `Prefab_instance` reader and writer moved onto the
+  record, the class, its catalog entry and its `Item_type` bit deleted,
+  documents. Suites: item, scene, usd, gltf; roundtrip references, variants
+  and override legs.
 - **P11. Delete the attachment infrastructure.** `Node_attachment`,
   `Node::attach` / `detach` / `get_attachments` / `get_attachment<T>`,
   `Node_attach_operation`, `Scene_commands::remove_attachment`, the
@@ -222,7 +245,6 @@ P10 and P11 remain. Each is worked through
 `doc/agents/orchestration_harness.md` on `build_vs2026_vulkan_headless`
 (tests on), one coder per commit, the orchestrator reviewing and committing.
 
-- Ask the user to confirm D4 (next section) before briefing P10.
 - A brief lists the files the coder never stages, reverts or deletes:
   `config/editor/desktop_windows.json`, `config/editor/editor_settings.json`,
   `config/editor/desktop_window_imgui_host_imgui.ini`, `prompt_queue.txt`,
@@ -248,12 +270,6 @@ P10 and P11 remain. Each is worked through
 - P11 starts from `src/editor/scene/attachment_types.{hpp,cpp}`: the applied
   API schema catalog is empty and the Add Attachment menu is hidden while it
   is; `Joint` is a child-prim catalog key, which stays.
-
-## Decision to confirm before P10
-
-D4 (arcs as prim-held structure, not properties): the verdict follows from
-arcs being prim metadata in USD, and the property system has no
-array-of-records type to hold them otherwise.
 
 ## Recipe for one value group, as Ik proved it
 
