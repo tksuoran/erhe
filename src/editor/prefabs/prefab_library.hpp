@@ -1,8 +1,7 @@
 #pragma once
 
-#include "prefabs/prefab_instance.hpp"
-
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_item/composition_arc.hpp"
 #include "erhe_scene/instance_override.hpp"
 
 #include <glm/glm.hpp>
@@ -50,14 +49,37 @@ class Scene_root;
 // only in such entries name one and the same template and parse the chain
 // once (doc/editor/parsers.md, "A `variants` selection an arc carries").
 // The arc's full
-// selection - what a USD save writes back on the carrier - is the
-// Prefab_instance's, not the key's.
+// selection - what a USD save writes back on the carrier - is the carrier
+// prim's own Composition_arc record, not the key's.
+// One variant set a prefab template's tree declares: the set `set_name` of
+// the prim `relative_path` names below the template's root prim, an empty
+// path being the root prim itself. The same coordinates
+// erhe::Composition_variant_selection uses, so a selection entry names the
+// set it selects in exactly when its two path/name fields match one of
+// these.
+//
+// A template reports the sets it CONSUMES - the ones its own file declares
+// plus the ones the files its arcs bring in declare, re-rooted at this
+// template's root - and a selection entry naming a set outside that list
+// selects nothing anywhere in the template, so it is not part of the
+// template's identity (doc/editor/parsers.md, "A `variants` selection an
+// arc carries").
+class Prefab_variant_set_key final
+{
+public:
+    std::string relative_path;
+    std::string set_name;
+
+    [[nodiscard]] auto operator< (const Prefab_variant_set_key& rhs) const -> bool;
+    [[nodiscard]] auto operator==(const Prefab_variant_set_key& rhs) const -> bool;
+};
+
 class Prefab_key
 {
 public:
-    std::filesystem::path                 source_path; // canonical
-    std::string                           prim_path;
-    std::vector<Prefab_variant_selection> variant_selections;
+    std::filesystem::path                            source_path; // canonical
+    std::string                                      prim_path;
+    std::vector<erhe::Composition_variant_selection> variant_selections;
 
     [[nodiscard]] auto operator< (const Prefab_key& rhs) const -> bool
     {
@@ -89,7 +111,7 @@ class Prefab
 public:
     std::filesystem::path                                   source_path;   // canonical
     std::string                                             prim_path;     // USD source prim, empty for glTF
-    std::vector<Prefab_variant_selection>                   variant_selections; // the consumed part of the arc's `variants`, empty for glTF
+    std::vector<erhe::Composition_variant_selection>        variant_selections; // the consumed part of the arc's `variants`, empty for glTF
     // The variant sets this template's tree declares, its arcs' targets
     // included, in this template's own coordinates. Empty for glTF, which has
     // no variant sets. What Prefab_library reduces an arc's selection against.
@@ -124,9 +146,9 @@ public:
     // cache key, so two arcs whose selections differ only in entries the
     // target declares no variant set for share one template.
     auto get_or_load(
-        const std::filesystem::path&                 path,
-        const std::string&                           prim_path = {},
-        const std::vector<Prefab_variant_selection>& variant_selections = {}
+        const std::filesystem::path&                            path,
+        const std::string&                                      prim_path = {},
+        const std::vector<erhe::Composition_variant_selection>& variant_selections = {}
     ) -> std::shared_ptr<Prefab>;
 
     // Asynchronous form (doc/editor/async_asset_loading_design.md step 7): the file is
@@ -143,16 +165,16 @@ public:
         std::function<void(const std::shared_ptr<Prefab>&)> on_ready
     );
     void get_or_load_async(
-        const std::filesystem::path&                         path,
-        const std::string&                                   prim_path,
-        const std::vector<Prefab_variant_selection>&         variant_selections,
-        std::function<void(const std::shared_ptr<Prefab>&)>  on_ready
+        const std::filesystem::path&                            path,
+        const std::string&                                      prim_path,
+        const std::vector<erhe::Composition_variant_selection>& variant_selections,
+        std::function<void(const std::shared_ptr<Prefab>&)>     on_ready
     );
 
     // Re-parse a previously loaded prefab from its source file and propagate
     // the change everywhere: templates of prefabs that (transitively)
     // reference the reloaded prefab are rebuilt in dependency order, then
-    // every Prefab_instance node in every registered scene whose source was
+    // every carrier prim in every registered scene whose source was
     // rebuilt is re-cloned in place, preserving the carrier node's
     // transform, name and flags. Deliberately not undoable: instances are
     // projections of the prefab source file, not scene edits. Returns false
@@ -179,13 +201,13 @@ public:
     // The key a source file, prim path and arc selection name: the selection
     // reduced to the entries the already loaded template of that file and prim
     // consumes. Identity for a file no template of which is loaded yet, and
-    // for glTF. Public because a Prefab_instance records the arc's FULL
+    // for glTF. Public because a carrier prim's arc records the FULL
     // selection, so finding the template an instance came from goes through
     // this.
     [[nodiscard]] auto make_key(
-        const std::filesystem::path&                 path,
-        const std::string&                           prim_path,
-        const std::vector<Prefab_variant_selection>& variant_selections
+        const std::filesystem::path&                            path,
+        const std::string&                                      prim_path,
+        const std::vector<erhe::Composition_variant_selection>& variant_selections
     ) const -> Prefab_key;
 
 private:
@@ -193,10 +215,10 @@ private:
     // the loaded templates of (path, prim_path) declare. Everything when
     // nothing is known about that file and prim yet.
     [[nodiscard]] auto reduce_variant_selections(
-        const std::filesystem::path&                 path,
-        const std::string&                           prim_path,
-        const std::vector<Prefab_variant_selection>& variant_selections
-    ) const -> std::vector<Prefab_variant_selection>;
+        const std::filesystem::path&                            path,
+        const std::string&                                      prim_path,
+        const std::vector<erhe::Composition_variant_selection>& variant_selections
+    ) const -> std::vector<erhe::Composition_variant_selection>;
 
     // Merge one loaded template's consumed variant sets into what is known
     // about its file and prim.
@@ -243,7 +265,7 @@ private:
     // prohibits cycles and loading rejects them).
     [[nodiscard]] auto collect_affected_in_dependency_order(const std::vector<Prefab_key>& seeds) const -> std::vector<Prefab_key>;
 
-    // Re-clone every Prefab_instance node in every registered scene whose
+    // Re-clone every carrier prim in every registered scene whose
     // source is in rebuilt_keys, and replace the affected scenes'
     // content-library texture / material entries (the re-parse produced new
     // objects).
@@ -260,7 +282,7 @@ private:
 };
 
 // Instantiate a prefab into a scene: clone the template subtree under a new
-// instance root node carrying a Prefab_instance attachment, register the
+// instance root node carrying the composition arc, register the
 // prefab's shared resources in the scene's content library, and queue the
 // whole insertion as one undoable Compound_operation (mirrors
 // place_brush_in_scene). Returns the instance root node. The parent is any
@@ -275,8 +297,9 @@ auto instantiate_prefab(
     std::size_t                               index_in_parent = 0
 ) -> std::shared_ptr<erhe::scene::Node>;
 
-// Attach a Prefab_instance marker and a clone of the prefab's template
-// under an existing node, retargeting cloned meshes to content_layer_id and
+// Append a composition arc naming the prefab (doc/erhe/item.md "Composition
+// arcs") to an existing node and clone the prefab's template
+// under it, retargeting cloned meshes to content_layer_id and
 // appending mesh-carrying nodes to out_mesh_node_items when non-null. The
 // building block shared by instantiate_prefab and glTF external-asset
 // import. `arc_kind` is the composition arc the instance was authored as,
@@ -285,21 +308,21 @@ auto instantiate_prefab(
 // (doc/erhe/usd_compatibility_design.md X2): they are applied to the fresh clones
 // before a glTF instance is sealed, so a sealed item still receives them.
 // `authored_variant_selections`, when non-null, is the `variants` selection
-// the arc carries as the file spells it; the instance records that, which is
+// the arc carries as the file spells it; the arc record holds that, which is
 // what a USD save writes back, while the template is keyed on the part of it
 // the target consumes. The template's own selection stands when it is null.
 void attach_prefab_instance(
-    const std::shared_ptr<Prefab>&                        prefab,
-    const std::shared_ptr<erhe::scene::Node>&             node,
-    erhe::scene::Layer_id                                 content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>*        out_mesh_node_items,
-    Prefab_arc_kind                                       arc_kind = Prefab_arc_kind::reference,
-    const std::vector<erhe::scene::Instance_override>*    overrides = nullptr,
-    const std::vector<Prefab_variant_selection>*          authored_variant_selections = nullptr
+    const std::shared_ptr<Prefab>&                          prefab,
+    const std::shared_ptr<erhe::scene::Node>&               node,
+    erhe::scene::Layer_id                                   content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>*          out_mesh_node_items,
+    erhe::Composition_arc_kind                              arc_kind = erhe::Composition_arc_kind::reference,
+    const std::vector<erhe::scene::Instance_override>*      overrides = nullptr,
+    const std::vector<erhe::Composition_variant_selection>* authored_variant_selections = nullptr
 );
 
 // Collect glTF 2.1 external-asset references for export: walks the subtree
-// under root_node and maps each node carrying a Prefab_instance attachment
+// under root_node and maps each node carrying a composition arc
 // to a files-array entry (URI relativized against export_directory when
 // possible, MIME type by source extension). Does not descend into instance
 // subtrees - their content lives in the referenced file. Pass the result to
@@ -312,8 +335,8 @@ void attach_prefab_instance(
 // Resolve glTF 2.1 external assets in freshly parsed gltf_data: for each
 // node that instantiates an external asset, load the referenced prefab
 // through the library (recursively; reference cycles are errors, per the
-// glTF 2.1 spec) and clone its template under the carrier node, which is
-// marked with a Prefab_instance attachment. Cloned meshes are pointed at
+// glTF 2.1 spec) and clone its template under the carrier node, which
+// records the arc. Cloned meshes are pointed at
 // content_layer_id and appended to out_mesh_node_items when non-null.
 // The instancing scene lists nothing of the template: a material a template
 // supplies is owned by the prefab library (Prefab_library::owns_material) and

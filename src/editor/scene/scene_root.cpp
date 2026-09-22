@@ -29,7 +29,6 @@
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
-#include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/joint.hpp"
 #include "scene/joint_system.hpp"
@@ -47,6 +46,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_item/composition_arc.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -1013,17 +1013,13 @@ auto Scene_root::make_browser_window(
             std::vector<std::function<void()>>&,
             bool&                                   close
         ) {
-            std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(item);
-            if (!prefab_instance) {
-                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (node) {
-                    prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
-                }
-            }
-            if (!prefab_instance || prefab_instance->get_prefab_source_path().empty()) {
+            // One arc is what one menu entry can open, so the carrier's
+            // first arc is the one offered.
+            const erhe::Composition_arc* const arc = get_first_instance_arc(*item.get());
+            if ((arc == nullptr) || arc->source_path.empty()) {
                 return;
             }
-            const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
+            const std::filesystem::path& source_path = arc->source_path;
             const std::string label = fmt::format("Load '{}'", erhe::file::to_string(source_path));
             if (ImGui::MenuItem(label.c_str())) {
                 context.app_message_bus->load_scene_file.queue_message(
@@ -2155,7 +2151,7 @@ namespace {
 auto is_content_embedded_camera(const erhe::scene::Camera& camera) -> bool
 {
     for (const erhe::scene::Node* node = &camera; node != nullptr; node = node->get_parent_node().get()) {
-        if (erhe::scene::get_attachment<Prefab_instance>(node)) {
+        if (is_instance_carrier(*node)) {
             return true;
         }
     }

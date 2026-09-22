@@ -1,11 +1,11 @@
 #include "windows/property_origin.hpp"
 
 #include "prefabs/instance_structure.hpp"
-#include "prefabs/prefab_instance.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_item/composition_arc.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_object.hpp"
@@ -62,29 +62,29 @@ constexpr std::size_t c_max_walk = 32;
 
 // The prim path an arc names in the file it targets. A USD arc that names the
 // target layer's default prim, and every glTF prefab, store an empty path.
-[[nodiscard]] auto arc_target_prim_path(const Prefab_instance& prefab_instance) -> std::string
+[[nodiscard]] auto arc_target_prim_path(const erhe::Composition_arc& arc) -> std::string
 {
-    const std::string& prim_path = prefab_instance.get_prefab_prim_path();
+    const std::string& prim_path = arc.prim_path;
     if (prim_path.empty()) {
         return "/<defaultPrim>";
     }
     return (prim_path.front() == '/') ? prim_path : ("/" + prim_path);
 }
 
-[[nodiscard]] auto arc_of(const Prefab_instance& prefab_instance) -> Property_arc
+[[nodiscard]] auto arc_of(const erhe::Composition_arc& arc) -> Property_arc
 {
-    return (prefab_instance.get_prefab_arc_kind() == Prefab_arc_kind::payload)
+    return (arc.kind == erhe::Composition_arc_kind::payload)
         ? Property_arc::payload
         : Property_arc::reference;
 }
 
 // "<file></prim>": the arc as it is authored on the carrier prim.
-[[nodiscard]] auto arc_target_text(const Prefab_instance& prefab_instance) -> std::string
+[[nodiscard]] auto arc_target_text(const erhe::Composition_arc& arc) -> std::string
 {
     return fmt::format(
         "{}{}",
-        erhe::file::to_string(prefab_instance.get_prefab_source_path()),
-        arc_target_prim_path(prefab_instance)
+        erhe::file::to_string(arc.source_path),
+        arc_target_prim_path(arc)
     );
 }
 
@@ -226,23 +226,23 @@ auto describe_property_origin(
         // X2: the value is the template counterpart's, reached through the
         // carrier's arc. The counterpart sits at the item's own path below the
         // arc's target prim, the level X1 collapses onto the carrier.
-        if (!position.prefab_instance) {
+        if (position.arc == nullptr) {
             origin.authored_as = "a reference counterpart";
             return origin;
         }
-        const Prefab_instance& prefab_instance = *position.prefab_instance;
-        origin.layer      = erhe::file::to_string(prefab_instance.get_prefab_source_path());
-        origin.prim_path  = join_prim_path(arc_target_prim_path(prefab_instance), position.relative_path);
-        origin.arc        = arc_of(prefab_instance);
-        origin.arc_target = arc_target_text(prefab_instance);
+        const erhe::Composition_arc& arc = *position.arc;
+        origin.layer      = erhe::file::to_string(arc.source_path);
+        origin.prim_path  = join_prim_path(arc_target_prim_path(arc), position.relative_path);
+        origin.arc        = arc_of(arc);
+        origin.arc_target = arc_target_text(arc);
         // A counterpart that is itself inside an instance names its own arc
         // after an arrow; one level of nesting is enough for the text.
         const std::shared_ptr<const Dependency_object>& counterpart = item.get_reference();
         const erhe::Item_base* counterpart_item = (counterpart ? dynamic_cast<const erhe::Item_base*>(counterpart.get()) : nullptr);
         if (counterpart_item != nullptr) {
             const Instance_position nested = find_instance_position(*counterpart_item);
-            if (nested.prefab_instance) {
-                origin.arc_target += " -> " + arc_target_text(*nested.prefab_instance);
+            if (nested.arc != nullptr) {
+                origin.arc_target += " -> " + arc_target_text(*nested.arc);
             }
         }
         origin.authored_as = authored_as_of(item, property, metadata, format, Instance_position{});
@@ -256,8 +256,8 @@ auto describe_property_origin(
     origin.arc   = Property_arc::root_layer;
     if (position.carrier != nullptr) {
         origin.prim_path  = join_prim_path(scene_prim_path(*position.carrier), position.relative_path);
-        origin.arc        = arc_of(*position.prefab_instance);
-        origin.arc_target = arc_target_text(*position.prefab_instance);
+        origin.arc        = arc_of(*position.arc);
+        origin.arc_target = arc_target_text(*position.arc);
     } else {
         origin.prim_path = scene_prim_path(item);
     }

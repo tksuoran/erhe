@@ -1047,8 +1047,8 @@ public:
 // values, plus the `references` and `payload` list ops these arcs give it -
 // and the prims below it are not written, because the arcs' targets supply
 // them (doc/erhe/usd_compatibility_design.md X1). The caller names the arcs: the
-// editor fills them from the carrier's Prefab_instance attachments, and
-// nothing in erhe::usd knows that type.
+// editor fills them from the carrier prim's own composition arc record
+// (doc/erhe/item.md "Composition arcs").
 class Usd_save_prim_references final
 {
 public:
@@ -1190,8 +1190,8 @@ public:
 // prototype, written where it sits and named by `rel prototypes` in tree
 // order. erhe::usd names no editor type, so the caller is what decides which
 // children are instances and which prototype each one instances (the editor:
-// the children carrying a Prefab_instance attachment, resolved against the
-// prototype children).
+// the children carrying a composition arc, resolved against the prototype
+// children).
 class Usd_save_point_instancer final
 {
 public:

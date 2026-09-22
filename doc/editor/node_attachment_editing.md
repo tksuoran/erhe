@@ -69,9 +69,8 @@ catalog and goes through the same `Scene_commands` path, so it is undoable.
 Its schema in `config/editor/mcp_tools.json` advertises the same key list the
 catalog holds, so a schema-validating client can reach every kind.
 `remove_node_attachment { node_id, attachment_id | type }` queues the remove
-helper; `type` is the attachment type name `get_node_details` reports (e.g.
-`Prefab_instance`), while `attachment_id` - also in `get_node_details` - removes
-unambiguously.
+helper; `type` is the attachment type name `get_node_details` reports, while
+`attachment_id` - also in `get_node_details` - removes unambiguously.
 
 ## Verification
 

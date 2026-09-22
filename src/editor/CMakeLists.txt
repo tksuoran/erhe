@@ -440,8 +440,6 @@ erhe_target_sources_grouped(
     parsers/wavefront_obj.hpp
     prefabs/instance_structure.cpp
     prefabs/instance_structure.hpp
-    prefabs/prefab_instance.cpp
-    prefabs/prefab_instance.hpp
     prefabs/prefab_library.cpp
     prefabs/prefab_library.hpp
     physics/collision_generator.hpp

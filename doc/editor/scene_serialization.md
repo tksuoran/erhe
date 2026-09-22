@@ -112,8 +112,8 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    from it. World-attached joints (no connected node) are skipped with a
    warning - the Khronos extension cannot express them.
 3. **Prefab external assets** - `collect_prefab_external_assets()`
-   (`prefabs/prefab_library.cpp`) walks the tree for `Prefab_instance`
-   attachments and maps those nodes to glTF 2.1 `externalAssets` references
+   (`prefabs/prefab_library.cpp`) walks the tree for prims carrying a
+   composition arc and maps those nodes to glTF 2.1 `externalAssets` references
    (URIs relativized against the save directory); the instanced subtree is
    NOT flattened into the file. See
    [`plans/gltf_prefabs.md`](../plans/gltf_prefabs.md).
@@ -375,10 +375,10 @@ arguments to the write, which plans identically; a planned path is where the
 prim lands in the file, so it is the path the item has once the file is opened
 again and the entry resolves by an exact match.
 
-A prefab instance is carried as the composition arc it came from: a node with
-`Prefab_instance` attachments is written as a referencing prim with one
-`references` (or `payload`) arc per attachment, in the attachments' order, and
-the instance content below it is not written - the arcs' targets hold it. An
+A prefab instance is carried as the composition arc it came from: a prim
+holding composition arcs (`doc/erhe/item.md`, "Composition arcs") is written
+as a referencing prim with one `references` (or `payload`) arc per record, in
+the record's order, and the instance content below it is not written - the arcs' targets hold it. An
 arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 

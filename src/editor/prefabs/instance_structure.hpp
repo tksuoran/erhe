@@ -2,22 +2,25 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 
 namespace erhe {
+    class Composition_arc;
     class Hierarchy;
     class Item_base;
+}
+namespace erhe::scene {
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {
 
-class Prefab_instance;
-
 // What a reference arc protects is STRUCTURE, not values
-// (doc/erhe/usd_compatibility_design.md X2): under a prim carrying a
-// Prefab_instance attachment no prim is added, removed or reparented, while
-// every property of every item inside the instance stays editable (a local
-// value there is an override of the reference layer).
+// (doc/erhe/usd_compatibility_design.md X2): under a prim carrying a composition
+// arc (doc/erhe/item.md "Composition arcs") no prim is added, removed or
+// reparented, while every property of every item inside the instance stays
+// editable (a local value there is an override of the reference layer).
 //
 // The two predicates answer that question for the two shapes a structural
 // edit takes; both return the user-facing reason when the edit is refused,
@@ -30,9 +33,9 @@ class Prefab_instance;
 // use the message forms.
 
 // True (a reason) when `item` is INSIDE an instance - it or an ancestor of
-// it hangs below a prim carrying a Prefab_instance attachment - so the item
-// cannot be removed or reparented. The carrier itself is a normal scene
-// prim: deleting or moving the whole instance is allowed.
+// it hangs below a prim carrying a composition arc - so the item cannot be
+// removed or reparented. The carrier itself is a normal scene prim:
+// deleting or moving the whole instance is allowed.
 [[nodiscard]] auto instance_structure_refusal(const erhe::Item_base& item) -> std::optional<std::string>;
 
 // True (a reason) when nothing can be added under `parent`: `parent` is an
@@ -48,27 +51,55 @@ class Prefab_instance;
 // attached to. nullptr for an item that is in no tree.
 [[nodiscard]] auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*;
 
+// The arcs `item` carries, empty for every item that carries none and for an
+// item that is no prim.
+[[nodiscard]] auto get_instance_arcs(const erhe::Item_base& item) -> std::span<const erhe::Composition_arc>;
+
+// The first arc of `item`, null when it carries none. The first arc is the
+// one that answers for the prim where one arc has to stand for the carrier:
+// the seal, the provenance of a value read through the reference layer and
+// the "Load '<source>'" entry.
+[[nodiscard]] auto get_first_instance_arc(const erhe::Item_base& item) -> const erhe::Composition_arc*;
+
+// True when `item` carries at least one composition arc.
+[[nodiscard]] auto is_instance_carrier(const erhe::Item_base& item) -> bool;
+
 // Where an item sits inside a prefab instance
 // (doc/erhe/usd_compatibility_design.md X1, X5). `carrier` is the referencing prim
-// at or above the item and `prefab_instance` its first arc; `relative_path`
+// at or above the item and `arc` its first arc; `relative_path`
 // is the item's M1 path below the arc's target clone, which is the carrier's
 // own child - so an empty path means the item IS that clone, the level a USD
 // save collapses onto the carrier prim. Everything is null / empty when the
-// item is inside no instance.
+// item is inside no instance. `arc` points into the carrier's own arc list,
+// so it is valid exactly as long as `carrier` is.
 class Instance_position final
 {
 public:
-    const erhe::Hierarchy*           carrier{nullptr};
-    std::shared_ptr<Prefab_instance> prefab_instance{};
-    std::string                      relative_path{};
+    const erhe::Hierarchy*       carrier{nullptr};
+    const erhe::Composition_arc* arc{nullptr};
+    std::string                  relative_path{};
 };
 
 [[nodiscard]] auto find_instance_position(const erhe::Item_base& item) -> Instance_position;
 
-// Whether this instance's interior is sealed (lock_edit and the viewport
-// locks, seal_instance_subtree): the glTF prefab editing model of
-// doc/plans/gltf_prefabs.md. A USD-backed instance is never sealed - USD
-// seals no property - and is protected by the two predicates above alone.
-[[nodiscard]] auto is_sealed_prefab_instance(const Prefab_instance& prefab_instance) -> bool;
+// Whether an instance carried by this arc has a sealed interior (lock_edit
+// and the viewport locks, seal_instance_subtree): the glTF prefab editing
+// model of doc/plans/gltf_prefabs.md. A USD-backed instance is never sealed -
+// USD seals no property - and is protected by the two predicates above alone.
+[[nodiscard]] auto is_sealed_prefab_instance(const erhe::Composition_arc& arc) -> bool;
+
+// The same question asked of a prim: its first arc decides, and a prim that
+// carries no arc is no instance root.
+[[nodiscard]] auto is_sealed_instance_carrier(const erhe::Item_base& item) -> bool;
+
+// Returns the outermost node, walking up from and including the given node,
+// that carries a SEALED composition arc (a glTF template,
+// is_sealed_prefab_instance); nullptr when the node is inside no sealed
+// instance. A sealed instance subtree is not editable in the containing
+// scene, so picking anything inside one resolves to the instance root, and
+// nested sealed instances resolve to the outermost one. A USD-backed
+// instance is not sealed: its interior picks and selects like any other prim
+// (doc/erhe/usd_compatibility_design.md X2).
+[[nodiscard]] auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene::Node*;
 
 } // namespace editor

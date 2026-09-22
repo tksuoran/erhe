@@ -14,7 +14,6 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/instance_structure.hpp"
-#include "prefabs/prefab_instance.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -538,7 +537,7 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
     // with one exception: a prefab instance is always deleted as a whole. Its
     // interior is sealed with lock_edit (seal_instance_subtree) to make it
     // non-editable, not to protect it from deleting the instance, so below a
-    // node carrying a Prefab_instance attachment everything is collected
+    // node carrying a composition arc everything is collected
     // unconditionally. (The previous for_each<Hierarchy> collection had abort
     // semantics: the first locked item ended the whole traversal, leaving
     // even unlocked siblings uncollected.)
@@ -557,8 +556,7 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         }
         recursive_selection.push_back(item.shared_from_this());
         bool collect_subtree_unconditionally = inside_prefab_instance;
-        erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(&item);
-        if ((node != nullptr) && erhe::scene::get_attachment<Prefab_instance>(node)) {
+        if (is_instance_carrier(item)) {
             collect_subtree_unconditionally = true;
         }
         for (const std::shared_ptr<erhe::Hierarchy>& child : item.get_children()) {

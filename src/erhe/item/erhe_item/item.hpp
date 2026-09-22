@@ -320,7 +320,6 @@ public:
     static constexpr uint64_t index_asset_file_scene       = 37;
     static constexpr uint64_t index_graph_texture          = 38;
     static constexpr uint64_t index_graph_mesh             = 39;
-    static constexpr uint64_t index_prefab_instance        = 40;
     static constexpr uint64_t index_asset_file_texture     = 41;
     static constexpr uint64_t index_style                  = 42;
     static constexpr uint64_t index_asset_file_usd         = 43;
@@ -377,7 +376,6 @@ public:
     static constexpr uint64_t asset_file_scene       = (uint64_t{1} << index_asset_file_scene      );
     static constexpr uint64_t graph_texture          = (uint64_t{1} << index_graph_texture         );
     static constexpr uint64_t graph_mesh             = (uint64_t{1} << index_graph_mesh            );
-    static constexpr uint64_t prefab_instance        = (uint64_t{1} << index_prefab_instance       );
     static constexpr uint64_t asset_file_texture     = (uint64_t{1} << index_asset_file_texture    );
     static constexpr uint64_t style                  = (uint64_t{1} << index_style                 );
     static constexpr uint64_t asset_file_usd         = (uint64_t{1} << index_asset_file_usd        );
@@ -431,7 +429,7 @@ public:
         "Asset_file_scene",
         "Graph_texture",
         "Graph_mesh",
-        "Prefab_instance",
+        "(unused)", // bit 40 has no type
         "Asset_file_texture",
         "Style",
         "Asset_file_usd",

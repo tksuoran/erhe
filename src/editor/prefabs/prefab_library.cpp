@@ -16,7 +16,6 @@
 #include "parsers/usd.hpp"
 #include "erhe_scene/xform_op.hpp"
 #include "prefabs/instance_structure.hpp"
-#include "prefabs/prefab_instance.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 #include "scene/scene_root.hpp"
 
@@ -32,6 +31,7 @@
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/xform.hpp"
@@ -41,8 +41,20 @@
 
 #include <algorithm>
 #include <mutex>
+#include <span>
+#include <tuple>
 
 namespace editor {
+
+auto Prefab_variant_set_key::operator<(const Prefab_variant_set_key& rhs) const -> bool
+{
+    return std::tie(relative_path, set_name) < std::tie(rhs.relative_path, rhs.set_name);
+}
+
+auto Prefab_variant_set_key::operator==(const Prefab_variant_set_key& rhs) const -> bool
+{
+    return std::tie(relative_path, set_name) == std::tie(rhs.relative_path, rhs.set_name);
+}
 
 namespace {
 
@@ -273,8 +285,8 @@ namespace {
 auto Prefab_library::reduce_variant_selections(
     const std::filesystem::path&                 path,
     const std::string&                           prim_path,
-    const std::vector<Prefab_variant_selection>& variant_selections
-) const -> std::vector<Prefab_variant_selection>
+    const std::vector<erhe::Composition_variant_selection>& variant_selections
+) const -> std::vector<erhe::Composition_variant_selection>
 {
     if (variant_selections.empty()) {
         return variant_selections;
@@ -286,9 +298,9 @@ auto Prefab_library::reduce_variant_selections(
         // below reports what it consumed.
         return variant_selections;
     }
-    std::vector<Prefab_variant_selection> result;
+    std::vector<erhe::Composition_variant_selection> result;
     result.reserve(variant_selections.size());
-    for (const Prefab_variant_selection& entry : variant_selections) {
+    for (const erhe::Composition_variant_selection& entry : variant_selections) {
         if (known->second.count(Prefab_variant_set_key{entry.relative_path, entry.set_name}) != 0) {
             result.push_back(entry);
         }
@@ -312,7 +324,7 @@ void Prefab_library::remember_consumed_variant_sets(
 auto Prefab_library::make_key(
     const std::filesystem::path&                 path,
     const std::string&                           prim_path,
-    const std::vector<Prefab_variant_selection>& variant_selections
+    const std::vector<erhe::Composition_variant_selection>& variant_selections
 ) const -> Prefab_key
 {
     const std::filesystem::path canonical_path = canonical_prefab_path(path);
@@ -326,7 +338,7 @@ auto Prefab_library::make_key(
 auto Prefab_library::get_or_load(
     const std::filesystem::path&                 path,
     const std::string&                           prim_path,
-    const std::vector<Prefab_variant_selection>& variant_selections
+    const std::vector<erhe::Composition_variant_selection>& variant_selections
 ) -> std::shared_ptr<Prefab>
 {
     const std::filesystem::path canonical_path = canonical_prefab_path(path);
@@ -347,7 +359,7 @@ auto Prefab_library::get_or_load(
     // back and the load redone. Each redo puts back at least one entry, so
     // this runs at most variant_selections.size() + 1 times, and a redo at all
     // needs a file whose variant branches declare different variant sets.
-    std::vector<Prefab_variant_selection> load_selections =
+    std::vector<erhe::Composition_variant_selection> load_selections =
         reduce_variant_selections(canonical_path, prim_path, variant_selections);
     for (;;) {
         Prefab_key key{canonical_path, prim_path, load_selections};
@@ -384,12 +396,12 @@ auto Prefab_library::get_or_load(
         }
 
         remember_consumed_variant_sets(canonical_path, prim_path, prefab->consumed_variant_sets);
-        const std::vector<Prefab_variant_selection> corrected =
+        const std::vector<erhe::Composition_variant_selection> corrected =
             reduce_variant_selections(canonical_path, prim_path, variant_selections);
         if (corrected != load_selections) {
             const bool selects_more = std::any_of(
                 corrected.cbegin(), corrected.cend(),
-                [&load_selections](const Prefab_variant_selection& entry) {
+                [&load_selections](const erhe::Composition_variant_selection& entry) {
                     return std::find(load_selections.cbegin(), load_selections.cend(), entry) == load_selections.cend();
                 }
             );
@@ -439,13 +451,13 @@ void Prefab_library::get_or_load_async(
     std::function<void(const std::shared_ptr<Prefab>&)> on_ready
 )
 {
-    get_or_load_async(path, std::string{}, std::vector<Prefab_variant_selection>{}, std::move(on_ready));
+    get_or_load_async(path, std::string{}, std::vector<erhe::Composition_variant_selection>{}, std::move(on_ready));
 }
 
 void Prefab_library::get_or_load_async(
     const std::filesystem::path&                        path,
     const std::string&                                  prim_path,
-    const std::vector<Prefab_variant_selection>&        variant_selections,
+    const std::vector<erhe::Composition_variant_selection>&        variant_selections,
     std::function<void(const std::shared_ptr<Prefab>&)> on_ready
 )
 {
@@ -861,9 +873,11 @@ void collect_prefab_external_assets_visit(
     std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>& result
 )
 {
-    const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(&node);
-    if (prefab_instance) {
-        const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
+    // A glTF file writes one external asset per carrier prim, so the first
+    // arc is the one it can state (doc/erhe/item.md "Composition arcs").
+    const erhe::Composition_arc* const arc = get_first_instance_arc(node);
+    if (arc != nullptr) {
+        const std::filesystem::path& source_path = arc->source_path;
         std::error_code error_code;
         const std::filesystem::path relative_path = std::filesystem::relative(source_path, export_directory, error_code);
         const std::string uri = (error_code || relative_path.empty())
@@ -875,7 +889,7 @@ void collect_prefab_external_assets_visit(
             erhe::gltf::Gltf_export_external_asset{
                 .uri       = uri,
                 .mime_type = is_binary ? "model/gltf-binary" : "model/gltf+json",
-                .name      = prefab_instance->get_prefab_name()
+                .name      = arc->name
             }
         );
         return; // instance content lives in the referenced file
@@ -964,7 +978,7 @@ void resolve_external_assets(
             gltf_data.node_instance_overrides.find(node_index);
         const std::vector<erhe::scene::Instance_override>* overrides =
             (overrides_it != gltf_data.node_instance_overrides.end()) ? &overrides_it->second : nullptr;
-        attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items, Prefab_arc_kind::reference, overrides);
+        attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items, erhe::Composition_arc_kind::reference, overrides);
     }
 }
 
@@ -1005,42 +1019,49 @@ void link_carrier_values_to_target(
     carrier->set_reference(target);
 }
 
-// Mark the node as a prefab instance and clone the prefab's template
-// subtree under it. Mesh clones share the template's Primitives (GPU
-// vertex/index ranges in Mesh_memory), so no GPU upload happens per
-// instance.
+// Append the composition arc naming the prefab to the node and clone the
+// prefab's template subtree under it. Mesh clones share the template's
+// Primitives (GPU vertex/index ranges in Mesh_memory), so no GPU upload
+// happens per instance.
 void attach_prefab_instance(
-    const std::shared_ptr<Prefab>&                     prefab,
-    const std::shared_ptr<erhe::scene::Node>&          node,
-    const erhe::scene::Layer_id                        content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>*     out_mesh_node_items,
-    const Prefab_arc_kind                              arc_kind,
-    const std::vector<erhe::scene::Instance_override>* overrides,
-    const std::vector<Prefab_variant_selection>*       authored_variant_selections
+    const std::shared_ptr<Prefab>&                          prefab,
+    const std::shared_ptr<erhe::scene::Node>&               node,
+    const erhe::scene::Layer_id                             content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>*          out_mesh_node_items,
+    const erhe::Composition_arc_kind                        arc_kind,
+    const std::vector<erhe::scene::Instance_override>*      overrides,
+    const std::vector<erhe::Composition_variant_selection>* authored_variant_selections
 )
 {
-    // The selection the instance records is the arc's, as the file spells it:
+    // The selection the arc records is the arc's, as the file spells it:
     // that is what a USD save writes back on the carrier. The template's own
     // selection is the part of it the template consumes - the rest selects
     // nothing in the template and is left out of its key - so it stands only
     // where the caller has no authored selection to give (an instantiation
     // made in the editor, a glTF prefab).
-    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(
-        prefab->source_path,
-        prefab->name,
-        prefab->prim_path,
-        arc_kind,
-        (authored_variant_selections != nullptr) ? *authored_variant_selections : prefab->variant_selections
-    );
-    prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
-    node->attach(prefab_instance);
+    //
+    // A carrier authors its arcs in order, so a further arc is appended to
+    // the ones the prim already holds (doc/erhe/item.md "Composition arcs").
+    const erhe::Composition_arc arc{
+        .source_path        = prefab->source_path,
+        .prim_path          = prefab->prim_path,
+        .name               = prefab->name,
+        .kind               = arc_kind,
+        .variant_selections = (authored_variant_selections != nullptr) ? *authored_variant_selections : prefab->variant_selections
+    };
+    {
+        const std::span<const erhe::Composition_arc> existing_arcs = node->get_composition_arcs();
+        std::vector<erhe::Composition_arc> arcs{existing_arcs.begin(), existing_arcs.end()};
+        arcs.push_back(arc);
+        node->set_composition_arcs(std::move(arcs));
+    }
 
     // A template child is any prim (doc/erhe/usd_compatibility_design.md U4, S1): a
     // USD arc names a `Scope` or a typeless `def` as readily as an `Xform`.
     std::vector<std::shared_ptr<erhe::Hierarchy>> clone_prims;
     const erhe::scene::Xform_op_stack* carrier_stack = node->get_xform_op_stack();
     const bool carrier_supersedes_target_transform =
-        is_usd_file_extension(prefab_instance->get_prefab_source_path()) &&
+        is_usd_file_extension(arc.source_path) &&
         (carrier_stack != nullptr) && !carrier_stack->ops.empty();
     for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
         if (!child) {
@@ -1102,7 +1123,7 @@ void attach_prefab_instance(
     if (overrides != nullptr) {
         erhe::scene::apply_instance_overrides(*node.get(), *overrides);
     }
-    if (is_sealed_prefab_instance(*prefab_instance)) {
+    if (is_sealed_prefab_instance(arc)) {
         for (const std::shared_ptr<erhe::Hierarchy>& clone_prim : clone_prims) {
             seal_instance_subtree(clone_prim);
         }
@@ -1121,47 +1142,65 @@ void refresh_instance_subtrees(
     std::set<Prefab_key>&                                refreshed_keys
 )
 {
-    const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
-    if (prefab_instance) {
-        // The instance records the arc's full selection; the template it came
-        // from is keyed on the part of it the target consumes.
-        const std::vector<Prefab_variant_selection> authored_variant_selections =
-            prefab_instance->get_prefab_variant_selections();
-        const Prefab_key key = prefab_library.make_key(
-            prefab_instance->get_prefab_source_path(),
-            prefab_instance->get_prefab_prim_path(),
-            authored_variant_selections
-        );
-        if (rebuilt_keys.contains(key)) {
-            const auto it = prefabs.find(key);
-            if (it != prefabs.end()) {
-                // Everything under an instance carrier is prefab content
-                // (the same model save and export already use: instance
-                // subtrees are never persisted), so drop all children and
-                // re-clone from the rebuilt template. The carrier node's
-                // own transform / name / flags are untouched.
-                //
-                // The overrides the instance holds are read off the clones
-                // before they go (doc/erhe/usd_compatibility_design.md X2) and put
-                // back on the fresh ones, so a template reload keeps the
-                // user's edits inside the instance.
-                const std::vector<erhe::scene::Instance_override> overrides =
-                    erhe::scene::collect_instance_overrides(*node.get());
-                node->detach(prefab_instance.get());
-                while (!node->get_children().empty()) {
-                    const std::shared_ptr<erhe::Hierarchy> child = node->get_children().back();
-                    child->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-                }
+    // Every arc the carrier holds is re-instantiated when any of their
+    // templates was rebuilt: the whole subtree below a carrier is the
+    // content its arcs supply, so it is dropped and re-cloned arc by arc,
+    // and the arc list is authored again in the same order. Identifying the
+    // arcs by their place in that list is what keeps a refresh from
+    // appending duplicates.
+    const std::span<const erhe::Composition_arc> carrier_arcs = node->get_composition_arcs();
+    if (!carrier_arcs.empty()) {
+        const std::vector<erhe::Composition_arc> arcs{carrier_arcs.begin(), carrier_arcs.end()};
+        std::vector<Prefab_key>                  keys;
+        keys.reserve(arcs.size());
+        bool any_rebuilt = false;
+        bool all_loaded  = true;
+        for (const erhe::Composition_arc& arc : arcs) {
+            // The arc records the full selection; the template it came from
+            // is keyed on the part of it the target consumes.
+            const Prefab_key key = prefab_library.make_key(arc.source_path, arc.prim_path, arc.variant_selections);
+            if (rebuilt_keys.contains(key)) {
+                any_rebuilt = true;
+            }
+            if (!prefabs.contains(key)) {
+                all_loaded = false;
+            }
+            keys.push_back(key);
+        }
+        if (any_rebuilt && !all_loaded) {
+            log_parsers->warn(
+                "Prefab instance '{}': a template of one of its arcs is not loaded - the instance is left as it is",
+                node->get_name()
+            );
+        } else if (any_rebuilt) {
+            // Everything under an instance carrier is prefab content
+            // (the same model save and export already use: instance
+            // subtrees are never persisted), so drop all children and
+            // re-clone from the rebuilt templates. The carrier node's
+            // own transform / name / flags are untouched.
+            //
+            // The overrides the instance holds are read off the clones
+            // before they go (doc/erhe/usd_compatibility_design.md X2) and put
+            // back on the fresh ones, so a template reload keeps the
+            // user's edits inside the instance.
+            const std::vector<erhe::scene::Instance_override> overrides =
+                erhe::scene::collect_instance_overrides(*node.get());
+            node->set_composition_arcs(std::vector<erhe::Composition_arc>{});
+            while (!node->get_children().empty()) {
+                const std::shared_ptr<erhe::Hierarchy> child = node->get_children().back();
+                child->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+            }
+            for (std::size_t index = 0, end = arcs.size(); index < end; ++index) {
                 attach_prefab_instance(
-                    it->second,
+                    prefabs.find(keys[index])->second,
                     node,
                     content_layer_id,
                     &mesh_node_items,
-                    prefab_instance->get_prefab_arc_kind(),
+                    arcs[index].kind,
                     &overrides,
-                    &authored_variant_selections
+                    &arcs[index].variant_selections
                 );
-                refreshed_keys.insert(key);
+                refreshed_keys.insert(keys[index]);
             }
         }
         // Instance interiors are sealed; a nested instance is refreshed via

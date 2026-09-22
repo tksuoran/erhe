@@ -577,17 +577,18 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
     return false;
 }
 
-// The `variants` selection an arc carries, in the editor's own terms: the
-// prefab types name no erhe::usd type, because a prefab is a glTF file as
-// readily as a USD one and erhe::usd is an optional dependency.
-[[nodiscard]] auto to_prefab_variant_selections(
+// The `variants` selection an arc carries, in the terms the arc record
+// speaks: erhe::Composition_arc names no erhe::usd type, because a prefab is
+// a glTF file as readily as a USD one and erhe::usd is an optional
+// dependency.
+[[nodiscard]] auto to_composition_variant_selections(
     const std::vector<erhe::usd::Usd_variant_selection>& variant_selections
-) -> std::vector<Prefab_variant_selection>
+) -> std::vector<erhe::Composition_variant_selection>
 {
-    std::vector<Prefab_variant_selection> result;
+    std::vector<erhe::Composition_variant_selection> result;
     result.reserve(variant_selections.size());
     for (const erhe::usd::Usd_variant_selection& entry : variant_selections) {
-        result.push_back(Prefab_variant_selection{entry.relative_path, entry.set_name, entry.variant_name});
+        result.push_back(erhe::Composition_variant_selection{entry.relative_path, entry.set_name, entry.variant_name});
     }
     return result;
 }
@@ -595,12 +596,12 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
 // The same selection back in erhe::usd's terms, for the load arguments and
 // for the writer.
 [[nodiscard]] auto to_usd_variant_selections(
-    const std::vector<Prefab_variant_selection>& variant_selections
+    const std::vector<erhe::Composition_variant_selection>& variant_selections
 ) -> std::vector<erhe::usd::Usd_variant_selection>
 {
     std::vector<erhe::usd::Usd_variant_selection> result;
     result.reserve(variant_selections.size());
-    for (const Prefab_variant_selection& entry : variant_selections) {
+    for (const erhe::Composition_variant_selection& entry : variant_selections) {
         result.push_back(erhe::usd::Usd_variant_selection{entry.relative_path, entry.set_name, entry.variant_name});
     }
     return result;
@@ -614,23 +615,23 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
 // own. The selection therefore travels down the arc.
 [[nodiscard]] auto propagate_variant_selections(
     const std::string&                           incoming_root_prim_path,
-    const std::vector<Prefab_variant_selection>& incoming,
+    const std::vector<erhe::Composition_variant_selection>& incoming,
     const std::string&                           stage_path
-) -> std::vector<Prefab_variant_selection>
+) -> std::vector<erhe::Composition_variant_selection>
 {
-    std::vector<Prefab_variant_selection> result;
-    for (const Prefab_variant_selection& entry : incoming) {
+    std::vector<erhe::Composition_variant_selection> result;
+    for (const erhe::Composition_variant_selection& entry : incoming) {
         const std::string absolute_path = entry.relative_path.empty()
             ? incoming_root_prim_path
             : (incoming_root_prim_path + "/" + entry.relative_path);
         if (absolute_path == stage_path) {
-            result.push_back(Prefab_variant_selection{std::string{}, entry.set_name, entry.variant_name});
+            result.push_back(erhe::Composition_variant_selection{std::string{}, entry.set_name, entry.variant_name});
             continue;
         }
         const std::string prefix = stage_path + "/";
         if (absolute_path.compare(0, prefix.size(), prefix) == 0) {
             result.push_back(
-                Prefab_variant_selection{absolute_path.substr(prefix.size()), entry.set_name, entry.variant_name}
+                erhe::Composition_variant_selection{absolute_path.substr(prefix.size()), entry.set_name, entry.variant_name}
             );
         }
     }
@@ -641,15 +642,15 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
 // authors for it, plus - stronger, because it is the outer opinion of one and
 // the same set - what reached the carrier from the load above.
 [[nodiscard]] auto merge_variant_selections(
-    const std::vector<Prefab_variant_selection>& propagated,
-    const std::vector<Prefab_variant_selection>& authored
-) -> std::vector<Prefab_variant_selection>
+    const std::vector<erhe::Composition_variant_selection>& propagated,
+    const std::vector<erhe::Composition_variant_selection>& authored
+) -> std::vector<erhe::Composition_variant_selection>
 {
-    std::vector<Prefab_variant_selection> result = propagated;
-    for (const Prefab_variant_selection& entry : authored) {
-        const std::vector<Prefab_variant_selection>::const_iterator existing = std::find_if(
+    std::vector<erhe::Composition_variant_selection> result = propagated;
+    for (const erhe::Composition_variant_selection& entry : authored) {
+        const std::vector<erhe::Composition_variant_selection>::const_iterator existing = std::find_if(
             result.cbegin(), result.cend(),
-            [&entry](const Prefab_variant_selection& kept) {
+            [&entry](const erhe::Composition_variant_selection& kept) {
                 return (kept.relative_path == entry.relative_path) && (kept.set_name == entry.set_name);
             }
         );
@@ -691,7 +692,7 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
 }
 
 // Instantiate every composition arc the file's prims author
-// (doc/erhe/usd_compatibility_design.md X1): one Prefab_instance attachment per arc,
+// (doc/erhe/usd_compatibility_design.md X1): one composition arc record per arc,
 // in the order the arcs resolved to, each with a clone of the template the arc
 // names below the carrier prim. `prim_path_prefix` limits this to one subtree,
 // which is what a template load wants. Cloned meshes are pointed at
@@ -709,7 +710,7 @@ void resolve_usd_references(
     // prims it names (propagate_variant_selections). A scene opened or
     // imported as itself has none.
     const std::string&                             incoming_selection_root = {},
-    const std::vector<Prefab_variant_selection>&   incoming_selections = {},
+    const std::vector<erhe::Composition_variant_selection>&   incoming_selections = {},
     // Filled, when non-null, with the variant sets the templates these arcs
     // bring in declare, re-rooted at `prim_path_prefix`: part of what the
     // template being loaded consumes (Prefab::consumed_variant_sets).
@@ -746,7 +747,7 @@ void resolve_usd_references(
             );
             continue;
         }
-        const std::vector<Prefab_variant_selection> propagated_selections =
+        const std::vector<erhe::Composition_variant_selection> propagated_selections =
             propagate_variant_selections(incoming_selection_root, incoming_selections, entry.stage_path);
         for (const erhe::usd::Usd_reference& reference : entry.references) {
             const std::filesystem::path target_path = resolve_reference_asset_path(source_path, reference.asset_path);
@@ -759,9 +760,9 @@ void resolve_usd_references(
                 continue;
             }
             const std::size_t children_before = carrier->get_children().size();
-            const std::vector<Prefab_variant_selection> arc_selections = merge_variant_selections(
+            const std::vector<erhe::Composition_variant_selection> arc_selections = merge_variant_selections(
                 propagated_selections,
-                to_prefab_variant_selections(reference.variant_selections)
+                to_composition_variant_selections(reference.variant_selections)
             );
             const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(
                 target_path,
@@ -794,8 +795,8 @@ void resolve_usd_references(
                 content_layer_id,
                 abstract_arc ? nullptr : out_mesh_node_items,
                 (reference.kind == erhe::usd::Usd_reference_kind::payload)
-                    ? Prefab_arc_kind::payload
-                    : Prefab_arc_kind::reference,
+                    ? erhe::Composition_arc_kind::payload
+                    : erhe::Composition_arc_kind::reference,
                 nullptr,
                 &arc_selections
             );
@@ -2220,8 +2221,8 @@ void fill_variant_table(
                         .source_path = resolve_reference_asset_path(source_path, usd_reference.asset_path),
                         .prim_path   = usd_reference.prim_path,
                         .arc_kind    = (usd_reference.kind == erhe::usd::Usd_reference_kind::payload)
-                            ? Prefab_arc_kind::payload
-                            : Prefab_arc_kind::reference
+                            ? erhe::Composition_arc_kind::payload
+                            : erhe::Composition_arc_kind::reference
                     }
                 );
             }
@@ -2912,8 +2913,8 @@ auto make_import_usd_operation(
     // opinion naming one resolves on the prim itself.
     resolve_usd_draw_modes(usd_data);
 
-    // Composition arcs: each referencing prim gets one Prefab_instance per
-    // arc, with the arc's target cloned below it. The instances ride the
+    // Composition arcs: each referencing prim records one arc per arc it
+    // authors, with the arc's target cloned below it. The instances ride the
     // import_root insert below, so an undo of the import removes them.
     if (context.prefab_library != nullptr) {
         resolve_usd_references(
@@ -2996,7 +2997,7 @@ auto load_usd_prefab_template(
     Prefab_library&                              prefab_library,
     const std::filesystem::path&                 path,
     const std::string&                           prim_path,
-    const std::vector<Prefab_variant_selection>& variant_selections
+    const std::vector<erhe::Composition_variant_selection>& variant_selections
 ) -> Usd_prefab_template
 {
     ERHE_PROFILE_FUNCTION();
@@ -3307,8 +3308,8 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // opinion naming one resolves on the prim itself.
     resolve_usd_draw_modes(usd_data);
 
-    // Composition arcs: one Prefab_instance per arc under its carrier prim,
-    // before the prims move under the scene root.
+    // Composition arcs: one arc record per arc on its carrier prim, the
+    // target cloned below it, before the prims move under the scene root.
     if (context.prefab_library != nullptr) {
         resolve_usd_references(
             context,
@@ -3407,11 +3408,11 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 namespace {
 
 // One instance of a point instancer (doc/erhe/usd_compatibility_design.md S1): a
-// content child prim of the instancer carrying a Prefab_instance attachment.
-// That is what the load makes of an instance - a content prim holding an
-// internal reference to its prototype. The content flag is what separates it
-// from a prototype, which is held abstract and carries an arc of its own, and
-// the attachment is what separates it from a prim the user parented under the
+// content child prim of the instancer carrying a composition arc. That is
+// what the load makes of an instance - a content prim holding an internal
+// reference to its prototype. The content flag is what separates it from a
+// prototype, which is held abstract and carries an arc of its own, and the
+// arc is what separates it from a prim the user parented under the
 // instancer by hand. The writer reads the same two facts off the tree.
 [[nodiscard]] auto is_point_instancer_instance(const std::shared_ptr<erhe::Hierarchy>& prim) -> bool
 {
@@ -3422,12 +3423,7 @@ namespace {
     if ((node->get_flag_bits() & erhe::Item_flags::content) == 0) {
         return false;
     }
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-        if (std::dynamic_pointer_cast<Prefab_instance>(attachment)) {
-            return true;
-        }
-    }
-    return false;
+    return node->has_composition_arcs();
 }
 
 void collect_usd_references(
@@ -3488,13 +3484,12 @@ void collect_point_instancer_prototypes(
     const erhe::scene::Node&                             instance
 ) -> std::size_t
 {
-    std::string target_path;
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : instance.get_attachments()) {
-        const std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(attachment);
-        if (prefab_instance) {
-            target_path = prefab_instance->get_prefab_prim_path();
-            break;
-        }
+    // An instance holds one internal arc, so its first arc names the
+    // prototype.
+    std::string                              target_path;
+    const std::span<const erhe::Composition_arc> instance_arcs = instance.get_composition_arcs();
+    if (!instance_arcs.empty()) {
+        target_path = instance_arcs.front().prim_path;
     }
     std::size_t best_index  = prototypes.size();
     std::size_t best_length = 0;
@@ -3554,11 +3549,12 @@ void collect_usd_point_instancers(
     out_point_instancers.push_back(std::move(entry));
 }
 
-// The composition arcs the scene carries, one entry per carrier prim: a node
-// with Prefab_instance attachments is a referencing prim, and each attachment
-// is one arc, in the order the attachments hold (doc/erhe/usd_compatibility_design.md
-// X1). The writer needs no prefab library - the attachment already names the
-// target file, the target prim and the arc form.
+// The composition arcs the scene carries, one entry per carrier prim: a prim
+// holding composition arcs is a referencing prim, and the record holds them
+// in authored order (doc/erhe/usd_compatibility_design.md X1,
+// doc/erhe/item.md "Composition arcs"). The writer needs no prefab library -
+// the record already names the target file, the target prim and the arc
+// form.
 // Whether one arc of `item` is an arc a variant block of one of its sets
 // authored: those are written inside the block, not on the prim
 // (doc/erhe/usd_compatibility_design.md C6).
@@ -3608,18 +3604,14 @@ void collect_usd_references(
     const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
     if (node) {
         erhe::usd::Usd_save_prim_references entry{};
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(attachment);
-            if (!prefab_instance) {
-                continue;
-            }
+        for (const erhe::Composition_arc& carried_arc : node->get_composition_arcs()) {
             const erhe::usd::Usd_save_reference arc{
-                .source_path = prefab_instance->get_prefab_source_path(),
-                .prim_path   = prefab_instance->get_prefab_prim_path(),
-                .kind        = (prefab_instance->get_prefab_arc_kind() == Prefab_arc_kind::payload)
+                .source_path = carried_arc.source_path,
+                .prim_path   = carried_arc.prim_path,
+                .kind        = (carried_arc.kind == erhe::Composition_arc_kind::payload)
                     ? erhe::usd::Usd_reference_kind::payload
                     : erhe::usd::Usd_reference_kind::reference,
-                .variant_selections = to_usd_variant_selections(prefab_instance->get_prefab_variant_selections())
+                .variant_selections = to_usd_variant_selections(carried_arc.variant_selections)
             };
             if (is_variant_authored_arc(variant_sets, *node.get(), arc)) {
                 continue; // the variant block writes it
@@ -3741,7 +3733,7 @@ void collect_usd_variant_sets(
                     erhe::usd::Usd_save_reference{
                         .source_path = reference.source_path,
                         .prim_path   = reference.prim_path,
-                        .kind        = (reference.arc_kind == Prefab_arc_kind::payload)
+                        .kind        = (reference.arc_kind == erhe::Composition_arc_kind::payload)
                             ? erhe::usd::Usd_reference_kind::payload
                             : erhe::usd::Usd_reference_kind::reference
                     }
@@ -4029,7 +4021,7 @@ auto load_usd_prefab_template(
     Prefab_library&,
     const std::filesystem::path& path,
     const std::string&,
-    const std::vector<Prefab_variant_selection>&
+    const std::vector<erhe::Composition_variant_selection>&
 ) -> Usd_prefab_template
 {
     log_parsers->error("USD prefab template '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());

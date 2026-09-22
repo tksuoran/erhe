@@ -303,7 +303,7 @@ checks both.
 **R26.** USD save carries the pole exactly as far as it carries the rest of
 the rest of the `Ik.*` values, which is not at all: the USD writer has a
 form for `Node_physics` and `Joint` (through the physics description),
-`Prefab_instance` (composition arcs), `Draw_mode` (`GeomModelAPI`) and
+the composition arcs of a prim, `Draw_mode` (`GeomModelAPI`) and
 `Geometry_graph_mesh` (the `erhe:scene` block), and none for rig data.
 `save_scene_usd` (`parsers/usd.cpp`) counts the nodes holding a local `Ik.*`
 value (`count_ik_value_holders` over `has_local_ik_value`) and logs one

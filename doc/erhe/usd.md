@@ -539,8 +539,9 @@ arrives as it was authored, and the arcs it names are reported in
 `Usd_data::references` as `Usd_prim_references` - the erhe prim the arcs were
 authored on, its stage path, and one `Usd_reference` per arc. The caller
 instantiates each arc's target under that prim, so the erhe scene keeps the
-instance structure instead of a flattened copy; in the editor an arc becomes a
-`Prefab_instance` attachment (`src/editor/prefabs/prefab_library.hpp`).
+instance structure instead of a flattened copy; in the editor an arc becomes
+one record of the carrier prim's own composition arc list
+(`doc/erhe/item.md`, "Composition arcs").
 
 - `asset_path` empty means an internal reference - a prim of the same layer -
   and `prim_path` empty means the target layer's default prim, which
@@ -705,8 +706,8 @@ persists and no copy of an array can drift out of step with the tree.
 `orientations` and `scales` are written when any instance needs them, so an
 instancer of plain translations stays as compact as the file that authored it.
 
-Which prototype an instance references is read off its `Prefab_instance`
-attachment: the arc target ends with the prototype's path below the
+Which prototype an instance references is read off its first composition
+arc: the arc target ends with the prototype's path below the
 instancer (`Prototypes/teapot`, `Pawn`), longest match first. An instance
 whose arc names none of the instancer's prototypes is one warning and is not
 written.
@@ -731,8 +732,8 @@ The prototype's own arcs are instantiated where the prototype sits, so the
 prim keeps them and a save writes them back, but the content they bring in is
 held abstract with the rest of the prototype - only the instances' clones of
 it draw. The editor tells an instance from a prototype by those two facts: an
-instance is a content child of the instancer carrying a `Prefab_instance`
-attachment, and a prototype is an abstract one.
+instance is a content child of the instancer carrying a composition arc, and
+a prototype is an abstract one.
 
 Not carried: time-sampled instancer arrays (the arrays are read at the default
 time), `velocities` / `accelerations` / `angularVelocities`, per-instance
@@ -1666,7 +1667,7 @@ over the tree with no file work in it.
   too, and the writer names it in a warning - a reference protects its
   structure (doc/erhe/usd_compatibility_design.md, "Out of scope"). `erhe::usd`
   knows nothing of prefabs: the editor
-  fills the arcs from the carrier's `Prefab_instance` attachments.
+  fills the arcs from the carrier prim's own composition arc record.
 - An `over` prim is typeless, so it carries no schema attribute: every value
   of an overriding item travels as an `erhe:Owner:name` custom attribute -
   `is_native_usd_property` is asked with the `custom_attributes` form, which

@@ -24,7 +24,6 @@
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/instance_structure.hpp"
-#include "prefabs/prefab_instance.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/item_lookup.hpp"
@@ -1930,8 +1929,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     // own scene, so the row renders as a leaf. A USD-backed instance is not
     // sealed (doc/erhe/usd_compatibility_design.md X2): its interior is listed,
     // selectable and editable, and only its structure is protected.
-    const std::shared_ptr<Prefab_instance> prefab_instance = node ? erhe::scene::get_attachment<Prefab_instance>(node.get()) : std::shared_ptr<Prefab_instance>{};
-    const bool is_sealed_instance_root = prefab_instance && is_sealed_prefab_instance(*prefab_instance);
+    const bool is_sealed_instance_root = is_sealed_instance_carrier(*item.get());
     bool is_leaf = true;
     if (hierarchy && !is_sealed_instance_root) {
         if (hierarchy->get_child_count(m_filter) > 0) {

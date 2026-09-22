@@ -1,6 +1,6 @@
 #pragma once
 
-#include "prefabs/prefab_instance.hpp"
+#include "prefabs/prefab_library.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -118,11 +118,11 @@ public:
 // among the target's variant sets before the target's own selection does
 // (doc/erhe/usd_compatibility_design.md C7).
 [[nodiscard]] auto load_usd_prefab_template(
-    App_context&                                 context,
-    Prefab_library&                              prefab_library,
-    const std::filesystem::path&                 path,
-    const std::string&                           prim_path,
-    const std::vector<Prefab_variant_selection>& variant_selections = {}
+    App_context&                                            context,
+    Prefab_library&                                         prefab_library,
+    const std::filesystem::path&                            path,
+    const std::string&                                      prim_path,
+    const std::vector<erhe::Composition_variant_selection>& variant_selections = {}
 ) -> Usd_prefab_template;
 
 // True for the file extensions the USD importer accepts (.usd / .usda /

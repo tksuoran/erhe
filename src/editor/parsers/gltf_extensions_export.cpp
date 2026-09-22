@@ -14,7 +14,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "parsers/gltf.hpp"
-#include "prefabs/prefab_instance.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -110,7 +110,7 @@ namespace {
         ancestor;
         ancestor = ancestor->get_parent_node()
     ) {
-        if (erhe::scene::get_attachment<Prefab_instance>(ancestor.get())) {
+        if (is_instance_carrier(*ancestor.get())) {
             return true;
         }
     }

@@ -157,8 +157,7 @@ now owns its behavior; `git log` on that record has the history.
   transform (`Light` keeps `light_type`; per-schema light classes wait
   for a light type that needs its own properties); `set_prim_parent()`,
   `get_camera()` and `get_light()` are the helpers and no typed prim has
-  a `get_node()` (`doc/erhe/scene.md`); `Node_attachment` remains
-  for `Prefab_instance`; the hierarchy
+  a `get_node()` (`doc/erhe/scene.md`); the hierarchy
   context menu's "Create" lists every creatable prim kind, resources
   included, on every prim row (child of the clicked prim) and "Add
   Attachment" the API-schema kinds (`scene/attachment_types.hpp`), the
@@ -230,8 +229,10 @@ now owns its behavior; `git log` on that record has the history.
   `payload` metadata and erhe resolves the arcs itself:
   `Usd_data::references` lists each prim's arcs in the order USD
   composes them, the importer stops below a referencing prim, and the
-  editor attaches one `Prefab_instance` per arc (source path, prim path,
-  arc kind) and clones the target through `Prefab_library`, keyed by
+  editor records one `erhe::Composition_arc` per arc on the carrier prim
+  (source path, prim path, arc kind, `variants` selection;
+  `doc/erhe/item.md`, "Composition arcs") and clones the target through
+  `Prefab_library`, keyed by
   (file, prim path) and loading a USD file at a prim as a template
   (`doc/erhe/usd.md` "Import", `doc/editor/parsers.md`,
   `doc/plans/gltf_prefabs.md`). The instance content is the target prim
@@ -391,7 +392,7 @@ now owns its behavior; `git log` on that record has the history.
   transform. And an override path is resolved one segment at a time,
   looking one level down through the clone of every carrier it crosses
   and not only the first (`erhe::scene::find_instance_item`; a carrier
-  is a prim holding an attachment with the `prefab_instance` type bit),
+  is a prim holding a composition arc),
   so the intent-vfx teapot's `over "geo" { over "default" { over "Body"
   } }` reaches the mesh below the second reference
   (`doc/erhe/usd.md` "Variant sets", "xformOp stacks";
@@ -411,7 +412,7 @@ now owns its behavior; `git log` on that record has the history.
   declare the set and hold the variant, each failing entry one warning and
   dropped - and the hoist and the reader both consult the kept entries
   before the prim's own `variants` metadatum. The editor keys a template by
-  the selection (`Prefab_key`, `Prefab_variant_selection`), so two carriers
+  the selection (`Prefab_key`, `erhe::Composition_variant_selection`), so two carriers
   selecting different variants of one target load two templates, which is
   what USD composes; a selection also reaches the arcs of the prims it
   names, because a variant set is composed once out of the prim's whole
@@ -422,7 +423,7 @@ now owns its behavior; `git log` on that record has the history.
   templates' own lists) - so a selection travelling down an arc to a file
   that declares no set of that name parses that chain once
   (doc/editor/parsers.md, "A `variants` selection an arc carries").
-  `Prefab_instance` records
+  The arc record holds
   the arc's FULL selection, a read-only Properties
   row and `get_node_details` show it, and the writer authors it back on the
   carrier - merged into the carrier's own `variants` metadatum, a deeper
@@ -530,8 +531,8 @@ now owns its behavior; `git log` on that record has the history.
   inherits as styles (X3), variant selections as bindings (X4) - so the
   erhe value source IS the composition provenance, and a value's origin in
   USD terms is a function of `Value_source` plus what the editor knows
-  about the item: its scene's file, its prim path, the `Prefab_instance`
-  carrier above it and the `Style` it uses.
+  about the item: its scene's file, its prim path, the arc carrier above
+  it and the `Style` it uses.
   `editor::describe_property_origin`
   (`src/editor/windows/property_origin.hpp`) derives it on demand - layer,
   prim path, arc, arc target and the attribute a save spells the value as,

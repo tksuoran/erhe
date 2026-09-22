@@ -2,9 +2,8 @@
 
 #include "app_message.hpp"
 
+#include "erhe_item/composition_arc.hpp"
 #include "erhe_scene/instance_override.hpp"
-
-#include "prefabs/prefab_instance.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -64,15 +63,16 @@ public:
 };
 
 // One composition arc a variant block authors
-// (doc/erhe/usd_compatibility_design.md C6). The prim carrying the set holds the selected variant's
-// arcs as Prefab_instance attachments, and this is what tells a save that the
-// arc belongs in the block rather than on the prim.
+// (doc/erhe/usd_compatibility_design.md C6). The prim carrying the set holds the
+// selected variant's arcs in its own composition arc record
+// (doc/erhe/item.md "Composition arcs"), and this is what tells a save that
+// the arc belongs in the block rather than on the prim.
 class Variant_reference
 {
 public:
-    std::filesystem::path source_path;
-    std::string           prim_path;
-    Prefab_arc_kind       arc_kind{Prefab_arc_kind::reference};
+    std::filesystem::path      source_path;
+    std::string                prim_path;
+    erhe::Composition_arc_kind arc_kind{erhe::Composition_arc_kind::reference};
 };
 
 // One variant of a variant set: its name, the bindings it authors, the
