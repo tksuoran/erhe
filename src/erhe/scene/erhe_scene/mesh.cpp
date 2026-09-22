@@ -111,7 +111,7 @@ const erhe::property::Property<glm::vec3> Mesh::world_bounds_min_property = erhe
     [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value { return world_bounds_corner(object, false); },
     erhe::property::Property_metadata{
         .flags = erhe::property::Property_flags::none,
-        .ui    = erhe::property::Property_ui{.group = "World", .tooltip = "Minimum corner of the world-space bounding box (computed)", .label = "Bounds Min"}
+        .ui    = erhe::property::Property_ui{.group = "World Transform", .tooltip = "Minimum corner of the world-space bounding box (computed)", .label = "Bounds Min"}
     }
 );
 const erhe::property::Property<glm::vec3> Mesh::world_bounds_max_property = erhe::property::Property<glm::vec3>::register_computed(
@@ -119,7 +119,7 @@ const erhe::property::Property<glm::vec3> Mesh::world_bounds_max_property = erhe
     [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value { return world_bounds_corner(object, true); },
     erhe::property::Property_metadata{
         .flags = erhe::property::Property_flags::none,
-        .ui    = erhe::property::Property_ui{.group = "World", .tooltip = "Maximum corner of the world-space bounding box (computed)", .label = "Bounds Max"}
+        .ui    = erhe::property::Property_ui{.group = "World Transform", .tooltip = "Maximum corner of the world-space bounding box (computed)", .label = "Bounds Max"}
     }
 );
 

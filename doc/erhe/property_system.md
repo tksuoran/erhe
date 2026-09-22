@@ -961,7 +961,9 @@ table, see D2a), and references to other objects (D28).
     writing intensity.
   - Node. `world_translation` (vec3), `world_rotation` (quat) and
     `world_scale` (vec3) read the components of `world_from_node_transform()`
-    (group `World`, tooltips naming the world space); `child_count` (int)
+    (group `World Transform`, tooltips naming the world space; the bridged
+    `translation`, `rotation` and `scale` sit in `Local Transform`);
+    `child_count` (int)
     reads `get_child_count()`. `Node::handle_transform_update` invalidates
     the three world properties next to the three bridged ones: it runs on
     the node that was written and, through `Scene::update_node_transforms`
@@ -972,7 +974,7 @@ table, see D2a), and references to other objects (D28).
     invalidate `child_count`; the property is registered by `Hierarchy`
     with its own owner type, so `Node` and `Content_library_node`, the
     two classes deriving from it, both list it.
-  - Mesh. `world_bounds_min` and `world_bounds_max` (vec3, group `World`)
+  - Mesh. `world_bounds_min` and `world_bounds_max` (vec3, group `World Transform`)
     read `get_aabb_world()`; a mesh whose box is invalid (no primitives)
     reports `0 0 0` for both. `Mesh::handle_node_transform_update` and
     the primitive mutation paths (`clear_primitives`, `add_primitive`,

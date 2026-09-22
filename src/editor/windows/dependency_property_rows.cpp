@@ -465,7 +465,7 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
         }
         groups_done.push_back(group);
         const bool collapsed = (property->get_metadata(owner_type).ui.group_state == Property_ui::Group_state::collapsed);
-        editor.push_group(std::string{group}, collapsed ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen);
+        editor.push_group(std::string{group}, collapsed ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen, editor.get_group_indent());
         for (const Dependency_property* grouped : properties) {
             if (grouped->get_metadata(owner_type).ui.group == group) {
                 row(editor, *grouped);

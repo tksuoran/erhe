@@ -27,6 +27,8 @@ public:
     void resume             ();
     void push_group         (std::string&& label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
     void pop_group          ();
+    // The indent the window gives the rows of a group below the group header.
+    [[nodiscard]] auto get_group_indent() const -> float { return m_indent; }
     // label_text_color tints the label text (IM_COL32); a row of a
     // registered property (Dependency_property_rows) is tinted so the
     // rows still hand-written for an item are told apart at a glance.

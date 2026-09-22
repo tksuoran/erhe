@@ -114,7 +114,7 @@ const Property<glm::vec3> Xformable::translation_property = Property<glm::vec3>:
     Property_metadata{
         .default_value = glm::vec3{0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
-        .ui            = Property_ui{.step = 0.01f, .tooltip = "Position relative to the parent node", .label = "Translation"},
+        .ui            = Property_ui{.step = 0.01f, .group = "Local Transform", .tooltip = "Position relative to the parent node", .label = "Translation"},
         .bridge        = make_transform_bridge<glm::vec3>(
             &Trs_transform::get_translation, &Trs_transform::set_translation,
             []() -> const erhe::property::Dependency_property& { return Xformable::translation_property.get(); }
@@ -126,7 +126,7 @@ const Property<glm::quat> Xformable::rotation_property = Property<glm::quat>::re
     Property_metadata{
         .default_value = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
-        .ui            = Property_ui{.step = 0.5f, .tooltip = "Rotation relative to the parent node (edited as Euler degrees)", .label = "Rotation"},
+        .ui            = Property_ui{.step = 0.5f, .group = "Local Transform", .tooltip = "Rotation relative to the parent node (edited as Euler degrees)", .label = "Rotation"},
         .bridge        = make_transform_bridge<glm::quat>(
             &Trs_transform::get_rotation, &Trs_transform::set_rotation,
             []() -> const erhe::property::Dependency_property& { return Xformable::rotation_property.get(); }
@@ -138,7 +138,7 @@ const Property<glm::vec3> Xformable::scale_property = Property<glm::vec3>::regis
     Property_metadata{
         .default_value = glm::vec3{1.0f, 1.0f, 1.0f},
         .flags         = c_transform_flags,
-        .ui            = Property_ui{.step = 0.01f, .tooltip = "Scale relative to the parent node", .label = "Scale"},
+        .ui            = Property_ui{.step = 0.01f, .group = "Local Transform", .tooltip = "Scale relative to the parent node", .label = "Scale"},
         .bridge        = make_transform_bridge<glm::vec3>(
             &Trs_transform::get_scale, &Trs_transform::set_scale,
             []() -> const erhe::property::Dependency_property& { return Xformable::scale_property.get(); }
@@ -154,7 +154,7 @@ const Property<glm::vec3> Xformable::world_translation_property = Property<glm::
     },
     Property_metadata{
         .flags = Property_flags::none,
-        .ui    = Property_ui{.group = "World", .tooltip = "Position in world space (computed)", .label = "Translation"}
+        .ui    = Property_ui{.group = "World Transform", .tooltip = "Position in world space (computed)", .label = "Translation"}
     }
 );
 const Property<glm::quat> Xformable::world_rotation_property = Property<glm::quat>::register_computed(
@@ -164,7 +164,7 @@ const Property<glm::quat> Xformable::world_rotation_property = Property<glm::qua
     },
     Property_metadata{
         .flags = Property_flags::none,
-        .ui    = Property_ui{.group = "World", .tooltip = "Rotation in world space (computed, shown as Euler degrees)", .label = "Rotation"}
+        .ui    = Property_ui{.group = "World Transform", .tooltip = "Rotation in world space (computed, shown as Euler degrees)", .label = "Rotation"}
     }
 );
 const Property<glm::vec3> Xformable::world_scale_property = Property<glm::vec3>::register_computed(
@@ -174,7 +174,7 @@ const Property<glm::vec3> Xformable::world_scale_property = Property<glm::vec3>:
     },
     Property_metadata{
         .flags = Property_flags::none,
-        .ui    = Property_ui{.group = "World", .tooltip = "Scale in world space (computed)", .label = "Scale"}
+        .ui    = Property_ui{.group = "World Transform", .tooltip = "Scale in world space (computed)", .label = "Scale"}
     }
 );
 
