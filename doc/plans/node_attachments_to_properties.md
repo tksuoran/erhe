@@ -261,10 +261,13 @@ P11 remains. It is worked through
   section is two checks),
   pass 465, the three failures being the falling-body positions of the P6
   bodies, `textured ... local_property_names` and `references_override: the
-  def below a carrier authored nothing`; `ctest -R "Mcp_"` 72 of 73, the
-  failure being the layout-dependent
-  `property_row_is_addressable_by_its_label` (or, under another layout, the
-  gizmo-drag case); `scripts/undo_reference_clearing_smoke_test.py` 59;
+  def below a carrier authored nothing`; `ctest -R "Mcp_"` with the failing set
+  fixed by the machine's window layout (the pointer-driven cases:
+  `property_row_is_addressable_by_its_label`,
+  `injected_pointer_click_selects_the_mesh_under_it`,
+  `mouse_wheel_over_a_viewport_zooms_the_camera`,
+  `mouse_drag_on_a_transform_handle_moves_the_selection`; a phase holds when
+  the set is the same as a pristine run under the same layout); `scripts/undo_reference_clearing_smoke_test.py` 59;
   `scripts/geometry_nodes_smoke_test.py` 136;
   `scripts/physics_drag_joint_sweep.py` 16 of 16 on `--jolt` and `--box3d`.
 - P11 starts from `src/editor/scene/attachment_types.{hpp,cpp}`: the applied
