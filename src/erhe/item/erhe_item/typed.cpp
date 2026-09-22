@@ -9,9 +9,27 @@ namespace erhe {
 Typed::Typed()           = default;
 Typed::~Typed() noexcept = default;
 
-Typed::Typed(const Typed& other) = default;
+// The arc list is prim-held storage, so a copy - and every clone, which
+// reaches this constructor through `Typed(src, for_clone)` - deep-copies it:
+// a pasted instance is an instance of the same source.
+Typed::Typed(const Typed& other)
+    : Item{other}
+    , m_prim_type_name{other.m_prim_type_name}
+{
+    if (other.m_composition_arcs) {
+        m_composition_arcs = std::make_unique<std::vector<Composition_arc>>(*other.m_composition_arcs);
+    }
+}
 
-Typed& Typed::operator=(const Typed& other) = default;
+Typed& Typed::operator=(const Typed& other)
+{
+    Item::operator=(other);
+    m_prim_type_name = other.m_prim_type_name;
+    m_composition_arcs = other.m_composition_arcs
+        ? std::make_unique<std::vector<Composition_arc>>(*other.m_composition_arcs)
+        : std::unique_ptr<std::vector<Composition_arc>>{};
+    return *this;
+}
 
 Typed::Typed(const std::string_view name)
     : Item{name}
@@ -81,6 +99,50 @@ void Typed::set_prim_type_name(const std::string_view prim_type_name)
     }
     m_prim_type_name.assign(prim_type_name);
 }
+
+auto Typed::has_composition_arcs() const -> bool
+{
+    return static_cast<bool>(m_composition_arcs);
+}
+
+auto Typed::get_composition_arcs() const -> std::span<const Composition_arc>
+{
+    if (!m_composition_arcs) {
+        return std::span<const Composition_arc>{};
+    }
+    return std::span<const Composition_arc>{*m_composition_arcs};
+}
+
+void Typed::set_composition_arcs(std::vector<Composition_arc> arcs)
+{
+    if (arcs.empty()) {
+        m_composition_arcs.reset();
+    } else if (m_composition_arcs) {
+        *m_composition_arcs = std::move(arcs);
+    } else {
+        m_composition_arcs = std::make_unique<std::vector<Composition_arc>>(std::move(arcs));
+    }
+    invalidate_dependents(composition_arcs_property.get()); // D26: the computed text re-evaluates
+}
+
+const erhe::property::Property<std::string> Typed::composition_arcs_property =
+    erhe::property::Property<std::string>::register_computed(
+        "composition_arcs", Typed::property_owner_type(),
+        [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+            return to_string(static_cast<const Typed&>(object).get_composition_arcs());
+        },
+        erhe::property::Property_metadata{
+            .flags = erhe::property::Property_flags::none,
+            .ui    = erhe::property::Property_ui{
+                .group        = "Composition",
+                .tooltip      = "The composition arcs this prim carries, one line per arc: the arc form, the file it names, the target prim in brackets and the `variants` selection the arc carries into it",
+                .label        = "Arcs",
+                .visible_when = [](const erhe::property::Dependency_object& object) -> bool {
+                    return static_cast<const Typed&>(object).has_composition_arcs();
+                }
+            }
+        }
+    );
 
 const erhe::property::Property<std::string> Typed::type_name_property = erhe::property::Property<std::string>::register_property(
     "type_name", Typed::property_owner_type(),

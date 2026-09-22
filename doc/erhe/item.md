@@ -56,6 +56,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 ### Typed / Scope
 - `get_prim_type_name()`, `set_prim_type_name(token)`, `get_class_type_name()` (virtual), `type_name_property` - the prim's USD `typeName` token, see "Prim classes"
 - `handle_parent_update()`, `handle_item_host_update()` (virtual) - the item-host hook of the prim class hierarchy, see "Prim classes"
+- `has_composition_arcs()`, `get_composition_arcs()`, `set_composition_arcs(arcs)`, `composition_arcs_property` - the arcs applied to the prim, see "Composition arcs"
 - `Scope::get_secondary_property_owner_type()` - the root owner type, see "Prim classes"
 
 ### Free functions
@@ -176,6 +177,35 @@ any class's value properties by qualified name (`Material.roughness` on a
 materials scope) and its descendants inherit them - the content-library
 folder rule.
 
+## Composition arcs
+
+A prim whose subtree was instantiated from another file carries the arcs that
+brought the content in, in authored order, as a record of its own
+(`erhe_item/composition_arc.hpp`,
+`doc/erhe/usd_compatibility_design.md` X1). One `Composition_arc` is plain
+data: the source file, the prim of it the content was taken from (empty for a
+glTF file and for an arc naming the target layer's default prim), the display
+name the file authors, the arc form (`reference` or `payload`) and the
+`variants` selection the arc carries into the target
+(`Composition_variant_selection`, one entry per variant set).
+
+`Typed` holds the list, so an arc applies to a prim of any type - a `Scope`, a
+`Material`, a typeless `def` - as a USD arc does. The storage is a
+`std::unique_ptr`, null on every prim that carries no arc: `has_composition_arcs()`
+is that null check, `get_composition_arcs()` answers an empty
+`std::span<const Composition_arc>` when the list is absent,
+`set_composition_arcs()` with an empty list releases the storage, and a prim
+without arcs costs one pointer. A copy - and so every clone, which reaches the
+copy constructor through `Typed(src, for_clone)` - deep-copies the list, so a
+pasted instance is an instance of the same source.
+
+The list is what makes a prim a carrier: `erhe::scene::instance_override`
+resolves an override path through the arc's target clone at every prim that
+answers `has_composition_arcs()`. `Typed::composition_arcs_property` renders
+it as read-only computed text for the Properties window and MCP, one line per
+arc, shown only while the prim carries one
+(`doc/erhe/property_system.md` section 4.27).
+
 ## Item paths
 
 An item in a hierarchy has a namespace path (`doc/erhe/usd_compatibility_design.md`
@@ -263,7 +293,7 @@ and is the identifier a USD prim path is.
 
 ## Testing
 
-169 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
+195 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
 
 | File | Tests | Coverage |
 |------|-------|----------|
@@ -281,5 +311,6 @@ and is the identifier a USD prim path is.
 | `test_item_visibility.cpp` | 6 | Derived flag bits follow local, inherited and tree-change values of the visible / shadow_cast / lightmapped properties; `set_flag_bits` drops derived bits; copy re-derives |
 | `test_typed_scope.cpp` | 6 | Composed type bits of `Typed` / `Scope`, class type names, authored and class-fixed `type_name`, path through a `Scope`, category values a `Scope` holds for its descendants |
 | `test_item_sealing.cpp` | 3 | `lock_edit` seals / unseals through every flag writer; inherited values still reach a sealed child; copies follow the copied flag |
+| `test_composition_arcs.cpp` | 7 | A prim carries no arc until one is authored, authored arcs are reported in order, an empty list releases the storage, a clone carries its own deep copy that outlives the source list, a clone of a prim without arcs carries none, the computed row is shown only while an arc stands and spells one line per arc |
 
 Test harness (`main.cpp`) bootstraps `erhe::file::log_file` before `erhe::item::initialize_logging()` to break a circular dependency.

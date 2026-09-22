@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::item ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_item/composition_arc.cpp
+    erhe_item/composition_arc.hpp
     erhe_item/constexpr-xxh3.h
     erhe_item/hierarchy.cpp
     erhe_item/hierarchy.hpp

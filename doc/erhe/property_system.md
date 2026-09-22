@@ -2518,6 +2518,26 @@ shape is built geometry rather than an opinion, so it is the system's and not a
 value; it outlives the body, because an undo takes the node out of the scene
 and a redo puts it back without rebuilding it.
 
+### 4.27 Typed composition arcs
+
+`erhe::Typed` renders the composition arcs it holds
+(`doc/erhe/item.md` "Composition arcs") as `composition_arcs`, a read-only
+computed string property (D26) of `Typed::property_owner_type()`, one line per
+arc: the arc form, the source file, the target prim in brackets when the arc
+names one, and the `variants` selection the arc carries when it carries one.
+Its `visible_when` is `has_composition_arcs()`, so the row stands on a carrier
+prim and on no other, in the UI group "Composition" under the label "Arcs".
+`set_composition_arcs()` invalidates the property's dependents, the way a
+computed property's inputs report a change.
+
+The arcs themselves are prim-held structure rather than values: they are
+neither authored per property nor inherited, a prim carries several of them,
+and the file carriers - a glTF `externalAsset` reference and the USD
+`references` / `payload` list ops with their `variants` selection - state them
+as prim metadata. So the record is read and written directly and the property
+exists for the Properties window and MCP alone
+(`doc/plans/node_attachments_to_properties.md` D4).
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

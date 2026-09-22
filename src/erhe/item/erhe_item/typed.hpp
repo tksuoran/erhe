@@ -1,12 +1,16 @@
 #pragma once
 
+#include "erhe_item/composition_arc.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_property.hpp"
 
 #include <cstdint>
+#include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace erhe {
 
@@ -54,6 +58,23 @@ public:
     // (doc/erhe/property_system.md D18) over the accessors above.
     static const erhe::property::Property<std::string> type_name_property;
 
+    // The composition arcs applied to this prim, in authored order
+    // (doc/erhe/item.md "Composition arcs"). A prim carrying none holds no
+    // storage at all, so the carrier test is a null check and a prim without
+    // arcs costs one pointer. The list sits on `Typed` rather than a
+    // transformable level because a USD arc is applied to a prim of any type
+    // - a `Scope`, a `Material`, a typeless `def`.
+    [[nodiscard]] auto has_composition_arcs() const -> bool;
+    [[nodiscard]] auto get_composition_arcs() const -> std::span<const Composition_arc>;
+
+    // Authors the list. An empty list releases the storage.
+    void set_composition_arcs(std::vector<Composition_arc> arcs);
+
+    // The list as read-only computed text (doc/erhe/property_system.md D26,
+    // section 4.27), one line per arc; the row is shown only while the prim
+    // carries an arc.
+    static const erhe::property::Property<std::string> composition_arcs_property;
+
     // Overrides Hierarchy: a prim's item host is the host of the prim it is
     // parented to, so attaching a prim anywhere in a hosted tree carries the
     // host to every prim below it, and detaching it takes the host away
@@ -69,6 +90,9 @@ public:
 
 private:
     std::string m_prim_type_name{};
+
+    // Null while the prim carries no arc; never an empty list.
+    std::unique_ptr<std::vector<Composition_arc>> m_composition_arcs;
 };
 
 } // namespace erhe

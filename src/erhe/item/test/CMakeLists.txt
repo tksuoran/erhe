@@ -28,6 +28,7 @@ add_executable(${_target}
     test_item_active.cpp
     test_item_purpose.cpp
     test_item_sealing.cpp
+    test_composition_arcs.cpp
     test_typed_scope.cpp
     test_typed_container.cpp
     test_prim_registration.cpp

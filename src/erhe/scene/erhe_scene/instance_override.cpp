@@ -7,6 +7,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_property/dependency_object.hpp"
@@ -172,22 +173,13 @@ void collect_item(
 }
 
 // Whether one item of an instance is itself a carrier: a prim a composition
-// arc was applied to. The arc is an attachment of the prim - what a file
-// applies to a prim as an API schema - and carries the
-// `erhe::Item_type::prefab_instance` type bit, so erhe::scene recognizes a
-// carrier without naming the class the editor gives it.
+// arc was applied to. The arcs are the prim's own record
+// (doc/erhe/item.md "Composition arcs"), so erhe::scene recognizes a carrier
+// by a null check on any prim, whether or not it is transformable.
 [[nodiscard]] auto is_instance_carrier(const erhe::Hierarchy& item) -> bool
 {
-    const Xformable* prim = dynamic_cast<const Xformable*>(&item);
-    if (prim == nullptr) {
-        return false;
-    }
-    for (const std::shared_ptr<Node_attachment>& attachment : prim->get_attachments()) {
-        if (attachment && ((attachment->get_type() & erhe::Item_type::prefab_instance) != 0)) {
-            return true;
-        }
-    }
-    return false;
+    const erhe::Typed* prim = dynamic_cast<const erhe::Typed*>(&item);
+    return (prim != nullptr) && prim->has_composition_arcs();
 }
 
 // Which of the two levels a path segment is resolved at.

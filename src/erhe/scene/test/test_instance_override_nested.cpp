@@ -5,9 +5,9 @@
 // level is transparent at every carrier the path crosses, not only at the one
 // the path starts at.
 
-#include "erhe_item/item.hpp"
+#include "erhe_item/composition_arc.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_scene/instance_override.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/xform.hpp"
 
 #include <gtest/gtest.h>
@@ -18,20 +18,16 @@
 
 namespace {
 
-// What the editor applies to a prim a composition arc was authored on, as
-// erhe::scene sees it: an attachment carrying the `prefab_instance` type bit.
-class Test_arc final : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Test_arc>
+// What makes a prim a carrier, as erhe::scene sees it: one composition arc
+// in the prim's own record (doc/erhe/item.md "Composition arcs").
+void author_arc(erhe::Typed& prim)
 {
-public:
-    Test_arc() : Item{"arc"} {}
-    Test_arc(const Test_arc& src, erhe::for_clone) : Item{src} {}
-
-    static constexpr std::string_view static_type_name{"Test_arc"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t
-    {
-        return erhe::Item_type::node_attachment | erhe::Item_type::prefab_instance;
-    }
-};
+    prim.set_composition_arcs(
+        std::vector<erhe::Composition_arc>{
+            erhe::Composition_arc{.source_path = "template.usda", .name = "template"}
+        }
+    );
+}
 
 // The shape the intent-vfx teapot asset has: a carrier holds the clone of its
 // target, that clone holds a plain prim `geo`, and below it `default` is a
@@ -46,7 +42,7 @@ public:
 
         carrier = std::make_shared<erhe::scene::Xform>("teapot");
         carrier->set_parent(root);
-        carrier->attach(std::make_shared<Test_arc>());
+        author_arc(*carrier.get());
 
         outer_template = std::make_shared<erhe::scene::Xform>("teapot");
         outer_clone    = std::make_shared<erhe::scene::Xform>("teapot");
@@ -58,7 +54,7 @@ public:
 
         inner_carrier = std::make_shared<erhe::scene::Xform>("default");
         inner_carrier->set_parent(geo);
-        inner_carrier->attach(std::make_shared<Test_arc>());
+        author_arc(*inner_carrier.get());
 
         beside = std::make_shared<erhe::scene::Xform>("Beside");
         beside->set_parent(inner_carrier);
@@ -98,13 +94,13 @@ public:
 
         carrier = std::make_shared<erhe::scene::Xform>("Teapot");
         carrier->set_parent(root);
-        carrier->attach(std::make_shared<Test_arc>());
+        author_arc(*carrier.get());
 
         outer_template = std::make_shared<erhe::scene::Xform>("Teapot");
         outer_clone    = std::make_shared<erhe::scene::Xform>("Teapot");
         outer_clone->set_reference(outer_template);
         outer_clone->set_parent(carrier);
-        outer_clone->attach(std::make_shared<Test_arc>());
+        author_arc(*outer_clone.get());
 
         inner_template = std::make_shared<erhe::scene::Xform>("UtahTeapot");
         inner_clone    = std::make_shared<erhe::scene::Xform>("UtahTeapot");
