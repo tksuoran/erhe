@@ -143,6 +143,7 @@ private:
     App_context& m_context;
 
     std::vector<Property_row_action> m_row_actions;
+    std::vector<std::string_view>    m_groups_scratch; // draw_rows: the groups of one call in draw order; capacity kept
     std::vector<Property_group_rows> m_group_rows;
 
     // Items the currently executing code operates on, bound only while

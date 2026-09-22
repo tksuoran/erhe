@@ -708,6 +708,8 @@ erhe_target_sources_grouped(
     windows/properties.hpp
     windows/property_editor.cpp
     windows/property_editor.hpp
+    windows/property_group_states.cpp
+    windows/property_group_states.hpp
     windows/property_origin.cpp
     windows/property_origin.hpp
     windows/scene_view_config_window.cpp
@@ -951,6 +953,9 @@ set(_config_sources
     ${_config_out}/user_state_config.hpp
     ${_config_out}/user_state_config_serialization.hpp
     ${_config_out}/user_state_config.cpp
+    ${_config_out}/property_group_state.hpp
+    ${_config_out}/property_group_state_serialization.hpp
+    ${_config_out}/property_group_state.cpp
     ${_config_out}/render_style_data.hpp
     ${_config_out}/render_style_data_serialization.hpp
     ${_config_out}/render_style_data.cpp

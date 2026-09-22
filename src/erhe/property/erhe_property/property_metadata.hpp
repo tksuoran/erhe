@@ -111,15 +111,6 @@ public:
         editable
     };
 
-    // How the row's group is shown when the Properties window first draws
-    // it: expanded, or collapsed until the user opens it. Read from the
-    // group's first listed row (registration order), so a group states it
-    // on its key property or on every row alike.
-    enum class Group_state : uint8_t {
-        open = 0,
-        collapsed
-    };
-
     // Row shown only while this returns true for the inspected object
     // (e.g. a material's alpha cutoff only in the alpha-test blending
     // mode); unset = always shown.
@@ -131,7 +122,6 @@ public:
     Presentation         presentation  {Presentation::plain};
     bool                 logarithmic   {false}; // slider presentation: logarithmic scale (D20)
     std::string_view     group         {};
-    Group_state          group_state   {Group_state::open};
     std::string_view     tooltip       {};
     bool                 developer_only{false};
     Array_size           array_size    {Array_size::fixed}; // array rows: may the user add and remove elements

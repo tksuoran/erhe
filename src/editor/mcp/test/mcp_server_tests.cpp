@@ -3230,7 +3230,19 @@ TEST_F(Mcp_test, property_row_is_addressable_by_its_label)
         return items.payload["items"][0];
     };
 
+    // Property groups start closed (Property_group_states) and an AI-driven
+    // editor reads no user state, so the row exists only once its group
+    // header has been clicked open.
     json row = first_translation_x();
+    if (row.empty()) {
+        Mcp_client::Tool_result open_group = client.call_tool("imgui_click", json{
+            {"window", "Properties"},
+            {"label",  "Local Transform"}
+        });
+        ASSERT_FALSE(open_group.is_error) << open_group.text;
+        advance_frames(client, 3);
+        row = first_translation_x();
+    }
     ASSERT_FALSE(row.empty()) << "no Properties row is named 'Translation.x'";
 
     // Scroll the window to its top and then step down until the row is on

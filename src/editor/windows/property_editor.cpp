@@ -1,4 +1,5 @@
 #include "windows/property_editor.hpp"
+#include "windows/property_group_states.hpp"
 
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_profile/profile.hpp"
@@ -25,6 +26,11 @@ void Property_editor::resume()
 void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
     m_entries.push_back(Entry{true, false, std::move(label), {}, {}, {}, flags, indent, {}, {}, open_state});
+}
+
+void Property_editor::push_group(std::string&& label, const float indent, Property_group_states& states)
+{
+    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, {}, ImGuiTreeNodeFlags_None, indent, {}, {}, nullptr, &states});
 }
 
 void Property_editor::pop_group()
@@ -87,6 +93,45 @@ void Property_editor::update_entry_visibility()
     m_filter_stack.clear(); // entries hold no reference past this point; capacity kept
 }
 
+namespace {
+
+constexpr const char* c_property_group_payload = "erhe_property_group";
+
+} // anonymous namespace
+
+// The header item just submitted is the drag source and the drop target of
+// a shared property group. The payload is the group name; the drop slot is
+// before the target when the pointer is in the upper half of its header,
+// after it otherwise, drawn as a yellow line on that edge of the header.
+void Property_editor::property_group_drag_drop(const Entry& entry)
+{
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
+        ImGui::SetDragDropPayload(c_property_group_payload, entry.label.c_str(), entry.label.size() + 1);
+        ImGui::TextUnformatted(entry.label.c_str());
+        ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* const payload = ImGui::AcceptDragDropPayload(
+            c_property_group_payload,
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+        if (payload != nullptr) {
+            const std::string_view source{static_cast<const char*>(payload->Data)};
+            const ImVec2 rect_min = ImGui::GetItemRectMin();
+            const ImVec2 rect_max = ImGui::GetItemRectMax();
+            const bool   after    = ImGui::GetMousePos().y > (0.5f * (rect_min.y + rect_max.y));
+            const float  y        = after ? rect_max.y : rect_min.y;
+            if (source != entry.label) {
+                ImGui::GetWindowDrawList()->AddLine(ImVec2{rect_min.x, y}, ImVec2{rect_max.x, y}, IM_COL32(255, 220, 0, 255), 2.0f);
+            }
+            if (payload->IsDelivery()) {
+                entry.group_states->move(source, entry.label, after ? Group_drop_side::after : Group_drop_side::before);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+}
+
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
 {
     ERHE_PROFILE_FUNCTION();
@@ -129,6 +174,13 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4.0f, 4.0f});
                 ImGui::TableNextRow(ImGuiTableRowFlags_None);
                 ImGui::TableSetColumnIndex(0);
+                // A shared property group is as open as its persisted state
+                // says, in every window; while a group drag is in flight
+                // ImGui's own storage rules so a hold does not fight it.
+                const bool group_drag_active = (entry.group_states != nullptr) && (ImGui::GetDragDropPayload() != nullptr);
+                if ((entry.group_states != nullptr) && !group_drag_active) {
+                    ImGui::SetNextItemOpen(entry.group_states->is_open(entry.label), ImGuiCond_Always);
+                }
                 if (filtering) {
                     // A group is only visible while filtering when it or one of
                     // its descendants matches - open it so the match is reached.
@@ -138,6 +190,12 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 const bool subtree_open = ImGui::TreeNodeEx(entry.label.c_str(), flags);
                 if (entry.open_state != nullptr) {
                     *entry.open_state = subtree_open;
+                }
+                if ((entry.group_states != nullptr) && !group_drag_active && !filtering) {
+                    entry.group_states->set_open(entry.label, subtree_open); // the click on the header, if any
+                }
+                if (entry.group_states != nullptr) {
+                    property_group_drag_drop(entry);
                 }
                 ImGui::PopStyleVar(1);
                 m_stack.emplace_back(subtree_open, entry.indent);

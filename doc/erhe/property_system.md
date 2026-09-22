@@ -358,7 +358,13 @@ table, see D2a), and references to other objects (D28).
   (D4) selects the widget variant and its limits: `color` draws a color
   edit for vec3 / vec4, `angle_degrees` converts radians to degrees for
   display, `slider` draws a slider within `min` / `max`, `group` collapses
-  rows under a header, `tooltip` is the hover text, `label` replaces the
+  rows under a header (one fold state and one position per group name,
+  shared by every window that draws property rows and kept in
+  `user_state.json`: `editor::Property_group_states`, owned by
+  `App_settings`; a group starts closed, the order is the order the
+  groups were first drawn in, and dragging a group header onto another
+  moves it before or after that group - a yellow line on the target's
+  edge shows the slot), `tooltip` is the hover text, `label` replaces the
   property name as the row label, `developer_only` rows show only in the
   editor's developer mode, and a row with `visible_when` is listed only
   while the predicate holds for every selected item (Material hides its
@@ -2498,9 +2504,7 @@ controlled rigid body and the applied bake revision - is owned by
 `editor::Node_physics` (`src/editor/scene/node_physics.{hpp,cpp}`) registers a
 node's rigid body as an attached value group of the node (section 4.23),
 owner type `Node_physics`,
-holder type `erhe::scene::Node`, UI group `Rigid Body`, collapsed until the
-user opens it (`Property_ui::Group_state::collapsed` on every row: the
-generic section reads the group's first listed row). The read-only state of
+holder type `erhe::scene::Node`, UI group `Rigid Body`. The read-only state of
 the body - its debug label, position, activity, collision shape, local center
 of mass and inertia - is drawn by `Properties::node_physics_properties` at
 the end of that same group, registered through

@@ -7,6 +7,7 @@
 #include "windows/property_origin.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -457,15 +458,20 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
             row(editor, *property);
         }
     }
-    std::vector<std::string_view> groups_done;
+    // The groups in the user's persisted order (Property_group_states): a
+    // group seen for the first time joins the order where it first appears.
+    m_groups_scratch.clear();
     for (const Dependency_property* property : properties) {
         const std::string_view group = property->get_metadata(owner_type).ui.group;
-        if (group.empty() || (std::find(groups_done.begin(), groups_done.end(), group) != groups_done.end())) {
+        if (group.empty() || (std::find(m_groups_scratch.begin(), m_groups_scratch.end(), group) != m_groups_scratch.end())) {
             continue;
         }
-        groups_done.push_back(group);
-        const bool collapsed = (property->get_metadata(owner_type).ui.group_state == Property_ui::Group_state::collapsed);
-        editor.push_group(std::string{group}, collapsed ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen, editor.get_group_indent());
+        m_groups_scratch.push_back(group);
+    }
+    Property_group_states& group_states = m_context.app_settings->property_group_states;
+    group_states.order(m_groups_scratch);
+    for (const std::string_view group : m_groups_scratch) {
+        editor.push_group(std::string{group}, editor.get_group_indent(), group_states);
         for (const Dependency_property* grouped : properties) {
             if (grouped->get_metadata(owner_type).ui.group == group) {
                 row(editor, *grouped);
@@ -714,7 +720,6 @@ void append_metadata_tooltip(std::string& tooltip, const Dependency_property& pr
         tooltip += " group=\"";
         tooltip += metadata.ui.group;
         tooltip += "\"";
-        flag(metadata.ui.group_state == Property_ui::Group_state::collapsed, "collapsed");
     }
     if (metadata.ui.min.has_value()) {
         tooltip += fmt::format(" min={}", metadata.ui.min.value());

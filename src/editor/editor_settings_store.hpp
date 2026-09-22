@@ -23,8 +23,9 @@ static const char* const c_user_state_openxr_file_path      = "config/editor/ope
 // The two structs are stored in separate files with the same lifecycle:
 // editor_settings.json holds the tuning knobs the Settings window edits, and
 // user_state.json holds the state the user builds up by using the editor -
-// the inventory / hotbar slot contents and the per scene view scene / camera /
-// visual style selections. A user_state.json that does not exist yet is
+// the inventory / hotbar slot contents, the per scene view scene / camera /
+// visual style selections and the property group fold state and order. A
+// user_state.json that does not exist yet is
 // seeded from the pre-v4 editor_settings.json sections the two structs were
 // split out of, so an existing setup carries over.
 //

@@ -12,6 +12,8 @@
 
 namespace editor {
 
+class Property_group_states;
+
 enum class Editor_state : unsigned int
 {
     clean           = 0,
@@ -26,6 +28,11 @@ public:
     void reset              ();
     void resume             ();
     void push_group         (std::string&& label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
+    // A property group shared by every Properties window: its header reads
+    // and writes the persisted fold state in `states` (closed until the
+    // user opens it), and dragging the header onto another such header
+    // reorders the groups in `states` (a yellow line shows the drop slot).
+    void push_group         (std::string&& label, float indent, Property_group_states& states);
     void pop_group          ();
     // The indent the window gives the rows of a group below the group header.
     [[nodiscard]] auto get_group_indent() const -> float { return m_indent; }
@@ -64,6 +71,7 @@ protected:
         std::optional<uint32_t> label_text_color{};
         std::optional<uint32_t> label_background_color{};
         bool*                   open_state{nullptr};
+        Property_group_states*  group_states{nullptr}; // set for a shared property group header
     };
 
     // Fills m_entry_visible for the current m_entries: an entry is visible
@@ -73,6 +81,7 @@ protected:
     // match is shown.
     void update_entry_visibility();
     void show_filter_row        ();
+    void property_group_drag_drop(const Entry& entry);
 
     class Filter_group
     {

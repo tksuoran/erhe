@@ -17,8 +17,9 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
   grid, headset, hotbar, HUD, etc.) loaded from `editor_settings.json`.
 
 - **`User_state_config`** -- The state the user builds up by using the editor: the
-  inventory / hotbar slot contents and the per scene view scene / camera / visual style
-  selections. Loaded from `user_state.json`, alongside `editor_settings.json` and with the
+  inventory / hotbar slot contents, the per scene view scene / camera / visual style
+  selections and the fold state and order of the property groups
+  (`property_groups`). Loaded from `user_state.json`, alongside `editor_settings.json` and with the
   same autosave. `Editor_settings_store` seeds a missing `user_state.json` from the
   matching sections of a pre-v4 `editor_settings.json`, which is why
   `Editor_settings_config` still declares `inventory` and `scene_views` as removed in v4.

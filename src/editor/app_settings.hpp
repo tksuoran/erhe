@@ -4,6 +4,7 @@
 
 #include "config/generated/graphics_preset_entry.hpp"
 #include "config/generated/icon_settings_config.hpp"
+#include "windows/property_group_states.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -139,6 +140,12 @@ public:
 
 private:
     Editor_settings_store m_store;
+public:
+    // The fold state and order of the property groups every Properties
+    // window shares (user_state.json). Declared after the store it reads
+    // at construction and registers its collect callback with.
+    Property_group_states       property_group_states{m_store};
+private:
     // Latched in read(). When running OpenXR the active preset comes from
     // the dedicated XR preset list, so its name must not be written back to
     // config().graphics_preset_name, which references the desktop list.
