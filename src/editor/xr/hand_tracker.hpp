@@ -44,7 +44,7 @@ public:
     glm::vec3   point;
 };
 
-class Joint
+class Hand_joint
 {
 public:
     glm::vec3 position;
@@ -65,7 +65,7 @@ public:
         glm::vec3 p1
     ) const -> std::optional<Finger_point>;
 
-    [[nodiscard]] auto get_joint(XrHandJointEXT joint) const -> std::optional<Joint>;
+    [[nodiscard]] auto get_joint(XrHandJointEXT joint) const -> std::optional<Hand_joint>;
 
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;

@@ -242,7 +242,7 @@ auto Hand::get_closest_point_to_line(const glm::mat4 transform, const glm::vec3 
 ////     return {};
 //// }
 
-auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Joint>
+auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Hand_joint>
 {
     const bool valid = is_valid(joint);
     if (valid) {
@@ -261,7 +261,7 @@ auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Joint>
             m_joints[joint].location.pose.orientation.z
         };
 #endif
-        return Joint{
+        return Hand_joint{
             // TODO take headset view into account
             .position = glm::vec3{
                 m_joints[joint].location.pose.position.x,
