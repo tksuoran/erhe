@@ -52,15 +52,18 @@ public:
     std::function<void(const std::vector<std::shared_ptr<erhe::Item_base>>&)>    execute;     // the row's items
 };
 
-// Hand-written rows drawn at the end of one registered UI group, inside it -
-// the runtime state a group implies (a rigid body's collision shape and
-// inertia) that is read back from the system owning it rather than held as
-// a value. The rows are drawn exactly when the group is, with the items the
-// group's rows address.
+// Hand-written rows drawn at the end of one UI group, inside it - the
+// runtime state a group implies (a rigid body's collision shape and
+// inertia, a texture's preview, a mesh's primitive shapes) that is read back
+// from the object or the system owning it rather than held as a value. The
+// group is listed when a registered property lists it, or when `applies`
+// holds for the items (a group of hand-written rows only); the rows are
+// drawn with the items the group's rows address, after the property rows.
 class Property_group_rows
 {
 public:
     std::string_view                                                                               group;
+    std::function<bool(const std::vector<std::shared_ptr<erhe::Item_base>>&)>                     applies;  // lists the group without property rows; unset = property rows only
     std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows;
 };
 
@@ -143,7 +146,11 @@ private:
     App_context& m_context;
 
     std::vector<Property_row_action> m_row_actions;
-    std::vector<std::string_view>    m_groups_scratch; // draw_rows: the groups of one call in draw order; capacity kept
+    // draw_rows: the groups of one call in draw order, one list per nesting
+    // depth because a group's hand-written rows may draw a sub-object's rows
+    // (a mesh primitive's) through this object again; capacity kept.
+    std::vector<std::vector<std::string_view>> m_groups_scratch;
+    std::size_t                                m_draw_depth{0};
     std::vector<Property_group_rows> m_group_rows;
 
     // Items the currently executing code operates on, bound only while

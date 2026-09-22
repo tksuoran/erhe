@@ -460,26 +460,52 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
     }
     // The groups in the user's persisted order (Property_group_states): a
     // group seen for the first time joins the order where it first appears.
-    m_groups_scratch.clear();
+    // The property groups first, then the hand-written groups that apply.
+    if (m_groups_scratch.size() <= m_draw_depth) {
+        m_groups_scratch.resize(m_draw_depth + 1);
+    }
+    std::vector<std::string_view>& groups = m_groups_scratch[m_draw_depth];
+    groups.clear();
     for (const Dependency_property* property : properties) {
         const std::string_view group = property->get_metadata(owner_type).ui.group;
-        if (group.empty() || (std::find(m_groups_scratch.begin(), m_groups_scratch.end(), group) != m_groups_scratch.end())) {
+        if (group.empty() || (std::find(groups.begin(), groups.end(), group) != groups.end())) {
             continue;
         }
-        m_groups_scratch.push_back(group);
+        groups.push_back(group);
+    }
+    if (!m_sub_object.has_value()) { // hand-written groups address items, not sub-objects
+        for (const Property_group_rows& group_rows : m_group_rows) {
+            if (!group_rows.applies || (std::find(groups.begin(), groups.end(), group_rows.group) != groups.end())) {
+                continue;
+            }
+            if (group_rows.applies(*m_items)) {
+                groups.push_back(group_rows.group);
+            }
+        }
     }
     Property_group_states& group_states = m_context.app_settings->property_group_states;
-    group_states.order(m_groups_scratch);
-    for (const std::string_view group : m_groups_scratch) {
+    group_states.order(groups);
+    for (const std::string_view group : groups) {
         editor.push_group(std::string{group}, editor.get_group_indent(), group_states);
         for (const Dependency_property* grouped : properties) {
             if (grouped->get_metadata(owner_type).ui.group == group) {
                 row(editor, *grouped);
             }
         }
-        for (const Property_group_rows& group_rows : m_group_rows) {
-            if (group_rows.group == group) {
-                group_rows.add_rows(editor, *m_items);
+        if (!m_sub_object.has_value()) {
+            for (const Property_group_rows& group_rows : m_group_rows) {
+                if (group_rows.group != group) {
+                    continue;
+                }
+                // The rows may draw a sub-object's rows through this object
+                // (add_sub_object_rows), which rebinds m_items / m_sub_object
+                // and clears them on return: keep this call's binding.
+                const std::shared_ptr<const std::vector<std::shared_ptr<erhe::Item_base>>> items = m_items;
+                ++m_draw_depth;
+                group_rows.add_rows(editor, *items);
+                --m_draw_depth;
+                m_items = items;
+                m_sub_object.reset();
             }
         }
         editor.pop_group();

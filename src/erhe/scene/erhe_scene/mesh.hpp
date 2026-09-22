@@ -58,6 +58,14 @@ public:
     // `material`; a write notifies the owning mesh's scene host.
     static const erhe::property::Property<erhe::property::Object_reference> material_property;
 
+    // Computed (doc/erhe/property_system.md D26): the element counts of
+    // the render shape's authored geometry, in the "Geometry" group; 0 for a
+    // primitive whose render shape carries no geometry (a triangle soup).
+    static const erhe::property::Property<int> vertex_count_property;
+    static const erhe::property::Property<int> facet_count_property;
+    static const erhe::property::Property<int> edge_count_property;
+    static const erhe::property::Property<int> corner_count_property;
+
     // The mesh whose primitive list holds this object, and the index there;
     // null / 0 for a primitive value outside a mesh.
     [[nodiscard]] auto get_owner() const -> Mesh*       { return m_owner; }

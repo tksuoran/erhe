@@ -88,6 +88,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Texture"};
+
+    // Computed (doc/erhe/property_system.md D26): the level-0 size and the
+    // pixel format, in the "Texture" group.
+    static const erhe::property::Property<int>         width_property;
+    static const erhe::property::Property<int>         height_property;
+    static const erhe::property::Property<std::string> pixelformat_property;
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::texture; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim

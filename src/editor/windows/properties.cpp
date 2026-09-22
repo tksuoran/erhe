@@ -153,6 +153,104 @@ Properties::Properties(
         }
     );
 
+    // The hand-written groups of an item section, each drawn inside the
+    // generic section as a shared property group (fold state, order and
+    // drag reordering like every other group). They describe one item, so
+    // each applies to a single-item selection of the right class only.
+    const auto single = [](const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> erhe::Item_base* {
+        return (items.size() == 1) ? items.front().get() : nullptr;
+    };
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Scene Overrides",
+            .applies  = [this, single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                erhe::scene::Scene* const scene = dynamic_cast<erhe::scene::Scene*>(single(items));
+                return (scene != nullptr) && (scene->get_item_host() != nullptr) && (m_context.editor_settings != nullptr);
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                scene_override_properties(*dynamic_cast<erhe::scene::Scene*>(items.front().get()));
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Variants",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                erhe::scene::Scene* const scene = dynamic_cast<erhe::scene::Scene*>(single(items));
+                if ((scene == nullptr) || (scene->get_item_host() == nullptr)) {
+                    return false;
+                }
+                return !static_cast<Scene_root*>(scene->get_item_host())->get_variant_table().get_sets().empty();
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                variant_properties(*static_cast<Scene_root*>(dynamic_cast<erhe::scene::Scene*>(items.front().get())->get_item_host()));
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Skin",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                erhe::scene::Mesh* const mesh = dynamic_cast<erhe::scene::Mesh*>(single(items));
+                return (mesh != nullptr) && static_cast<bool>(mesh->skin);
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                skin_properties(*dynamic_cast<erhe::scene::Mesh*>(items.front().get())->skin.get());
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Primitives",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                erhe::scene::Mesh* const mesh = dynamic_cast<erhe::scene::Mesh*>(single(items));
+                return (mesh != nullptr) && (mesh->get_item_host() != nullptr) && !mesh->get_primitives().empty();
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                mesh_primitive_properties(*dynamic_cast<erhe::scene::Mesh*>(items.front().get()));
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Mesh Raytrace",
+            .applies  = [this, single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                erhe::scene::Mesh* const mesh = dynamic_cast<erhe::scene::Mesh*>(single(items));
+                return m_context.developer_mode && (mesh != nullptr) && (mesh->get_item_host() != nullptr);
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                mesh_raytrace_properties(*dynamic_cast<erhe::scene::Mesh*>(items.front().get()));
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Texture", // the size and format rows are the texture's computed properties
+            .applies  = {},
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                if (items.size() == 1) {
+                    texture_properties(std::dynamic_pointer_cast<erhe::graphics::Texture>(items.front()));
+                }
+            }
+        }
+    );
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Polygons",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(single(items));
+                if (node == nullptr) {
+                    return false;
+                }
+                const std::optional<Brush_placement_data> placement = read_brush_placement(*node);
+                return placement.has_value() && static_cast<bool>(placement.value().brush);
+            },
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                brush_placement_properties(*dynamic_cast<const erhe::scene::Node*>(items.front().get()));
+            }
+        }
+    );
+
     // Below each "Sizes X/Y/Z" row of a grid layout node: the toggle between
     // uniform tracks (the empty list) and per-track sizes seeded from the
     // node's layout volume (doc/erhe/property_system.md section 4.13). It
@@ -278,7 +376,8 @@ void Properties::animation_properties(const std::shared_ptr<erhe::scene::Animati
     });
 }
 
-void Properties::scene_properties(erhe::scene::Scene& scene)
+// The rows of the "Scene Overrides" group (a shared property group hook).
+void Properties::scene_override_properties(erhe::scene::Scene& scene)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -298,10 +397,6 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     Editor_settings_config& settings       = *m_context.editor_settings;
     Scene_settings&         scene_settings = scene_root->get_scene_settings();
     const bool              show_developer  = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
-
-    variant_properties(*scene_root);
-
-    push_group("Scene Overrides", ImGuiTreeNodeFlags_Framed);
 
     // Whole-config-group override: an "Override" checkbox that engages the
     // scene's optional (seeded from the current editor value) or clears it,
@@ -333,8 +428,6 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     // surfaced here for now (the Scene_settings fields remain and still
     // serialize). Re-add add_entry rows for scene_settings.clear_color /
     // .post_processing when their per-scene effect is wired up.
-
-    pop_group();
 }
 
 void Properties::variant_properties(Scene_root& scene_root)
@@ -351,10 +444,6 @@ void Properties::variant_properties(Scene_root& scene_root)
     // not carry").
     Variant_table&                  variant_table = scene_root.get_variant_table();
     const std::vector<Variant_set>& sets          = variant_table.get_sets();
-    if (sets.empty()) {
-        return;
-    }
-    push_group("Variants", ImGuiTreeNodeFlags_Framed);
     for (const Variant_set& set : sets) {
         const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
         if (!prim) {
@@ -415,7 +504,6 @@ void Properties::variant_properties(Scene_root& scene_root)
             std::move(tooltip)
         );
     }
-    pop_group();
 }
 
 void Properties::light_properties(erhe::scene::Light& light)
@@ -445,19 +533,16 @@ void Properties::skin_properties(erhe::scene::Skin& skin)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The skeleton name and the joint count are the skin's computed
+    // properties; the joint names follow as rows of the same "Skin" group.
     auto& skin_data = skin.skin_data;
-    add_entry("Skeleton",    [&](){ ImGui::TextUnformatted(skin_data.skeleton ? skin_data.skeleton->get_name().c_str() : "(no skeleton)"); });
-    add_entry("Joint Count", [&](){ ImGui::Text("%d", static_cast<int>(skin_data.joints.size())); });
-
-    push_group("Skin", ImGuiTreeNodeFlags_None, m_indent);
     for (auto& joint : skin_data.joints) {
         if (!joint) {
-            ImGui::TextUnformatted("(missing joint)");
+            add_entry("", [](){ ImGui::TextUnformatted("(missing joint)"); });
         } else {
             add_entry("", [&](){ ImGui::TextUnformatted(joint->get_name().c_str()); });
         }
     }
-    pop_group();
 }
 
 auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
@@ -481,12 +566,8 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
         return;
     }
 
-    push_group("Texture", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-
-    add_entry("Width",  [texture](){ ImGui::Text("%d", texture->get_width()); });
-    add_entry("Height", [texture](){ ImGui::Text("%d", texture->get_height()); });
-    add_entry("Format", [texture](){ ImGui::TextUnformatted(erhe::dataformat::c_str(texture->get_pixelformat())); });
-
+    // The size and format are the texture's computed properties, drawn as
+    // the "Texture" group's property rows above this preview.
     add_entry("Preview", [this, texture](){
         // TODO Draw to available size respecting aspect ratio
         m_context.imgui_renderer->image(
@@ -501,8 +582,6 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
             }
         );
     });
-
-    pop_group();
 }
 
 void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
@@ -589,7 +668,7 @@ void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytra
     buffer_mesh_properties("Raytrace Buffer Mesh", &buffer_mesh);
 }
 
-void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape)
+void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape, const Shape_kind shape_kind)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -601,9 +680,14 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
         push_group(label, ImGuiTreeNodeFlags_None, m_indent);
     }
 
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
-    if (geometry) {
-        geometry_properties(*geometry.get());
+    // The render shape's geometry counts are the primitive's computed
+    // properties ("Geometry" group of the primitive's rows); the other
+    // shapes list theirs here.
+    if (shape_kind == Shape_kind::other) {
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
+        if (geometry) {
+            geometry_properties(*geometry.get());
+        }
     }
 
     if (m_context.developer_mode) {
@@ -612,7 +696,10 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
     }
 }
 
-void Properties::mesh_properties(erhe::scene::Mesh& mesh)
+// The rows of the "Primitives" group (a shared property group hook): one
+// nested group per primitive with its registered sub-object rows, its shapes
+// and buffer meshes.
+void Properties::mesh_primitive_properties(erhe::scene::Mesh& mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -622,17 +709,6 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         return;
     }
 
-    if (m_context.developer_mode) {
-        add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
-    }
-
-    if (mesh.skin) {
-        skin_properties(*mesh.skin.get());
-    }
-
-    if (m_context.developer_mode) {
-        push_group("Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-    }
     const std::shared_ptr<erhe::Item_base> mesh_shared = mesh.shared_from_this();
 
     const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh.get_primitives();
@@ -644,9 +720,10 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
             m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
         }
         push_group(m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        // The primitive's registered properties (its material): generic rows
-        // on the property sub-object (doc/erhe/property_system.md D29), undo
-        // through Property_set_operation on (mesh, primitive index).
+        // The primitive's registered properties (its material, the geometry
+        // counts): generic rows on the property sub-object
+        // (doc/erhe/property_system.md D29), undo through
+        // Property_set_operation on (mesh, primitive index).
         m_dependency_rows.add_sub_object_rows(*this, mesh_shared, static_cast<std::size_t>(primitive_index));
         if (m_context.developer_mode) {
             if (mesh_primitive.material) {
@@ -671,52 +748,62 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
 
         erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (primitive.render_shape) {
-            shape_properties("Render shape", primitive.render_shape.get());
+            shape_properties("Render shape", primitive.render_shape.get(), Shape_kind::render);
             buffer_mesh_properties("Renderable Buffer Mesh", &primitive.render_shape->get_renderable_mesh());
         }
         // Inspecting a primitive should show what is actually resident, so list
         // the optimized build separately whenever one is live.
         if (primitive.optimized_render_shape) {
-            shape_properties("Optimized render shape", primitive.optimized_render_shape.get());
+            shape_properties("Optimized render shape", primitive.optimized_render_shape.get(), Shape_kind::other);
             buffer_mesh_properties("Optimized Buffer Mesh", &primitive.optimized_render_shape->get_renderable_mesh());
         }
         if (m_context.developer_mode && primitive.collision_shape) {
-            shape_properties("Collision shape", primitive.collision_shape.get());
+            shape_properties("Collision shape", primitive.collision_shape.get(), Shape_kind::other);
         }
         pop_group();
     }
-    if (m_context.developer_mode) {
-        pop_group();
+}
+
+// The rows of the developer-mode "Mesh Raytrace" group (a shared property
+// group hook).
+void Properties::mesh_raytrace_properties(erhe::scene::Mesh& mesh)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const auto* mesh_rt_scene = mesh.get_rt_scene();
+    if (mesh_rt_scene != nullptr) {
+        add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
     }
-
-    if (m_context.developer_mode) {
-        push_group("Mesh Raytrace", ImGuiTreeNodeFlags_None, m_indent);
-        const auto* mesh_rt_scene = mesh.get_rt_scene();
-        if (mesh_rt_scene != nullptr) {
-            add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
-        }
-        const auto& rt_primitives = mesh.get_rt_primitives();
-        const std::size_t rt_primitive_count = rt_primitives.size();
-        if (!rt_primitives.empty()) {
-            push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
-            for (size_t rt_primitive_index = 0; rt_primitive_index < rt_primitive_count; ++rt_primitive_index) {
-                while (m_rt_primitive_labels.size() <= rt_primitive_index) {
-                    m_rt_primitive_labels.push_back(fmt::format("Raytrace Primitive {}", m_rt_primitive_labels.size()));
-                }
-                const auto& rt_primitive = rt_primitives.at(rt_primitive_index);
-
-                const auto* rt_instance = rt_primitive->rt_instance.get();
-                const auto* rt_scene    = rt_primitive->rt_scene.get();
-                push_group(m_rt_primitive_labels.at(rt_primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-                add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
-                add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
-                add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
-                add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
-                pop_group();
+    const auto& rt_primitives = mesh.get_rt_primitives();
+    const std::size_t rt_primitive_count = rt_primitives.size();
+    if (!rt_primitives.empty()) {
+        push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
+        for (size_t rt_primitive_index = 0; rt_primitive_index < rt_primitive_count; ++rt_primitive_index) {
+            while (m_rt_primitive_labels.size() <= rt_primitive_index) {
+                m_rt_primitive_labels.push_back(fmt::format("Raytrace Primitive {}", m_rt_primitive_labels.size()));
             }
+            const auto& rt_primitive = rt_primitives.at(rt_primitive_index);
+
+            const auto* rt_instance = rt_primitive->rt_instance.get();
+            const auto* rt_scene    = rt_primitive->rt_scene.get();
+            push_group(m_rt_primitive_labels.at(rt_primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
+            add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
+            add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
+            add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
             pop_group();
         }
         pop_group();
+    }
+}
+
+// The developer-mode diagnostic rows of a mesh outside any group.
+void Properties::mesh_properties(erhe::scene::Mesh& mesh)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (m_context.developer_mode) {
+        add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
     }
 }
 
@@ -726,7 +813,7 @@ void Properties::brush_placement_properties(const erhe::scene::Node& node)
 
     // The brush, facet and corner are generic rows of the node itself
     // (doc/erhe/property_system.md 4.11); the polygon counts of the brush
-    // follow as diagnostics.
+    // are the rows of the "Polygons" group (a shared property group hook).
     const std::optional<Brush_placement_data> placement = read_brush_placement(node);
     if (!placement.has_value()) {
         return;
@@ -735,7 +822,6 @@ void Properties::brush_placement_properties(const erhe::scene::Node& node)
     if (!brush) {
         return;
     }
-    push_group("Polygons", ImGuiTreeNodeFlags_None);
     const std::map<GEO::index_t, std::vector<GEO::index_t>>& facets = brush->get_corner_count_to_facets();
     for (const auto& i : facets) {
         const GEO::index_t corner_count  = i.first;
@@ -752,7 +838,6 @@ void Properties::brush_placement_properties(const erhe::scene::Node& node)
             }
         );
     }
-    pop_group();
 }
 
 void Properties::on_begin()
@@ -878,23 +963,19 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 // disabled while the item is sealed.
 void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
 {
+    // The ungrouped diagnostic rows of an item; the grouped ones are the
+    // shared property group hooks registered in the constructor.
     const auto& joint            = std::dynamic_pointer_cast<Joint                  >(item);
-    const auto& scene            = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
-    const auto& node             = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
-    const auto& texture          = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
     const bool edit_disabled = item->is_lock_edit();
     if (edit_disabled) {
         ImGui::BeginDisabled();
     }
     if (joint)            { joint_properties(*joint); }
-    if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
-    if (node)             { brush_placement_properties(*node); }
-    if (texture)          { texture_properties(texture); }
     if (edit_disabled) {
         ImGui::EndDisabled();
     }

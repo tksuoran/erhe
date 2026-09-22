@@ -5,6 +5,28 @@
 
 namespace erhe::scene {
 
+const erhe::property::Property<std::string> Skin::skeleton_property = erhe::property::Property<std::string>::register_computed(
+    "skeleton", Skin::property_owner_type(),
+    [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+        const std::shared_ptr<Node>& skeleton = static_cast<const Skin&>(object).skin_data.skeleton;
+        return skeleton ? skeleton->get_name() : std::string{};
+    },
+    erhe::property::Property_metadata{
+        .flags = erhe::property::Property_flags::none,
+        .ui    = erhe::property::Property_ui{.group = "Skin", .tooltip = "Name of the skeleton root node; empty when the skin has none (computed)", .label = "Skeleton"}
+    }
+);
+const erhe::property::Property<int> Skin::joint_count_property = erhe::property::Property<int>::register_computed(
+    "joint_count", Skin::property_owner_type(),
+    [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+        return static_cast<int>(static_cast<const Skin&>(object).skin_data.joints.size());
+    },
+    erhe::property::Property_metadata{
+        .flags = erhe::property::Property_flags::none,
+        .ui    = erhe::property::Property_ui{.group = "Skin", .tooltip = "Number of joint nodes (computed)", .label = "Joint Count"}
+    }
+);
+
 auto Skin_data::get_world_from_bind(const std::size_t joint_index) const -> std::optional<glm::mat4>
 {
     if (joint_index >= joints.size()) {

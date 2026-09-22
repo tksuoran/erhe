@@ -26,6 +26,37 @@
 
 namespace erhe::graphics {
 
+const erhe::property::Property<int> Texture::width_property = erhe::property::Property<int>::register_computed(
+    "width", Texture::property_owner_type(),
+    [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+        return static_cast<const Texture&>(object).get_width();
+    },
+    erhe::property::Property_metadata{
+        .flags = erhe::property::Property_flags::none,
+        .ui    = erhe::property::Property_ui{.group = "Texture", .tooltip = "Level 0 width in texels (computed)", .label = "Width"}
+    }
+);
+const erhe::property::Property<int> Texture::height_property = erhe::property::Property<int>::register_computed(
+    "height", Texture::property_owner_type(),
+    [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+        return static_cast<const Texture&>(object).get_height();
+    },
+    erhe::property::Property_metadata{
+        .flags = erhe::property::Property_flags::none,
+        .ui    = erhe::property::Property_ui{.group = "Texture", .tooltip = "Level 0 height in texels (computed)", .label = "Height"}
+    }
+);
+const erhe::property::Property<std::string> Texture::pixelformat_property = erhe::property::Property<std::string>::register_computed(
+    "pixelformat", Texture::property_owner_type(),
+    [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+        return std::string{erhe::dataformat::c_str(static_cast<const Texture&>(object).get_pixelformat())};
+    },
+    erhe::property::Property_metadata{
+        .flags = erhe::property::Property_flags::none,
+        .ui    = erhe::property::Property_ui{.group = "Texture", .tooltip = "Pixel format (computed)", .label = "Format"}
+    }
+);
+
 Texture_reference_user::~Texture_reference_user() noexcept = default;
 
 Texture_reference::~Texture_reference() noexcept = default;

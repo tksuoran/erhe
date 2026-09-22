@@ -100,19 +100,33 @@ private:
     };
 
 
-    void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
-    void scene_properties             (erhe::scene::Scene& scene);
+    // Whether a shape's geometry counts are already the primitive's computed
+    // properties (the render shape) or listed by shape_properties itself.
+    enum class Shape_kind : unsigned int {
+        render = 0,
+        other  = 1
+    };
+
+    // The rows of the shared property groups an item section draws by hand
+    // (Dependency_property_rows::add_group_rows in the constructor):
+    // "Scene Overrides", "Variants", "Skin", "Primitives", "Mesh Raytrace",
+    // "Texture" and "Polygons"; each draws the rows of its group only.
+    void scene_override_properties    (erhe::scene::Scene& scene);
     void variant_properties           (Scene_root& scene_root);
-    void light_properties             (erhe::scene::Light& light);
+    void skin_properties              (erhe::scene::Skin& skin);
+    void mesh_primitive_properties    (erhe::scene::Mesh& mesh);
+    void mesh_raytrace_properties     (erhe::scene::Mesh& mesh);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
+    void brush_placement_properties   (const erhe::scene::Node& node);
+
+    void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
+    void light_properties             (erhe::scene::Light& light);
     void geometry_properties          (erhe::geometry::Geometry& geometry);
     void buffer_mesh_properties       (const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh);
     void primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace);
-    void shape_properties             (const char* label, erhe::primitive::Primitive_shape* shape);
+    void shape_properties             (const char* label, erhe::primitive::Primitive_shape* shape, Shape_kind shape_kind);
     void mesh_properties              (erhe::scene::Mesh& mesh);
-    void skin_properties              (erhe::scene::Skin& skin);
     void material_properties          (const std::vector<std::shared_ptr<erhe::Item_base>>& items);
-    void brush_placement_properties   (const erhe::scene::Node& node);
     // Read-only rows of the node's rigid body, drawn inside the generic
     // "Rigid Body" group through Dependency_property_rows::add_group_rows.
     void node_physics_properties      (const erhe::scene::Node& node);

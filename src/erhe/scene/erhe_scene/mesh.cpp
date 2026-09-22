@@ -1,4 +1,5 @@
 #include "erhe_scene/mesh.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_raytrace/igeometry.hpp"
@@ -104,6 +105,49 @@ auto world_bounds_corner(const erhe::property::Dependency_object& object, const 
 }
 
 } // anonymous namespace
+
+namespace {
+
+enum class Geometry_count : unsigned int { vertices = 0, facets = 1, edges = 2, corners = 3 };
+
+[[nodiscard]] auto geometry_count(const erhe::property::Dependency_object& object, const Geometry_count which) -> erhe::property::Property_value
+{
+    const Mesh_primitive& mesh_primitive = static_cast<const Mesh_primitive&>(object);
+    if (!mesh_primitive.primitive || !mesh_primitive.primitive->render_shape) {
+        return 0;
+    }
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = mesh_primitive.primitive->render_shape->get_geometry_const();
+    if (!geometry) {
+        return 0;
+    }
+    const GEO::Mesh& mesh = geometry->get_mesh();
+    switch (which) {
+        case Geometry_count::vertices: return static_cast<int>(mesh.vertices.nb());
+        case Geometry_count::facets:   return static_cast<int>(mesh.facets.nb());
+        case Geometry_count::edges:    return static_cast<int>(mesh.edges.nb());
+        case Geometry_count::corners:  return static_cast<int>(mesh.facet_corners.nb());
+    }
+    return 0;
+}
+
+[[nodiscard]] auto register_geometry_count(const char* name, const char* label, const char* tooltip, const Geometry_count which) -> erhe::property::Property<int>
+{
+    return erhe::property::Property<int>::register_computed(
+        name, Mesh_primitive::property_owner_type(),
+        [which](const erhe::property::Dependency_object& object) -> erhe::property::Property_value { return geometry_count(object, which); },
+        erhe::property::Property_metadata{
+            .flags = erhe::property::Property_flags::none,
+            .ui    = erhe::property::Property_ui{.group = "Geometry", .tooltip = tooltip, .label = label}
+        }
+    );
+}
+
+} // anonymous namespace
+
+const erhe::property::Property<int> Mesh_primitive::vertex_count_property = register_geometry_count("vertex_count", "Vertices", "Vertex count of the render shape geometry (computed)", Geometry_count::vertices);
+const erhe::property::Property<int> Mesh_primitive::facet_count_property  = register_geometry_count("facet_count",  "Facets",   "Facet count of the render shape geometry (computed)",  Geometry_count::facets);
+const erhe::property::Property<int> Mesh_primitive::edge_count_property   = register_geometry_count("edge_count",   "Edges",    "Edge count of the render shape geometry (computed)",   Geometry_count::edges);
+const erhe::property::Property<int> Mesh_primitive::corner_count_property = register_geometry_count("corner_count", "Corners",  "Corner count of the render shape geometry (computed)", Geometry_count::corners);
 
 // Computed world bounds (D26)
 const erhe::property::Property<glm::vec3> Mesh::world_bounds_min_property = erhe::property::Property<glm::vec3>::register_computed(

@@ -988,6 +988,17 @@ table, see D2a), and references to other objects (D28).
     both. A skinned mesh's posed bounds move with its joints without any of
     these running; reading the property gives the current box, an
     expression on it follows only the pushes above.
+  - Mesh_primitive (the D29 sub-object). `vertex_count`, `facet_count`,
+    `edge_count` and `corner_count` (int, group `Geometry`) read the
+    element counts of the render shape's authored geometry, 0 when the
+    shape carries none (a triangle soup). Nothing invalidates them: a
+    primitive swap replaces the sub-object's shape, and the rows read
+    the provider each frame.
+  - Skin. `skeleton` (string, the skeleton node's name or empty) and
+    `joint_count` (int), group `Skin`.
+  - Texture (`erhe::graphics::Texture`). `width`, `height` (int, level 0)
+    and `pixelformat` (string, the `erhe::dataformat` name), group
+    `Texture`.
   - Editor (D12). A computed row draws its widget disabled like any
     read-only row, with no `*` prefix (no local value), `Source: computed`
     in the tooltip, no `Default:` line, and the context menu's per-property
@@ -2509,8 +2520,12 @@ the body - its debug label, position, activity, collision shape, local center
 of mass and inertia - is drawn by `Properties::node_physics_properties` at
 the end of that same group, registered through
 `Dependency_property_rows::add_group_rows` (`Property_group_rows`: hand-written
-rows drawn inside one registered group, after its rows, with the group's
-items; the readouts draw for a single item only). Like `Ik`, `Draw_mode`
+rows drawn inside one shared property group, after its property rows, with
+the group's items; a hook whose `applies` predicate holds for the items
+lists its group even when no registered property names it, which is how
+the Properties window's own groups - Scene Overrides, Variants, Skin,
+Primitives, Mesh Raytrace, Texture, Polygons - take part in the shared fold
+state and order; the readouts draw for a single item only). Like `Ik`, `Draw_mode`
 and `Geometry_graph_mesh` it is a registration holder with static members only,
 not a `Dependency_object`, so its owner type sits directly under the root. USD
 gives the same shape: `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`,

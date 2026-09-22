@@ -49,6 +49,11 @@ public:
     // typeName (doc/erhe/usd_compatibility.md).
     [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Skin"; }
 
+    // Computed (doc/erhe/property_system.md D26): the skeleton node's name
+    // and the joint count, in the "Skin" group.
+    static const erhe::property::Property<std::string> skeleton_property;
+    static const erhe::property::Property<int>         joint_count_property;
+
     Skin_data skin_data;
 };
 
