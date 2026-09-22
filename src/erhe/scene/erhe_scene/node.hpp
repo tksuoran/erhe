@@ -197,7 +197,7 @@ public:
     // parent_from_node_transform() while nothing animates the prim.
     [[nodiscard]] auto authored_parent_from_node_transform() const -> Trs_transform;
 
-    // Transform observers (D7 of doc/plans/node_attachments_to_properties.md):
+    // Transform observers (doc/erhe/scene.md "Transform observers"):
     // a callback invoked from handle_transform_update, for a part that follows
     // a prim's world transform without being an item attached to it. The
     // returned token unsubscribes on destruction and is safe when the prim

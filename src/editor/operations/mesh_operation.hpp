@@ -90,7 +90,7 @@ public:
         // collision shape built for it and the key value that says whether it
         // carries a body at all. Restoring a version writes both, so the
         // operation stays one undo entry
-        // (doc/plans/node_attachments_to_properties.md P8).
+        // (doc/erhe/property_system.md section 4.26).
         class Version
         {
         public:

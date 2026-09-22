@@ -1,5 +1,5 @@
-// The composition arcs of a prim (doc/erhe/item.md "Composition arcs",
-// doc/plans/node_attachments_to_properties.md D4): prim-held storage that is
+// The composition arcs of a prim (doc/erhe/item.md "Composition arcs"):
+// prim-held storage that is
 // absent while the prim carries no arc, deep-copied by a clone so a pasted
 // instance is an instance of the same source, and rendered for the Properties
 // window by a read-only computed property that is shown only while an arc

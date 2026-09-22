@@ -48,7 +48,7 @@ private:
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> before_parent;
         // The node's physics state as the merge found it, restored by undo
-        // (doc/plans/node_attachments_to_properties.md P8).
+        // (doc/erhe/property_system.md section 4.26).
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
         erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none};
     };

@@ -15,8 +15,8 @@ namespace erhe::scene {
 class Xformable; using Node = Xformable;
 
 // The per-scene owner of the `Layout` value group's runtime state
-// (doc/erhe/scene.md "Node systems", doc/plans/node_attachments_to_properties.md
-// D2): the set of layout nodes the solve pass runs over, and each one's
+// (doc/erhe/scene.md "Node systems"): the set of layout nodes the solve pass
+// runs over, and each one's
 // effective container values. One of these is owned by each `Scene` and added
 // to it, which drives it from the three node-system change sites.
 //

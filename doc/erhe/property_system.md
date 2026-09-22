@@ -1704,7 +1704,7 @@ local value reads its style, section 4.2 / D30, so a style holds
 `grid_plane_type_strings`), `frame_node` (a weak object reference, D28:
 the node the Node plane follows, `visible_when` the plane is the Node
 plane; per grid, so it does not inherit, and session state, so it carries
-no serialize flag, D5), `center` and `rotation` (degrees,
+no serialize flag, section 4.23), `center` and `rotation` (degrees,
 `visible_when` the plane is not the Node plane), `intersect_enable`,
 `snap_enabled`, `cell_size` (logarithmic 0.01..10), `cell_div` (1..10),
 `cell_count` (the snap region bound), the four `level<N>_color` and
@@ -1730,8 +1730,7 @@ a grid edit is a `Property_set_operation` with undo.
 
 `editor::Brush_placement` (`src/editor/brushes/brush_placement.{hpp,cpp}`)
 registers how a brush was placed as an attached value group of the placed
-node itself (section 4.23,
-`doc/plans/node_attachments_to_properties.md` D1), owner type
+node itself (section 4.23), owner type
 `Brush_placement`, holder type `erhe::scene::Node`, UI group
 `Brush Placement`, qualified `Brush_placement.brush`, `.facet` and
 `.corner`. Like `Ik`, `Layout` and `Draw_mode` it is a registration holder
@@ -1748,7 +1747,7 @@ reference is an ordinary resource usership and it dies with the node.
 taking `attached_group_visible_when(Brush_placement.brush)` as their
 `visible_when`, so the rows are listed on exactly the placed nodes. None of
 the three inherits - a placement is the node's own seat - and none of them
-carries `Property_flags::serialize` (D5): they are session values, so both
+carries `Property_flags::serialize` (section 4.23): they are session values, so both
 exporters skip them through that flag alone and no file has a carrier to
 keep in step. A clone carries them, which is what makes a duplicated
 instance still a placement of its brush.
@@ -1817,8 +1816,8 @@ window draws the material as generic rows only.
 ### 4.13 Layout (attached to Node)
 
 `erhe::scene::Layout` (`src/erhe/scene/erhe_scene/layout.{hpp,cpp}`) registers
-a layout as an attached value group of the node itself (section 4.23,
-`doc/plans/node_attachments_to_properties.md` D1), owner type
+a layout as an attached value group of the node itself (section 4.23),
+owner type
 `Layout::property_owner_type()`, holder type `erhe::scene::Node`, UI group
 `Layout`, qualified `Layout.type` .. `Layout.grid_track_extent_z`. Like `Ik`
 and `Draw_mode` it is a registration holder with static members only, not a
@@ -1926,8 +1925,7 @@ Animation Window" button; the generic section draws the four rows.
 
 ### 4.17 Joint
 
-`editor::Joint` (the joint prim of
-`doc/plans/node_attachments_to_properties.md` D3, section 4.26's sibling)
+`editor::Joint` (the joint prim, section 4.26's sibling)
 registers `body_0`, `body_1`, `joint_settings` and `enable_collision` (UI
 group `Joint`). `body_0` and `body_1` name the joint's two FRAME nodes as
 weak object references (D28, `reference_item_types` the xformable bit,
@@ -2341,9 +2339,8 @@ the mirror, clone).
 
 A feature a node carries is a group of attached properties (R7, D3)
 of the node itself, registered by one class on one holder class under one
-UI group, and one value of the group is its KEY property
-(`doc/plans/node_attachments_to_properties.md` D1). The holder carries the
-feature exactly while the key property's effective value on it differs from
+UI group, and one value of the group is its KEY property. The holder carries
+the feature exactly while the key property's effective value on it differs from
 that holder's own default layer (D31) -
 `erhe::property::carries_attached_group(object, key)` in
 `erhe_property/attached_group.hpp`. The key property is registered first and
@@ -2368,13 +2365,58 @@ branch (D30). The runtime state a group implies is owned by a node system
 per scene (`doc/erhe/scene.md` "Node systems"), which is driven by the key
 property through that system's `on_values_changed`.
 
+**Session values.** A value of a group that no file keeps - because the
+concept is the session's (a grid's frame node) or because a native file
+carrier already states it (section 4.25) - is registered without
+`Property_flags::serialize`, and both exporters skip it through that flag
+alone, so no writer needs a list of exceptions. A clone copies every local
+value whatever its flags, so a duplicated node keeps such a value, which is
+what a brush placement (section 4.11) and a card-texture source directory
+(section 4.24) want.
+
+**A group inside a prefab instance.** Values of a group reach an instance
+node from its template node through the reference layer (D33):
+`link_instance_to_template` pairs the nodes of the two trees, so an instance
+that authors nothing of a group reads the template's values and an edit on
+the instance is a local value over them. A carrier prim (`doc/erhe/item.md`
+"Composition arcs") that authors a value of any group is paired with the
+prim the arc targets by `link_carrier_values_to_target`, which is how a
+variant block's opinions on a carrier reach the content the arc brought in.
+
+**Registering a group.** A class `X` that gives nodes a feature registers
+its values with `register_attached`, owner type `X`, holder type
+`erhe::scene::Node`, one UI group, from a holder class with static members
+only (`src/editor/scene/<x>_properties.{hpp,cpp}`, or the owning library for
+a group of `erhe::scene`'s own such as `Layout`). Then:
+
+1. A value the feature would otherwise capture when it is created gets a
+   computed default (D31), so it is correct on every node without an
+   authoring step.
+2. A value naming another node is a weak object reference (D28), so it is
+   never an ownership edge; a value naming a content-library resource is a
+   strong one, which is that resource's usership.
+3. `inherits` is decided per value: a per-instance value does not inherit,
+   and a set of values shared between nodes is a Style holding them (D25).
+4. Consumers read the group through one free function
+   `read_<x>(const erhe::scene::Node&) -> std::optional<X_data>` returning a
+   plain record of the effective values, with `carries_<x>(node)` as the key
+   test.
+5. The values ride the node's `ERHE_node` `properties` map by their
+   qualified names (D14), plus `property_node_refs` for a reference naming a
+   node (`doc/gltf_extensions/ERHE_node.md`), unless a native carrier already
+   holds them (`doc/editor/scene_serialization.md` "Native carriers").
+6. The runtime state the group implies belongs to a node system, one per
+   scene (`doc/erhe/scene.md` "Node systems"), and every value of the group
+   takes `erhe::scene::node_system_property_changed` as its
+   `property_changed` so the system sees each change.
+
 Tests: `src/erhe/property/test/test_attached_group.cpp`.
 
 ### 4.24 Draw_mode (attached to Node)
 
 `editor::Draw_mode` (`src/editor/scene/draw_mode_properties.{hpp,cpp}`)
 registers `UsdGeomModelAPI` as an attached value group of the prim (section
-4.23, `doc/plans/node_attachments_to_properties.md` D1), owner type
+4.23), owner type
 `Draw_mode`, holder type `erhe::scene::Node`, qualified
 `Draw_mode.apply_draw_mode` .. `Draw_mode.extents_hint_max`, which is the name
 a file's opinion of one addresses it by. Like `Ik` it is a registration holder
@@ -2401,7 +2443,7 @@ plain record of the effective values plus the two resolved ones, which holds
 no path so a per-frame reader allocates nothing;
 `resolve_card_texture_path(node, face)` is the path half.
 `Draw_mode.source_directory` (string) is session state registered without
-`Property_flags::serialize` (D5): the directory a relative card-texture path
+`Property_flags::serialize` (section 4.23): the directory a relative card-texture path
 of this prim resolves against. It travels with the values, so an instance
 holds none of its own and reads the template's through the reference layer,
 which is the file whose variant block spelled the relative path.
@@ -2420,8 +2462,7 @@ the card proxy - is owned by `editor::Draw_mode_system`, one per scene
 `editor::Geometry_graph_mesh`
 (`src/editor/geometry_graph/geometry_graph_mesh.{hpp,cpp}`) registers the
 geometry graph a node sources its mesh from as an attached value group of the
-node (section 4.23, `doc/plans/node_attachments_to_properties.md` D1), owner
-type `Geometry_graph_mesh`, holder type `erhe::scene::Node`, qualified
+node (section 4.23), owner type `Geometry_graph_mesh`, holder type `erhe::scene::Node`, qualified
 `Geometry_graph_mesh.graph_mesh`. Like `Ik` and `Draw_mode` it is a
 registration holder with static members only, not a `Dependency_object`, so
 its owner type sits directly under the root.
@@ -2436,10 +2477,11 @@ per-instance value. Readers go through
 `read_geometry_graph_mesh(const erhe::scene::Node&) -> std::optional<Geometry_graph_mesh_data>`
 and writers through `set_geometry_graph_mesh(node, graph_mesh)`.
 
-The value carries no `Property_flags::serialize` (D5), because the binding's
+The value carries no `Property_flags::serialize` (section 4.23), because the binding's
 file carriers are the native ones - `ERHE_node_graphs` `node_bindings` in
 glTF, the `erhe:scene` block's `graph_meshes.bound_prims` in USD - which are
-fed from `read_geometry_graph_mesh()` and consumed by writing the value (D8).
+fed from `read_geometry_graph_mesh()` and consumed by writing the value
+(`doc/editor/scene_serialization.md` "Native carriers").
 Its `property_changed` is `erhe::scene::node_system_property_changed`: the
 runtime state the group implies - the controlled mesh, the ghost mesh, the
 controlled rigid body and the applied bake revision - is owned by
@@ -2449,8 +2491,8 @@ controlled rigid body and the applied bake revision - is owned by
 ### 4.26 Node_physics (attached to Node)
 
 `editor::Node_physics` (`src/editor/scene/node_physics.{hpp,cpp}`) registers a
-node's rigid body as an attached value group of the node (section 4.23,
-`doc/plans/node_attachments_to_properties.md` D1), owner type `Node_physics`,
+node's rigid body as an attached value group of the node (section 4.23),
+owner type `Node_physics`,
 holder type `erhe::scene::Node`, UI group `Rigid Body`. Like `Ik`, `Draw_mode`
 and `Geometry_graph_mesh` it is a registration holder with static members only,
 not a `Dependency_object`, so its owner type sits directly under the root. USD
@@ -2516,8 +2558,7 @@ neither authored per property nor inherited, a prim carries several of them,
 and the file carriers - a glTF `externalAsset` reference and the USD
 `references` / `payload` list ops with their `variants` selection - state them
 as prim metadata. So the record is read and written directly and the property
-exists for the Properties window and MCP alone
-(`doc/plans/node_attachments_to_properties.md` D4).
+exists for the Properties window and MCP alone.
 
 ## 5. Out of scope
 
@@ -2537,8 +2578,6 @@ style layer is D25 and the reference layer is D33.
   parameters; shader graph parameters; editor per-item attached properties.
 - [plans/gltf_properties_extension.md](../plans/gltf_properties_extension.md) -
   the draft `ERHE_*_properties` extensions the serialization work needs.
-- [plans/node_attachments_to_properties.md](../plans/node_attachments_to_properties.md) -
-  the per-node features that are groups of attached properties of the node.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

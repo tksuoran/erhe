@@ -18,7 +18,7 @@ namespace editor {
 class Joint_constraint_state;
 class Joint_system;
 
-// A joint prim (doc/plans/node_attachments_to_properties.md D3): the erhe
+// A joint prim (doc/erhe/property_system.md section 4.17): the erhe
 // class of the UsdPhysics joint prims, which derive `UsdGeomImageable`, so it
 // carries `visible` and `purpose` and no transform of its own. It sits
 // anywhere in the hierarchy; the importers place it below the prim whose body

@@ -451,7 +451,7 @@ def section_grid_frame_node():
     """A grid drops the node its frame names when an undo removes that node.
 
     The grid is owned by Grid_tool and outlives every scene
-    (doc/editor/grid.md, doc/plans/node_attachments_to_properties.md D6), so
+    (doc/editor/grid.md "Frame"), so
     Grid.frame_node is exactly the cross-frame reference this suite is about.
     """
     section = "grid frame node"

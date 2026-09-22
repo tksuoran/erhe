@@ -40,8 +40,7 @@ public:
 };
 
 // The per-scene owner of the `Geometry_graph_mesh` value group's runtime state
-// (doc/erhe/scene.md "Node systems",
-// doc/plans/node_attachments_to_properties.md D2). One of these is owned by
+// (doc/erhe/scene.md "Node systems"). One of these is owned by
 // each Scene_root and added to its scene, which drives it from the three
 // change sites; it keeps one Geometry_graph_mesh_entry per node bound to a
 // graph, keyed by a raw Node*, and releases the entry's products when the node

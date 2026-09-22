@@ -11,8 +11,7 @@ namespace erhe::scene {
 class Xformable; using Node = Xformable;
 
 // Per-scene owner of the runtime state a node value group implies
-// (doc/erhe/scene.md "Node systems", D2 of
-// doc/plans/node_attachments_to_properties.md): a physics body, a card proxy
+// (doc/erhe/scene.md "Node systems"): a physics body, a card proxy
 // mesh, a layout solve registration. One system per group per scene, added to
 // the scene with Scene::add_node_system. The system keeps its per-node record
 // in a container keyed by Node*, holds no shared_ptr to a node, and erases the

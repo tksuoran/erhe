@@ -539,8 +539,8 @@ def norm_physics_details(details):
 
 
 def norm_joint_details(details):
-    """The joints of the prim, which are child prims of their own (P9 of
-    doc/plans/node_attachments_to_properties.md)."""
+    """The joints of the prim, which are child prims of their own
+    (doc/erhe/property_system.md section 4.17)."""
     out = []
     for joint in details.get("joints", []):
         record = {k: joint.get(k) for k in JOINT_FIELDS}

@@ -1100,7 +1100,7 @@ class Creation:
         """Remove the rigid body from a node (pure visual detail parts).
 
         The body is values of the node itself, so taking it away is clearing
-        the key property (doc/plans/node_attachments_to_properties.md P8).
+        the key property (doc/erhe/property_system.md section 4.26).
         """
         self.mutate("set_item_property", {
             "scene_name": self.scene, "item_id": int(node_id),

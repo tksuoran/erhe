@@ -288,7 +288,6 @@ Every document states its standing in its first ten lines:
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
-- [plans/node_attachments_to_properties.md](plans/node_attachments_to_properties.md) (proposed): Node attachments as attached properties of the node
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work

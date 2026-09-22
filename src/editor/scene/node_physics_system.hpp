@@ -62,8 +62,7 @@ public:
 };
 
 // The per-scene owner of the `Node_physics` value group's runtime state
-// (doc/erhe/scene.md "Node systems",
-// doc/plans/node_attachments_to_properties.md D2). One of these is owned by
+// (doc/erhe/scene.md "Node systems"). One of these is owned by
 // each Scene_root and added to its scene, which drives it from the three
 // change sites.
 //

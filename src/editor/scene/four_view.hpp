@@ -63,8 +63,8 @@ private:
     void place_camera            (Four_view_axis axis);
     void place_orthogonal_cameras(Four_view_axis except);
     void on_perspective_camera_moved();
-    // The link of one camera (D7 of
-    // doc/plans/node_attachments_to_properties.md): the four view holds the
+    // The link of one camera (doc/erhe/scene.md "Transform observers"):
+    // the four view holds the
     // camera weakly and follows its transform through a token it owns, so
     // ~Four_view takes the observer off the user's own perspective camera.
     void link_camera(Four_view_axis axis);

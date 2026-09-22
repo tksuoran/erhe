@@ -22,7 +22,7 @@ The per-node features that are not prims - the rigid body, the draw mode, the
 layout, the brush placement and the geometry graph binding - are attached
 value groups of the node, added through Add Property and shown in the
 Properties window as their own groups (`doc/erhe/property_system.md`
-section 4.23, `doc/plans/node_attachments_to_properties.md` D1). The
+section 4.23). The
 Hierarchy row of a node carrying one shows that group's feature icon,
 right-aligned (`doc/editor/windows.md`).
 

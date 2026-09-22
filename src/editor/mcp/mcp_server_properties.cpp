@@ -46,7 +46,7 @@ using namespace mcp_server_detail;
 namespace {
 
 // A grid is owned by Grid_tool and belongs to no scene
-// (doc/plans/node_attachments_to_properties.md D6), so it is addressed through
+// (doc/editor/grid.md "Frame"), so it is addressed through
 // the tool's own list. `item_id` wins over `item_name` when it is given.
 auto find_grid(App_context& context, const std::size_t item_id, const std::string& item_name) -> std::shared_ptr<erhe::Item_base>
 {

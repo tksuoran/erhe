@@ -40,7 +40,7 @@ public:
 };
 
 // `UsdGeomModelAPI` as a value group of the prim itself
-// (doc/plans/node_attachments_to_properties.md D1): the request that a model
+// (doc/erhe/property_system.md sections 4.24 and 4.23): the request that a model
 // prim's subtree be drawn as a proxy instead of by itself
 // (doc/erhe/usd_compatibility.md, "Draw modes").
 //

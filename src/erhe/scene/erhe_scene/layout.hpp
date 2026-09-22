@@ -76,8 +76,7 @@ public:
 };
 
 // A layout as a value group of the node itself
-// (doc/plans/node_attachments_to_properties.md D1,
-// doc/erhe/property_system.md sections 4.13 and 4.14): a node owns a volume
+// (doc/erhe/property_system.md sections 4.13, 4.14 and 4.23): a node owns a volume
 // (an axis-aligned box in its own local space) and the layout computes the
 // local transform of each direct child so the children are arranged inside
 // that volume.

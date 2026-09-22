@@ -110,7 +110,7 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_typed                 ] = { .code = icons.file,     .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
 
     // The Hierarchy feature icons, in row order: one per attached value group
-    // of a node (doc/plans/node_attachments_to_properties.md D1), each drawn
+    // of a node (doc/erhe/property_system.md section 4.23), each drawn
     // while the node carries that group.
     m_feature_icons = {
         Feature_icon{

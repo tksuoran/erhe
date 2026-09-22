@@ -959,7 +959,7 @@ void resolve_external_assets(
 
 // Pair a carrier prim with the prim its arc named, so the values the carrier
 // does not author itself come from the target
-// (doc/plans/node_attachments_to_properties.md D9). An applied API schema
+// (doc/erhe/property_system.md section 4.23). An applied API schema
 // authors its attributes on the prim, so a carrier that applies one states
 // its own opinion of some of them and reads the rest from the arc target -
 // which is the reference layer's job (X2), the same one the cloned prims use.

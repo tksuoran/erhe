@@ -1807,7 +1807,7 @@ void Item_tree::imgui_row(const Flat_row& row)
         }
 
         // Feature icons: one per attached value group the row's node carries
-        // (doc/plans/node_attachments_to_properties.md D1). They are read
+        // (doc/erhe/property_system.md section 4.23). They are read
         // here, per visible row per frame, because a group is taken up or
         // dropped by a property write, which the flattened row cache does not
         // see; each entry costs one key-property read and one glyph

@@ -23,8 +23,8 @@ enum class Control : unsigned int {
 
 // The example's camera controller: a plain object owned by the application,
 // naming its node by weak reference and following that node's transform
-// through a transform observer token (D7 of
-// doc/plans/node_attachments_to_properties.md).
+// through a transform observer token
+// (doc/erhe/scene.md "Transform observers").
 class Frame_controller
 {
 public:

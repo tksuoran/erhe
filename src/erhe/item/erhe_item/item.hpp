@@ -302,8 +302,8 @@ public:
     static constexpr uint64_t index_asset_file_other       = 23;
     static constexpr uint64_t index_content_library_folder = 24;
     static constexpr uint64_t index_content_library_node   = 25;
-    // The `editor::Joint` prim (doc/plans/node_attachments_to_properties.md
-    // D3). erhe::usd tests the bit to leave a joint prim out of the prims it
+    // The `editor::Joint` prim (doc/erhe/property_system.md section 4.17).
+    // erhe::usd tests the bit to leave a joint prim out of the prims it
     // writes: a joint is written as the UsdPhysics joint prim of the body it
     // joins, from the physics description.
     static constexpr uint64_t index_joint                  = 26;

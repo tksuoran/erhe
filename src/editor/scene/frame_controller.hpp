@@ -35,8 +35,8 @@ enum class Zoom_direction_space : unsigned int {
 
 // The 6DOF camera pose a tool drives: input axes, a position and an
 // orientation, written into the node it is pointed at and read back from it
-// whenever anyone else writes that node's transform (D7 of
-// doc/plans/node_attachments_to_properties.md). A plain object owned by its
+// whenever anyone else writes that node's transform
+// (doc/erhe/scene.md "Transform observers"). A plain object owned by its
 // tool, never an item in the scene: it names its node by weak_ptr, so it
 // keeps no camera of a closed scene alive, and follows that node's transform
 // through a transform observer token.

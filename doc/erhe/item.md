@@ -197,7 +197,11 @@ is that null check, `get_composition_arcs()` answers an empty
 `set_composition_arcs()` with an empty list releases the storage, and a prim
 without arcs costs one pointer. A copy - and so every clone, which reaches the
 copy constructor through `Typed(src, for_clone)` - deep-copies the list, so a
-pasted instance is an instance of the same source.
+pasted instance is an instance of the same source. The prim holds the record
+itself rather than a table on the scene or on the item host keying it,
+because a prefab template tree has no host, a clipboard clone has none until
+it is pasted, and an entry keyed by the item would have to outlive the item's
+scene membership for a redo to find it.
 
 The list is what makes a prim a carrier: `erhe::scene::instance_override`
 resolves an override path through the arc's target clone at every prim that

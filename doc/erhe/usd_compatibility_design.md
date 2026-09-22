@@ -72,8 +72,9 @@ Constraints every step respects:
   transform passes through the prims that have none. What USD applies to a
   prim as an API schema is a group of values of that prim itself
   (physics body, layout, brush placement, draw mode;
-  `doc/plans/node_attachments_to_properties.md` D1), and a composition
-  arc is a record the carrier prim holds (D4). glTF is a serialization
+  `doc/erhe/property_system.md` section 4.23), and a composition
+  arc is a record the carrier prim holds (`doc/erhe/item.md`
+  "Composition arcs"). glTF is a serialization
   of that tree, as USD is
   (G3): the glTF reader and writer map their node + mesh + flat resource
   lists onto it and back. The U steps of section 2 brought the model to
@@ -489,8 +490,8 @@ now owns its behavior; `git log` on that record has the history.
   (`doc/erhe/usd.md` "Variant sets"; `doc/erhe/scene.md`;
   `doc/editor/parsers.md`; `doc/editor/scene.md`).
 - C10 `GeomModelAPI` draw modes. A model prim's `UsdGeomModelAPI` is a value
-  group of that prim itself (`doc/plans/node_attachments_to_properties.md`
-  D1): `editor::Draw_mode` registers every attribute of the schema as an
+  group of that prim itself (`doc/erhe/property_system.md` section 4.23):
+  `editor::Draw_mode` registers every attribute of the schema as an
   attached property of `erhe::scene::Node`, named as
   `doc/erhe/usd_compatibility.md` "Draw modes" names it; the neutral record is
   `erhe::scene::Draw_mode_description`, whose enumerations spell USD's
@@ -503,7 +504,8 @@ now owns its behavior; `git log` on that record has the history.
   carries the feature, which is what `prepend apiSchemas` inside the block
   means: authoring any value of the group sets it. A carrier prim reads its
   arc target's values through the reference layer
-  (`link_carrier_values_to_target`, D9). A prim whose own mode asks for a
+  (`link_carrier_values_to_target`, `doc/erhe/property_system.md`
+  section 4.23). A prim whose own mode asks for a
   proxy takes its children's subtrees out of render, pick and simulation
   (`Item_base::set_prunes_children`, ANDed into the derived active bit;
   the prim itself stays) and supplies the proxy: `bounds` and

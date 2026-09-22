@@ -61,8 +61,8 @@ public:
 };
 
 // The per-scene owner of the constraints the scene's `Joint` prims imply
-// (doc/plans/node_attachments_to_properties.md D2 and D3,
-// doc/editor/scene.md "Node systems"). One of these is owned by each
+// (doc/erhe/scene.md "Node systems",
+// doc/erhe/property_system.md section 4.17). One of these is owned by each
 // Scene_root, which reports every `Joint` prim entering and leaving its tree
 // (Item_host::register_prim).
 //

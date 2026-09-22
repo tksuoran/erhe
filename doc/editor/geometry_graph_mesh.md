@@ -167,7 +167,7 @@ Two codegen structs in `scene.json`:
 These two, the glTF `ERHE_node_graphs` `node_bindings` array and the USD
 `erhe:scene` block's `graph_meshes.bound_prims` are the binding's native
 carriers, fed from `read_geometry_graph_mesh(node)` and consumed by writing
-the node's value (`doc/plans/node_attachments_to_properties.md` D8).
+the node's value (`doc/editor/scene_serialization.md` "Native carriers").
 
 Load reconstructs the assets (`graph_meshes->make<Graph_mesh>(name)` plus a
 `read_parameters`-based graph parse, degrading to a `log_parsers->warn` and a

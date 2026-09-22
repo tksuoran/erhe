@@ -44,7 +44,7 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4;
 extern const erhe::property::Enum_info c_grid_plane_type_enum_info;
 
 // A grid is an item of its own, owned by Grid_tool in every case
-// (doc/editor/grid.md, doc/plans/node_attachments_to_properties.md D6). It is
+// (doc/editor/grid.md "Frame"). It is
 // editor-settings content that outlives every scene, so it is never part of a
 // scene hierarchy and is never cloned.
 class Grid : public erhe::Item<erhe::Item_base, erhe::Item_base, Grid, erhe::Item_kind::not_clonable>

@@ -36,8 +36,8 @@ public:
 };
 
 // The per-scene owner of the `Draw_mode` value group's runtime state
-// (doc/erhe/scene.md "Node systems", doc/plans/node_attachments_to_properties.md
-// D2). One of these is owned by each Scene_root and added to its scene, which
+// (doc/erhe/scene.md "Node systems"). One of these is owned by each
+// Scene_root and added to its scene, which
 // drives it from the three change sites; it keeps one Draw_mode_entry per
 // node carrying a draw mode, keyed by a raw Node*, and erases the entry when
 // the node leaves the scene, so a scene close releases the proxies it holds.

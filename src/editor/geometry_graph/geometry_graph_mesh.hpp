@@ -22,8 +22,8 @@ public:
 };
 
 // The geometry graph a node sources its mesh from, as an attached value group
-// of the node itself (doc/erhe/property_system.md section 4.25,
-// doc/plans/node_attachments_to_properties.md D1). The same shape USD gives
+// of the node itself (doc/erhe/property_system.md sections 4.25 and 4.23).
+// The same shape USD gives
 // `material:binding`: a relationship from the prim to a resource prim.
 //
 // Geometry_graph_mesh is a registration holder with static members only, not

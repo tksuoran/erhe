@@ -353,7 +353,7 @@ public:
 
 
     // The constraints of this scene's `Joint` prims
-    // (doc/plans/node_attachments_to_properties.md D3). register_prim() and
+    // (doc/erhe/property_system.md section 4.17). register_prim() and
     // unregister_prim() report every joint entering and leaving the tree.
     [[nodiscard]] auto get_joint_system() -> Joint_system&;
     [[nodiscard]] auto get_joint_system() const -> const Joint_system&;

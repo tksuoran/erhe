@@ -314,8 +314,7 @@ the record draws is the editor's.
 ## Node systems
 
 `node_system.hpp` owns `erhe::scene::INode_system`, the interface a per-scene
-owner of node runtime state implements
-(`doc/plans/node_attachments_to_properties.md` D2). A node value group - the
+owner of node runtime state implements. A node value group - the
 attached properties one class registers on `Node`, keyed on one of them
 (`doc/erhe/property_system.md` section 4.23) - states what the user authored;
 the objects that exist because of it (a physics body, a card proxy mesh, a
@@ -357,8 +356,7 @@ Tests: `src/erhe/scene/test/test_node_systems.cpp` and
 ## Transform observers
 
 `transform_observer.hpp` owns `erhe::scene::Transform_observer_token` and the
-per-prim `Transform_observer_list` behind it
-(`doc/plans/node_attachments_to_properties.md` D7). A part that has to follow
+per-prim `Transform_observer_list` behind it. A part that has to follow
 one prim's world transform without being an item in the scene subscribes with
 `Xformable::add_transform_observer(callback)` and keeps the returned token; the
 callback runs from `Xformable::handle_transform_update`, so every transform

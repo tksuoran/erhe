@@ -51,8 +51,7 @@ public:
 };
 
 // The rigid body of a node, as an attached value group of the node itself
-// (doc/erhe/property_system.md section 4.26,
-// doc/plans/node_attachments_to_properties.md D1). The same shape USD gives
+// (doc/erhe/property_system.md sections 4.26 and 4.23). The same shape USD gives
 // `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`, `PhysicsMassAPI` and the
 // `PhysicsMaterialAPI` binding: applied API schemas contributing plain
 // attributes to the prim.

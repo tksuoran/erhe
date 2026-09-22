@@ -42,7 +42,7 @@ static constexpr const char* c_motion_mode_strings[] = {
 // (doc/erhe/property_system.md D2a). e_none is one of them: it is the default
 // of the Node_physics.motion_mode key property, and a node carries a rigid
 // body exactly while its effective value is something else
-// (doc/plans/node_attachments_to_properties.md D1).
+// (doc/erhe/property_system.md section 4.23).
 extern const erhe::property::Enum_info c_motion_mode_enum_info;
 
 class Collision_filter;

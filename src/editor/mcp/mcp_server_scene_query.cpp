@@ -736,7 +736,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     }
 
     // The joints of this prim: the `Joint` child prims naming it as their
-    // first frame node (doc/plans/node_attachments_to_properties.md D3).
+    // first frame node (doc/erhe/property_system.md section 4.17).
     json joints = json::array();
     for (const std::shared_ptr<erhe::Hierarchy>& child : found_node->get_children()) {
         const std::shared_ptr<Joint> joint = std::dynamic_pointer_cast<Joint>(child);

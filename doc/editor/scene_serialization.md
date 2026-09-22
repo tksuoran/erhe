@@ -88,6 +88,29 @@ whose source of truth is an imported triangle soup exports the soup instead
 (full vertex attributes: TEXCOORD_n, JOINTS_n / WEIGHTS_n, COLOR_n) with no
 `ERHE_geometry` - its geometry is a derived artifact, re-derived on load.
 
+## Native carriers
+
+Where a file format of its own already states a concept - the
+`KHR_physics_rigid_bodies` body and joint of a node, the `UsdPhysics`
+schemas, `UsdGeomModelAPI`, the `ERHE_node_graphs` `node_bindings` array,
+the `erhe:scene` block's `graph_meshes.bound_prims` - that carrier is the
+one a save writes and an open reads. The carrier is produced from the value
+group's `read_<x>(node)` record and consumed by writing the node's values
+(`doc/erhe/property_system.md` section 4.23), so the group and the file stay
+one concept with one writer and there is no second, erhe-specific carrier of
+the same data to keep in step.
+
+What a native carrier cannot hold rides `ERHE_node` `properties` by the
+value's qualified name, with `property_node_refs` for a value naming a node
+([`gltf_extensions/ERHE_node.md`](../gltf_extensions/ERHE_node.md)), and
+`erhe:Owner:name` custom attributes in USD
+([`../erhe/usd_compatibility.md`](../erhe/usd_compatibility.md)) - which of a
+body's two kinematic modes is in force is the standing example
+([`../erhe/khr_physics_rigid_bodies_support.md`](../erhe/khr_physics_rigid_bodies_support.md),
+"Motion modes in a file"). A value that is session state carries no
+serialize flag and no carrier at all (`doc/erhe/property_system.md`
+section 4.23).
+
 ## Save pipeline
 
 Entry point: `editor::save_scene_gltf(Scene_root&, path)` in

@@ -32,7 +32,7 @@ constexpr std::string_view c_extent = "Extents Hint";
 // `model:` attributes exist because `GeomModelAPI` is applied to the prim, so
 // a file - or a user - that authors one has applied it, and the key property
 // is the erhe form of that application
-// (doc/plans/node_attachments_to_properties.md D9).
+// (doc/erhe/property_system.md section 4.24).
 //
 // Delivered callbacks may write values (Dependency_object::deliver), and the
 // key property's own callback is node_system_property_changed alone, so the
