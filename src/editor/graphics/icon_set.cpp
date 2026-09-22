@@ -2,6 +2,12 @@
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
 
+#include "brushes/brush_placement.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "scene/draw_mode_properties.hpp"
+#include "scene/node_physics.hpp"
+
+#include "erhe_scene/layout.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_primitive/material.hpp"
@@ -103,6 +109,36 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_scope                 ] = { .code = icons.folder,   .color = glm::vec4{0.6f, 0.7f, 0.8f, 1.0f}};
     type_icons[erhe::Item_type::index_typed                 ] = { .code = icons.file,     .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
 
+    // The Hierarchy feature icons, in row order: one per attached value group
+    // of a node (doc/plans/node_attachments_to_properties.md D1), each drawn
+    // while the node carries that group.
+    m_feature_icons = {
+        Feature_icon{
+            .carries = &carries_node_physics,
+            .icon    = Item_icon{.font = custom_icons, .code = icons.physics, .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}}
+        },
+        Feature_icon{
+            .carries = &carries_brush_placement,
+            .icon    = Item_icon{.font = custom_icons, .code = icons.brush_small, .color = glm::vec4{0.6f, 0.4f, 1.0f, 1.0f}}
+        },
+        Feature_icon{
+            .carries = &erhe::scene::carries_layout,
+            .icon    = Item_icon{.font = custom_icons, .code = icons.grid, .color = glm::vec4{0.5f, 0.8f, 0.5f, 1.0f}}
+        },
+        Feature_icon{
+            .carries = &carries_draw_mode,
+            .icon    = Item_icon{.font = custom_icons, .code = icons.texture, .color = glm::vec4{0.9f, 0.7f, 0.3f, 1.0f}}
+        },
+        Feature_icon{
+            .carries = &carries_geometry_graph_mesh,
+            .icon    = Item_icon{.font = custom_icons, .code = icons.mesh, .color = glm::vec4{0.7f, 0.5f, 1.0f, 1.0f}}
+        }
+    };
+}
+
+auto Icon_set::get_feature_icons() const -> const std::vector<Feature_icon>&
+{
+    return m_feature_icons;
 }
 
 void Icon_set::add_icons(const uint64_t item_type, const float size)

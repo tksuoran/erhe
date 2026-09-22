@@ -64,7 +64,6 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_before;
     std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>            m_hold_nodes;
-    std::vector<std::shared_ptr<erhe::scene::Node_attachment>> m_hold_node_attachments;
 };
 
 }

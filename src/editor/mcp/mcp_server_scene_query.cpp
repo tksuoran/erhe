@@ -420,8 +420,8 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 {"tags",        tags_arr}
             };
 
-            // Transform and attachments are the transformable prim's; a prim
-            // outside Xformable - a Scope - carries neither.
+            // The transform is the transformable prim's; a prim outside
+            // Xformable - a Scope - carries none.
             const erhe::scene::Node* const node = erhe::is<erhe::scene::Node>(prim.get())
                 ? static_cast<const erhe::scene::Node*>(prim.get())
                 : nullptr;
@@ -431,15 +431,9 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 const glm::quat r = trs.get_rotation();
                 const glm::vec3 s = trs.get_scale();
 
-                json attachment_types = json::array();
-                for (const auto& att : node->get_attachments()) {
-                    attachment_types.push_back(std::string{att->get_type_name()});
-                }
-
-                entry["position"]         = {t.x, t.y, t.z};
-                entry["rotation_xyzw"]    = {r.x, r.y, r.z, r.w};
-                entry["scale"]            = {s.x, s.y, s.z};
-                entry["attachment_types"] = attachment_types;
+                entry["position"]      = {t.x, t.y, t.z};
+                entry["rotation_xyzw"]   = {r.x, r.y, r.z, r.w};
+                entry["scale"]           = {s.x, s.y, s.z};
             }
 
             nodes.push_back(entry);
@@ -500,8 +494,8 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         ? std::static_pointer_cast<erhe::scene::Node>(found_prim)
         : std::shared_ptr<erhe::scene::Node>{};
     if (!found_node) {
-        // A prim outside Xformable has no transform and no attachments; what
-        // it holds is its type, its place in the tree and its children.
+        // A prim outside Xformable has no transform; what it holds is its
+        // type, its place in the tree and its children.
         json prim_result = {
             {"name",     found_prim->get_name()},
             {"id",       found_prim->get_id()},
@@ -530,7 +524,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     const glm::vec4 wp = found_node->position_in_world();
 
     // The mesh of this prim: a Mesh IS the prim (doc/erhe/usd_compatibility_design.md
-    // C5), so its detail is reported on the node, not among its attachments.
+    // C5), so its detail is reported on the prim's own entry.
     const auto mesh_details = [&scene](const std::shared_ptr<erhe::scene::Mesh>& mesh) -> json {
         json mesh_json = json::object();
         mesh_json["primitive_count"] = static_cast<int>(mesh->get_primitives().size());
@@ -600,8 +594,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     };
 
     // A Camera and a Light are prims of their own (C5), so their values sit
-    // on the prim's own entry, under the same keys they had while the two
-    // were attachments.
+    // on the prim's own entry.
     const auto camera_details = [](const std::shared_ptr<erhe::scene::Camera>& camera) -> json
     {
         return json{
@@ -714,7 +707,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     };
 
     // The rigid body is values of the node itself (P8), so it is reported
-    // beside the node's other values, not as an attachment.
+    // beside the node's other values.
     json node_physics_json = json(nullptr);
     const std::optional<Node_physics_data> physics_data = read_node_physics(*found_node.get());
     if (physics_data.has_value()) {
@@ -762,17 +755,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 {"constraint",       (joint->get_constraint() != nullptr) ? "created" : "pending"}
             }
         );
-    }
-
-    json attachments = json::array();
-    for (const auto& att : found_node->get_attachments()) {
-        json att_json = {
-            {"type", std::string{att->get_type_name()}},
-            {"name", att->get_name()},
-            {"id",   att->get_id()}
-        };
-
-        attachments.push_back(att_json);
     }
 
     // The composition arcs the prim carries, in authored order
@@ -855,7 +837,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"scale",         {ws.x, ws.y, ws.z}},
             {"skew",          {wk.x, wk.y, wk.z}}
         }},
-        {"attachments",      attachments},
         {"composition_arcs", composition_arcs},
         {"joints",         joints},
         {"physics",        node_physics_json},

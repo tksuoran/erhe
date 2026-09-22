@@ -9,7 +9,6 @@
 #include "operations/compound_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
-#include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/item_lookup.hpp"
@@ -71,20 +70,14 @@ void collect_orphan_materials(
 }
 
 // Collects everything a held clipboard item keeps alive: the item subtree
-// itself plus, transitively, node attachments, mesh materials, skins and
-// material textures. See Clipboard::collect_pinned_items.
+// itself plus, transitively, mesh materials, skins and material textures.
+// See Clipboard::collect_pinned_items.
 void collect_clipboard_pins(const std::shared_ptr<erhe::Item_base>& item, std::unordered_set<const erhe::Item_base*>& out_pinned)
 {
     if (!item) {
         return;
     }
     out_pinned.insert(item.get());
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            out_pinned.insert(attachment.get());
-        }
-    }
     {
         const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (mesh) {

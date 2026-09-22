@@ -20,7 +20,6 @@
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
-#include "operations/node_attach_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "mesh_rendertarget_view.hpp"
@@ -58,7 +57,6 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/xform.hpp"
@@ -1062,17 +1060,6 @@ auto Scene_commands::create_new_joint(
         )
     );
     return new_joint;
-}
-
-void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment)
-{
-    if (!attachment) {
-        return;
-    }
-    // Empty host node = pure, undoable detach (Node_attach_operation contract).
-    m_context.operation_stack->queue(
-        std::make_shared<Node_attach_operation>(attachment, std::shared_ptr<erhe::scene::Node>{})
-    );
 }
 
 auto Scene_commands::create_new_rendertarget(erhe::Hierarchy* parent) -> std::shared_ptr<Rendertarget_mesh>

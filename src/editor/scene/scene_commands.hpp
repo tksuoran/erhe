@@ -43,7 +43,6 @@ namespace erhe::scene {
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;
-    class Node_attachment;
 }
 
 namespace editor {
@@ -316,19 +315,6 @@ public:
         const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings         = {},
         bool                                                          enable_collision = false
     ) -> std::shared_ptr<Joint>;
-
-    // Node attachment management (issue #249). Each of these attaches a new
-    // attachment to an EXISTING in-scene node via a bare (undoable)
-    // Node_attach_operation -- no node creation, no Compound_operation. They
-    // gate single-instance kinds via get_attachment<T> and return empty when
-    // the node already carries that attachment (Scene_root is resolved from the
-    // node's item host). See scene/attachment_types.{hpp,cpp} for the user
-    // catalog that drives them; Rigid Body / Joint reuse create_new_rigid_body
-    // / create_new_joint above.
-
-    // Queues an undoable pure detach of the attachment from its current node
-    // (Node_attach_operation with an empty host node). No-op on a null pointer.
-    void remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment);
 
     auto get_scene_root         (erhe::Hierarchy* parent) const -> Scene_root*;
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;

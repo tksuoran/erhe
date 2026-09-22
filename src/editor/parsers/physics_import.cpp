@@ -997,9 +997,9 @@ void import_physics(
     // the node set on every save/open cycle. Only a prim whose whole content
     // was that shape is removed: a plain `Xform`, which carries nothing of
     // its own (a `Mesh` prim IS its geometry and stays, and so does every
-    // other typed prim), with no attachments (light, joint, own body, ...)
-    // and no children (external assets instantiate before physics import, so
-    // carrier nodes with instanced content have children here).
+    // other typed prim), with no own body and no children (external assets
+    // instantiate before physics import, so carrier nodes with instanced
+    // content have children here).
     for (erhe::scene::Node* node : folded_contributor_nodes) {
         if (nodes_with_body.contains(node)) {
             continue;
@@ -1007,7 +1007,7 @@ void import_physics(
         if (!erhe::is<erhe::scene::Xform>(node)) {
             continue;
         }
-        if (!node->get_attachments().empty() || !node->get_children().empty()) {
+        if (!node->get_children().empty()) {
             continue;
         }
         log_parsers->info("physics import: removing folded shape-carrier node '{}'", node->get_name());

@@ -22,12 +22,12 @@ migrated" table lists the hand-written rows that are authored state; section
    holder type and the secondary properties it holds (D12), for one item
    or for a group of items of one property owner type. `Properties::imgui`
    partitions a multi-selection by owner type (a content-library entry
-   standing for its item, a node followed by its attachments) and draws
+   standing for its item) and draws
    one such section per type; a single selection draws the section under
    the item's own group through `item_properties` and `dependency_properties`.
 2. Hand-written rows. `Properties::item_properties` is the frame (the
-   group header, the developer id and flag word, the attachment Remove
-   and Add buttons) around `item_diagnostics`, whose per-class functions
+   group header, the developer id and flag word, the Add Property and
+   Remove Property buttons) around `item_diagnostics`, whose per-class functions
    (`scene_properties`, `light_properties`, `mesh_properties`,
    `node_physics_properties`, `node_joint_properties`,
    `texture_properties`, ...) add the read-only diagnostics, the actions
@@ -39,7 +39,7 @@ migrated" table lists the hand-written rows that are authored state; section
 - R1 Every row the window draws for an item comes from the registered
   property path or is a read-only diagnostic. The selector next to Pin
   picks how a multi-selection is drawn: Individual draws every item on
-  its own (its group, diagnostics, attachments and registered rows);
+  its own (its group, diagnostics and registered rows);
   Combined draws one section per property owner type and nothing per
   item, and a selection of two types shows one section per type. A
   single item always draws the individual form.
@@ -78,7 +78,7 @@ migrated" table lists the hand-written rows that are authored state; section
   record); `material_properties` draws only the preview render and the
   BRDF slice for a selected material.
 - R5 List-valued state with no `Property_value` form (the record list
-  editors: attachments, samplers, animation channels and samplers) and the
+  editors: samplers, animation channels and samplers) and the
   scene's settings-override block keep their hand-written editor, drawn per
   item, and are the documented exception. A list of scalars has a form: it
   is one array property drawn by the generic row

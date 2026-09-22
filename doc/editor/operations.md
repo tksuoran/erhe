@@ -29,7 +29,6 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
-  - `Node_attach_operation` -- attach/detach node attachments
   - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
   - `Merge_operation` -- merge multiple meshes
 

@@ -19,7 +19,7 @@ verification of doc/editor/gltf_scene_roundtrip.md:
    its FULL payload (parameter values, brush geometry, animation
    samplers) - never as a name-only reference stub.
 3. Loads the saved scene back and diffs the MCP-visible state: node set
-   (name / parent / TRS / tags / attachment types / locked), per-node
+   (name / parent / TRS / tags / locked), per-node
    physics and joint fields, materials, animations (channel-level), the
    brush library, and graph assets. Captures screenshots before and after.
 4. Round-trips a prefab scene ("res/editor/scenes/Prefab test.glb") when
@@ -300,7 +300,7 @@ def schema_validate(instance, schema, root_schema, path, errors):
 
 def collect_erhe_payloads(doc):
     """Yield (extension_name, json_path, payload) for every ERHE_* extension
-    object in the document, from every attachment site the writers use."""
+     object in the document, from every extension site the writers use."""
     found = []
 
     def take(obj, where):
@@ -397,7 +397,7 @@ def wait_for_scene_node(scene_name, node_name, tries=100):
 
 def wait_for_mesh_child(scene_name, node_name, tries=100):
     """A Mesh is a child prim of the node it belongs to
-    (doc/erhe/usd_compatibility_design.md C5), not an attachment of it."""
+    (doc/erhe/usd_compatibility_design.md C5)."""
     for _ in range(tries):
         nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
         for node in nodes:
@@ -447,7 +447,6 @@ def norm_node(node, parent_name=None):
         "rotation":    norm_quat(node.get("rotation_xyzw", [])),
         "scale":       round_vec(node.get("scale", [])),
         "tags":        sorted(node.get("tags", [])),
-        "attachments": sorted(node.get("attachment_types", [])),
         "locked":      node.get("locked"),
     }
 
@@ -523,7 +522,7 @@ JOINT_FIELDS = ["connected_node", "enable_collision"]
 
 def norm_physics_details(details):
     # The rigid body is values of the node itself (P8): get_node_details
-    # reports it under "physics", not as an attachment.
+    # reports it under "physics".
     physics = details.get("physics")
     if not isinstance(physics, dict):
         return None
@@ -539,28 +538,16 @@ def norm_physics_details(details):
     return record
 
 
-def norm_attachment_details(details):
+def norm_joint_details(details):
+    """The joints of the prim, which are child prims of their own (P9 of
+    doc/plans/node_attachments_to_properties.md)."""
     out = []
-    # The joints of the prim are child prims of their own (P9 of
-    # doc/plans/node_attachments_to_properties.md); they are compared beside
-    # the attachments, in the same list.
     for joint in details.get("joints", []):
         record = {k: joint.get(k) for k in JOINT_FIELDS}
         for key, value in list(record.items()):
             if isinstance(value, float):
                 record[key] = round(value, 4)
         record["type"] = "Joint"
-        out.append(record)
-    for attachment in details.get("attachments", []):
-        a_type = attachment.get("type")
-        if a_type == "Mesh":
-            record = {"name": attachment.get("name")}
-        else:
-            record = {}
-        for key, value in list(record.items()):
-            if isinstance(value, float):
-                record[key] = round(value, 4)
-        record["type"] = a_type
         out.append(record)
     return sorted(out, key=lambda r: json.dumps(r, sort_keys=True))
 
@@ -661,8 +648,8 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
             continue
         if isinstance(details, dict):
             snap["node_details"][node_name] = {
-                "attachments": norm_attachment_details(details),
-                "physics":     norm_physics_details(details),
+                "joints":  norm_joint_details(details),
+                "physics": norm_physics_details(details),
             }
     return snap
 
@@ -1966,14 +1953,6 @@ def usd_item_id(scene_name, kind, name):
     return None
 
 
-def usd_attachment_id(scene_name, node_name, attachment_type):
-    details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
-    for attachment in details.get("attachments", []):
-        if attachment.get("type") == attachment_type:
-            return attachment.get("id")
-    return None
-
-
 def usd_open_pbr_terminals(S, saved):
     """The written file offers both surface terminals for the material whose
     values only the OpenPBR network carries (doc/erhe/usd_compatibility_design.md
@@ -1999,8 +1978,7 @@ def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
         return
 
     for kind, target, property_name, value in edits:
-        item_id = usd_attachment_id(scene_name, target, kind[len("attachment:"):]) if kind.startswith("attachment:") \
-            else usd_item_id(scene_name, kind, target)
+        item_id = usd_item_id(scene_name, kind, target)
         if item_id is None:
             check(S, f"{scene_name}: edit target '{target}' found", False, f"{kind} lookup failed")
             continue
@@ -2187,7 +2165,7 @@ USD_PHYSICS_LEG_BODIES = ["Crate", "Ball", "Ground", "Slab", "Sensor"]
 
 def usd_physics_state(scene_name, node_names):
     """The physics of a USD-backed scene: the shared items by category and the
-    physics attachments of the named prims, in the form the glTF leg diffs."""
+    physics values of the named prims, in the form the glTF leg diffs."""
     items = call("get_physics_items", {"scene_name": scene_name})
     state = {
         "physics_materials":      sorted(m.get("name") for m in items.get("physics_materials", [])),
@@ -2198,8 +2176,8 @@ def usd_physics_state(scene_name, node_names):
     for name in node_names:
         details = call("get_node_details", {"scene_name": scene_name, "node_name": name})
         state["bodies"][name] = {
-            "attachments": norm_attachment_details(details),
-            "physics":     norm_physics_details(details),
+            "joints":  norm_joint_details(details),
+            "physics": norm_physics_details(details),
         }
     return state
 

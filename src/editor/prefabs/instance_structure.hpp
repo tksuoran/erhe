@@ -46,9 +46,8 @@ namespace editor {
 [[nodiscard]] auto is_instance_structure_protected(const erhe::Item_base& item) -> bool;
 [[nodiscard]] auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool;
 
-// The Hierarchy an item's position in the tree is that of: the item itself,
-// or - for a Node_attachment, whose position is its prim's - the prim it is
-// attached to. nullptr for an item that is in no tree.
+// The Hierarchy an item's position in the tree is that of: the item itself.
+// nullptr for an item that is in no tree.
 [[nodiscard]] auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*;
 
 // The arcs `item` carries, empty for every item that carries none and for an

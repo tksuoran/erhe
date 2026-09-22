@@ -41,14 +41,6 @@ auto find_prim_in_subtree(const std::shared_ptr<erhe::Hierarchy>& prim, Predicat
     if (matches(*prim)) {
         return prim;
     }
-    if (erhe::is<erhe::scene::Node>(prim.get())) {
-        const erhe::scene::Node* const node = static_cast<const erhe::scene::Node*>(prim.get());
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            if (attachment && matches(*attachment)) {
-                return attachment;
-            }
-        }
-    }
     for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
         const std::shared_ptr<erhe::Item_base> found = find_prim_in_subtree(child, matches);
         if (found) {
@@ -294,17 +286,14 @@ void collect_reference_candidates(
         }
     }
 
-    // Scene nodes and their attachments, for a node-typed (or mesh-, camera-,
-    // light-typed) reference. The root node is not in the transform-update
-    // buckets for_each_node visits, so it is considered on its own.
+    // Scene nodes, for a node-typed (or mesh-, camera-, light-typed)
+    // reference. The root node is not in the transform-update buckets
+    // for_each_node visits, so it is considered on its own.
     const erhe::scene::Scene& scene = scene_root->get_scene();
     consider(scene.get_root_node());
     scene.for_each_node(
         [&consider](const std::shared_ptr<erhe::scene::Node>& node) {
             consider(node);
-            for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-                consider(attachment);
-            }
             return true;
         }
     );

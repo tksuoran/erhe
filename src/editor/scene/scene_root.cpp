@@ -29,7 +29,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
-#include "scene/attachment_types.hpp"
+#include "scene/child_prim_types.hpp"
 #include "scene/joint.hpp"
 #include "scene/joint_system.hpp"
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
@@ -57,7 +57,6 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
@@ -524,8 +523,7 @@ auto Scene_root::make_browser_window(
             // onto any row of this scene imports it into this scene's content
             // library, the same verb the asset browser's context menu offers.
             // The texture lands as a child of the hovered prim, or in the
-            // Textures scope when the row is not a prim (the Scene header, a
-            // node attachment).
+            // Textures scope when the row is not a prim (the Scene header).
             {
                 const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
                 if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_texture::static_type_name.data())) {
@@ -661,41 +659,6 @@ auto Scene_root::make_browser_window(
                     );
                 }
             }
-            // "Add Attachment": the catalog's applied-API-schema entries (issue
-            // #249), each entry disabled when the node cannot take that kind.
-            if (!get_attachment_types().empty() && ImGui::BeginMenu("Add Attachment")) {
-                for (const Attachment_type_info& type_info : get_attachment_types()) {
-                    const bool can_add = type_info.can_add(*node);
-                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
-                        deferred_operations.push_back(
-                            [&context, node, make = type_info.make]() {
-                                make(*context.scene_commands, *node);
-                            }
-                        );
-                        close = true;
-                    }
-                }
-                ImGui::EndMenu();
-            }
-
-            // "Remove Attachment": one undoable pure-detach entry per existing
-            // attachment (only shown when the node has any).
-            const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
-            if (!attachments.empty() && ImGui::BeginMenu("Remove Attachment")) {
-                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : attachments) {
-                    std::string label = fmt::format("{} '{}'", attachment->get_type_name(), attachment->get_name());
-                    if (ImGui::MenuItem(label.c_str())) {
-                        deferred_operations.push_back(
-                            [&context, attachment]() {
-                                context.scene_commands->remove_attachment(attachment);
-                            }
-                        );
-                        close = true;
-                    }
-                }
-                ImGui::EndMenu();
-            }
-
             // Lightmapped (undoable): the lightmapped property is inherited
             // down the node tree (D23), so the recursive command writes the
             // local value on the clicked node - or on every selected node
@@ -738,11 +701,6 @@ auto Scene_root::make_browser_window(
                                 parameters.operations.push_back(std::make_shared<Property_set_operation>(item, property, before, after));
                             };
                             const std::function<void(erhe::scene::Node&)> clear_below = [&](erhe::scene::Node& visited_node) {
-                                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : visited_node.get_attachments()) {
-                                    if (attachment) {
-                                        queue_state(attachment, std::nullopt);
-                                    }
-                                }
                                 for (const std::shared_ptr<erhe::Hierarchy>& child : visited_node.get_children()) {
                                     const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
                                     if (child_node) {
@@ -1175,12 +1133,8 @@ auto Scene_root::get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t
         return 0;
     }
     // A Mesh is a prim (doc/erhe/usd_compatibility_design.md C5): its own flags
-    // carry the role bits (content, tool, brush, rendertarget, ...), and
-    // any attachment it holds contributes its bits on top.
-    uint32_t mask = raytrace_node_mask(*mesh);
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : mesh->get_attachments()) {
-        mask = mask | raytrace_node_mask(*attachment);
-    }
+    // carry the role bits (content, tool, brush, rendertarget, ...).
+    const uint32_t mask = raytrace_node_mask(*mesh);
     log_raytrace->debug("RT mask for mesh '{}' in scene '{}' = {:#x}", mesh->get_name(), m_scene->get_name(), mask);
     return mask;
 }

@@ -117,13 +117,12 @@ item is itself selected does not matter.
 
 Each consumer resolves its reference through one helper,
 `Selection::get_active_item_as<T>()` (the active item when it is of type `T`,
-or the node an active attachment belongs to, subject to the scene rule
-above, else empty), and uses its own fallback only when the helper returns
-empty:
+subject to the scene rule above, else empty), and uses its own fallback only
+when the helper returns empty:
 
 | Consumer | Reference rule |
 |----------|----------------|
-| `Tool::get_node` | active node (or active attachment's node), else first hosted node of the command target selection |
+| `Tool::get_node` | active node, else first hosted node of the command target selection |
 | `Brush_tool` "Parent to Active" | active node |
 | `Operations::can_flip_joint` / `flip_joint` | active node |
 | `Operations::create_brush` | active mesh, else first selected mesh |
@@ -141,8 +140,8 @@ palette types Material and Brush (`get_default_material`, the `Brush_tool`
 brush fallback, the `Operations` make-mesh material): those answer "which
 material / brush is current", a question the single active item does not
 answer once the user clicks a node. The map is written only for those two
-types; every hierarchy-typed reference (Node, Mesh, Node_attachment,
-Hierarchy) is the active item.
+types; every hierarchy-typed reference (Node, Mesh, Hierarchy) is the
+active item.
 
 ### D8. MCP
 

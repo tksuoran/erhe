@@ -403,8 +403,6 @@ erhe_target_sources_grouped(
     operations/fork_geometry_operation.hpp
     operations/item_set_flag_bits_operation.cpp
     operations/item_set_flag_bits_operation.hpp
-    operations/node_attach_operation.cpp
-    operations/node_attach_operation.hpp
     operations/node_transform_operation.cpp
     operations/node_transform_operation.hpp
     operations/operations_window.cpp
@@ -512,8 +510,8 @@ erhe_target_sources_grouped(
     rendertarget_mesh.hpp
     rendertarget_view.hpp
     robin_hood.h
-    scene/attachment_types.cpp
-    scene/attachment_types.hpp
+    scene/child_prim_types.cpp
+    scene/child_prim_types.hpp
     scene/camera_roll_monitor.cpp
     scene/camera_roll_monitor.hpp
     scene/collision_shape_from_mesh.cpp

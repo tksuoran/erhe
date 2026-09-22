@@ -2,7 +2,6 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <cstddef>

@@ -80,13 +80,10 @@ void Merge_static_subtree_operation::build_target(
     target.root = root;
     target.mesh = erhe::scene::get_mesh(root.get());
 
-    // A node is merged only when it IS a Mesh prim carrying nothing else and
-    // every primitive carries source geometry - anything else (joint anchors,
-    // group nodes, sensor bodies, buffer-only meshes) is kept.
+    // A node is merged only when it IS a Mesh prim and every primitive
+    // carries source geometry - anything else (joint anchors, group nodes,
+    // sensor bodies, buffer-only meshes) is kept.
     const auto is_mergeable = [](Node* node) -> std::shared_ptr<Mesh> {
-        if (!node->get_attachments().empty()) {
-            return {};
-        }
         Mesh* const mesh_prim = dynamic_cast<Mesh*>(node);
         if (mesh_prim == nullptr) {
             return {};
@@ -169,10 +166,10 @@ void Merge_static_subtree_operation::build_target(
             dispositions[node.get()] = Disposition::merged;
             return Disposition::merged;
         }
-        if (node->get_attachments().empty() && !erhe::is<Mesh>(node.get()) && has_children && all_children_removed) {
+        if (!erhe::is<Mesh>(node.get()) && has_children && all_children_removed) {
             // Part pose node / chain group whose whole payload was merged.
-            // Attachment-less LEAVES are never pruned - zero-child markers
-            // (joint pivot anchors) may be referenced from outside.
+            // LEAVES are never pruned - zero-child markers (joint pivot
+            // anchors) may be referenced from outside.
             dispositions[node.get()] = Disposition::pruned;
             return Disposition::pruned;
         }

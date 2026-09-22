@@ -7,7 +7,6 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <memory>
@@ -249,8 +248,7 @@ public:
     [[nodiscard]] auto get_last_selected() const -> std::shared_ptr<T>;
 
     // The one reference item of a command (doc/editor/active_item.md D6): the
-    // active item when it is of type T, or the node an active
-    // erhe::scene::Node_attachment belongs to when T is Node or a base of it.
+    // active item when it is of type T.
     // The active item counts as a reference only when it is non-hosted or
     // hosted by the active scene; an active item hosted by another scene
     // answers empty, matching the command target scoping. Whether the active
@@ -372,15 +370,6 @@ auto Selection::get_active_item_as() -> std::shared_ptr<T>
     }
     if (erhe::utility::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
         return std::static_pointer_cast<T>(item);
-    }
-    if constexpr (std::is_base_of_v<T, erhe::scene::Node>) {
-        if (erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::scene::Node_attachment::get_static_type())) {
-            erhe::scene::Node_attachment* attachment = static_cast<erhe::scene::Node_attachment*>(item.get());
-            erhe::scene::Node* node = attachment->get_node();
-            if ((node != nullptr) && is_command_reference_host(*node)) {
-                return std::dynamic_pointer_cast<T>(node->shared_from_this());
-            }
-        }
     }
     return {};
 }

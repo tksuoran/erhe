@@ -131,7 +131,6 @@ public:
     [[nodiscard]] auto user_state    () const -> const User_state_config&;
 
     // Node tree (ephemeral UI state, not persisted)
-    bool node_tree_expand_attachments{false};
     bool node_tree_show_all          {false};
 
     Graphics_settings           graphics;

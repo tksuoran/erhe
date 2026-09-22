@@ -37,7 +37,7 @@
 #include "windows/lightmap_window.hpp"
 #include "windows/viewport_config_window.hpp"
 #include "windows/viewport_window.hpp"
-#include "scene/attachment_types.hpp"
+#include "scene/child_prim_types.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
@@ -610,9 +610,8 @@ auto Mcp_server::action_set_item_flags(const json& args) -> std::string
 
     json updated = json::array();
     for (const std::shared_ptr<erhe::Item_base>& item : find_items_by_ids(*sr, target_ids)) {
-        // Mesh-scoped flags live on the Mesh attachment; a Node id resolves
-        // to its mesh so callers can pass the ids that get_scene_nodes
-        // returns.
+        // Mesh-scoped flags live on the Mesh prim; a Node id resolves to its
+        // mesh so callers can pass the ids that get_scene_nodes returns.
         std::shared_ptr<erhe::Item_base> target = item;
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
         if (mesh) {
@@ -2036,8 +2035,8 @@ auto Mcp_server::place_brush_instance(
     if (args.contains("mass") && args.at("mass").is_number()) {
         mass_override = args.at("mass").get<float>();
     }
-    // "none" = pure visual instance: the Node_physics attachment the brush
-    // instancing creates is detached again before the node enters the
+    // "none" = pure visual instance: the Node_physics values the brush
+    // instancing writes are cleared again before the node enters the
     // scene. Saves one strip pass per part on physics-driven assemblies
     // (e.g. swaying trees whose child parts must not collide).
     const std::string motion_mode_text = args.value("motion_mode", "dynamic");
@@ -2063,8 +2062,8 @@ auto Mcp_server::place_brush_instance(
         // scene-root resolution requires. Ops execute in queue order, so the
         // chain attaches parent-first.
         attach_node = std::make_shared<erhe::scene::Xform>(instance_name.empty() ? std::string{brush.get_name()} : instance_name);
-        // visible: inert while the node is empty, but attachments added later
-        // sync their visibility from the node.
+        // visible: inert while the node is empty, but child prims added later
+        // inherit their visibility from the node.
         attach_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         glm::mat4 pose_world = erhe::math::create_translation<float>(position);
         if (rotation.has_value()) {
@@ -2884,7 +2883,7 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::action_add_node_attachment(const json& args) -> std::string
+auto Mcp_server::action_create_child_prim(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     Scene_root* sr = find_scene(scene_name);
@@ -2893,112 +2892,32 @@ auto Mcp_server::action_add_node_attachment(const json& args) -> std::string
     }
     const std::string type_key = args.value("type", "");
     if (type_key.empty()) {
-        return make_error_content("Missing 'type' (attachment catalog key)");
+        return make_error_content("Missing 'type' (child prim catalog key)");
     }
 
-    // A child prim kind (Mesh, Camera, Light) goes under any prim
+    // A child prim kind (Mesh, Camera, Light, Joint) goes under any prim
     // (doc/erhe/usd_compatibility_design.md C5).
     const Child_prim_type_info* const child_prim_info = find_child_prim_type(type_key);
-    if (child_prim_info != nullptr) {
-        const std::shared_ptr<erhe::Hierarchy> parent = find_prim_in_scene(*sr, args, "node_id", "node_name");
-        if (!parent) {
-            return make_error_content("Prim not found (give node_id or node_name)");
-        }
-        // Structure protection (doc/erhe/usd_compatibility_design.md X2).
-        const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
-        if (child_refusal.has_value()) {
-            log_mcp->info("add_node_attachment refused: {}", child_refusal.value());
-            return make_error_content(child_refusal.value());
-        }
-        child_prim_info->make(*m_context.scene_commands, *parent);
-        return make_json_content({
-            {"added",   true},
-            {"queued",  true}, // the insert operation executes on the next editor frame
-            {"node",    parent->get_name()},
-            {"node_id", parent->get_id()},
-            {"type",    type_key}
-        }).dump();
+    if (child_prim_info == nullptr) {
+        return make_error_content("Unknown child prim type: " + type_key);
     }
-
-    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
-    if (!node) {
-        return make_error_content("Node not found (give node_id or node_name)");
+    const std::shared_ptr<erhe::Hierarchy> parent = find_prim_in_scene(*sr, args, "node_id", "node_name");
+    if (!parent) {
+        return make_error_content("Prim not found (give node_id or node_name)");
     }
-    const Attachment_type_info* info = find_attachment_type(type_key);
-    if (info == nullptr) {
-        return make_error_content("Unknown attachment type: " + type_key);
+    // Structure protection (doc/erhe/usd_compatibility_design.md X2).
+    const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+    if (child_refusal.has_value()) {
+        log_mcp->info("create_child_prim refused: {}", child_refusal.value());
+        return make_error_content(child_refusal.value());
     }
-    if (!info->can_add(*node)) {
-        return make_error_content(
-            "Cannot add attachment '" + type_key + "' to node '" + node->get_name() +
-            "' (duplicate, or precondition not met)"
-        );
-    }
-    info->make(*m_context.scene_commands, *node);
+    child_prim_info->make(*m_context.scene_commands, *parent);
     return make_json_content({
         {"added",   true},
-        {"queued",  true}, // the attach operation executes on the next editor frame
-        {"node",    node->get_name()},
-        {"node_id", node->get_id()},
+        {"queued",  true}, // the insert operation executes on the next editor frame
+        {"node",    parent->get_name()},
+        {"node_id", parent->get_id()},
         {"type",    type_key}
-    }).dump();
-}
-
-auto Mcp_server::action_remove_node_attachment(const json& args) -> std::string
-{
-    const std::string scene_name = args.value("scene_name", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        return make_error_content("Scene not found: " + scene_name);
-    }
-    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
-    if (!node) {
-        return make_error_content("Node not found (give node_id or node_name)");
-    }
-    const std::size_t attachment_id = args.value("attachment_id", std::size_t{0});
-    const std::string type_key      = args.value("type", "");
-    if ((attachment_id == 0) && type_key.empty()) {
-        return make_error_content("Give attachment_id or type to identify the attachment to remove");
-    }
-
-    // Match by attachment_id, or by attachment type name (as reported by
-    // get_node_details, e.g. "Camera", "Node_physics"), case-insensitively.
-    auto iequals = [](std::string_view a, std::string_view b) -> bool {
-        if (a.size() != b.size()) {
-            return false;
-        }
-        for (std::size_t i = 0; i < a.size(); ++i) {
-            if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    std::shared_ptr<erhe::scene::Node_attachment> target;
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& att : node->get_attachments()) {
-        const bool match = (attachment_id != 0)
-            ? (att->get_id() == attachment_id)
-            : iequals(type_key, att->get_type_name());
-        if (match) {
-            target = att;
-            break;
-        }
-    }
-    if (!target) {
-        return make_error_content("No matching attachment on node '" + node->get_name() + "'");
-    }
-
-    const std::string removed_type = std::string{target->get_type_name()};
-    const std::size_t removed_id   = target->get_id();
-    m_context.scene_commands->remove_attachment(target);
-    return make_json_content({
-        {"removed",       true},
-        {"queued",        true}, // the detach operation executes on the next editor frame
-        {"node",          node->get_name()},
-        {"node_id",       node->get_id()},
-        {"attachment_id", removed_id},
-        {"type",          removed_type}
     }).dump();
 }
 

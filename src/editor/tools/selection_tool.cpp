@@ -698,7 +698,6 @@ auto Selection::duplicate_selection() -> bool
                 )
             );
         }
-            //const auto& node_attachment = std::dynamic_pointer_cast<erhe::scene::Node_attachment>(item);
             //if (node_attachment) {
             //    compound_parameters.operations.push_back(
             //        std::make_shared<Node_attach_operation>(
@@ -1483,7 +1482,7 @@ void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& ite
     // once the user clicks a node. The remaining readers are
     // get_default_material() (tools/tool.cpp), the Brush_tool brush fallback
     // and the Operations make-mesh material. Every hierarchy-typed reference
-    // (Node, Mesh, Node_attachment, Hierarchy) reads the active item instead.
+    // (Node, Mesh, Hierarchy) reads the active item instead.
     constexpr uint64_t recorded_types = erhe::Item_type::material | erhe::Item_type::brush;
     const uint64_t type = item->get_type();
     if ((type & recorded_types) == 0) {

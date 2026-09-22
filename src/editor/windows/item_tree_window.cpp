@@ -56,6 +56,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -130,8 +131,8 @@ std::vector<Item_tree*> g_item_trees;
 
 // The rows that take the structural move (before / into / after), as target
 // and as payload: every prim of the one object model
-// (doc/erhe/usd_compatibility_design.md C5), whatever its kind. The Scene header row
-// and node attachment rows are not prims.
+// (doc/erhe/usd_compatibility_design.md C5), whatever its kind. The Scene
+// header row is not a prim.
 [[nodiscard]] auto is_tree_prim(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return std::dynamic_pointer_cast<erhe::Typed>(item) != nullptr;
@@ -1805,8 +1806,38 @@ void Item_tree::imgui_row(const Flat_row& row)
             );
         }
 
-        float icons_start_x = row_right - row.right_icons_width;
-        if (row.right_icon_count > 0) {
+        // Feature icons: one per attached value group the row's node carries
+        // (doc/plans/node_attachments_to_properties.md D1). They are read
+        // here, per visible row per frame, because a group is taken up or
+        // dropped by a property write, which the flattened row cache does not
+        // see; each entry costs one key-property read and one glyph
+        // measurement, and the row's own stack holds them.
+        const Icon_set& icon_set = *m_context.icon_set;
+        std::array<const Icon_set::Feature_icon*, Flat_row::max_right_icon_count> feature_icons{};
+        std::size_t feature_icon_count = 0;
+        float       feature_icons_width = 0.0f;
+        if (erhe::is<erhe::scene::Node>(row.item.get())) {
+            const erhe::scene::Node& node = *static_cast<const erhe::scene::Node*>(row.item.get());
+            for (const Icon_set::Feature_icon& feature_icon : icon_set.get_feature_icons()) {
+                if (feature_icon_count == feature_icons.size()) {
+                    break; // out of slots; remaining feature icons are dropped
+                }
+                if ((feature_icon.icon.code == nullptr) || !feature_icon.carries(node)) {
+                    continue;
+                }
+                if (feature_icon_count > 0) {
+                    feature_icons_width += style.ItemSpacing.x;
+                }
+                feature_icons[feature_icon_count] = &feature_icon;
+                ++feature_icon_count;
+                feature_icons_width += icon_set.get_icon_width(feature_icon.icon);
+            }
+        }
+
+        const float right_icons_width = row.right_icons_width + feature_icons_width +
+            (((row.right_icon_count > 0) && (feature_icon_count > 0)) ? style.ItemSpacing.x : 0.0f);
+        float icons_start_x = row_right - right_icons_width;
+        if ((row.right_icon_count > 0) || (feature_icon_count > 0)) {
             // Never draw the right-aligned icons over a long label
             const float label_end_x = row_pos.x + row.label_x_offset + row.label_width;
             icons_start_x = std::max(icons_start_x, label_end_x + style.ItemInnerSpacing.x);
@@ -1822,7 +1853,7 @@ void Item_tree::imgui_row(const Flat_row& row)
             row.label_text.data(),
             row.label_text.data() + row.label_text.size(),
             0.0f,
-            (row.right_icon_count > 0) ? &label_clip : nullptr
+            ((row.right_icon_count > 0) || (feature_icon_count > 0)) ? &label_clip : nullptr
         );
 
         // R5.8 reference badge suffix: dim defining-container name after the
@@ -1836,10 +1867,25 @@ void Item_tree::imgui_row(const Flat_row& row)
                 row.reference_suffix.data(),
                 row.reference_suffix.data() + row.reference_suffix.size(),
                 0.0f,
-                (row.right_icon_count > 0) ? &label_clip : nullptr
+                ((row.right_icon_count > 0) || (feature_icon_count > 0)) ? &label_clip : nullptr
             );
         }
 
+        float feature_icon_x = icons_start_x;
+        for (std::size_t i = 0; i < feature_icon_count; ++i) {
+            const Icon_set::Item_icon& icon = feature_icons[i]->icon;
+            draw_list->AddText(
+                icon.font,
+                m_cached_icon_font_size,
+                ImVec2{feature_icon_x, row_pos.y + m_icon_y_offset},
+                ImGui::GetColorU32(ImVec4{icon.color.x, icon.color.y, icon.color.z, icon.color.w}),
+                icon.code
+            );
+            feature_icon_x += icon_set.get_icon_width(icon) + style.ItemSpacing.x;
+        }
+
+        const float cached_icons_start_x = icons_start_x + feature_icons_width +
+            (((row.right_icon_count > 0) && (feature_icon_count > 0)) ? style.ItemSpacing.x : 0.0f);
         for (std::size_t i = 0; i < row.right_icon_count; ++i) {
             const Row_icon& icon  = row.right_icons[i];
             const glm::vec4 color =
@@ -1849,7 +1895,7 @@ void Item_tree::imgui_row(const Flat_row& row)
             draw_list->AddText(
                 icon.font,
                 m_cached_icon_font_size,
-                ImVec2{icons_start_x + icon.x_offset, row_pos.y + m_icon_y_offset},
+                ImVec2{cached_icons_start_x + icon.x_offset, row_pos.y + m_icon_y_offset},
                 ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
                 icon.code
             );
@@ -1871,20 +1917,6 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
     const bool show_by_type = m_filter(item->get_flag_bits());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
     if (show_by_type && show_by_name) {
-        return Show_mode::Show;
-    }
-
-    bool show_by_attachments = false;
-    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node) {
-        for (const auto& node_attachment : node->get_attachments()) {
-            if (should_show(node_attachment) != Show_mode::Hide) {
-                show_by_attachments = true;
-                break;
-            }
-        }
-    }
-    if (show_by_attachments) {
         return Show_mode::Show;
     }
 
@@ -1922,8 +1954,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     }
     const bool force_expand = (show == Show_mode::Show_expanded);
 
-    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy   >(item);
-    const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
+    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     // A SEALED prefab instance root (a glTF template) hides its interior:
     // the subtree is prefab content, editable only by opening the prefab's
     // own scene, so the row renders as a leaf. A USD-backed instance is not
@@ -2019,27 +2050,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
             }
         }
 
-        // Attachment icons, right-aligned at render time using these offsets
-        if (node && !m_context.app_settings->node_tree_expand_attachments) {
-            const float icon_spacing = style.ItemSpacing.x;
-            float x = 0.0f;
-            for (const auto& node_attachment : node->get_attachments()) {
-                if (row.right_icon_count >= Flat_row::max_right_icon_count) {
-                    break; // out of slots; remaining attachment icons are dropped
-                }
-                const Icon_set::Item_icon icon = icon_set.get_item_icon(node_attachment);
-                if (icon.code == nullptr) {
-                    continue;
-                }
-                const float width = icon_set.get_icon_width(icon);
-                row.right_icons[row.right_icon_count] = Row_icon{
-                    .font = icon.font, .code = icon.code, .color = icon.color, .live_color_light = icon.live_color_light, .live_color_material = icon.live_color_material, .x_offset = x
-                };
-                ++row.right_icon_count;
-                row.right_icons_width = x + width;
-                x += width + icon_spacing;
-            }
-        }
     }
 
     // ImGui treats leaf tree nodes as always open (TreeNodeUpdateNextOpen); for
@@ -2054,14 +2064,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         return;
     }
 
-    if (m_context.app_settings->node_tree_expand_attachments) {
-        if (node) {
-            const float attachment_indent = 15.0f; // TODO
-            for (const auto& node_attachment : node->get_attachments()) {
-                flatten_visible_rows(node_attachment, indent + attachment_indent);
-            }
-        }
-    }
     if (hierarchy && !is_sealed_instance_root) {
         const float indent_spacing = ImGui::GetStyle().IndentSpacing;
         for (const auto& child_node : hierarchy->get_children()) {
@@ -2127,8 +2129,7 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_WidthStretch);
 
 #if 0 //// TODO
-    ImGui::Checkbox("Expand Attachments", &m_context.app_settings->node_tree_expand_attachments);
-    ImGui::Checkbox("Show All",           &m_context.app_settings->node_tree_show_all);
+    ImGui::Checkbox("Show All", &m_context.app_settings->node_tree_show_all);
 #endif
 
     m_context.selection->range_selection().begin();
@@ -2184,14 +2185,12 @@ void Item_tree::imgui_tree(float ui_scale)
 #endif
     // Flatten the visible tree into uniform-height rows, then submit only the
     // on-screen range. The flattened list is cached across frames: it is
-    // rebuilt when the item mutation serial moves (any hierarchy, attachment,
-    // name or non-transient flag change anywhere), or when this tree's own
-    // inputs change (open/close toggle, text filter, root, item filter,
-    // expand-attachments mode, indent spacing). flatten_visible_rows() must
-    // run inside the BeginTable scope so its ImGui::GetID() calls match the
-    // TreeNodeEx IDs.
+    // rebuilt when the item mutation serial moves (any hierarchy, name or
+    // non-transient flag change anywhere), or when this tree's own inputs
+    // change (open/close toggle, text filter, root, item filter, indent
+    // spacing). flatten_visible_rows() must run inside the BeginTable scope
+    // so its ImGui::GetID() calls match the TreeNodeEx IDs.
     const uint64_t item_mutation_serial = erhe::get_item_mutation_serial();
-    const bool     expand_attachments   = m_context.app_settings->node_tree_expand_attachments;
     const float    indent_spacing       = ImGui::GetStyle().IndentSpacing;
     const float    font_size            = ImGui::GetFontSize();
     const float    icon_font_size       = m_context.icon_set->get_icon_font_size();
@@ -2199,7 +2198,6 @@ void Item_tree::imgui_tree(float ui_scale)
         m_flat_rows_dirty ||
         (m_last_mutation_serial != item_mutation_serial) ||
         !(m_cached_filter == m_filter) ||
-        (m_cached_expand_attachments != expand_attachments) ||
         (m_cached_indent_spacing != indent_spacing) ||
         (m_cached_font_size != font_size) ||
         (m_cached_icon_font_size != icon_font_size);
@@ -2208,7 +2206,6 @@ void Item_tree::imgui_tree(float ui_scale)
         m_flat_rows_dirty           = false;
         m_last_mutation_serial      = item_mutation_serial;
         m_cached_filter             = m_filter;
-        m_cached_expand_attachments = expand_attachments;
         m_cached_indent_spacing     = indent_spacing;
         m_cached_font_size          = font_size;
         m_cached_icon_font_size     = icon_font_size;

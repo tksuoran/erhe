@@ -193,9 +193,8 @@ auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
     return get_default_material(m_context, *scene_root);
 }
 
-// The reference node of a tool (doc/editor/active_item.md D6): the active node,
-// or the node the active Node_attachment belongs to. When there is no active
-// node, the first node (or node of an attachment) of the command target
+// The reference node of a tool (doc/editor/active_item.md D6): the active
+// node. When there is no active node, the first node of the command target
 // selection answers instead.
 auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
 {
@@ -212,20 +211,6 @@ auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
         std::shared_ptr<erhe::scene::Node> node = get<erhe::scene::Node>(selected_items);
         if (node) {
             return node;
-        }
-    }
-
-    {
-        std::shared_ptr<erhe::scene::Node_attachment> attachment = get<erhe::scene::Node_attachment>(selected_items);
-        if (attachment) {
-            erhe::scene::Node* node = attachment->get_node();
-            if (node != nullptr) {
-                std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
-                std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (shared_node) {
-                    return shared_node;
-                }
-            }
         }
     }
 

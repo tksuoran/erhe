@@ -256,7 +256,6 @@ private:
     bool                               m_flat_rows_dirty{true};
     uint64_t                           m_last_mutation_serial{0};
     erhe::Item_filter                  m_cached_filter{};
-    bool                               m_cached_expand_attachments{false};
     float                              m_cached_indent_spacing{0.0f};
     float                              m_cached_font_size{0.0f};
     float                              m_cached_icon_font_size{0.0f};

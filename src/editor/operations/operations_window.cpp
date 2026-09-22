@@ -17,7 +17,6 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/mesh_operation.hpp"
-#include "operations/node_attach_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"

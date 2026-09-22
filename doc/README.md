@@ -160,6 +160,7 @@ Every document states its standing in its first ten lines:
 - [editor/async_asset_loading.md](editor/async_asset_loading.md) (mostly stable): Asynchronous glTF / asset loading pipeline: tasks, threads, budgets
 - [editor/async_asset_loading_design.md](editor/async_asset_loading_design.md) (mostly stable): Design record behind async asset loading (numbered sections cited from code)
 - [editor/brushes.md](editor/brushes.md) (stable): Implements the brush system for placing parametric mesh shapes onto surfaces
+- [editor/child_prim_creation.md](editor/child_prim_creation.md) (stable): Creating a typed child prim under any prim from the Hierarchy context menu and MCP
 - [editor/command_script.md](editor/command_script.md) (stable): Startup commands.json scene script: commands, execution and undo model
 - [editor/config.md](editor/config.md) (stable): Editor configuration loading
 - [editor/content_library.md](editor/content_library.md) (mostly stable): Indexes a scene's reusable resources - materials, brushes, styles, textures, physics items, animations, skins and node graphs - which live as prims in the scene's own tree
@@ -182,7 +183,6 @@ Every document states its standing in its first ten lines:
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
-- [editor/node_attachment_editing.md](editor/node_attachment_editing.md) (stable): Adding and removing Node_attachments on a node from the UI and MCP
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
 - [editor/physics.md](editor/physics.md) (stable): Physics-related tools, UI, and collision shape generation for the editor

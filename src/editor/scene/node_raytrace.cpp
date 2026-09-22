@@ -29,7 +29,6 @@ namespace editor {
 
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
-using erhe::scene::Node_attachment;
 using erhe::Item_flags;
 
 auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t

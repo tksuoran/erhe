@@ -108,7 +108,7 @@ Returns: `{scenes: [{name, node_count, camera_count, light_count, material_count
 ### get_scene_nodes
 
 List every prim of a scene's tree with its class, place and - for the prims
-that have one - transform and attachment info.
+that have one - its transform.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -117,16 +117,14 @@ curl -X POST http://127.0.0.1:3743/mcp \
 ```
 
 Returns: `{nodes: [{name, id, type, parent, parent_id, locked, active, import_root, tags}]}`,
-each transformable prim additionally carrying `position`, `rotation_xyzw`,
-`scale` and `attachment_types`. `type` is the prim's class name (`Xform`,
-`Mesh`, `Camera`, `Light`, `Scope`, ...) and `attachment_types` names the
-applied-API-schema attachments alone; a prim outside `Xformable` - a `Scope` -
-has no transform and no attachments, and the prims below it are listed with it
-as their `parent`.
+each transformable prim additionally carrying `position`, `rotation_xyzw`
+and `scale`. `type` is the prim's class name (`Xform`, `Mesh`, `Camera`,
+`Light`, `Scope`, ...); a prim outside `Xformable` - a `Scope` - has no
+transform, and the prims below it are listed with it as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. A node placed by a brush carries a `brush_placement` section (`brush_name`, `brush_id`, `facet`, `corner`), null on every other node. A node carrying a rigid body carries a `physics` section (`motion_mode`, `is_trigger`, `gravity_factor`, `physics_material`, `collision_filter`, `collision_mesh`, `collision_shape`, and the live body's `mass`, `is_active` and damping), null on every other node. `attachments` lists the applied-API-schema attachments alone, because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. `joints` lists the `Joint` child prims that name this prim as their first frame node (`name`, `id`, `connected_node`, `joint_settings`, `enable_collision`, `constraint`). `composition_arcs` lists the composition arcs the prim carries, in authored order (doc/erhe/item.md, "Composition arcs"): each entry carries `source_path`, `name`, `prim_path` (the prim a USD `references` arc named, empty for a glTF prefab), `kind` (`reference` or `payload`) and `variant_selections` (`path`, `set`, `variant` per entry); it is empty on every prim that carries no arc. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/erhe/usd_compatibility_design.md X2).
+Get detailed info for a specific prim including world position, local transform, the prim's own class section, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. A node placed by a brush carries a `brush_placement` section (`brush_name`, `brush_id`, `facet`, `corner`), null on every other node. A node carrying a rigid body carries a `physics` section (`motion_mode`, `is_trigger`, `gravity_factor`, `physics_material`, `collision_filter`, `collision_mesh`, `collision_shape`, and the live body's `mass`, `is_active` and damping), null on every other node. `joints` lists the `Joint` child prims that name this prim as their first frame node (`name`, `id`, `connected_node`, `joint_settings`, `enable_collision`, `constraint`). `composition_arcs` lists the composition arcs the prim carries, in authored order (doc/erhe/item.md, "Composition arcs"): each entry carries `source_path`, `name`, `prim_path` (the prim a USD `references` arc named, empty for a glTF prefab), `kind` (`reference` or `payload`) and `variant_selections` (`path`, `set`, `variant` per entry); it is empty on every prim that carries no arc. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/erhe/usd_compatibility_design.md X2).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -522,7 +520,7 @@ Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loa
 
 ## Physics Tools
 
-Create and edit KHR_physics_rigid_bodies features: rigid body / joint node attachments and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.
+Create and edit KHR_physics_rigid_bodies features: the rigid body values of a node, the `Joint` prims and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.
 
 ### get_physics_items
 

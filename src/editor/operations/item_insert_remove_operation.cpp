@@ -34,12 +34,6 @@ void note_subtree_removed(App_context& context, const std::shared_ptr<erhe::Hier
     for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
         note_subtree_removed(context, child);
     }
-    const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node) {
-        for (const auto& attachment : node->get_attachments()) {
-            context.asset_manager->note_item_detached(attachment);
-        }
-    }
 }
 
 } // anonymous namespace

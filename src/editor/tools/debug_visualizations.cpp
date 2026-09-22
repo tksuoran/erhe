@@ -104,8 +104,6 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
     return false;
 }
 
-// Node_attachment mirrors the node's selected / hovered flags onto its
-// attachments, so these read correctly for both nodes and attachments.
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const std::shared_ptr<erhe::Item_base>& item)
 {
     return should_visualize(mode, item->is_selected(), item->is_hovered());

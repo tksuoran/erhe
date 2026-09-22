@@ -265,8 +265,7 @@ private:
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_advance_time    (const nlohmann::json& args) -> std::string;
     auto action_set_log_levels  (const nlohmann::json& args) -> std::string;
-    auto action_add_node_attachment   (const nlohmann::json& args) -> std::string;
-    auto action_remove_node_attachment(const nlohmann::json& args) -> std::string;
+    auto action_create_child_prim(const nlohmann::json& args) -> std::string;
     auto action_reparent_item   (const nlohmann::json& args) -> std::string;
     auto action_create_scope    (const nlohmann::json& args) -> std::string;
     auto action_clipboard_copy_nodes(const nlohmann::json& args) -> std::string;

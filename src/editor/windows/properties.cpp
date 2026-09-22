@@ -16,7 +16,6 @@
 #include "operations/compound_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
-#include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
 
@@ -891,8 +890,6 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     if (!item) {
         return;
     }
-    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
     if (!erhe::is<Rendertarget_mesh>(item.get())) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
@@ -914,24 +911,8 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     item_diagnostics(item);
 
-    if (node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            item_properties(attachment);
-            // Undoable remove (pure detach) for this attachment. Queuing to the
-            // operation stack runs on the next frame, so node->get_attachments()
-            // is not mutated during this iteration.
-            add_entry("Remove", [this, attachment]() {
-                std::string button_label = fmt::format("X##remove_attachment_{}", attachment->get_id());
-                if (ImGui::Button(button_label.c_str())) {
-                    m_context.scene_commands->remove_attachment(attachment);
-                }
-            }, "Remove this attachment (undoable)");
-        }
-
-    }
-
-    // The registered rows of the item (and, for a node, of each attachment
-    // above, drawn by the recursive call).
+    // The registered rows of the item, the values of its attached groups
+    // among them (doc/erhe/property_system.md section 4.23).
     dependency_properties(item);
 
     pop_group();
@@ -1087,16 +1068,7 @@ void Properties::imgui()
             m_type_groups[group_index].push_back(item);
         };
         for (const std::shared_ptr<erhe::Item_base>& selected : items) {
-            const std::shared_ptr<erhe::Item_base>& item = selected;
-            add_to_group(item);
-            // A node's attachments get their sections too (the single-item
-            // path draws them under the node).
-            const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-            if (node) {
-                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-                    add_to_group(attachment);
-                }
-            }
+            add_to_group(selected);
         }
         for (std::size_t group_index = 0; group_index < group_count; ++group_index) {
             const std::vector<std::shared_ptr<erhe::Item_base>>& group = m_type_groups[group_index];

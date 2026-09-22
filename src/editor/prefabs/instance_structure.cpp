@@ -7,7 +7,6 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/node_attachment.hpp"
 
 #include <fmt/format.h>
 
@@ -39,15 +38,7 @@ namespace {
 
 auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*
 {
-    const erhe::Hierarchy* hierarchy = dynamic_cast<const erhe::Hierarchy*>(&item);
-    if (hierarchy != nullptr) {
-        return hierarchy;
-    }
-    const erhe::scene::Node_attachment* attachment = dynamic_cast<const erhe::scene::Node_attachment*>(&item);
-    if (attachment != nullptr) {
-        return attachment->get_node();
-    }
-    return nullptr;
+    return dynamic_cast<const erhe::Hierarchy*>(&item);
 }
 
 auto get_instance_arcs(const erhe::Item_base& item) -> std::span<const erhe::Composition_arc>

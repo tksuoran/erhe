@@ -11,6 +11,7 @@ struct ImFont;
 namespace erhe        { class Item_base; }
 namespace erhe::imgui { class Imgui_renderer; }
 namespace erhe::scene { enum class Light_type : unsigned int; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace erhe::primitive { class Material; }
 namespace erhe::scene { class Light; }
@@ -88,7 +89,18 @@ public:
         const erhe::primitive::Material* live_color_material{nullptr};
     };
 
+    // One Hierarchy feature icon: the icon a node row shows while the node
+    // carries one attached value group (doc/erhe/property_system.md section
+    // 4.23), asked of the group's own carries_<x>() - the key property read.
+    class Feature_icon
+    {
+    public:
+        bool (*carries)(const erhe::scene::Node& node){nullptr};
+        Item_icon icon{};
+    };
+
     [[nodiscard]] auto get_item_icon     (const std::shared_ptr<erhe::Item_base>& item) const -> Item_icon;
+    [[nodiscard]] auto get_feature_icons () const -> const std::vector<Feature_icon>&;
     [[nodiscard]] auto get_icon_width    (const Item_icon& icon) const -> float;
     [[nodiscard]] auto get_icon_font_size() const -> float;
 
@@ -122,6 +134,7 @@ public:
     std::vector<std::optional<Type_icon>> type_icons;
 
 private:
+    std::vector<Feature_icon> m_feature_icons;
     App_context& m_context;
 };
 

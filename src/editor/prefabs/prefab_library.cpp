@@ -100,12 +100,6 @@ void seal_instance_subtree(const std::shared_ptr<erhe::Hierarchy>& item)
         erhe::Item_flags::lock_viewport_selection |
         erhe::Item_flags::lock_viewport_transform;
     item->enable_flag_bits(seal_flags);
-    const std::shared_ptr<erhe::scene::Xformable> prim = std::dynamic_pointer_cast<erhe::scene::Xformable>(item);
-    if (prim) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : prim->get_attachments()) {
-            attachment->enable_flag_bits(seal_flags);
-        }
-    }
     for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
         if (child) {
             seal_instance_subtree(child);
@@ -180,23 +174,6 @@ void link_instance_to_template(
 
     clone->set_reference(template_item);
     clear_locals_supplied_by_reference(*clone, *template_item);
-
-    const erhe::scene::Xformable* template_prim = dynamic_cast<const erhe::scene::Xformable*>(template_item.get());
-    erhe::scene::Xformable*       clone_prim    = dynamic_cast<erhe::scene::Xformable*>(clone.get());
-    if ((template_prim != nullptr) && (clone_prim != nullptr)) {
-        const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& template_attachments = template_prim->get_attachments();
-        const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& clone_attachments    = clone_prim->get_attachments();
-        std::size_t clone_index = 0;
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& template_attachment : template_attachments) {
-            if (!template_attachment->is_clonable()) {
-                continue;
-            }
-            ERHE_VERIFY(clone_index < clone_attachments.size());
-            link_instance_to_template(clone_attachments[clone_index], template_attachment);
-            ++clone_index;
-        }
-        ERHE_VERIFY(clone_index == clone_attachments.size());
-    }
 
     const erhe::Hierarchy* template_hierarchy = dynamic_cast<const erhe::Hierarchy*>(template_item.get());
     const erhe::Hierarchy* clone_hierarchy    = dynamic_cast<const erhe::Hierarchy*>(clone.get());

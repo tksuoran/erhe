@@ -66,7 +66,7 @@
     "name": "get_composition_passes"
   },
   {
-    "description": "Get detailed info for a node (transform, attachments). The node is named by name, by path or by id. A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
+    "description": "Get detailed info for a node (transform, meshes, cameras, lights, joints, physics). The node is named by name, by path or by id. A Mesh prim reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1669,7 +1669,7 @@
     "name": "set_log_levels"
   },
   {
-    "description": "Add a new child prim or attachment (undoable, executes on the next frame). 'type' is a catalog key. The child prim kinds mesh, camera, light and joint insert a new prim as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. A joint created this way names the nearest node at or above the addressed prim as its first frame node (use create_joint to name both frame nodes). A rigid body is not an attachment: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
+    "description": "Create a new typed child prim (undoable, executes on the next frame). 'type' is a child prim catalog key: mesh, camera, light or joint, inserted as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. A joint created this way names the nearest node at or above the addressed prim as its first frame node (use create_joint to name both frame nodes). A rigid body is a node value group: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1685,7 +1685,7 @@
           "type": "string"
         },
         "type": {
-          "description": "Child prim or attachment catalog key",
+          "description": "Child prim catalog key",
           "enum": [
             "mesh",
             "camera",
@@ -1701,39 +1701,7 @@
       ],
       "type": "object"
     },
-    "name": "add_node_attachment"
-  },
-  {
-    "description": "Remove an attachment from a scene node (undoable pure detach, executes on the next frame). Identify the attachment by attachment_id, or by 'type' = its attachment type name as reported by get_node_details (e.g. Camera, Light, Mesh, Node_physics), case-insensitive. Any attachment is removable, including ones not in the add catalog.",
-    "inputSchema": {
-      "properties": {
-        "attachment_id": {
-          "description": "ID of the attachment to remove (from get_node_details)",
-          "type": "integer"
-        },
-        "node_id": {
-          "description": "Target node ID",
-          "type": "integer"
-        },
-        "node_name": {
-          "description": "Target node name (alternative to node_id)",
-          "type": "string"
-        },
-        "scene_name": {
-          "description": "Name of the scene",
-          "type": "string"
-        },
-        "type": {
-          "description": "Attachment type name to remove (alternative to attachment_id)",
-          "type": "string"
-        }
-      },
-      "required": [
-        "scene_name"
-      ],
-      "type": "object"
-    },
-    "name": "remove_node_attachment"
+    "name": "create_child_prim"
   },
   {
     "description": "Move any prim - a scene node, a resource (material, brush, style, texture, graph asset, physics material, ...) or a Scope - under any other prim of the same scene, as one undoable parent change executed on the next editor frame. Name the item and the new parent by id, by name (the name must name exactly one prim of the scene) or by path ('Parent/Child', the erhe item path form; a leading '/' addresses a child of the scene root, e.g. '/cube'). Without parent_id / parent_name (or with parent_id 0) the item moves under the scene root. Refused: the scene root itself, a move under the item itself or its subtree, and structural edits of a reference instance. A move is a detach immediately followed by an attach and is not announced as a removal.",
