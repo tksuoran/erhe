@@ -463,10 +463,16 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
             continue;
         }
         groups_done.push_back(group);
-        editor.push_group(std::string{group}, ImGuiTreeNodeFlags_DefaultOpen);
+        const bool collapsed = (property->get_metadata(owner_type).ui.group_state == Property_ui::Group_state::collapsed);
+        editor.push_group(std::string{group}, collapsed ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen);
         for (const Dependency_property* grouped : properties) {
             if (grouped->get_metadata(owner_type).ui.group == group) {
                 row(editor, *grouped);
+            }
+        }
+        for (const Property_group_rows& group_rows : m_group_rows) {
+            if (group_rows.group == group) {
+                group_rows.add_rows(editor, *m_items);
             }
         }
         editor.pop_group();
@@ -821,6 +827,11 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
 void Dependency_property_rows::add_row_action(Property_row_action action)
 {
     m_row_actions.push_back(std::move(action));
+}
+
+void Dependency_property_rows::add_group_rows(Property_group_rows rows)
+{
+    m_group_rows.push_back(std::move(rows));
 }
 
 auto Dependency_property_rows::inline_remove_offered(const Dependency_property& property, const Property_metadata& metadata) const -> bool

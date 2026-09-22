@@ -2493,7 +2493,15 @@ controlled rigid body and the applied bake revision - is owned by
 `editor::Node_physics` (`src/editor/scene/node_physics.{hpp,cpp}`) registers a
 node's rigid body as an attached value group of the node (section 4.23),
 owner type `Node_physics`,
-holder type `erhe::scene::Node`, UI group `Rigid Body`. Like `Ik`, `Draw_mode`
+holder type `erhe::scene::Node`, UI group `Rigid Body`, collapsed until the
+user opens it (`Property_ui::Group_state::collapsed` on every row: the
+generic section reads the group's first listed row). The read-only state of
+the body - its debug label, position, activity, collision shape, local center
+of mass and inertia - is drawn by `Properties::node_physics_properties` at
+the end of that same group, registered through
+`Dependency_property_rows::add_group_rows` (`Property_group_rows`: hand-written
+rows drawn inside one registered group, after its rows, with the group's
+items; the readouts draw for a single item only). Like `Ik`, `Draw_mode`
 and `Geometry_graph_mesh` it is a registration holder with static members only,
 not a `Dependency_object`, so its owner type sits directly under the root. USD
 gives the same shape: `PhysicsRigidBodyAPI`, `PhysicsCollisionAPI`,

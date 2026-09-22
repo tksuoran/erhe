@@ -113,7 +113,9 @@ private:
     void skin_properties              (erhe::scene::Skin& skin);
     void material_properties          (const std::vector<std::shared_ptr<erhe::Item_base>>& items);
     void brush_placement_properties   (const erhe::scene::Node& node);
-    void node_physics_properties      (erhe::scene::Node& node);
+    // Read-only rows of the node's rigid body, drawn inside the generic
+    // "Rigid Body" group through Dependency_property_rows::add_group_rows.
+    void node_physics_properties      (const erhe::scene::Node& node);
     void joint_properties             (Joint& joint);
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.

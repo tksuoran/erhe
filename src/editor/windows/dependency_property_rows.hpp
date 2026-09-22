@@ -52,12 +52,25 @@ public:
     std::function<void(const std::vector<std::shared_ptr<erhe::Item_base>>&)>    execute;     // the row's items
 };
 
+// Hand-written rows drawn at the end of one registered UI group, inside it -
+// the runtime state a group implies (a rigid body's collision shape and
+// inertia) that is read back from the system owning it rather than held as
+// a value. The rows are drawn exactly when the group is, with the items the
+// group's rows address.
+class Property_group_rows
+{
+public:
+    std::string_view                                                                               group;
+    std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows;
+};
+
 class Dependency_property_rows
 {
 public:
     explicit Dependency_property_rows(App_context& context);
 
     void add_row_action(Property_row_action action);
+    void add_group_rows(Property_group_rows rows);
 
     // Adds rows to `editor` for the properties every item's type has, in
     // registration order, grouped by Property_ui::group. Call between the
@@ -130,6 +143,7 @@ private:
     App_context& m_context;
 
     std::vector<Property_row_action> m_row_actions;
+    std::vector<Property_group_rows> m_group_rows;
 
     // Items the currently executing code operates on, bound only while
     // add_rows() / add_sub_object_rows() build the rows and while a row

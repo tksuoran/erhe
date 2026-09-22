@@ -134,6 +134,25 @@ Properties::Properties(
         }
     );
 
+    // At the end of a node's "Rigid Body" group (doc/erhe/property_system.md
+    // 4.26): the read-only state of the body the group implies, read back
+    // from the scene's Node_physics_system. One item only - the readouts
+    // describe one body, and the combined multi-selection form edits values.
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Rigid Body",
+            .add_rows = [this](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                if (items.size() != 1) {
+                    return;
+                }
+                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(items.front());
+                if (node) {
+                    node_physics_properties(*node.get());
+                }
+            }
+        }
+    );
+
     // Below each "Sizes X/Y/Z" row of a grid layout node: the toggle between
     // uniform tracks (the empty list) and per-track sizes seeded from the
     // node's layout volume (doc/erhe/property_system.md section 4.13). It
@@ -746,7 +765,7 @@ void Properties::on_end()
     ImGui::PopStyleVar();
 }
 
-void Properties::node_physics_properties(erhe::scene::Node& node)
+void Properties::node_physics_properties(const erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -785,11 +804,11 @@ void Properties::node_physics_properties(erhe::scene::Node& node)
             ImGui::Text("%.3f, %.3f, %.3f", local_inertia[0][0], local_inertia[1][1], local_inertia[2][2]);
         });
     }
-    // The authored rigid body state (motion mode, trigger, mass, friction,
-    // restitution, damping, gravity factor, wind receptivity, initial
-    // velocities, center of mass, physics material, collision filter) is
-    // generic rows (doc/erhe/property_system.md 4.26), drawn by
-    // dependency_properties() after the item rows.
+    // The authored rigid body state (motion mode, trigger, mass, gravity
+    // factor, initial velocities, center of mass, physics material,
+    // collision filter, collision mesh) is the generic rows of the same
+    // "Rigid Body" group (doc/erhe/property_system.md 4.26), drawn above
+    // these.
 }
 
 
@@ -874,7 +893,6 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (scene)            { scene_properties(*scene); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
-    if (node)             { node_physics_properties(*node); }
     if (node)             { brush_placement_properties(*node); }
     if (texture)          { texture_properties(texture); }
     if (edit_disabled) {

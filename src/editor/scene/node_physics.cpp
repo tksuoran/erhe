@@ -63,9 +63,10 @@ const Property<Motion_mode> Node_physics::motion_mode_property = Property<Motion
         .property_changed = erhe::scene::node_system_property_changed,
         .inherits         = false,
         .ui               = Property_ui{
-            .group   = c_group,
-            .tooltip = "The intended mode; 'None' means the prim simulates nothing. A static trigger body is created kinematic non-physical",
-            .label   = "Motion Mode"
+            .group       = c_group,
+            .group_state = Property_ui::Group_state::collapsed,
+            .tooltip     = "The intended mode; 'None' means the prim simulates nothing. A static trigger body is created kinematic non-physical",
+            .label       = "Motion Mode"
         }
     }
 );
@@ -82,6 +83,7 @@ namespace {
 {
     return Property_ui{
         .group        = c_group,
+        .group_state  = Property_ui::Group_state::collapsed,
         .tooltip      = tooltip,
         .label        = label,
         .visible_when = (holder_predicate != nullptr)
@@ -113,6 +115,7 @@ const Property<float> Node_physics::mass_property = Property<float>::register_at
             .presentation = Property_ui::Presentation::slider,
             .logarithmic  = true,
             .group        = c_group,
+            .group_state  = Property_ui::Group_state::collapsed,
             .tooltip      = "kg; while no value is set (source default) the body's mass is its shape mass scaled by the material density",
             .label        = "Mass",
             .visible_when = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get(), is_movable)
@@ -131,6 +134,7 @@ const Property<float> Node_physics::gravity_factor_property = Property<float>::r
             .max          = 2.0f,
             .presentation = Property_ui::Presentation::slider,
             .group        = c_group,
+            .group_state  = Property_ui::Group_state::collapsed,
             .label        = "Gravity Factor",
             .visible_when = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get(), is_movable)
         }
@@ -145,6 +149,7 @@ const Property<glm::vec3> Node_physics::initial_linear_velocity_property = Prope
         .ui               = Property_ui{
             .step         = 0.01f,
             .group        = c_group,
+            .group_state  = Property_ui::Group_state::collapsed,
             .tooltip      = "World space; applied when the rigid body is (re)created",
             .label        = "Initial Linear Velocity",
             .visible_when = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get(), is_movable)
@@ -160,6 +165,7 @@ const Property<glm::vec3> Node_physics::initial_angular_velocity_property = Prop
         .ui               = Property_ui{
             .step         = 0.01f,
             .group        = c_group,
+            .group_state  = Property_ui::Group_state::collapsed,
             .tooltip      = "World space; applied when the rigid body is (re)created",
             .label        = "Initial Angular Velocity",
             .visible_when = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get(), is_movable)
@@ -175,6 +181,7 @@ const Property<glm::vec3> Node_physics::center_of_mass_offset_property = Propert
         .ui               = Property_ui{
             .step         = 0.01f,
             .group        = c_group,
+            .group_state  = Property_ui::Group_state::collapsed,
             .tooltip      = "Offset-center-of-mass wrapper around the collision shape (recreates the rigid body)",
             .label        = "Center of Mass",
             .visible_when = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get())
@@ -188,6 +195,7 @@ const Property<Object_reference> Node_physics::physics_material_property = Prope
         .inherits         = true,
         .ui               = Property_ui{
             .group                = c_group,
+            .group_state          = Property_ui::Group_state::collapsed,
             .tooltip              = "Shared material carrying friction, restitution, damping, wind receptivity and density; none behaves like the material defaults",
             .label                = "Physics Material",
             .visible_when         = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get()),
@@ -203,6 +211,7 @@ const Property<Object_reference> Node_physics::collision_filter_property = Prope
         .inherits         = true,
         .ui               = Property_ui{
             .group                = c_group,
+            .group_state          = Property_ui::Group_state::collapsed,
             .label                = "Collision Filter",
             .visible_when         = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get()),
             .reference_item_types = erhe::Item_type::collision_filter
@@ -218,6 +227,7 @@ const Property<Weak_object_reference> Node_physics::collision_mesh_property = Pr
         .inherits = false,
         .ui       = Property_ui{
             .group                = c_group,
+            .group_state          = Property_ui::Group_state::collapsed,
             .tooltip              = "The mesh the convex hull / triangle shape was built from; none means the body's own mesh. Recorded for the exporters - changing it does not rebuild the shape",
             .label                = "Collision Mesh",
             .visible_when         = erhe::property::attached_group_visible_when(Node_physics::motion_mode_property.get()),
