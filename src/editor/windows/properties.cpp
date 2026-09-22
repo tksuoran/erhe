@@ -234,6 +234,7 @@ Properties::Properties(
             }
         }
     );
+#if 0
     m_dependency_rows.add_group_rows(
         Property_group_rows{
             .group    = "Polygons",
@@ -250,6 +251,7 @@ Properties::Properties(
             }
         }
     );
+#endif
 
     // Below each "Sizes X/Y/Z" row of a grid layout node: the toggle between
     // uniform tracks (the empty list) and per-track sizes seeded from the
@@ -864,7 +866,6 @@ void Properties::node_physics_properties(const erhe::scene::Node& node)
 
     add_entry("Rigid Body", [=](){ ImGui::TextUnformatted(rigid_body->get_debug_label()); });
     add_entry("Position",   [=](){ ImGui::Text("%.2f, %.2f, %.2f", pos.x, pos.y, pos.z); });
-    add_entry("Is Active",  [=](){ ImGui::TextUnformatted(rigid_body->is_active() ? "Yes" : "No"); });
 
     //bool allow_sleeping = rigid_body->get_allow_sleeping();
     //ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
