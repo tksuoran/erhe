@@ -11,6 +11,7 @@ CPMAddPackage(
 set(_target "erhe_math_tests")
 add_executable(${_target}
     main.cpp
+    test_euler_angles.cpp
     test_projection.cpp
 )
 
