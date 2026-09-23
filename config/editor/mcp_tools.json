@@ -7315,6 +7315,15 @@
     "name": "get_transform_handles"
   },
   {
+    "description": "Report what the Transform window's Rotation group shows: its representation (Quaternion / Matrix / Axis-angle / Euler Angles), the Euler order, the three Euler angles in degrees exactly as the row displays them, and the quaternion. The Euler angles need not be a canonical extraction of the node's rotation: several angle triples give the same quaternion, and the row keeps the one nearest to the angles it showed before (what the user dragged or typed). The Transform window must be visible and a node selected for the values to track the selection.",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_transform_rotation"
+  },
+  {
     "description": "List the ImGui hosts the editor runs (one ImGui context each): the desktop window host and every rendertarget host (an ImGui surface drawn into the scene, e.g. the hotbar). Reports the host name the other get_imgui_* tools take, whether it is the default (desktop) host, whether it renders frames, its display size in pixels, its window count, whether it holds a recorded item frame, and hook_calls_total - the number of Dear ImGui item-hook calls that host has received since startup. Item recording is armed for one frame at a time, so hook_calls_total stays put across frames in which no get_imgui_items / get_imgui_item_rect call asked for a recording.",
     "inputSchema": {
       "properties": {},

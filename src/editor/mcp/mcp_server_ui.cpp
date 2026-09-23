@@ -16,6 +16,10 @@
 //                         gesture is stepping.
 //   get_transform_handles - where the transform gizmo's handles are on screen,
 //                         so a drag can aim at one.
+//   get_transform_rotation - what the Transform window's Rotation group
+//                         shows: the representation, the Euler order and the
+//                         angles as displayed, which get_imgui_items (labels
+//                         and rectangles, no values) cannot report.
 //
 // There is one gesture builder (Input_gesture_builder) and one stepping path
 // (Mcp_server::step_input_gesture): a tool parses its arguments, fills the
@@ -2256,6 +2260,35 @@ void Mcp_server::draw_imgui_annotations(const int width, const int height, const
         canvas.fill(box_x0, box_y0, box_x0 + text_w + (2 * c_digit_scale), box_y0 + c_digit_height + (2 * c_digit_scale), c_annotation_background);
         canvas.digits(box_x0 + c_digit_scale, box_y0 + c_digit_scale, annotation.number, c_annotation_color);
     }
+}
+
+// get_transform_rotation -----------------------------------------------------
+//
+// The Rotation group of the Transform window (Rotation_inspector) as last
+// drawn. The Euler angles are the ones the row shows, which differ from any
+// canonical extraction of the node's quaternion when the user dragged an angle
+// past +-180 deg: several angle triples give the same quaternion, and the
+// inspector keeps the one nearest to what it showed before.
+auto Mcp_server::query_transform_rotation(const nlohmann::json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool is not available");
+    }
+    const Rotation_inspector& inspector = m_context.transform_tool->get_rotation_inspector();
+    const unsigned int representation = static_cast<unsigned int>(inspector.get_representation());
+    const unsigned int order          = static_cast<unsigned int>(inspector.get_euler_order());
+    const glm::quat    q              = inspector.get_quaternion();
+    return make_json_content({
+        {"representation",       Rotation_inspector::c_representation_strings[representation]},
+        {"euler_order",          Rotation_inspector::c_euler_strings[order]},
+        {"euler_angles_degrees", {
+            glm::degrees(inspector.get_euler_value(0)),
+            glm::degrees(inspector.get_euler_value(1)),
+            glm::degrees(inspector.get_euler_value(2))
+        }},
+        {"quaternion_xyzw",      {q.x, q.y, q.z, q.w}}
+    }).dump();
 }
 
 } // namespace editor

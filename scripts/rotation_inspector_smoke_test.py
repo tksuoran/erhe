@@ -16,13 +16,18 @@ For each of the 12 Euler orders and for quaternions in both hemispheres
 (w > 0 and w < 0):
 
   1. Set the node's local rotation to q (transform_selection).
-  2. Ctrl+click the order's first angle field ("<ORDER>.x"), type the first
-     angle this script expects the inspector to show, press Enter.
-  3. The node's rotation must be q again - sign included - which holds only
-     if the inspector's other two angles reproduce q's hemisphere.
+  2. The angles the row shows (get_transform_rotation) must compose to q,
+     sign included.
+  3. Ctrl+click the order's first angle field ("<ORDER>.x"), type the shown
+     first angle back, press Enter: the node's rotation must be q again -
+     sign included - which holds only if the inspector's other two angles
+     reproduce q's hemisphere.
 
 Then one edit that crosses hemispheres: from Z = 270 deg (w < 0) typing
-Y = 10 deg must keep w < 0, and typing Z = -90 deg must land on w > 0.
+Y = 10 deg must keep w < 0, and typing Z = -90 deg must land on w > 0. And
+angles past +-180 deg must stay as edited once the edit ends: typing
+Z = 250, X = 200 and then dragging Y must leave the row (get_transform_rotation)
+showing 250 and 200, not the equivalent (-110, -160).
 
 Usage:
   py -3 scripts/rotation_inspector_smoke_test.py [--port 3743] [--wait 30]
@@ -44,7 +49,7 @@ ORDERS = ["XYX", "XZX", "YXY", "YZY", "ZXZ", "ZYZ", "XYZ", "XZY", "YXZ", "YZX", 
 AXIS   = {"X": 0, "Y": 1, "Z": 2}
 
 
-# --- reference math (mirrors erhe_math/euler_angles.hpp), quaternions as (w, x, y, z)
+# --- quaternions as (w, x, y, z)
 
 def quat_mul(a, b):
     aw, ax, ay, az = a
@@ -66,46 +71,6 @@ def axis_quat(axis, angle):
 def compose(order, t1, t2, t3):
     a1, a2, a3 = (AXIS[c] for c in order)
     return quat_mul(quat_mul(axis_quat(a1, t1), axis_quat(a2, t2)), axis_quat(a3, t3))
-
-
-def extract(order, q):
-    a1, a2, a3 = (AXIS[c] for c in order)
-    w = q[0]
-    v = q[1:]
-    proper = (a1 == a3)
-    other  = 3 - a1 - a2
-    parity = 1.0 if (a2 == (a1 + 1) % 3) else -1.0
-    q1, q2, qo = v[a1], v[a2], parity * v[other]
-    if proper:
-        a, b, c, d = w, q1, q2, qo
-    else:
-        a, b, c, d = w - q2, q1 - qo, w + q2, q1 + qo
-    r_ab  = math.hypot(a, b)
-    r_cd  = math.hypot(c, d)
-    half  = math.atan2(r_cd, r_ab)
-    alpha = math.atan2(b, a)
-    delta = math.atan2(d, c)
-    if proper:
-        t2, o1, o3 = 2.0 * half, alpha + delta, alpha - delta
-    else:
-        t2, o1, o3 = 2.0 * half - math.pi / 2.0, delta + alpha, parity * (delta - alpha)
-    wraps = 0
-    def wrap(x):
-        nonlocal wraps
-        if x > math.pi:
-            wraps += 1
-            return x - 2.0 * math.pi
-        if x <= -math.pi:
-            wraps += 1
-            return x + 2.0 * math.pi
-        return x
-    o1, o3 = wrap(o1), wrap(o3)
-    if wraps % 2 == 1:
-        if abs(o3) > abs(o1):
-            o3 = o3 - 2.0 * math.pi if o3 > 0.0 else o3 + 2.0 * math.pi
-        else:
-            o1 = o1 - 2.0 * math.pi if o1 > 0.0 else o1 + 2.0 * math.pi
-    return o1, t2, o3
 
 
 # --- editor driving
@@ -232,12 +197,14 @@ def main() -> int:
                 continue
             for q in samples:
                 set_node_rotation(client, q)
-                t1, _, _ = extract(order, q)
-                if not type_into(client, order + ".x", f"{math.degrees(t1):.6f}"):
+                shown = client.call("get_transform_rotation")["euler_angles_degrees"]
+                shown_q = compose(order, *(math.radians(a) for a in shown))
+                check_close(f"{order} q={fmt(q)}: the angles shown give q with its sign", shown_q, q, 2.0e-4)
+                if not type_into(client, order + ".x", f"{shown[0]:.6f}"):
                     check_true(f"{order}: '{order}.x' field reachable", False)
                     break
                 back = node_rotation_wxyz(client, scene)
-                check_close(f"{order} q={fmt(q)} round-trips with its sign", back, q, 2.0e-4)
+                check_close(f"{order} q={fmt(q)} round-trips through the row with its sign", back, q, 2.0e-4)
 
         print("Hemisphere crossing (ZYX)")
         select_order(client, "ZYX")
@@ -250,6 +217,33 @@ def main() -> int:
         back = node_rotation_wxyz(client, scene)
         check_close("typing Y = 10 keeps Z = 270 (w < 0)", back, expected, 2.0e-4)
 
+        print("Angles past 180 deg survive the end of an edit (ZYX)")
+        set_node_rotation(client, compose("ZYX", 0.0, 0.0, 0.0))
+        shown = client.call("get_transform_rotation")["euler_angles_degrees"]
+        check_close("a rotation set from outside shows canonical angles", shown, [0.0, 0.0, 0.0], 1.0e-3)
+        type_into(client, "ZYX.x", "250")
+        type_into(client, "ZYX.z", "200")
+        settle(client, 6)
+        shown = client.call("get_transform_rotation")["euler_angles_degrees"]
+        check_close("Euler row keeps (250, 0, 200) after the edits end", shown, [250.0, 0.0, 200.0], 1.0e-3)
+        drag_item = visible_item(client, "ZYX.y")
+        client.call("mouse_drag", {
+            "from": [drag_item["center_x"], drag_item["center_y"]],
+            "to":   [drag_item["center_x"] + 20.0, drag_item["center_y"]],
+            "frames": 20
+        })
+        settle(client, 6)
+        shown = client.call("get_transform_rotation")["euler_angles_degrees"]
+        check_true(
+            "dragging Y keeps Z and X past 180 deg after the drag ends",
+            (abs(shown[0] - 250.0) < 1.0e-3) and (abs(shown[2] - 200.0) < 1.0e-3) and (abs(shown[1]) > 1.0),
+            f"shown = {shown}"
+        )
+        expected = compose("ZYX", math.radians(shown[0]), math.radians(shown[1]), math.radians(shown[2]))
+        check_close("the node's rotation is the shown angles' quaternion", node_rotation_wxyz(client, scene), expected, 2.0e-4)
+
+        set_node_rotation(client, q_270)
+        type_into(client, "ZYX.y", "10")
         type_into(client, "ZYX.x", "-90")
         expected = compose("ZYX", math.radians(-90.0), math.radians(10.0), 0.0)
         back = node_rotation_wxyz(client, scene)

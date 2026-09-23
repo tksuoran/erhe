@@ -167,15 +167,38 @@ void Rotation_inspector::update_euler_angles_from_quaternion()
     // From the quaternion, not the matrix: the matrix cannot tell q from -q,
     // the quaternion extraction gives q and -q different angles, so editing
     // the angles and reading them back keeps the quaternion's sign.
-    erhe::math::quaternion_to_euler_angles(
-        m_quaternion,
-        get_euler_component(m_euler_angle_order, 0),
-        get_euler_component(m_euler_angle_order, 1),
-        get_euler_component(m_euler_angle_order, 2),
-        m_euler_angles[0],
-        m_euler_angles[1],
-        m_euler_angles[2]
+    //
+    // Many angle triples give the same quaternion (full turns on two angles,
+    // the second Euler branch, any split at gimbal lock). While the angles
+    // shown still give (nearly) this quaternion - the rotation read back after
+    // an edit here ended, or moved a small step by the gizmo - the triple
+    // nearest to them is shown, so angles dragged or typed past +-180 deg stay
+    // as edited and gizmo rotation moves them continuously. A rotation that
+    // jumped (another node selected, undo, a value set from elsewhere) owes
+    // nothing to the angles shown before and gets the canonical triple.
+    const int       axis_1 = get_euler_component(m_euler_angle_order, 0);
+    const int       axis_2 = get_euler_component(m_euler_angle_order, 1);
+    const int       axis_3 = get_euler_component(m_euler_angle_order, 2);
+    const glm::quat q      = normalize(m_quaternion);
+    const glm::quat shown  = erhe::math::euler_angles_to_quaternion(
+        axis_1, axis_2, axis_3, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
     );
+    // Sign-aware: -q (a full turn away) counts as a jump.
+    constexpr float c_follow_max_rotation = glm::radians(30.0f);
+    const bool follows_shown_angles = glm::dot(shown, q) >= std::cos(0.5f * c_follow_max_rotation);
+    if (follows_shown_angles) {
+        const float reference[3] = {m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]};
+        erhe::math::quaternion_to_euler_angles_near(
+            q, axis_1, axis_2, axis_3,
+            reference[0], reference[1], reference[2],
+            m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
+        );
+    } else {
+        erhe::math::quaternion_to_euler_angles(
+            q, axis_1, axis_2, axis_3,
+            m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
+        );
+    }
     if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
     if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
     if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
@@ -366,12 +389,12 @@ void Rotation_inspector::imgui(
     }
 }
 
-auto Rotation_inspector::get_matrix() -> mat4
+auto Rotation_inspector::get_matrix() const -> mat4
 {
     return m_matrix;
 }
 
-auto Rotation_inspector::get_quaternion() -> quat
+auto Rotation_inspector::get_quaternion() const -> quat
 {
     return glm::normalize(m_quaternion);
 }
@@ -379,6 +402,16 @@ auto Rotation_inspector::get_quaternion() -> quat
 auto Rotation_inspector::get_euler_value(const std::size_t i) const -> float
 {
     return m_euler_angles[i];
+}
+
+auto Rotation_inspector::get_representation() const -> Representation
+{
+    return m_representation;
+}
+
+auto Rotation_inspector::get_euler_order() const -> Euler_angle_order
+{
+    return m_euler_angle_order;
 }
 
 auto Rotation_inspector::get_euler_axis(const std::size_t i) const -> std::size_t

@@ -388,6 +388,7 @@ private:
     auto action_type_text                     (const nlohmann::json& args) -> std::string;
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
     auto query_transform_handles              (const nlohmann::json& args) -> std::string;
+    auto query_transform_rotation             (const nlohmann::json& args) -> std::string;
 
     // ImGui introspection, doc/agents/mcp_ui_driving.md (src/editor/mcp/mcp_server_ui.cpp).
     // get_imgui_items and get_imgui_item_rect need a recorded frame, so they

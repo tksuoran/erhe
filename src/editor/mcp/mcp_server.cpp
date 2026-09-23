@@ -705,6 +705,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "type_text",                      &Mcp_server::action_type_text                     },
         { "get_input_state",                &Mcp_server::query_input_state                    },
         { "get_transform_handles",          &Mcp_server::query_transform_handles              },
+        { "get_transform_rotation",         &Mcp_server::query_transform_rotation             },
         { "get_imgui_hosts",                &Mcp_server::query_imgui_hosts                    },
         { "get_imgui_windows",              &Mcp_server::query_imgui_windows                  },
         { "get_imgui_items",                &Mcp_server::query_imgui_items                    },

@@ -97,6 +97,7 @@ these rather than clicking at a guessed offset. See
 | `inject_input_events` | `events` | The raw form: `erhe::window::Input_event` values with a `frame` offset each. Field names are the `*_event` member names; `modifiers` is a list of `ctrl` / `shift` / `super` / `menu` |
 | `get_input_state` | - | Pointer position, held buttons, modifier mask, whether cursor-enter / focus were sent, and the stepping gesture if one runs |
 | `get_transform_handles` | `viewport` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`; plus the gizmo anchor and radius. Needs a selection |
+| `get_transform_rotation` | - | What the Transform window's Rotation group shows: representation, Euler order, the Euler angles in degrees as displayed, and the quaternion. The values a widget shows are not in `get_imgui_items`, which records labels and rectangles |
 | `capture_screenshot` | `path`, `annotate_imgui_items`, `annotate_window`, `annotate_limit` | The frame as a PNG; with annotation, numbered magenta rectangles over the recorded items and the number -> item table |
 
 ## Standing rules

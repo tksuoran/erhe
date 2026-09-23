@@ -2852,6 +2852,11 @@ Edit_state::Edit_state(
     }
 }
 
+auto Transform_tool::get_rotation_inspector() const -> const Rotation_inspector&
+{
+    return m_rotation;
+}
+
 void Transform_tool::transform_properties()
 {
     if (shared.entries.empty() && !shared.component_mode) {

@@ -99,9 +99,11 @@ public:
         Property_editor&               property_editor
     );
 
-    [[nodiscard]] auto get_matrix     () -> glm::mat4;
-    [[nodiscard]] auto get_quaternion () -> glm::quat;
-    [[nodiscard]] auto get_euler_value(std::size_t i) const -> float;
+    [[nodiscard]] auto get_matrix        () const -> glm::mat4;
+    [[nodiscard]] auto get_quaternion    () const -> glm::quat;
+    [[nodiscard]] auto get_euler_value   (std::size_t i) const -> float;
+    [[nodiscard]] auto get_representation() const -> Representation;
+    [[nodiscard]] auto get_euler_order   () const -> Euler_angle_order;
 
 private:
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;

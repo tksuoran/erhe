@@ -248,6 +248,9 @@ public:
     auto on_drag      () -> bool;
     void end_drag     ();
 
+    // The Transform window's Rotation group (MCP get_transform_rotation).
+    [[nodiscard]] auto get_rotation_inspector() const -> const Rotation_inspector&;
+
     // For Handle_visualizations
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;
