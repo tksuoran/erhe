@@ -1,9 +1,11 @@
 #include "transform/rotation_inspector.hpp"
+#include "transform/subtool.hpp"
 #include "windows/property_editor.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/euler_angles.hpp>
 
@@ -112,6 +114,29 @@ auto Rotation_inspector::is_tait_bryan(const Euler_angle_order euler_angle_order
     }
 }
 
+auto Rotation_inspector::get_euler_component(const Euler_angle_order euler_angle_order, const int i) -> int
+{
+    constexpr int x = 0;
+    constexpr int y = 1;
+    constexpr int z = 2;
+    ERHE_VERIFY(x >= 0 && x < 3);
+    switch (euler_angle_order) {
+        case Euler_angle_order::e_xyx: return std::array<int, 3>{x, y, x}[i];
+        case Euler_angle_order::e_xyz: return std::array<int, 3>{x, y, z}[i];
+        case Euler_angle_order::e_xzx: return std::array<int, 3>{x, z, x}[i];
+        case Euler_angle_order::e_xzy: return std::array<int, 3>{x, z, y}[i];
+        case Euler_angle_order::e_yxy: return std::array<int, 3>{y, x, y}[i];
+        case Euler_angle_order::e_yxz: return std::array<int, 3>{y, x, z}[i];
+        case Euler_angle_order::e_yzx: return std::array<int, 3>{y, z, x}[i];
+        case Euler_angle_order::e_yzy: return std::array<int, 3>{y, z, y}[i];
+        case Euler_angle_order::e_zxy: return std::array<int, 3>{z, x, y}[i];
+        case Euler_angle_order::e_zxz: return std::array<int, 3>{z, x, z}[i];
+        case Euler_angle_order::e_zyx: return std::array<int, 3>{z, y, x}[i];
+        case Euler_angle_order::e_zyz: return std::array<int, 3>{z, y, z}[i];
+        default: return 0;
+    }
+}
+
 auto Rotation_inspector::gimbal_lock_warning() const -> float
 {
     using namespace std;
@@ -155,6 +180,9 @@ void Rotation_inspector::update_euler_angles_from_matrix()
         case Euler_angle_order::e_zyz: glm::extractEulerAngleZYZ(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
         default: break;
     }
+    if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
+    if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
+    if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
 }
 
 void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
@@ -203,7 +231,6 @@ void Rotation_inspector::imgui(
     if (!m_active) {
         set_quaternion(rotation);
     }
-    // ImGui::TextUnformatted(m_active ? "Active" : "Not active");
     
     p.add_entry("Mode", [this]() {
         erhe::imgui::make_combo(
@@ -247,75 +274,87 @@ void Rotation_inspector::imgui(
         }
 
         case Representation::e_quaternion: {
-            p.add_entry("W", get_label_color(3, true, matches_gizmo), get_label_color(3, false, matches_gizmo), [this, &quaternion_state]() {
-                quaternion_state.combine(
-                    erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qw")
-                );
-            });
-            p.add_entry("X", get_label_color(0, true, matches_gizmo), get_label_color(0, false, matches_gizmo), [this, &quaternion_state]() {
-                quaternion_state.combine(
-                    erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qx")
-                );
-            });
-            p.add_entry("Y", get_label_color(1, true, matches_gizmo), get_label_color(1, false, matches_gizmo), [this, &quaternion_state]() {
-                quaternion_state.combine(
-                    erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qy")
-                );
-            });
-            p.add_entry("Z", get_label_color(2, true, matches_gizmo), get_label_color(2, false, matches_gizmo), [this, &quaternion_state]() {
-                quaternion_state.combine(
-                    erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qz")
-                );
-            });
+            p.add_entry(
+                "Quaternion",
+                [this, &quaternion_state, matches_gizmo]() {
+                    glm::vec4 q = glm::vec4{m_quaternion.w, m_quaternion.x, m_quaternion.y, m_quaternion.z};
+                    ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat;
+                    erhe::imgui::Value_edit_state q_edit_state = erhe::imgui::make_drag_vec4(q, {}, {}, 0.02f, flags, "##Quaternion", "%.4f");
+                    if (q_edit_state.value_changed) {
+                        m_quaternion = glm::quat(q.w, q.x, q.y, q.z);
+                    }
+                    quaternion_state.combine(q_edit_state);
+                }
+            );
+
+            //p.add_entry("W", get_label_color(3, true, matches_gizmo), get_label_color(3, false, matches_gizmo), [this, &quaternion_state]() {
+            //    quaternion_state.combine(
+            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qw")
+            //    );
+            //});
+            //p.add_entry("X", get_label_color(0, true, matches_gizmo), get_label_color(0, false, matches_gizmo), [this, &quaternion_state]() {
+            //    quaternion_state.combine(
+            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qx")
+            //    );
+            //});
+            //p.add_entry("Y", get_label_color(1, true, matches_gizmo), get_label_color(1, false, matches_gizmo), [this, &quaternion_state]() {
+            //    quaternion_state.combine(
+            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qy")
+            //    );
+            //});
+            //p.add_entry("Z", get_label_color(2, true, matches_gizmo), get_label_color(2, false, matches_gizmo), [this, &quaternion_state]() {
+            //    quaternion_state.combine(
+            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qz")
+            //    );
+            //});
             break;
         }
 
         case Representation::e_euler_angles: {
-            const std::size_t a             = get_euler_axis(0);
-            const std::size_t b             = get_euler_axis(1);
-            const std::size_t c             = get_euler_axis(2);
-            const char*       axis_labels[] = {"X", "Y", "Z"};
+            //const std::size_t a             = get_euler_axis(0);
+            //const std::size_t b             = get_euler_axis(1);
+            //const std::size_t c             = get_euler_axis(2);
+            //const char*       axis_labels[] = {"X", "Y", "Z"};
 
-            p.add_entry(axis_labels[a], get_label_color(a, true, matches_gizmo), get_label_color(a, false, matches_gizmo), [this, &euler_state]() {
-                const float warn = gimbal_lock_warning();
-                if (warn > 0.0f) { ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 1.0f - warn, 0.0f, 1.0f});}
-                euler_state.combine(erhe::imgui::make_angle_button(m_euler_angles[0], -10.0f * glm::pi<float>(), 10.0f * glm::pi<float>(), "##R.0"));
-                if (warn > 0.0f) { 
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::BeginTooltip();
-                        ImGui::TextUnformatted("Gimbal Lock");
-                        ImGui::EndTooltip();
+            p.add_entry(
+                c_euler_strings[static_cast<int>(m_euler_angle_order)],
+                [this, &euler_state, matches_gizmo]() {
+                    const float warn = gimbal_lock_warning();
+                    if (warn > 0.0f) {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 1.0f - warn, 0.0f, 1.0f});
                     }
-                    ImGui::PopStyleColor(1);
-                }
-            });
-            p.add_entry(axis_labels[b], get_label_color(b, true, matches_gizmo), get_label_color(b, false, matches_gizmo), [this, &euler_state]() {
-                const float warn = gimbal_lock_warning();
-                if (warn > 0.0f) { ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 1.0f - warn, 0.0f, 1.0f});}
-                euler_state.combine(erhe::imgui::make_angle_button(m_euler_angles[1], -10.0f * glm::half_pi<float>(), 10.0f * glm::half_pi<float>(), "##R.1"));
-                if (warn > 0.0f) { 
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::BeginTooltip();
-                        ImGui::TextUnformatted("Gimbal Lock");
-                        ImGui::EndTooltip();
+                    glm::vec3 e = glm::vec3{
+                        glm::degrees<float>(m_euler_angles[0]),
+                        glm::degrees<float>(m_euler_angles[1]),
+                        glm::degrees<float>(m_euler_angles[2])
+                    };
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(get_euler_component(m_euler_angle_order, 0), false));
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(get_euler_component(m_euler_angle_order, 1), false));
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(get_euler_component(m_euler_angle_order, 2), false));
+                    glm::vec4 q = glm::vec4{m_quaternion.w, m_quaternion.x, m_quaternion.y, m_quaternion.z};
+                    ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat | (matches_gizmo ? ImGuiSliderFlags_ColorMarkers : 0);
+                    erhe::imgui::Value_edit_state e_edit_state = erhe::imgui::make_drag_vec3(e, {}, {}, 1.0f, flags, "##Euler", "%.2f\xc2\xb0");
+                    ImGui::PopStyleColor(3);
+                    if (e_edit_state.value_changed) {
+                        m_euler_angles[0] = glm::radians<float>(e.x);
+                        m_euler_angles[1] = glm::radians<float>(e.y);
+                        m_euler_angles[2] = glm::radians<float>(e.z);
+                        if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
+                        if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
+                        if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
                     }
-                    ImGui::PopStyleColor(1);
-                }
-            });
-            p.add_entry(axis_labels[c], get_label_color(c, true, matches_gizmo), get_label_color(c, false, matches_gizmo), [this, &euler_state]() {
-                const float warn = gimbal_lock_warning();
-                if (warn > 0.0f) { ImGui::BeginDisabled(); ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 1.0f - warn, 0.0f, 1.0f});}
-                euler_state.combine(erhe::imgui::make_angle_button(m_euler_angles[2], -10.0f * glm::pi<float>(), 10.0f * glm::pi<float>(), "##R.2"));
-                if (warn > 0.0f) { 
-                    ImGui::EndDisabled();
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::BeginTooltip();
-                        ImGui::TextUnformatted("Gimbal Lock");
-                        ImGui::EndTooltip();
+                    euler_state.combine(e_edit_state);
+                    if (warn > 0.0f) {
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted("Gimbal Lock");
+                            ImGui::EndTooltip();
+                        }
+                        ImGui::PopStyleColor(1);
                     }
-                    ImGui::PopStyleColor(1);
                 }
-            });
+            );
+
             break;
         }
 
@@ -363,24 +402,6 @@ auto Rotation_inspector::get_euler_axis(const std::size_t i) const -> std::size_
         case 'Y': return 1;
         case 'Z': return 2;
         default:  return 0;
-    }
-}
-
-auto Rotation_inspector::get_label_color(
-    const std::size_t i,
-    const bool        text,
-    const bool        matches_gizmo
-) const -> uint32_t
-{
-    if (!matches_gizmo) {
-        return text ? 0xffccccccu : 0xff222222u;
-    }
-    switch (i) {
-        case 0:  return text ? 0xff8888ffu : 0xff222266u; // X
-        case 1:  return text ? 0xff88ff88u : 0xff226622u; // Y
-        case 2:  return text ? 0xffff8888u : 0xff662222u; // Z
-        case 3:  return text ? 0xffff88ffu : 0xff662266u; // W
-        default: return text ? 0xffccccccu : 0xff222222u;
     }
 }
 

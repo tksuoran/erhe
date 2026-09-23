@@ -2,6 +2,8 @@
 
 #include "tools/tool.hpp"
 
+#include <imgui/imgui.h>
+
 #include <glm/glm.hpp>
 
 #include <functional>
@@ -61,4 +63,7 @@ private:
     std::function<void()>  m_record_operation;
 };
 
+auto get_label_color(std::size_t i, bool text, bool matches_gizmo) -> uint32_t;
+
+auto get_drag_color(std::size_t i, bool locked) -> ImVec4;
 }

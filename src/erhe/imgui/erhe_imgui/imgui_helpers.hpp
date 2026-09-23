@@ -68,6 +68,26 @@ auto make_scalar_button(
     const char* imgui_label
 ) -> Value_edit_state;
 
+auto make_drag_vec3(
+    glm::vec3&               value,
+    std::optional<glm::vec3> value_min,
+    std::optional<glm::vec3> value_max,
+    float                    value_speed, // 0.02f
+    ImGuiSliderFlags         flags,
+    const char*              imgui_label,
+    const char*              format_string
+) -> Value_edit_state;
+
+auto make_drag_vec4(
+    glm::vec4&               value,
+    std::optional<glm::vec4> value_min,
+    std::optional<glm::vec4> value_max,
+    float                    value_speed, // 0.02f
+    ImGuiSliderFlags         flags,
+    const char*              imgui_label,
+    const char*              format_string
+) -> Value_edit_state;
+
 auto make_angle_button(
     float&      radians_value,
     float       value_min,
@@ -105,5 +125,7 @@ void draw_spinner(ImVec2 center, float radius, float thickness, ImU32 color);
 // flag is frame-global, so an edit earlier in the same frame makes the region
 // test a false positive - callers must treat a positive as "maybe edited".
 auto any_item_edited_this_frame() -> bool;
+
+auto begin_drag_drop_source(ImGuiDragDropFlags flags = ImGuiDragDropFlags_None) -> bool;
 
 } // namespace erhe::imgui

@@ -1,6 +1,7 @@
 #include "windows/property_editor.hpp"
 #include "windows/property_group_states.hpp"
 
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -105,7 +106,7 @@ constexpr const char* c_property_group_payload = "erhe_property_group";
 // after it otherwise, drawn as a yellow line on that edge of the header.
 void Property_editor::property_group_drag_drop(const Entry& entry)
 {
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
+    if (erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
         ImGui::SetDragDropPayload(c_property_group_payload, entry.label.c_str(), entry.label.size() + 1);
         ImGui::TextUnformatted(entry.label.c_str());
         ImGui::EndDragDropSource();

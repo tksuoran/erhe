@@ -144,7 +144,6 @@ void Plot::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    //ImGuiContext& g = *GImGui;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems) {
         return;

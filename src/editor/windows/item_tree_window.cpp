@@ -36,6 +36,7 @@
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/scope.hpp"
@@ -619,7 +620,7 @@ void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& ite
 
     // log_tree_frame->trace("DnD source: '{}'", item->describe());
 
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    if (erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceAllowNullID)) {
         erhe::Item_base* item_raw = item.get();
         ImGui::SetDragDropPayload(item->get_type_name().data(), &item_raw, sizeof(item_raw));
 

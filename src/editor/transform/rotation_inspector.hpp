@@ -37,15 +37,16 @@ public:
     };
 
     enum class Euler_angle_order : unsigned int {
-        e_xyz   =  0,
-        e_yxz   =  1,
-        e_xzx   =  2,
-        e_xyx   =  3,
-        e_yxy   =  4,
-        e_yzy   =  5,
-        e_zyz   =  6,
-        e_zxz   =  7,
-        e_xzy   =  8,
+        e_xyx   =  0,
+        e_xzx   =  1,
+        e_yxy   =  2,
+        e_yzy   =  3,
+        e_zxz   =  4,
+        e_zyz   =  5,
+
+        e_xyz   =  6,
+        e_xzy   =  7,
+        e_yxz   =  8,
         e_yzx   =  9,
         e_zyx   = 10,
         e_zxy   = 11,
@@ -69,8 +70,9 @@ public:
         "ZXY"
     };
 
-    [[nodiscard]] static auto is_proper    (Euler_angle_order euler_angle_order) -> bool;
-    [[nodiscard]] static auto is_tait_bryan(Euler_angle_order euler_angle_order) -> bool;
+    [[nodiscard]] static auto is_proper          (Euler_angle_order euler_angle_order) -> bool;
+    [[nodiscard]] static auto is_tait_bryan      (Euler_angle_order euler_angle_order) -> bool;
+    [[nodiscard]] static auto get_euler_component(Euler_angle_order euler_angle_order, int i) -> int;
 
     Rotation_inspector();
 
@@ -100,10 +102,8 @@ public:
     [[nodiscard]] auto get_matrix     () -> glm::mat4;
     [[nodiscard]] auto get_quaternion () -> glm::quat;
     [[nodiscard]] auto get_euler_value(std::size_t i) const -> float;
-    [[nodiscard]] auto get_axis       () const -> glm::vec3;
 
 private:
-    [[nodiscard]] auto get_label_color    (std::size_t i, bool text, bool matches_gizmo) const -> uint32_t;
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;
     [[nodiscard]] auto gimbal_lock_warning() const -> float;
 

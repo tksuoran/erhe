@@ -137,6 +137,38 @@ auto Subtool::get_plane_side(const bool world) const -> vec3
 
 #pragma region Helpers
 
+auto get_label_color(
+    const std::size_t i,
+    const bool        text,
+    const bool        matches_gizmo
+) -> uint32_t
+{
+    if (!matches_gizmo) {
+        return text ? 0xffccccccu : 0xff222222u;
+    }
+    switch (i) {
+        case 0:  return text ? 0xff8888ffu : 0xff222266u; // X
+        case 1:  return text ? 0xff88ff88u : 0xff226622u; // Y
+        case 2:  return text ? 0xffff8888u : 0xff662222u; // Z
+        case 3:  return text ? 0xffff88ffu : 0xff662266u; // W
+        default: return text ? 0xffccccccu : 0xff222222u;
+    }
+}
+
+auto get_drag_color(const std::size_t i, bool locked) -> ImVec4
+{
+    if (locked) {
+        return ImVec4(0.33f, 0.33f, 0.33f, 1.0f);
+    }
+    switch (i) {
+        case 0:  return ImVec4(1.00f, 0.08f, 0.08f, 1.0f);
+        case 1:  return ImVec4(0.08f, 1.00f, 0.08f, 1.0f);
+        case 2:  return ImVec4(0.08f, 0.08f, 1.00f, 1.0f);
+        case 3:  return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+        default: return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+    }
+}
+
 auto Subtool::offset_plane_origo(const vec3 p) const -> vec3
 {
     switch (m_axis_mask) {

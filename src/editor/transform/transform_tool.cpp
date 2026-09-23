@@ -2741,11 +2741,25 @@ Edit_state::Edit_state(
 
     Property_editor& p = property_editor;
     p.reset();
-    p.push_group("Translation", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ ImGui::BeginDisabled(m_lock_translation[0]); m_translate_state.combine(make_scalar_button(&m_translation.x, 0.0f, 0.0f, "##T.X")); ImGui::EndDisabled(); });
-    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ ImGui::BeginDisabled(m_lock_translation[1]); m_translate_state.combine(make_scalar_button(&m_translation.y, 0.0f, 0.0f, "##T.Y")); ImGui::EndDisabled(); });
-    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ ImGui::BeginDisabled(m_lock_translation[2]); m_translate_state.combine(make_scalar_button(&m_translation.z, 0.0f, 0.0f, "##T.Z")); ImGui::EndDisabled(); });
-    p.pop_group();
+
+    p.add_entry(
+        "Translation",
+        [this]() {
+            const ImGuiSliderFlags flags =
+                ImGuiSliderFlags_NoRoundToFormat |
+                ImGuiSliderFlags_ColorMarkers |
+                (m_lock_translation[0] ? ImGuiSliderFlags_LockComponent0 : 0) |
+                (m_lock_translation[1] ? ImGuiSliderFlags_LockComponent1 : 0) |
+                (m_lock_translation[2] ? ImGuiSliderFlags_LockComponent2 : 0);
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, m_lock_translation[0]));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(1, m_lock_translation[1]));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(2, m_lock_translation[2]));
+            m_translate_state.combine(
+                make_drag_vec3(m_translation, {}, {}, 0.02f, flags, "##Translation", "%.4f")
+            );
+            ImGui::PopStyleColor(3);
+        }
+    );
 
     p.push_group("Rotation", ImGuiTreeNodeFlags_DefaultOpen);
     // Per-component rotation disabling is not expressible in the rotation
@@ -2756,17 +2770,38 @@ Edit_state::Edit_state(
     rotation_inspector.imgui(m_rotate_quaternion_state, m_rotate_euler_state, m_rotate_axis_angle_state, m_rotation, euler_matches_gizmo, p);
     p.pop_group();
 
-    p.push_group("Scale", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ ImGui::BeginDisabled(m_lock_scale[0]); m_scale_state.combine(make_scalar_button(&m_scale.x, 0.01f, FLT_MAX, "##S.X")); ImGui::EndDisabled(); });
-    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ ImGui::BeginDisabled(m_lock_scale[1]); m_scale_state.combine(make_scalar_button(&m_scale.y, 0.01f, FLT_MAX, "##S.Y")); ImGui::EndDisabled(); });
-    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ ImGui::BeginDisabled(m_lock_scale[2]); m_scale_state.combine(make_scalar_button(&m_scale.z, 0.01f, FLT_MAX, "##S.Z")); ImGui::EndDisabled(); });
-    p.pop_group();
+    p.add_entry(
+        "Scale",
+        [this]() {
+            const ImGuiSliderFlags flags =
+                ImGuiSliderFlags_NoRoundToFormat |
+                ImGuiSliderFlags_ColorMarkers |
+                (m_lock_scale[0] ? ImGuiSliderFlags_LockComponent0 : 0) |
+                (m_lock_scale[1] ? ImGuiSliderFlags_LockComponent1 : 0) |
+                (m_lock_scale[2] ? ImGuiSliderFlags_LockComponent2 : 0);
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, m_lock_scale[0]));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(1, m_lock_scale[1]));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(2, m_lock_scale[2]));
+            m_scale_state.combine(
+                make_drag_vec3(m_scale, {}, {}, 0.02f, flags, "##Scale", "%.4f")
+            );
+            ImGui::PopStyleColor(3);
+        }
+    );
 
-    p.push_group("Skew", ImGuiTreeNodeFlags_None);
-    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.x, 0.0f, 0.0f, "##K.X")); });
-    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.y, 0.0f, 0.0f, "##K.Y")); });
-    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.z, 0.0f, 0.0f, "##K.Z")); });
-    p.pop_group();
+    p.add_entry(
+        "Skew",
+        [this]() {
+            const ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_ColorMarkers;
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, false));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(1, false));
+            ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(2, false));
+            m_skew_state.combine(
+                make_drag_vec3(m_skew, {}, {}, 0.02f, flags, "##Skew", "%.4f")
+            );
+            ImGui::PopStyleColor(3);
+        }
+    );
 
     p.show_entries();
 

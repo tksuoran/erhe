@@ -5,6 +5,8 @@
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_imgui/imgui_helpers.hpp"
+
 #include <imgui/imgui.h>
 
 #include <algorithm>
@@ -75,7 +77,7 @@ auto item_reference_imgui(
     const float value_w  = std::max(ImGui::GetContentRegionAvail().x - reserved, 1.0f);
     ImGui::Button(have_value ? io_value->get_name().c_str() : options.none_text, ImVec2{value_w, 0.0f});
 
-    if (have_value && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    if (have_value && erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceAllowNullID)) {
         erhe::Item_base* const raw = io_value.get();
         ImGui::SetDragDropPayload(io_value->get_type_name().data(), &raw, sizeof(raw));
         context.icon_set->item_icon(io_value, 1.0f);

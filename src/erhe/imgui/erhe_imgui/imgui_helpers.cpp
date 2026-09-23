@@ -1,4 +1,5 @@
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -148,6 +149,62 @@ auto make_scalar_button(
     };
 };
 
+auto make_drag_vec3(
+    glm::vec3&               value,
+    std::optional<glm::vec3> value_min,
+    std::optional<glm::vec3> value_max,
+    const float              value_speed,
+    const ImGuiSliderFlags   flags,
+    const char*              imgui_label,
+    const char*              format_string
+) -> Value_edit_state
+{
+    const auto value_changed = ImGui::DragScalarN(
+        imgui_label,
+        ImGuiDataType_Float,
+        &value.x,
+        3,
+        value_speed,
+        value_min.has_value() ? &value_min.value().x : nullptr,
+        value_max.has_value() ? &value_max.value().x : nullptr,
+        format_string,
+        flags
+    );
+    return Value_edit_state{
+        .value_changed = value_changed,
+        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
+        .active        = ImGui::IsItemActive()
+    };
+}
+
+auto make_drag_vec4(
+    glm::vec4&               value,
+    std::optional<glm::vec4> value_min,
+    std::optional<glm::vec4> value_max,
+    const float              value_speed,
+    const ImGuiSliderFlags   flags,
+    const char*              imgui_label,
+    const char*              format_string
+) -> Value_edit_state
+{
+    const auto value_changed = ImGui::DragScalarN(
+        imgui_label,
+        ImGuiDataType_Float,
+        &value.x,
+        4,
+        value_speed,
+        value_min.has_value() ? &value_min.value().x : nullptr,
+        value_max.has_value() ? &value_max.value().x : nullptr,
+        format_string,
+        flags
+    );
+    return Value_edit_state{
+        .value_changed = value_changed,
+        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
+        .active        = ImGui::IsItemActive()
+    };
+}
+
 auto make_angle_button(
     float&            radians_value,
     float             value_min,
@@ -230,9 +287,10 @@ auto make_angle_button(
 // once it has been closed (by the close button, an outside click, or the caller).
 auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool
 {
-    ImGuiContext& g = *GImGui;
+    ImGuiContext* const g = ImGui::GetCurrentContext();
+    ERHE_VERIFY(g != nullptr);
     if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
-        g.NextWindowData.ClearFlags();
+        g->NextWindowData.ClearFlags();
         if ((open != nullptr) && *open) {
             *open = false;
         }
@@ -244,7 +302,7 @@ auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, I
         // NB: is_open can be false when the popup is completely clipped (e.g. zero size display).
         ImGui::EndPopup();
         if (is_open) {
-            ImGui::ClosePopupToLevel(g.BeginPopupStack.Size, true);
+            ImGui::ClosePopupToLevel(g->BeginPopupStack.Size, true);
         }
         return false;
     }
@@ -255,9 +313,28 @@ auto any_item_edited_this_frame() -> bool
 {
     // Set by ImGui::MarkItemEdited(), which every value widget calls on edit
     // (including Selectable, so combos count); plain Button presses do not.
-    ImGuiContext& g = *GImGui;
-    return g.ActiveIdHasBeenEditedThisFrame;
+    ImGuiContext* const g = ImGui::GetCurrentContext();
+    ERHE_VERIFY(g != nullptr);
+    return g->ActiveIdHasBeenEditedThisFrame;
 }
+
+auto begin_drag_drop_source(ImGuiDragDropFlags flags) -> bool
+{
+    ImGuiContext* const g = ImGui::GetCurrentContext();
+    ERHE_VERIFY(g != nullptr);
+
+    if (!ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+        return false;
+    }
+
+    if (g->CurrentItemFlags & ImGuiItemFlags_Disabled) {
+        return false;
+    }
+
+    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    return ImGui::BeginDragDropSource(flags);
+}
+
 
 auto combo_fit_width(const char* label, int* current_item, const char* const items[], int items_count) -> bool
 {

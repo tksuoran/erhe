@@ -13,6 +13,7 @@
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 
 #include <imgui/imgui.h>
@@ -673,7 +674,7 @@ void Graph_editor_window_base::node_palette()
                 // position) and into inventory / hotbar slots. The payload
                 // copies the strings, so it survives the per-frame palette
                 // rebuild.
-                if (ImGui::BeginDragDropSource()) {
+                if (erhe::imgui::begin_drag_drop_source()) {
                     Graph_node_drag_payload payload{};
                     snprintf(payload.kind,      sizeof(payload.kind),      "%s", clipboard_kind());
                     snprintf(payload.type_name, sizeof(payload.type_name), "%s", entry.type_name.c_str());

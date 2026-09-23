@@ -1505,7 +1505,7 @@ void Operations::operation_drag_source(erhe::commands::Command* command, const c
     if ((command == nullptr) || !m_param_invokers.contains(command)) {
         return;
     }
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    if (erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceAllowNullID)) {
         Operation_drag_payload payload{};
         payload.command = command;
         payload.params  = current_params();
