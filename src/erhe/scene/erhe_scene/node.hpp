@@ -168,8 +168,10 @@ public:
     void clear_xform_op_stack();
     // Restores a recorded local transform and its stack verbatim (undo /
     // redo): no write-back runs, so a stack that a write-back collapsed stays
-    // collapsed on redo and comes back whole on undo.
-    void restore_local_transform(const Transform& parent_from_node, const std::optional<Xform_op_stack>& stack);
+    // collapsed on redo and comes back whole on undo. The TRS components are
+    // copied as recorded, never re-derived from the matrix, so the rotation
+    // quaternion keeps its sign.
+    void restore_local_transform(const Trs_transform& parent_from_node, const std::optional<Xform_op_stack>& stack);
 
     // The shared tail of every local transform write: the xformOp stack
     // write-back, the world transform update and handle_transform_update.

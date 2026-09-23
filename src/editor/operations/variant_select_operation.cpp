@@ -128,8 +128,8 @@ void append_variant_property_operations(
         }
         Node_transform_operation::Parameters parameters{};
         parameters.node                    = xformable;
-        parameters.parent_from_node_before = erhe::scene::Transform{current};
-        parameters.parent_from_node_after  = erhe::scene::Transform{wanted};
+        parameters.parent_from_node_before = xformable->parent_from_node_transform();
+        parameters.parent_from_node_after  = erhe::scene::Trs_transform{wanted};
         parameters.xform_op_stack_before   = xformable->copy_xform_op_stack();
         operations.push_back(std::make_shared<Node_transform_operation>(parameters));
     }

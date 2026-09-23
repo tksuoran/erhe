@@ -693,7 +693,7 @@ void Xformable::clear_xform_op_stack()
     m_xform_op_stack_collapse_logged = false;
 }
 
-void Xformable::restore_local_transform(const Transform& parent_from_node, const std::optional<Xform_op_stack>& stack)
+void Xformable::restore_local_transform(const Trs_transform& parent_from_node, const std::optional<Xform_op_stack>& stack)
 {
     if (stack.has_value()) {
         m_xform_op_stack = std::make_unique<Xform_op_stack>(stack.value());
@@ -703,15 +703,10 @@ void Xformable::restore_local_transform(const Transform& parent_from_node, const
     if (is_local_transform_animated()) {
         // The recorded transform is authored state: it goes to the base, and
         // the pose the animation is playing stays where it is.
-        Trs_transform transform;
-        transform.set(parent_from_node.get_matrix(), parent_from_node.get_inverse_matrix());
-        write_animation_base_transform(transform);
+        write_animation_base_transform(parent_from_node);
         return;
     }
-    node_data.transforms.parent_from_node.set(
-        parent_from_node.get_matrix(),
-        parent_from_node.get_inverse_matrix()
-    );
+    node_data.transforms.parent_from_node = parent_from_node;
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }

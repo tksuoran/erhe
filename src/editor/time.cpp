@@ -166,8 +166,8 @@ auto Time::get_host_system_last_frame_duration_ns() const -> int64_t
 
 void Time::begin_transform_animation(
     std::shared_ptr<erhe::scene::Node> node,
-    erhe::scene::Transform             parent_from_node_before,
-    erhe::scene::Transform             parent_from_node_after,
+    erhe::scene::Trs_transform         parent_from_node_before,
+    erhe::scene::Trs_transform         parent_from_node_after,
     const float                        time_duration
 )
 {
@@ -224,9 +224,11 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
         );
         ERHE_VERIFY(t >= 0.0f);
         const float t_ = glm::smoothstep(0.0f, 1.0f, t);
-        const erhe::scene::Trs_transform t0{entry.parent_from_node_before.get_matrix()};
-        const erhe::scene::Trs_transform t1{entry.parent_from_node_after.get_matrix()};
-        const erhe::scene::Trs_transform transform = erhe::scene::interpolate(t0, t1, t_);
+        const erhe::scene::Trs_transform transform = erhe::scene::interpolate(
+            entry.parent_from_node_before,
+            entry.parent_from_node_after,
+            t_
+        );
         entry.node->set_parent_from_node(transform);
         app_message_bus.node_touched.send_message(
             Node_touched_message{

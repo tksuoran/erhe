@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_profile/profile.hpp"
-#include "erhe_scene/transform.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -43,8 +43,8 @@ class Transform_animation_entry
 {
 public:
     std::shared_ptr<erhe::scene::Node> node;
-    erhe::scene::Transform             parent_from_node_before;
-    erhe::scene::Transform             parent_from_node_after;
+    erhe::scene::Trs_transform         parent_from_node_before;
+    erhe::scene::Trs_transform         parent_from_node_after;
     int64_t                            time_duration_ns;
     int64_t                            start_time_ns;
 };
@@ -88,8 +88,8 @@ public:
     void finish_all_transform_animations(App_message_bus& app_message_bus);
     void begin_transform_animation(
         std::shared_ptr<erhe::scene::Node> node,
-        erhe::scene::Transform             parent_from_node_before,
-        erhe::scene::Transform             parent_from_node_after,
+        erhe::scene::Trs_transform         parent_from_node_before,
+        erhe::scene::Trs_transform         parent_from_node_after,
         float                              time_duration
     );
 

@@ -33,8 +33,11 @@ public:
     {
     public:
         std::shared_ptr<erhe::scene::Node> node;
-        erhe::scene::Transform             parent_from_node_before;
-        erhe::scene::Transform             parent_from_node_after;
+        // TRS components, not a matrix: re-decomposing a matrix picks one of
+        // the two quaternions of a rotation, and a Trs_transform keeps the one
+        // the edit wrote.
+        erhe::scene::Trs_transform         parent_from_node_before;
+        erhe::scene::Trs_transform         parent_from_node_after;
         // The node's authored xformOp stack as it was next to
         // parent_from_node_before (no value when the node has no stack).
         // Undo restores it verbatim, so a stack the edit collapsed comes

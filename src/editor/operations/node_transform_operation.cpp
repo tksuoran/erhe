@@ -8,8 +8,6 @@
 
 #include "erhe_log/log_glm.hpp"
 
-#include <glm/gtx/matrix_decompose.hpp>
-
 //#include <sstream>
 
 namespace editor {
@@ -60,40 +58,13 @@ namespace editor {
 Node_transform_operation::Node_transform_operation(const Parameters& parameters)
     : m_parameters{parameters}
 {
-    glm::vec3 scale_before;
-    glm::quat orientation_before;
-    glm::vec3 translation_before;
-    glm::vec3 skew_before;
-    glm::vec4 perspective_before;
-
-    glm::vec3 scale_after;
-    glm::quat orientation_after;
-    glm::vec3 translation_after;
-    glm::vec3 skew_after;
-    glm::vec4 perspective_after;
-    glm::decompose(
-        m_parameters.parent_from_node_before.get_matrix(),
-        scale_before,
-        orientation_before,
-        translation_before,
-        skew_before,
-        perspective_before
-    );
-    glm::decompose(
-        m_parameters.parent_from_node_after.get_matrix(),
-        scale_after,
-        orientation_after,
-        translation_after,
-        skew_after,
-        perspective_after
-    );
     set_description(
         fmt::format(
             "[{}] Trs_transform {} translate before = {}, translate after = {}",
             get_serial(),
             m_parameters.node->get_name(),
-            translation_before,
-            translation_after
+            m_parameters.parent_from_node_before.get_translation(),
+            m_parameters.parent_from_node_after.get_translation()
         )
     );
 }

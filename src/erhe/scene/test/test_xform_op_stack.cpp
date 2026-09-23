@@ -431,7 +431,7 @@ TEST(Xform_op_stack, restore_does_not_run_the_write_back)
     stack.ops.push_back(translate_op(glm::dvec3{1.0, 0.0, 0.0}));
     node->set_xform_op_stack(stack);
 
-    const erhe::scene::Transform before{node->parent_from_node()};
+    const erhe::scene::Trs_transform before = node->parent_from_node_transform();
     const std::optional<Xform_op_stack> stack_before = node->copy_xform_op_stack();
 
     // An edit the stack cannot carry collapses it ...
