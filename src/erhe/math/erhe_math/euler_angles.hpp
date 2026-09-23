@@ -28,7 +28,9 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 
 namespace erhe::math {
@@ -201,6 +203,133 @@ void quaternion_to_euler_angles(
     detail::canonicalize_outer_angles(outer_1, outer_3);
     t1 = outer_1;
     t3 = outer_3;
+}
+
+// Like quaternion_to_euler_angles(), but of all the angle triples that give
+// q (sign included), returns the one nearest to the reference angles
+// (r1, r2, r3), each angle then brought into (-2 pi, 2 pi] - the range over
+// which an angle still tells q from -q. An editor showing angles passes the
+// angles it shows as the reference: when they still give q they come back
+// unchanged (up to rounding) instead of being folded into the canonical
+// ranges, and when q moved the angles follow it continuously.
+//
+// The candidates are the two branches of the Euler decomposition,
+//     (t1, t2, t3) and (t1 + pi, pi - t2, t3 + pi) (Tait-Bryan)
+//                  or  (t1 + pi,     - t2, t3 + pi) (proper),
+// and at gimbal lock the triple that keeps r3, each with any number of full
+// turns added to its angles as long as the total number of turns is even
+// (one full turn negates the quaternion).
+template <typename T, glm::qualifier Q>
+void quaternion_to_euler_angles_near(
+    const glm::qua<T, Q>& q,
+    const int             axis_1,
+    const int             axis_2,
+    const int             axis_3,
+    const T               r1,
+    const T               r2,
+    const T               r3,
+    T&                    t1,
+    T&                    t2,
+    T&                    t3
+)
+{
+    const T pi     = glm::pi<T>();
+    const T two_pi = glm::two_pi<T>();
+    const bool proper = (axis_1 == axis_3);
+    const T parity = static_cast<T>(detail::axis_pair_parity(axis_1, axis_2));
+
+    T c1;
+    T c2;
+    T c3;
+    quaternion_to_euler_angles(q, axis_1, axis_2, axis_3, c1, c2, c3);
+
+    std::array<glm::vec<3, T, Q>, 3> candidates;
+    std::size_t candidate_count = 0;
+    candidates[candidate_count++] = glm::vec<3, T, Q>{c1, c2, c3};
+    candidates[candidate_count++] = proper
+        ? glm::vec<3, T, Q>{c1 + pi, -c2,     c3 + pi}
+        : glm::vec<3, T, Q>{c1 + pi, pi - c2, c3 + pi};
+
+    // At gimbal lock only t1 + sigma * t3 is determined; keep the reference's
+    // t3 and solve t1 from the canonical triple (whose t3 is 0 there).
+    const T lock_tolerance = T{64} * std::numeric_limits<T>::epsilon();
+    const T lock_low       = proper ? T{0} : -glm::half_pi<T>();
+    const T lock_high      = proper ? pi   :  glm::half_pi<T>();
+    T sigma{0};
+    if (std::abs(c2 - lock_low) <= lock_tolerance) {
+        sigma = proper ? T{1} : -parity;
+    } else if (std::abs(c2 - lock_high) <= lock_tolerance) {
+        sigma = proper ? T{-1} : parity;
+    }
+    if (sigma != T{0}) {
+        candidates[candidate_count++] = glm::vec<3, T, Q>{c1 + (sigma * c3) - (sigma * r3), c2, r3};
+    }
+
+    const glm::vec<3, T, Q> reference{r1, r2, r3};
+    T best_distance = std::numeric_limits<T>::max();
+    glm::vec<3, T, Q> best{c1, c2, c3};
+    for (std::size_t i = 0; i < candidate_count; ++i) {
+        glm::vec<3, T, Q> candidate = candidates[i];
+
+        // A branch triple may give -q; one full turn on t1 makes it q.
+        const glm::qua<T, Q> composed = euler_angles_to_quaternion<T, Q>(
+            axis_1, axis_2, axis_3, candidate[0], candidate[1], candidate[2]
+        );
+        if (glm::dot(composed, q) < T{0}) {
+            candidate[0] += two_pi;
+        }
+
+        // Nearest full-turn shift per angle, then restore an even total by
+        // moving the angle for which a second-nearest shift costs least.
+        std::array<T, 3> turns{};
+        int turn_sum = 0;
+        for (int a = 0; a < 3; ++a) {
+            turns[a] = std::round((reference[a] - candidate[a]) / two_pi);
+            turn_sum += static_cast<int>(turns[a]);
+        }
+        if ((turn_sum % 2) != 0) {
+            int cheapest      = 0;
+            T   cheapest_cost = std::numeric_limits<T>::max();
+            T   cheapest_turn = T{0};
+            for (int a = 0; a < 3; ++a) {
+                const T exact       = (reference[a] - candidate[a]) / two_pi;
+                const T alternative = (exact > turns[a]) ? (turns[a] + T{1}) : (turns[a] - T{1});
+                const T nearest_d   = candidate[a] + (turns[a]    * two_pi) - reference[a];
+                const T other_d     = candidate[a] + (alternative * two_pi) - reference[a];
+                const T cost        = (other_d * other_d) - (nearest_d * nearest_d);
+                if (cost < cheapest_cost) {
+                    cheapest      = a;
+                    cheapest_cost = cost;
+                    cheapest_turn = alternative;
+                }
+            }
+            turns[cheapest] = cheapest_turn;
+        }
+        T distance{0};
+        for (int a = 0; a < 3; ++a) {
+            candidate[a] += turns[a] * two_pi;
+            const T d = candidate[a] - reference[a];
+            distance += d * d;
+        }
+        if (distance < best_distance) {
+            best_distance = distance;
+            best          = candidate;
+        }
+    }
+
+    // Into (-2 pi, 2 pi]: shifts of two full turns keep the quaternion.
+    const T four_pi = T{2} * two_pi;
+    for (int a = 0; a < 3; ++a) {
+        while (best[a] > two_pi) {
+            best[a] -= four_pi;
+        }
+        while (best[a] <= -two_pi) {
+            best[a] += four_pi;
+        }
+    }
+    t1 = best[0];
+    t2 = best[1];
+    t3 = best[2];
 }
 
 // Named per-order forms, mirroring glm::eulerAngleABC() (which returns a

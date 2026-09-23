@@ -319,3 +319,128 @@ TEST(EulerAngles, TurningThroughPiDoesNotWrap)
         EXPECT_EQ(jumps, 0) << order.name;
     }
 }
+
+// ============================================================================
+// Extraction nearest to reference angles
+// ============================================================================
+
+namespace {
+
+void extract_near(
+    const Euler_order& order,
+    const glm::dquat&  q,
+    const glm::dvec3&  reference,
+    glm::dvec3&        result
+)
+{
+    erhe::math::quaternion_to_euler_angles_near(
+        q, order.axis_1, order.axis_2, order.axis_3,
+        reference.x, reference.y, reference.z,
+        result.x, result.y, result.z
+    );
+}
+
+void expect_in_double_cover_range(const Euler_order& order, const glm::dvec3& angles)
+{
+    for (int a = 0; a < 3; ++a) {
+        EXPECT_GT(angles[a], -2.0 * pi_d) << order.name;
+        EXPECT_LE(angles[a],  2.0 * pi_d) << order.name;
+    }
+}
+
+} // anonymous namespace
+
+TEST(EulerAnglesNear, ReferenceThatGivesQComesBackUnchanged)
+{
+    // Any angles in (-2 pi, 2 pi], two or three of them past +-pi and the
+    // middle one outside its canonical range included.
+    std::mt19937 rng{11u};
+    std::uniform_real_distribution<double> angle{-1.99 * pi_d, 1.99 * pi_d};
+    for (const Euler_order& order : all_orders()) {
+        for (int i = 0; i < 1000; ++i) {
+            const glm::dvec3 reference{angle(rng), angle(rng), angle(rng)};
+            const glm::dquat q = order.quat_double(reference.x, reference.y, reference.z);
+            glm::dvec3 result{};
+            extract_near(order, q, reference, result);
+            EXPECT_NEAR(result.x, reference.x, 1e-9) << order.name;
+            EXPECT_NEAR(result.y, reference.y, 1e-9) << order.name;
+            EXPECT_NEAR(result.z, reference.z, 1e-9) << order.name;
+        }
+    }
+}
+
+TEST(EulerAnglesNear, TwoOuterAnglesPastPiStay)
+{
+    // The editor case: Z = 250 deg, X = 200 deg (ZYX). The canonical
+    // extraction folds both back to (-110, 0, -160) - the same quaternion.
+    const Euler_order& zyx = all_orders()[10];
+    ASSERT_EQ(std::string{zyx.name}, "ZYX");
+    const glm::dvec3 reference{glm::radians(250.0), 0.0, glm::radians(200.0)};
+    const glm::dquat q = zyx.quat_double(reference.x, reference.y, reference.z);
+    glm::dvec3 result{};
+    extract_near(zyx, q, reference, result);
+    EXPECT_NEAR(glm::degrees(result.x), 250.0, 1e-9);
+    EXPECT_NEAR(glm::degrees(result.y),   0.0, 1e-9);
+    EXPECT_NEAR(glm::degrees(result.z), 200.0, 1e-9);
+}
+
+TEST(EulerAnglesNear, GimbalLockKeepsReferenceThirdAngle)
+{
+    for (const Euler_order& order : all_orders()) {
+        const std::array<double, 2> locked_middles = order.is_proper()
+            ? std::array<double, 2>{0.0, pi_d}
+            : std::array<double, 2>{-0.5 * pi_d, 0.5 * pi_d};
+        for (const double t2 : locked_middles) {
+            for (const double t1 : {0.3, -2.0, 1.2 * pi_d}) {
+                for (const double t3 : {0.5, -1.1, 1.4 * pi_d}) {
+                    const glm::dvec3 reference{t1, t2, t3};
+                    const glm::dquat q = order.quat_double(t1, t2, t3);
+                    glm::dvec3 result{};
+                    extract_near(order, q, reference, result);
+                    EXPECT_NEAR(result.x, t1, 1e-9) << order.name << " t2 = " << t2;
+                    EXPECT_NEAR(result.y, t2, 1e-9) << order.name << " t2 = " << t2;
+                    EXPECT_NEAR(result.z, t3, 1e-9) << order.name << " t2 = " << t2;
+                }
+            }
+        }
+    }
+}
+
+TEST(EulerAnglesNear, AnyReferenceGivesQInRange)
+{
+    std::mt19937 rng{13u};
+    std::uniform_real_distribution<double> angle{-3.0 * pi_d, 3.0 * pi_d};
+    for (const Euler_order& order : all_orders()) {
+        for (int i = 0; i < 1000; ++i) {
+            const glm::dquat q = random_unit_quaternion<double>(rng);
+            const glm::dvec3 reference{angle(rng), angle(rng), angle(rng)};
+            glm::dvec3 result{};
+            extract_near(order, q, reference, result);
+            EXPECT_LT(max_abs_diff(order.quat_double(result.x, result.y, result.z), q), 1e-12) << order.name;
+            expect_in_double_cover_range(order, result);
+        }
+    }
+}
+
+TEST(EulerAnglesNear, FollowsAContinuousRotation)
+{
+    // A rotation changing in small steps, each extraction taking the previous
+    // result as its reference: the angles move in small steps too, except for
+    // a 4 pi jump when one crosses +-2 pi.
+    for (const Euler_order& order : all_orders()) {
+        const double t2 = order.is_proper() ? 0.6 : 0.4;
+        glm::dvec3 previous{-1.9 * pi_d, t2, 1.4 * pi_d};
+        const int steps = 720;
+        for (int i = 0; i <= steps; ++i) {
+            const double t1 = -1.9 * pi_d + (3.8 * pi_d * i) / steps;
+            const double t3 =  1.4 * pi_d - (1.0 * pi_d * i) / steps;
+            const glm::dquat q = order.quat_double(t1, t2, t3);
+            glm::dvec3 result{};
+            extract_near(order, q, previous, result);
+            EXPECT_NEAR(result.x, t1, 1e-9) << order.name << " step " << i;
+            EXPECT_NEAR(result.y, t2, 1e-9) << order.name << " step " << i;
+            EXPECT_NEAR(result.z, t3, 1e-9) << order.name << " step " << i;
+            previous = result;
+        }
+    }
+}
