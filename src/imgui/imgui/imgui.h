@@ -1923,6 +1923,10 @@ enum ImGuiCol_
     ImGuiCol_NavWindowingHighlight, // Highlight window when using Ctrl+Tab
     ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the Ctrl+Tab window list, when active
     ImGuiCol_ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
+    ImGuiCol_ColorMarker0,          // Color markers for DragScalarN(), ColorEdit3(), ColorEdit4() and ColorPicker*() when ImGuiColorEditFlags_Marker is used.
+    ImGuiCol_ColorMarker1,          // Color markers for DragScalarN(), ColorEdit3(), ColorEdit4() and ColorPicker*() when ImGuiColorEditFlags_Marker is used.
+    ImGuiCol_ColorMarker2,          // Color markers for DragScalarN(), ColorEdit3(), ColorEdit4() and ColorPicker*() when ImGuiColorEditFlags_Marker is used.
+    ImGuiCol_ColorMarker3,          // Color markers for DragScalarN(), ColorEdit3(), ColorEdit4() and ColorPicker*() when ImGuiColorEditFlags_Marker is used.
     ImGuiCol_COUNT,
 
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
@@ -2077,6 +2081,10 @@ enum ImGuiSliderFlags_
     ImGuiSliderFlags_NoSpeedTweaks      = 1 << 11,      // Disable keyboard modifiers altering tweak speed. Useful if you want to alter tweak speed yourself based on your own logic.
     ImGuiSliderFlags_ColorMarkers       = 1 << 12,      // DragScalarN(), SliderScalarN(): Draw R/G/B/A color markers on each component.
     ImGuiSliderFlags_ValueLadder        = 1 << 13,      // DragXXX() only: hold middle mouse button over the widget (or activate it with keyboard/gamepad nav) to open a value ladder: drag vertically/Up/Down to select step magnitude, horizontally/Left/Right to add/subtract steps. (Shared behavior flag: io.ConfigDragValueLadder)
+    ImGuiSliderFlags_LockComponent0     = 1 << 13,      // DragXXX() only: prevent editing of the first component.
+    ImGuiSliderFlags_LockComponent1     = 1 << 14,      // DragXXX() only: prevent editing of the second component.
+    ImGuiSliderFlags_LockComponent2     = 1 << 15,      // DragXXX() only: prevent editing of the third component.
+    ImGuiSliderFlags_LockComponent3     = 1 << 16,      // DragXXX() only: prevent editing of the fourth component.
     ImGuiSliderFlags_AlwaysClamp        = ImGuiSliderFlags_ClampOnInput | ImGuiSliderFlags_ClampZeroRange,
     //ImGuiSliderFlags_LiveEditOnInput  = 1 << 13,      // Shortcut to enable LiveEdit for this field.
     //ImGuiSliderFlags_NoLiveEditOnInput= 1 << 14,      // Shortcut to disable LiveEdit for this field.

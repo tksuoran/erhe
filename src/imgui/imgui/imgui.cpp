@@ -3947,6 +3947,10 @@ const char* ImGui::GetStyleColorName(ImGuiCol idx)
     case ImGuiCol_NavWindowingHighlight: return "NavWindowingHighlight";
     case ImGuiCol_NavWindowingDimBg: return "NavWindowingDimBg";
     case ImGuiCol_ModalWindowDimBg: return "ModalWindowDimBg";
+    case ImGuiCol_ColorMarker0: return "ImGuiCol_ColorMarker0";
+    case ImGuiCol_ColorMarker1: return "ImGuiCol_ColorMarker1";
+    case ImGuiCol_ColorMarker2: return "ImGuiCol_ColorMarker2";
+    case ImGuiCol_ColorMarker3: return "ImGuiCol_ColorMarker3";
     }
     IM_ASSERT(0);
     return "Unknown";

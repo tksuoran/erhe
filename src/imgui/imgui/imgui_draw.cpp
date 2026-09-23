@@ -393,6 +393,10 @@ void ImGui::StyleColorsLight(ImGuiStyle* dst)
     colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(0.70f, 0.70f, 0.70f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.20f, 0.20f, 0.20f, 0.20f);
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
+    colors[ImGuiCol_ColorMarker0]           = ImVec4(1.00f, 0.08f, 0.08f, 1.00f);
+    colors[ImGuiCol_ColorMarker1]           = ImVec4(0.08f, 1.00f, 0.08f, 1.00f);
+    colors[ImGuiCol_ColorMarker2]           = ImVec4(0.08f, 0.08f, 1.00f, 1.00f);
+    colors[ImGuiCol_ColorMarker3]           = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
 }
 
 //-----------------------------------------------------------------------------

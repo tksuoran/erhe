@@ -3092,14 +3092,23 @@ bool ImGui::DragScalarN(const char* label, ImGuiDataType data_type, void* p_data
     PushID(label);
     PushMultiItemsWidths(components, CalcItemWidth());
     size_t type_size = GDataTypeInfo[data_type].Size;
+    const ImGuiSliderFlags component_lock_flags[4] = { ImGuiSliderFlags_LockComponent0, ImGuiSliderFlags_LockComponent1, ImGuiSliderFlags_LockComponent2, ImGuiSliderFlags_LockComponent3 };
+
     for (int i = 0; i < components; i++)
     {
         PushID(i);
         if (i > 0)
             SameLine(0, g.Style.ItemInnerSpacing.x);
-        if (flags & ImGuiSliderFlags_ColorMarkers)
-            SetNextItemColorMarker(GDefaultRgbaColorMarkers[i]);
+        if (flags & ImGuiSliderFlags_ColorMarkers) {
+            ImGuiStyle& style = GetStyle();
+            SetNextItemColorMarker(ColorConvertFloat4ToU32(style.Colors[ImGuiCol_ColorMarker0 + i]));
+        }
+        const bool disabled_component = (flags & component_lock_flags[i]) != 0;
+        if (disabled_component)
+            BeginDisabled();
         value_changed |= DragScalar("", data_type, p_data, v_speed, p_min, p_max, format, flags);
+        if (disabled_component)
+            EndDisabled();
         PopID();
         PopItemWidth();
         p_data = (void*)((char*)p_data + type_size);
