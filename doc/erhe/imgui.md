@@ -131,7 +131,9 @@ what Dear ImGui submitted in one frame, which is what the editor's
   item submitted last; `set_recorded_item_labels(first_index, label)` names a
   run of items bracketed with `get_recorded_item_count()`, giving a single
   item the label and several the `.x` / `.y` / `.z` / `.w` / `.<position>`
-  component suffixes. `is_item_recording()` guards building the text. Item
+  component suffixes. It names only the items of the window current when it
+  is called (the row's window), so a popup the widget opened - a combo's
+  list - keeps its entries' own labels. `is_item_recording()` guards building the text. Item
   tree rows and property rows use these.
 - **Threading.** Every ImGui context erhe creates is driven from the main
   (tick) thread - `Imgui_windows::begin_frame` / `draw_imgui_windows` /

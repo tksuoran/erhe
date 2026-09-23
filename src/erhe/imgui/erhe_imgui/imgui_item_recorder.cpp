@@ -171,13 +171,13 @@ auto Imgui_item_recorder::get_record_count() const -> std::size_t
     return m_records.size();
 }
 
-void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const std::string_view label)
+void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const ImGuiID window_id, const std::string_view label)
 {
     static constexpr std::string_view c_component_suffixes[4] = {".x", ".y", ".z", ".w"};
 
     std::size_t named_count = 0;
     for (std::size_t i = first_index; i < m_records.size(); ++i) {
-        if (m_records[i].id != 0) {
+        if ((m_records[i].id != 0) && (m_records[i].window_id == window_id)) {
             ++named_count;
         }
     }
@@ -188,7 +188,7 @@ void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const s
     std::size_t component = 0;
     for (std::size_t i = first_index; i < m_records.size(); ++i) {
         Item_record& record = m_records[i];
-        if (record.id == 0) {
+        if ((record.id == 0) || (record.window_id != window_id)) {
             continue;
         }
         record.label_offset = static_cast<uint32_t>(m_labels.size());
@@ -249,7 +249,10 @@ void set_recorded_item_labels(const std::size_t first_index, const std::string_v
     if (recorder == nullptr) {
         return;
     }
-    recorder->set_labels_from(first_index, label);
+    // Called after the widget returned, so the current window is the one the
+    // widget itself was submitted to.
+    const ImGuiWindow* const window = ImGui::GetCurrentWindow();
+    recorder->set_labels_from(first_index, (window != nullptr) ? window->ID : 0, label);
 }
 
 auto Imgui_item_recorder::find_label(const ImGuiID id) const -> const char*

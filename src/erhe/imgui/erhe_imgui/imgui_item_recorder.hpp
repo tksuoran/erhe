@@ -98,8 +98,10 @@ public:
     // '<label>.z', '<label>.w' and '<label>.<position>' past the fourth, so
     // one component of a vector row is addressable on its own. Items Dear
     // ImGui submits with id 0 - a group's bounding box, a text run - are left
-    // unnamed because nothing can click them.
-    void set_labels_from(std::size_t first_index, std::string_view label);
+    // unnamed because nothing can click them. Only items of window_id are
+    // named: a popup the widget opened (a combo's list, a tooltip) records
+    // its items in its own window, and they keep their own labels.
+    void set_labels_from(std::size_t first_index, ImGuiID window_id, std::string_view label);
 
     [[nodiscard]] auto find_label(ImGuiID id) const -> const char*;
 
