@@ -84,7 +84,7 @@ public:
 
     void set_active(bool active);
 
-    void update_euler_angles_from_matrix               ();
+    void update_euler_angles_from_quaternion           ();
     void update_axis_angle_from_quaternion             ();
     void update_matrix_and_quaternion_from_euler_angles();
     void update_from_axis_angle                        ();

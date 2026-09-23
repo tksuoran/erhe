@@ -3,11 +3,10 @@
 #include "windows/property_editor.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_math/euler_angles.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_verify/verify.hpp"
-
-#include <glm/gtx/euler_angles.hpp>
 
 #include <imgui/imgui.h>
 
@@ -50,7 +49,7 @@ void Rotation_inspector::set_matrix(const mat3& m)
 {
     m_matrix     = mat4{m};
     m_quaternion = quat_cast(m);
-    update_euler_angles_from_matrix();
+    update_euler_angles_from_quaternion();
     update_axis_angle_from_quaternion();
 }
 
@@ -58,7 +57,7 @@ void Rotation_inspector::set_quaternion(const quat& q)
 {
     m_quaternion = q;
     m_matrix     = mat4{mat3_cast(q)};
-    update_euler_angles_from_matrix();
+    update_euler_angles_from_quaternion();
     update_axis_angle_from_quaternion();
 }
 
@@ -68,7 +67,7 @@ void Rotation_inspector::set_axis_angle(const glm::vec3 axis, const float angle)
     m_angle      = angle;
     m_quaternion = glm::angleAxis(angle, axis);
     m_matrix     = mat4{mat3_cast(m_quaternion)};
-    update_euler_angles_from_matrix();
+    update_euler_angles_from_quaternion();
 }
 
 void Rotation_inspector::set_active(const bool active)
@@ -163,23 +162,20 @@ void Rotation_inspector::update_axis_angle_from_quaternion()
     m_angle = glm::angle(m_quaternion);
 }
 
-void Rotation_inspector::update_euler_angles_from_matrix()
+void Rotation_inspector::update_euler_angles_from_quaternion()
 {
-    switch (m_euler_angle_order) {
-        case Euler_angle_order::e_xyx: glm::extractEulerAngleXYX(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xyz: glm::extractEulerAngleXYZ(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xzx: glm::extractEulerAngleXZX(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xzy: glm::extractEulerAngleXZY(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yxy: glm::extractEulerAngleYXY(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yxz: glm::extractEulerAngleYXZ(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yzx: glm::extractEulerAngleYZX(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yzy: glm::extractEulerAngleYZY(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zxy: glm::extractEulerAngleZXY(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zxz: glm::extractEulerAngleZXZ(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zyx: glm::extractEulerAngleZYX(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zyz: glm::extractEulerAngleZYZ(m_matrix, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        default: break;
-    }
+    // From the quaternion, not the matrix: the matrix cannot tell q from -q,
+    // the quaternion extraction gives q and -q different angles, so editing
+    // the angles and reading them back keeps the quaternion's sign.
+    erhe::math::quaternion_to_euler_angles(
+        m_quaternion,
+        get_euler_component(m_euler_angle_order, 0),
+        get_euler_component(m_euler_angle_order, 1),
+        get_euler_component(m_euler_angle_order, 2),
+        m_euler_angles[0],
+        m_euler_angles[1],
+        m_euler_angles[2]
+    );
     if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
     if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
     if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
@@ -187,23 +183,15 @@ void Rotation_inspector::update_euler_angles_from_matrix()
 
 void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 {
-    switch (m_euler_angle_order) {
-        case Euler_angle_order::e_xyx: m_matrix = glm::eulerAngleXYX(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xyz: m_matrix = glm::eulerAngleXYZ(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xzx: m_matrix = glm::eulerAngleXZX(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_xzy: m_matrix = glm::eulerAngleXZY(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yxy: m_matrix = glm::eulerAngleYXY(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yxz: m_matrix = glm::eulerAngleYXZ(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yzx: m_matrix = glm::eulerAngleYZX(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_yzy: m_matrix = glm::eulerAngleYZY(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zxy: m_matrix = glm::eulerAngleZXY(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zxz: m_matrix = glm::eulerAngleZXZ(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zyx: m_matrix = glm::eulerAngleZYX(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        case Euler_angle_order::e_zyz: m_matrix = glm::eulerAngleZYZ(m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]); break;
-        default: break;
-    }
-    m_quaternion = quat_cast(m_matrix);
-    //m_quaternion = glm::normalize(m_quaternion);
+    m_quaternion = erhe::math::euler_angles_to_quaternion(
+        get_euler_component(m_euler_angle_order, 0),
+        get_euler_component(m_euler_angle_order, 1),
+        get_euler_component(m_euler_angle_order, 2),
+        m_euler_angles[0],
+        m_euler_angles[1],
+        m_euler_angles[2]
+    );
+    m_matrix = mat4{mat3_cast(m_quaternion)};
 }
 
 void Rotation_inspector::update_from_axis_angle()
@@ -213,8 +201,8 @@ void Rotation_inspector::update_from_axis_angle()
 
 void Rotation_inspector::update_from_quaternion()
 {
-    m_matrix= mat4{mat3_cast(normalize(m_quaternion))};
-    update_euler_angles_from_matrix();
+    m_matrix = mat4{mat3_cast(normalize(m_quaternion))};
+    update_euler_angles_from_quaternion();
 }
 
 void Rotation_inspector::imgui(

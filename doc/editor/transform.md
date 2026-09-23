@@ -28,7 +28,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 - **`Transform_tool_settings`** -- Settings for gizmo behavior (snap, local/world space).
 
-- **`Rotation_inspector`** -- Debug window showing rotation decomposition.
+- **`Rotation_inspector`** -- The Transform window's Rotation group: the rotation shown and edited as a quaternion, a matrix, axis-angle, or Euler angles in any of the 12 axis orders. The Euler angles are read from and written to the quaternion directly (`erhe_math/euler_angles.hpp`, see [../erhe/math.md](../erhe/math.md)), so they cover the quaternion's double cover: q and -q show different angles, and editing an angle keeps the node's quaternion in the hemisphere the angles name. `scripts/rotation_inspector_smoke_test.py` checks this against a running editor by typing into the Euler fields.
 
 ## Public API / Integration Points
 
