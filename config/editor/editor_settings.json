@@ -158,7 +158,7 @@
         "enabled": true,
         "auto_rotate": true
     },
-    "developer": { "enable": true },
+    "developer": { "enable": false },
     "grid": {
         "snap_enabled": true,
         "visible": true,
@@ -373,7 +373,7 @@
         "translate_cone_radius": 1.44,
         "rotate_ring_radius": 22,
         "view_ring_radius_factor": 1.23,
-        "arrow_ring_gap": 12,
+        "arrow_ring_gap": 8,
         "box_scale_cone_length": 5,
         "box_scale_cone_radius": 5,
         "arrow_shaft_pick_radius": 3,
