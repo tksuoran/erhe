@@ -40,6 +40,8 @@ public:
     glm::vec4 hit_color    {1.0f, 1.0f, 1.0f, 1.0f};
     float     hit_thickness{2.0f};
     float     hit_size     {0.5f};
+    bool      draw_ray     {true}; // the ray line from the hit back toward the origin
+    bool      draw_hit     {true}; // the tangent / bitangent / normal cross at the hit
 };
 
 [[nodiscard]] auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*;

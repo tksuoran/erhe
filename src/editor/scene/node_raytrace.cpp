@@ -155,14 +155,16 @@ void draw_ray_hit(
     const glm::vec4 marker_full   = style.hit_color;
     const glm::vec4 marker_clear{marker_full.x, marker_full.y, marker_full.z, 0.0f};
     const glm::vec3 arms[4] = { T, -T, B, -B };
-    for (const glm::vec3& arm : arms) {
-        const glm::vec3 mid = marker_center + 0.5f * style.hit_size * arm;
-        const glm::vec3 tip = marker_center + style.hit_size * arm;
-        line_renderer.add_line(marker_full, marker_width, marker_center, marker_full,  marker_width, mid);
-        line_renderer.add_line(marker_full, marker_width, mid,           marker_clear, marker_width, tip);
+    if (style.draw_hit) {
+        for (const glm::vec3& arm : arms) {
+            const glm::vec3 mid = marker_center + 0.5f * style.hit_size * arm;
+            const glm::vec3 tip = marker_center + style.hit_size * arm;
+            line_renderer.add_line(marker_full, marker_width, marker_center, marker_full,  marker_width, mid);
+            line_renderer.add_line(marker_full, marker_width, mid,           marker_clear, marker_width, tip);
+        }
     }
     // Normal tick: same two-segment fade as the tangent / bitangent arms.
-    {
+    if (style.draw_hit) {
         const glm::vec3 mid = position + 0.5f * style.hit_size * N;
         const glm::vec3 tip = position + style.hit_size * N;
         line_renderer.add_line(marker_full, marker_width, position, marker_full,  marker_width, mid);
@@ -174,6 +176,9 @@ void draw_ray_hit(
     // hit, then dimming to 0.2 - matching the constant-0.2 continuation that
     // covers any remaining span to the origin so the ray's source stays
     // readable.
+    if (!style.draw_ray) {
+        return;
+    }
     erhe::renderer::Primitive_renderer& ray_renderer = (ray_line_renderer != nullptr) ? *ray_line_renderer : line_renderer;
     const float     ray_width   = 0.5f * style.ray_thickness;
     const float     tail_length = std::min(style.ray_length, ray.t_far);

@@ -383,21 +383,6 @@ void Transform_tool::window_imgui()
     auto& settings = shared.settings;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
 
-    const ImVec2 mode_button_size{ImGui::GetContentRegionAvail().x / 4.0f, 0.0f};
-    const auto reference_mode_button = [&](const char* label, const Transform_reference_mode mode) {
-        if (
-            erhe::imgui::make_button(
-                label,
-                (settings.reference_mode == mode) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
-                mode_button_size
-            )
-        ) {
-            if (settings.reference_mode != mode) {
-                settings.reference_mode = mode;
-                on_reference_settings_changed();
-            }
-        }
-    };
     // The note is produced by the node-selection path; in component mode the
     // gizmo is driven by the mesh component selection and the note is stale.
     if (!shared.component_mode && !m_transform_target_note.empty()) {
@@ -406,13 +391,28 @@ void Transform_tool::window_imgui()
         ImGui::PopStyleColor();
     }
 
-    reference_mode_button("Global",    Transform_reference_mode::global);
-    ImGui::SameLine();
-    reference_mode_button("Local",     Transform_reference_mode::local);
-    ImGui::SameLine();
-    reference_mode_button("Reference", Transform_reference_mode::reference);
-    ImGui::SameLine();
-    reference_mode_button("Selection", Transform_reference_mode::selection);
+    {
+        Property_editor& p = m_property_editor;
+        p.reset();
+        p.add_entry("Coordinate System", [this, &settings]() {
+            int mode = static_cast<int>(settings.reference_mode);
+            bool changed = false;
+            for (int i = 0, end = IM_ARRAYSIZE(c_transform_reference_mode_strings); i < end; ++i) {
+                if (i > 0) {
+                    ImGui::SameLine();
+                }
+                changed = ImGui::RadioButton(c_transform_reference_mode_strings[i], &mode, i) || changed;
+            }
+            if (changed) {
+                const Transform_reference_mode new_mode = static_cast<Transform_reference_mode>(mode);
+                if (settings.reference_mode != new_mode) {
+                    settings.reference_mode = new_mode;
+                    on_reference_settings_changed();
+                }
+            }
+        });
+        p.show_entries();
+    }
 
     if (settings.reference_mode == Transform_reference_mode::reference) {
         // Build the picker candidate list (reused scratch, capacity retained).
@@ -446,35 +446,30 @@ void Transform_tool::window_imgui()
         ImGui::SliderFloat("Edge normal blend", &settings.edge_normal_blend, 0.0f, 1.0f);
     }
 
-    if (erhe::imgui::make_button("Create node from frame", erhe::imgui::Item_mode::normal, button_size)) {
-        create_node_from_anchor();
+    if (settings.reference_mode == Transform_reference_mode::selection) {
+        if (erhe::imgui::make_button("Create node from frame", erhe::imgui::Item_mode::normal, button_size)) {
+            create_node_from_anchor();
+        }
     }
 
-    ImGui::TextUnformatted("Scale gizmo");
-    if (
-        erhe::imgui::make_button(
-            "Basic",
-            (settings.scale_gizmo_mode == Scale_gizmo_mode::basic) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
-            button_size
-        )
-    ) {
-        if (settings.scale_gizmo_mode != Scale_gizmo_mode::basic) {
-            settings.scale_gizmo_mode = Scale_gizmo_mode::basic;
-            update_visibility();
-        }
-    }
-    ImGui::SameLine();
-    if (
-        erhe::imgui::make_button(
-            "Bounding box",
-            (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
-            button_size
-        )
-    ) {
-        if (settings.scale_gizmo_mode != Scale_gizmo_mode::bounding_box) {
-            settings.scale_gizmo_mode = Scale_gizmo_mode::bounding_box;
-            update_visibility();
-        }
+    {
+        Property_editor& p = m_property_editor;
+        p.reset();
+        p.add_entry("Scale Gizmo", [this, &settings]() {
+            int  mode    = static_cast<int>(settings.scale_gizmo_mode);
+            bool changed = false;
+            for (int i = 0, end = IM_ARRAYSIZE(c_scale_gizmo_mode_strings); i < end; ++i) {
+                if (i > 0) {
+                    ImGui::SameLine();
+                }
+                changed = ImGui::RadioButton(c_scale_gizmo_mode_strings[i], &mode, i) || changed;
+            }
+            if (changed && (static_cast<Scale_gizmo_mode>(mode) != settings.scale_gizmo_mode)) {
+                settings.scale_gizmo_mode = static_cast<Scale_gizmo_mode>(mode);
+                update_visibility();
+            }
+        });
+        p.show_entries();
     }
 
     // Persistent gizmo preferences (Negative Translate Handles, Hover
@@ -1568,6 +1563,25 @@ auto Transform_tool::get_ray_sphere_plane_crossing_position_in_world() const -> 
 
 #pragma region Render
 
+auto Transform_tool::get_cast_ray_style() const -> Ray_hit_style
+{
+    // Translate Drag Cast Rays settings (Settings window). draw_ray_hit()
+    // halves the thicknesses; a negative thickness is a fixed screen-space
+    // pixel width, a positive one scales with distance.
+    const Transform_tool_config& config = m_context.editor_settings->transform_tool;
+    const float width_sign = config.translate_cast_rays_screen_space_widths ? -1.0f : 1.0f;
+    return Ray_hit_style{
+        .ray_color     = config.translate_cast_rays_ray_color,
+        .ray_thickness = width_sign * 2.0f * config.translate_cast_rays_ray_width,
+        .ray_length    = 0.5f,
+        .hit_color     = config.translate_cast_rays_hit_color,
+        .hit_thickness = width_sign * 2.0f * config.translate_cast_rays_hit_width,
+        .hit_size      = 0.10f,
+        .draw_ray      = config.translate_cast_rays_ray_lines,
+        .draw_hit      = config.translate_cast_rays_hit_markers
+    };
+}
+
 void Transform_tool::render_rays(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1631,15 +1645,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
 
         erhe::raytrace::Hit hit;
         if (project_ray(&raytrace_scene, mesh.get(), ray, hit)) {
-            Ray_hit_style ray_hit_style {
-                .ray_color     = vec4{1.0f, 0.0f, 1.0f, 1.0f},
-                .ray_thickness = 8.0f,
-                .ray_length    = 0.5f,
-                .hit_color     = vec4{0.8f, 0.2f, 0.8f, 0.75f},
-                .hit_thickness = 8.0f,
-                .hit_size      = 0.10f
-            };
-
+            const Ray_hit_style ray_hit_style = get_cast_ray_style();
             draw_ray_hit(line_renderer, ray, hit, ray_hit_style, &ray_line_renderer);
         }
     }
@@ -1698,14 +1704,7 @@ void Transform_tool::render_initial_position_ray()
     };
     erhe::raytrace::Hit hit;
     if (project_ray(&scene_root->get_raytrace_scene(), mesh.get(), ray, hit)) {
-        const Ray_hit_style ray_hit_style{
-            .ray_color     = vec4{1.0f, 0.0f, 1.0f, 1.0f},
-            .ray_thickness = 8.0f,
-            .ray_length    = 0.5f,
-            .hit_color     = vec4{0.8f, 0.2f, 0.8f, 0.75f},
-            .hit_thickness = 8.0f,
-            .hit_size      = 0.10f
-        };
+        const Ray_hit_style ray_hit_style = get_cast_ray_style();
         draw_ray_hit(line_renderer, ray, hit, ray_hit_style, &ray_line_renderer);
     }
 }
@@ -1727,15 +1726,20 @@ void Transform_tool::tool_render(const Render_context& context)
     const bool translate_drag_active =
         (active_type == Handle_type::e_handle_type_translate_axis) ||
         (active_type == Handle_type::e_handle_type_translate_plane);
-    if (m_context.editor_settings->transform_tool.translate_cast_rays && translate_drag_active) {
-        for (auto& entry : shared.entries) {
-            auto& node = entry.node;
-            if (!node) {
-                continue;
+    const Transform_tool_config& cast_rays_config = m_context.editor_settings->transform_tool;
+    if (cast_rays_config.translate_cast_rays && translate_drag_active) {
+        if (cast_rays_config.translate_cast_rays_node_rays) {
+            for (auto& entry : shared.entries) {
+                auto& node = entry.node;
+                if (!node) {
+                    continue;
+                }
+                render_rays(*node.get());
             }
-            render_rays(*node.get());
         }
-        render_initial_position_ray();
+        if (cast_rays_config.translate_cast_rays_start_ray) {
+            render_initial_position_ray();
+        }
     }
 
     // All gizmo handles are drawn with the debug primitive renderer
@@ -2874,7 +2878,11 @@ auto Transform_tool::get_rotate_ring_frames(const glm::mat3& basis) const -> Rot
     // a single node's rotation, relative to its parent in Local mode and to
     // world otherwise (the same frames Edit_state gives the inspector).
     const bool single_node = !shared.component_mode && (shared.entries.size() == 1);
-    if (!single_node || (m_rotation.get_representation() != Rotation_inspector::Representation::e_euler_angles)) {
+    if (
+        m_rotation.is_orthogonal_gizmo() ||
+        !single_node ||
+        (m_rotation.get_representation() != Rotation_inspector::Representation::e_euler_angles)
+    ) {
         return result;
     }
     const std::shared_ptr<erhe::scene::Node>& node = shared.entries.front().node;

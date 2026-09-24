@@ -248,12 +248,23 @@ void Rotation_inspector::imgui(
     }
     
     p.add_entry("Mode", [this]() {
-        erhe::imgui::make_combo(
-            "##",
-            m_representation,
-            Rotation_inspector::c_representation_strings,
-            IM_ARRAYSIZE(Rotation_inspector::c_representation_strings)
-        );
+        // Matrix is not offered.
+        int  mode  = static_cast<int>(m_representation);
+        bool first = true;
+        for (int i = 0, end = IM_ARRAYSIZE(Rotation_inspector::c_representation_strings); i < end; ++i) {
+            if (static_cast<Representation>(i) == Representation::e_quaternion) {
+                continue;
+            }
+            if (static_cast<Representation>(i) == Representation::e_matrix) {
+                continue;
+            }
+            if (!first) {
+                ImGui::SameLine();
+            }
+            first = false;
+            ImGui::RadioButton(Rotation_inspector::c_representation_strings[i], &mode, i);
+        }
+        m_representation = static_cast<Representation>(mode);
     });
 
     if (m_representation == Representation::e_euler_angles) {
@@ -262,8 +273,15 @@ void Rotation_inspector::imgui(
                 "##",
                 m_euler_angle_order,
                 Rotation_inspector::c_euler_strings,
-                IM_ARRAYSIZE(Rotation_inspector::c_euler_strings)
+                IM_ARRAYSIZE(Rotation_inspector::c_euler_strings),
+                IM_ARRAYSIZE(Rotation_inspector::c_euler_strings) // popup shows every order, no scrolling
             );
+        });
+        // Decouples the viewport rings from the angles shown here: checked,
+        // the rings stay orthogonal instead of forming the Euler gimbal. The
+        // rings are rebuilt from this flag every frame they render.
+        p.add_entry("Orthogonal Gizmo", [this]() {
+            ImGui::Checkbox("##", &m_orthogonal_gizmo);
         });
     }
 
@@ -293,35 +311,14 @@ void Rotation_inspector::imgui(
                 "Quaternion",
                 [this, &quaternion_state, matches_gizmo]() {
                     glm::vec4 q = glm::vec4{m_quaternion.w, m_quaternion.x, m_quaternion.y, m_quaternion.z};
-                    ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat;
-                    erhe::imgui::Value_edit_state q_edit_state = erhe::imgui::make_drag_vec4(q, {}, {}, 0.02f, flags, "##Quaternion", "%.4f");
+                    const char* format_strings[4] = {"W:%.4f", "X:%.4f", "Y:%.4f", "Z:%.4f"};
+                    erhe::imgui::Value_edit_state q_edit_state = erhe::imgui::make_input_vec4(q, "##Quaternion", format_strings);
                     if (q_edit_state.value_changed) {
                         m_quaternion = glm::quat(q.w, q.x, q.y, q.z);
                     }
                     quaternion_state.combine(q_edit_state);
                 }
             );
-
-            //p.add_entry("W", get_label_color(3, true, matches_gizmo), get_label_color(3, false, matches_gizmo), [this, &quaternion_state]() {
-            //    quaternion_state.combine(
-            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qw")
-            //    );
-            //});
-            //p.add_entry("X", get_label_color(0, true, matches_gizmo), get_label_color(0, false, matches_gizmo), [this, &quaternion_state]() {
-            //    quaternion_state.combine(
-            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qx")
-            //    );
-            //});
-            //p.add_entry("Y", get_label_color(1, true, matches_gizmo), get_label_color(1, false, matches_gizmo), [this, &quaternion_state]() {
-            //    quaternion_state.combine(
-            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qy")
-            //    );
-            //});
-            //p.add_entry("Z", get_label_color(2, true, matches_gizmo), get_label_color(2, false, matches_gizmo), [this, &quaternion_state]() {
-            //    quaternion_state.combine(
-            //        erhe::imgui::make_scalar_button(&m_quaternion.w, -1.0f, 1.0f, "##R.qz")
-            //    );
-            //});
             break;
         }
 
@@ -369,14 +366,13 @@ void Rotation_inspector::imgui(
             p.add_entry("Angle", get_label_color(3, true, false), get_label_color(3, false, false), [this, &axis_angle_state]() {
                 axis_angle_state.combine(erhe::imgui::make_angle_button(m_angle, -10.0f * glm::pi<float>(), 10.0f * glm::pi<float>(), "##R.aa"));
             });
-            p.add_entry("X", get_label_color(0, true, false), get_label_color(0, false, false), [this, &axis_angle_state]() {
-                axis_angle_state.combine(erhe::imgui::make_scalar_button(&m_axis.x, -1.0f, 1.0f, "##R.ax"));
-            });
-            p.add_entry("Y", get_label_color(1, true, false), get_label_color(1, false, false), [this, &axis_angle_state]() {
-                axis_angle_state.combine(erhe::imgui::make_scalar_button(&m_axis.y, -1.0f, 1.0f, "##R.ay"));
-            });
-            p.add_entry("Z", get_label_color(2, true, false), get_label_color(2, false, false), [this, &axis_angle_state]() {
-                axis_angle_state.combine(erhe::imgui::make_scalar_button(&m_axis.z, -1.0f, 1.0f, "##R.az"));
+            p.add_entry("Axis", [this, &axis_angle_state]() {
+                ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, false));
+                ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(1, false));
+                ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(2, false));
+                const ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_ColorMarkers;
+                axis_angle_state.combine(erhe::imgui::make_drag_vec3(m_axis, glm::vec3{-1.0f}, glm::vec3{1.0f}, 0.01f, flags, "##R.axis", "%.4f"));
+                ImGui::PopStyleColor(3);
             });
             break;
         }
@@ -408,6 +404,11 @@ auto Rotation_inspector::get_representation() const -> Representation
 auto Rotation_inspector::get_euler_order() const -> Euler_angle_order
 {
     return m_euler_angle_order;
+}
+
+auto Rotation_inspector::is_orthogonal_gizmo() const -> bool
+{
+    return m_orthogonal_gizmo;
 }
 
 auto Rotation_inspector::get_euler_axis(const std::size_t i) const -> std::size_t

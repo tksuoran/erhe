@@ -647,6 +647,100 @@ struct("Transform_tool_config",
             visible=True,
             developer=False
         ),
+        field(
+            "translate_cast_rays_node_rays",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Cast Rays: Node Rays",
+            long_desc="Translate Drag Cast Rays: cast the six world-axis rays from each dragged node.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_start_ray",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Cast Rays: Start Position Ray",
+            long_desc="Translate Drag Cast Rays: cast the ray straight down (world -Y) from the drag start position.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_ray_lines",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Cast Rays: Ray Lines",
+            long_desc="Translate Drag Cast Rays: draw each ray from its hit back toward its origin.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_hit_markers",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Cast Rays: Hit Markers",
+            long_desc="Translate Drag Cast Rays: draw the tangent / bitangent / normal cross at each hit.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_ray_color",
+            Vec4,
+            added_in=3,
+            default="1.0f, 0.0f, 1.0f, 1.0f",
+            short_desc="Cast Rays: Ray Color",
+            long_desc="Translate Drag Cast Rays: color of the ray lines (fading to 0.2 alpha toward the origin).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_hit_color",
+            Vec4,
+            added_in=3,
+            default="0.8f, 0.2f, 0.8f, 0.75f",
+            short_desc="Cast Rays: Hit Marker Color",
+            long_desc="Translate Drag Cast Rays: color of the hit markers (arms fade out toward their tips).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_ray_width",
+            Float,
+            added_in=3,
+            default="4.0f",
+            ui_min="0.0f",
+            ui_max="20.0f",
+            short_desc="Cast Rays: Ray Line Width",
+            long_desc="Translate Drag Cast Rays: line width of the ray lines; Cast Rays: Screen Space Widths selects the unit.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_hit_width",
+            Float,
+            added_in=3,
+            default="4.0f",
+            ui_min="0.0f",
+            ui_max="20.0f",
+            short_desc="Cast Rays: Hit Marker Width",
+            long_desc="Translate Drag Cast Rays: line width of the hit markers; Cast Rays: Screen Space Widths selects the unit.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cast_rays_screen_space_widths",
+            Bool,
+            added_in=3,
+            default="false",
+            short_desc="Cast Rays: Screen Space Widths",
+            long_desc="Translate Drag Cast Rays: on - the ray and hit marker widths are fixed screen-space pixels; off - they are distance-scaled widths that shrink with distance in 3D.",
+            visible=True,
+            developer=False
+        ),
         # Off-screen indicator FOV margins (XR only). The headset's rendered
         # frustum extends past the lens-visible area, so an indicator placed at
         # the frustum edge can be invisible; these inset the frustum the

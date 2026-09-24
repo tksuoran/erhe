@@ -54,6 +54,7 @@ namespace tf {
 namespace editor {
 
 class Compound_operation;
+class Ray_hit_style;
 class App_message_bus;
 struct Active_scene_changed_message;
 class  Active_item_changed_message;
@@ -254,8 +255,9 @@ public:
     // Rotate ring k (handle e_handle_rotate_x/y/z for k = 0/1/2) rotates
     // about frames[k][0] and lies in the plane of frames[k][1], frames[k][2]
     // (world space, orthonormal). Normally ring k is gizmo basis axis k. With
-    // the Rotation inspector showing Euler angles of a single node the rings
-    // form the Euler gimbal instead: ring k rotates about the k-th axis of
+    // the Rotation inspector showing Euler angles of a single node and its
+    // Orthogonal Gizmo unchecked, the rings form the Euler gimbal instead:
+    // ring k rotates about the k-th axis of
     // the Euler order in the frame left by the rotations before it, so
     // dragging ring k changes exactly Euler angle k.
     [[nodiscard]] auto get_rotate_ring_frames(const glm::mat3& basis) const -> Rotate_ring_frames;
@@ -373,6 +375,7 @@ private:
     void update_hover       (Scene_view& scene_view, glm::vec3 ray_origin, glm::vec3 ray_direction);
     void clear_hover_state  ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
+    [[nodiscard]] auto get_cast_ray_style() const -> Ray_hit_style;
     void render_rays        (erhe::scene::Node& node);
     void render_initial_position_ray();
     // Draws the constraint of the hovered handle: the plane rectangle + grid

@@ -22,18 +22,18 @@ class Rotation_inspector
 {
 public:
     enum class Representation : unsigned int {
-        e_quaternion   = 0,
-        e_matrix       = 1,
-        e_axis_angle   = 2,
-        e_euler_angles = 3,
+        e_euler_angles = 0,
+        e_axis_angle   = 1,
+        e_quaternion   = 2,
+        e_matrix       = 3,
         e_count        = 4
     };
 
     static constexpr const char* c_representation_strings[] = {
+        "Euler Angles",
+        "Axis-angle",
         "Quaternion",
         "Matrix",
-        "Axis-angle",
-        "Euler Angles"
     };
 
     enum class Euler_angle_order : unsigned int {
@@ -105,13 +105,17 @@ public:
     [[nodiscard]] auto get_euler_value   (std::size_t i) const -> float;
     [[nodiscard]] auto get_representation() const -> Representation;
     [[nodiscard]] auto get_euler_order   () const -> Euler_angle_order;
+    // True when the viewport rotate rings stay orthogonal (gizmo basis axes)
+    // even while Euler angles are shown; false lets them form the Euler
+    // gimbal (Transform_tool::get_rotate_ring_frames()).
+    [[nodiscard]] auto is_orthogonal_gizmo() const -> bool;
 
+    // 0 far from gimbal lock, rising to 1 at it, for the given middle Euler angle.
     [[nodiscard]] static auto gimbal_lock_warning(Euler_angle_order euler_angle_order, float middle_angle) -> float;
 
 private:
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;
     [[nodiscard]] auto gimbal_lock_warning() const -> float;
-    // 0 far from gimbal lock, rising to 1 at it, for the given middle Euler angle.
 
     float             m_euler_angles     [3];
     Representation    m_representation   {Representation::e_euler_angles};
@@ -122,6 +126,7 @@ private:
     float             m_angle            {0.0f};
     bool              m_matrix_dirty     {false};
     bool              m_active           {false};
+    bool              m_orthogonal_gizmo {false};
 };
 
 }
