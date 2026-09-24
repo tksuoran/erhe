@@ -70,9 +70,10 @@ public:
         "ZXY"
     };
 
-    [[nodiscard]] static auto is_proper          (Euler_angle_order euler_angle_order) -> bool;
-    [[nodiscard]] static auto is_tait_bryan      (Euler_angle_order euler_angle_order) -> bool;
-    [[nodiscard]] static auto get_euler_component(Euler_angle_order euler_angle_order, int i) -> int;
+    [[nodiscard]] static auto is_proper      (Euler_angle_order euler_angle_order) -> bool;
+    [[nodiscard]] static auto is_tait_bryan  (Euler_angle_order euler_angle_order) -> bool;
+    [[nodiscard]] static auto get_euler_axis (Euler_angle_order euler_angle_order, int i) -> int;
+    [[nodiscard]] static auto get_euler_axis2(Euler_angle_order euler_angle_order, int i) -> int;
 
     Rotation_inspector();
 

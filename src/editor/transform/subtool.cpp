@@ -161,11 +161,15 @@ auto get_drag_color(const std::size_t i, bool locked) -> ImVec4
         return ImVec4(0.33f, 0.33f, 0.33f, 1.0f);
     }
     switch (i) {
-        case 0:  return ImVec4(1.00f, 0.08f, 0.08f, 1.0f);
-        case 1:  return ImVec4(0.08f, 1.00f, 0.08f, 1.0f);
-        case 2:  return ImVec4(0.08f, 0.08f, 1.00f, 1.0f);
-        case 3:  return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
-        default: return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+        case axis_x:  return ImVec4(1.00f, 0.08f, 0.08f, 1.0f);
+        case axis_y:  return ImVec4(0.08f, 1.00f, 0.08f, 1.0f);
+        case axis_z:  return ImVec4(0.08f, 0.08f, 1.00f, 1.0f);
+        case axis_w:  return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+        case axis_x2: return ImVec4(1.00f, 0.00f, 0.18f, 1.0f);
+        case axis_y2: return ImVec4(0.18f, 1.00f, 0.00f, 1.0f);
+        case axis_z2: return ImVec4(0.00f, 0.18f, 1.00f, 1.0f);
+        case axis_w2: return ImVec4(0.45f, 0.55f, 0.65f, 1.0f);
+        default:      return ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
     }
 }
 

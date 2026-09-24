@@ -65,5 +65,16 @@ private:
 
 auto get_label_color(std::size_t i, bool text, bool matches_gizmo) -> uint32_t;
 
+static constexpr int axis_x            = 0;
+static constexpr int axis_y            = 1;
+static constexpr int axis_z            = 2;
+static constexpr int axis_w            = 3;
+static constexpr int axis_xyzw_mask    = 0x3;
+static constexpr int axis_euler_repeat = 4;
+static constexpr int axis_x2           = axis_x | axis_euler_repeat;
+static constexpr int axis_y2           = axis_y | axis_euler_repeat;
+static constexpr int axis_z2           = axis_z | axis_euler_repeat;
+static constexpr int axis_w2           = axis_w | axis_euler_repeat;
+
 auto get_drag_color(std::size_t i, bool locked) -> ImVec4;
 }

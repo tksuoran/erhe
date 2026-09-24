@@ -113,27 +113,29 @@ auto Rotation_inspector::is_tait_bryan(const Euler_angle_order euler_angle_order
     }
 }
 
-auto Rotation_inspector::get_euler_component(const Euler_angle_order euler_angle_order, const int i) -> int
+auto Rotation_inspector::get_euler_axis2(const Euler_angle_order euler_angle_order, const int i) -> int
 {
-    constexpr int x = 0;
-    constexpr int y = 1;
-    constexpr int z = 2;
-    ERHE_VERIFY(x >= 0 && x < 3);
+    ERHE_VERIFY(i >= 0 && i < 3);
     switch (euler_angle_order) {
-        case Euler_angle_order::e_xyx: return std::array<int, 3>{x, y, x}[i];
-        case Euler_angle_order::e_xyz: return std::array<int, 3>{x, y, z}[i];
-        case Euler_angle_order::e_xzx: return std::array<int, 3>{x, z, x}[i];
-        case Euler_angle_order::e_xzy: return std::array<int, 3>{x, z, y}[i];
-        case Euler_angle_order::e_yxy: return std::array<int, 3>{y, x, y}[i];
-        case Euler_angle_order::e_yxz: return std::array<int, 3>{y, x, z}[i];
-        case Euler_angle_order::e_yzx: return std::array<int, 3>{y, z, x}[i];
-        case Euler_angle_order::e_yzy: return std::array<int, 3>{y, z, y}[i];
-        case Euler_angle_order::e_zxy: return std::array<int, 3>{z, x, y}[i];
-        case Euler_angle_order::e_zxz: return std::array<int, 3>{z, x, z}[i];
-        case Euler_angle_order::e_zyx: return std::array<int, 3>{z, y, x}[i];
-        case Euler_angle_order::e_zyz: return std::array<int, 3>{z, y, z}[i];
+        case Euler_angle_order::e_xyx: return std::array<int, 3>{axis_x, axis_y, axis_x2}[i];
+        case Euler_angle_order::e_xyz: return std::array<int, 3>{axis_x, axis_y, axis_z }[i];
+        case Euler_angle_order::e_xzx: return std::array<int, 3>{axis_x, axis_z, axis_x2}[i];
+        case Euler_angle_order::e_xzy: return std::array<int, 3>{axis_x, axis_z, axis_y }[i];
+        case Euler_angle_order::e_yxy: return std::array<int, 3>{axis_y, axis_x, axis_y2}[i];
+        case Euler_angle_order::e_yxz: return std::array<int, 3>{axis_y, axis_x, axis_z }[i];
+        case Euler_angle_order::e_yzx: return std::array<int, 3>{axis_y, axis_z, axis_x }[i];
+        case Euler_angle_order::e_yzy: return std::array<int, 3>{axis_y, axis_z, axis_y2}[i];
+        case Euler_angle_order::e_zxy: return std::array<int, 3>{axis_z, axis_x, axis_y }[i];
+        case Euler_angle_order::e_zxz: return std::array<int, 3>{axis_z, axis_x, axis_z2}[i];
+        case Euler_angle_order::e_zyx: return std::array<int, 3>{axis_z, axis_y, axis_x }[i];
+        case Euler_angle_order::e_zyz: return std::array<int, 3>{axis_z, axis_y, axis_z2}[i];
         default: return 0;
     }
+}
+
+auto Rotation_inspector::get_euler_axis(const Euler_angle_order euler_angle_order, const int i) -> int
+{
+    return get_euler_axis2(euler_angle_order,i) & axis_xyzw_mask;
 }
 
 auto Rotation_inspector::gimbal_lock_warning() const -> float
@@ -176,9 +178,9 @@ void Rotation_inspector::update_euler_angles_from_quaternion()
     // as edited and gizmo rotation moves them continuously. A rotation that
     // jumped (another node selected, undo, a value set from elsewhere) owes
     // nothing to the angles shown before and gets the canonical triple.
-    const int       axis_1 = get_euler_component(m_euler_angle_order, 0);
-    const int       axis_2 = get_euler_component(m_euler_angle_order, 1);
-    const int       axis_3 = get_euler_component(m_euler_angle_order, 2);
+    const int       axis_1 = get_euler_axis(m_euler_angle_order, 0);
+    const int       axis_2 = get_euler_axis(m_euler_angle_order, 1);
+    const int       axis_3 = get_euler_axis(m_euler_angle_order, 2);
     const glm::quat q      = normalize(m_quaternion);
     const glm::quat shown  = erhe::math::euler_angles_to_quaternion(
         axis_1, axis_2, axis_3, m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
@@ -199,17 +201,14 @@ void Rotation_inspector::update_euler_angles_from_quaternion()
             m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
         );
     }
-    if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
-    if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
-    if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
 }
 
 void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 {
     m_quaternion = erhe::math::euler_angles_to_quaternion(
-        get_euler_component(m_euler_angle_order, 0),
-        get_euler_component(m_euler_angle_order, 1),
-        get_euler_component(m_euler_angle_order, 2),
+        get_euler_axis(m_euler_angle_order, 0),
+        get_euler_axis(m_euler_angle_order, 1),
+        get_euler_axis(m_euler_angle_order, 2),
         m_euler_angles[0],
         m_euler_angles[1],
         m_euler_angles[2]
@@ -322,11 +321,6 @@ void Rotation_inspector::imgui(
         }
 
         case Representation::e_euler_angles: {
-            //const std::size_t a             = get_euler_axis(0);
-            //const std::size_t b             = get_euler_axis(1);
-            //const std::size_t c             = get_euler_axis(2);
-            //const char*       axis_labels[] = {"X", "Y", "Z"};
-
             p.add_entry(
                 c_euler_strings[static_cast<int>(m_euler_angle_order)],
                 [this, &euler_state, matches_gizmo]() {
@@ -339,9 +333,9 @@ void Rotation_inspector::imgui(
                         glm::degrees<float>(m_euler_angles[1]),
                         glm::degrees<float>(m_euler_angles[2])
                     };
-                    ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(get_euler_component(m_euler_angle_order, 0), false));
-                    ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(get_euler_component(m_euler_angle_order, 1), false));
-                    ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(get_euler_component(m_euler_angle_order, 2), false));
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(get_euler_axis2(m_euler_angle_order, 0), false));
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(get_euler_axis2(m_euler_angle_order, 1), false));
+                    ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(get_euler_axis2(m_euler_angle_order, 2), false));
                     glm::vec4 q = glm::vec4{m_quaternion.w, m_quaternion.x, m_quaternion.y, m_quaternion.z};
                     ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat | (matches_gizmo ? ImGuiSliderFlags_ColorMarkers : 0);
                     erhe::imgui::Value_edit_state e_edit_state = erhe::imgui::make_drag_vec3(e, {}, {}, 1.0f, flags, "##Euler", "%.2f\xc2\xb0");
@@ -350,9 +344,6 @@ void Rotation_inspector::imgui(
                         m_euler_angles[0] = glm::radians<float>(e.x);
                         m_euler_angles[1] = glm::radians<float>(e.y);
                         m_euler_angles[2] = glm::radians<float>(e.z);
-                        if (m_euler_angles[0] == -0.0f) m_euler_angles[0] = 0.0f;
-                        if (m_euler_angles[1] == -0.0f) m_euler_angles[1] = 0.0f;
-                        if (m_euler_angles[2] == -0.0f) m_euler_angles[2] = 0.0f;
                     }
                     euler_state.combine(e_edit_state);
                     if (warn > 0.0f) {

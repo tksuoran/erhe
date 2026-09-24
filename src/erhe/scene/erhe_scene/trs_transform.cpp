@@ -33,20 +33,6 @@ void Trs_transform::decompose() const
         perspective
     );
 
-    if (m_translation.x == -0.0f) m_translation.x = 0.0f;
-    if (m_translation.y == -0.0f) m_translation.y = 0.0f;
-    if (m_translation.z == -0.0f) m_translation.z = 0.0f;
-    if (m_rotation.x == -0.0f) m_rotation.x = 0.0f;
-    if (m_rotation.y == -0.0f) m_rotation.y = 0.0f;
-    if (m_rotation.z == -0.0f) m_rotation.z = 0.0f;
-    if (m_rotation.w == -0.0f) m_rotation.w = 0.0f;
-    if (m_scale.x == -0.0f) m_scale.x = 0.0f;
-    if (m_scale.y == -0.0f) m_scale.y = 0.0f;
-    if (m_scale.z == -0.0f) m_scale.z = 0.0f;
-    if (m_skew.x == -0.0f) m_skew.x = 0.0f;
-    if (m_skew.y == -0.0f) m_skew.y = 0.0f;
-    if (m_skew.z == -0.0f) m_skew.z = 0.0f;
-
     // A rank-deficient matrix (a zero, or near-zero, scale component) cannot be decomposed
     // reliably: glm::decompose orthogonalizes the basis (Gram-Schmidt) to extract rotation,
     // and when one column is ~zero that process yields an arbitrary rotation AND corrupts the
