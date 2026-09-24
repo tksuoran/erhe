@@ -1214,17 +1214,21 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             continue;
         }
         const vec3 d     = basis[axis];
-        const vec4 color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
         const bool positive_towards_eye = octant_signs[axis];
+        // One scale handle covers both directions. Like the translate arrows
+        // (a handle per direction), only the camera-facing side is drawn hot
+        // (hover / active highlight); the opposite side, when shown, keeps
+        // the resting color and width.
+        const vec4 hot_color     = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
+        const vec4 resting_color = vec4{vec3{axis_colors[axis]}, axis_colors[axis].a * handle_alpha(handle)};
         // Both sides during an active scale drag of this axis (the pair
         // reads as the scale axis), mirroring the translate arrows' rule.
         const bool axis_drag_here =
             m_context.scale_tool->is_active() &&
             (m_context.scale_tool->get_axis_mask() == get_axis_mask(handle));
         // Both sides while this axis' plane-scale sector is hovered (the
-        // pairs read as the plane's scale axes), and while this handle is
-        // hovered itself - one scale handle covers both directions, so the
-        // side hover rests on must not vanish under it.
+        // pairs read as the plane's scale axes). Hovering the handle itself
+        // keeps only the camera-facing side - the one hover rests on.
         const bool plane_hover_here =
             (active_handle == Handle::e_handle_none) &&
             (hover_handle != Handle::e_handle_none) &&
@@ -1237,7 +1241,6 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
-                (handle != hover_handle) &&
                 ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
@@ -1247,7 +1250,9 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 : translate_start;
             const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
             const vec3  dir   = (sign == 0) ? d : -d;
-            arrow_line_renderer.set_thickness(is_hot(handle) ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
+            const bool  hot   = is_hot(handle) && ((sign == 0) == positive_towards_eye);
+            const vec4  color = hot ? hot_color : resting_color;
+            arrow_line_renderer.set_thickness(hot ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + shaft)) * dir}});
             const vec3 cube_center = c + (s * (start + shaft + gz.scale_cube_half_length)) * dir;
             solid_tips.push_back({
@@ -1540,8 +1545,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         }
         const bool positive_towards_eye = octant_signs[axis];
         // Mirrors render(): both sides during an active scale drag of this
-        // axis, while this axis' plane-scale sector is hovered, and while
-        // this handle is hovered itself.
+        // axis and while this axis' plane-scale sector is hovered.
         const bool axis_drag_here =
             m_context.scale_tool->is_active() &&
             (m_context.scale_tool->get_axis_mask() == get_axis_mask(handle));
@@ -1556,7 +1560,6 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
-                (handle != hover_handle) &&
                 ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
