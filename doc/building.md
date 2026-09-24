@@ -135,6 +135,7 @@ attempt and the launch must be retried.
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `box3d`, `none` | `jolt` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
 | `ERHE_MALLOC_LIBRARY` | Memory allocator for C++ `new`/`delete` | `mimalloc`, `jemalloc`, `none` | `none` |
+| `ERHE_USD_LIBRARY` | USD support (`erhe::usd`, the `describe_usd_file` MCP tool) | `lightusd`, `none` | `none` |
 | `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
 | `ERHE_TRACY_ON_DEMAND` | Tracy records only while a profiler is connected | `ON`, `OFF` | `ON` |
@@ -160,7 +161,11 @@ disabling unused features and selecting different backends.
 
 ### Notes on Specific Options
 
-**ERHE_BUILD_TESTS** -- Builds the gtest suites (see "Testing" in `AGENTS.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
+**ERHE_BUILD_TESTS** -- Builds the gtest suites (see `doc/testing.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
+
+**ERHE_USD_LIBRARY** -- `lightusd` builds `erhe::usd` on LightUSD (`doc/erhe/usd.md`) and the `describe_usd_file` MCP tool. The Windows configure wrappers and the Android build pass `lightusd`.
+
+**ERHE_MALLOC_LIBRARY** -- Routes C++ `new`/`delete` to the allocator. `jemalloc` runs its autoconf `configure` once per build tree at configure time (`cmake/jemalloc.cmake`).
 
 **ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. `box3d` selects the Box3D
 backend, which the editor also runs on; its deferred and unsupported features are
@@ -197,7 +202,7 @@ From an x64 Native Tools Command Prompt:
 
 For command-line builds without a Visual Studio solution, the Ninja wrappers
 locate VS 2026's bundled cmake/ninja and set up the MSVC environment
-themselves (see AGENTS.md "Windows CLI builds"):
+themselves (see `doc/agents/windows.md`):
 
 -   `scripts\configure_ninja_win_vulkan.bat` / `scripts\build_ninja_win_vulkan.bat <target>` -- MSVC `cl`
 -   `scripts\configure_ninja_win_clang.bat` / `scripts\build_ninja_win_clang.bat <target>` -- clang-cl (also regenerates `compile_commands.json` for clangd)

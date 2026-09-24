@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Acceptance criteria of doc/plans/rigging/ik_drag_options.md section 1.4, over MCP.
 
-Runs against an ALREADY RUNNING editor (headless is enough; see AGENTS.md
+Runs against an ALREADY RUNNING editor (headless is enough; see doc/agents/editor_runs.md
 "In-editor MCP server"). It creates its own scene, imports the tracked
 RiggedFigure fixture, and drives the `ik_drag` tool once per effector
 orientation mode, measuring the effector's world and local rotation before and

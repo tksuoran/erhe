@@ -312,7 +312,7 @@ gtests for: STEP/LINEAR/CUBICSPLINE evaluation (including the Phase 0 STEP
 fix and quat normalization), insert/remove/move keeping sortedness and
 triplet layout, interpolation-mode conversion round-trip, cursor reset, and
 copy-on-shared-edit. This is exactly the "pure-logic code in an `erhe::*`
-library" case AGENTS.md calls for.
+library" case doc/testing.md calls for.
 
 ### D5. Undo/redo model
 

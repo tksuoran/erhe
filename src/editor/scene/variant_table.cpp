@@ -267,7 +267,7 @@ auto Variant_table::set_selected(
 void Variant_table::on_items_removed(const Removed_items& removed)
 {
     // Membership test only: undoing a large import announces thousands of
-    // items in one message (AGENTS.md "Scene-hosted references in editor
+    // items in one message (doc/editor/coding_rules.md "Scene-hosted references in editor
     // parts").
     m_sets.erase(
         std::remove_if(

@@ -71,7 +71,7 @@ public:
 
 private:
     void window_imgui();
-    // AGENTS.md "Scene-hosted references in editor parts": a grid's frame node
+    // doc/editor/coding_rules.md "Scene-hosted references in editor parts": a grid's frame node
     // is scene content, so the tool drops it when that content leaves.
     void on_close_scene  (erhe::Item_host* closing_host);
     void on_items_removed(const Removed_items& removed);

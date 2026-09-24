@@ -159,7 +159,7 @@ private:
     // once per frame (once per item and once per mesh primitive), so every row
     // lambda captures its own call's snapshot and re-binds m_items from it;
     // and a snapshot kept past the draw would hold the items of a closed
-    // scene alive (the scene-close leak class, AGENTS.md).
+    // scene alive (the scene-close leak class, doc/editor/coding_rules.md).
     std::shared_ptr<const std::vector<std::shared_ptr<erhe::Item_base>>> m_items;
     std::optional<std::size_t>                                            m_sub_object; // D29: rows address items' sub-object of this index
 

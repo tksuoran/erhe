@@ -197,7 +197,7 @@ public:
     ) const -> std::pair<erhe::scene::Mesh*, std::size_t>;
 
     // Drops all references without touching the scene - the scene is being
-    // closed (see AGENTS.md "Scene-hosted references in editor parts").
+    // closed (see doc/editor/coding_rules.md "Scene-hosted references in editor parts").
     void on_scene_closed(const Scene_root* scene_root);
 
 private:

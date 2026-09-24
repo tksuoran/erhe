@@ -1,10 +1,33 @@
 # AGENTS.md
 
 This file provides guidance to AI coding agents working with this repository.
+It holds the rules every session needs; everything specific to one platform or
+one topic lives in the documents listed under "Topic documents" - read the
+ones that match your session before starting work.
 
 ## Project Overview
 
-**erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt or Box3D), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
+**erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt or Box3D), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application. Each library `src/erhe/<name>/` (CMake target `erhe_<name>`) has its document `doc/erhe/<name>.md`; the editor (`src/editor/`) is described under `doc/editor/`, starting at `doc/editor/editor.md`. Check the subsystem's document first when working on it; `doc/README.md` indexes all of them.
+
+## Topic documents
+
+| Session works on / runs on | Read first |
+|---|---|
+| Windows (build trees, edit-build loop, clangd, shell hygiene) | `doc/agents/windows.md` |
+| macOS (Xcode builds and diagnostics) | `doc/agents/macos.md` |
+| Linux (builds, memory growth diagnostics) | `doc/agents/linux.md` |
+| Launching, driving or verifying the editor (MCP server, screenshots, `ERHE_AI_DRIVER`, user hand-off) | `doc/agents/editor_runs.md` |
+| Crashes, hangs, GPU "renders wrong" bugs, missing debug tools | `doc/agents/debugging.md` |
+| Unit tests, `mcp_server_tests`, CI | `doc/testing.md` |
+| `CMakeLists.txt`, dependencies, forks, code generation | `doc/cmake_conventions.md` |
+| Code under `src/editor/` (part construction, scene-hosted references, editor logging, config JSON) | `doc/editor/coding_rules.md` |
+| Vulkan / graphics backend code, shaders, UBO/SSBO layout | `doc/erhe/gpu_coding_rules.md` |
+| Quest / Android device work | `doc/agents/quest.md` |
+| Writing or moving documentation under `doc/` | `doc/README.md` |
+| Delegating to sub-agents | `doc/agents/orchestration_harness.md` |
+
+The memory bank has the matching per-topic state under `memory-bank/topics/`
+(see "Memory Bank" below).
 
 ## Session handoff: `prompt_queue.txt`
 
@@ -12,663 +35,15 @@ When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff wr
 
 **Keep the queue lean.** `prompt_queue.txt` only lists the outstanding tasks and the order to work them in - at most three lines per task, naming the task, its ordering constraints, and the dedicated document to read first. Each task's details (state, decisions, verification recipes, gotchas) live in that task's own document under `doc/`, not in the queue. When writing a handoff, put the substance in the task's doc and add or update the queue's three-line pointer; never let the queue grow per-task sections that duplicate or fork the doc.
 
-## Documentation layout (`doc/`)
+## Documentation
 
-`doc/README.md` states the layout, the header-line convention and the writing rules, and indexes every document; read it before adding or moving a document. In short: `doc/erhe/<name>.md` describes the library built by CMake target `erhe_<name>` and every subsystem that lives in `src/erhe/`; `doc/editor/` holds the editor (`editor.md`, one document per source subdirectory, one per editor feature); `doc/agents/` holds documentation written primarily for AI coding agents (orchestration harness, MCP tool guidelines, RenderDoc and survey run-books, the creations catalog); `doc/<subject>.md` at the top level is for cross-cutting workflows (building, platforms); `doc/plans/` holds future work (a current document links to its plans from a "Future work" section that holds nothing but those links); `doc/reference/` holds material erhe does not own (bug reports for other projects, comparisons, transcribed specifications, dated reports). Every document carries a `Stability:` line (`stable` / `mostly stable` / `experimental`) and every plan a `Status:` line (`proposed` / `in progress` / `blocked`) in its first ten lines. `py -3 scripts/check_doc_links.py` verifies that every `doc/...md` reference in the repository resolves and that every document carries its header line; run it after any documentation change and keep it clean. Moving a document is a `git mv` plus a rewrite of every reference to it (sources, scripts, workflows, this file, the memory bank), in the same commit.
-## Live documents under `doc/` describe the present, not the past
-
-A live document (e.g. `doc/erhe/gl_worker_thread_contexts.md`, `doc/erhe/meshoptimizer_integration.md`, a library's `doc/erhe/<name>.md`) states the subsystem's CURRENT state - requirements, design, verification status - and the REMAINING future work. It never narrates history: no commit hashes or commit tables, no dated progress or "follow-up series" sections, no phase-by-phase records of work already landed, no "an earlier revision did X" or before/after narration. History belongs in git commit messages (`git log --follow` on the doc and on the code it describes). When updating a live doc after landing work, rewrite the affected statements in the present tense and move anything still outstanding into its future-work section - never append a dated record. Settled decisions and traps stay, stated as standing rules with their rationale, not as stories; measured results stay only while they describe current behavior or are needed to interpret a future re-run.
-
-## Documentation states what to do, not what to avoid
-
-Documents under `doc/` - plans and requirement lists above all - specify their subject positively: the dependencies a type may name, the call sites that may reach an API, the states a value may hold, the steps a phase performs. Give the closed list of what is allowed and let everything outside it be excluded by omission; a requirement that enumerates forbidden alternatives is both longer and weaker, because the enumeration is never complete and the reader still has to infer the rule behind it. A requirement, a design constraint and a phase step each read as an instruction that can be carried out and checked as written. Reserve the negative form for a trap that has actually been hit and would otherwise be walked into again, state it once with the evidence for it, and give the positive rule to follow in its place.
-
-## Each fact belongs in exactly one place
-
-A document under `doc/` states each fact once, in the section that owns it, and every other section that needs it refers to that section by its label. This matters most in plans and requirement lists, where a summary, an overview, a design note and a phase step can each restate the same rule: the copies drift the moment one is edited, and a reader who finds two versions of a rule has no way to tell which is current. Prefer a reference (`R4`, `D9`, "the phase 3 sizing note") over a restatement, even a short one; where a fact genuinely reads better repeated, name the owning section in both places so the next edit updates both. A section whose whole content is a restatement of other sections - an overview, a summary of the design, a recap of requirements - is the form that drifts fastest, so write the document without one.
-
-## `rendering_test` has been deleted
-
-The standalone `rendering_test` executable (`src/rendering_test/`, its duplicated shaders under `res/rendering_test/shaders/`, its `cell_*.cpp` files and `config/rendering_test/`) had rotted past the point of being worth repairing - it was already excluded from the build - and was removed so it stops showing up as a false dependency in refactors of shared code. A replacement is future work, to be written fresh against the current `erhe::*` APIs rather than resurrected; recover the old tree from git history if it is wanted as a reference.
-
-Refactors of shared infrastructure (e.g. `erhe::scene_renderer`) now need to keep only the `editor` executable, `src/example`, `src/hello_swap`, `src/hextiles` and the `erhe::*` libraries consistent.
+`doc/README.md` states the documentation layout, the header-line convention and the writing rules (documents describe the present, specify positively, state each fact once), and indexes every document; read it before adding, rewriting or moving a document. `py -3 scripts/check_doc_links.py` verifies that every `doc/...md` reference in the repository resolves and that every document carries its header line; run it after any documentation change and keep it clean. Moving a document is a `git mv` plus a rewrite of every reference to it (sources, scripts, workflows, this file, the memory bank), in the same commit.
 
 ## Building
 
-### Windows (Visual Studio 2026)
+Configure and build through the `scripts/` wrappers on every platform; they encode the project's configure flow (CPM caching, MSVC environment init, the options they pass). The per-platform build trees and the day-to-day loop are in the platform's topic document; `doc/building.md` lists every wrapper and CMake option. Building and launching the editor to verify a change is self-serve.
 
-Vulkan is the default backend. From an x64 Native Tools Command Prompt:
-
-```bat
-scripts\configure_vs2026_vulkan.bat
-```
-
-This generates a Visual Studio solution in `build_vs2026_vulkan/`. Open it and build the `editor` target.
-
-Alternative configurations:
-- `configure_vs2026_vulkan_asan.bat` - Vulkan with AddressSanitizer
-- `configure_vs2026_opengl.bat` - OpenGL backend
-- `configure_vs2026_opengl_asan.bat` - OpenGL with AddressSanitizer
-- `configure_vs2026_opengl_no_tracy.bat` - OpenGL without Tracy profiler
-
-**Always use the `scripts\` build scripts on Windows.** Do not invoke `cmake --preset` directly -- the wrappers encode the project's intended configure flow (CPM caching, MSVC env init, etc.).
-
-### Windows CLI builds (the day-to-day verification loop)
-
-For command-line build verification (no Visual Studio needed), use the ninja
-wrappers -- they locate VS 2026's bundled cmake/ninja and set up the MSVC
-environment themselves, so they work from any shell:
-
-```bat
-scripts\configure_ninja_win_vulkan.bat        REM once -> build_ninja_win_vulkan/ (MSVC cl)
-scripts\build_ninja_win_vulkan.bat editor     REM build a target (this is the usual edit-build loop)
-```
-
-`configure_ninja_win_clang.bat` / `build_ninja_win_clang.bat` are the clang-cl
-equivalents (their configure also regenerates `compile_commands.json` for
-clangd). The **headless Vulkan build** (needed for MCP-driven verification
-without a live display, see "In-editor MCP server" below; `capture_screenshot`
-works in the windowed build too since 2026-08-08) is a VS solution
-configured with `scripts\configure_vs2026_vulkan_headless.bat`; build it from
-the CLI with:
-
-```bat
-cmake --build build_vs2026_vulkan_headless --target editor --config Debug
-```
-
-### clangd diagnostics vs the real build
-
-IDE diagnostics come from clangd via `build_ninja_win_clang/compile_commands.json`.
-That build tree is NOT part of the routine build loop (day-to-day verification
-uses `build_ninja_win_vulkan`), so nothing keeps its database fresh on its own.
-
-**Habit: after any change that affects compile commands -- editing a
-`CMakeLists.txt`, adding/removing/renaming source files, or adding a new
-`erhe::*` library / include directory -- re-run
-`scripts\configure_ninja_win_clang.bat`.** It is configure-only (~25 s, no
-compilation) and regenerates the database. The IDE's clangd may need a
-language-server restart to pick it up.
-
-Recognize the staleness signature: ONE unresolved include (a header the stale
-database has no include path for) cascades into hundreds of false errors in
-perfectly compiling, committed code -- "file not found", then "unknown type",
-"no member named ... in <well-known class>", "cannot initialize object
-parameter" across unrelated files. Do not chase these -- the ninja/VS build is
-the ground truth; refresh the database instead. (Precedent: a database
-predating `src/erhe/frame_pacing` poisoned diagnostics repo-wide via the single
-missing `erhe_frame_pacing/frame_time_recorder.hpp` include path.) To verify a
-refresh worked without an IDE: `clangd --check=<file>` -- only `tweak:` probe
-failures in its output means the file is clean.
-
-### macOS (Xcode)
-
-The OpenGL backend is not supported on Apple platforms; use Metal or Vulkan.
-Use the build scripts in `scripts/`:
-
-```bash
-scripts/configure_xcode_metal.sh        # Metal backend  -> build_xcode_metal/
-scripts/configure_xcode_vulkan.sh       # Vulkan backend -> build_xcode_vulkan/
-```
-
-Then build with:
-```bash
-cmake --build build_xcode_metal  --target editor --config Debug
-cmake --build build_xcode_vulkan --target editor --config Debug
-```
-
-**Always use the `scripts/` build scripts on macOS.** Do not use CMake presets directly on macOS.
-
-### Linux
-
-Vulkan is the default backend:
-
-```bash
-scripts/configure_ninja_linux_vulkan.sh
-cmake --build build_ninja_linux_vulkan --target editor
-```
-
-For the OpenGL backend, use `scripts/configure_ninja_linux_opengl.sh` and build `build_ninja_linux`.
-
-Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.
-
-### Build output directory
-
-Every executable and shared library of a build tree, erhe's and the
-dependencies', is written to `<build>/bin/` (`<build>/bin/<Config>/` under the
-Visual Studio and Xcode generators), e.g.
-`build_vs2026_vulkan_headless/bin/Debug/editor.exe`,
-`build_ninja_win_vulkan/bin/editor.exe`. Shared libraries such as oneTBB's DLL
-sit next to the executables that load them. Android is the exception: Gradle
-chooses the library output directory for APK packaging.
-
-### CMake presets exist but should not be used
-
-`CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux_*.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
-
-### Key CMake Options
-
-| Option | Default | Notes |
-|--------|---------|-------|
-| `ERHE_GRAPHICS_API` | `vulkan` | `vulkan`, `opengl` (not on Apple platforms), `metal` (macOS), or `none` (headless) |
-| `ERHE_NAVIGATION_LIBRARY` | `none` | `recastnavigation` or `none` |
-| `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt`, `box3d`, or `none` |
-| `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
-| `ERHE_PROFILE_LIBRARY` | `none` | `tracy`, `nvtx`, `superluminal`, or `none`; the configure wrappers pass `tracy` |
-| `ERHE_TRACY_ON_DEMAND` | `ON` | `ON` records only while a profiler is connected; `OFF` records from process start (startup profiling, see `doc/building.md`) |
-| `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw` (deprecated), or `none` (headless) |
-| `ERHE_XR_LIBRARY` | `none` | `openxr` or `none`; the configure wrappers pass `openxr` |
-| `ERHE_USD_LIBRARY` | `none` | `lightusd` or `none`; the Windows configure wrappers and the Android build pass `lightusd`. Builds `erhe::usd` (LightUSD) and the `describe_usd_file` MCP tool |
-| `ERHE_MALLOC_LIBRARY` | `none` | `mimalloc`, `jemalloc`, or `none`; routes C++ `new`/`delete` to the allocator (`jemalloc` runs its autoconf `configure` once per build tree at configure time, see `cmake/jemalloc.cmake`) |
-| `ERHE_USE_ASAN` | `OFF` | AddressSanitizer |
-| `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds; the configure wrappers pass `ON` |
-| `ERHE_BUILD_TESTS` | `OFF` | gtest unit test targets (see Testing below) |
-
-## Testing
-
-Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
-(circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
-physics, primitive, raytrace, usd), plus `mcp_server_tests` for the editor's
-MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
-and `erhe_physics_tests` needs a backend that simulates
-(`-DERHE_PHYSICS_LIBRARY=jolt`, the default, or `box3d`); a `box3d` tree adds
-that backend's own tests to the suite. Each
-builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
-(default OFF).
-
-- A test `main()` that exercises code which logs must bootstrap logging the way
-  `src/erhe/graph/test/main.cpp` does: `erhe::log::initialize_log_sinks()`, then
-  `erhe::file::log_file` by hand, then the library's `initialize_logging()`. The
-  `log_*` globals are null `shared_ptr`s until then, so the first log call from
-  a library under test is an access violation, not a silent no-op.
-- `mcp_server_tests` is a pure HTTP client of the editor's MCP server, so under
-  `ctest` editors are CTest fixtures: `mcp_editor` (MCP port 3773) is one
-  editor shared by every `Mcp_test.*` case, and `mcp_editor_auth` (port 3774)
-  is a dedicated editor started with a configure-time test token
-  (`ERHE_MCP_TOKEN_FILE`) for `Mcp_auth_test.*`. Each fixture's start test
-  runs `mcp_server_tests --start-editor`, which spawns `editor` detached from
-  the repo root with its standard streams on the null device (a fixture
-  setup test must exit before its dependents run, CMake itself cannot start
-  a process without waiting for it, and a child that inherits ctest's output
-  pipe makes ctest wait for it, so the editor's console output is not
-  captured - read `logs/log.txt`), refuses when something already answers on
-  the port, and exits once `GET /health` answers 200 (it answers 503 until
-  the main loop serves requests); the cases wait for that 200 too and run
-  one at a time; the stop test runs `mcp_server_tests --request-editor-exit`,
-  which waits for a still-starting editor, calls that editor's `request_exit`
-  MCP tool and waits for it to go away. Every case begins with the
-  `reset_editor_state` MCP tool (selection, mesh component selection,
-  clipboard, undo/redo stacks, queued operations, shader-debug stack and thumbnail slots cleared, window visibility
-  back to the startup state, every scene closed - the call returns once the
-  scene list is empty) and then prepares its own scene over MCP
-  (create_scene + textured glTF import + a material); the last case's scene
-  is reset away at exit. Run `ctest -C Debug -R "Mcp_"` from the build
-  directory; the windowed editor needs a live display (see "Windowed editor
-  needs a live display" below). Visual Studio's Test Explorer runs the gtest
-  binary directly (no ctest, no fixtures): there the binary launches the
-  editors from their compiled-in path when nothing answers on the port and
-  stops them at exit (`src/editor/mcp/test/editor_launcher.hpp`). Running
-  the binary by hand against an editor you started yourself: point it at
-  that editor with `ERHE_MCP_TEST_PORT` (default 3743); each case waits
-  `ERHE_MCP_TEST_TIMEOUT_S` seconds (default 30) before launching one.
-
-- The macOS `configure_xcode_*.sh` scripts and `configure_vs2026_vulkan.bat`
-  enable tests by default. On Windows, `scripts\configure_tests_asan.bat`
-  produces a dedicated test configuration (`build_tests_asan/`, OpenGL + ASAN
-  + tests ON); the other configure wrappers leave tests off -- every wrapper
-  passes extra arguments through to cmake (`%*` / `"$@"`), so pass
-  `-DERHE_BUILD_TESTS=ON` to get tests in a regular build tree. For
-  performance measurement, `scripts\configure_tests.bat` produces
-  `build_tests/` (no ASAN, profiler none; VS generator, so `--config Release`
-  and `--config Debug` build from the same tree) -- used by the geometry
-  timing harness, see `doc/erhe/catmull_clark.md`.
-- With tests enabled, the `erhe_tests` target builds every test executable
-  the configuration defines (each test `CMakeLists.txt` registers its target
-  with `add_dependencies(erhe_tests ...)`; a new test target must do the
-  same). Two ctest labels partition the tests by what they need: `gpu`
-  (they bring up a graphics `Device`: `erhe_graphics_gpu_tests`,
-  `erhe_scene_renderer_gpu_tests`) and `editor` (they drive a running
-  editor: `mcp_server_tests` and its fixtures). A machine without a GPU runs
-  `ctest --label-exclude "gpu|editor"`; a new test that needs either must
-  carry the label (`gtest_discover_tests(... PROPERTIES LABELS "gpu")`).
-- Test cases are discovered when `ctest` runs, not as a post-build step: the
-  top-level `CMakeLists.txt` sets
-  `CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST`. Keep it that way --
-  MSBuild's `Exec` task turns any stderr output of a post-build discovery run
-  into a build error even when the run exits 0, so a test binary that prints
-  anything at startup breaks the Visual Studio build. Precedent: Tracy's
-  `SymInitialize FAILED with code 0xc0000004` warning failed the Windows CI
-  test builds while discovery ran post-build.
-- CI (`.github/workflows/build.yml`) configures every matrix entry with
-  tests on, builds `editor` and `erhe_tests`, and runs
-  `ctest --label-exclude "gpu|editor" --output-junit`; the runners have no
-  GPU. That ctest step does not fail its job, so the build badge stays a
-  build verdict: the JUnit files are uploaded as `test-results-*` artifacts
-  and `.github/workflows/tests.yml` (triggered when a build run completes)
-  summarizes them with `scripts/ci_test_summary.py` and gives the tests
-  badge in README.md. A build run that did not succeed fails the tests
-  workflow too. Running the `gpu` tests in CI under a software Vulkan is
-  future work (`doc/erhe/graphics_test_coverage.md`).
-- Run via `ctest` from the build directory, or invoke the
-  `.../bin/<config>/erhe_<name>_tests.exe` binary directly.
-  Run suites serially and fix one failure at a time -- an abort hides the rest
-  of the run.
-- When adding pure-logic code to an `erhe::*` library that already has a
-  `test/` directory (geometry operations, math, item/graph logic, dataformat),
-  add or extend a test for it. Editor-level behavior is instead verified live
-  through the in-editor MCP server (below).
-
-## Architecture
-
-### Library Structure (`src/erhe/`)
-
-Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a document `doc/erhe/<name>.md`** (the CMake target `erhe_<name>` without its prefix) with details on purpose, key types, public API, dependencies, and implementation notes. Always check `doc/erhe/<name>.md` first when working with a library; the editor's own documents live under `doc/editor/` (`doc/editor/editor.md` for the application, `doc/editor/<subdir>.md` per source subdirectory, and one document per editor feature).
-
-- **`erhe::gl`** - Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
-- **`erhe::graphics`** - Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
-- **`erhe::rendergraph`** - DAG of `Rendergraph_node`s with typed inputs/outputs. Executed in dependency order each frame.
-- **`erhe::scene`** - glTF-like scene graph: `Node` (transform + children), `Mesh`, `Camera`, `Light`, `Scene`.
-- **`erhe::scene_renderer`** - Renders `erhe::scene` content using `erhe::renderer` utilities.
-- **`erhe::geometry`** - Polygon mesh manipulation using Geogram as backend. Catmull-Clark, Conway operators, CSG (experimental).
-- **`erhe::primitive`** - Converts `erhe::geometry::Geometry` to GPU vertex/index buffers.
-- **`erhe::item`** - Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes.
-- **`erhe::renderer`** - GPU ring buffer, `Line_renderer` (debug lines), `Text_renderer` (2D labels in 3D viewports).
-- **`erhe::imgui`** - Custom ImGui backend and window management helpers.
-- **`erhe::physics`** - Thin abstraction over Jolt and Box3D physics (backend chosen at configure time; see `doc/erhe/physics.md`).
-- **`erhe::window`** - SDL/GLFW windowing abstraction.
-- **`erhe::commands`** - Input command system.
-- **`erhe::log`** - spdlog wrappers.
-- **`erhe::verify`** - `VERIFY(condition)` and `FATAL(format, ...)` macros.
-
-### Editor Application (`src/editor/`)
-
-The `editor` executable is the main application. Entry point is `src/editor/main.cpp` → `editor::run_editor()`. Key subsystems:
-
-- `rendergraph/` - Editor-specific render graph nodes (shadow maps, viewports, post-processing)
-- `tools/` - Editor tools (translate, rotate, scale, brush painting, etc.)
-- `operations/` - Geometry operations (Catmull-Clark, Conway, CSG)
-- `windows/` - ImGui windows (scene browser, properties, console, etc.)
-- `scene/` - Scene management and content library
-- `res/` - Resources: TOML configuration files and GLSL shaders
-
-#### Part construction and `App_context` (IMPORTANT)
-
-The editor is composed of "parts" (tools, windows, renderers, scene managers, etc.). `App_context` holds pointers to all parts and shared resources (`graphics_device`, `imgui_renderer`, `rendergraph`, `mesh_memory`, `scene_builder`, `headset_view`, `editor_settings`, ...).
-
-**A part constructor must NEVER access `App_context` members other than to store the `App_context&` itself into a member variable.** The `App_context` pointers are only assigned *after all parts have been constructed*, so reading e.g. `context.graphics_device` from inside a part constructor yields `nullptr` (or a stale value) and will crash. (Exception: a few fields populated earlier in init, such as `current_command_buffer`, but do not rely on this - prefer explicit arguments.)
-
-Each part constructor must receive the other parts and resources it needs as explicit `Part&` / resource-reference constructor arguments, and use those (not `App_context`) during construction. `App_context` may be used freely *after* construction (in per-frame / runtime methods). Helper/owned objects created by a part (e.g. `Quad_view`) must follow the same rule: pass them the needed references explicitly rather than having them read from `App_context` at construction time.
-
-### CMake Conventions
-
-- Follow modern CMake best practices. Do not use deprecated CMake features.
-- **Never use `file(GLOB)` or `file(GLOB_RECURSE)` to collect source files.** All source and definition files must be listed explicitly in `CMakeLists.txt`. This is the CMake-recommended practice - globbing does not detect added/removed files without a reconfigure.
-- `erhe_target_sources_grouped()` helper macro (in `cmake/functions.cmake`) organizes sources into IDE source groups.
-- Each component has its own `CMakeLists.txt`.
-- External dependencies are fetched at configure time via CPM (`cmake/CPM.cmake`).
-- **Dependency version pins are not sacred.** A `GIT_TAG` / `VERSION` pin in `CMakeLists.txt` exists only to prevent uncontrolled upstream changes from breaking the build while nothing in erhe changes - it is not a statement that the pinned version is required. If the currently pinned version has a bug (build break, runtime defect, spec non-compliance), bumping the dependency to the latest version that fixes it is the preferred fix over carrying a downstream patch or fork. Prefer the newest release that resolves the issue; only carry a downstream change when no released upstream version fixes it yet.
-- **Do not use CPM's `PATCHES` keyword.** Applying patches at configure time relies on a host `patch` program, which is not portable (e.g. GitHub Windows CI runners have a broken Strawberry-Perl `patch.exe` 2.5.9 that asserts on valid diffs). When a dependency genuinely needs a downstream change that no upstream release provides, do NOT carry a `.patch` file applied via CPM. Instead, **ask the user to provide a fork repo we control** (e.g. `tksuoran/<dep>`), apply the change in a dedicated branch of that fork, push it, and point `CPMAddPackage(... GITHUB_REPOSITORY tksuoran/<dep> GIT_TAG <commit>)` at the patched commit. This keeps the build free of any host `patch` invocation. Record in a comment why the fork exists and when it can be dropped (i.e. which upstream version would obsolete it). Precedent: `tksuoran/fastgltf` branch `khr_physics_rigid_bodies`.
-- **Do not do any development work inside `.cpm_cache/` checkouts.** The CPM source cache is a fetch artifact, not a workspace: commits made there are invisible to the fork's real clone, easily lost to a re-fetch, and leave builds silently depending on unpushed state. When a dependency fork needs changes, work in the dedicated clone the user has prepared (per-machine clone locations are recorded in `memory-bank/local/`; ask the user to prepare a clone when none exists for a dependency), commit there, then prompt the user to arrange branches and perform pushes - never push yourself. Bump the `CPMAddPackage` `GIT_TAG` only after the commit is on GitHub.
-
-### Code Generation
-
-`src/erhe/gl/generate_sources.py` generates the OpenGL wrapper from `gl.xml`. Run this script when updating the GL API bindings.
-
-### `erhe_codegen` (Python C++ Struct Code Generator)
-
-`src/erhe/codegen/` - A Python-based code generator that produces C++ structs with versioned JSON serialization (simdjson), deserialization, rich reflection, and enum support from Python definitions. The implementation is complete.
-
-### Backends / Abstraction Layers
-
-Many systems have swappable backends selected at CMake configure time via `#ifdef ERHE_<SUBSYSTEM>_LIBRARY_<VALUE>` guards. This is especially true for physics, raytrace, window, and XR subsystems.
-
-## Debugging on Windows / MSVC (Visual Studio MCP server)
-
-**Skill:** for any C++ crash / abort / `VERIFY` / `ERHE_FATAL` / thrown exception / hang, invoke the **`erhe-cpp-debugging`** skill -- Windows VS-MCP (this section) plus the complete macOS/Linux lldb run-book. For GPU "renders wrong" bugs use **`erhe-renderdoc-gpu-debug`** instead.
-
-On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer)) for interactive debugging and build/diagnostic queries over ad-hoc print debugging. It lets an AI coding agent drive a *live* Visual Studio instance: set breakpoints, launch under the debugger, step, and inspect program state, all without leaving the conversation.
-
-**Prerequisites (one-time, done by the user):**
-- Visual Studio 2022 or 2026 with the "MCP Server" extension installed (Extensions > Manage Extensions, search "MCP Server"; requires the .NET 10 SDK).
-- The server started inside VS: Tools > MCP Server > Start Server (listens on `http://localhost:5050`; can be set to auto-start in Tools > Options > MCP Server).
-- The erhe solution open in that VS instance (e.g. `build_vs2026_vulkan/erhe.slnx`). The tools act on whatever solution is currently loaded -- always call `mcp__visualstudio__solution_info` first to confirm which one.
-- Permission: configure the active AI client to allow the `mcp__visualstudio` server without per-call prompts.
-
-**Tool groups** (all prefixed `mcp__visualstudio__`):
-- Solution/project: `solution_info`, `solution_open/close`, `project_list`, `project_info`, `startup_project_get/set`.
-- Build: `build_solution`, `build_project`, `build_status` (poll until `State == "Done"`, check `FailedProjects`), `build_cancel`, `clean_solution`.
-- Diagnostics: `errors_list` (severity / code / file / line), `output_read`, `output_list_panes`.
-- Debugger: `debugger_add_breakpoint` / `list_breakpoints` / `remove_breakpoint`, `debugger_launch` (with debugging) / `launch_without_debugging`, `debugger_status` (`Mode` is `Design` when not running), `debugger_break` / `continue` / `stop`, `debugger_step_into/over/out`, `debugger_get_callstack`, `debugger_get_locals`, `debugger_evaluate`, `debugger_set_variable`.
-- Documents/editor/navigation: `document_open/read/write/save`, `editor_find/replace`, `editor_goto_line`, `goto_definition`, `find_references`, `selection_get/set`.
-
-**Typical debug flow:** confirm `solution_info` -> `debugger_add_breakpoint` (file + line) -> `debugger_launch` -> poll `debugger_status` until it breaks -> `debugger_get_callstack` / `debugger_get_locals` / `debugger_evaluate` -> step or `continue` -> `debugger_stop` when done.
-
-**ALWAYS use the Visual Studio MCP server to diagnose editor crashes.** When the editor aborts / throws (e.g. `editor.exe` exits with a non-zero code, `[crash] unhandled exception (code=0x...)`, a `logs/editor_crash_*.dmp` minidump, a `VERIFY` / `ERHE_FATAL`, or any C++ exception `0xe06d7363`), do NOT try to reason it out from `logs/log.txt` and a stripped console backtrace alone, and do NOT just stare at the minidump. Reproduce it **live under the VS debugger** so you get a real callstack plus `debugger_get_locals` / `debugger_evaluate` at the throw site:
-  1. `mcp__visualstudio__solution_info` to see which solution is loaded. The crash is almost always in shared `editor` / `erhe::*` code, so it reproduces on **any** build's `editor` target -- prefer the solution already open. To debug the **headless** build specifically (e.g. a crash only seen while driving the in-editor MCP / `capture_screenshot`), `solution_open` `build_vs2026_vulkan_headless/erhe.slnx`; for windowed use `build_vs2026_vulkan/erhe.slnx` (needs a live display) or `build_vs2026_opengl/erhe.slnx`.
-  2. If the loaded `editor` binary predates your change, `build_project` the `editor.vcxproj` and poll `build_status` until `State=="Done"` / `FailedProjects==0`.
-  3. `debugger_add_breakpoint` at the suspected throw site(s) if you have a hypothesis; otherwise just `debugger_launch` and let the debugger break on the unhandled exception (the editor's crash handler runs at second chance, so the user-stack throw frame is still visible).
-  4. Drive the repro (e.g. the in-editor MCP `tools/call` over HTTP, or the input that triggers it), poll `debugger_status` until `Mode != "Design"` stops at the break, then `debugger_get_callstack` + `debugger_get_locals` / `debugger_evaluate` to read the faulting state. `debugger_stop` when done.
-The minidump and `logs/log.txt` are a starting hypothesis, not the diagnosis -- the live callstack + locals are.
-
-**Notes / gotchas:**
-- `symbol_workspace` does not index this C++ solution's symbols (it is C#-oriented and returns no matches here). For C++ symbol navigation use `goto_definition` / `find_references` from an open document, or the Grep tool over `src/`.
-- The startup project is `editor`; `build_status` reports `NoBuildPerformed` until a build is triggered through VS or the MCP build tools.
-- **Modal dialogs in VS block the MCP server.** A CMake configure (rerunning a `scripts\configure_*.bat` while the solution is open, or a `CMakeLists.txt` edit triggering VS's own regenerate) can pop a modal dialog in the VS instance; the MCP server cannot dismiss dialogs, and tool calls just hang/fail until a human clears it. When a configure is part of the flow, tell the user beforehand and ask them to clear any dialog that appears. Expect similar interactive limitations elsewhere (any modal prompt blocks tool calls until dismissed).
-- If the `mcp__visualstudio__*` tools are not registered in the active AI client session, the server is still reachable over plain HTTP on `http://localhost:5050` (JSON-RPC 2.0, same pattern as the in-editor MCP server) -- probe it before concluding the server is unavailable.
-- This complements -- does not replace -- the log-based workflow below (`logs/log.txt`) and the Quest/Android debugging flows, which run on-device and are out of VS's reach.
-
-## Missing tooling: ask, don't settle
-
-When a debugging or analysis task would be materially easier with software
-that is not installed (a post-mortem debugger such as WinDbg/cdb, a profiler,
-a dump or trace analyzer), do NOT silently settle for a weaker workaround.
-Tell the user what is missing, what it would buy for the task at hand, and how
-to install it (command or link), and ask them to install it or for permission
-to install it yourself. Record newly installed per-machine tool locations in
-`memory-bank/local/`. Also re-check the debugging sections of this file first:
-the capability may already exist through an MCP server (Visual Studio MCP for
-live debugging, RenderDoc fork for GPU captures) even when the classic
-command-line tool is absent. Precedent: a `logs/editor_crash_*.dmp` minidump
-was "analyzed" with a hand-rolled dbghelp stack walker that produced a single
-usable frame, when the documented VS MCP debugger flow (or WinDbg,
-`winget install Microsoft.WinDbg`) would have given the full callstack and
-locals.
-
-## Building / diagnostics on macOS (Xcode MCP server)
-
-**Skill:** invoke **`erhe-macos-xcode`** for building and reading diagnostics on
-macOS -- it is the full run-book for the `mcp__xcode__*` tools (always call
-`XcodeListWindows` first for the `tabIdentifier`; `BuildProject` + `GetBuildLog`
-for structured errors; Apple-docs search). Hard limits to remember even without
-the skill: it is NOT a debugger (no breakpoints / launch / attach / callstacks --
-use lldb via `erhe-cpp-debugging`), it cannot select schemes or run destinations,
-and it cannot launch or drive the editor (use the in-editor MCP server). If no
-Xcode window is open, fall back to `scripts/configure_xcode_*.sh` +
-`cmake --build`.
-
-## Debugging on macOS (lldb, for AI coding agents)
-
-**Skill:** invoke **`erhe-cpp-debugging`** -- it is the complete macOS/Linux lldb
-run-book (Python SB API emitting JSON preferred; recipes for crash capture,
-all-thread hang snapshots, post-mortem cores; interface ranking). There is no
-VS-MCP equivalent on macOS and the Xcode MCP server has zero debugger control.
-Two constraints that always apply: the windowed editor needs a live, awake
-display (attaching to an already-running editor is unaffected), and building +
-launching the editor to verify changes is self-serve -- do not ask first. For
-GPU "renders wrong" bugs use `erhe-renderdoc-gpu-debug` instead.
-
-## Vulkan validation cleanliness (IMPORTANT)
-
-**erhe should be kept free of Vulkan validation errors at all times.** When
-touching Vulkan code, run the editor with the validation layer enabled
-(`"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`)
-and fix every VUID before committing - the editor's device-error callback
-treats validation errors as fatal, so a single error aborts the run. Do not
-suppress, filter, or downgrade validation messages to make a run pass.
-
-## AI-driven editor runs (`ERHE_AI_DRIVER=1`)
-
-When an AI coding agent launches the editor, set `ERHE_AI_DRIVER=1` in the
-process environment. In this mode the editor routes error artifacts to files
-the agent can read instead of the clipboard (which assumed a human pastes the
-message into an AI chat):
-
-- Device / validation errors: full message + callstack appended to
-  `logs/device_error.txt` (truncated at each run's first error).
-- Shader compile/link errors: `logs/shader_error.txt` (error, source,
-  callstack).
-- The per-user editor state file (`config/editor/user_state.json`: inventory /
-  hotbar slots, per scene view scene, camera and visual style selections) is
-  neither read nor written, so an agent run starts from that struct's defaults
-  and leaves the user's own state alone. `config/editor/editor_settings.json`
-  is read and autosaved as usual.
-- Fatal behavior is unchanged (errors still abort); the log line names the
-  file to read. After any crashed or aborted run, grep `logs/log.txt` and
-  read these files before theorizing.
-
-## Runtime logs
-
-The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
-
-**Always use erhe logging in the editor -- never `printf` / `fprintf` / `std::cout` / `std::cerr`, not even for temporary debug tracing.** Editor code logs through the `log_*` spdlog categories declared in `src/editor/editor_log.hpp` (e.g. `log_startup->info("...", ...)`); pick the closest existing category or add a new one in `editor_log.{hpp,cpp}` (declare `extern`, create it in `initialize_logging()` via `make_logger("editor.<name>")`). Library (`erhe::*`) code uses that library's own `erhe::log::make_logger(...)` category. Only erhe logging reaches `logs/log.txt` and the Android logcat `erhe` tag, honors per-category levels in `config/editor/logging.json`, and carries timestamps -- raw `printf`/`std::cout` bypasses the file sink (see the redirect note above) and is invisible to the standard `grep logs/log.txt` verification flow. This applies to throwaway diagnostics too: add a temporary `log_*->info/trace(...)` line, not a `printf`, and remove it (or keep a concise permanent line) when done.
-
-## ImGui ini file is untracked; default layout is procedural
-
-`config/editor/desktop_window_imgui_host_imgui.ini` (window layout state) is
-gitignored and rewritten by every editor run on exit -- never add it (or other
-erhe_imgui window/ini state files) to the repo. When the ini is absent at
-startup, the default layout is built procedurally from
-`config/editor/default_layout.json`, an ordered list of dock placements
-(codegen structs; see `src/editor/editor_default_layout.cpp`). To iterate on
-the default layout, edit the JSON (no rebuild needed), delete the ini, and
-relaunch; a present ini always wins untouched.
-
-## Once the user starts testing, stop headless testing yourself
-
-For any task or bug that has a user-interaction aspect: once you consider the
-change complete and the user has started testing it, STOP running the headless
-verify loop (build + launch + MCP + screenshot) yourself unless the user
-explicitly asks for it. At that stage the useful signal is the user's
-verification in a real interactive session, and continuing to headless-test in
-parallel only slows the work down (and re-dirties `logs/` and the ini state).
-Headless verification is valuable earlier -- while you are still iterating on
-your own before handing off -- but it is not a substitute for user
-verification. The menu- and mouse-driven entry points are scriptable headlessly
-through the UI-driving tools ([`doc/agents/mcp_ui_driving.md`](doc/agents/mcp_ui_driving.md)),
-so reach for them while you iterate and drive the same path the user's hands
-would; the user's verdict in a live session still has the final word, because
-a headless run exercises the path you thought to script and nothing else
-(precedent: the #258 headless run docked the MCP-created viewport correctly,
-but the menu-driven "Create Scene" viewport was still floating -- the user
-found that interactively). So: build,
-hand off, and let the user drive; re-engage headless testing only when they ask
-or when you resume iterating on a fresh change.
-
-## In-editor MCP server (live scene scripting + headless screenshots)
-
-**Skill:** invoke **`erhe-headless-verify`** for the standard verification
-loop (build headless -> launch -> wait for the MCP server -> drive tools ->
-screenshot -> clean up); the prose below is the full reference.
-
-The `editor` executable embeds its own MCP server (`src/editor/mcp/mcp_server.{hpp,cpp}`), auto-started at launch on `http://127.0.0.1:3743/mcp` (JSON-RPC 2.0 over `POST`; methods `initialize`, `tools/list`, `tools/call`). The `ERHE_MCP_PORT` env var overrides the preferred port (both for the editor and for `scripts/mcp_call.py` / `scripts/erhe_mcp.py` defaults). If the preferred port is taken it falls back to the next free port, scanning 20 successors (`[3743, 3763)` by default); grep `logs/log.txt` (or logcat on Quest) for `MCP server: listening on 127.0.0.1:<port>` to learn the bound port. It runs on a background thread and dispatches each call to the main thread (`process_queued_requests()` once per frame), so it is safe to drive a *running* editor. Auth is **off** unless `~/.agents/erhe_mcp_token` exists (mode 0600); when present, every request needs `Authorization: Bearer <token>`. The server is a conformant MCP HTTP endpoint and CAN be registered as native `mcp__erhe__*` tools (`claude mcp add --transport http erhe http://127.0.0.1:3743/mcp`; verified 2026-08-22 -- see "Registering as an HTTP MCP server" in [`doc/agents/mcp_server_usage.md`](doc/agents/mcp_server_usage.md), including the bearer-token header form). Registration only helps sessions that start while an editor is already running on the registered port; for scripted flows, or when the session launches the editor itself, drive it over plain HTTP:
-
-```bash
-py -3 scripts/mcp_call.py --list                  # list tool names (optionally: --list <substring>)
-py -3 scripts/mcp_call.py get_scene_lights        # call with no arguments
-py -3 scripts/mcp_call.py create_shape b64:eyJzaGFwZSI6ICJib3gifQ==   # args as base64 JSON
-```
-
-**Always use `scripts/mcp_call.py` to drive it** -- it handles the JSON-RPC
-envelope, the bearer token, and (via the `b64:` argument form or `-` for
-stdin) sidesteps PowerShell 5.1's quote mangling, which reliably corrupts
-inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
-`http://127.0.0.1:3743/mcp`) but is only worth it from code.
-
-**Use this to set up / inspect / mutate a scene for any debugging need**, rather than only poking at the UI by hand. Tools fall into:
-- **Queries**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_textures`, `get_scene_brushes`, `get_brush_geometry_states`, `get_selection`, `get_undo_redo_stack`, `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
-- **Actions**: `create_shape`, `create_node`, `place_brush`, `request_brush_geometry`, `select_items`, `transform_selection`, `reparent_item`, `create_scope`, `edit_material`, `lock_items`/`unlock_items`, `add_tags`/`remove_tags`, `toggle_physics` + the `*_physics_*` family, mesh-component editing (`set_mesh_component_mode`, `select_mesh_components`, `remesh`/`decimate`/`smooth`, ...), `save_scene`, `export_gltf`/`import_gltf`, and `capture_screenshot`.
-- **ImGui introspection**: `get_imgui_hosts`, `get_imgui_windows`, `get_imgui_items`, `get_imgui_item_rect`, plus `capture_screenshot.annotate_imgui_items` -- which windows and widgets the editor is showing and where they are, in editor window pixels.
-- **Input gestures**: `imgui_click`, `imgui_hover`, `imgui_scroll`, `mouse_click`, `mouse_drag`, `mouse_release`, `mouse_wheel`, `key_press`, `type_text`, `inject_input_events`, `get_input_state`, `get_transform_handles` -- real window input events, so menus, docking, property rows, gizmo drags and viewport gestures are driven the way a user drives them. Run-book: [`doc/agents/mcp_ui_driving.md`](doc/agents/mcp_ui_driving.md).
-
-**Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) work in BOTH builds** (windowed support added 2026-08-08). Headless: `Device::capture_last_frame` reads back the *emulated* swapchain synchronously. Windowed: the tool arms a one-shot swapchain capture (`Device::request_frame_capture`), the MCP server defers the request one frame while the swapchain render pass records a copy of the composited image, and the retry returns the pixels -- one extra frame of latency, invisible to the caller. The windowed path needs the surface to grant `TRANSFER_SRC` image usage (all desktop drivers do) and a supported 4x8-bit swapchain format; otherwise the tool errors. The macOS Metal build has the same windowed path (the layer hands out readable drawables and the swapchain render pass blits the composited drawable into a shared buffer). This is the preferred screenshot path in every build -- no OS-level window capture, no occlusion, no permission concerns; never use `screencapture` or other system capture tools, they trigger the endpoint security agent (Cortex XDR). For deeper GPU diagnostics (individual textures, pixel-debug shaders) use the RenderDoc fork ([`doc/agents/renderdoc_fork.md`](doc/agents/renderdoc_fork.md)).
-
-**Windowed editor needs a live display; switch to headless when it does not start.** The windowed build creates a real WSI swapchain, so it needs a present-capable GPU queue on the window surface. When the **display is powered off / asleep / disconnected** (common when an AI is driving the machine unattended), no present queue exists, `choose_physical_device()` finds no usable GPU, and the editor aborts at startup. The log now says exactly this and recommends the fix (look for "Switch to the HEADLESS build" in `logs/log.txt`); older builds printed a misleading `vkCreateInstance() failed with 0 VK_SUCCESS` -- that message is really `choose_physical_device()` failing, not `vkCreateInstance()`. **When this happens, run the headless build instead** (`build_vs2026_vulkan_headless/bin/Debug/editor.exe`, `ERHE_WINDOW_LIBRARY=none`): it is surfaceless (emulated swapchain), needs no display, still runs the full render pipeline + MCP server, and supports `capture_screenshot`. The same RenderDoc/GPU-capture flows do not work against a headless emulated swapchain (no real present), so for GPU captures the windowed build + a live display is still required.
-
-**Reaching the server on Quest / Android.** On device the server binds the same loopback address (`127.0.0.1:3743`), unreachable from the host directly -- forward it over adb (`adb forward tcp:3743 tcp:3743`, re-run after each device reconnect) and then drive it exactly as on desktop. The APK declares the `INTERNET` permission (`android-project/app/src/main/AndroidManifest.xml`): Android gates **all** socket creation -- even loopback -- behind it, so without it `bind()` returns `EACCES` on every port and the fallback loop logs `failed to bind any port in [3743, 3763)` (a blanket denial, not a port clash). Confirm the grant with `adb shell dumpsys package org.libsdl.app.quest | grep INTERNET`. See [`doc/agents/mcp_server_usage.md`](doc/agents/mcp_server_usage.md) for the full recipe.
-
-**Interactive (windowed) debugging needs the user at the controls -- prompt for readiness before launching.** When a bug can only be reproduced by live mouse/keyboard/controller input (e.g. physics right-drag, gizmo manipulation, box-select, anything the headless MCP cannot drive), the standard loop is: add `log_*` instrumentation on the suspected path, build the windowed editor, then have the *user* perform the gesture while the file sink records to `logs/log.txt`. Because the run depends on the user actually being present and ready to interact, **prompt the user to get ready and wait for their go-ahead before launching the windowed editor** -- do not launch it and assume they will notice. After launch, tell them the exact gesture to perform and the log prefix you will grep for, then read `logs/log.txt` once they confirm. (This mirrors the Quest headset-prompt protocol: install/build first, then prompt, then act on an acknowledged signal.)
-
-**Driving the WINDOWED editor from an agent session** (verified 2026-07-30;
-the headless flow above is still preferred when a real display is not
-required):
-- Launch with a hidden console (the editor is a console-subsystem binary and
-  its console window annoys the user):
-  `powershell Start-Process -FilePath <build>\bin\editor.exe -WorkingDirectory <repo> -WindowStyle Hidden`.
-  The working directory MUST be the repo root (config/, res/, logs/).
-- Kill `editor.exe` before every relink (LNK1168 otherwise), and poll
-  readiness by grepping `logs/log.txt` for `Main loop: completed frame 12`.
-- Scene node ids RESHUFFLE on every launch - re-query with
-  `get_scene_nodes` before every `select_items`; never reuse an id from a
-  previous run.
-- Screenshots: PREFER the MCP `capture_screenshot` tool -- it works in the
-  windowed build too (2026-08-08; captures the editor's own composited
-  frame, so occlusion by other windows does not matter). OS-level window
-  capture (`py -3 scripts/capture_window.py`) remains only for cases the
-  in-editor capture cannot serve (PrintWindow by default - no focus change;
-  `--foreground` raises the window and blits from the screen).
-  **ALWAYS ASK THE USER FOR PERMISSION BEFORE ANY non-headless window
-  capture, every time.** The user may be using the computer for something
-  else entirely, the editor may not be the topmost window (the capture can
-  include unrelated windows or content), and the user may be live-driving
-  the editor without knowing a capture is being taken - the user must
-  always be aware when non-headless screenshotting is in use. A single
-  granted permission covers only the capture(s) it was asked for, not the
-  rest of the session.
-
-**Scripted startup scene**: `config/editor/commands.json` is a startup script (`scene.add_cameras` / `add_lights` / `add_room` / `add_platonic_solids` / ... with arg blocks; see `editor.cpp` dispatch + `src/editor/config/definitions/*.py` for arg fields). Adjust it to stand up a reproducible test scene before the editor even finishes init -- this is the preferred knob for "I need scene X to debug Y".
-
-**Augment the API when a capability is missing.** If a debugging task needs an editor action the MCP server does not expose, add a new tool (a `query_*`/`action_*` handler + the `req->tool_name == "..."` dispatch entry + its `tools/list` schema in `refresh_tool_list`) rather than working around it from outside. Growing this surface makes the live editor scriptable for the next investigation; treat it as first-class debugging infrastructure.
-
-## GPU frame debugging (RenderDoc fork MCP server)
-
-**Skill:** invoke the **`erhe-renderdoc-gpu-debug`** skill for any "renders nothing / renders wrong / wrong color / why does X look different from Y / I need to SEE the frame or the exact uniform values feeding a shader" bug. It is the condensed run-book for this section: capture a frame, `save_texture` a render target to PNG and `Read` it to see the frame, and read decoded constant-buffer values (`get_constant_buffers` -> `get_constant_buffer_contents`) at a specific draw. On macOS reproduce the bug on `build_xcode_vulkan` first (RenderDoc cannot capture Metal/OpenGL or the headless emulated swapchain).
-
-For **windowed Vulkan GPU debugging** -- inspecting a captured frame's pipeline state, render targets, texture statistics (min/max/mean, NaN/Inf/zero counts), pixel history, constant-buffer contents, post-VS geometry, and saving textures -- use the **RenderDoc fork MCP server** ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc), branch `mcp-server`, cloned and built locally), an MCP server embedded in `qrenderdoc` that connects to the running editor (which loads the fork's in-app `renderdoc.dll`) and reads back the captured frame programmatically. This is the tool for "renders nothing / renders wrong" bugs that the headless `capture_screenshot` and the in-editor MCP cannot diagnose (they show *what* is wrong, not *why* at the GPU level). It needs a **live display** (real WSI swapchain) -- it does not work against the headless emulated swapchain. The full tested recipe, gotchas, and a worked example (the "black atmosphere sky" bug) are in [`doc/agents/renderdoc_fork.md`](doc/agents/renderdoc_fork.md); the fork's own tool reference is its [`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md) (the `D:\renderdoc\...` paths in that doc are just this machine's clone/build location of the fork).
-
-**On-demand launch via the stdio proxy.** AI clients commonly connect MCP servers at session start and may not reconnect one mid-session, so a raw HTTP registration pointing at `qrenderdoc` only works if it was already running at startup. Instead, register the **stdio proxy** `scripts/renderdoc_mcp_proxy.py` in `.mcp.json` (`"renderdoc": { "command": "py", "args": ["-3", "<repo>/scripts/renderdoc_mcp_proxy.py"] }`). A stdio server is spawned at client startup, so its tools are registered immediately; the proxy serves the fork's tool schema from the committed `scripts/renderdoc_tools.json` and **launches `qrenderdoc --mcp-server` lazily on the first tool call** (or eagerly via its `renderdoc_launch` tool), proxying JSON-RPC over POST to `127.0.0.1:7398`. It **leaves `qrenderdoc` running** when the AI client exits; the `renderdoc_shutdown` tool only tears down an instance the proxy itself launched (an externally started `qrenderdoc` is never touched). Other management tools: `renderdoc_status` (is the backend reachable, did the proxy launch it). This lets the agent launch RenderDoc on demand without a manual pre-start or MCP reconnect.
-
-**One-shot setup:** `py -3 scripts/setup_renderdoc_mcp.py` clones+builds the fork, configures erhe, registers the proxy in `.mcp.json`, and generates the schema (re-run with `--skip-build` to just rewire an existing build; `--help` for options). The pieces it wires up:
-
-`scripts/renderdoc_tools.json` is the proxy's baked-in tool schema, **regenerated with `py -3 scripts/capture_renderdoc_tools.py`** (which launches `qrenderdoc` on demand to dump its `tools/list`). Re-run and re-commit it whenever the fork's tool set changes. `.mcp.json` is machine-specific and stays untracked/local; the proxy honors `ERHE_RENDERDOC_QRENDERDOC` / `ERHE_RENDERDOC_MCP_HOST` / `ERHE_RENDERDOC_MCP_PORT` / `ERHE_RENDERDOC_LAUNCH_TIMEOUT` env overrides for the path/port. This complements the Visual Studio MCP server (build + debug-launch the editor) and the in-editor MCP server (set up the scene): the canonical windowed GPU-debug loop drives all three.
-
-## Memory growth diagnostics (Linux)
-
-Two zero-install tools. Both launch the editor in an isolated working directory (copy of `config/` with optional overrides applied, `res/` symlinked, shared spirv cache), so the user's `config/` is never touched and runs are reproducible:
-
-- `python3 scripts/idle_memory_check.py --duration 300` -- launches the editor, samples VmRSS / smaps_rollup / per-process DRM fdinfo GPU counters (GTT/VRAM) once a second, fits Theil-Sen + least-squares slopes, prints per-mapping growth attribution and a leak verdict (exit code 1 = growth). `--set 'file.json:dotted.path=value'` overrides any value in the copied config (works for logger levels in logging.json too); `--build-dir` selects other builds, including the OpenGL one.
-- `python3 scripts/vk_alloc_census.py` -- runs the editor under gdb (ptrace_scope=1 forbids attaching, so gdb must be the parent) and counts DRM `GEM_CREATE` ioctls with requested sizes and backtraces, Vulkan loader create/destroy entry points, and glibc brk/anonymous-mmap heap growth, all normalized per `vkQueuePresentKHR` frame. This sees GPU allocations the driver makes internally (command-stream / descriptor upload BOs) that never go through `vkAllocateMemory`/VMA.
-
-History: the 2026-06 idle leak (~850 MiB/min host heap + ~5 GiB/min GTT at uncapped fps) was `Device_impl::get_command_buffer()` calling `vkAllocateCommandBuffers` every frame; `vkResetCommandPool` resets but never frees pool-owned handles, so each frame leaked a `VkCommandBuffer` whose RADV command-stream/upload BOs stayed resident. Fixed by reusing handles across frame-in-flight cycles (`Per_thread_command_pool::vk_command_buffers` / `next_handle_index`). Exit-time stats (VMA dump, LSAN) looked clean because teardown's `vkDestroyCommandPool` freed everything -- steady growth needs over-time attribution, not exit-time leak checks.
-
-## Quest / Android device work
-
-**Skill:** invoke **`erhe-quest-launch`** for ANY Quest (or `mobile`-flavor
-Android) build / install / launch / log-capture work -- it is the full
-run-book: canonical script invocations, the persistent logcat capture
-(`scripts/quest_logcat.sh`, started BEFORE every launch), erhe-only log
-filtering, readiness signals, Android SDK/JDK probing, and the mobile
-sideload-dialog workaround. `erhe-quest-validation` (make silent GPU hangs
-abort loudly) and `erhe-quest-shader-failure` (vkCreateShaderModule /
-spirv-val aborts at startup) build on it.
-
-The inviolable launch protocol, even when not using the skill: install the APK
-FIRST, then prompt the user to put the headset on and activate the
-controllers, and wait for explicit confirmation before EVERY one-off
-`adb shell am start`; a confirmation applies only to that one launch. Batch /
-soak runs are the exception: one confirmation at the start covers the whole
-unattended sweep -- do not prompt between iterations, but stop and re-confirm
-if results suggest the headset went off-head. Pure builds and installs need no
-prompt. Never blind-sleep waiting for the editor to come up; poll for a
-readiness signal (recipes in the skill).
-
-Vulkan validation on Quest: without `VK_LAYER_KHRONOS_validation`, GPU-side
-errors are silent hangs. The layer .so is bundled in every APK by default; the
-runtime knob is `"vulkan_validation_layers"` in
-`config/editor/erhe_graphics.json` (device-level errors then abort via
-`ERHE_FATAL`). Leave the knob off for normal runs (per-frame overhead); the
-bundled .so alone costs nothing -- see `erhe-quest-validation` for the full
-flow including the SPIR-V cache wipe.
-
-## Python
-
-**IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
-
-**Write repository tooling/scripts in Python, not PowerShell.** New helper scripts (under `scripts/` or elsewhere) must be Python (`py -3`) - do not add `.ps1` PowerShell scripts. This keeps tooling portable and consistent. The only exception is the platform build-configure wrappers that must set up the native toolchain environment: `scripts/configure_*.bat` (Windows) and `scripts/configure_*.sh` (macOS/Linux); do not rewrite those.
-
-Example:
-
-```bash
-py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
-```
-
-## Shell process hygiene (find.exe)
-
-On this Windows machine `find` resolves to Git Bash's `C:\Program Files\Git\usr\bin\find.exe`. A broad search such as `find / -name <file>` walks the entire Windows filesystem and effectively hangs, leaving an orphaned `find.exe` running in the background. Prefer the dedicated Glob/Grep tools, or scope `find` to a specific directory -- never `/`. Every now and then, and especially right after you have used `find`, verify that no leftover `find.exe` processes remain and kill any that do:
-
-```powershell
-Get-CimInstance Win32_Process -Filter "Name='find.exe'" | Select-Object ProcessId, CommandLine | Format-List
-Get-CimInstance Win32_Process -Filter "Name='find.exe'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-```
-
-## Editor Improvement Plan
-
-See [`doc/plans/editor_improvements.md`](doc/plans/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
-
-## Machine-Neutral Committed Files
-
-**Never write machine-dependent information into files that are committed / pushed to the repo** - this applies to ALL committed files (sources, docs, AGENTS.md, memory-bank), not just the Memory Bank (whose README "Machine-Scope Rule" defines the same policy). Forbidden: absolute per-machine paths (`C:\Users\<name>\...`, `C:\git\...`, `D:\...`), usernames, hostnames, per-machine install state. Phrase facts as capabilities or with placeholders (`%USERPROFILE%`, `<your clone>`), and record the actual per-machine values (clone locations, tool install paths) in `memory-bank/local/*.md`, which is gitignored.
-
-## Text Encoding
-
-**Use only ASCII characters** in all source files (.cpp, .hpp) and documentation files (.md). Never use Unicode dashes, quotes, or other non-ASCII characters. Use `-` or `--` instead of em-dash, `'` instead of curly quotes, etc.
-
-## Diagnostic float serialization
-
-When (de)serializing `float` / `double` values for diagnostic purposes (capturing
-live values to dump/replay, repro generation, bit-exact comparison across runs or
-processes), always use hexadecimal floating-point literals (`%a` / `std::hexfloat`,
-parsed back with `%a` / `strtod` / `std::from_chars`). Decimal formatting is lossy
-and round-trips are not guaranteed bit-exact, which silently invalidates any
-diagnostic that depends on reproducing the exact same bits.
-
-## Scene-hosted references in editor parts
-
-Scenes can be closed at runtime (Hierarchy "Close" context menu, MCP
-`close_scene`). Any editor part (window, tool, cache, singleton) that stores a
-reference across frames to scene-hosted content - items of a scene's content
-library (materials, brushes, `Graph_mesh` / `Graph_texture` assets), scene
-nodes, meshes, cameras, or the `Scene_root` itself - must handle that scene
-closing, or it keeps showing / editing / simulating content of a dead scene
-(a recurring bug class).
-
-- A `weak_ptr` alone is NOT sufficient: any cached resolved `shared_ptr`
-  (including the part's own resolve cache) keeps the item alive, so expiry
-  never signals the close.
-- Either subscribe to `App_message_bus::close_scene` and drop the references
-  (precedent: `Editor::on_close_scene()` clearing graph editor targets), or
-  validate on access that the item's host is still a registered scene:
-  `App_scenes::is_host_registered(item->get_item_host())` (precedent:
-  `Geometry_graph_window::resolve_target()`).
-- `Editor::on_close_scene()` arms a **scene-close leak watchdog**: 60 frames
-  after a close it logs a `scene-close leak: ...` warning for every tracked
-  item of the closed scene still alive (and an all-released info line when
-  clean). Treat these warnings as bugs of this class; when touching close /
-  teardown paths, close a scene and grep `logs/log.txt` for
-  `scene-close leak` as part of verification.
-
-A scene closing is only half of it: content also leaves the editor **without**
-any scene closing, when an undo removes it - undoing a glTF import takes every
-imported asset back out of the content library and every imported node back out
-of the scene. So a cached reference must handle BOTH.
-
-- Subscribe to `App_message_bus::items_removed` and drop the reference when
-  `message.removed->lookup.contains(ptr)` names it (precedent:
-  `Animation_window::on_items_removed()`). Handlers do that set lookup ONLY -
-  no manager lookups, no linear scans - because undoing a large import
-  announces thousands of items in one message.
-- The message is published once per frame by
-  `Asset_manager::flush_pending_removals()`, from `Editor::tick` just before
-  the message bus pump. The producers are the content-library detach walk
-  (`release_host_for_subtree`), `Item_insert_remove_operation`, and
-  `Asset_manager::on_scene_unregistered` - so no new removal path needs its own
-  integration.
-- Re-resolving state needs the same care as a cached `shared_ptr`: an item
-  removed by an undo stays alive in the undo history for redo, so a weak
-  "last selected" entry is still lockable and a part that re-resolves it every
-  frame will resurrect the reference (`Selection::on_items_removed()` forgets
-  those entries for exactly this reason).
-- Verify with `scripts/undo_reference_clearing_smoke_test.py` (drives a running
-  editor over MCP) and the `get_editor_references` MCP query, which reports
-  every such cached reference. See doc/editor/import_undo_reference_clearing.md.
+A change to shared infrastructure (e.g. `erhe::scene_renderer`) keeps these targets building and consistent: the `editor` executable, `src/example`, `src/hello_swap`, `src/hextiles` and the `erhe::*` libraries.
 
 ## No Band-Aid Fixes
 
@@ -715,6 +90,33 @@ Be mindful about memory allocations: actively avoid heap allocations in run-time
 - Reset persistent containers with `clear()`, never by assigning a fresh default-constructed object (which deallocates).
 - Debug-only paths (e.g. behind `collect_debug`) may allocate.
 
+## Logging
+
+**Always use erhe logging -- never `printf` / `fprintf` / `std::cout` / `std::cerr`, not even for temporary debug tracing.** Library (`erhe::*`) code uses that library's own `erhe::log::make_logger(...)` category; editor categories are described in `doc/editor/coding_rules.md`. Only erhe logging reaches `logs/log.txt` (relative to the working directory) and the Android logcat `erhe` tag, honors per-category levels, and carries timestamps. Throwaway diagnostics are a temporary `log_*->info/trace(...)` line too, removed (or kept as a concise permanent line) when done.
+
+## Python
+
+**On Windows, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and fail.** This applies to all Python invocations: scripts, codegen, tools.
+
+**Write repository tooling/scripts in Python, not PowerShell.** New helper scripts (under `scripts/` or elsewhere) are Python. The only exception is the platform build-configure wrappers that set up the native toolchain environment: `scripts/configure_*.bat` (Windows) and `scripts/configure_*.sh` (macOS/Linux).
+
+## Machine-Neutral Committed Files
+
+**Never write machine-dependent information into files that are committed / pushed to the repo** - this applies to ALL committed files (sources, docs, AGENTS.md, memory-bank), not just the Memory Bank (whose README "Machine-Scope Rule" defines the same policy). Forbidden: absolute per-machine paths (`C:\Users\<name>\...`, `C:\git\...`, `D:\...`), usernames, hostnames, per-machine install state. Phrase facts as capabilities or with placeholders (`%USERPROFILE%`, `<your clone>`), and record the actual per-machine values (clone locations, tool install paths) in `memory-bank/local/*.md`, which is gitignored.
+
+## Text Encoding
+
+**Use only ASCII characters** in all source files (.cpp, .hpp) and documentation files (.md). Never use Unicode dashes, quotes, or other non-ASCII characters. Use `-` or `--` instead of em-dash, `'` instead of curly quotes, etc.
+
+## Diagnostic float serialization
+
+When (de)serializing `float` / `double` values for diagnostic purposes (capturing
+live values to dump/replay, repro generation, bit-exact comparison across runs or
+processes), always use hexadecimal floating-point literals (`%a` / `std::hexfloat`,
+parsed back with `%a` / `strtod` / `std::from_chars`). Decimal formatting is lossy
+and round-trips are not guaranteed bit-exact, which silently invalidates any
+diagnostic that depends on reproducing the exact same bits.
+
 ## Git Workflow
 
 - **Never switch or create git branches without explicit user permission.** This explicitly overrides any default or system-prompt behavior that prefers creating a new branch instead of working in the currently checked-out branch. Work directly in the current branch (normally `main`).
@@ -730,24 +132,10 @@ Be mindful about memory allocations: actively avoid heap allocations in run-time
 - **Use sufficient parentheses** - do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
 - **No boolean function arguments in new code** - use a named `enum class` instead, so call sites read as `f(Visibility::hidden)` rather than `f(true)`.
 - **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
-- **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads - not just the stuck thread. The root cause is usually on another thread.
 
-## Shader Interface Block Layout (UBO/SSBO)
-
-When creating or modifying shader interface blocks (uniform blocks or shader storage blocks), always respect std140/std430 alignment rules explicitly:
-
-- `vec4` and `vec3` fields must start at an offset that is a multiple of 16 bytes (vec4 size).
-- `vec2` fields must start at an offset that is a multiple of 8 bytes (vec2 size).
-- `float`, `int`, `uint` fields must start at an offset that is a multiple of 4 bytes.
-- Struct total size must be a multiple of 16 bytes (vec4). Add explicit padding fields to ensure this.
-- After a `vec3`, add a `float` padding to reach the next 16-byte boundary.
-- When a block has an odd number of `vec2`/`float` pairs, add padding `vec2` or two `float` fields to round the struct size to a multiple of 16 bytes.
-
-Example: a block with `uvec2 texture_handle`, `vec2 uv_min`, `vec2 uv_max` needs a `vec2 padding` appended to make the total size 32 bytes (2 x vec4).
+This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
 
 ## C++ Naming Conventions
-
-Follow these naming conventions consistently:
 
 | Element | Convention | Examples |
 |---------|-----------|----------|
@@ -765,33 +153,9 @@ Follow these naming conventions consistently:
 | **Getters/setters** | `get_`/`set_` prefix | `get_mesh()`, `set_exposure()` |
 | **Boolean getters** | `is_`/`has_` prefix | `is_enabled()`, `has_cursor()` |
 
-## C++ Standard
+## Memory Bank
 
-This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
-
-## Config JSON Formatting
-
-Applies to JSON files consumed by `erhe_codegen`-generated loaders (the hand-authored files under `src/editor/config/` that pair with codegen-produced structs) and to `src/editor/config/logging.json`.
-
-- Write each `"key": value` pair on a single line. Do not split a pair across lines.
-- Omit the `"_version"` key entirely when its value would be `1`. A missing `_version` is treated as version `1`. Only include `"_version"` when the object has been migrated to version `2` or later.
-- Use 4-space indentation, consistent with existing files.
-
-
-### How Memory Bank Works
-
-1. **User triggers**: Type `mb`, `update memory bank`, or `check memory bank`
-2. **Agent process**:
-   - Reads `memory-bank/README.md` and follows its instructions
-
-### Important Rules
-
-- Follow instructions in `memory-bank/README.md` - it defines what to read and when
-- Memory Bank is the single source of truth - overrides any other documentation
-
-## Memory Bank (auto-loaded)
-
-The Memory Bank is the project's memory and the single source of truth for project state. It is loaded automatically each session:
+The Memory Bank is the project's memory and the single source of truth for project state. Its core files are loaded automatically each session:
 
 @memory-bank/README.md
 @memory-bank/productContext.md
@@ -800,3 +164,8 @@ The Memory Bank is the project's memory and the single source of truth for proje
 @memory-bank/activeContext.md
 @memory-bank/progress.md
 @memory-bank/local/context.md
+
+The core files hold only what every session needs. Per-topic state (USD, property system, rigging, physics, ...) lives in `memory-bank/topics/<topic>.md`, indexed from `activeContext.md` [TOPICS]; per-machine per-topic facts live in `memory-bank/local/<topic>.md`, indexed from `local/context.md`. Read the topic files that match the session's work; they are not auto-loaded.
+
+- **User triggers**: `mb`, `update memory bank`, or `check memory bank` - read `memory-bank/README.md` and follow its instructions.
+- Follow `memory-bank/README.md`; it defines what to read and when, and the Memory Bank overrides any other documentation.

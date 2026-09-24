@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Acceptance criteria 1-9 and 12 of doc/plans/rigging/pole_target.md, over MCP.
 
-Runs against an ALREADY RUNNING editor (headless is enough; see AGENTS.md
+Runs against an ALREADY RUNNING editor (headless is enough; see doc/agents/editor_runs.md
 "In-editor MCP server"). It creates its own scene, imports the tracked
 RiggedFigure fixture, authors the effector bone's Ik.* values and a pole node,
 and drives the `ik_drag` tool, computing the chain's bend direction (R11
@@ -156,7 +156,7 @@ def log_size():
 
 
 def log_since(offset):
-    """The editor's log text written after `offset` (AGENTS.md "Runtime logs")."""
+    """The editor's log text written after `offset` (doc/agents/editor_runs.md "Logs")."""
     try:
         with open(LOG_PATH, "rb") as handle:
             handle.seek(offset)

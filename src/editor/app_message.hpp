@@ -196,7 +196,7 @@ struct Removed_items
 // Published once per frame for content taken out of the editor without a scene
 // closing: undoing a glTF import removes every imported asset from the content
 // library and every imported node from the scene. Same contract as close_scene
-// (AGENTS.md "Scene-hosted references in editor parts") - a part that caches a
+// (doc/editor/coding_rules.md "Scene-hosted references in editor parts") - a part that caches a
 // reference to editor content must drop it when this message names that item,
 // or the item survives as an undeclared user in the exclusivity check of
 // Asset_manager::unload_record. Handlers do a lookup against the set ONLY: no

@@ -26,7 +26,7 @@ each notification, so nothing is recomputed per frame.
 no scene to name a node in, so the value carries no serialize flag and starts
 unset in every session. `Grid_tool` subscribes to `App_message_bus::close_scene`
 and `items_removed` and clears `frame_node` on the grids naming content that
-leaves (AGENTS.md "Scene-hosted references in editor parts"); the
+leaves (doc/editor/coding_rules.md "Scene-hosted references in editor parts"); the
 `get_editor_references` MCP query reports each grid's frame node. A grid is in
 no scene, so MCP addresses it by its name or item id (`get_item_properties`,
 `set_item_property`) and `set_item_property` takes `reference_id` for

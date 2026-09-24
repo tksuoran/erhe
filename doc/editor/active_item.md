@@ -85,7 +85,7 @@ keeps its name. The identifiers of this one say `active_item` everywhere:
 `Selection_message`, and directly from `set_active_item` when no selection
 change is open, so subscribers always observe the active item and the
 selection in their final state. Consumers that cache a resolved reference
-follow the scene-close and items-removed rules of AGENTS.md ("Scene-hosted
+follow the scene-close and items-removed rules of doc/editor/coding_rules.md ("Scene-hosted
 references in editor parts").
 
 ### D5. Presentation

@@ -40,7 +40,7 @@ public:
 // `relative_path` is the M1 path of the bound prim below the prim carrying
 // the set, empty for that prim itself. The material is held weakly: a
 // material an undo takes out of the editor must not be pinned by the table
-// (AGENTS.md "Scene-hosted references in editor parts").
+// (doc/editor/coding_rules.md "Scene-hosted references in editor parts").
 class Variant_binding
 {
 public:

@@ -2,7 +2,7 @@
 
 namespace editor {
 
-// AI-driven editor runs (see AGENTS.md): when an AI coding agent launches the
+// AI-driven editor runs (see doc/agents/editor_runs.md): when an AI coding agent launches the
 // editor it sets ERHE_AI_DRIVER=1. The run then behaves as an unattended
 // diagnostic session rather than a user session:
 //

@@ -7,7 +7,7 @@ without closing a scene, so the `close_scene` channel - the one teardown
 notification editor parts subscribe to - never fires. `Items_removed_message`
 is the second teardown channel, published once per frame for content that left
 the editor without a scene closing, and it carries the same contract as
-`close_scene` (AGENTS.md, "Scene-hosted references in editor parts"): a part
+`close_scene` (doc/editor/coding_rules.md, "Scene-hosted references in editor parts"): a part
 that caches a reference to editor content drops it when this message names
 that item.
 

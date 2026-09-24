@@ -110,7 +110,7 @@ constexpr float        c_jointed_drag_brake_distance            = 0.05f; // mete
 // its speed limit * dt (see c_jointed_drag_limit_margin).
 //
 // The owner detaches before the world or the dragged body goes away: on scene
-// close and when the dragged node is removed (AGENTS.md "Scene-hosted
+// close and when the dragged node is removed (doc/editor/coding_rules.md "Scene-hosted
 // references in editor parts").
 class Physics_drag_constraint
 {

@@ -257,6 +257,12 @@ MemoryBank::git-committed+public-repo→MachineNeutralOnly!
 ## Additional Context
 
 @flexible::CreateMore{path:"memory-bank/*"}
+- topics/*.md :: PerTopicState{¬auto-loaded;read-on-demand}
+  - DurableStateOfOneSubject{landed-work+traps+open-items+patterns;usd|property_system|rigging|physics|...}
+  - activeContext[TOPICS]::index{one-line-hook-per-topic}→read-the-topics-matching-the-session
+  - CompletedTask→history{as-before}+DurableState→TopicFile{traps+open-items+user-interactive-checks}
+  - CoreFiles::only-what-EVERY-session-needs;PlatformFacts→platform-topic{windows.md}
+- local/<topic>.md :: PerMachinePerTopic{gitignored;indexed-in-local/context.md[LOCAL_TOPICS]}
 - features/*.md :: ComplexFeatures
 - api/*.md :: APISpecs  
 - decisions/*.md :: ArchitectureRecords

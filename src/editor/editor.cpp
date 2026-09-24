@@ -3295,7 +3295,7 @@ public:
         // subscribe to close_scene themselves and drop their own hosted
         // references (Brush_tool, Material_paint_tool, Material_preview,
         // Brdf_slice, Physics_tool, Operations, Animation_player /
-        // Animation_window; see AGENTS.md "Scene-hosted references").
+        // Animation_window; see doc/editor/coding_rules.md "Scene-hosted references").
         {
             erhe::Item_host* const closing_host = static_cast<erhe::Item_host*>(scene_root.get());
             for_each_graph_window(
@@ -3368,7 +3368,7 @@ public:
     // survivors exist (e.g. a prefab template whose instances in other
     // scenes keep resources alive). Anything reported is an instance of the
     // scene-close bug class: a subsystem cached a shared_ptr to scene-hosted
-    // content and did not enroll in close cleanup (see AGENTS.md
+    // content and did not enroll in close cleanup (see doc/editor/coding_rules.md
     // "Scene-hosted references in editor parts"). Items intentionally kept
     // alive by inventory / hotbar slots (persistent inventory) are reported
     // as info, not warnings.

@@ -11,8 +11,7 @@ variable values at the fault site. Do NOT try to reason a crash out from
 `logs/editor_crash_*.dmp` minidump -- they are a hypothesis, not the diagnosis.
 
 This is the authoritative macOS/Linux lldb run-book. The Windows VS-MCP prose
-(full tool list, typical flow, gotchas) lives in AGENTS.md under "Debugging on
-Windows / MSVC (Visual Studio MCP server)".
+(full tool list, typical flow, gotchas) lives in `doc/agents/debugging.md`.
 
 ## Pick the platform path
 
@@ -24,7 +23,7 @@ Windows / MSVC (Visual Studio MCP server)".
   `debugger_status` until it breaks -> `debugger_get_callstack` /
   `debugger_get_locals` / `debugger_evaluate` -> `debugger_stop`. Always
   `solution_info` first to confirm which solution is loaded; for headless-only
-  repros open `build_vs2026_vulkan_headless/erhe.slnx`. (AGENTS.md has the full
+  repros open `build_vs2026_vulkan_headless/erhe.slnx`. (`doc/agents/debugging.md` has the full
   tool list and flow.) `lldb-mi`/GDB-MI do not exist here; on Windows use VS-MCP.
 
 ## macOS: which lldb interface (most efficient first)
@@ -81,7 +80,7 @@ Windows / MSVC (Visual Studio MCP server)".
 - **Building & launching to verify is self-serve** -- you may build
   `build_xcode_metal`/etc. and launch the editor on your own initiative (mind the
   live-display requirement); only ask if the user told you to.
-- Run erhe gtest suites serially, one failure at a time (AGENTS.md "Testing"); an
+- Run erhe gtest suites serially, one failure at a time (`doc/testing.md`); an
   abort hides the rest of the run.
 
 ## When NOT this skill

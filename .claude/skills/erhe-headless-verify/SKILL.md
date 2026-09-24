@@ -6,7 +6,7 @@ description: Verify editor behavior end-to-end without a display -- build the he
 # erhe headless verification (headless Vulkan build + in-editor MCP)
 
 The condensed run-book for the loop used to verify editor changes headlessly.
-Full reference: AGENTS.md "In-editor MCP server".
+Full reference: `doc/agents/editor_runs.md`.
 
 ## Step 1 -- build
 
@@ -89,7 +89,7 @@ py -3 scripts/mcp_call.py get_scene_nodes b64:<base64-of-{"scene_name":"Default 
 - Missing capability? Add a new MCP tool (handler + dispatch entry in
   `src/editor/mcp/mcp_server*.{hpp,cpp}`, schema in
   `config/editor/mcp_tools.json`) rather than working around it --
-  AGENTS.md calls this out as first-class debugging infrastructure.
+  `doc/agents/editor_runs.md` calls this out as first-class debugging infrastructure.
 
 ## Step 4 -- clean up (always)
 

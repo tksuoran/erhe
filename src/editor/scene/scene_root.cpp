@@ -339,7 +339,7 @@ Scene_root::Scene_root(
         );
         // Content taken out of the editor without a scene closing - an undo of
         // the import that brought a variant set in - takes the set out of the
-        // table, so a dead set is never offered (AGENTS.md "Scene-hosted
+        // table, so a dead set is never offered (doc/editor/coding_rules.md "Scene-hosted
         // references in editor parts").
         m_items_removed_subscription = app_message_bus->items_removed.subscribe(
             [this](Items_removed_message& message) {

@@ -481,8 +481,8 @@ if (ERHE_SPIRV)
         #      DebugSource line/column check added in SPIRV-Tools #5986 / Vulkan SDK
         #      1.4.350); now emits column 0 like every other DebugInfo instruction.
         # The fork (rather than a CPM PATCHES patch) keeps the build free of any host
-        # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
-        # AGENTS.md. Move back to KhronosGroup/glslang and bump the tag once upstream
+        # `patch` invocation - see the fork rule in
+        # doc/cmake_conventions.md. Move back to KhronosGroup/glslang and bump the tag once upstream
         # ships both fixes.
         GIT_TAG           6ee8c2531efcf16e1531d7a1259dd7100c1db020
         GITHUB_REPOSITORY tksuoran/glslang
@@ -1251,8 +1251,8 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     # VUID-xrStructureTypeToString-value-parameter that any "warnings are
     # fatal" debug callback escalates to an abort. Not present upstream. The
     # fork (rather than a CPM PATCHES patch) keeps the build free of any host
-    # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
-    # AGENTS.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
+    # `patch` invocation - see the fork rule in
+    # doc/cmake_conventions.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
     # once upstream carries the fix.
     #
     # The fork additionally adds OPENXR_VULKAN_INCLUDE_DIR, used below.

@@ -350,7 +350,7 @@ void Transform_tool::on_render_scene_view(Render_scene_view_message& message)
 void Transform_tool::on_close_scene(Close_scene_message& message)
 {
     // A drag in progress must not keep a spring or a kinematic hold on the
-    // bodies of a closing scene (AGENTS.md "Scene-hosted references in
+    // bodies of a closing scene (doc/editor/coding_rules.md "Scene-hosted references in
     // editor parts"): the physics world goes away with the scene.
     m_physics_drag.on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
 }

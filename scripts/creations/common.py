@@ -7,7 +7,7 @@ geometry operations. Run with:
 
     py -3 scripts/creations/<script>.py [--port 3743]
 
-The editor must already be running (see AGENTS.md "In-editor MCP server").
+The editor must already be running (see doc/agents/editor_runs.md "In-editor MCP server").
 """
 
 import argparse

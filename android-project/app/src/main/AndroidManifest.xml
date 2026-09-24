@@ -66,8 +66,8 @@
          embedded MCP server gets EACCES from bind() on every port and logs
          "failed to bind any port in [3743, 3763)". That is what makes
          MCP-driven on-device verification (capture_screenshot and the rest)
-         possible over "adb forward tcp:3743 tcp:3743". See AGENTS.md,
-         "Reaching the server on Quest / Android". -->
+         possible over "adb forward tcp:3743 tcp:3743". See doc/agents/quest.md,
+         "Reaching the MCP server on the device". -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Android 11+ filters which packages an app can see. The platform's

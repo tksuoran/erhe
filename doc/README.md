@@ -22,8 +22,12 @@ below and is part of every documentation change.
   run-books, the catalog of agent-built creations, MCP server setup guides.
   A document a human developer needs as often as an agent does stays with
   its subject.
-- `doc/<subject>.md` at the top level is a cross-cutting workflow: building
-  and platforms.
+- `doc/<subject>.md` at the top level is a cross-cutting workflow: building,
+  testing, CMake conventions and platforms.
+- `AGENTS.md` holds only the rules every agent session needs; its "Topic
+  documents" table routes each platform and topic to its document. A rule
+  that only some sessions need goes into the topic's document and, when it
+  is a new topic, gets a row in that table.
 - A landed design record stays a current document; its numbered section
   labels (`D5`, `R3`, `C7`) are cited from source comments and stay stable
   across edits.
@@ -57,9 +61,43 @@ Every document states its standing in its first ten lines:
 
 ## Writing rules
 
-- A document describes the present. History belongs in commit messages
-  (`git log --follow` on the document and the code it covers); see the
-  "Live documents" rule in AGENTS.md.
+- A document describes the present, not the past. A live document states
+  the subsystem's CURRENT state - requirements, design, verification status -
+  and the REMAINING future work. It never narrates history: no commit hashes
+  or commit tables, no dated progress or "follow-up series" sections, no
+  phase-by-phase records of work already landed, no "an earlier revision did
+  X" or before/after narration. History belongs in commit messages
+  (`git log --follow` on the document and the code it covers). When updating
+  a document after landing work, rewrite the affected statements in the
+  present tense and move anything still outstanding into its plan - never
+  append a dated record. Settled decisions and traps stay, stated as standing
+  rules with their rationale, not as stories; measured results stay only
+  while they describe current behavior or are needed to interpret a future
+  re-run.
+- A document states what to do, not what to avoid. Plans and requirement
+  lists above all specify their subject positively: the dependencies a type
+  may name, the call sites that may reach an API, the states a value may
+  hold, the steps a phase performs. Give the closed list of what is allowed
+  and let everything outside it be excluded by omission; a requirement that
+  enumerates forbidden alternatives is both longer and weaker, because the
+  enumeration is never complete and the reader still has to infer the rule
+  behind it. A requirement, a design constraint and a phase step each read as
+  an instruction that can be carried out and checked as written. Reserve the
+  negative form for a trap that has actually been hit and would otherwise be
+  walked into again, state it once with the evidence for it, and give the
+  positive rule to follow in its place.
+- Each fact belongs in exactly one place. A document states each fact once,
+  in the section that owns it, and every other section that needs it refers
+  to that section by its label. This matters most in plans and requirement
+  lists, where a summary, an overview, a design note and a phase step can
+  each restate the same rule: the copies drift the moment one is edited, and
+  a reader who finds two versions of a rule has no way to tell which is
+  current. Prefer a reference (`R4`, `D9`, "the phase 3 sizing note") over a
+  restatement, even a short one; where a fact genuinely reads better
+  repeated, name the owning section in both places so the next edit updates
+  both. A section whose whole content is a restatement of other sections - an
+  overview, a summary of the design, a recap of requirements - is the form
+  that drifts fastest, so write the document without one.
 - File names are `snake_case.md`, named after the subject (a library after
   its CMake target). A plan is named after the work, without a `-plan`
   suffix; its directory already says what it is.
@@ -94,6 +132,7 @@ Every document states its standing in its first ten lines:
 - [erhe/gl_worker_context_enforcement.md](erhe/gl_worker_context_enforcement.md) (mostly stable): Enforcing the GL worker-context blocking invariant against taskflow deadlocks
 - [erhe/gl_worker_thread_contexts.md](erhe/gl_worker_thread_contexts.md) (stable): OpenGL worker-thread contexts: publication fencing, per-context containers, traps
 - [erhe/gltf.md](erhe/gltf.md) (mostly stable): glTF file import and export using the fastgltf library
+- [erhe/gpu_coding_rules.md](erhe/gpu_coding_rules.md) (stable): Rules for graphics backend and shader code: Vulkan validation cleanliness, UBO/SSBO layout
 - [erhe/graph.md](erhe/graph.md) (stable): Generic directed acyclic graph (DAG) framework
 - [erhe/graphics.md](erhe/graphics.md) (stable): Vulkan-style abstraction over OpenGL, Vulkan, and Metal
 - [erhe/graphics_test_coverage.md](erhe/graphics_test_coverage.md) (stable): GPU test coverage matrix for erhe::graphics
@@ -161,6 +200,7 @@ Every document states its standing in its first ten lines:
 - [editor/async_asset_loading_design.md](editor/async_asset_loading_design.md) (mostly stable): Design record behind async asset loading (numbered sections cited from code)
 - [editor/brushes.md](editor/brushes.md) (stable): Implements the brush system for placing parametric mesh shapes onto surfaces
 - [editor/child_prim_creation.md](editor/child_prim_creation.md) (stable): Creating a typed child prim under any prim from the Hierarchy context menu and MCP
+- [editor/coding_rules.md](editor/coding_rules.md) (stable): Rules for editor code: part construction, logging, scene-hosted references, config JSON
 - [editor/command_script.md](editor/command_script.md) (stable): Startup commands.json scene script: commands, execution and undo model
 - [editor/config.md](editor/config.md) (stable): Editor configuration loading
 - [editor/content_library.md](editor/content_library.md) (mostly stable): Indexes a scene's reusable resources - materials, brushes, styles, textures, physics items, animations, skins and node graphs - which live as prims in the scene's own tree
@@ -207,26 +247,34 @@ Every document states its standing in its first ten lines:
 - [editor/window_target_items.md](editor/window_target_items.md) (mostly stable): Editor windows with independent target items
 - [editor/windows.md](editor/windows.md) (stable): ImGui window implementations for the editor UI, including viewport display, property inspection, settings, and configuration
 
-### Building and platforms
+### Building, testing and platforms
 
 - [android.md](android.md) (experimental): Android (mobile flavor) port of the editor: build, packaging, verification ladder
 - [building.md](building.md) (stable): Build instructions, platform requirements, CMake options, build scripts
+- [cmake_conventions.md](cmake_conventions.md) (stable): CMake conventions, dependency pins and forks, code generation
 - [msvc_build_issues.md](msvc_build_issues.md) (experimental): MSVC stale-object / ODR incident: diagnosis recipe and prevention options
 - [quest.md](quest.md) (mostly stable): Building, installing and running the Quest 3 flavor
+- [testing.md](testing.md) (stable): Unit test suites, the editor MCP test suite, test build trees, CI
 
 ### Agents (`agents/`)
 
 - [agents/creations.md](agents/creations.md) (mostly stable): MCP-built showcase scenes and the editor features each exercises
+- [agents/debugging.md](agents/debugging.md) (stable): Crash, hang and GPU debugging: Visual Studio MCP, lldb, RenderDoc, missing tools
+- [agents/editor_runs.md](agents/editor_runs.md) (stable): Launching and driving the editor as an agent: MCP server, screenshots, user hand-off
+- [agents/linux.md](agents/linux.md) (stable): Linux sessions: build trees, memory growth diagnostics
 - [agents/lsai_usage_playbook.md](agents/lsai_usage_playbook.md) (mostly stable): LSAI usage playbook (erhe, C++)
+- [agents/macos.md](agents/macos.md) (stable): macOS sessions: Xcode build trees, Xcode MCP, lldb
 - [agents/mcp_api_guidelines.md](agents/mcp_api_guidelines.md) (stable): MCP tools take explicit parameters and never depend on UI state
 - [agents/mcp_server_usage.md](agents/mcp_server_usage.md) (mostly stable): In-editor MCP server reference: transport, ports, auth, registration, Quest forwarding, every tool with its arguments
 - [agents/mcp_ui_driving.md](agents/mcp_ui_driving.md) (mostly stable): Run-book for driving the editor user interface over MCP: ImGui introspection and input gestures
 - [agents/orchestration_harness.md](agents/orchestration_harness.md) (stable): Orchestrator / coder / scout roles and brief format for delegated coding work
+- [agents/quest.md](agents/quest.md) (stable): Quest / Android sessions: skills, launch protocol, validation, MCP over adb
 - [agents/quest_renderdoc_capture.md](agents/quest_renderdoc_capture.md) (mostly stable): RenderDoc Meta Fork capture workflow on Quest
 - [agents/renderdoc_fork.md](agents/renderdoc_fork.md) (mostly stable): Desktop GPU-debugging workflow with the RenderDoc fork MCP server
 - [agents/semantic_cpp_mcp_setup_xmp4_lsai.md](agents/semantic_cpp_mcp_setup_xmp4_lsai.md) (mostly stable): Semantic C++ code intelligence for Claude Code: xmp4 + LSAI
 - [agents/usd_survey_gap_loop.md](agents/usd_survey_gap_loop.md) (stable): How the USD-WG asset survey is driven to zero gaps
 - [agents/usd_wg_assets.md](agents/usd_wg_assets.md) (mostly stable): Script-generated survey of the ASWF USD-WG sample assets
+- [agents/windows.md](agents/windows.md) (stable): Windows sessions: build trees, edit-build loop, clangd database, shell hygiene
 
 ### Frame pacing (`frame_pacing/`)
 

@@ -2,7 +2,7 @@
 """Capture a top-level window of a process into a PNG (Windows only).
 
 Intended for judging windowed-editor rendering when the headless MCP
-capture_screenshot is not available. POLICY (see AGENTS.md): an AI agent
+capture_screenshot is not available. POLICY (see doc/agents/editor_runs.md): an AI agent
 must ALWAYS ask the user before capturing the windowed editor or any
 other window - the user may be using the computer for something else,
 the target window may be occluded, and the user must always be aware

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Call a tool on the in-editor MCP server (see AGENTS.md "In-editor MCP server").
+"""Call a tool on the in-editor MCP server (see doc/agents/editor_runs.md "In-editor MCP server").
 
 Usage:
     py -3 scripts/mcp_call.py <tool> [json-arguments] [--port N]

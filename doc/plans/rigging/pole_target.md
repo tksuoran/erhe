@@ -101,7 +101,7 @@ as not authored, so the scan of R5 passes it by in silence. A resolved
 once per drag in `Ik_drag::begin`:
 
 - the node's `get_item_host()` equals the effector's `get_item_host()`. A
-  same-host test is what the AGENTS.md rule "Scene-hosted references in
+  same-host test is what the doc/editor/coding_rules.md rule "Scene-hosted references in
   editor parts" asks for here: the chain being dragged is by construction
   hosted by a live registered scene, so a pole sharing that host is live
   too, and every pole in a closed or foreign scene is excluded by the same

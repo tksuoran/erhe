@@ -23,7 +23,7 @@ built on. The **canonical workflow guide** (read before building or
 revising a creation) is the `erhe-creations` skill:
 `.claude/skills/erhe-creations/SKILL.md` plus its domain recipe files in
 `.claude/skills/erhe-creations/references/`. The MCP server itself is
-documented in `AGENTS.md` ("In-editor MCP server") and
+documented in `doc/agents/editor_runs.md` ("In-editor MCP server") and
 `doc/agents/mcp_server_usage.md`.
 
 ## Architecture
@@ -500,7 +500,7 @@ geometry-node sculpture built from a different Conway operator chain
 - `.claude/skills/erhe-creations/SKILL.md` - canonical workflow,
   hierarchy rules, gotcha index; domain recipes in
   `references/{vegetation,physics_rigs,csg_hulls,settling_rock_piles,blades_sweep}.md`.
-- `AGENTS.md` "In-editor MCP server" + `doc/agents/mcp_server_usage.md` -
+- `doc/agents/editor_runs.md` "In-editor MCP server" + `doc/agents/mcp_server_usage.md` -
   server transport, ports, auth, headless vs windowed, Quest forwarding.
 - `config/editor/mcp_tools.json` - the full tool schema, loaded at
   runtime; the editor commands are added on top at runtime by

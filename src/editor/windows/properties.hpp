@@ -138,7 +138,7 @@ private:
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
     void item_diagnostics             (const std::shared_ptr<erhe::Item_base>& item);
 
-    // Scene-hosted references (see AGENTS.md "Scene-hosted references in
+    // Scene-hosted references (see doc/editor/coding_rules.md "Scene-hosted references in
     // editor parts"): drop the pinned target and the material-edit latch
     // when their host scene closes - the window's own strong references
     // would otherwise keep the closed scene's items alive (a weak_ptr

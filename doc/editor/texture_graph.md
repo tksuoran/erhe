@@ -413,7 +413,7 @@ precedent; it is unrelated to this feature despite the name.
   `erhe_graphics_tests` (headless Vulkan: compile, render 8x8, assert pixels,
   including a parameter-UBO case that proves a value edit needs no recompile).
   Run via ctest or the executable directly from a `build_tests*` tree, per the
-  Testing section of `AGENTS.md`.
+  `doc/testing.md`.
 - **Headless end-to-end**: `scripts/texture_graph_smoke_test.py` against the
   headless Vulkan editor build over the in-editor MCP server, including
   `texture_graph_export_png` pixel assertions and `capture_screenshot` visual

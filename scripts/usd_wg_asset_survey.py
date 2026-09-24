@@ -12,7 +12,7 @@ ERHE_USD_WG_ASSETS environment variable:
     py -3 scripts/usd_wg_asset_survey.py --from-summary      (doc only)
 
 It needs the headless Vulkan build
-(build_vs2026_vulkan_headless/bin/Debug/editor.exe, see AGENTS.md
+(build_vs2026_vulkan_headless/bin/Debug/editor.exe, see doc/agents/editor_runs.md
 "In-editor MCP server"); it launches and, after a crash or a load that does
 not answer in time, relaunches the editor itself.
 
@@ -684,7 +684,7 @@ class Editor:
         environment["ERHE_MCP_PORT"] = str(self.port)
         creation_flags = 0
         if os.name == "nt":
-            creation_flags = subprocess.CREATE_NO_WINDOW  # hidden console (AGENTS.md)
+            creation_flags = subprocess.CREATE_NO_WINDOW  # hidden console (doc/agents/editor_runs.md)
         self.process = subprocess.Popen(
             [str(self.exe)], cwd=str(pathlib.Path.cwd()), env=environment,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

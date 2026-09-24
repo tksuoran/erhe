@@ -135,7 +135,7 @@ physics fields of `get_node_details`.
   name, booleans, motion arrays, the rigid-body close brace, `collisionFilters`
   commas, omitting an infinite `maxForce`). The root `CMakeLists.txt`
   `CPMAddPackage` comment states when the fork can be dropped for
-  spnda/fastgltf. CPM `PATCHES` is banned repo-wide (AGENTS.md), so the fork is
+  spnda/fastgltf. CPM `PATCHES` is banned repo-wide (doc/cmake_conventions.md), so the fork is
   how the fixes travel.
 - The fastgltf physics material, filter and joint types carry no name field.
   Names ride the `ERHE_scene` `physics_materials` / `physics_joints` /

@@ -24,7 +24,7 @@ Give `App_message_bus` a `std::size_t m_size_marker{0}` set to
 message instead of an undebuggable crash. This is the struct both observed
 chimera crashes went through.
 
-## A workflow rule in AGENTS.md
+## A workflow rule in doc/agents/windows.md
 
 State that after changing a widely included editor header, or after git
 operations with VS open, the VS IDE incremental build is not to be trusted:

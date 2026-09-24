@@ -31,7 +31,7 @@ public:
     {
     public:
         // Weak: an operation recorded for undo must not keep a closed scene
-        // alive (AGENTS.md "Scene-hosted references in editor parts"). An
+        // alive (doc/editor/coding_rules.md "Scene-hosted references in editor parts"). An
         // undo after the scene closed has nothing to put back.
         std::weak_ptr<Scene_root>   scene_root;
         // Which set of the scene is switched: the prim, the set name and the

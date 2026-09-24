@@ -181,7 +181,7 @@ where the editor's visualization appearance is edited in one place:
 `ik_chain_color`, `ik_chain_width`, `ik_root_color`, `ik_pole_color` and
 `ik_marker_width`. New fields carry `added_in=2` and bump the struct's
 `version`, and a codegen definition change needs the build run twice (see the
-`erhe_codegen` notes in AGENTS.md).
+code generation notes in doc/cmake_conventions.md).
 
 **R16.** The line list is produced by a free function with no scene access,
 declared beside the solver in `src/editor/transform/ik_solver.hpp`:

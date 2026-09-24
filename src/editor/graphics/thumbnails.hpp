@@ -77,7 +77,7 @@ public:
     void flush();
 
     // Scene close / items removed: a slot showing content of the closing
-    // scene, or an item the message names, is freed the same way (AGENTS.md
+    // scene, or an item the message names, is freed the same way (doc/editor/coding_rules.md
     // "Scene-hosted references in editor parts"). Slot count is the
     // configured capacity, so the walk is bounded and independent of the
     // message size.

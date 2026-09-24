@@ -115,4 +115,4 @@ are interactive only: select two nodes with meshes and bodies, two
 physics materials, and a material plus a body, and check each type has
 one section in Combined mode, that dragging one mixed component changes
 only that component on every item, and that each edit is one undo entry;
-the user drives that check (AGENTS.md "Once the user starts testing").
+the user drives that check (doc/agents/editor_runs.md "Once the user starts testing").
