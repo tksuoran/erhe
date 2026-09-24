@@ -88,6 +88,12 @@ auto make_drag_vec4(
     const char*              format_string
 ) -> Value_edit_state;
 
+auto make_input_vec4(
+    glm::vec4&   value,
+    const char*  imgui_label,
+    const char** format_string
+) -> Value_edit_state;
+
 auto make_angle_button(
     float&      radians_value,
     float       value_min,

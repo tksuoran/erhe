@@ -205,6 +205,85 @@ auto make_drag_vec4(
     };
 }
 
+auto make_input_vec4(
+    glm::vec4&   value,
+    const char*  imgui_label,
+    const char** format_strings
+) -> Value_edit_state
+{
+    //const auto value_changed = ImGui::InputScalarN(
+    //    imgui_label,
+    //    ImGuiDataType_Float,
+    //    &value.x,
+    //    4,
+    //    nullptr,
+    //    nullptr,
+    //    format_string,
+    //    ImGuiInputTextFlags_None
+    //);
+    auto input_scalar_n = [](
+        const char*         label,
+        ImGuiDataType       data_type,
+        void*               p_data,
+        int                 components,
+        const void*         p_step,
+        const void*         p_step_fast,
+        const char**        format,
+        ImGuiInputTextFlags flags
+    ) -> bool
+    {
+        using namespace ImGui;
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        if (window->SkipItems)
+            return false;
+
+        ImGuiContext& g = *GImGui;
+        bool value_changed = false;
+        ImGui::BeginGroup();
+        ImGui::PushID(label);
+        ImGui::PushMultiItemsWidths(components, CalcItemWidth());
+        size_t type_size = sizeof(float); // GDataTypeInfo[data_type].Size;
+        for (int i = 0; i < components; i++)
+        {
+            ImGui::PushID(i);
+            if (i > 0)
+                ImGui::SameLine(0, g.Style.ItemInnerSpacing.x);
+            value_changed |= ImGui::InputScalar("", data_type, p_data, p_step, p_step_fast, format[i], flags);
+            ImGui::PopID();
+            ImGui::PopItemWidth();
+            p_data = (void*)((char*)p_data + type_size);
+        }
+        ImGui::PopID();
+
+        const char* label_end = ImGui::FindRenderedTextEnd(label);
+        if (label != label_end)
+        {
+            ImGui::SameLine(0.0f, g.Style.ItemInnerSpacing.x);
+            ImGui::TextEx(label, label_end);
+        }
+
+        ImGui::EndGroup();
+        return value_changed;
+    };
+    const auto value_changed = input_scalar_n(
+        imgui_label,
+        ImGuiDataType_Float,
+        &value.x,
+        4,
+        nullptr,
+        nullptr,
+        format_strings,
+        ImGuiInputTextFlags_None
+    );
+
+
+    return Value_edit_state{
+        .value_changed = value_changed,
+        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
+        .active        = ImGui::IsItemActive()
+    };
+}
+
 auto make_angle_button(
     float&            radians_value,
     float             value_min,
