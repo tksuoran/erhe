@@ -95,6 +95,9 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
     m_current_angle = 0.0f;
     m_view_mode     = (axis_mask == Axis_mask::view);
     m_free_mode     = (axis_mask == Axis_mask::free);
+    m_ring_color.reset();
+    m_ring_radius_inset    = 0.0f;
+    m_innermost_ring_inset = 0.0f;
 
     auto& shared = get_shared();
     const vec3 center = shared.world_from_anchor_initial_state.get_translation();
@@ -134,9 +137,24 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
         const vec3 ref = (std::abs(n.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
         side = normalize(cross(n, ref));
     } else {
-        const bool world = !shared.settings.use_anchor_orientation();
-        n    = get_plane_normal(world);
-        side = get_plane_side  (world);
+        // Ring k of the axis mask is the ring drawn for that handle: a gizmo
+        // basis axis, or an Euler gimbal axis (get_rotate_ring_frames()).
+        const int ring =
+            (axis_mask == Axis_mask::x) ? 0 :
+            (axis_mask == Axis_mask::y) ? 1 :
+            (axis_mask == Axis_mask::z) ? 2 : -1;
+        if (ring < 0) {
+            log_trs_tool->warn("Rotate_tool::begin(): unexpected axis mask {:02x}", axis_mask);
+            return false;
+        }
+        const Rotate_ring_frames rings = m_context.transform_tool->get_rotate_ring_frames(get_basis());
+        n    = rings.frames[ring][0];
+        side = rings.frames[ring][1];
+        if (rings.euler_gimbal) {
+            m_ring_color           = rings.colors[ring];
+            m_ring_radius_inset    = rings.radius_insets[ring];
+            m_innermost_ring_inset = std::max({rings.radius_insets[0], rings.radius_insets[1], rings.radius_insets[2]});
+        }
     }
     const auto intersection = project_pointer_to_plane(scene_view, n, center);
 
@@ -297,12 +315,12 @@ void Rotate_tool::update_final()
     const vec3  q_                     = normalize                           (m_intersection.value() - m_center_of_rotation);
     const float angle                  = erhe::math::angle_of_rotation<float>(q_, m_normal, m_reference_direction);
     const float snapped_angle          = snap                                (angle);
-    // View-mode rotation happens about the viewing axis, which is not a
-    // basis axis (get_axis_direction() has no mapping for it). Both sources
-    // are unit vectors - get_axis_direction() reads an orthonormal basis - so
-    // angleAxis yields a unit quaternion; building a matrix and quat_cast'ing
-    // it would silently turn any axis-length error into scale and shear.
-    const vec3  rotation_axis_in_world = m_view_mode ? m_normal : get_axis_direction();
+    // The rotation is about the drag plane normal: the viewing axis, a gizmo
+    // basis axis or an Euler gimbal axis. It is a unit vector (normalized, or
+    // a column of an orthonormal frame), so angleAxis yields a unit
+    // quaternion; building a matrix and quat_cast'ing it would silently turn
+    // any axis-length error into scale and shear.
+    const vec3  rotation_axis_in_world = m_normal;
     const quat  rotation               = glm::angleAxis(snapped_angle, rotation_axis_in_world);
 
     m_current_angle = angle;
@@ -365,7 +383,13 @@ void Rotate_tool::render(const Render_context& context)
     const float scale = (visualizations != nullptr)
         ? visualizations->get_view_scale()
         : context.app_context.editor_settings->transform_tool.gizmo_scale * length(p - vec3{camera_node->position_in_world()}) / 100.0f;
-    const float r1 = scale * context.app_context.editor_settings->transform_tool.rotate_ring_size;
+    const float r1 = scale * (context.app_context.editor_settings->transform_tool.rotate_ring_size - m_ring_radius_inset);
+    // The dragged gizmo ring (drawn by Handle_visualizations) is the inner
+    // edge of the swept sector and its spokes; the rotation axis is drawn from
+    // the innermost ring outward. Neither reaches the gizmo center.
+    const float ring_radius       = context.app_context.editor_settings->transform_tool.rotate_ring_radius;
+    const float r_sector_inner    = std::min(scale * (ring_radius - m_ring_radius_inset), r1);
+    const float r_axis_inner      = std::min(scale * (ring_radius - m_innermost_ring_inset), r1);
     const float snapped_angle     = snap(m_current_angle);
     const float a1                = a0 + snapped_angle;
 
@@ -383,8 +407,16 @@ void Rotate_tool::render(const Render_context& context)
             : (d >= snapped_angle) && (d <= 0.0f);
     };
 
-    const vec4     axis_color = get_axis_color(m_axis_mask, context.app_context.editor_settings->transform_tool);
-    constexpr vec4 yellow{1.0f, 1.0f, 0.0f, 1.0f};
+    const vec4     axis_color = m_ring_color.has_value()
+        ? m_ring_color.value()
+        : get_axis_color(m_axis_mask, context.app_context.editor_settings->transform_tool);
+    // Yellow, tinted toward orange as the Euler gimbal nears gimbal lock
+    // (the same warning the Rotation inspector shows on its Euler angles).
+    constexpr vec4 pure_yellow{1.0f, 1.0f, 0.0f, 1.0f};
+    constexpr vec4 orange     {1.0f, 0.5f, 0.0f, 1.0f};
+    const Rotate_ring_frames rings = m_context.transform_tool->get_rotate_ring_frames(get_basis());
+    const float gimbal_lock_warning = (m_ring_color.has_value() && rings.euler_gimbal) ? rings.gimbal_lock_warning : 0.0f;
+    const vec4  yellow = glm::mix(pure_yellow, orange, gimbal_lock_warning);
 
     // Axis-colored protractor lines are thinner than the yellow swept-sector
     // lines so the sector reads as the emphasized element.
@@ -446,14 +478,12 @@ void Rotate_tool::render(const Render_context& context)
         // as fractions of the ring radius so the marks scale with the
         // configurable ring size). The small / medium ticks are thinner than
         // the spokes and the ring so they stay background reference marks;
-        // the majors keep the full spoke / sector widths. Yellow inside the
-        // swept sector, axis color outside.
-        constexpr float tick_line_width        = -0.71f;
+        // the majors keep the full spoke / sector widths. Only the ticks
+        // inside the swept sector are drawn, in yellow: outside it the
+        // dragged gizmo ring itself (Handle_visualizations) is the reference.
         constexpr float sector_tick_line_width = -1.0f;
         std::vector<erhe::renderer::Line> inside_major_ticks;
         std::vector<erhe::renderer::Line> inside_minor_ticks;
-        std::vector<erhe::renderer::Line> outside_major_ticks;
-        std::vector<erhe::renderer::Line> outside_minor_ticks;
         constexpr int tick_count = 72;  // one tick per 5 deg
         for (int i = 0; i < tick_count; ++i) {
             const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(tick_count);
@@ -462,17 +492,11 @@ void Rotate_tool::render(const Render_context& context)
             const float r0     = major ? r1 * (5.0f / 6.0f) : medium ? r1 * 0.89f : r1 * 0.94f;
             const vec3  p0     = p + r0 * std::cos(theta) * side1 + r0 * std::sin(theta) * side2;
             const vec3  p1     = p + r1 * std::cos(theta) * side1 + r1 * std::sin(theta) * side2;
-            const bool  inside = in_sector(theta);
-            auto& bucket = inside
-                ? (major ? inside_major_ticks  : inside_minor_ticks)
-                : (major ? outside_major_ticks : outside_minor_ticks);
-            bucket.push_back({p0, p1});
+            if (!in_sector(theta)) {
+                continue;
+            }
+            (major ? inside_major_ticks : inside_minor_ticks).push_back({p0, p1});
         }
-        line_renderer.set_line_color(axis_color);
-        line_renderer.set_thickness(tick_line_width);
-        line_renderer.add_lines(outside_minor_ticks);
-        line_renderer.set_thickness(axis_line_width);
-        line_renderer.add_lines(outside_major_ticks);
         line_renderer.set_line_color(yellow);
         line_renderer.set_thickness(sector_tick_line_width);
         line_renderer.add_lines(inside_minor_ticks);
@@ -485,30 +509,27 @@ void Rotate_tool::render(const Render_context& context)
         const vec3 initial_dir = std::cos(a0) * side1 + std::sin(a0) * side2;
         line_renderer.set_thickness(axis_line_width);
         line_renderer.set_line_color(yellow);
-        line_renderer.add_lines({{ p, p + r1 * initial_dir }});
+        line_renderer.add_lines({{ p + r_sector_inner * initial_dir, p + r1 * initial_dir }});
     }
 
-    // Circle (ring): the part inside the swept sector - the sector's outer
-    // edge - is yellow, the rest axis color. One polyline with per-segment
-    // classification (by midpoint angle) instead of overdrawing a separate
-    // yellow arc: two differently-tessellated polylines never coincide
-    // exactly, so the color underneath would peek through. The exact sector
-    // boundaries are marked by the indicator spokes.
+    // Circle (ring): only the part inside the swept sector - the sector's
+    // outer edge - in yellow; the rest of the circle is the dragged gizmo
+    // ring itself (Handle_visualizations). Segments are classified by
+    // midpoint angle; the exact sector boundaries are marked by the
+    // indicator spokes.
     {
         constexpr int segment_count = 200;
         std::vector<erhe::renderer::Line> inside_segments;
-        std::vector<erhe::renderer::Line> outside_segments;
         for (int i = 0; i < segment_count; ++i) {
             const float theta0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(segment_count);
             const float theta1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segment_count);
             const vec3  p0     = p + r1 * std::cos(theta0) * side1 + r1 * std::sin(theta0) * side2;
             const vec3  p1     = p + r1 * std::cos(theta1) * side1 + r1 * std::sin(theta1) * side2;
             const float mid = 0.5f * (theta0 + theta1);
-            (in_sector(mid) ? inside_segments : outside_segments).push_back({p0, p1});
+            if (in_sector(mid)) {
+                inside_segments.push_back({p0, p1});
+            }
         }
-        line_renderer.set_thickness(axis_line_width);
-        line_renderer.set_line_color(axis_color);
-        line_renderer.add_lines(outside_segments);
         line_renderer.set_thickness(sector_line_width);
         line_renderer.set_line_color(yellow);
         line_renderer.add_lines(inside_segments);
@@ -516,43 +537,91 @@ void Rotate_tool::render(const Render_context& context)
 
     const auto snapped = p + r1 * std::cos(a1) * side1 + r1 * std::sin(a1) * side2;
 
+    // Start and end markers: quarter arcs (the visible octant) on the
+    // protractor sphere through the rotation axis, orthogonal to the rotation
+    // plane, from the start / current position to the end of the rotation
+    // axis on the camera's side, in the axis color. Opacity falls linearly
+    // from full at the start / current position to zero at the configured
+    // fade arc distance.
+    {
+        const float start_fade = glm::radians(context.app_context.editor_settings->transform_tool.rotate_start_marker_fade);
+        const float end_fade   = glm::radians(context.app_context.editor_settings->transform_tool.rotate_end_marker_fade);
+        const vec3  eye        = vec3{camera_node->position_in_world()};
+        const vec3  toward     = (glm::dot(axis, eye - p) >= 0.0f) ? axis : -axis;
+        const auto add_marker = [&](const float angle, const float fade) {
+            if (!(fade > 0.0f)) {
+                return;
+            }
+            constexpr int   marker_segment_count = 32;
+            const float     quarter_turn         = glm::half_pi<float>();
+            const vec3 direction = std::cos(angle) * side1 + std::sin(angle) * side2;
+            const auto alpha_at = [fade](const float phi) -> float {
+                return std::clamp(1.0f - (phi / fade), 0.0f, 1.0f);
+            };
+            vec3  previous       = p + r1 * direction;
+            float previous_alpha = 1.0f;
+            for (int i = 1; i <= marker_segment_count; ++i) {
+                const float phi   = quarter_turn * static_cast<float>(i) / static_cast<float>(marker_segment_count);
+                const vec3  point = p + r1 * (std::cos(phi) * direction + std::sin(phi) * toward);
+                const float alpha = alpha_at(phi);
+                if ((previous_alpha <= 0.0f) && (alpha <= 0.0f)) {
+                    break;
+                }
+                line_renderer.add_line(
+                    vec4{vec3{axis_color}, previous_alpha * axis_color.a}, sector_line_width, previous,
+                    vec4{vec3{axis_color}, alpha * axis_color.a},          sector_line_width, point
+                );
+                previous       = point;
+                previous_alpha = alpha;
+            }
+        };
+        add_marker(a0, start_fade);
+        add_marker(a1, end_fade);
+    }
+
     // Swept-rotation sector fill from the initial (reference) direction to
-    // the current snapped angle, rooted at the rotation center. Low alpha so
+    // the current snapped angle, between the dragged ring and the arc. Low alpha so
     // the delta text placed inside stays readable; the sector's outer edge is
-    // the yellow part of the ring above.
-    if (std::abs(snapped_angle) > 1e-4f) {
+    // the yellow arc above.
+    if ((std::abs(snapped_angle) > 1e-4f) && (r_sector_inner < r1)) {
         constexpr float sector_step  = glm::two_pi<float>() / 200.0f;
         const int       sector_count = std::max(1, static_cast<int>(std::ceil(std::abs(snapped_angle) / sector_step)));
         std::vector<vec3>     sector_positions;
         std::vector<uint32_t> sector_indices;
-        sector_positions.reserve(sector_count + 2);
-        sector_indices.reserve(3 * sector_count);
-        sector_positions.push_back(p);
+        sector_positions.reserve(2 * (static_cast<std::size_t>(sector_count) + 1));
+        sector_indices.reserve(6 * static_cast<std::size_t>(sector_count));
+        // Annular sector: inner edge on the dragged ring, outer edge on the
+        // protractor arc. Vertex 2 i is inner, 2 i + 1 outer.
         for (int i = 0; i <= sector_count; ++i) {
-            const float theta = a0 + snapped_angle * static_cast<float>(i) / static_cast<float>(sector_count);
-            sector_positions.push_back(p + r1 * std::cos(theta) * side1 + r1 * std::sin(theta) * side2);
+            const float theta     = a0 + snapped_angle * static_cast<float>(i) / static_cast<float>(sector_count);
+            const vec3  direction = std::cos(theta) * side1 + std::sin(theta) * side2;
+            sector_positions.push_back(p + r_sector_inner * direction);
+            sector_positions.push_back(p + r1 * direction);
         }
         for (int i = 0; i < sector_count; ++i) {
-            sector_indices.push_back(0);
-            sector_indices.push_back(static_cast<uint32_t>(i + 1));
-            sector_indices.push_back(static_cast<uint32_t>(i + 2));
+            const uint32_t inner0 = static_cast<uint32_t>(2 * i);
+            sector_indices.insert(sector_indices.end(), {inner0, inner0 + 1u, inner0 + 3u});
+            sector_indices.insert(sector_indices.end(), {inner0, inner0 + 3u, inner0 + 2u});
         }
         erhe::renderer::Primitive_renderer triangle_renderer = context.get(
             {erhe::graphics::Primitive_type::triangle, 2, true, false}
         );
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{1.0f, 1.0f, 0.0f, 0.14f}, sector_positions, sector_indices);
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{yellow}, 0.14f}, sector_positions, sector_indices);
     }
 
     // Current-angle indicator spoke in yellow (sector boundary / delta
-    // color), and the rotation axis itself through the center in the
-    // rotation-axis color - two segments meeting at the rotation center
-    // with alpha fading to zero there, so the axis reads at its ends
-    // without covering the protractor center.
+    // color) from the dragged ring out, and the rotation axis in the
+    // rotation-axis color - two segments from the innermost ring outward,
+    // alpha fading to zero at the ring, so the axis reads at its ends
+    // without crossing the gizmo interior.
     line_renderer.set_thickness(axis_line_width);
-    line_renderer.add_lines(yellow, { { p, snapped } } );
-    const vec4 axis_clear{vec3{axis_color}, 0.0f};
-    line_renderer.add_line(axis_color, axis_line_width, p - r1 * axis, axis_clear, axis_line_width, p);
-    line_renderer.add_line(axis_clear, axis_line_width, p,             axis_color, axis_line_width, p + r1 * axis);
+    const vec3 current_dir = std::cos(a1) * side1 + std::sin(a1) * side2;
+    line_renderer.add_lines(yellow, { { p + r_sector_inner * current_dir, snapped } } );
+    if (r_axis_inner < r1) {
+        const vec4 axis_clear{vec3{axis_color}, 0.0f};
+        line_renderer.add_line(axis_color, axis_line_width, p - r1 * axis,           axis_clear, axis_line_width, p - r_axis_inner * axis);
+        line_renderer.add_line(axis_clear, axis_line_width, p + r_axis_inner * axis, axis_color, axis_line_width, p + r1 * axis);
+    }
 
     // Angle readout at the ring: the anchor's twist about the rotation axis
     // at drag start (swing-twist decomposition), printed just outside the
@@ -576,7 +645,10 @@ void Rotate_tool::render(const Render_context& context)
     const mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
 
     constexpr uint32_t white_abgr  = 0xffffffffu;
-    constexpr uint32_t yellow_abgr = 0xff00ffffu;
+    const uint32_t     yellow_abgr =
+        0xff000000u |
+        (static_cast<uint32_t>(std::lround(255.0f * std::clamp(yellow.g, 0.0f, 1.0f))) << 8u) |
+        static_cast<uint32_t>(std::lround(255.0f * std::clamp(yellow.r, 0.0f, 1.0f)));
     const float label_radius   = 1.15f * r1;
     const float bisector_angle = a0 + 0.5f * snapped_angle;
 
@@ -589,9 +661,9 @@ void Rotate_tool::render(const Render_context& context)
     const vec3 current_anchor = project(p + label_radius * (std::cos(a1)             * side1 + std::sin(a1)             * side2));
     const vec3 delta_anchor   = project(p + label_radius * (std::cos(bisector_angle) * side1 + std::sin(bisector_angle) * side2));
 
-    const std::string initial_text = fmt::format("{:.1f} deg", glm::degrees(initial));
-    const std::string current_text = fmt::format("{:.1f} deg", glm::degrees(current));
-    const std::string delta_text   = fmt::format("{:.1f} deg", glm::degrees(snapped_angle));
+    const std::string initial_text = fmt::format("{:.1f}\xc2\xb0", glm::degrees(initial));
+    const std::string current_text = fmt::format("{:.1f}\xc2\xb0", glm::degrees(current));
+    const std::string delta_text   = fmt::format("{:.1f}\xc2\xb0", glm::degrees(snapped_angle));
 
     // The initial and current labels stack away from each other vertically:
     // the on-screen upper one hangs its bottom edge on its anchor and the

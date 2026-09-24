@@ -24,6 +24,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
+#include "transform/subtool.hpp"
 #include "windows/item_reference.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -31,6 +32,7 @@
 #include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_math/euler_angles.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/ray.hpp"
@@ -2306,7 +2308,11 @@ void Transform_tool::render_hover_preview(const Render_context& context)
         return;
     }
 
-    const vec4 color = get_axis_color(get_axis_mask(handle), context.app_context.editor_settings->transform_tool);
+    const Rotate_ring_frames rings = get_rotate_ring_frames(basis);
+    const int  ring_index = static_cast<int>(get_handle_axis(handle)) - 1;
+    const vec4 color = (rings.euler_gimbal && (ring_index >= 0) && (ring_index < 3))
+        ? rings.colors[ring_index]
+        : get_axis_color(get_axis_mask(handle), context.app_context.editor_settings->transform_tool);
 
     erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
 
@@ -2334,12 +2340,12 @@ void Transform_tool::render_hover_preview(const Render_context& context)
             side2  = normalize(cross(view_dir, side1));
             ring_r = visualizations->get_view_ring_radius();
         } else {
-            const int axis_index = static_cast<int>(get_handle_axis(handle)) - 1;
-            side1 = basis[(axis_index + 1) % 3];
-            side2 = basis[(axis_index + 2) % 3];
+            side1  = rings.frames[ring_index][1];
+            side2  = rings.frames[ring_index][2];
+            ring_r = radius - (visualizations->get_view_scale() * rings.radius_insets[ring_index]);
         }
 
-        const float half_width = 0.08f * ring_r;
+        const float half_width = m_context.editor_settings->transform_tool.hover_ring_band_half_width * ring_r;
         const float r_inner    = ring_r - half_width;
         const float r_outer    = ring_r + half_width;
         constexpr int sector_count = 64;
@@ -2379,7 +2385,7 @@ void Transform_tool::render_hover_preview(const Render_context& context)
                 .xray              = true
             }
         );
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.2f}, band_positions, band_indices);
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, m_context.editor_settings->transform_tool.hover_ring_band_opacity}, band_positions, band_indices);
     }
 }
 
@@ -2855,6 +2861,70 @@ Edit_state::Edit_state(
 auto Transform_tool::get_rotation_inspector() const -> const Rotation_inspector&
 {
     return m_rotation;
+}
+
+auto Transform_tool::get_rotate_ring_frames(const glm::mat3& basis) const -> Rotate_ring_frames
+{
+    Rotate_ring_frames result;
+    for (int k = 0; k < 3; ++k) {
+        result.frames[k] = glm::mat3{basis[k], basis[(k + 1) % 3], basis[(k + 2) % 3]};
+    }
+
+    // The gimbal describes the Euler angles the Rotation inspector shows:
+    // a single node's rotation, relative to its parent in Local mode and to
+    // world otherwise (the same frames Edit_state gives the inspector).
+    const bool single_node = !shared.component_mode && (shared.entries.size() == 1);
+    if (!single_node || (m_rotation.get_representation() != Rotation_inspector::Representation::e_euler_angles)) {
+        return result;
+    }
+    const std::shared_ptr<erhe::scene::Node>& node = shared.entries.front().node;
+    if (!node) {
+        return result;
+    }
+    glm::quat reference_from_rotation{1.0f, 0.0f, 0.0f, 0.0f}; // world from the Euler angles' base frame
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    if (shared.settings.is_local()) {
+        rotation                = glm::normalize(node->parent_from_node_transform().get_rotation());
+        reference_from_rotation = glm::normalize(node->world_from_node_transform().get_rotation() * glm::inverse(rotation));
+    } else {
+        rotation = glm::normalize(shared.world_from_anchor.get_rotation());
+    }
+
+    const Rotation_inspector::Euler_angle_order order = m_rotation.get_euler_order();
+    const int axes[3] = {
+        Rotation_inspector::get_euler_axis(order, 0),
+        Rotation_inspector::get_euler_axis(order, 1),
+        Rotation_inspector::get_euler_axis(order, 2)
+    };
+
+    // Prefer the angles the inspector shows (it keeps them continuous past
+    // +-180 deg); extract fresh ones when they no longer give this rotation.
+    float angles[3] = {m_rotation.get_euler_value(0), m_rotation.get_euler_value(1), m_rotation.get_euler_value(2)};
+    const glm::quat shown = erhe::math::euler_angles_to_quaternion(axes[0], axes[1], axes[2], angles[0], angles[1], angles[2]);
+    if (std::abs(glm::dot(shown, rotation)) < 0.99999f) {
+        erhe::math::quaternion_to_euler_angles(rotation, axes[0], axes[1], axes[2], angles[0], angles[1], angles[2]);
+    }
+
+    // R = R_A(t1) * R_B(t2) * R_C(t3): ring 0 turns about A in the base
+    // frame, ring 1 about B after R_A(t1), ring 2 about C after
+    // R_A(t1) * R_B(t2) (the node's own axis).
+    const glm::vec3 unit_axes[3] = {glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}};
+    glm::quat frame = reference_from_rotation;
+    for (int k = 0; k < 3; ++k) {
+        const glm::mat3 m = glm::mat3_cast(frame);
+        const int       a = axes[k];
+        result.frames[k] = glm::mat3{m[a], m[(a + 1) % 3], m[(a + 2) % 3]};
+        const ImVec4 color = get_drag_color(static_cast<std::size_t>(Rotation_inspector::get_euler_axis2(order, k)), false);
+        result.colors[k] = glm::vec4{color.x, color.y, color.z, color.w};
+        frame = glm::normalize(frame * glm::angleAxis(angles[k], unit_axes[a]));
+    }
+    const float gap = m_context.editor_settings->transform_tool.gimbal_ring_gap;
+    for (int k = 0; k < 3; ++k) {
+        result.radius_insets[k] = static_cast<float>(2 - k) * gap;
+    }
+    result.gimbal_lock_warning = Rotation_inspector::gimbal_lock_warning(order, angles[1]);
+    result.euler_gimbal        = true;
+    return result;
 }
 
 void Transform_tool::transform_properties()

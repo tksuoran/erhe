@@ -312,7 +312,8 @@ constexpr Handle box_scale_neg_handles[3] = {
 };
 
 // Rotation-ring arc visibility (rotate_visible_arcs_only): the shown rings
-// are treated as a ball of mutually perpendicular discs. A point on one
+// are treated as a ball of discs (mutually perpendicular except for the
+// Euler gimbal, see Transform_tool::get_rotate_ring_frames()). A point on one
 // ring is occluded - not drawn and not pickable - when the sight line from
 // the eye to it passes through the disc of another SHOWN ring first; a
 // hidden ring's disc covers nothing, so with a single ring shown the whole
@@ -321,8 +322,8 @@ auto is_ring_point_occluded(
     const vec3&  eye,
     const vec3&  point,
     const vec3&  center,
-    const mat3&  basis,
-    const float  radius,
+    const Rotate_ring_frames& rings,
+    const float  radii[3],
     const int    axis,
     const bool   ring_shown[3]
 ) -> bool
@@ -333,7 +334,7 @@ auto is_ring_point_occluded(
         if ((other == axis) || !ring_shown[other]) {
             continue;
         }
-        const vec3  n     = basis[other];
+        const vec3  n     = rings.frames[other][0];
         const float denom = dot(eye_to_point, n);
         if (std::abs(denom) < 1.0e-6f * sight_length) {
             continue; // sight line grazes the disc plane
@@ -345,11 +346,85 @@ auto is_ring_point_occluded(
             continue;
         }
         const vec3 q = eye + t * eye_to_point;
-        if (glm::length(q - center) <= radius) {
+        if (glm::length(q - center) <= radii[other]) {
             return true;
         }
     }
     return false;
+}
+
+// Appends the parts of segment [a, b] not hidden behind the discs of the
+// SHOWN rings (is_ring_point_occluded()) to `out`. Analytic: along the
+// segment, occlusion by a disc can only change where the segment crosses the
+// disc plane (a linear equation in the segment parameter s) or where the
+// eye's projection of the segment onto the disc plane crosses the disc
+// boundary. With P(s) = a + s (b - a), d(s) = dot(P(s) - eye, n) and
+// h = dot(center - eye, n), the projection is Q(s) = eye + (h / d(s)) (P(s) - eye),
+// and |Q(s) - center| = r becomes the quadratic
+// |d(s) (eye - center) + h (P(s) - eye)|^2 = r^2 d(s)^2. Between consecutive
+// breakpoints the occlusion state is constant, so one exact point test per
+// sub-segment classifies it.
+void add_unoccluded_segment(
+    const vec3&               eye,
+    const vec3&               a,
+    const vec3&               b,
+    const vec3&               center,
+    const Rotate_ring_frames& rings,
+    const float               radii[3],
+    const bool                ring_shown[3],
+    std::vector<erhe::renderer::Line>& out
+)
+{
+    std::array<float, 11> breakpoints{};
+    std::size_t           count = 0;
+    breakpoints[count++] = 0.0f;
+    breakpoints[count++] = 1.0f;
+    const auto add_breakpoint = [&](const float s) {
+        if (std::isfinite(s) && (s > 0.0f) && (s < 1.0f)) {
+            breakpoints[count++] = s;
+        }
+    };
+    const vec3 ab = b - a;
+    for (int other = 0; other < 3; ++other) {
+        if (!ring_shown[other]) {
+            continue;
+        }
+        const vec3  n  = rings.frames[other][0];
+        const float h  = dot(center - eye, n);
+        const float d0 = dot(a - eye, n);
+        const float d1 = dot(ab, n);
+        if (d1 != 0.0f) {
+            add_breakpoint((h - d0) / d1);
+        }
+        const vec3  v0 = (d0 * (eye - center)) + (h * (a - eye));
+        const vec3  v1 = (d1 * (eye - center)) + (h * ab);
+        const float r2 = radii[other] * radii[other];
+        const float qa = dot(v1, v1) - (r2 * d1 * d1);
+        const float qb = 2.0f * (dot(v0, v1) - (r2 * d0 * d1));
+        const float qc = dot(v0, v0) - (r2 * d0 * d0);
+        if (qa != 0.0f) {
+            const float discriminant = (qb * qb) - (4.0f * qa * qc);
+            if (discriminant >= 0.0f) {
+                const float root = std::sqrt(discriminant);
+                add_breakpoint((-qb - root) / (2.0f * qa));
+                add_breakpoint((-qb + root) / (2.0f * qa));
+            }
+        } else if (qb != 0.0f) {
+            add_breakpoint(-qc / qb);
+        }
+    }
+    std::sort(breakpoints.begin(), breakpoints.begin() + count);
+    for (std::size_t i = 0; (i + 1) < count; ++i) {
+        const float s0 = breakpoints[i];
+        const float s1 = breakpoints[i + 1];
+        if ((s1 - s0) <= 1.0e-6f) {
+            continue;
+        }
+        const vec3 mid = a + (0.5f * (s0 + s1)) * ab;
+        if (!is_ring_point_occluded(eye, mid, center, rings, radii, -1, ring_shown)) {
+            out.push_back({a + s0 * ab, a + s1 * ab});
+        }
+    }
 }
 
 // shaded: flat-shade each lateral triangle with the fixed handle light.
@@ -699,6 +774,16 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
     // drag keeps only the uniform wedges. Everything else on the same plane
     // (or anywhere) hides - only the active handle stays up.
     const Handle active_handle = transform_tool->get_active_handle();
+    // During a rotate drag every axis ring stays up: the dragged ring drawn
+    // as at rest, the others dimmed by render(). The Rotate_tool protractor
+    // adds the swept sector on top.
+    const bool rotate_drag_ring =
+        m_context.rotate_tool->is_active() &&
+        (type == Handle_type::e_handle_type_rotate) &&
+        (get_handle_axis(handle) != Handle_axis::e_handle_axis_none);
+    if (rotate_drag_ring) {
+        return true;
+    }
     if (settings.hide_inactive && (active_handle != Handle::e_handle_none) && (handle != active_handle)) {
         // The mask match alone cannot tell translate_xy from scale_xy (same
         // axis mask), so each match also requires the handle's own tool
@@ -731,10 +816,9 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
         }
     }
 
-    // Every rotate ring is hidden during ANY active drag (and with them the
-    // single-shown-ring tangent/bitangent guides): a rotate drag shows the
-    // Rotate_tool protractor instead, and translate/scale drags draw their
-    // own travel guides. Without this, a same-axis ring would pass the
+    // Every other rotate ring is hidden during ANY active drag (and with them
+    // the single-shown-ring tangent/bitangent guides): translate/scale drags
+    // draw their own travel guides. Without this, a same-axis ring would pass the
     // axis-mask match above and ride along with axis drags.
     if ((active_handle != Handle::e_handle_none) && (type == Handle_type::e_handle_type_rotate)) {
         return false;
@@ -916,7 +1000,6 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     // act as occluders, so a single shown ring renders as the full circle.
     {
         const bool  arcs_only = m_context.editor_settings->transform_tool.rotate_visible_arcs_only;
-        const float radius    = s * gz.rotate_ring_major_radius;
         const bool  ring_shown[3] = {
             is_handle_shown(ring_handles[0]),
             is_handle_shown(ring_handles[1]),
@@ -924,6 +1007,16 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         };
         const int shown_count =
             (ring_shown[0] ? 1 : 0) + (ring_shown[1] ? 1 : 0) + (ring_shown[2] ? 1 : 0);
+        const Rotate_ring_frames rings = m_context.transform_tool->get_rotate_ring_frames(basis);
+        const float radii[3] = {
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[0]),
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[1]),
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[2])
+        };
+        // During a rotate drag the rings not dragged are dimmed; the dragged
+        // ring is drawn as at rest (not hot).
+        const bool  rotate_drag_active = m_context.rotate_tool->is_active();
+        const float drag_alpha         = rotate_drag_active ? 0.5f : 1.0f;
         std::vector<erhe::renderer::Line> visible_lines;
         visible_lines.reserve(ring_arc_sample_count);
         for (int axis = 0; axis < 3; ++axis) {
@@ -934,8 +1027,9 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             if (dimmed_away(handle)) {
                 continue;
             }
-            const vec3 side1 = basis[(axis + 1) % 3];
-            const vec3 side2 = basis[(axis + 2) % 3];
+            const vec3  side1  = rings.frames[axis][1];
+            const vec3  side2  = rings.frames[axis][2];
+            const float radius = radii[axis];
             visible_lines.clear();
             vec3 previous        {0.0f};
             bool previous_visible{false};
@@ -943,15 +1037,24 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 const float theta   = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
                 const vec3  normal  = std::cos(theta) * side1 + std::sin(theta) * side2;
                 const vec3  point   = c + radius * normal;
-                const bool  visible = !arcs_only || !is_ring_point_occluded(eye, point, c, basis, radius, axis, ring_shown);
+                const bool  visible = !arcs_only || !is_ring_point_occluded(eye, point, c, rings, radii, axis, ring_shown);
                 if ((i > 0) && visible && previous_visible) {
                     visible_lines.push_back({previous, point});
                 }
                 previous         = point;
                 previous_visible = visible;
             }
-            const vec4  color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
-            const float width = is_hot(handle) ? gz.ring_width_hot : gz.ring_width;
+            const bool dragged = rotate_drag_active && (handle == active_handle);
+            const vec4 base    = rings.euler_gimbal ? rings.colors[axis] : axis_colors[axis];
+            vec4 color = dragged
+                ? base
+                : rings.euler_gimbal
+                    ? handle_color(handle, rings.colors[axis], rings.colors[axis])
+                    : handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
+            if (!dragged) {
+                color.a *= drag_alpha;
+            }
+            const float width = (is_hot(handle) && !dragged) ? gz.ring_width_hot : gz.ring_width;
             if (!visible_lines.empty()) {
                 line_renderer.set_thickness(width);
                 line_renderer.set_line_color(color);
@@ -967,6 +1070,38 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 for (const vec3& direction : directions) {
                     line_renderer.add_line(transparent, width, c, opaque, width, c + radius * direction);
                 }
+            }
+        }
+
+        // Euler gimbal rig: neighboring rings k, k + 1 have perpendicular
+        // axes, so both ring planes contain d = axis_k x axis_k+1. Segments
+        // along +-d join the two rings, like the pivots of a gimbal, clipped
+        // analytically where they pass behind a shown ring's disc.
+        if (rings.euler_gimbal) {
+            for (int k = 0; k < 2; ++k) {
+                if (!ring_shown[k] || !ring_shown[k + 1]) {
+                    continue;
+                }
+                const vec3  d      = cross(rings.frames[k][0], rings.frames[k + 1][0]);
+                const float length = glm::length(d);
+                if (length < 1.0e-6f) {
+                    continue;
+                }
+                const vec3 direction = d / length;
+                vec4 color = 0.5f * (rings.colors[k] + rings.colors[k + 1]);
+                color.a *= drag_alpha;
+                // Only the parts not behind a shown ring's disc; the
+                // segment lies in the planes of rings k and k + 1, so only
+                // the third ring can hide it.
+                visible_lines.clear();
+                add_unoccluded_segment(eye, c + radii[k] * direction, c + radii[k + 1] * direction, c, rings, radii, ring_shown, visible_lines);
+                add_unoccluded_segment(eye, c - radii[k] * direction, c - radii[k + 1] * direction, c, rings, radii, ring_shown, visible_lines);
+                if (visible_lines.empty()) {
+                    continue;
+                }
+                line_renderer.set_thickness(gz.ring_width);
+                line_renderer.set_line_color(color);
+                line_renderer.add_lines(visible_lines);
             }
         }
     }
@@ -1468,24 +1603,30 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     // pixel the arrow is what the user sees, even when the ring is nearer.
     if (!best.has_value() || (get_handle_type(best->handle) != Handle_type::e_handle_type_translate_axis)) {
         const bool  arcs_only = m_context.editor_settings->transform_tool.rotate_visible_arcs_only;
-        const float radius    = s * gz.rotate_ring_major_radius;
         const bool  ring_shown[3] = {
             is_handle_shown(ring_handles[0]),
             is_handle_shown(ring_handles[1]),
             is_handle_shown(ring_handles[2])
+        };
+        const Rotate_ring_frames rings = m_context.transform_tool->get_rotate_ring_frames(basis);
+        const float radii[3] = {
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[0]),
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[1]),
+            s * (gz.rotate_ring_major_radius - rings.radius_insets[2])
         };
         for (int axis = 0; axis < 3; ++axis) {
             if (!ring_shown[axis]) {
                 continue;
             }
             const Handle handle = ring_handles[axis];
-            const vec3 side1 = basis[(axis + 1) % 3];
-            const vec3 side2 = basis[(axis + 2) % 3];
+            const vec3  side1  = rings.frames[axis][1];
+            const vec3  side2  = rings.frames[axis][2];
+            const float radius = radii[axis];
             for (int i = 0; i < ring_arc_sample_count; ++i) {
                 const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
                 const vec3  normal = std::cos(theta) * side1 + std::sin(theta) * side2;
                 const vec3  point  = c + radius * normal;
-                if (arcs_only && is_ring_point_occluded(eye_position, point, c, basis, radius, axis, ring_shown)) {
+                if (arcs_only && is_ring_point_occluded(eye_position, point, c, rings, radii, axis, ring_shown)) {
                     continue;
                 }
                 const float t = dot(point - ray_origin, d);

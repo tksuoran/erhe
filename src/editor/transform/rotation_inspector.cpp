@@ -140,16 +140,21 @@ auto Rotation_inspector::get_euler_axis(const Euler_angle_order euler_angle_orde
 
 auto Rotation_inspector::gimbal_lock_warning() const -> float
 {
+    return gimbal_lock_warning(m_euler_angle_order, m_euler_angles[1]);
+}
+
+auto Rotation_inspector::gimbal_lock_warning(const Euler_angle_order euler_angle_order, const float middle_angle) -> float
+{
     using namespace std;
-    if (is_proper(m_euler_angle_order)) {
-        const float modulo   = fmodf(m_euler_angles[1], glm::pi<float>());
+    if (is_proper(euler_angle_order)) {
+        const float modulo   = fmodf(middle_angle, glm::pi<float>());
         const float distance = std::min(
             std::abs(modulo),
             std::abs(modulo - glm::pi<float>())
         );
         return (distance < 0.15) ? erhe::math::remap(distance, 0.15f, 0.0f, 0.0f, 1.0f) : 0.0f;
     } else {
-        const float modulo   = fmodf(m_euler_angles[1] + glm::half_pi<float>(), glm::pi<float>());
+        const float modulo   = fmodf(middle_angle + glm::half_pi<float>(), glm::pi<float>());
         const float distance = std::min(
             std::abs(modulo),
             std::abs(modulo - glm::pi<float>())

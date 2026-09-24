@@ -5,6 +5,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <optional>
 #include <string_view>
 
 namespace editor {
@@ -47,6 +48,14 @@ private:
     glm::vec3                m_normal              {0.0f}; // also rotation axis
     glm::vec3                m_reference_direction {0.0f};
     glm::vec3                m_axis_side           {0.0f}; // active-space plane side at drag start (axis-absolute protractor frame)
+    // Euler gimbal ring dragged (Transform_tool::get_rotate_ring_frames()):
+    // its color, and how much smaller than rotate_ring_size the protractor is,
+    // so the protractor replaces the dragged ring in place.
+    std::optional<glm::vec4> m_ring_color          {};
+    float                    m_ring_radius_inset   {0.0f};
+    // Inset of the innermost gimbal ring (0 without the gimbal): the rotation
+    // axis is drawn from that ring outward.
+    float                    m_innermost_ring_inset{0.0f};
     bool                     m_view_mode           {false}; // rotating around the viewing axis (outer ring)
     bool                     m_free_mode           {false}; // arcball rotation (inside the rotate sphere)
     // Incremental screen-plane trackball state (see update_arcball()).

@@ -29,6 +29,28 @@ public:
     glm::vec3 position{0.0f};   // world-space point on the handle
 };
 
+// World-space frames of the three rotate rings, see
+// Transform_tool::get_rotate_ring_frames().
+class Rotate_ring_frames
+{
+public:
+    // Column 0 = ring axis, columns 1 and 2 = ring plane sides.
+    std::array<glm::mat3, 3> frames{glm::mat3{1.0f}, glm::mat3{1.0f}, glm::mat3{1.0f}};
+    // Euler gimbal ring colors (Rotation_inspector Euler angle colors); only
+    // meaningful when euler_gimbal is set, otherwise the rings use the
+    // configured axis colors.
+    std::array<glm::vec4, 3> colors{glm::vec4{1.0f}, glm::vec4{1.0f}, glm::vec4{1.0f}};
+    // How much smaller than the rotate ring radius each ring is, in
+    // view-scaled gizmo units: 0 except for the Euler gimbal, whose first
+    // ring is innermost with Transform_tool_config::gimbal_ring_gap between
+    // neighboring rings (the third ring keeps the rotate ring radius).
+    std::array<float, 3>     radius_insets{0.0f, 0.0f, 0.0f};
+    // Euler gimbal only: Rotation_inspector::gimbal_lock_warning() of the
+    // current angles (0 = far from gimbal lock, 1 = at it).
+    float                    gimbal_lock_warning{0.0f};
+    bool                     euler_gimbal{false};
+};
+
 // The transform gizmo, drawn entirely with the debug primitive renderer
 // (x-ray lines and filled triangles - no scene meshes) and hit tested
 // analytically. render() runs per view from Transform_tool::tool_render;

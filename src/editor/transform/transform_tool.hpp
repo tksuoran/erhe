@@ -251,6 +251,15 @@ public:
     // The Transform window's Rotation group (MCP get_transform_rotation).
     [[nodiscard]] auto get_rotation_inspector() const -> const Rotation_inspector&;
 
+    // Rotate ring k (handle e_handle_rotate_x/y/z for k = 0/1/2) rotates
+    // about frames[k][0] and lies in the plane of frames[k][1], frames[k][2]
+    // (world space, orthonormal). Normally ring k is gizmo basis axis k. With
+    // the Rotation inspector showing Euler angles of a single node the rings
+    // form the Euler gimbal instead: ring k rotates about the k-th axis of
+    // the Euler order in the frame left by the rotations before it, so
+    // dragging ring k changes exactly Euler angle k.
+    [[nodiscard]] auto get_rotate_ring_frames(const glm::mat3& basis) const -> Rotate_ring_frames;
+
     // For Handle_visualizations
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;

@@ -106,9 +106,12 @@ public:
     [[nodiscard]] auto get_representation() const -> Representation;
     [[nodiscard]] auto get_euler_order   () const -> Euler_angle_order;
 
+    [[nodiscard]] static auto gimbal_lock_warning(Euler_angle_order euler_angle_order, float middle_angle) -> float;
+
 private:
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;
     [[nodiscard]] auto gimbal_lock_warning() const -> float;
+    // 0 far from gimbal lock, rising to 1 at it, for the given middle Euler angle.
 
     float             m_euler_angles     [3];
     Representation    m_representation   {Representation::e_euler_angles};
