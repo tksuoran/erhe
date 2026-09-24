@@ -8,7 +8,10 @@
         "velocity_max_delta": 0.003,
         "move_power": 1000,
         "move_speed": 2,
-        "turn_speed": 1
+        "turn_speed": 1,
+        "ortho_zoom_mode": "size_and_pan",
+        "perspective_zoom_mode": "hover_point",
+        "zoom_glide_direction": "follow_view"
     },
     "debug_visualizations_style": {
         "_version": 2,
@@ -159,6 +162,7 @@
     "grid": {
         "snap_enabled": true,
         "visible": true,
+        "behind_content": false,
         "cell_size": 1,
         "cell_div": 10,
         "cell_count": 15,
@@ -205,8 +209,8 @@
         "x": 0,
         "z": -0.7,
         "anchor": "bottom",
-        "height": 0.1,
-        "padding": 0.01
+        "height": 0.05,
+        "padding": 0
     },
     "hud": {
         "enabled": false,
