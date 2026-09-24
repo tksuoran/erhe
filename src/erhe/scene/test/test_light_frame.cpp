@@ -30,10 +30,10 @@ public:
         // A Camera and a Light are prims (doc/erhe/usd_compatibility_design.md C5):
         // each carries its own transform.
         camera = std::make_shared<erhe::scene::Camera>("camera");
-        camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-        camera->set_z_near(0.1f);
-        camera->set_z_far (100.0f);
-        camera->set_fov_y (glm::pi<float>() / 3.0f);
+        camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+        camera->set_perspective_z_near(0.1f);
+        camera->set_perspective_z_far (100.0f);
+        camera->set_fov_y             (glm::pi<float>() / 3.0f);
         camera->set_shadow_range(20.0f);
         camera->set_parent_from_node(
             glm::inverse(glm::lookAt(glm::vec3{3.0f, 4.0f, 5.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}))
@@ -169,10 +169,10 @@ TEST(light_frame, stable_directional_fit_is_scale_invariant)
     const erhe::scene::Light_projection_transforms a = unscaled.light->projection_transforms(unscaled.make_parameters(nullptr));
     const erhe::scene::Light_projection_transforms b = scaled  .light->projection_transforms(scaled  .make_parameters(nullptr));
 
-    EXPECT_FLOAT_EQ(a.projection.z_near,       b.projection.z_near);
-    EXPECT_FLOAT_EQ(a.projection.z_far,        b.projection.z_far);
-    EXPECT_FLOAT_EQ(a.projection.ortho_width,  b.projection.ortho_width);
-    EXPECT_FLOAT_EQ(a.projection.ortho_height, b.projection.ortho_height);
+    EXPECT_FLOAT_EQ(a.projection.orthographic_z_near, b.projection.orthographic_z_near);
+    EXPECT_FLOAT_EQ(a.projection.orthographic_z_far,  b.projection.orthographic_z_far);
+    EXPECT_FLOAT_EQ(a.projection.ortho_width,         b.projection.ortho_width);
+    EXPECT_FLOAT_EQ(a.projection.ortho_height,        b.projection.ortho_height);
     expect_matrices_near(a.clip_from_world.get_matrix(),         b.clip_from_world.get_matrix(),         1e-4f, "clip_from_world");
     expect_matrices_near(a.texture_from_world.get_matrix(),      b.texture_from_world.get_matrix(),      1e-4f, "texture_from_world");
     expect_matrices_near(a.world_from_light_camera.get_matrix(), b.world_from_light_camera.get_matrix(), 1e-4f, "world_from_light_camera");
@@ -189,10 +189,10 @@ TEST(light_frame, tight_directional_fit_is_scale_invariant)
     const erhe::scene::Light_projection_transforms a = unscaled.light->projection_transforms(unscaled.make_parameters(&settings));
     const erhe::scene::Light_projection_transforms b = scaled  .light->projection_transforms(scaled  .make_parameters(&settings));
 
-    EXPECT_NEAR(a.projection.z_near,       b.projection.z_near,       1e-4f);
-    EXPECT_NEAR(a.projection.z_far,        b.projection.z_far,        1e-4f);
-    EXPECT_NEAR(a.projection.ortho_width,  b.projection.ortho_width,  1e-4f);
-    EXPECT_NEAR(a.projection.ortho_height, b.projection.ortho_height, 1e-4f);
+    EXPECT_NEAR(a.projection.orthographic_z_near, b.projection.orthographic_z_near, 1e-4f);
+    EXPECT_NEAR(a.projection.orthographic_z_far,  b.projection.orthographic_z_far,  1e-4f);
+    EXPECT_NEAR(a.projection.ortho_width,         b.projection.ortho_width,         1e-4f);
+    EXPECT_NEAR(a.projection.ortho_height,        b.projection.ortho_height,        1e-4f);
     expect_matrices_near(a.clip_from_world.get_matrix(),         b.clip_from_world.get_matrix(),         1e-4f, "clip_from_world");
     expect_matrices_near(a.world_from_light_camera.get_matrix(), b.world_from_light_camera.get_matrix(), 1e-4f, "world_from_light_camera");
 }

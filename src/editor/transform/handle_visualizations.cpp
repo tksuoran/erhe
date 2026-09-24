@@ -673,7 +673,7 @@ auto Handle_visualizations::get_gizmo_radius() const -> float
 
 auto Handle_visualizations::get_eye(const erhe::scene::Camera& camera) const -> vec3
 {
-    if (!camera.projection()->is_orthogonal()) {
+    if (!camera.projection()->is_orthographic()) {
         return vec3{camera.position_in_world()};
     }
     // Camera looks down its -Z axis; +Z points from the scene back to the eye.

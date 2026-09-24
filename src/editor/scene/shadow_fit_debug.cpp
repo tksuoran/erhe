@@ -48,8 +48,8 @@ auto dump_shadow_fit_debug(const erhe::scene_renderer::Light_projections& light_
         result["view_camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(projection->projection_type)];
         result["view_camera_fov_x_deg"]       = glm::degrees(projection->fov_x);
         result["view_camera_fov_y_deg"]       = glm::degrees(projection->fov_y);
-        result["view_camera_z_near"]          = projection->z_near;
-        result["view_camera_z_far"]           = projection->z_far;
+        result["view_camera_z_near"]          = projection->get_z_near();
+        result["view_camera_z_far"]           = projection->get_z_far();
     }
     const erhe::math::Viewport& view_camera_viewport = light_projections.parameters.main_camera_viewport;
     result["view_camera_viewport_width"]  = view_camera_viewport.width;

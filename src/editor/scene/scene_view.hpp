@@ -135,7 +135,7 @@ public:
     // from those; use this camera.
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     // World units per unit of gizmo size, for content at view_distance from the
-    // camera. Perspective projections scale with view_distance; orthogonal
+    // camera. Perspective projections scale with view_distance; orthographic
     // projections scale with the projection size only.
     [[nodiscard]] virtual auto get_projection_scale  (float view_distance) const -> float = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }

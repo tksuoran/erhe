@@ -133,10 +133,10 @@ void Brush_preview::make_preview_scene()
     // own transform, so the preview needs no node to hold it.
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     //m_camera->enable_flag_bits(erhe::Item_flags::content);
-    m_camera->set_fov_y (0.3f);
-    m_camera->set_z_near(4.0f);
-    m_camera->set_z_far (12.0f);
-    m_camera->set_parent(paremt);
+    m_camera->set_fov_y             (0.3f);
+    m_camera->set_perspective_z_near(4.0f);
+    m_camera->set_perspective_z_far (12.0f);
+    m_camera->set_parent            (paremt);
 
     m_scene_root_shared->get_scene().set_ambient_light(glm::vec3{0.1f, 0.1f, 0.1f});
     
@@ -410,8 +410,8 @@ void Brush_preview::render_preview(
     //const glm::mat4 world_from_clip = m_camera->world_from_node() * node_from_clip;
     //
     // TODO Compute good near and far planes
-    m_camera->set_z_near(0.1f);
-    m_camera->set_z_far (80.0f);
+    m_camera->set_perspective_z_near(0.1f);
+    m_camera->set_perspective_z_far (80.0f);
 
     m_scene_root_shared->get_hosted_scene()->update_node_transforms();
 

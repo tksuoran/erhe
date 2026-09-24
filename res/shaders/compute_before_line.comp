@@ -9,14 +9,14 @@ float get_line_width(uint view_index, vec4 position, float thickness)
     float fov_width        = fov_right - fov_left;
     float viewport_width   = view.cameras[view_index].viewport[2];
     if (thickness < 0.0) {
-        // Constant screen-space width. Under an orthogonal projection the fov
+        // Constant screen-space width. Under an orthographic projection the fov
         // sides are the projection extents in world units (the bottom row of
         // clip_from_world is 0 0 0 1), which must not reach a width that is
         // independent of the projection size; a unit fov stands in for them.
         mat4  clip_from_world = view.cameras[view_index].clip_from_world;
         vec3  w_row           = vec3(clip_from_world[0][3], clip_from_world[1][3], clip_from_world[2][3]);
-        bool  orthogonal      = dot(w_row, w_row) == 0.0;
-        float reference_fov   = orthogonal ? 1.0 : fov_width;
+        bool  orthographic    = dot(w_row, w_row) == 0.0;
+        float reference_fov   = orthographic ? 1.0 : fov_width;
         return (1.0 / 1024.0) * viewport_width * -thickness / reference_fov;
     }
     float scaled_thickness = max(thickness / position.w, 0.01);

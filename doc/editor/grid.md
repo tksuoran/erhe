@@ -49,13 +49,13 @@ wrapped world space and takes line and label coordinates from
 
 `Grid::get_view_frame(camera)` returns the plane one view shows and hovers
 (`Grid_frame`: `world_from_grid`, `grid_from_world`, `label_sign`). For a grid
-with an XZ, XY or YZ plane seen through an orthogonal camera whose right, up
+with an XZ, XY or YZ plane seen through an orthographic camera whose right, up
 and back vectors each run along a world axis (dot product above `1 - 1e-4`),
 the frame is the axis plane facing the camera through the grid origin: grid x
 = camera right, grid z = camera down, grid y (normal) = towards the camera.
 Top views get XZ, Front and Back XY, Right and Left YZ; the four view
 (`four_view.md`) shows a grid in every cell. Every other case - perspective
-camera, tilted orthogonal camera, `Node` plane - uses the grid's own plane.
+camera, tilted orthographic camera, `Node` plane - uses the grid's own plane.
 The frame is derived from the camera at each use, never cached.
 
 The label shader draws glyph up along grid -z and reads along grid +x, so the
@@ -82,4 +82,4 @@ property, `Grid_config::behind_content`) at far depth, where the
 
 ## Future work
 
-- [Screen-space label size in orthogonal views](../plans/editor.md)
+- [Screen-space label size in orthographic views](../plans/editor.md)

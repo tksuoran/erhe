@@ -1594,11 +1594,11 @@
           "type": "number"
         },
         "z_far": {
-          "description": "New far clip plane distance (default projection is 64 m - big scenes clip without raising this)",
+          "description": "New far clip plane distance of the camera's projection type: the perspective or the orthographic clip range (default perspective projection is 64 m - big scenes clip without raising this)",
           "type": "number"
         },
         "z_near": {
-          "description": "New near clip plane distance",
+          "description": "New near clip plane distance of the camera's projection type: the perspective or the orthographic clip range (an orthographic near plane may be negative, behind the camera)",
           "type": "number"
         }
       },
@@ -7211,7 +7211,7 @@
     "name": "mouse_release"
   },
   {
-    "description": "Turn the mouse wheel at a point in the editor window. The pointer moves there and settles first, because the fly camera's zoom step is proportional to the distance of what the pointer hovers. Over a viewport this zooms the camera; over an orthogonal four view cell it changes the shared view height (get_four_views). The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "description": "Turn the mouse wheel at a point in the editor window. The pointer moves there and settles first, because the fly camera's zoom step is proportional to the distance of what the pointer hovers. Over a viewport this zooms the camera; over an orthographic four view cell it changes the shared view height (get_four_views). The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
     "inputSchema": {
       "properties": {
         "x": {
@@ -7567,7 +7567,7 @@
     "name": "imgui_scroll"
   },
   {
-    "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthogonal cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthogonal cameras, and moving an orthogonal camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthogonal views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
+    "description": "Turn the source viewport (the last hovered one, else the only one) into a four view: creates three session-only orthographic cameras (Top, Front, Right) in the viewport's scene, framed on the scene's mesh bounds, opens a viewport window for each, and docks the four windows as a 2 x 2 grid sharing one cross splitter (top | front over right | source). The four cameras share one focus point, the point a fixed distance ahead of the source viewport's perspective camera: moving or turning the perspective camera moves the orthographic cameras, and moving an orthographic camera in its view plane moves the other two and translates the perspective camera by the same offset. The orthographic views also share one zoom, and their rotation is locked. Returns the four view (same shape as one get_four_views entry). See doc/editor/four_view.md.",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -7576,7 +7576,7 @@
     "name": "open_four_view"
   },
   {
-    "description": "List the four views (see open_four_view): scene name, shared focus point, shared view_height (orthogonal view height in world units) and the cameras with axis (top / front / right / perspective), node id, name, world position and ortho_height.",
+    "description": "List the four views (see open_four_view): scene name, shared focus point, shared view_height (orthographic view height in world units) and the cameras with axis (top / front / right / perspective), node id, name, world position and ortho_height.",
     "inputSchema": {
       "properties": {},
       "required": [],

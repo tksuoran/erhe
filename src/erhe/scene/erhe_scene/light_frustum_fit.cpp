@@ -365,9 +365,11 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     // exactly when its inward normal opposes the light direction).
     const float shadow_range = parameters.view_camera->get_shadow_range();
     Projection truncated_projection = *parameters.view_camera->projection();
-    truncated_projection.z_far = std::min(
-        truncated_projection.z_far,
-        std::max(shadow_range, truncated_projection.z_near + min_box_extent)
+    truncated_projection.set_z_far(
+        std::min(
+            truncated_projection.get_z_far(),
+            std::max(shadow_range, truncated_projection.get_z_near() + min_box_extent)
+        )
     );
     const Transform main_clip_from_node  = truncated_projection.clip_from_node_transform(
         parameters.main_camera_viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions
@@ -711,17 +713,17 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     const glm::mat4 light_camera_from_world = glm::inverse(world_from_light_camera);
 
     const Projection light_projection{
-        .projection_type = Projection::Type::orthogonal,
-        .z_near          = 0.0f,
-        .z_far           = s_extent,
-        .ortho_width     = box_size.x,
-        .ortho_height    = box_size.y
+        .projection_type     = Projection::Type::orthographic,
+        .orthographic_z_near = 0.0f,
+        .orthographic_z_far  = s_extent,
+        .ortho_width         = box_size.x,
+        .ortho_height        = box_size.y
     };
 
     if (debug_out != nullptr) {
         debug_out->fit_points.assign(primary_fit_points.begin(), primary_fit_points.end());
-        debug_out->light_plane_hull   = light_plane_hull;
-        debug_out->obb                = obb;
+        debug_out->light_plane_hull           = light_plane_hull;
+        debug_out->obb                        = obb;
         debug_out->view_frustum_planes        = main_frustum_planes;
         debug_out->view_frustum_corners       = main_frustum_corners;
         debug_out->view_frustum_corners_valid = true;

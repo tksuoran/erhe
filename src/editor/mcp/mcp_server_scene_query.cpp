@@ -944,8 +944,8 @@ auto Mcp_server::query_viewports(const json& args) -> std::string
                 entry["camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<int>(projection->projection_type)];
                 entry["camera_fov_y"]           = projection->fov_y;
                 entry["camera_fov_x"]           = projection->fov_x;
-                entry["camera_z_near"]          = projection->z_near;
-                entry["camera_z_far"]           = projection->z_far;
+                entry["camera_z_near"]          = projection->get_z_near();
+                entry["camera_z_far"]           = projection->get_z_far();
             }
         }
         viewports.push_back(entry);

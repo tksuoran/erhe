@@ -9,16 +9,16 @@ namespace erhe::scene {
 namespace {
 
 constexpr erhe::property::Enum_entry c_projection_type_entries[] = {
-    { "Other",                  static_cast<int32_t>(Projection::Type::other)                  },
-    { "Perspective Horizontal", static_cast<int32_t>(Projection::Type::perspective_horizontal) },
-    { "Perspective Vertical",   static_cast<int32_t>(Projection::Type::perspective_vertical)   },
-    { "Perspective",            static_cast<int32_t>(Projection::Type::perspective)            },
-    { "Perspective XR",         static_cast<int32_t>(Projection::Type::perspective_xr)         },
-    { "Orthogonal Horizontal",  static_cast<int32_t>(Projection::Type::orthogonal_horizontal)  },
-    { "Orthogonal Vertical",    static_cast<int32_t>(Projection::Type::orthogonal_vertical)    },
-    { "Orthogonal",             static_cast<int32_t>(Projection::Type::orthogonal)             },
-    { "Orthogonal Rectangle",   static_cast<int32_t>(Projection::Type::orthogonal_rectangle)   },
-    { "Generic Frustum",        static_cast<int32_t>(Projection::Type::generic_frustum)        }
+    { "Other",                   static_cast<int32_t>(Projection::Type::other)                   },
+    { "Perspective Horizontal",  static_cast<int32_t>(Projection::Type::perspective_horizontal)  },
+    { "Perspective Vertical",    static_cast<int32_t>(Projection::Type::perspective_vertical)    },
+    { "Perspective",             static_cast<int32_t>(Projection::Type::perspective)             },
+    { "Perspective XR",          static_cast<int32_t>(Projection::Type::perspective_xr)          },
+    { "Orthographic Horizontal", static_cast<int32_t>(Projection::Type::orthographic_horizontal) },
+    { "Orthographic Vertical",   static_cast<int32_t>(Projection::Type::orthographic_vertical)   },
+    { "Orthographic",            static_cast<int32_t>(Projection::Type::orthographic)            },
+    { "Orthographic Rectangle",  static_cast<int32_t>(Projection::Type::orthographic_rectangle)  },
+    { "Generic Frustum",         static_cast<int32_t>(Projection::Type::generic_frustum)         }
 };
 
 } // anonymous namespace
@@ -51,7 +51,12 @@ auto Projection::get_projection_matrix(
     // the other way round - the x/y frustum scale works out the same either
     // way and only the depth row changes. That trick has no infinite
     // counterpart, so the infinite builders take reverse_depth directly.
-    const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
+    const auto perspective_clip_range = reverse_depth
+        ? Clip_range{perspective_z_far,  perspective_z_near}
+        : Clip_range{perspective_z_near, perspective_z_far};
+    const auto orthographic_clip_range = reverse_depth
+        ? Clip_range{orthographic_z_far,  orthographic_z_near}
+        : Clip_range{orthographic_z_near, orthographic_z_far};
 
     glm::mat4 result{1.0f};
     switch (projection_type) {
@@ -59,10 +64,10 @@ auto Projection::get_projection_matrix(
         case Projection::Type::perspective: {
             result = infinite_z_far
                 ? erhe::math::create_perspective_infinite_far(
-                    fov_x, fov_y, z_near, depth_range, reverse_depth
+                    fov_x, fov_y, perspective_z_near, depth_range, reverse_depth
                 )
                 : erhe::math::create_perspective(
-                    fov_x, fov_y, clip_range.z_near, clip_range.z_far, depth_range
+                    fov_x, fov_y, perspective_clip_range.z_near, perspective_clip_range.z_far, depth_range
                 );
             break;
         }
@@ -70,10 +75,10 @@ auto Projection::get_projection_matrix(
         case Projection::Type::perspective_xr: {
             result = infinite_z_far
                 ? erhe::math::create_perspective_xr_infinite_far(
-                    fov_left, fov_right, fov_up, fov_down, z_near, depth_range, reverse_depth
+                    fov_left, fov_right, fov_up, fov_down, perspective_z_near, depth_range, reverse_depth
                 )
                 : erhe::math::create_perspective_xr(
-                    fov_left, fov_right, fov_up, fov_down, clip_range.z_near, clip_range.z_far, depth_range
+                    fov_left, fov_right, fov_up, fov_down, perspective_clip_range.z_near, perspective_clip_range.z_far, depth_range
                 );
             break;
         }
@@ -81,10 +86,10 @@ auto Projection::get_projection_matrix(
         case Projection::Type::perspective_horizontal: {
             result = infinite_z_far
                 ? erhe::math::create_perspective_horizontal_infinite_far(
-                    fov_x, aspect_ratio, z_near, depth_range, reverse_depth
+                    fov_x, aspect_ratio, perspective_z_near, depth_range, reverse_depth
                 )
                 : erhe::math::create_perspective_horizontal(
-                    fov_x, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
+                    fov_x, aspect_ratio, perspective_clip_range.z_near, perspective_clip_range.z_far, depth_range
                 );
             break;
         }
@@ -92,52 +97,52 @@ auto Projection::get_projection_matrix(
         case Projection::Type::perspective_vertical: {
             result = infinite_z_far
                 ? erhe::math::create_perspective_vertical_infinite_far(
-                    fov_y, aspect_ratio, z_near, depth_range, reverse_depth
+                    fov_y, aspect_ratio, perspective_z_near, depth_range, reverse_depth
                 )
                 : erhe::math::create_perspective_vertical(
-                    fov_y, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
+                    fov_y, aspect_ratio, perspective_clip_range.z_near, perspective_clip_range.z_far, depth_range
                 );
             break;
         }
 
-        case Projection::Type::orthogonal_horizontal: {
+        case Projection::Type::orthographic_horizontal: {
             if (aspect_ratio == 0.0f) {
                 return glm::mat4{1.0f};
             }
             result = erhe::math::create_orthographic(
-                -0.5f * ortho_width,             0.5f * ortho_width,
+                -0.5f * ortho_width,                0.5f * ortho_width,
                 -0.5f * ortho_width / aspect_ratio, 0.5f * ortho_width / aspect_ratio,
-                clip_range.z_near, clip_range.z_far, depth_range
+                orthographic_clip_range.z_near,     orthographic_clip_range.z_far, depth_range
             );
             break;
         }
 
-        case Projection::Type::orthogonal_vertical: {
+        case Projection::Type::orthographic_vertical: {
             if (aspect_ratio == 0.0f) {
                 return glm::mat4{1.0f};
             }
             result = erhe::math::create_orthographic(
                 -0.5f * ortho_height * aspect_ratio, 0.5f * ortho_height * aspect_ratio,
                 -0.5f * ortho_height,                0.5f * ortho_height,
-                clip_range.z_near, clip_range.z_far, depth_range
+                orthographic_clip_range.z_near,      orthographic_clip_range.z_far, depth_range
             );
             break;
         }
 
-        case Projection::Type::orthogonal: {
+        case Projection::Type::orthographic: {
             result = erhe::math::create_orthographic(
-                -0.5f * ortho_width,  0.5f * ortho_width,
-                -0.5f * ortho_height, 0.5f * ortho_height,
-                clip_range.z_near, clip_range.z_far, depth_range
+                -0.5f * ortho_width,            0.5f * ortho_width,
+                -0.5f * ortho_height,           0.5f * ortho_height,
+                orthographic_clip_range.z_near, orthographic_clip_range.z_far, depth_range
             );
             break;
         }
 
-        case Projection::Type::orthogonal_rectangle: {
+        case Projection::Type::orthographic_rectangle: {
             result = erhe::math::create_orthographic(
-                ortho_left, ortho_left + ortho_width,
-                ortho_bottom, ortho_bottom + ortho_height,
-                clip_range.z_near, clip_range.z_far, depth_range
+                ortho_left,                     ortho_left + ortho_width,
+                ortho_bottom,                   ortho_bottom + ortho_height,
+                orthographic_clip_range.z_near, orthographic_clip_range.z_far, depth_range
             );
             break;
         }
@@ -145,7 +150,7 @@ auto Projection::get_projection_matrix(
         case Projection::Type::generic_frustum: {
             result = erhe::math::create_frustum(
                 frustum_left, frustum_right, frustum_bottom, frustum_top,
-                clip_range.z_near, clip_range.z_far, depth_range
+                perspective_clip_range.z_near, perspective_clip_range.z_far, depth_range
             );
             break;
         }
@@ -208,7 +213,7 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
             };
         }
 
-        case Projection::Type::orthogonal_horizontal: {
+        case Projection::Type::orthographic_horizontal: {
             return Fov_sides{
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -217,7 +222,7 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
             };
         }
 
-        case Projection::Type::orthogonal_vertical: {
+        case Projection::Type::orthographic_vertical: {
             return Fov_sides{
                 -0.5f * ortho_height * viewport.aspect_ratio(),
                  0.5f * ortho_height * viewport.aspect_ratio(),
@@ -226,7 +231,7 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
             };
         }
 
-        case Projection::Type::orthogonal: {
+        case Projection::Type::orthographic: {
             return Fov_sides{
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -235,7 +240,7 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
             };
         }
 
-        case Projection::Type::orthogonal_rectangle: {
+        case Projection::Type::orthographic_rectangle: {
             return Fov_sides{
                 ortho_left,
                 ortho_left   + ortho_width,
@@ -282,19 +287,19 @@ auto Projection::get_scale() const -> float
             return 0.5f * fov_y;
         }
 
-        case Projection::Type::orthogonal_horizontal: {
+        case Projection::Type::orthographic_horizontal: {
             return 0.5f * ortho_width;
         }
 
-        case Projection::Type::orthogonal_vertical: {
+        case Projection::Type::orthographic_vertical: {
             return 0.5f * ortho_height;
         }
 
-        case Projection::Type::orthogonal: {
+        case Projection::Type::orthographic: {
             return 0.5f * std::min(ortho_width, ortho_height);
         }
 
-        case Projection::Type::orthogonal_rectangle: {
+        case Projection::Type::orthographic_rectangle: {
             return 0.5f * std::min(ortho_width, ortho_height);
         }
 
@@ -310,13 +315,13 @@ auto Projection::get_scale() const -> float
     return 1.0f;
 }
 
-auto Projection::is_orthogonal() const -> bool
+auto Projection::is_orthographic() const -> bool
 {
     return
-        (projection_type == Type::orthogonal_horizontal) ||
-        (projection_type == Type::orthogonal_vertical  ) ||
-        (projection_type == Type::orthogonal           ) ||
-        (projection_type == Type::orthogonal_rectangle );
+        (projection_type == Type::orthographic_horizontal) ||
+        (projection_type == Type::orthographic_vertical  ) ||
+        (projection_type == Type::orthographic           ) ||
+        (projection_type == Type::orthographic_rectangle );
 }
 
 } // namespace erhe::scene

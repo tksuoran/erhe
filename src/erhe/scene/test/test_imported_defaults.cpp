@@ -49,15 +49,16 @@ TEST(Imported_defaults, a_camera_projection_write_authors_only_what_differs)
 {
     Camera camera{};
     Projection projection = *camera.projection();
-    projection.z_far = 500.0f;
+    projection.perspective_z_far = 500.0f;
     camera.set_projection(projection);
     camera.set_exposure(1.0f);
 
     clear_default_valued_local_properties(camera);
 
-    EXPECT_EQ(camera.get_value_source(Camera::z_far_property.get()),    Value_source::local);
-    EXPECT_EQ(camera.get_value_source(Camera::z_near_property.get()),   Value_source::default_value);
-    EXPECT_EQ(camera.get_value_source(Camera::fov_y_property.get()),    Value_source::default_value);
-    EXPECT_EQ(camera.get_value_source(Camera::exposure_property.get()), Value_source::default_value);
-    EXPECT_EQ(camera.projection()->z_far, 500.0f);
+    EXPECT_EQ(camera.get_value_source(Camera::perspective_z_far_property.get()),   Value_source::local);
+    EXPECT_EQ(camera.get_value_source(Camera::perspective_z_near_property.get()),  Value_source::default_value);
+    EXPECT_EQ(camera.get_value_source(Camera::orthographic_z_far_property.get()),  Value_source::default_value);
+    EXPECT_EQ(camera.get_value_source(Camera::fov_y_property.get()),               Value_source::default_value);
+    EXPECT_EQ(camera.get_value_source(Camera::exposure_property.get()),            Value_source::default_value);
+    EXPECT_EQ(camera.projection()->perspective_z_far, 500.0f);
 }

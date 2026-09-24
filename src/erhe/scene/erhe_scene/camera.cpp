@@ -42,10 +42,14 @@ auto is_perspective(const Dependency_object& object) -> bool
 auto uses_fov_x    (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::perspective) || (t == Type::perspective_horizontal); }
 auto uses_fov_y    (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::perspective) || (t == Type::perspective_vertical); }
 auto uses_fov_sides(const Dependency_object& object) -> bool { return projection_type_of(object) == Type::perspective_xr; }
-auto uses_width    (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::orthogonal) || (t == Type::orthogonal_horizontal) || (t == Type::orthogonal_rectangle); }
-auto uses_height   (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::orthogonal) || (t == Type::orthogonal_vertical) || (t == Type::orthogonal_rectangle); }
-auto uses_corner   (const Dependency_object& object) -> bool { return projection_type_of(object) == Type::orthogonal_rectangle; }
+auto uses_width    (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::orthographic) || (t == Type::orthographic_horizontal) || (t == Type::orthographic_rectangle); }
+auto uses_height   (const Dependency_object& object) -> bool { const Type t = projection_type_of(object); return (t == Type::orthographic) || (t == Type::orthographic_vertical) || (t == Type::orthographic_rectangle); }
+auto uses_corner   (const Dependency_object& object) -> bool { return projection_type_of(object) == Type::orthographic_rectangle; }
 auto uses_frustum  (const Dependency_object& object) -> bool { return projection_type_of(object) == Type::generic_frustum; }
+// Projection::get_z_near() / get_z_far(): the orthographic types use the
+// orthographic clip range, every other type the perspective one.
+auto uses_perspective_clip_range (const Dependency_object& object) -> bool { return !static_cast<const Camera&>(object).projection()->is_orthographic(); }
+auto uses_orthographic_clip_range(const Dependency_object& object) -> bool { return static_cast<const Camera&>(object).projection()->is_orthographic(); }
 
 auto angle(const std::string_view name, float Projection::*member, const float min, const float max, const std::string_view label, const Property_ui::Visible_when visible_when) -> Property<float>
 {
@@ -73,6 +77,22 @@ auto extent(const std::string_view name, float Projection::*member, const std::s
     );
 }
 
+// A signed distance along the view axis: an orthographic clip plane may lie
+// behind the camera, so the row is a plain (unbounded) drag, not the
+// logarithmic 0..1000 slider of extent().
+auto signed_distance(const std::string_view name, float Projection::*member, const std::string_view label, const Property_ui::Visible_when visible_when) -> Property<float>
+{
+    return Property<float>::register_property(
+        name, c_owner,
+        Property_metadata{
+            .default_value = Projection{}.*member,
+            .inherits      = true,
+            .flags         = c_native,
+            .ui            = Property_ui{.group = c_group, .label = label, .visible_when = visible_when}
+        }
+    );
+}
+
 auto log_slider(const float min, const float max, const std::string_view label, const std::string_view tooltip = {}) -> Property_ui
 {
     return Property_ui{.min = min, .max = max, .presentation = Property_ui::Presentation::slider, .logarithmic = true, .tooltip = tooltip, .label = label};
@@ -92,23 +112,25 @@ const Property<Type> Camera::projection_type_property = Property<Type>::register
         .ui            = Property_ui{.group = c_group, .label = "Type"}
     }
 );
-const Property<float> Camera::fov_x_property     = angle("fov_x", &Projection::fov_x, 0.0f,       c_pi,      "Fov X",     uses_fov_x);
-const Property<float> Camera::fov_y_property     = angle("fov_y", &Projection::fov_y, 0.0f,       c_pi,      "Fov Y",     uses_fov_y);
-const Property<float> Camera::fov_left_property  = angle("fov_left", &Projection::fov_left, -c_half_pi, c_half_pi, "Fov Left",  uses_fov_sides);
-const Property<float> Camera::fov_right_property = angle("fov_right", &Projection::fov_right, -c_half_pi, c_half_pi, "Fov Right", uses_fov_sides);
-const Property<float> Camera::fov_up_property    = angle("fov_up", &Projection::fov_up, -c_half_pi, c_half_pi, "Fov Up",    uses_fov_sides);
-const Property<float> Camera::fov_down_property  = angle("fov_down", &Projection::fov_down, -c_half_pi, c_half_pi, "Fov Down",  uses_fov_sides);
-const Property<float> Camera::ortho_left_property     = extent("ortho_left", &Projection::ortho_left, "Left",   uses_corner);
-const Property<float> Camera::ortho_width_property    = extent("ortho_width", &Projection::ortho_width, "Width",  uses_width);
-const Property<float> Camera::ortho_bottom_property   = extent("ortho_bottom", &Projection::ortho_bottom, "Bottom", uses_corner);
-const Property<float> Camera::ortho_height_property   = extent("ortho_height", &Projection::ortho_height, "Height", uses_height);
-const Property<float> Camera::frustum_left_property   = extent("frustum_left", &Projection::frustum_left, "Frustum Left",   uses_frustum);
-const Property<float> Camera::frustum_right_property  = extent("frustum_right", &Projection::frustum_right, "Frustum Right",  uses_frustum);
-const Property<float> Camera::frustum_bottom_property = extent("frustum_bottom", &Projection::frustum_bottom, "Frustum Bottom", uses_frustum);
-const Property<float> Camera::frustum_top_property    = extent("frustum_top", &Projection::frustum_top, "Frustum Top",    uses_frustum);
-const Property<float> Camera::z_near_property = extent("z_near", &Projection::z_near, "Z Near", {});
-const Property<float> Camera::z_far_property  = extent("z_far", &Projection::z_far, "Z Far",  {}, "Stays the depth hint for shadow fitting and the gizmo while Infinite Z Far is set");
-const Property<bool> Camera::infinite_z_far_property = Property<bool>::register_property(
+const Property<float> Camera::fov_x_property               = angle("fov_x", &Projection::fov_x, 0.0f,       c_pi,      "Fov X",     uses_fov_x);
+const Property<float> Camera::fov_y_property               = angle("fov_y", &Projection::fov_y, 0.0f,       c_pi,      "Fov Y",     uses_fov_y);
+const Property<float> Camera::fov_left_property            = angle("fov_left", &Projection::fov_left, -c_half_pi, c_half_pi, "Fov Left",  uses_fov_sides);
+const Property<float> Camera::fov_right_property           = angle("fov_right", &Projection::fov_right, -c_half_pi, c_half_pi, "Fov Right", uses_fov_sides);
+const Property<float> Camera::fov_up_property              = angle("fov_up", &Projection::fov_up, -c_half_pi, c_half_pi, "Fov Up",    uses_fov_sides);
+const Property<float> Camera::fov_down_property            = angle("fov_down", &Projection::fov_down, -c_half_pi, c_half_pi, "Fov Down",  uses_fov_sides);
+const Property<float> Camera::ortho_left_property          = extent("ortho_left", &Projection::ortho_left, "Left",   uses_corner);
+const Property<float> Camera::ortho_width_property         = extent("ortho_width", &Projection::ortho_width, "Width",  uses_width);
+const Property<float> Camera::ortho_bottom_property        = extent("ortho_bottom", &Projection::ortho_bottom, "Bottom", uses_corner);
+const Property<float> Camera::ortho_height_property        = extent("ortho_height", &Projection::ortho_height, "Height", uses_height);
+const Property<float> Camera::frustum_left_property        = extent("frustum_left", &Projection::frustum_left, "Frustum Left",   uses_frustum);
+const Property<float> Camera::frustum_right_property       = extent("frustum_right", &Projection::frustum_right, "Frustum Right",  uses_frustum);
+const Property<float> Camera::frustum_bottom_property      = extent("frustum_bottom", &Projection::frustum_bottom, "Frustum Bottom", uses_frustum);
+const Property<float> Camera::frustum_top_property         = extent("frustum_top", &Projection::frustum_top, "Frustum Top",    uses_frustum);
+const Property<float> Camera::perspective_z_near_property  = extent("perspective_z_near", &Projection::perspective_z_near, "Z Near", uses_perspective_clip_range);
+const Property<float> Camera::perspective_z_far_property   = extent("perspective_z_far", &Projection::perspective_z_far, "Z Far", uses_perspective_clip_range, "Stays the depth hint for shadow fitting and the gizmo while Infinite Z Far is set");
+const Property<float> Camera::orthographic_z_near_property = signed_distance("orthographic_z_near", &Projection::orthographic_z_near, "Z Near", uses_orthographic_clip_range);
+const Property<float> Camera::orthographic_z_far_property  = signed_distance("orthographic_z_far", &Projection::orthographic_z_far, "Z Far", uses_orthographic_clip_range);
+const Property<bool>  Camera::infinite_z_far_property      = Property<bool>::register_property(
     "infinite_z_far", c_owner,
     Property_metadata{
         .default_value = false,
@@ -151,46 +173,50 @@ void Camera::on_property_changed(const erhe::property::Property_changed_args& ar
 
 void Camera::refresh_projection_mirror()
 {
-    m_projection.projection_type = get_value(projection_type_property);
-    m_projection.z_near          = get_value(z_near_property);
-    m_projection.z_far           = get_value(z_far_property);
-    m_projection.infinite_z_far  = get_value(infinite_z_far_property);
-    m_projection.fov_x           = get_value(fov_x_property);
-    m_projection.fov_y           = get_value(fov_y_property);
-    m_projection.fov_left        = get_value(fov_left_property);
-    m_projection.fov_right       = get_value(fov_right_property);
-    m_projection.fov_up          = get_value(fov_up_property);
-    m_projection.fov_down        = get_value(fov_down_property);
-    m_projection.ortho_left      = get_value(ortho_left_property);
-    m_projection.ortho_width     = get_value(ortho_width_property);
-    m_projection.ortho_bottom    = get_value(ortho_bottom_property);
-    m_projection.ortho_height    = get_value(ortho_height_property);
-    m_projection.frustum_left    = get_value(frustum_left_property);
-    m_projection.frustum_right   = get_value(frustum_right_property);
-    m_projection.frustum_bottom  = get_value(frustum_bottom_property);
-    m_projection.frustum_top     = get_value(frustum_top_property);
+    m_projection.projection_type     = get_value(projection_type_property);
+    m_projection.perspective_z_near  = get_value(perspective_z_near_property);
+    m_projection.perspective_z_far   = get_value(perspective_z_far_property);
+    m_projection.orthographic_z_near = get_value(orthographic_z_near_property);
+    m_projection.orthographic_z_far  = get_value(orthographic_z_far_property);
+    m_projection.infinite_z_far      = get_value(infinite_z_far_property);
+    m_projection.fov_x               = get_value(fov_x_property);
+    m_projection.fov_y               = get_value(fov_y_property);
+    m_projection.fov_left            = get_value(fov_left_property);
+    m_projection.fov_right           = get_value(fov_right_property);
+    m_projection.fov_up              = get_value(fov_up_property);
+    m_projection.fov_down            = get_value(fov_down_property);
+    m_projection.ortho_left          = get_value(ortho_left_property);
+    m_projection.ortho_width         = get_value(ortho_width_property);
+    m_projection.ortho_bottom        = get_value(ortho_bottom_property);
+    m_projection.ortho_height        = get_value(ortho_height_property);
+    m_projection.frustum_left        = get_value(frustum_left_property);
+    m_projection.frustum_right       = get_value(frustum_right_property);
+    m_projection.frustum_bottom      = get_value(frustum_bottom_property);
+    m_projection.frustum_top        = get_value(frustum_top_property);
 }
 
 void Camera::set_projection(const Projection& projection)
 {
-    set_projection_type(projection.projection_type);
-    set_z_near         (projection.z_near);
-    set_z_far          (projection.z_far);
-    set_infinite_z_far (projection.infinite_z_far);
-    set_fov_x          (projection.fov_x);
-    set_fov_y          (projection.fov_y);
-    set_fov_left       (projection.fov_left);
-    set_fov_right      (projection.fov_right);
-    set_fov_up         (projection.fov_up);
-    set_fov_down       (projection.fov_down);
-    set_ortho_left     (projection.ortho_left);
-    set_ortho_width    (projection.ortho_width);
-    set_ortho_bottom   (projection.ortho_bottom);
-    set_ortho_height   (projection.ortho_height);
-    set_frustum_left   (projection.frustum_left);
-    set_frustum_right  (projection.frustum_right);
-    set_frustum_bottom (projection.frustum_bottom);
-    set_frustum_top    (projection.frustum_top);
+    set_projection_type    (projection.projection_type);
+    set_perspective_z_near (projection.perspective_z_near);
+    set_perspective_z_far  (projection.perspective_z_far);
+    set_orthographic_z_near(projection.orthographic_z_near);
+    set_orthographic_z_far (projection.orthographic_z_far);
+    set_infinite_z_far     (projection.infinite_z_far);
+    set_fov_x              (projection.fov_x);
+    set_fov_y              (projection.fov_y);
+    set_fov_left           (projection.fov_left);
+    set_fov_right          (projection.fov_right);
+    set_fov_up             (projection.fov_up);
+    set_fov_down           (projection.fov_down);
+    set_ortho_left         (projection.ortho_left);
+    set_ortho_width        (projection.ortho_width);
+    set_ortho_bottom       (projection.ortho_bottom);
+    set_ortho_height       (projection.ortho_height);
+    set_frustum_left       (projection.frustum_left);
+    set_frustum_right      (projection.frustum_right);
+    set_frustum_bottom     (projection.frustum_bottom);
+    set_frustum_top        (projection.frustum_top);
 }
 
 void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)

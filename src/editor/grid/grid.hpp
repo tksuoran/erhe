@@ -108,7 +108,7 @@ public:
     // The grid's own plane.
     [[nodiscard]] auto get_frame          () const -> Grid_frame;
     // The plane a view through camera shows and hovers: for a free-plane
-    // grid seen through an axis-aligned orthogonal camera, the axis plane
+    // grid seen through an axis-aligned orthographic camera, the axis plane
     // facing the camera through the grid origin, with grid x along the
     // camera's right and grid z along its down (upright, unmirrored
     // labels); the grid's own plane otherwise.

@@ -738,10 +738,12 @@ public:
         if (name == "ortho_width")     { return "horizontalAperture"; }
         if (name == "ortho_bottom")    { return "verticalAperture"; }
         if (name == "ortho_height")    { return "verticalAperture"; }
-        if (name == "z_near")          { return "clippingRange"; }
-        if (name == "z_far")           { return "clippingRange"; }
-        if (name == "infinite_z_far")  { return "clippingRange"; }
-        if (name == "exposure")        { return "exposure"; }
+        if (name == "perspective_z_near")  { return "clippingRange"; }
+        if (name == "perspective_z_far")   { return "clippingRange"; }
+        if (name == "orthographic_z_near") { return "clippingRange"; }
+        if (name == "orthographic_z_far")  { return "clippingRange"; }
+        if (name == "infinite_z_far")      { return "clippingRange"; }
+        if (name == "exposure")            { return "exposure"; }
         return {};
     }
     if (owner == "Light") {
@@ -5943,16 +5945,22 @@ private:
         geom_camera.name = prim_name;
         set_transform(geom_camera.xformOps, node, matrix);
 
-        if (is_local(camera, Camera::z_near_property.get()) || is_local(camera, Camera::z_far_property.get())) {
+        // clippingRange is the clip range of the projection the prim is
+        // written with: only Type::orthographic is written as a USD
+        // orthographic camera, every other type as a perspective one.
+        const erhe::scene::Projection::Type projection_type = camera.get_value(Camera::projection_type_property);
+        const bool                          orthographic    = (projection_type == erhe::scene::Projection::Type::orthographic);
+        const erhe::property::Property<float>& z_near_property = orthographic ? Camera::orthographic_z_near_property : Camera::perspective_z_near_property;
+        const erhe::property::Property<float>& z_far_property  = orthographic ? Camera::orthographic_z_far_property  : Camera::perspective_z_far_property;
+        if (is_local(camera, z_near_property.get()) || is_local(camera, z_far_property.get())) {
             geom_camera.clippingRange.set_value(
                 lightusd::value::float2{
-                    camera.get_value(Camera::z_near_property),
-                    camera.get_value(Camera::z_far_property)
+                    camera.get_value(z_near_property),
+                    camera.get_value(z_far_property)
                 }
             );
         }
-        const erhe::scene::Projection::Type projection_type = camera.get_value(Camera::projection_type_property);
-        if (projection_type == erhe::scene::Projection::Type::orthogonal) {
+        if (orthographic) {
             geom_camera.projection.set_value(lightusd::GeomCamera::Projection::Orthographic);
             // A USD aperture is in tenths of a scene unit.
             if (is_local(camera, Camera::ortho_width_property.get())) {

@@ -78,7 +78,7 @@ public:
     [[nodiscard]] auto get_view_ring_radius() const -> float;
     // The eye position every view-dependent gizmo decision uses (view ring
     // plane, octant signs, ring occlusion, face culling, depth order). Under a
-    // perspective projection it is the camera position. Under an orthogonal
+    // perspective projection it is the camera position. Under an orthographic
     // projection all sight lines are parallel to the camera axis, so it is a
     // point far from the anchor along that axis: the direction from any part
     // of the gizmo to it is the view direction.

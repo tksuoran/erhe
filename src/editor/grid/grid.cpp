@@ -513,7 +513,7 @@ auto Grid::get_view_frame(const erhe::scene::Camera* const camera) const -> Grid
         return get_frame();
     }
     const erhe::scene::Projection* const projection = camera->projection();
-    if ((projection == nullptr) || !projection->is_orthogonal()) {
+    if ((projection == nullptr) || !projection->is_orthographic()) {
         return get_frame();
     }
     const glm::mat4 world_from_camera = camera->world_from_node();

@@ -1602,10 +1602,10 @@ void Headset_view::setup_root_camera()
     m_root_camera = std::make_shared<erhe::scene::Camera>("Root Camera");
     m_root_camera->set_parent(m_root_node);
     m_root_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-    m_root_camera->set_fov_y          (glm::radians(35.0f));
-    m_root_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-    m_root_camera->set_z_near         (0.03f);
-    m_root_camera->set_z_far          (200.0f);
+    m_root_camera->set_fov_y             (glm::radians(35.0f));
+    m_root_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+    m_root_camera->set_perspective_z_near(0.03f);
+    m_root_camera->set_perspective_z_far (200.0f);
 
     setup_pointer_pick_camera();
 }
@@ -1620,10 +1620,10 @@ void Headset_view::setup_pointer_pick_camera()
     // No content flag and hidden: it must never be composited or listed.
     m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
     m_pointer_pick_camera->hide();
-    m_pointer_pick_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-    m_pointer_pick_camera->set_fov_y          (glm::radians(10.0f));
-    m_pointer_pick_camera->set_z_near         (0.03f);
-    m_pointer_pick_camera->set_z_far          (200.0f);
+    m_pointer_pick_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+    m_pointer_pick_camera->set_fov_y             (glm::radians(10.0f));
+    m_pointer_pick_camera->set_perspective_z_near(0.03f);
+    m_pointer_pick_camera->set_perspective_z_far (200.0f);
     m_pointer_pick_camera->set_parent(m_root_node);
 }
 
@@ -1704,13 +1704,13 @@ void Headset_view::update_root_camera_projection()
     // per-frame call costs nothing while the eye fov stays the same.
     m_root_camera->set_projection(
         erhe::scene::Projection{
-            .projection_type = erhe::scene::Projection::Type::perspective_xr,
-            .z_near          = m_combined_eye_z_near,
-            .z_far           = m_combined_eye_z_far,
-            .fov_left        = m_combined_eye_fov_sides.left,
-            .fov_right       = m_combined_eye_fov_sides.right,
-            .fov_up          = m_combined_eye_fov_sides.up,
-            .fov_down        = m_combined_eye_fov_sides.down
+            .projection_type    = erhe::scene::Projection::Type::perspective_xr,
+            .perspective_z_near = m_combined_eye_z_near,
+            .perspective_z_far  = m_combined_eye_z_far,
+            .fov_left           = m_combined_eye_fov_sides.left,
+            .fov_right          = m_combined_eye_fov_sides.right,
+            .fov_up             = m_combined_eye_fov_sides.up,
+            .fov_down           = m_combined_eye_fov_sides.down
         }
     );
 }

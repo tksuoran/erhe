@@ -20,8 +20,10 @@ fallback only.
 ```json
 {
     "projection_type": "perspective_vertical",
-    "z_near": 0.03,
-    "z_far": 80,
+    "perspective_z_near": 0.03,
+    "perspective_z_far": 80,
+    "orthographic_z_near": -256,
+    "orthographic_z_far": 256,
     "fov_x": 0,
     "fov_y": 0.6108652,
     "fov_left": -0.5,
@@ -40,19 +42,25 @@ fallback only.
     "exposure": 1,
     "shadow_range": 22,
     "flags": ["content", "show_in_ui"],
-    "properties": {"fov_y": "0.6108652", "z_far": "80"}
+    "properties": {"fov_y": "0.6108652", "perspective_z_far": "80"}
 }
 ```
 
 - `projection_type`: one of `other`, `perspective_horizontal`,
   `perspective_vertical`, `perspective`, `perspective_xr`,
-  `orthogonal_horizontal`, `orthogonal_vertical`, `orthogonal`,
-  `orthogonal_rectangle`, `generic_frustum`.
+  `orthographic_horizontal`, `orthographic_vertical`, `orthographic`,
+  `orthographic_rectangle`, `generic_frustum`.
 - All projection fields are always written (the active subset depends on
   `projection_type`); angles are radians, distances scene units.
+- `perspective_z_near`, `perspective_z_far`: the clip range of the
+  perspective types, `perspective_xr` and `generic_frustum` (distances in
+  front of the camera, `perspective_z_near > 0`).
+- `orthographic_z_near`, `orthographic_z_far`: the clip range of the
+  orthographic types, signed view-axis distances: an orthographic near plane
+  may lie behind the camera (negative `orthographic_z_near`).
 - `infinite_z_far` (boolean, default `false`): the perspective projection
   types put their far plane at infinity, which is what an absent
-  `camera.perspective.zfar` means in core glTF. `z_far` stays a finite,
+  `camera.perspective.zfar` means in core glTF. `perspective_z_far` stays a finite,
   meaningful number while this is set - it is the depth hint the rest of the
   editor works from (shadow range fitting, gizmo distances, the properties
   slider) - and only the projection matrix is unbounded. The exporter omits

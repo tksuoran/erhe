@@ -76,7 +76,7 @@ Two traps follow from that:
   shadow-casting point light. Each face builds a
   `create_look_at(light_pos, light_pos + cube_look[f], cube_up[f])` camera with
   the light's 90-degree perspective (`Light::point_light_projection_transforms`,
-  `z_far = light->range`), sets `update_control(..., vec4(light_pos, far))` and
+  `perspective_z_far = light->range`), sets `update_control(..., vec4(light_pos, far))` and
   draws with `cull_none` and color blending disabled under
   `VARIANT_SHADOW_CUBE`. The caster fragment writes
   `length(v_position.xyz - light_control_block.point_light_position.xyz)` to the

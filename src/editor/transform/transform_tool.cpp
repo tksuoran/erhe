@@ -1836,12 +1836,12 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         (type == erhe::scene::Projection::Type::perspective_xr) ||
         (type == erhe::scene::Projection::Type::perspective_horizontal) ||
         (type == erhe::scene::Projection::Type::perspective_vertical);
-    const bool orthogonal =
-        (type == erhe::scene::Projection::Type::orthogonal) ||
-        (type == erhe::scene::Projection::Type::orthogonal_horizontal) ||
-        (type == erhe::scene::Projection::Type::orthogonal_vertical) ||
-        (type == erhe::scene::Projection::Type::orthogonal_rectangle);
-    if (!perspective && !orthogonal) {
+    const bool orthographic =
+        (type == erhe::scene::Projection::Type::orthographic) ||
+        (type == erhe::scene::Projection::Type::orthographic_horizontal) ||
+        (type == erhe::scene::Projection::Type::orthographic_vertical) ||
+        (type == erhe::scene::Projection::Type::orthographic_rectangle);
+    if (!perspective && !orthographic) {
         return;
     }
 
@@ -1916,9 +1916,11 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         return 0.5f * (-b + std::sqrt(discriminant));
     };
 
-    if ((anchor_depth >= projection.z_near) && (anchor_depth <= projection.z_far)) {
+    const float z_near = projection.get_z_near();
+    const float z_far  = projection.get_z_far();
+    if ((anchor_depth >= z_near) && (anchor_depth <= z_far)) {
         // Lateral frustum extents at the anchor's depth: angular sides for
-        // perspective projections, fixed world-unit sides for orthogonal.
+        // perspective projections, fixed world-unit sides for orthographic.
         const float x_min = perspective ? (anchor_depth * std::tan(fov.left )) : fov.left;
         const float x_max = perspective ? (anchor_depth * std::tan(fov.right)) : fov.right;
         const float y_min = perspective ? (anchor_depth * std::tan(fov.down )) : fov.down;
@@ -1939,11 +1941,11 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
     }
 
     // Depth of the plane (in front of the camera) the indicator is drawn on.
-    // Perspective: ~1 m, kept inside the clip range; orthogonal: mid range
+    // Perspective: ~1 m, kept inside the clip range; orthographic: mid range
     // (lateral extents are depth-independent there).
     const float d_ref = perspective
-        ? std::clamp(1.0f, 2.0f * projection.z_near, 0.5f * projection.z_far)
-        : (0.5f * (projection.z_near + projection.z_far));
+        ? std::clamp(1.0f, 2.0f * z_near, 0.5f * z_far)
+        : (0.5f * (z_near + z_far));
 
     const float x_min = perspective ? (d_ref * std::tan(fov.left )) : fov.left;
     const float x_max = perspective ? (d_ref * std::tan(fov.right)) : fov.right;
@@ -1960,7 +1962,7 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
 
     // Direction from the view center toward the anchor, on the d_ref plane.
     vec2 direction;
-    if (perspective && (anchor_depth <= projection.z_near)) {
+    if (perspective && (anchor_depth <= z_near)) {
         // At or behind the camera plane: no stable plane projection; the
         // view-space lateral offset still tells which side the anchor is on.
         direction = vec2{p_view.x, p_view.y} - rect_center;

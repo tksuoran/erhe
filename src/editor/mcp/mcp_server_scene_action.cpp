@@ -3061,13 +3061,27 @@ auto Mcp_server::action_edit_camera(const json& args) -> std::string
             camera->set_fov_y(args.value("fov_y", camera->projection()->fov_y));
             changed["fov_y"] = camera->projection()->fov_y;
         }
+        // z_near / z_far edit the clip range of the camera's projection
+        // type (Projection::get_z_near()): the orthographic pair for an
+        // orthographic camera, the perspective pair otherwise.
+        const bool orthographic = camera->projection()->is_orthographic();
         if (args.contains("z_near")) {
-            camera->set_z_near(args.value("z_near", camera->projection()->z_near));
-            changed["z_near"] = camera->projection()->z_near;
+            const float z_near = args.value("z_near", camera->projection()->get_z_near());
+            if (orthographic) {
+                camera->set_orthographic_z_near(z_near);
+            } else {
+                camera->set_perspective_z_near(z_near);
+            }
+            changed["z_near"] = camera->projection()->get_z_near();
         }
         if (args.contains("z_far")) {
-            camera->set_z_far(args.value("z_far", camera->projection()->z_far));
-            changed["z_far"] = camera->projection()->z_far;
+            const float z_far = args.value("z_far", camera->projection()->get_z_far());
+            if (orthographic) {
+                camera->set_orthographic_z_far(z_far);
+            } else {
+                camera->set_perspective_z_far(z_far);
+            }
+            changed["z_far"] = camera->projection()->get_z_far();
         }
     }
 
@@ -3690,8 +3704,8 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
             up = (flat_axis == 1) ? glm::vec3{0.0f, 0.0f, 1.0f} : glm::vec3{0.0f, 1.0f, 0.0f};
         }
         eye = center + (direction * distance);
-        camera->set_z_near(glm::max(distance * 0.001f, 1.0e-4f));
-        camera->set_z_far (distance + (radius * 4.0f));
+        camera->set_perspective_z_near(glm::max(distance * 0.001f, 1.0e-4f));
+        camera->set_perspective_z_far (distance + (radius * 4.0f));
         camera->set_parent_from_node(
             erhe::math::create_look_at(eye, center, up)
         );

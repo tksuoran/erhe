@@ -134,14 +134,14 @@ public:
     void open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root);
 
     // Turns the source viewport (the last hovered one, else the only one) into
-    // a four view: three linked orthogonal viewports (top, front, right) of
+    // a four view: three linked orthographic viewports (top, front, right) of
     // the same scene are created and the four windows are docked as a 2 x 2
     // grid sharing one cross splitter, the source viewport bottom-right.
     // Returns the new Four_view, or nullptr when there is no source viewport
     // showing a scene. See doc/editor/four_view.md.
     auto open_four_view() -> Four_view*;
 
-    // The four view whose orthogonal cameras include the camera, if any.
+    // The four view whose orthographic cameras include the camera, if any.
     [[nodiscard]] auto find_four_view(const erhe::scene::Camera* camera) const -> Four_view*;
     [[nodiscard]] auto get_four_views() const -> const std::vector<std::unique_ptr<Four_view>>&;
 

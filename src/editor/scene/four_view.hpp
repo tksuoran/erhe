@@ -13,7 +13,7 @@ namespace editor {
 
 class Scene_root;
 
-// The views of a four view: three axis-aligned orthogonal views and the
+// The views of a four view: three axis-aligned orthographic views and the
 // perspective view the four view was opened from.
 enum class Four_view_axis : unsigned int {
     top         = 0, // from +Y looking down, -Z up on screen
@@ -23,12 +23,12 @@ enum class Four_view_axis : unsigned int {
 };
 
 // Four linked views of one scene that share one focus point: a perspective
-// view and three axis-aligned orthogonal views, which also share one zoom.
+// view and three axis-aligned orthographic views, which also share one zoom.
 // The focus is the point a fixed distance ahead of the perspective camera;
-// each orthogonal camera sits at focus + axis * distance, looking at the
+// each orthographic camera sits at focus + axis * distance, looking at the
 // focus. Moving or turning the perspective camera moves the focus and with it
-// the orthogonal cameras; moving an orthogonal camera in its view plane moves
-// the focus, the other two orthogonal cameras, and the perspective camera by
+// the orthographic cameras; moving an orthographic camera in its view plane moves
+// the focus, the other two orthographic cameras, and the perspective camera by
 // the same offset. See doc/editor/four_view.md.
 class Four_view
 {
@@ -61,7 +61,7 @@ public:
 
 private:
     void place_camera            (Four_view_axis axis);
-    void place_orthogonal_cameras(Four_view_axis except);
+    void place_orthographic_cameras(Four_view_axis except);
     void on_perspective_camera_moved();
     // The link of one camera (doc/erhe/scene.md "Transform observers"):
     // the four view holds the

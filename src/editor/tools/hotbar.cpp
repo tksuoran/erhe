@@ -825,13 +825,13 @@ void Hotbar::update_node_transform()
 
             // View volume extents at the hotbar depth, in meters from the
             // camera axis. A perspective projection gives its sides as angles;
-            // an orthogonal projection gives them as the extents themselves,
+            // an orthographic projection gives them as the extents themselves,
             // the same at every depth.
-            const bool  orthogonal = projection->is_orthogonal();
-            const float extent_left  = orthogonal ? fov.left  : (depth * std::tan(fov.left ));
-            const float extent_right = orthogonal ? fov.right : (depth * std::tan(fov.right));
-            const float extent_up    = orthogonal ? fov.up    : (depth * std::tan(fov.up   ));
-            const float extent_down  = orthogonal ? fov.down  : (depth * std::tan(fov.down ));
+            const bool  orthographic = projection->is_orthographic();
+            const float extent_left  = orthographic ? fov.left  : (depth * std::tan(fov.left ));
+            const float extent_right = orthographic ? fov.right : (depth * std::tan(fov.right));
+            const float extent_up    = orthographic ? fov.up    : (depth * std::tan(fov.up   ));
+            const float extent_down  = orthographic ? fov.down  : (depth * std::tan(fov.down ));
 
             // Vertical extent of the frustum at the hotbar depth, in meters. Both
             // the constant-size scaling and the padding are expressed as fractions

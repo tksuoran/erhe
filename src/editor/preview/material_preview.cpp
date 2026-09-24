@@ -137,10 +137,10 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
 
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     m_camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_camera->set_fov_y (0.3f);
-    m_camera->set_z_near(4.0f);
-    m_camera->set_z_far (12.0f);
-    m_camera->set_parent(paremt);
+    m_camera->set_fov_y             (0.3f);
+    m_camera->set_perspective_z_near(4.0f);
+    m_camera->set_perspective_z_far (12.0f);
+    m_camera->set_parent            (paremt);
     m_camera->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{0.0f, 0.0f, 8.0f},  // eye

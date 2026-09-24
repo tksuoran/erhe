@@ -84,7 +84,7 @@ plus each malformed path); the `t_d` test fails on the previous code.
 - **Orthographic cameras came in 2× too zoomed.** glTF `xmag` / `ymag` are
   half extents — the reference builds the projection as `1/xmag` along X, so
   the view spans `[-xmag, xmag]` — while erhe's `ortho_width` / `ortho_height`
-  are full extents and `Projection::Type::orthogonal` uses
+  are full extents and `Projection::Type::orthographic` uses
   `±0.5 * ortho_width`. Import now doubles them and export halves them. The
   export mirrored the import, so erhe-to-erhe round-trips hid this; anything
   else did not.

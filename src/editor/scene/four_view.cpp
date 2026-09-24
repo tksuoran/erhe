@@ -67,10 +67,10 @@ Four_view::Four_view(
     for (std::size_t i = 0; i < axis_count; ++i) {
         const Four_view_axis axis = static_cast<Four_view_axis>(i);
         std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(c_camera_names[i]);
-        camera->set_projection_type(erhe::scene::Projection::Type::orthogonal_vertical);
-        camera->set_ortho_height   (m_view_height);
-        camera->set_z_near         (0.0f);
-        camera->set_z_far          (2.0f * m_distance);
+        camera->set_projection_type    (erhe::scene::Projection::Type::orthographic_vertical);
+        camera->set_ortho_height       (m_view_height);
+        camera->set_orthographic_z_near(0.0f);
+        camera->set_orthographic_z_far (2.0f * m_distance);
         // View cameras of the editor session, like the default camera
         // injected on open: shown in the hierarchy, never saved.
         camera->enable_flag_bits(
@@ -165,7 +165,7 @@ void Four_view::place_camera(const Four_view_axis axis)
     camera->set_world_from_node(world_from_node);
 }
 
-void Four_view::place_orthogonal_cameras(const Four_view_axis except)
+void Four_view::place_orthographic_cameras(const Four_view_axis except)
 {
     for (std::size_t i = 0; i < axis_count; ++i) {
         const Four_view_axis axis = static_cast<Four_view_axis>(i);
@@ -189,7 +189,7 @@ void Four_view::on_perspective_camera_moved()
     }
     m_focus = focus;
     m_placing = true;
-    place_orthogonal_cameras(Four_view_axis::perspective);
+    place_orthographic_cameras(Four_view_axis::perspective);
     m_placing = false;
 }
 
@@ -207,7 +207,7 @@ void Four_view::on_camera_moved(const Four_view_axis axis)
         return;
     }
     // Only movement in the view plane moves the focus: movement along the
-    // view axis changes nothing an orthogonal view shows.
+    // view axis changes nothing an orthographic view shows.
     const glm::vec3 axis_direction = get_axis_direction(axis);
     const glm::vec3 expected       = m_focus + (m_distance * axis_direction);
     glm::vec3       offset         = glm::vec3{camera->position_in_world()} - expected;
@@ -218,7 +218,7 @@ void Four_view::on_camera_moved(const Four_view_axis axis)
     }
     m_focus += offset;
     m_placing = true;
-    place_orthogonal_cameras(axis);
+    place_orthographic_cameras(axis);
     // The perspective camera keeps looking at the focus from where it did:
     // it moves by the same offset, orientation unchanged.
     const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
@@ -246,7 +246,7 @@ void Four_view::set_focus(const glm::vec3 focus)
     const glm::vec3 offset = focus - m_focus;
     m_focus = focus;
     m_placing = true;
-    place_orthogonal_cameras(Four_view_axis::perspective);
+    place_orthographic_cameras(Four_view_axis::perspective);
     const std::shared_ptr<erhe::scene::Camera> perspective_camera = m_perspective_camera.lock();
     if (perspective_camera && (perspective_camera->get_scene() != nullptr)) {
         glm::mat4 world_from_node = perspective_camera->world_from_node();

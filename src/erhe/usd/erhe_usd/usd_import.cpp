@@ -4864,14 +4864,19 @@ private:
             const bool         ortho            = usd_camera.projection == lightusd::GeomCamera::Projection::Orthographic;
 
             if (range_authored) {
-                camera->set_value(erhe::scene::Camera::z_near_property,         usd_camera.znear);
-                camera->set_value(erhe::scene::Camera::z_far_property,          usd_camera.zfar);
-                camera->set_value(erhe::scene::Camera::infinite_z_far_property, false);
+                if (ortho) {
+                    camera->set_value(erhe::scene::Camera::orthographic_z_near_property, usd_camera.znear);
+                    camera->set_value(erhe::scene::Camera::orthographic_z_far_property,  usd_camera.zfar);
+                } else {
+                    camera->set_value(erhe::scene::Camera::perspective_z_near_property,  usd_camera.znear);
+                    camera->set_value(erhe::scene::Camera::perspective_z_far_property,   usd_camera.zfar);
+                    camera->set_value(erhe::scene::Camera::infinite_z_far_property,      false);
+                }
             }
             if (ortho) {
                 // A USD aperture is in tenths of a scene unit, so the
                 // orthographic view spans aperture / 10 world units.
-                camera->set_value(erhe::scene::Camera::projection_type_property, erhe::scene::Projection::Type::orthogonal);
+                camera->set_value(erhe::scene::Camera::projection_type_property, erhe::scene::Projection::Type::orthographic);
                 if (is_authored(path, "horizontalAperture")) {
                     const float width = usd_camera.horizontalAperture * 0.1f;
                     camera->set_value(erhe::scene::Camera::ortho_width_property, width);

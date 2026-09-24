@@ -522,32 +522,32 @@ constexpr Serialized_item_flag c_serialized_item_flags[] = {
 [[nodiscard]] auto projection_type_name(const erhe::scene::Projection::Type type) -> const char*
 {
     switch (type) {
-        case erhe::scene::Projection::Type::other:                 return "other";
-        case erhe::scene::Projection::Type::perspective_horizontal:return "perspective_horizontal";
-        case erhe::scene::Projection::Type::perspective_vertical:  return "perspective_vertical";
-        case erhe::scene::Projection::Type::perspective:           return "perspective";
-        case erhe::scene::Projection::Type::perspective_xr:        return "perspective_xr";
-        case erhe::scene::Projection::Type::orthogonal_horizontal: return "orthogonal_horizontal";
-        case erhe::scene::Projection::Type::orthogonal_vertical:   return "orthogonal_vertical";
-        case erhe::scene::Projection::Type::orthogonal:            return "orthogonal";
-        case erhe::scene::Projection::Type::orthogonal_rectangle:  return "orthogonal_rectangle";
-        case erhe::scene::Projection::Type::generic_frustum:       return "generic_frustum";
-        default:                                                   return "perspective_vertical";
+        case erhe::scene::Projection::Type::other:                   return "other";
+        case erhe::scene::Projection::Type::perspective_horizontal:  return "perspective_horizontal";
+        case erhe::scene::Projection::Type::perspective_vertical:    return "perspective_vertical";
+        case erhe::scene::Projection::Type::perspective:             return "perspective";
+        case erhe::scene::Projection::Type::perspective_xr:          return "perspective_xr";
+        case erhe::scene::Projection::Type::orthographic_horizontal: return "orthographic_horizontal";
+        case erhe::scene::Projection::Type::orthographic_vertical:   return "orthographic_vertical";
+        case erhe::scene::Projection::Type::orthographic:            return "orthographic";
+        case erhe::scene::Projection::Type::orthographic_rectangle:  return "orthographic_rectangle";
+        case erhe::scene::Projection::Type::generic_frustum:         return "generic_frustum";
+        default:                                                     return "perspective_vertical";
     }
 }
 
 [[nodiscard]] auto projection_type_from_name(const std::string_view name) -> erhe::scene::Projection::Type
 {
-    if (name == "other")                  return erhe::scene::Projection::Type::other;
-    if (name == "perspective_horizontal") return erhe::scene::Projection::Type::perspective_horizontal;
-    if (name == "perspective_vertical")   return erhe::scene::Projection::Type::perspective_vertical;
-    if (name == "perspective")            return erhe::scene::Projection::Type::perspective;
-    if (name == "perspective_xr")         return erhe::scene::Projection::Type::perspective_xr;
-    if (name == "orthogonal_horizontal")  return erhe::scene::Projection::Type::orthogonal_horizontal;
-    if (name == "orthogonal_vertical")    return erhe::scene::Projection::Type::orthogonal_vertical;
-    if (name == "orthogonal")             return erhe::scene::Projection::Type::orthogonal;
-    if (name == "orthogonal_rectangle")   return erhe::scene::Projection::Type::orthogonal_rectangle;
-    if (name == "generic_frustum")        return erhe::scene::Projection::Type::generic_frustum;
+    if (name == "other")                   return erhe::scene::Projection::Type::other;
+    if (name == "perspective_horizontal")  return erhe::scene::Projection::Type::perspective_horizontal;
+    if (name == "perspective_vertical")    return erhe::scene::Projection::Type::perspective_vertical;
+    if (name == "perspective")             return erhe::scene::Projection::Type::perspective;
+    if (name == "perspective_xr")          return erhe::scene::Projection::Type::perspective_xr;
+    if (name == "orthographic_horizontal") return erhe::scene::Projection::Type::orthographic_horizontal;
+    if (name == "orthographic_vertical")   return erhe::scene::Projection::Type::orthographic_vertical;
+    if (name == "orthographic")            return erhe::scene::Projection::Type::orthographic;
+    if (name == "orthographic_rectangle")  return erhe::scene::Projection::Type::orthographic_rectangle;
+    if (name == "generic_frustum")         return erhe::scene::Projection::Type::generic_frustum;
     return erhe::scene::Projection::Type::perspective_vertical;
 }
 
@@ -2083,7 +2083,7 @@ private:
                     }
                     log_gltf->trace("Camera.znear:             {}", perspective.znear);
                     projection->fov_y  = perspective.yfov;
-                    projection->z_near = perspective.znear;
+                    projection->perspective_z_near = perspective.znear;
                     // camera.perspective.aspectRatio is optional: when it is
                     // given the camera has a fixed aspect ratio and must not
                     // adopt the viewport's. Type::perspective is the erhe
@@ -2103,7 +2103,7 @@ private:
                     // a number (shadow fitting, gizmo distances, the UI
                     // slider) and let only the projection matrix go infinite.
                     if (perspective.zfar.has_value()) {
-                        projection->z_far          = perspective.zfar.value();
+                        projection->perspective_z_far = perspective.zfar.value();
                         projection->infinite_z_far = false;
                     } else {
                         projection->infinite_z_far = true;
@@ -2114,16 +2114,16 @@ private:
                     log_gltf->trace("Camera.ymag:              {}", orthographic.ymag);
                     log_gltf->trace("Camera.zfar:              {}", orthographic.zfar);
                     log_gltf->trace("Camera.znear:             {}", orthographic.znear);
-                    projection->projection_type = erhe::scene::Projection::Type::orthogonal;
+                    projection->projection_type = erhe::scene::Projection::Type::orthographic;
                     // glTF xmag / ymag are half extents: the view spans
                     // [-xmag, xmag] horizontally (the reference implementation
                     // builds the projection as 1/xmag along X). erhe's
                     // ortho_width / ortho_height are full extents, so the
-                    // orthogonal projection uses +/- 0.5 * ortho_width.
-                    projection->ortho_width     = 2.0f * orthographic.xmag;
-                    projection->ortho_height    = 2.0f * orthographic.ymag;
-                    projection->z_far           = orthographic.zfar;
-                    projection->z_near          = orthographic.znear;
+                    // orthographic projection uses +/- 0.5 * ortho_width.
+                    projection->ortho_width         = 2.0f * orthographic.xmag;
+                    projection->ortho_height        = 2.0f * orthographic.ymag;
+                    projection->orthographic_z_far  = orthographic.zfar;
+                    projection->orthographic_z_near = orthographic.znear;
                 }
             },
             camera.camera
@@ -4293,27 +4293,29 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     if (extension_object.at_key("projection_type").get_string().get(type_name) == simdjson::SUCCESS) {
                         projection->projection_type = projection_type_from_name(type_name);
                     }
-                    static_cast<void>(read_float(extension_object, "z_near",         projection->z_near));
-                    static_cast<void>(read_float(extension_object, "z_far",          projection->z_far));
-                    static_cast<void>(read_float(extension_object, "fov_x",          projection->fov_x));
-                    static_cast<void>(read_float(extension_object, "fov_y",          projection->fov_y));
-                    static_cast<void>(read_float(extension_object, "fov_left",       projection->fov_left));
-                    static_cast<void>(read_float(extension_object, "fov_right",      projection->fov_right));
-                    static_cast<void>(read_float(extension_object, "fov_up",         projection->fov_up));
-                    static_cast<void>(read_float(extension_object, "fov_down",       projection->fov_down));
-                    static_cast<void>(read_float(extension_object, "ortho_left",     projection->ortho_left));
-                    static_cast<void>(read_float(extension_object, "ortho_width",    projection->ortho_width));
-                    static_cast<void>(read_float(extension_object, "ortho_bottom",   projection->ortho_bottom));
-                    static_cast<void>(read_float(extension_object, "ortho_height",   projection->ortho_height));
-                    static_cast<void>(read_float(extension_object, "frustum_left",   projection->frustum_left));
-                    static_cast<void>(read_float(extension_object, "frustum_right",  projection->frustum_right));
-                    static_cast<void>(read_float(extension_object, "frustum_bottom", projection->frustum_bottom));
-                    static_cast<void>(read_float(extension_object, "frustum_top",    projection->frustum_top));
-                    static_cast<void>(read_bool (extension_object, "infinite_z_far", projection->infinite_z_far));
+                    static_cast<void>(read_float(extension_object, "perspective_z_near",  projection->perspective_z_near));
+                    static_cast<void>(read_float(extension_object, "perspective_z_far",   projection->perspective_z_far));
+                    static_cast<void>(read_float(extension_object, "orthographic_z_near", projection->orthographic_z_near));
+                    static_cast<void>(read_float(extension_object, "orthographic_z_far",  projection->orthographic_z_far));
+                    static_cast<void>(read_float(extension_object, "fov_x",               projection->fov_x));
+                    static_cast<void>(read_float(extension_object, "fov_y",               projection->fov_y));
+                    static_cast<void>(read_float(extension_object, "fov_left",            projection->fov_left));
+                    static_cast<void>(read_float(extension_object, "fov_right",           projection->fov_right));
+                    static_cast<void>(read_float(extension_object, "fov_up",              projection->fov_up));
+                    static_cast<void>(read_float(extension_object, "fov_down",            projection->fov_down));
+                    static_cast<void>(read_float(extension_object, "ortho_left",          projection->ortho_left));
+                    static_cast<void>(read_float(extension_object, "ortho_width",         projection->ortho_width));
+                    static_cast<void>(read_float(extension_object, "ortho_bottom",        projection->ortho_bottom));
+                    static_cast<void>(read_float(extension_object, "ortho_height",        projection->ortho_height));
+                    static_cast<void>(read_float(extension_object, "frustum_left",        projection->frustum_left));
+                    static_cast<void>(read_float(extension_object, "frustum_right",       projection->frustum_right));
+                    static_cast<void>(read_float(extension_object, "frustum_bottom",      projection->frustum_bottom));
+                    static_cast<void>(read_float(extension_object, "frustum_top",         projection->frustum_top));
+                    static_cast<void>(read_bool (extension_object, "infinite_z_far",      projection->infinite_z_far));
                     camera->set_projection(projection_value);
                 }
                 float float_value{0.0f};
-                if (read_float(extension_object, "exposure", float_value)) {
+                if (read_float(extension_object, "exposure",            float_value)) {
                     camera->set_exposure(float_value);
                 }
                 if (read_float(extension_object, "shadow_range", float_value)) {
@@ -5621,8 +5623,8 @@ private:
         // (doc/editor/gltf_scene_roundtrip.md phase 3) carries full fidelity.
         // glTF requires perspective znear > 0.
         fastgltf::Camera gltf_camera{};
-        const float z_near_raw = std::min(erhe_projection->z_far, erhe_projection->z_near);
-        const float z_far_raw  = std::max(erhe_projection->z_far, erhe_projection->z_near);
+        const float z_near_raw = std::min(erhe_projection->get_z_far(), erhe_projection->get_z_near());
+        const float z_far_raw  = std::max(erhe_projection->get_z_far(), erhe_projection->get_z_near());
         const float z_near     = std::max(z_near_raw, 0.0001f);
         const auto make_perspective = [&](const float yfov, const std::optional<float> aspect_ratio) {
             fastgltf::Camera::Perspective perspective{
@@ -5680,17 +5682,23 @@ private:
                 );
                 break;
             }
-            case erhe::scene::Projection::Type::orthogonal_horizontal:
-            case erhe::scene::Projection::Type::orthogonal_vertical:
-            case erhe::scene::Projection::Type::orthogonal:
-            case erhe::scene::Projection::Type::orthogonal_rectangle: {
+            case erhe::scene::Projection::Type::orthographic_horizontal:
+            case erhe::scene::Projection::Type::orthographic_vertical:
+            case erhe::scene::Projection::Type::orthographic:
+            case erhe::scene::Projection::Type::orthographic_rectangle: {
                 // glTF xmag / ymag are half extents; erhe's ortho_width /
                 // ortho_height are full extents (see parse_camera()).
+                // glTF requires orthographic znear >= 0 and zfar > znear,
+                // while erhe's orthographic near plane may lie behind the
+                // camera: the core camera gets the part of the clip range in
+                // front of the camera, ERHE_camera carries the exact range.
+                const float ortho_z_near = std::max(z_near_raw, 0.0f);
+                const float ortho_z_far  = std::max(z_far_raw, ortho_z_near + 0.0001f);
                 gltf_camera.camera = fastgltf::Camera::Orthographic{
                     .xmag  = 0.5f * erhe_projection->ortho_width,
                     .ymag  = 0.5f * erhe_projection->ortho_height,
-                    .zfar  = z_far_raw,
-                    .znear = z_near_raw
+                    .zfar  = ortho_z_far,
+                    .znear = ortho_z_near
                 };
                 break;
             }
@@ -5731,14 +5739,14 @@ private:
     {
         std::string members = fmt::format(
             "\"ERHE_camera\":{{\"projection_type\":\"{}\""
-            ",\"z_near\":{},\"z_far\":{}"
+            ",\"perspective_z_near\":{},\"perspective_z_far\":{},\"orthographic_z_near\":{},\"orthographic_z_far\":{}"
             ",\"fov_x\":{},\"fov_y\":{},\"fov_left\":{},\"fov_right\":{},\"fov_up\":{},\"fov_down\":{}"
             ",\"ortho_left\":{},\"ortho_width\":{},\"ortho_bottom\":{},\"ortho_height\":{}"
             ",\"frustum_left\":{},\"frustum_right\":{},\"frustum_bottom\":{},\"frustum_top\":{}"
             ",\"infinite_z_far\":{}"
             ",\"exposure\":{},\"shadow_range\":{},\"flags\":{},\"properties\":{}}}",
             projection_type_name(projection.projection_type),
-            projection.z_near, projection.z_far,
+            projection.perspective_z_near, projection.perspective_z_far, projection.orthographic_z_near, projection.orthographic_z_far,
             projection.fov_x, projection.fov_y,
             projection.fov_left, projection.fov_right, projection.fov_up, projection.fov_down,
             projection.ortho_left, projection.ortho_width, projection.ortho_bottom, projection.ortho_height,

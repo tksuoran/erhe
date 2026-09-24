@@ -210,7 +210,7 @@ public:
     auto try_start_track         () -> bool;
     auto track                   () -> bool;
     auto zoom                    (int64_t timestamp_ns, float delta) -> bool;
-    // The orthogonal cameras of a four view keep their axis-aligned orientation.
+    // The orthographic cameras of a four view keep their axis-aligned orientation.
     [[nodiscard]] auto is_rotation_locked() const -> bool;
     void serialize_transform     (bool store);
 

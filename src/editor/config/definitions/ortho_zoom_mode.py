@@ -1,6 +1,6 @@
 from erhe_codegen import *
 
-# Controls what the zoom input (mouse wheel) does in a view with an orthogonal
+# Controls what the zoom input (mouse wheel) does in a view with an orthographic
 # camera: 'size_only' changes the size of the view volume around the view
 # center; 'size_and_pan' also pans the camera so that the point under the
 # pointer stays under the pointer.

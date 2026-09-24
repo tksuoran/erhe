@@ -62,26 +62,28 @@ public:
     [[nodiscard]] auto get_exposure         () const -> float { return get_value(exposure_property); }
     [[nodiscard]] auto get_shadow_range     () const -> float { return get_value(shadow_range_property); }
     [[nodiscard]] auto get_projection_scale () const -> float;
-    void set_exposure    (float value) { set_value(exposure_property, value); }
-    void set_shadow_range(float value) { set_value(shadow_range_property, value); }
-    void set_projection_type(Projection::Type value) { set_value(projection_type_property, value); }
-    void set_fov_x         (float value) { set_value(fov_x_property,          value); }
-    void set_fov_y         (float value) { set_value(fov_y_property,          value); }
-    void set_fov_left      (float value) { set_value(fov_left_property,       value); }
-    void set_fov_right     (float value) { set_value(fov_right_property,      value); }
-    void set_fov_up        (float value) { set_value(fov_up_property,         value); }
-    void set_fov_down      (float value) { set_value(fov_down_property,       value); }
-    void set_ortho_left    (float value) { set_value(ortho_left_property,     value); }
-    void set_ortho_width   (float value) { set_value(ortho_width_property,    value); }
-    void set_ortho_bottom  (float value) { set_value(ortho_bottom_property,   value); }
-    void set_ortho_height  (float value) { set_value(ortho_height_property,   value); }
-    void set_frustum_left  (float value) { set_value(frustum_left_property,   value); }
-    void set_frustum_right (float value) { set_value(frustum_right_property,  value); }
-    void set_frustum_bottom(float value) { set_value(frustum_bottom_property, value); }
-    void set_frustum_top   (float value) { set_value(frustum_top_property,    value); }
-    void set_z_near        (float value) { set_value(z_near_property,         value); }
-    void set_z_far         (float value) { set_value(z_far_property,          value); }
-    void set_infinite_z_far(bool  value) { set_value(infinite_z_far_property, value); }
+    void set_exposure           (float value) { set_value(exposure_property, value); }
+    void set_shadow_range       (float value) { set_value(shadow_range_property, value); }
+    void set_projection_type    (Projection::Type value) { set_value(projection_type_property, value); }
+    void set_fov_x              (float value) { set_value(fov_x_property,               value); }
+    void set_fov_y              (float value) { set_value(fov_y_property,               value); }
+    void set_fov_left           (float value) { set_value(fov_left_property,            value); }
+    void set_fov_right          (float value) { set_value(fov_right_property,           value); }
+    void set_fov_up             (float value) { set_value(fov_up_property,              value); }
+    void set_fov_down           (float value) { set_value(fov_down_property,            value); }
+    void set_ortho_left         (float value) { set_value(ortho_left_property,          value); }
+    void set_ortho_width        (float value) { set_value(ortho_width_property,         value); }
+    void set_ortho_bottom       (float value) { set_value(ortho_bottom_property,        value); }
+    void set_ortho_height       (float value) { set_value(ortho_height_property,        value); }
+    void set_frustum_left       (float value) { set_value(frustum_left_property,        value); }
+    void set_frustum_right      (float value) { set_value(frustum_right_property,       value); }
+    void set_frustum_bottom     (float value) { set_value(frustum_bottom_property,      value); }
+    void set_frustum_top        (float value) { set_value(frustum_top_property,         value); }
+    void set_perspective_z_near (float value) { set_value(perspective_z_near_property,  value); }
+    void set_perspective_z_far  (float value) { set_value(perspective_z_far_property,   value); }
+    void set_orthographic_z_near(float value) { set_value(orthographic_z_near_property, value); }
+    void set_orthographic_z_far (float value) { set_value(orthographic_z_far_property,  value); }
+    void set_infinite_z_far     (bool  value) { set_value(infinite_z_far_property,      value); }
 
     // Registered properties (erhe::property, doc/erhe/property_system.md
     // section 4.4), all in the entry store and all inherits: a camera
@@ -102,8 +104,10 @@ public:
     static const erhe::property::Property<float>            frustum_right_property;
     static const erhe::property::Property<float>            frustum_bottom_property;
     static const erhe::property::Property<float>            frustum_top_property;
-    static const erhe::property::Property<float>            z_near_property;
-    static const erhe::property::Property<float>            z_far_property;
+    static const erhe::property::Property<float>            perspective_z_near_property;
+    static const erhe::property::Property<float>            perspective_z_far_property;
+    static const erhe::property::Property<float>            orthographic_z_near_property;
+    static const erhe::property::Property<float>            orthographic_z_far_property;
     static const erhe::property::Property<bool>             infinite_z_far_property;
     static const erhe::property::Property<float>            exposure_property;
     static const erhe::property::Property<float>            shadow_range_property;

@@ -24,13 +24,16 @@ TEST(Camera_properties, defaults_match_projection_defaults)
 {
     auto camera = std::make_shared<Camera>("c");
     EXPECT_EQ(camera->get_value(Camera::projection_type_property), Projection::Type::perspective_vertical);
-    EXPECT_FLOAT_EQ(camera->get_value(Camera::z_near_property), 0.03f);
-    EXPECT_FLOAT_EQ(camera->get_value(Camera::z_far_property), 64.0f);
-    EXPECT_EQ(camera->get_value_source(Camera::z_far_property), Value_source::default_value);
+    EXPECT_FLOAT_EQ(camera->get_value(Camera::perspective_z_near_property), 0.03f);
+    EXPECT_FLOAT_EQ(camera->get_value(Camera::perspective_z_far_property), 64.0f);
+    EXPECT_EQ(camera->get_value_source(Camera::perspective_z_far_property), Value_source::default_value);
+    EXPECT_FLOAT_EQ(camera->get_value(Camera::orthographic_z_near_property), -256.0f);
+    EXPECT_FLOAT_EQ(camera->get_value(Camera::orthographic_z_far_property), 256.0f);
+    EXPECT_EQ(camera->get_value_source(Camera::orthographic_z_far_property), Value_source::default_value);
     const Projection defaults{};
     EXPECT_EQ(camera->projection()->projection_type, defaults.projection_type);
     EXPECT_FLOAT_EQ(camera->projection()->fov_y, defaults.fov_y);
-    EXPECT_FLOAT_EQ(camera->projection()->z_far, defaults.z_far);
+    EXPECT_FLOAT_EQ(camera->projection()->perspective_z_far, defaults.perspective_z_far);
 }
 
 TEST(Camera_properties, property_writes_reach_the_projection_mirror)
@@ -39,22 +42,22 @@ TEST(Camera_properties, property_writes_reach_the_projection_mirror)
     camera->set_value(Camera::projection_type_property, Projection::Type::perspective);
     camera->set_value(Camera::fov_x_property, 1.0f);
     camera->set_fov_y(0.5f);
-    camera->set_z_near(0.1f);
+    camera->set_value(Camera::perspective_z_near_property, 0.1f);
     camera->set_infinite_z_far(true);
     const Projection* projection = camera->projection();
     EXPECT_EQ(projection->projection_type, Projection::Type::perspective);
     EXPECT_FLOAT_EQ(projection->fov_x, 1.0f);
     EXPECT_FLOAT_EQ(projection->fov_y, 0.5f);
-    EXPECT_FLOAT_EQ(projection->z_near, 0.1f);
+    EXPECT_FLOAT_EQ(projection->perspective_z_near, 0.1f);
     EXPECT_TRUE(projection->infinite_z_far);
     EXPECT_EQ(camera->get_value_source(Camera::fov_y_property), Value_source::local);
 
     camera->clear_value(Camera::fov_x_property);
     EXPECT_FLOAT_EQ(projection->fov_x, Projection{}.fov_x);
 
-    camera->set_projection(Projection{.projection_type = Projection::Type::orthogonal, .z_far = 200.0f, .ortho_width = 12.0f});
-    EXPECT_EQ(projection->projection_type, Projection::Type::orthogonal);
-    EXPECT_FLOAT_EQ(projection->z_far, 200.0f);
+    camera->set_projection(Projection{.projection_type = Projection::Type::orthographic, .orthographic_z_far = 200.0f, .ortho_width = 12.0f});
+    EXPECT_EQ(projection->projection_type, Projection::Type::orthographic);
+    EXPECT_FLOAT_EQ(projection->orthographic_z_far, 200.0f);
     EXPECT_FLOAT_EQ(projection->ortho_width, 12.0f);
     EXPECT_FLOAT_EQ(projection->fov_y, Projection{}.fov_y);
 }
@@ -69,10 +72,10 @@ TEST(Camera_properties, untyped_access_with_enumeration_labels)
     EXPECT_EQ(camera->projection()->projection_type, Projection::Type::generic_frustum);
     EXPECT_FALSE(parse_value(*type, "Fisheye").has_value());
 
-    const Dependency_property* z_far = Property_registry::get().find_for_object(camera->get_property_owner_type(), "z_far");
+    const Dependency_property* z_far = Property_registry::get().find_for_object(camera->get_property_owner_type(), "perspective_z_far");
     ASSERT_NE(z_far, nullptr);
     camera->set_value(*z_far, parse_value(*z_far, "500").value());
-    EXPECT_FLOAT_EQ(camera->projection()->z_far, 500.0f);
+    EXPECT_FLOAT_EQ(camera->projection()->perspective_z_far, 500.0f);
 }
 
 TEST(Camera_properties, node_held_values_are_inherited_into_the_mirror)
@@ -114,12 +117,12 @@ TEST(Camera_properties, exposure_and_shadow_range_live_in_the_store)
 TEST(Camera_properties, clone_copies_projection_and_store)
 {
     auto camera = std::make_shared<Camera>("c");
-    camera->set_z_far(300.0f);
+    camera->set_perspective_z_far(300.0f);
     camera->set_exposure(2.0f);
     const auto clone = std::static_pointer_cast<Camera>(camera->clone());
     ASSERT_TRUE(clone);
-    EXPECT_FLOAT_EQ(clone->projection()->z_far, 300.0f);
-    EXPECT_FLOAT_EQ(clone->get_value(Camera::z_far_property), 300.0f);
+    EXPECT_FLOAT_EQ(clone->projection()->perspective_z_far, 300.0f);
+    EXPECT_FLOAT_EQ(clone->get_value(Camera::perspective_z_far_property), 300.0f);
     EXPECT_FLOAT_EQ(clone->get_exposure(), 2.0f);
     EXPECT_EQ(clone->get_value_source(Camera::shadow_range_property), Value_source::default_value);
 }

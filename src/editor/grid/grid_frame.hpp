@@ -11,7 +11,7 @@ enum class Grid_depth_mode : unsigned int {
 };
 
 // Placement of a grid plane (grid y = 0) as one view sees it: the grid's own
-// plane, or for an axis-aligned orthogonal view the axis plane facing the
+// plane, or for an axis-aligned orthographic view the axis plane facing the
 // camera (Grid::get_view_frame()). A grid hover entry carries the frame it
 // was hit in, so tools place onto the plane the view shows.
 class Grid_frame

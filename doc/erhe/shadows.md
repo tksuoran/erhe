@@ -62,8 +62,8 @@ The fit works in a light-aligned frame: x / y span the light plane
 light_direction)` increases TOWARD the light (the light direction is the
 light node +Z, pointing from the scene toward the light). The fitted box's
 `s_max` face (light-most) becomes the near plane of the orthographic light
-projection (`z_near = 0`); the `s_min` face becomes the far plane
-(`z_far = s_max - s_min`). The light camera sits centered on the `s_max`
+projection (`orthographic_z_near = 0`); the `s_min` face becomes the far plane
+(`orthographic_z_far = s_max - s_min`). The light camera sits centered on the `s_max`
 face, looking along the negative light direction.
 
 ### Stable fit (baseline)
@@ -417,7 +417,7 @@ the per-face coordinate flip, is in
   shadow-casting point light, six render passes -- one per face -- rasterize the
   scene into that cube layer from a `create_look_at(light_pos, light_pos +
   look[f], up[f])` camera with a 90-degree perspective
-  (`Light::point_light_projection_transforms()`, `z_far = light->range`). The
+  (`Light::point_light_projection_transforms()`, `perspective_z_far = light->range`). The
   caster fragment (`standard.frag` under `VARIANT_SHADOW_CUBE`) writes
   `length(world_pos - light_position)` to the R32F face (`cull_none`; the light
   world position and far come from `light_control_block`). A shared 2D depth

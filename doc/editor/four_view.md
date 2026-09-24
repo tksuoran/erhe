@@ -3,7 +3,7 @@
 Stability: experimental
 
 A four view shows one scene in four linked viewport windows docked as a
-2 x 2 grid that shares one cross splitter: three axis-aligned orthogonal views
+2 x 2 grid that shares one cross splitter: three axis-aligned orthographic views
 and the perspective viewport it was opened from.
 
 | cell         | view                                             |
@@ -22,13 +22,13 @@ to show a scene through a camera. That camera is the four view's perspective
 camera.
 
 Opening creates three cameras named Top, Front and Right under the scene's
-root node. They are orthogonal (`orthogonal_vertical`), flagged `content |
+root node. They are orthographic (`orthographic_vertical`), flagged `content |
 show_in_ui | exclude_from_prefab | session_only` like the default camera
 injected on open: they appear in the Hierarchy and are left out of every save.
 The focus point lies ahead of the perspective camera at the distance of the
 center of the active meshes' world bounds (the focus distance, fixed for the
 life of the four view), the view height is 2.2 bounding-sphere radii, and
-each orthogonal camera sits 4 radii + 1 from the focus along its axis. A `Viewport_scene_view` and a `Viewport_window` are
+each orthographic camera sits 4 radii + 1 from the focus along its axis. A `Viewport_scene_view` and a `Viewport_window` are
 created per camera.
 
 ## Docking
@@ -47,9 +47,9 @@ window leaves the new windows undocked. The cross splitter is described in
 ## Linking
 
 `Four_view` (`src/editor/scene/four_view.hpp`) holds the shared state: focus
-point, focus distance, view height (the zoom) and orthogonal camera distance.
+point, focus distance, view height (the zoom) and orthographic camera distance.
 The focus is the point `focus distance` ahead of the perspective camera; each
-orthogonal camera sits at `focus + axis * distance` looking at the focus.
+orthographic camera sits at `focus + axis * distance` looking at the focus.
 
 - Change notification. `Four_view` holds one
   `erhe::scene::Transform_observer_token` per camera (`doc/erhe/scene.md`
@@ -59,17 +59,17 @@ orthogonal camera sits at `focus + axis * distance` looking at the focus.
   takes the observer off every camera, including the perspective camera (the
   user's own, which outlives the four view).
 - Perspective camera moved or turned. The focus becomes the point ahead of
-  it and the three orthogonal cameras are placed for the new focus.
-- Orthogonal camera moved. The part of its offset that lies in its view
-  plane moves the focus; the other two orthogonal cameras are placed for the
+  it and the three orthographic cameras are placed for the new focus.
+- Orthographic camera moved. The part of its offset that lies in its view
+  plane moves the focus; the other two orthographic cameras are placed for the
   new focus and the perspective camera is translated by the same offset,
   orientation unchanged. Movement along the view axis changes nothing an
-  orthogonal view shows and leaves the focus alone.
+  orthographic view shows and leaves the focus alone.
 - Zoom. `Fly_camera_tool::zoom()` scales the size of the view volume for an
-  orthogonal camera (`0.9 ^ delta`). For a four view camera it calls
+  orthographic camera (`0.9 ^ delta`). For a four view camera it calls
   `Four_view::set_view_height()`, which sets `ortho_height` on all three
   cameras. The `Camera_controls_config::ortho_zoom_mode` setting (Settings,
-  Camera Control, "Orthogonal View Zoom") selects what else zoom does:
+  Camera Control, "Orthographic View Zoom") selects what else zoom does:
   `size_only` scales around the view center; `size_and_pan` (the default)
   also translates the zoomed camera by the offset between the pointer ray
   origins before and after the size change, which keeps the point under the
@@ -96,24 +96,24 @@ by placement until an undo returns it.
 Headless, over MCP: `open_four_view`, `capture_screenshot` for the layout;
 `select_items` a four view camera by name and `transform_selection` it, then
 `get_four_views` shows the focus and the other cameras following, and
-`undo` returns them - once for an orthogonal camera, once for the perspective
+`undo` returns them - once for an orthographic camera, once for the perspective
 camera; `close_scene` logs a clean `scene-close check`.
 
 Wheel zoom, middle-drag pan and the rotation lock reach the fly camera through
 window input events, so they are driven by the input gesture tools
 ([../agents/mcp_ui_driving.md](../agents/mcp_ui_driving.md)) over the rectangles `get_viewports` reports:
 
-- Wheel zoom. `mouse_wheel` at the center of an orthogonal cell with a
+- Wheel zoom. `mouse_wheel` at the center of an orthographic cell with a
   positive `dy`; `get_four_views` then reports a smaller `view_height` and the
-  same value on all three orthogonal cameras.
+  same value on all three orthographic cameras.
 - Middle-drag pan. `mouse_drag` with `button: "middle"` and
-  `modifiers: ["menu"]` (the track command's binding) across an orthogonal
+  `modifiers: ["menu"]` (the track command's binding) across an orthographic
   cell; `get_four_views` then reports a moved `focus` and the other cameras
   placed for it.
-- Rotation lock. `mouse_drag` with `button: "right"` across an orthogonal cell
+- Rotation lock. `mouse_drag` with `button: "right"` across an orthographic cell
   leaves that camera's `position` unchanged.
 
 ## Grid
 
-Each orthogonal cell shows and hovers the grid on the axis plane it faces
+Each orthographic cell shows and hovers the grid on the axis plane it faces
 (`grid.md`, View frame).

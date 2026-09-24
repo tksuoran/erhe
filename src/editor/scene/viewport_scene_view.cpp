@@ -803,7 +803,7 @@ auto Viewport_scene_view::get_projection_scale(const float view_distance) const 
     const float h = static_cast<float>(m_projection_viewport.height);
     const float vp_scale = 1000.0f / std::min(w, h);
     // Clip space w at view_distance: the distance itself under a perspective
-    // projection, 1 under an orthogonal projection - where x and y already
+    // projection, 1 under an orthographic projection - where x and y already
     // are the projection half extents and distance has no effect on size.
     const float clip_w = (std::abs(clip_from_view[2][3]) * view_distance) + clip_from_view[3][3];
     return std::min(x, y) * vp_scale * clip_w;

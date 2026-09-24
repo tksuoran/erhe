@@ -47,13 +47,13 @@ Blender's Select menu entries that key off the active object, now that
 parent or the siblings of the active item, select everything of the active
 item's type, select the items that share the active item's material or mesh.
 
-## Grid: screen-space label size in orthogonal views
+## Grid: screen-space label size in orthographic views
 
 Grid axis labels (`doc/editor/grid.md`) are sized in world units (`label_text_fraction`
-of `label_spacing`), so in an orthogonal view they shrink and fade out as the
-view zooms out and grow large when it zooms in. In an orthogonal view the
+of `label_spacing`), so in an orthographic view they shrink and fade out as the
+view zooms out and grow large when it zooms in. In an orthographic view the
 labels keep a fixed size on screen: `grid.frag` derives the text height from
-the view's pixels per world unit (constant across an orthogonal view, already
+the view's pixels per world unit (constant across an orthographic view, already
 available as `fwidth(uv)`), and the label spacing steps through the grid LOD
 levels so neighbouring labels keep a minimum screen distance. Perspective
 views keep the world-space size.

@@ -256,8 +256,8 @@ TEST_F(Cube_round_trip, camera_values_survive)
     const std::shared_ptr<Camera> camera = erhe::scene::get_camera(node.get());
     ASSERT_TRUE(camera.operator bool());
 
-    EXPECT_NEAR(camera->get_value(Camera::z_near_property), 0.1f, 1e-4f);
-    EXPECT_NEAR(camera->get_value(Camera::z_far_property), 1000.0f, 1e-2f);
+    EXPECT_NEAR(camera->get_value(Camera::perspective_z_near_property), 0.1f, 1e-4f);
+    EXPECT_NEAR(camera->get_value(Camera::perspective_z_far_property), 1000.0f, 1e-2f);
     EXPECT_EQ(camera->get_value(Camera::projection_type_property), erhe::scene::Projection::Type::perspective_vertical);
     // The source file's 50 mm lens with a 36 x 24 aperture.
     EXPECT_NEAR(camera->get_value(Camera::fov_y_property), 2.0f * std::atan(12.0f / 50.0f), 1e-4f);

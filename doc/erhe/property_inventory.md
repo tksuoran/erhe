@@ -146,7 +146,8 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 |---|---|---|
 | projection_type, infinite_z_far | entry | inherits (D30); mirrored into `Projection` by `on_property_changed` |
 | fov_x, fov_y, fov_left, fov_right, fov_up, fov_down | entry | inherits; mirrored; angle rows |
-| ortho_left, ortho_width, ortho_bottom, ortho_height, frustum_left, frustum_right, frustum_bottom, frustum_top, z_near, z_far | entry | inherits; mirrored; logarithmic extents |
+| ortho_left, ortho_width, ortho_bottom, ortho_height, frustum_left, frustum_right, frustum_bottom, frustum_top, perspective_z_near, perspective_z_far | entry | inherits; mirrored; logarithmic extents |
+| orthographic_z_near, orthographic_z_far | entry | inherits; mirrored; signed (the near plane may lie behind the camera) |
 | exposure, shadow_range | entry | inherits |
 
 ### Node_physics (`src/editor/scene/node_physics.cpp`, section 4.26)

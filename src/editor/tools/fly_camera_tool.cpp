@@ -1072,11 +1072,11 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
         return true;
     }
 
-    // Moving an orthogonal camera along its view axis changes nothing it
+    // Moving an orthographic camera along its view axis changes nothing it
     // shows: zoom is the size of the view volume. The cameras of a four view
     // share one zoom.
-    if ((m_camera != nullptr) && m_camera->projection()->is_orthogonal()) {
-        // Ortho_zoom_mode::size_and_pan: all pointer rays of an orthogonal
+    if ((m_camera != nullptr) && m_camera->projection()->is_orthographic()) {
+        // Ortho_zoom_mode::size_and_pan: all pointer rays of an orthographic
         // camera are parallel, so the offset between the pointer ray origins
         // before and after the size change is the pan that puts the point
         // that was under the pointer back under it.
@@ -1158,7 +1158,8 @@ auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
 
     // Right at a surface the hit distance goes to zero, which would make the
     // wheel stop responding: the near clip distance is the lower bound.
-    const float min_distance = (m_camera != nullptr) ? m_camera->projection()->z_near : 0.03f;
+    // (Orthographic cameras zoom by size above and never reach this.)
+    const float min_distance = (m_camera != nullptr) ? m_camera->projection()->perspective_z_near : 0.03f;
     if (l < min_distance) {
         l = min_distance;
     }
@@ -1342,7 +1343,7 @@ auto Fly_camera_tool::track() -> bool
 
     // The translation is parallel to the track plane, so it keeps the anchor
     // depth; moving the camera by its opposite puts the anchor exactly under
-    // the pointer, for perspective and orthogonal projections alike.
+    // the pointer, for perspective and orthographic projections alike.
     const glm::vec3 translation = pointer_position.value() - m_track_plane_point.value();
     if (translation == glm::vec3{0.0f, 0.0f, 0.0f}) {
         return true;

@@ -336,16 +336,16 @@ auto Light::stable_directional_light_projection(const Light_projection_parameter
     using glm::mat4;
 
     //// // View distance is radius of the view camera bounding volume
-    //// const float r = parameters.view_camera->projection()->z_far;
+    //// const float r = parameters.view_camera->projection()->get_z_far();
     const float r = parameters.view_camera->get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     return Projection{
-        .projection_type = Projection::Type::orthogonal,
-        .z_near          = 0.0f,
-        .z_far           = 2.0f * r,
-        .ortho_width     = 2.0f * r,
-        .ortho_height    = 2.0f * r
+        .projection_type     = Projection::Type::orthographic,
+        .orthographic_z_near = 0.0f,
+        .orthographic_z_far  = 2.0f * r,
+        .ortho_width         = 2.0f * r,
+        .ortho_height        = 2.0f * r
     };
 }
 
@@ -353,11 +353,11 @@ auto Light::spot_light_projection(const Light_projection_parameters& parameters)
 {
     static_cast<void>(parameters); // TODO ignored for now
     return Projection{
-        .projection_type = Projection::Type::perspective,
-        .z_near          = 0.04f, // TODO
-        .z_far           = get_range(),
-        .fov_x           = get_outer_spot_angle(),
-        .fov_y           = get_outer_spot_angle()
+        .projection_type    = Projection::Type::perspective,
+        .perspective_z_near = 0.04f, // TODO
+        .perspective_z_far  = get_range(),
+        .fov_x              = get_outer_spot_angle(),
+        .fov_y              = get_outer_spot_angle()
     };
 }
 
@@ -403,7 +403,7 @@ auto Light::stable_directional_light_projection_transforms(
     //
     // - Define bounding sphere around view camare, based on view camera
     //   position (as sphere center) and far plane distance (as sphere radius)
-    // - Construct cubic orthogonal projection for light, using view camera far
+    // - Construct cubic orthographic projection for light, using view camera far
     //   plane distance as left / rignt / top / bottom
     // - Snap view camera position to light space texels
     //
@@ -422,7 +422,7 @@ auto Light::stable_directional_light_projection_transforms(
     const Node* const view_camera_node = parameters.view_camera;
 
     //// // View distance is used as radius of the view camera bounding volume
-    //// const float r = parameters.view_camera->projection()->z_far;
+    //// const float r = parameters.view_camera->projection()->get_z_far();
     const float r = parameters.view_camera->get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
@@ -567,11 +567,11 @@ auto Light::point_light_projection_transforms(const Light_projection_parameters&
     // direction, so clip_from_world / texture_from_world are unused and kept
     // identity to avoid implying a single-projection shadow lookup.
     const Projection light_projection{
-        .projection_type = Projection::Type::perspective,
-        .z_near          = 0.05f,
-        .z_far           = get_range(),
-        .fov_x           = glm::half_pi<float>(),
-        .fov_y           = glm::half_pi<float>()
+        .projection_type    = Projection::Type::perspective,
+        .perspective_z_near = 0.05f,
+        .perspective_z_far  = get_range(),
+        .fov_x              = glm::half_pi<float>(),
+        .fov_y              = glm::half_pi<float>()
     };
 
     return Light_projection_transforms{

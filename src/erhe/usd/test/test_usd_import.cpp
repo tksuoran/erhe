@@ -158,8 +158,8 @@ TEST_F(Cube_import, camera)
     // verticalAperture 24 mm at focal length 50 mm.
     const float expected_fov_y = 2.0f * std::atan(0.5f * 24.0f / 50.0f);
     EXPECT_NEAR(projection->fov_y,  expected_fov_y, 1e-4f);
-    EXPECT_NEAR(projection->z_near, 0.1f,           1e-4f);
-    EXPECT_NEAR(projection->z_far,  1000.0f,        1e-1f);
+    EXPECT_NEAR(projection->perspective_z_near, 0.1f,    1e-4f);
+    EXPECT_NEAR(projection->perspective_z_far,  1000.0f, 1e-1f);
     // cube.usda authors no `exposure`, so erhe's own default multiplier stands.
     EXPECT_FLOAT_EQ(camera.get_exposure(), 1.0f);
 }

@@ -43,7 +43,7 @@ it runs, and the list of what is and is not persisted, is
 | node tree, TRS, names | core |
 | node Item flags plus mesh-prim Item flags | `ERHE_node` extension |
 | cameras (interchange approximation) | core cameras, lossy by design |
-| camera full projection (all 9 `Projection::Type`s, asymmetric fov / ortho / frustum fields, z_near / z_far), exposure, shadow_range, Item flags | `ERHE_camera` extension; core cameras carry only yfov / aspect plus xmag / ymag and cannot express erhe's `Projection` |
+| camera full projection (all 9 `Projection::Type`s, asymmetric fov / ortho / frustum fields, perspective and orthographic clip ranges), exposure, shadow_range, Item flags | `ERHE_camera` extension; core cameras carry only yfov / aspect plus xmag / ymag and cannot express erhe's `Projection` |
 | lights (type, color, intensity, range, spot angles) | KHR_lights_punctual |
 | light cast_shadow, Item flags | `ERHE_light` extension; KHR_lights_punctual has no shadow flag |
 | materials plus erhe fields | core plus `ERHE_material` extension |
@@ -117,7 +117,7 @@ kind of content a round-trip needs.
    because `Skin_data::skeleton` is never populated by the importer.
 4. **Camera correctness.** `Projection::Type::other` and `generic_frustum`
    export as a best-effort core approximation rather than aborting a save, and
-   the importer keeps `z_near` on perspective cameras. Under this design the
+   the importer keeps `perspective_z_near` on perspective cameras. Under this design the
    core camera is only the interchange approximation - full fidelity is
    `ERHE_camera`, phase 3 - but both paths are correct for foreign files.
 5. Unreferenced physics materials, filters and joint settings from the content
@@ -230,7 +230,7 @@ editor-controlled meshes.
 - `ERHE_camera` (camera extension): the FULL `erhe::scene::Projection`
   (projection_type, all 9 values; fov_x / fov_y / fov_left / right / up / down;
   ortho_left / width / bottom / height; frustum_left / right / bottom / top;
-  z_near; z_far), exposure, shadow_range and Item flags. The core camera
+  perspective_z_near / z_far; orthographic_z_near / z_far), exposure, shadow_range and Item flags. The core camera
   object is only the interchange approximation: without this extension
   asymmetric frusta, XR projections and offset orthos cannot round-trip.
 - `ERHE_light` (node extension on the light-carrying node, not inside the

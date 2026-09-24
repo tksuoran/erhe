@@ -23,11 +23,11 @@ public:
         perspective_vertical,
         perspective,          // Uses both horizontal and vertical fov and ignores aspect ratio
         perspective_xr,
-        orthogonal_horizontal,
-        orthogonal_vertical,
-        orthogonal,           // Uses both horizontal and vertical size and ignores aspect ratio, O-centered
-        orthogonal_rectangle, // Like above, not O-centered, uses X and Y as corner
-        generic_frustum       // Generic frustum
+        orthographic_horizontal,
+        orthographic_vertical,
+        orthographic,           // Uses both horizontal and vertical size and ignores aspect ratio, O-centered
+        orthographic_rectangle, // Like above, not O-centered, uses X and Y as corner
+        generic_frustum         // Generic frustum - uses perspective z near and far
     };
 
     static constexpr const char* c_type_strings[] = {
@@ -36,10 +36,10 @@ public:
         "Perspective Vertical",
         "Perspective",
         "Perspective XR",
-        "Orthogonal Horizontal",
-        "Orthogonal Vertical",
-        "Orthogonal",
-        "Orthogonal Rectangle",
+        "Orthographic Horizontal",
+        "Orthographic Vertical",
+        "Orthographic",
+        "Orthographic Rectangle",
         "Generic Frustum"
     };
 
@@ -76,15 +76,27 @@ public:
 
     [[nodiscard]] auto get_fov_sides(erhe::math::Viewport viewport) const -> Fov_sides;
     [[nodiscard]] auto get_scale() const -> float;
-    [[nodiscard]] auto is_orthogonal() const -> bool;
+    [[nodiscard]] auto is_orthographic() const -> bool;
 
-    Type  projection_type{Type::perspective_vertical};
-    float z_near         { 0.03f};
-    float z_far          {64.0};
+    // The clip range of the projection type: the orthographic types use the
+    // orthographic pair, every other type (generic_frustum included) the
+    // perspective pair.
+    [[nodiscard]] auto get_z_near() const -> float { return is_orthographic() ? orthographic_z_near : perspective_z_near; }
+    [[nodiscard]] auto get_z_far () const -> float { return is_orthographic() ? orthographic_z_far  : perspective_z_far;  }
+    void set_z_near(const float z_near) { if (is_orthographic()) { orthographic_z_near = z_near; } else { perspective_z_near = z_near; } }
+    void set_z_far (const float z_far ) { if (is_orthographic()) { orthographic_z_far  = z_far;  } else { perspective_z_far  = z_far;  } }
+
+    Type  projection_type    {Type::perspective_vertical};
+    float perspective_z_near {   0.03f};
+    float perspective_z_far  {  64.0f};
+    // An orthographic projection has no eye point, so its near plane may lie
+    // behind the camera (negative z_near).
+    float orthographic_z_near{-256.0f};
+    float orthographic_z_far { 256.0f};
 
     // Far plane at infinity, for the perspective projection types only (glTF
     // makes camera.perspective.zfar optional and the reference implementation
-    // treats an absent zfar as Infinity). z_far stays a finite, meaningful
+    // treats an absent zfar as Infinity). perspective_z_far stays a finite, meaningful
     // number while this is set: it is the depth hint the rest of the editor
     // works from (shadow range fitting, the transform tool's gizmo distance,
     // the properties slider), and only the projection matrix goes to infinity.

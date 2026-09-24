@@ -210,7 +210,7 @@ Every document states its standing in its first ten lines:
 - [editor/ddgi.md](editor/ddgi.md) (experimental): Dynamic diffuse global illumination: probe volume, tracing, atlases, sampling
 - [editor/editor.md](editor/editor.md) (mostly stable): The editor is the main application built on the erhe C++ graphics engine
 - [editor/four_view.md](editor/four_view.md) (experimental): Four linked viewports (top, front, right, perspective) docked as a 2 x 2 grid with a cross splitter
-- [editor/grid.md](editor/grid.md) (mostly stable): Editor grid: rendering, per-view plane in orthogonal views, hover and snap, depth mode
+- [editor/grid.md](editor/grid.md) (mostly stable): Editor grid: rendering, per-view plane in orthographic views, hover and snap, depth mode
 - [editor/geometry_graph_mesh.md](editor/geometry_graph_mesh.md) (mostly stable): Geometry node graph as a first-class Graph_mesh asset
 - [editor/geometry_graph_transform_from_node.md](editor/geometry_graph_transform_from_node.md) (mostly stable): transform_from_node geometry-graph node driven by a scene node
 - [editor/geometry_nodes.md](editor/geometry_nodes.md) (mostly stable): Geometry Nodes status and Blender architecture analysis

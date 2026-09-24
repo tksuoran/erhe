@@ -565,10 +565,10 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
 [[nodiscard]] auto make_default_camera(const std::optional<Content_fit>& content_fit) -> std::shared_ptr<erhe::scene::Camera>
 {
     std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
-    default_camera->set_fov_y          (c_default_camera_fov_y);
-    default_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-    default_camera->set_z_near         (0.03f);
-    default_camera->set_z_far          (80.0f);
+    default_camera->set_fov_y             (c_default_camera_fov_y);
+    default_camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+    default_camera->set_perspective_z_near(0.03f);
+    default_camera->set_perspective_z_far (80.0f);
     default_camera->enable_flag_bits(
         erhe::Item_flags::content             |
         erhe::Item_flags::show_in_ui          |
@@ -579,8 +579,8 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
     glm::vec3 eye_position{0.0f, 0.0f, 8.0f};
     glm::vec3 target_position{0.0f, 0.0f, 0.0f};
     if (content_fit.has_value()) {
-        default_camera->set_z_near(content_fit->z_near);
-        default_camera->set_z_far (content_fit->z_far);
+        default_camera->set_perspective_z_near(content_fit->z_near);
+        default_camera->set_perspective_z_far (content_fit->z_far);
         default_camera->set_shadow_range(content_fit->shadow_range);
         target_position = content_fit->center;
         eye_position    = content_fit->center + glm::vec3{0.0f, 0.0f, 1.0f} * content_fit->view_distance;
@@ -1195,8 +1195,14 @@ auto make_import_gltf_operation(
             // Widens a LOCAL value only: a camera that takes its far plane or
             // shadow range from its node or a style (which the editor-state
             // operations assign after this) keeps the author's setup.
-            if (camera->has_local_value(erhe::scene::Camera::z_far_property.get()) && (content_fit->z_far > camera->projection()->z_far)) {
-                camera->set_z_far(content_fit->z_far);
+            // The fit is a perspective depth: an orthographic camera's clip
+            // range is a signed slab around the camera and is left alone.
+            if (
+                !camera->projection()->is_orthographic() &&
+                camera->has_local_value(erhe::scene::Camera::perspective_z_far_property.get()) &&
+                (content_fit->z_far > camera->projection()->perspective_z_far)
+            ) {
+                camera->set_perspective_z_far(content_fit->z_far);
             }
             if (camera->has_local_value(erhe::scene::Camera::shadow_range_property.get()) && (content_fit->shadow_range > camera->get_shadow_range())) {
                 camera->set_shadow_range(content_fit->shadow_range);

@@ -1530,7 +1530,10 @@ defined next to `Projection::c_type_strings` in `projection.cpp`),
 `ortho_left`, `ortho_width`, `ortho_bottom`, `ortho_height`,
 `frustum_left`, `frustum_right`, `frustum_bottom`, `frustum_top`
 (logarithmic sliders 0..1000, `visible_when` per type as the hand-written
-rows switched), `z_near`, `z_far` (logarithmic sliders 0..1000) and
+rows switched), `perspective_z_near`, `perspective_z_far` (logarithmic
+sliders 0..1000, `visible_when` the type is not orthographic),
+`orthographic_z_near`, `orthographic_z_far` (plain signed rows,
+`visible_when` the type is orthographic) and
 `infinite_z_far` (bool, `visible_when` perspective types). The
 `visible_when` callbacks read the mirror and are evaluated on `Camera`
 objects only.

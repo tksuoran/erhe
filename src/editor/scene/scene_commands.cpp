@@ -523,10 +523,10 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     // other part can observe the scene camera-less; not routed through the
     // Operation_stack because the scene creation itself is not undoable.
     std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>("Camera");
-    camera->set_fov_y          (glm::radians(35.0f));
-    camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-    camera->set_z_near         (0.03f);
-    camera->set_z_far          (64.0f);
+    camera->set_fov_y             (glm::radians(35.0f));
+    camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+    camera->set_perspective_z_near(0.03f);
+    camera->set_perspective_z_far (64.0f);
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     camera->set_exposure(1.0f);
     camera->set_shadow_range(22.0f);

@@ -766,7 +766,7 @@ auto Scene_views::open_four_view() -> Four_view*
     }
 
     // Frame the scene content: the focus is the point ahead of the source
-    // camera at the distance of the mesh bounds center, the orthogonal views
+    // camera at the distance of the mesh bounds center, the orthographic views
     // are sized to the bounds and their cameras sit outside the bounding
     // sphere.
     erhe::math::Aabb bounds{};

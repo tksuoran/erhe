@@ -102,8 +102,8 @@ void write_camera_entry(
     const auto      fov_sides            = camera_projection.get_fov_sides(viewport);
     const float     fov_floats[4]        { fov_sides.left, fov_sides.right, fov_sides.up, fov_sides.down };
     const float     clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
-    const float     view_depth_near      = camera_projection.z_near;
-    const float     view_depth_far       = camera_projection.z_far;
+    const float     view_depth_near      = camera_projection.get_z_near();
+    const float     view_depth_far       = camera_projection.get_z_far();
 
     const glm::mat4 world_from_grid       = grid_parameters.world_from_grid;
     const glm::mat4 grid_from_world       = glm::inverse(world_from_grid);
