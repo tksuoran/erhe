@@ -181,6 +181,13 @@ Implementation status section for commits and code locations):
 - **Add Bone Tip Nodes** (Hierarchy window context menu): places empty child
   nodes at the tips of leaf bones, ready to use as drag handles - an early
   slice of Phase 3's authoring UX.
+- **Reset Bones to Bind Pose** (Hierarchy window context menu, next to Add
+  Bone Tip Nodes): writes every bone in the target subtrees to the pose its
+  skin's inverse bind matrices were taken in, anchored at the world transform
+  of a mesh using that skin (glTF inverse bind matrices are mesh-node
+  relative). It stops an animation playing on the subtrees first, because the
+  animated layer would hide the result. It is one undoable compound operation
+  (`Scene_commands::reset_bones_to_bind_pose`).
 - **Data-driven bone tails**: `bone_tail_in_joint_space` (shared by the bone
   visualizations and tip placement) now sizes leaf/ambiguous bones from the
   rest-pose bounds of the vertices each joint skins

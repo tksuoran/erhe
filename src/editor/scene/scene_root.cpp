@@ -658,6 +658,21 @@ auto Scene_root::make_browser_window(
                         "selected subtrees (this subtree when nothing relevant is selected)"
                     );
                 }
+                if (ImGui::MenuItem("Reset Bones to Bind Pose")) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            context.scene_commands->reset_bones_to_bind_pose(node);
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Put every bone in the selected subtrees (this subtree when nothing\n"
+                        "relevant is selected) on the pose its skin was bound in; stops an\n"
+                        "animation playing on them"
+                    );
+                }
             }
             // Lightmapped (undoable): the lightmapped property is inherited
             // down the node tree (D23), so the recursive command writes the

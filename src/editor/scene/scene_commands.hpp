@@ -275,6 +275,13 @@ public:
     // selected, otherwise clicked_node's subtree alone. One undoable compound
     // operation; returns the number of tip nodes created.
     auto add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
+    // Puts every bone (skin joint) in the target subtrees on its bind pose:
+    // the pose the skin's inverse bind matrices were taken in, anchored at
+    // the world transform of a mesh using that skin. Targets as in
+    // add_bone_tip_nodes(). Stops an animation playing on the subtrees first
+    // (its animated layer would hide the result). One undoable compound
+    // operation; returns the number of bones reset.
+    auto reset_bones_to_bind_pose(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
     auto create_new_light       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
     // An Xform holding a Rendertarget_mesh showing a viewport of the selected
     // camera; returns empty when no camera is selected.
