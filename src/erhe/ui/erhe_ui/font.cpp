@@ -87,7 +87,8 @@ Font::Font(
         "0123456789"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
-        "<>*+-.,:;=!?'`^~_|()[]{}";
+        "<>*+-.,:;=!?'`^~_|()[]{}"
+        "\xc2\xb0";
 
     m_pixel_size = size;
 

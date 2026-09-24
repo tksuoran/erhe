@@ -94,9 +94,9 @@ Text_renderer::Text_renderer(
     const int                       font_size,
     const int                       view_count
 )
-    : m_graphics_device          {graphics_device}
-    , m_view_count           {std::max(1, view_count)}
-    , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
+    : m_graphics_device  {graphics_device}
+    , m_view_count       {std::max(1, view_count)}
+    , m_projection_block {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_vertex_ssbo_block{
         graphics_device,
         {
