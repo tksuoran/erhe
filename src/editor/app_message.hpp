@@ -167,6 +167,21 @@ struct Skin_registered_message
     bool                               registered{true};
 };
 
+// Queued by Rig_system (the per-scene node system of the bone values,
+// rig/rig_system.hpp) when a node's bone display may have changed: the node
+// entered or left its scene while carrying Item_flags::bone, its bone flag
+// changed, or its Rig.tail changed. Queued rather than sent because node
+// systems are called in the middle of node attach traversals (and a proxy
+// node must not be attached there). Weak references: the node may be gone by
+// delivery. `parent` is the node's parent at the change - the parent's
+// default tail follows its first bone child (rig/bone_tail.hpp).
+class Bone_changed_message
+{
+public:
+    std::weak_ptr<erhe::Item_base> node  {};
+    std::weak_ptr<erhe::Item_base> parent{};
+};
+
 // Published by Mesh_component_selection::set_mode() when the mode actually
 // changes. Carries no payload (the enum lives in mesh_component_selection.hpp,
 // which includes this header); the mode is already updated when this fires, so

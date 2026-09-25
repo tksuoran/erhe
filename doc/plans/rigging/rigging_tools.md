@@ -188,8 +188,8 @@ Implementation status section for commits and code locations):
   relative). It stops an animation playing on the subtrees first, because the
   animated layer would hide the result. It is one undoable compound operation
   (`Scene_commands::reset_bones_to_bind_pose`).
-- **Data-driven bone tails**: `bone_tail_in_joint_space` (shared by the bone
-  visualizations and tip placement) now sizes leaf/ambiguous bones from the
+- **Data-driven bone tails**: `infer_skinned_bone_tail` (`src/editor/rig/bone_tail.hpp`,
+  the skinned default of `Rig.tail` the bone visualizations and tip placement read) sizes leaf/ambiguous bones from the
   rest-pose bounds of the vertices each joint skins
   (`Buffer_mesh::joint_bounding_boxes` in joint space); direction still
   follows the hierarchy rules. This is a head-start on Phase 3's "bone

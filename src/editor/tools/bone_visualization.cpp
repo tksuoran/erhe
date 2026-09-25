@@ -5,7 +5,9 @@
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
 #include "app_settings.hpp"
+#include "rig/bone_tail.hpp"
 #include "scene/node_raytrace_mask.hpp"
+#include "scene/rig_properties.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 
@@ -116,154 +118,6 @@ void make_bone(GEO::Mesh& mesh)
 
 } // anonymous namespace
 
-namespace {
-
-// Bone length estimate from the vertices the joint actually skins, measured
-// along a caller-chosen joint-space direction (unit): the union of the
-// per-primitive joint bounding boxes (rest pose, bind space - computed at
-// import, see Buffer_mesh::joint_bounding_boxes) of every mesh skinned by
-// `skin` is transformed into joint space by the inverse bind matrix, and the
-// length is the farthest box corner's projection onto the direction. The
-// direction itself is NOT derived here - the tail direction always comes from
-// the hierarchy rules in bone_tail_in_joint_space; the bounds only size it.
-// Empty when no mesh provides joint bounds for this joint, or when the box
-// does not extend along the direction.
-[[nodiscard]] auto bone_length_from_skinned_bounds(
-    const erhe::scene::Skin& skin,
-    const std::size_t        joint_index,
-    const erhe::scene::Node& joint,
-    const glm::vec3          direction
-) -> std::optional<float>
-{
-    const erhe::scene::Scene* const scene = joint.get_scene();
-    if (scene == nullptr) {
-        return {};
-    }
-
-    erhe::math::Aabb bind_box{};
-    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene->get_mesh_layers()) {
-        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
-            if (!mesh || (mesh->skin.get() != &skin)) {
-                continue;
-            }
-            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-                if (!mesh_primitive.primitive) {
-                    continue;
-                }
-                const erhe::primitive::Primitive_render_shape* const shape = mesh_primitive.primitive->render_shape.get();
-                if (shape == nullptr) {
-                    continue;
-                }
-                const std::vector<erhe::math::Aabb>& joint_boxes =
-                    shape->get_renderable_mesh().joint_bounding_boxes;
-                if ((joint_index >= joint_boxes.size()) || !joint_boxes[joint_index].is_valid()) {
-                    continue;
-                }
-                bind_box.include(joint_boxes[joint_index]);
-            }
-        }
-    }
-    if (!bind_box.is_valid()) {
-        return {};
-    }
-
-    const glm::mat4 inverse_bind = (joint_index < skin.skin_data.inverse_bind_matrices.size())
-        ? skin.skin_data.inverse_bind_matrices[joint_index]
-        : glm::mat4{1.0f};
-    const erhe::math::Aabb joint_box = bind_box.transformed_by(inverse_bind);
-
-    constexpr float epsilon = 1.0e-6f;
-    float extent = 0.0f;
-    for (int corner = 0; corner < 8; ++corner) {
-        const glm::vec3 p{
-            (corner & 1) ? joint_box.max.x : joint_box.min.x,
-            (corner & 2) ? joint_box.max.y : joint_box.min.y,
-            (corner & 4) ? joint_box.max.z : joint_box.min.z
-        };
-        extent = std::max(extent, glm::dot(p, direction));
-    }
-    if (extent < epsilon) {
-        return {};
-    }
-    return extent;
-}
-
-} // anonymous namespace
-
-auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, const std::size_t joint_index) -> glm::vec3
-{
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin.skin_data.joints;
-    if (joint_index >= joints.size()) {
-        return glm::vec3{0.2f, 0.0f, 0.0f};
-    }
-    const std::shared_ptr<erhe::scene::Node>& joint = joints[joint_index];
-    if (!joint) {
-        return glm::vec3{0.2f, 0.0f, 0.0f};
-    }
-
-    // Child joints agreeing on the tail win: their shared local translation IS
-    // the tail offset. Multiple children that disagree (a hand joint fanning
-    // into fingers) give no single answer, so the skinned-vertex bounds below
-    // decide instead.
-    bool      have_child{false};
-    bool      children_agree{true};
-    glm::vec3 first_child_translation{0.0f};
-    for (std::size_t j = 0, end = joints.size(); j < end; ++j) {
-        if (j == joint_index) {
-            continue;
-        }
-        const std::shared_ptr<erhe::scene::Node>& other = joints[j];
-        if (!other || (other->get_parent_node() != joint)) {
-            continue;
-        }
-        const glm::vec3 translation = other->parent_from_node_transform().get_translation();
-        if (!have_child) {
-            have_child              = true;
-            first_child_translation = translation;
-        } else {
-            const float tolerance = std::max(1.0e-4f, 1.0e-3f * glm::length(first_child_translation));
-            if (glm::distance(translation, first_child_translation) > tolerance) {
-                children_agree = false;
-            }
-        }
-    }
-    if (have_child && children_agree) {
-        return first_child_translation;
-    }
-
-    // Leaf joint, or children that don't agree: the DIRECTION still follows
-    // the long-standing rules (first child's direction when there were
-    // children, local +Y for a leaf), and the skinned-vertex bounds only
-    // resize it - the length becomes the box extent along that direction.
-    constexpr float epsilon = 1.0e-6f;
-    const float first_child_distance = glm::length(first_child_translation);
-    const glm::vec3 direction = (have_child && (first_child_distance > epsilon))
-        ? first_child_translation / first_child_distance
-        : glm::vec3{0.0f, 1.0f, 0.0f};
-    const std::optional<float> length_from_bounds = bone_length_from_skinned_bounds(skin, joint_index, *joint, direction);
-    if (length_from_bounds.has_value()) {
-        return direction * length_from_bounds.value();
-    }
-
-    // No skinned bounds available. Disagreeing children: fall back to the
-    // first child (the long-standing rule).
-    if (have_child) {
-        return first_child_translation;
-    }
-
-    // Leaf joint: point along local +Y, as long as this joint's own offset from
-    // its parent - the same "how long is a bone here" cue the line
-    // visualization uses.
-    const std::shared_ptr<erhe::scene::Node> parent = joint->get_parent_node();
-    if (parent) {
-        const float length = glm::length(joint->parent_from_node_transform().get_translation());
-        if (length > 0.0f) {
-            return glm::vec3{0.0f, length, 0.0f};
-        }
-    }
-    return glm::vec3{0.2f, 0.0f, 0.0f};
-}
-
 Bone_visualization::Bone_visualization(App_context& context, App_message_bus& app_message_bus, erhe::scene_renderer::Mesh_memory& mesh_memory)
     : m_context    {context}
     , m_mesh_memory{mesh_memory}
@@ -276,6 +130,9 @@ Bone_visualization::Bone_visualization(App_context& context, App_message_bus& ap
     // first pump are delivered to these subscriptions regardless of order.
     m_skin_registered_subscription = app_message_bus.skin_registered.subscribe(
         [this](Skin_registered_message& message) { on_skin_registered(message); }
+    );
+    m_bone_changed_subscription = app_message_bus.bone_changed.subscribe(
+        [this](Bone_changed_message& message) { on_bone_changed(message); }
     );
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) { on_close_scene(message); }
@@ -454,15 +311,17 @@ void Bone_visualization::set_proxy_transform(Proxy& proxy, const glm::vec3 tail_
 
 void Bone_visualization::refresh_proxy_shape(Proxy& proxy)
 {
-    const std::shared_ptr<erhe::scene::Skin> skin = proxy.skin.lock();
-    if (!skin) {
+    const std::shared_ptr<erhe::scene::Node> joint = proxy.joint.lock();
+    if (!joint) {
         return;
     }
-    // Only rebuild the transform when the bone shape actually changed. Under a
-    // rotation-only animation - the common case - the child's local translation
-    // is constant, so this is a compare and nothing else; the joint's own
-    // animation reaches the proxy through the parent link.
-    const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, proxy.joint_index);
+    // The bone's Rig.tail (R3): a local value when one is authored, else the
+    // computed default (rig/bone_tail.hpp). Only rebuild the transform when
+    // the bone shape actually changed. Under a rotation-only animation - the
+    // common case - the child's local translation is constant, so this is a
+    // compare and nothing else; the joint's own animation reaches the proxy
+    // through the parent link.
+    const glm::vec3 tail_local = joint->get_value(Rig::tail_property());
     if ((tail_local != proxy.tail_local) || (m_aspect_ratio != proxy.aspect_ratio)) {
         set_proxy_transform(proxy, tail_local);
     }
@@ -527,48 +386,60 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
     proxy.hovered  = hovered;
 }
 
-void Bone_visualization::add_skin_proxies(const std::shared_ptr<erhe::scene::Skin>& skin)
+void Bone_visualization::reconcile_bone(const std::shared_ptr<erhe::scene::Node>& node)
 {
+    if (!node) {
+        return;
+    }
+    const auto found = m_proxies.find(node.get());
+    // A proxy stands for a bone of a scene: a node that left its scene (a
+    // removal, the undo of an insert) or stopped being a bone loses it, and
+    // gets it back when it returns.
+    const bool wanted = (node->get_scene() != nullptr) && erhe::scene::is_bone(node.get());
+    if (!wanted) {
+        if (found != m_proxies.end()) {
+            remove_proxy(found->second);
+            m_proxies.erase(found);
+        }
+        return;
+    }
     ensure_primitive();
+    auto i = found;
+    if ((i != m_proxies.end()) && (i->second.joint.lock() != node)) {
+        // A stale entry of a destroyed node whose address was reused.
+        remove_proxy(i->second);
+        m_proxies.erase(i);
+        i = m_proxies.end();
+    }
+    if (i == m_proxies.end()) {
+        Proxy proxy = make_proxy(node);
+        m_joint_by_proxy_mesh[proxy.mesh.get()] = node;
+        i = m_proxies.emplace(node.get(), std::move(proxy)).first;
+    }
+    Proxy& proxy = i->second;
+    refresh_proxy_shape(proxy);
+    apply_proxy_flags(proxy);
+    update_proxy_material(proxy);
+}
 
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
-    for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-        const std::shared_ptr<erhe::scene::Node>& joint = joints[i];
-        if (!joint) {
-            continue;
-        }
-        auto found = m_proxies.find(joint.get());
-        if (found == m_proxies.end()) {
-            Proxy proxy = make_proxy(joint);
-            m_joint_by_proxy_mesh[proxy.mesh.get()] = joint;
-            found = m_proxies.emplace(joint.get(), std::move(proxy)).first;
-        }
-        // (Re)bind the shape source: a joint shared between skins keeps one
-        // proxy, owned by whichever skin registered last.
-        Proxy& proxy = found->second;
-        proxy.skin        = skin;
-        proxy.skin_key    = skin.get();
-        proxy.joint_index = i;
-        refresh_proxy_shape(proxy);
-        apply_proxy_flags(proxy);
-        update_proxy_material(proxy);
+void Bone_visualization::remove_proxy(Proxy& proxy)
+{
+    if (proxy.mesh) {
+        m_joint_by_proxy_mesh.erase(proxy.mesh.get());
+    }
+    if (proxy.node) {
+        proxy.node->set_node_parent(nullptr);
     }
 }
 
-void Bone_visualization::remove_skin_proxies(const erhe::scene::Skin* skin)
+void Bone_visualization::drop_expired_proxies()
 {
     for (auto i = m_proxies.begin(); i != m_proxies.end(); ) {
-        Proxy& proxy = i->second;
-        if (proxy.skin_key != skin) {
+        if (!i->second.joint.expired()) {
             ++i;
             continue;
         }
-        if (proxy.mesh) {
-            m_joint_by_proxy_mesh.erase(proxy.mesh.get());
-        }
-        if (proxy.node) {
-            proxy.node->set_node_parent(nullptr);
-        }
+        remove_proxy(i->second);
         i = m_proxies.erase(i);
     }
 }
@@ -578,13 +449,42 @@ void Bone_visualization::on_skin_registered(Skin_registered_message& message)
     if (!message.skin) {
         return;
     }
-    if (message.registered) {
-        if (message.scene_root) {
-            add_skin_proxies(message.skin);
-        }
-    } else {
-        remove_skin_proxies(message.skin.get());
+    // Registering marks the joints as bones (their own Bone_changed_message
+    // follows for a joint whose flag changed); either way the skin is now
+    // (or no longer) where the joints' default tails come from, so each
+    // joint is reconciled. A joint keeps its proxy when the skin leaves: the
+    // bone flag is authored and stays.
+    for (const std::shared_ptr<erhe::scene::Node>& joint : message.skin->skin_data.joints) {
+        reconcile_bone(joint);
     }
+}
+
+void Bone_visualization::on_bone_changed(Bone_changed_message& message)
+{
+    const std::shared_ptr<erhe::Item_base> item = message.node.lock();
+    if (!item) {
+        drop_expired_proxies();
+    } else {
+        reconcile_bone(std::dynamic_pointer_cast<erhe::scene::Node>(item));
+    }
+    // The parent's default tail is its first bone child's head.
+    const std::shared_ptr<erhe::Item_base> parent_item = message.parent.lock();
+    const erhe::scene::Node* const parent = dynamic_cast<const erhe::scene::Node*>(parent_item.get());
+    if (parent != nullptr) {
+        const auto parent_proxy = m_proxies.find(parent);
+        if (parent_proxy != m_proxies.end()) {
+            refresh_proxy_shape(parent_proxy->second);
+        }
+    }
+}
+
+auto Bone_visualization::get_bone_tail(const erhe::scene::Node& joint) const -> glm::vec3
+{
+    const auto i = m_proxies.find(&joint);
+    if (i != m_proxies.end()) {
+        return i->second.tail_local;
+    }
+    return joint.get_value(Rig::tail_property());
 }
 
 void Bone_visualization::on_close_scene(Close_scene_message& message)
@@ -600,12 +500,7 @@ void Bone_visualization::on_close_scene(Close_scene_message& message)
             ++i;
             continue;
         }
-        if (i->second.mesh) {
-            m_joint_by_proxy_mesh.erase(i->second.mesh.get());
-        }
-        if (i->second.node) {
-            i->second.node->set_node_parent(nullptr);
-        }
+        remove_proxy(i->second);
         i = m_proxies.erase(i);
     }
 }
@@ -636,9 +531,10 @@ void Bone_visualization::on_node_touched(erhe::scene::Node* node)
     if (node == nullptr) {
         return;
     }
-    // A node's local translation feeds two bone shapes: its own proxy (a leaf
-    // bone's length is the joint's offset from its parent) and its parent
-    // joint's proxy (a parent bone's tail is the first child's translation).
+    // A node's local translation feeds two default tails (rig/bone_tail.hpp):
+    // its own (a skinned leaf bone's length is the joint's offset from its
+    // parent) and its parent's (a parent bone's tail is the first child's
+    // head).
     const auto self = m_proxies.find(node);
     if (self != m_proxies.end()) {
         refresh_proxy_shape(self->second);

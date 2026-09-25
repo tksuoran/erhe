@@ -2639,6 +2639,21 @@ namespace-scope reference registers them at static initialization: the `Ik`
 registration in another translation unit names `rest_rotation` as its
 `default_from`, and static initialization order across translation units is
 unspecified.
+`Rig.tail` (R3) is the bone's head-to-tail vector in its local frame. Its
+per-object default is `compute_default_bone_tail` (`src/editor/rig/bone_tail.hpp`):
+the skinned inference for a joint a skin lists, else the first bone child's
+head, else the bone parent's tail length along +Y, else one unit along +Y. It
+is read on every get (no cache), and a change of its inputs (a child's
+translation, a skin entering the scene) is not notified as a value change:
+the bone display re-reads it on the node touch and skin messages. Its
+`Property_bridge::validate` (no `get`, so the property is stored, not
+bridged) refuses a write on a node a skin lists, naming the skin (R9), and
+its `property_changed` is `node_system_property_changed`, which is how the
+bone display (`Rig_system`) learns of an edit. `Rig.connected` (R4, bool)
+has no callback: the snaps it and a `Rig.tail` edit imply are follow-ups the
+edit's `Property_set_operation` records into its own undo step
+(`rig/bone_connect.hpp`), so a load moves nothing. The authored bone flag
+itself is `Node::bone_property`, a bridged flag property of erhe::scene.
 The values ride the node's `ERHE_node` `properties` map by their qualified
 names (D14), as the `Ik.*` values do. Tests: `test_ik_properties.cpp`
 (`editor_ik_solver_tests`) and `test_bone_pose.cpp` (`editor_rig_tests`),

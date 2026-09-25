@@ -158,6 +158,24 @@ namespace {
 
 } // anonymous namespace
 
+auto find_skin_joint(const Node& node) -> std::optional<Skin_joint>
+{
+    const Scene* const scene = node.get_scene();
+    if (scene == nullptr) {
+        return std::nullopt;
+    }
+    for (const std::shared_ptr<Skin>& candidate : scene->get_skins()) {
+        if (!candidate) {
+            continue;
+        }
+        const std::optional<std::size_t> index = find_joint_index(*candidate, &node);
+        if (index.has_value()) {
+            return Skin_joint{.skin = candidate, .joint_index = index.value()};
+        }
+    }
+    return std::nullopt;
+}
+
 auto get_bind_pose_parent_from_node(const Node& node) -> std::optional<glm::mat4>
 {
     const Scene* const scene = node.get_scene();
@@ -228,9 +246,9 @@ auto is_bone(const Item_base* const item) -> bool
         return false;
     }
     // Item_flags, not Item_type: Item_type is per-class (Item<>::get_type()
-    // returns Self::get_static_type()), and a joint is an ordinary Node - there
-    // is no Bone class for it to report. Item_flags::bone is set on the nodes a
-    // Skin lists in skin_data.joints (see mark_skin_joints).
+    // returns Self::get_static_type()), and a bone is an ordinary Node - there
+    // is no Bone class for it to report. Item_flags::bone is authored (and set
+    // on the nodes a Skin lists in skin_data.joints, see mark_skin_joints).
     return test_bit_set(item->get_flag_bits(), Item_flags::bone);
 }
 

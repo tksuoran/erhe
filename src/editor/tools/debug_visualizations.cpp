@@ -335,32 +335,14 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
             joint->is_selected() ? style.bone_selected_color :
             (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
         );
-        vec3 a = vec3{joint->position_in_world()};
-        vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
-
-        // Search for child to connect bone tip:
-        bool child_found = false;
-        for (std::size_t j = 0, end_j = skin.skin_data.joints.size(); j < end_j; ++j) {
-            if (j == i) {
-                continue;
-            }
-            const auto& other_joint = skin.skin_data.joints[j];
-            if (other_joint->get_parent_node() == joint) {
-                b = vec3{other_joint->position_in_world()};
-                child_found = true;
-                break;
-            }
-        }
-        if (!child_found) {
-            // No child, try to guess bone tip compared to parent (if it has parent):
-            const auto& parent = joint->get_parent_node();
-            if (parent) {
-                const vec3 parent_position = vec3{parent->position_in_world()};
-                const float distance = glm::distance(parent_position, a);
-                vec3 joint_local_axis_y = joint->transform_direction_from_local_to_world(axis_y);
-                b = a + distance * joint_local_axis_y;
-            }
-        }
+        // Head at the joint origin, tail at the bone's Rig.tail
+        // (doc/plans/rigging/skeleton_editing.md R3) - the shape the bone
+        // proxies were last built from, so the two styles agree.
+        const vec3 a = vec3{joint->position_in_world()};
+        const vec3 tail_local = (render_context.app_context.bone_visualization != nullptr)
+            ? render_context.app_context.bone_visualization->get_bone_tail(*joint)
+            : vec3{0.0f, 1.0f, 0.0f};
+        const vec3 b = vec3{world_from_joint * glm::vec4{tail_local, 1.0f}};
 
         // For linear blend skinning, matrices to be used on the shader would be:
         //const mat4  joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];

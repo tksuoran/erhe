@@ -203,6 +203,11 @@ const Property<bool> Xformable::lock_scale_x_property       = register_channel_l
 const Property<bool> Xformable::lock_scale_y_property       = register_channel_lock_property("lock_scale_y",       erhe::Item_flags::lock_scale_y,       "Scale Y");
 const Property<bool> Xformable::lock_scale_z_property       = register_channel_lock_property("lock_scale_z",       erhe::Item_flags::lock_scale_z,       "Scale Z");
 
+const Property<bool> Xformable::bone_property = erhe::Item_base::register_flag_bit_property(
+    "bone", Xformable::property_owner_type(), erhe::Item_flags::bone,
+    Property_ui{.group = "Rig", .tooltip = "The node is a skeleton bone: listed with the Rig and IK rows, drawn as a bone and posed by the bone verbs. Saved with the scene; a skin sets it on its joints", .label = "Bone"}
+);
+
 uint64_t Node_transforms::s_global_update_serial = 0;
 
 auto Node_transforms::get_current_serial() -> uint64_t
@@ -316,6 +321,15 @@ auto Xformable::get_secondary_property_owner_type() const -> std::optional<erhe:
 void Xformable::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     const uint64_t changed_flag_bits = old_flag_bits ^ new_flag_bits;
+    if ((changed_flag_bits & erhe::Item_flags::bone) != 0) {
+        // Every writer of the bit (the bridged bone_property, a skin marking
+        // its joints, set_item_flags) reaches the node systems here, as a
+        // change of bone_property.
+        Scene* const scene = get_scene();
+        if (scene != nullptr) {
+            scene->on_node_values_changed(*this, bone_property);
+        }
+    }
     if ((changed_flag_bits & (erhe::Item_flags::no_transform_update | erhe::Item_flags::active)) != 0) {
         Scene* const scene = get_scene();
         if (scene != nullptr) {

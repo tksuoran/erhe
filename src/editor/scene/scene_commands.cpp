@@ -30,13 +30,13 @@
 #include "scene/joint.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/rig_properties.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
-#include "tools/bone_visualization.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/viewport_window.hpp"
 #include "windows/window_placement.hpp"
@@ -771,40 +771,15 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
         return 0;
     }
 
-    // One tip node per leaf bone, placed at the bone tail
-    // (bone_tail_in_joint_space - the same rule the bone visualizations use,
-    // including the skinned-vertex-bounds method for leaves). The skin and
-    // joint index are looked up from the joint's scene; a bone no skin lists
-    // is skipped (the flag only ever comes from a skin's joint list).
+    // One tip node per leaf bone, placed at the bone tail: the bone's Rig.tail
+    // (doc/plans/rigging/skeleton_editing.md R3), the same value the bone
+    // visualizations draw - an authored tail, else the computed default
+    // (rig/bone_tail.hpp: the skinned inference for a joint, including the
+    // skinned-vertex-bounds method for leaves).
     Compound_operation::Parameters compound_parameters;
     std::size_t created_count = 0;
     for (const std::shared_ptr<erhe::scene::Node>& bone : leaf_bones) {
-        const erhe::scene::Scene* const scene = bone->get_scene();
-        if (scene == nullptr) {
-            continue;
-        }
-        const erhe::scene::Skin* skin{nullptr};
-        std::size_t              joint_index{0};
-        for (const std::shared_ptr<erhe::scene::Skin>& scene_skin : scene->get_skins()) {
-            if (!scene_skin) {
-                continue;
-            }
-            const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = scene_skin->skin_data.joints;
-            for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-                if (joints[i] == bone) {
-                    skin        = scene_skin.get();
-                    joint_index = i;
-                    break;
-                }
-            }
-            if (skin != nullptr) {
-                break;
-            }
-        }
-        if (skin == nullptr) {
-            continue;
-        }
-        const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, joint_index);
+        const glm::vec3 tail_local = bone->get_value(Rig::tail_property());
 
         auto tip_node = std::make_shared<erhe::scene::Xform>(fmt::format("{} tip", bone->get_name()));
         tip_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Skeleton editing slices A and B (doc/plans/rigging/skeleton_editing.md R10-R15), driven as a user does.
+"""Skeleton editing slices A and B and the foundations (doc/plans/rigging/skeleton_editing.md R1-R4, R10-R15), driven as a user does.
 
 On res/editor/assets/RiggedFigure/RiggedFigure.glb (its bones carry the side
 before a trailing index: arm_joint_L_1 .. arm_joint_R_3, leg_joint_L_1 ..
@@ -10,6 +10,14 @@ only set up the selection and the pose, and read the results back. Flip
 Names, Clear Rotation / Location and Paste Pose Flipped are each checked for
 exactly one undo step, and Ctrl+Z over the viewport restoring what they
 changed.
+
+Section D builds a skeleton no skin lists in a scene of its own: nodes made
+bones with the Properties window's Rig > Bone checkbox, a child connected
+with Rig > Connected, the parent's Rig > Tail typed into its row (the
+connected child follows, one undo step, Ctrl+Z restores), the bone proxies
+redrawn from the new tail (bone selection mode, screenshots compared along
+the old and the new tail) and a glTF save + reopen that keeps the bones, the
+tail and the connection.
 
     py -3 scripts/skeleton_editing_verify.py [--port N] [--launch]
 
@@ -28,7 +36,9 @@ import sys
 import tempfile
 
 from erhe_mcp import DEFAULT_PORT, McpClient, check_true, report, wait_for_server
-from ik_interactive_pass_verify import DEFAULT_EDITOR, USD_PATH, Editor, launch_editor, load_scene_file, log_since, log_size
+from ik_interactive_pass_verify import (DEFAULT_EDITOR, ROW_PROPERTIES, USD_PATH, Editor, Rig, have_pil, launch_editor,
+                                       load_rgb, load_scene_file, log_since, log_size, select_for_properties, ui_checkbox,
+                                       ui_type_field, undo_viewport)
 
 ASSET_PATH = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 BONE_ENTRIES = ["Select Parent", "Select Children", "Select Children (All)", "Select Chain", "Select Mirror", "Flip Names"]
@@ -343,6 +353,150 @@ def usd_warning_check(e: Editor, opened):
                warned and os.path.isfile(usd_path), f"warned={warned} file={os.path.isfile(usd_path)}")
 
 
+# --- section D: foundations (R1, R3, R4) -----------------------------------
+
+ROW_PROPERTIES[("Rig", "Bone")] = "bone"
+ROW_PROPERTIES[("Rig", "Connected")] = "Rig.connected"
+
+
+def parse_vec(text):
+    return [float(v) for v in text.replace(",", " ").split()]
+
+
+def changed_fraction(path_a, path_b, rig, head, tail, begin=0.55, end=0.95, samples=12, radius=2, threshold=40):
+    """Fraction of points along the projected head-tail segment (between `begin` and `end` of
+    its length) where the two screenshots differ by more than `threshold` somewhere within `radius`."""
+    image_a, pixels_a = load_rgb(path_a)
+    _, pixels_b = load_rgb(path_b)
+    size = image_a.size
+    hits = 0
+    for k in range(samples):
+        f = begin + ((end - begin) * ((k + 0.5) / samples))
+        x, y = rig.project([head[i] + ((tail[i] - head[i]) * f) for i in range(3)])
+        found = False
+        for py in range(int(y) - radius, int(y) + radius + 1):
+            for px in range(int(x) - radius, int(x) + radius + 1):
+                if (0 <= px < size[0]) and (0 <= py < size[1]):
+                    a = pixels_a[px, py]
+                    b = pixels_b[px, py]
+                    if sum(abs(a[i] - b[i]) for i in range(3)) > threshold:
+                        found = True
+        if found:
+            hits += 1
+    return hits / samples
+
+
+def foundations_checks(e: Editor, opened):
+    print("\n== Foundations: authored bones, Rig.tail, Rig.connected (R1, R3, R4) ==")
+    scene = e.create_scene()
+    opened.append(scene)
+    rig = Rig(e, scene)
+
+    def create(name, parent, position):
+        args = {"scene_name": scene, "name": name, "position": position}
+        if parent is not None:
+            args["parent_node_id"] = rig.ids[parent]
+        rig.ids[name] = e.call("create_node", args)["node_id"]
+        e.advance(3)
+
+    create("rig_root", None, [0.0, 0.0, 0.0])
+    create("rig_upper", "rig_root", [0.0, 1.0, 0.0])
+    create("rig_side", "rig_root", [0.6, 0.0, 0.0])
+    names = ("rig_root", "rig_upper", "rig_side")
+
+    made = all(ui_checkbox(rig, name, "Rig", "Bone", True) for name in names)
+    check_true("D.1 the Properties 'Rig > Bone' checkbox makes the three new nodes bones (no skin lists them)",
+               made and all(rig.prop(name, "bone")["value"] == "true" for name in names),
+               f"bone={[rig.prop(name, 'bone')['value'] for name in names]}")
+    default_tail = rig.prop("rig_root", "Rig.tail")
+    check_true("D.2 rig_root's Rig.tail defaults to its first bone child's head (0, 1, 0)",
+               (default_tail["source"] == "default") and (distance(parse_vec(default_tail["value"]), [0.0, 1.0, 0.0]) < 1.0e-4),
+               f"Rig.tail={default_tail['value']} ({default_tail['source']})")
+
+    rig.viewport = [v for v in e.call("get_viewports")["viewports"] if v["scene"] == scene][0]
+    depth_before = e.undo_depth()
+    connected = ui_checkbox(rig, "rig_side", "Rig", "Connected", True)
+    side = rig.node("rig_side")["local_transform"]["translation"]
+    check_true("D.3 'Rig > Connected' on rig_side snaps its head onto rig_root's tail, one undo step",
+               connected and (distance(side, [0.0, 1.0, 0.0]) < 1.0e-4) and (e.undo_depth() == depth_before + 1),
+               f"rig_side at {[round(v, 4) for v in side]}, undo depth {depth_before} -> {e.undo_depth()}")
+    undo_viewport(rig)
+    e.advance(4)
+    side = rig.node("rig_side")["local_transform"]["translation"]
+    check_true("D.4 Ctrl+Z puts rig_side back at (0.6, 0, 0), not connected",
+               (distance(side, [0.6, 0.0, 0.0]) < 1.0e-4) and (rig.prop("rig_side", "Rig.connected")["value"] == "false"),
+               f"rig_side at {[round(v, 4) for v in side]}")
+    ui_checkbox(rig, "rig_upper", "Rig", "Connected", True)
+
+    # Bone selection mode shows every bone proxy; a frontal camera on the skeleton.
+    e.call("set_mesh_component_mode", {"mode": "bone"})
+    e.advance(3)
+    cameras = [n for n in e.call("get_scene_nodes", {"scene_name": scene})["nodes"] if (n["type"] == "Camera") and (n["parent"] == "root")]
+    if cameras:
+        rig.place_camera([0.0, 1.0, 4.0], [0.0, 1.0, 0.0])
+    rig.viewport = [v for v in e.call("get_viewports")["viewports"] if v["scene"] == scene][0]
+    shots = tempfile.mkdtemp(prefix="erhe_skeleton_editing_")
+    before_png = os.path.join(shots, "tail_before.png")
+    after_png = os.path.join(shots, "tail_after.png")
+    select_for_properties(rig, "rig_root")
+    e.advance(4)
+    e.call("capture_screenshot", {"path": before_png})
+
+    depth_before = e.undo_depth()
+    typed = ui_type_field(rig, "rig_root", "Rig", "Tail.x", "0.8")
+    e.advance(4)
+    tail = rig.prop("rig_root", "Rig.tail")
+    upper = rig.node("rig_upper")["local_transform"]["translation"]
+    side = rig.node("rig_side")["local_transform"]["translation"]
+    check_true("D.5 typing 0.8 into rig_root's 'Rig > Tail.x' row moves the connected rig_upper to the new tail (0.8, 1, 0), "
+               "rig_side (not connected) stays, one undo step",
+               typed and (tail["source"] == "local") and (distance(upper, [0.8, 1.0, 0.0]) < 1.0e-4)
+               and (distance(side, [0.6, 0.0, 0.0]) < 1.0e-4) and (e.undo_depth() == depth_before + 1),
+               f"Rig.tail={tail['value']} ({tail['source']}) rig_upper at {[round(v, 4) for v in upper]} "
+               f"rig_side at {[round(v, 4) for v in side]} undo depth {depth_before} -> {e.undo_depth()}")
+
+    e.call("capture_screenshot", {"path": after_png})
+    if have_pil() and cameras:
+        head = rig.node("rig_root")["world_transform"]["translation"]
+        new_part = changed_fraction(before_png, after_png, rig, head, [0.8, 1.0, 0.0])
+        old_part = changed_fraction(before_png, after_png, rig, head, [0.0, 1.0, 0.0])
+        check_true("D.6 the bone proxies redraw from the new tail: the screenshots differ along the far part of both the "
+                   "new and the old rig_root head-tail segment", (new_part >= 0.6) and (old_part >= 0.6),
+                   f"changed along the new tail {new_part:.2f}, along the old tail {old_part:.2f} ({shots})")
+    else:
+        print(f"  [SKIP] D.6 proxy redraw (PIL {'present' if have_pil() else 'missing'}, scene camera {'found' if cameras else 'missing'})")
+
+    undo_viewport(rig)
+    e.advance(4)
+    upper = rig.node("rig_upper")["local_transform"]["translation"]
+    check_true("D.7 Ctrl+Z restores rig_root's default tail and rig_upper's head in one step",
+               (rig.prop("rig_root", "Rig.tail")["source"] == "default") and (distance(upper, [0.0, 1.0, 0.0]) < 1.0e-4)
+               and (e.undo_depth() == depth_before),
+               f"rig_upper at {[round(v, 4) for v in upper]} undo depth {e.undo_depth()}")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.advance(2)
+
+    # Save + reopen: the authored bones, the tail and the connection persist.
+    e.call("set_item_property", {"item_id": rig.ids["rig_root"], "property": "Rig.tail", "value": "0.8 1 0"})
+    e.advance(4)
+    path = os.path.join(shots, "unskinned_skeleton.glb")
+    e.call("save_scene", {"scene_name": scene, "path": path})
+    e.wait_idle()
+    reopened = load_scene_file(e, path)
+    opened.append(reopened)
+    nodes = {n["name"]: n["id"] for n in e.call("get_scene_nodes", {"scene_name": reopened})["nodes"] if n.get("content", False)}
+    reloaded = Rig(e, reopened)
+    reloaded.ids = {name: nodes.get(name) for name in names}
+    missing = [name for name in names if reloaded.ids[name] is None]
+    bones = [] if missing else [reloaded.prop(name, "bone")["value"] for name in names]
+    tail = None if missing else reloaded.prop("rig_root", "Rig.tail")
+    check_true("D.8 a glTF save + reopen keeps the three bones (no skin), rig_root's tail and rig_upper's connection",
+               (not missing) and (bones == ["true"] * 3) and (tail["source"] == "local")
+               and (distance(parse_vec(tail["value"]), [0.8, 1.0, 0.0]) < 1.0e-4)
+               and (reloaded.prop("rig_upper", "Rig.connected")["value"] == "true"),
+               f"missing={missing} bone={bones} Rig.tail={tail['value'] if tail else None}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=None)
@@ -366,6 +520,7 @@ def main():
         flip_names_checks(figure)
         posing_checks(figure)
         usd_warning_check(e, opened)
+        foundations_checks(e, opened)
     finally:
         # Closing the scenes closes their viewport windows, which the editor
         # would otherwise record as open in desktop_windows.json at exit.

@@ -99,13 +99,29 @@ public:
 // doc/plans/rigging/skeleton_editing.md R2).
 [[nodiscard]] auto get_bind_pose_parent_from_node(const Node& node) -> std::optional<glm::mat4>;
 
+// A skin listing a node as a joint, with the node's index in its joint list.
+class Skin_joint
+{
+public:
+    std::shared_ptr<Skin> skin;
+    std::size_t           joint_index{0};
+};
+
+// The first skin in Scene::get_skins() order that lists the node as a joint.
+// nullopt when the node belongs to no scene or no skin of its scene lists it:
+// the node is then not bound (doc/plans/rigging/skeleton_editing.md R9).
+[[nodiscard]] auto find_skin_joint(const Node& node) -> std::optional<Skin_joint>;
+
+// True when the item carries Item_flags::bone, the authored, persistent bone
+// flag (doc/plans/rigging/skeleton_editing.md R1).
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;
 
-// Set Item_flags::bone on every node the skin lists as a joint, so a joint is
-// identifiable without walking every skin. Idempotent; call when a skin enters
-// a scene. Joint-ness is a per-instance flag rather than an Item_type because a
-// joint is an ordinary Node (see is_bone).
+// Set Item_flags::bone on every node the skin lists as a joint. Idempotent;
+// called when a skin enters a scene. The flag it sets is an authored one like
+// any other (saved with the scene, kept when the skin leaves), so an imported
+// rig's joints stay bones on their own. Bone-ness is a per-instance flag
+// rather than an Item_type because a bone is an ordinary Node (see is_bone).
 void mark_skin_joints(const Skin& skin);
 
 } // namespace erhe::scene

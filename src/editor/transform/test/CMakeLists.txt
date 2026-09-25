@@ -15,8 +15,10 @@ add_executable(${_target}
     # executable: the editor itself is an executable, so there is no editor
     # library to link against. ik_solver.cpp is pure (glm + std only);
     # ik_properties.cpp and rig_properties.cpp (Ik.rest_rotation defaults to
-    # Rig.rest_rotation) need erhe::scene (their registered properties).
+    # Rig.rest_rotation) need erhe::scene (their registered properties), and
+    # rig_properties.cpp the Rig.tail default (rig/bone_tail.cpp).
     ${CMAKE_CURRENT_SOURCE_DIR}/../ik_solver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../rig/bone_tail.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/ik_properties.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/rig_properties.cpp
     test_ik_properties.cpp

@@ -35,6 +35,7 @@
 #include "scene/joint_system.hpp"
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/draw_mode_system.hpp"
+#include "rig/rig_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
@@ -195,6 +196,8 @@ Scene_root::Scene_root(
     m_scene->add_node_system(*m_geometry_graph_mesh_system.get());
     m_node_physics_system = std::make_unique<Node_physics_system>(*this);
     m_scene->add_node_system(*m_node_physics_system.get());
+    m_rig_system = std::make_unique<Rig_system>(m_app_message_bus);
+    m_scene->add_node_system(*m_rig_system.get());
     // Not a node system: a joint prim is no node, so it is reported through
     // the prim registration hook rather than the node hooks (D3).
     m_joint_system = std::make_unique<Joint_system>(*this);
@@ -399,6 +402,9 @@ Scene_root::~Scene_root() noexcept
         if (m_draw_mode_system) {
             m_scene->remove_node_system(*m_draw_mode_system.get());
         }
+        if (m_rig_system) {
+            m_scene->remove_node_system(*m_rig_system.get());
+        }
         if (m_node_physics_system) {
             m_scene->remove_node_system(*m_node_physics_system.get());
         }
@@ -407,6 +413,7 @@ Scene_root::~Scene_root() noexcept
         }
     }
     m_draw_mode_system.reset();
+    m_rig_system.reset();
     m_geometry_graph_mesh_system.reset();
     // The physics system tears its bodies down through the joint system, so
     // the joint system outlives it.

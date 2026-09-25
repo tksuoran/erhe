@@ -78,6 +78,7 @@ class App_scenes;
 class App_settings;
 class Item_tree_window;
 class Draw_mode_system;
+class Rig_system;
 class Geometry_graph_mesh_system;
 class Node_physics_system;
 class Joint_system;
@@ -577,6 +578,7 @@ private:
     bool                                            m_physics_simulation_running{true};
     double                                          m_wind_time{0.0};
     std::unique_ptr<Draw_mode_system>               m_draw_mode_system;
+    std::unique_ptr<Rig_system>                     m_rig_system;
     std::unique_ptr<Geometry_graph_mesh_system>     m_geometry_graph_mesh_system;
     std::unique_ptr<Node_physics_system>            m_node_physics_system;
     std::unique_ptr<Joint_system>                   m_joint_system;

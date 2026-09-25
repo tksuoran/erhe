@@ -104,6 +104,7 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | translation, rotation, scale | bridge | over `Trs_transform`, no matrix round trip |
 | world_translation, world_rotation, world_scale | computed | |
 | lock_translation_x/y/z, lock_rotation_x/y/z, lock_scale_x/y/z | bridge | flag bits (`Item_flags::lock_*`) over `Item_base::register_flag_bit_property`, "Channel Locks" group; nodes only |
+| bone | bridge | flag bit `Item_flags::bone` (`Node::bone_property`), "Rig" group, nodes only; authored and persistent (skeleton_editing.md R1); a change of the bit by any writer reaches the node systems as a change of this property |
 
 ### Mesh and Mesh_primitive (`src/erhe/scene/erhe_scene/mesh.cpp`, sections 4.9, D29)
 
@@ -256,6 +257,8 @@ and each is listed on a node carrying `Item_flags::bone`.
 | Property | Storage | Notes |
 |---|---|---|
 | Rig.rest_translation, Rig.rest_rotation, Rig.rest_scale | attached | the bone's rest transform (local TRS), one property per channel; computed default (D31): the channel of the bind-pose local transform (erhe::scene::get_bind_pose_parent_from_node), identity without a skin; Ik.rest_rotation defaults to Rig.rest_rotation |
+| Rig.tail | attached | head-to-tail vector in the bone's local frame; computed default (D31): compute_default_bone_tail (rig/bone_tail.hpp); bridge validate refuses a write on a bone a skin lists (R9); a change reaches the node systems (Rig_system -> bone display); an edit moves the connected children in its undo step |
+| Rig.connected | attached | bool, default false; an edit to true snaps the node's head onto its bone parent's Rig.tail in the edit's undo step |
 
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 

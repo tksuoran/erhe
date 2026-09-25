@@ -48,6 +48,7 @@ constexpr Serialized_item_flag c_persistent_item_flags[] = {
     { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       },
     { erhe::Item_flags::lightmapped,               "lightmapped"               },
     { erhe::Item_flags::ik_lock,                   "ik_lock"                   },
+    { erhe::Item_flags::bone,                      "bone"                      },
     { erhe::Item_flags::lock_translation_x,        "lock_translation_x"        },
     { erhe::Item_flags::lock_translation_y,        "lock_translation_y"        },
     { erhe::Item_flags::lock_translation_z,        "lock_translation_z"        },

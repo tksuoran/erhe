@@ -28,6 +28,12 @@ class App_context;
 // take effect. With a sub-object index (D29) the target is
 // item->get_property_sub_object(index) - a mesh primitive - and the item
 // stays the one the operation names and seals against.
+//
+// Follow-ups: the first execute that applies the write records the
+// operations the edit implies on other items (the connected child bones a
+// Rig.tail or Rig.connected edit moves, rig/bone_connect.hpp) and runs them;
+// a redo runs them again after the write and an undo undoes them before
+// restoring the value, so the edit and its consequences are one undo step.
 class Property_set_operation : public Operation
 {
 public:
@@ -62,7 +68,7 @@ public:
     [[nodiscard]] auto get_property  () const -> const erhe::property::Dependency_property& { return m_property; }
 
 private:
-    void apply(App_context& context, const std::optional<erhe::property::Local_state>& state);
+    auto apply(App_context& context, const std::optional<erhe::property::Local_state>& state) -> bool;
     void adopt_userships(App_context& context);
 
     std::shared_ptr<erhe::Item_base>            m_item;
@@ -76,6 +82,8 @@ private:
     // Mesh_material_assign_operation does.
     std::vector<Asset_reference>                m_userships;
     bool                                        m_userships_adopted{false};
+    std::vector<std::shared_ptr<Operation>>     m_follow_ups;
+    bool                                        m_follow_ups_recorded{false};
 };
 
 // Applies a Property_set to several items (paste, multi-selection edit) as
@@ -114,24 +122,25 @@ private:
 // operations above and by direct (non-undoable) callers such as the startup
 // script. An object value (D28) is applied only when the referenced item
 // belongs to the target's scene or is a cross-scene referenceable asset;
-// otherwise a warning names both items and nothing changes.
-void apply_item_property(
+// otherwise a warning names both items and nothing changes. Returns whether
+// the state was applied.
+auto apply_item_property(
     App_context&                                       context,
     erhe::Item_base&                                   item,
     const erhe::property::Dependency_property&         property,
     const std::optional<erhe::property::Local_state>&  state
-);
+) -> bool;
 
 // The same for a property of one of the item's sub-objects (D29):
 // `target` is item.get_property_sub_object(index); a sealed item refuses
 // the write, and the consequence hook runs with the item.
-void apply_item_property(
+auto apply_item_property(
     App_context&                                       context,
     erhe::Item_base&                                   item,
     erhe::property::Dependency_object&                 target,
     const erhe::property::Dependency_property&         property,
     const std::optional<erhe::property::Local_state>&  state
-);
+) -> bool;
 
 // D26: an undoable write of a writable computed property. The value goes
 // through the property's setter now, and the returned operation records

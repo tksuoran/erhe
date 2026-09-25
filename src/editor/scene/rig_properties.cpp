@@ -1,11 +1,15 @@
 #include "scene/rig_properties.hpp"
 
+#include "rig/bone_tail.hpp"
+
 #include "erhe_property/property_metadata.hpp"
+#include "erhe_scene/node_system.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
 #include <optional>
+#include <string>
 
 namespace editor {
 
@@ -55,6 +59,33 @@ constexpr std::string_view c_rig_group = "Rig";
 [[nodiscard]] auto compute_rest_scale(const Dependency_object& object) -> Property_value
 {
     return get_bind_pose_trs(object).get_scale();
+}
+
+[[nodiscard]] auto compute_tail(const Dependency_object& object) -> Property_value
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+    if (node == nullptr) {
+        return glm::vec3{0.0f, 1.0f, 0.0f};
+    }
+    return compute_default_bone_tail(*node);
+}
+
+// R9: a bone a skin lists keeps the tail its bind implies; the inverse bind
+// matrices and weights would go stale (editing a bound skeleton is Phase 6).
+[[nodiscard]] auto validate_tail(const Dependency_object& object, const Property_value&, std::string& out_error) -> bool
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+    if (node == nullptr) {
+        return true;
+    }
+    const std::optional<erhe::scene::Skin_joint> skin_joint = erhe::scene::find_skin_joint(*node);
+    if (!skin_joint.has_value()) {
+        return true;
+    }
+    out_error =
+        "'" + node->get_name() + "' is a joint of skin '" + skin_joint.value().skin->get_name() +
+        "': the tail of a bound bone is fixed by its bind (skeleton_editing.md R9)";
+    return false;
 }
 
 } // anonymous namespace
@@ -108,6 +139,33 @@ auto Rig::rest_scale_property() -> const Property<glm::vec3>&
     return s_property;
 }
 
+auto Rig::tail_property() -> const Property<glm::vec3>&
+{
+    static const Property<glm::vec3> s_property = Property<glm::vec3>::register_attached(
+        "tail", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value    = glm::vec3{0.0f, 1.0f, 0.0f},
+            .property_changed = erhe::scene::node_system_property_changed,
+            .ui               = Property_ui{.group = c_rig_group, .tooltip = "Head-to-tail vector of the bone in its local frame; moves the connected child bones with it. Unset: the first child bone's head (skinned joints: inferred from the skin), else the parent's bone length along +Y. Refused on a bone a skin lists", .label = "Tail", .visible_when = is_bone_node},
+            .bridge           = erhe::property::Property_bridge{.validate = validate_tail},
+            .compute_default  = compute_tail
+        }
+    );
+    return s_property;
+}
+
+auto Rig::connected_property() -> const Property<bool>&
+{
+    static const Property<bool> s_property = Property<bool>::register_attached(
+        "connected", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value = false,
+            .ui            = Property_ui{.group = c_rig_group, .tooltip = "The bone's head stays on its parent bone's tail: setting it moves the bone there, and editing the parent's tail moves the bone with it", .label = "Connected", .visible_when = is_bone_node}
+        }
+    );
+    return s_property;
+}
+
 // Registered at static initialization like every other property, so the
 // registry lists them (and finds them by qualified name, as a scene load
 // does) before anything else runs; the accessors' own statics keep the order
@@ -116,6 +174,8 @@ namespace {
 [[maybe_unused]] const Property<glm::vec3>& rest_translation_registration = Rig::rest_translation_property();
 [[maybe_unused]] const Property<glm::quat>& rest_rotation_registration    = Rig::rest_rotation_property();
 [[maybe_unused]] const Property<glm::vec3>& rest_scale_registration       = Rig::rest_scale_property();
+[[maybe_unused]] const Property<glm::vec3>& tail_registration             = Rig::tail_property();
+[[maybe_unused]] const Property<bool>&      connected_registration        = Rig::connected_property();
 } // anonymous namespace
 
 auto Rig::all_properties() -> const std::vector<const Dependency_property*>&
@@ -123,7 +183,9 @@ auto Rig::all_properties() -> const std::vector<const Dependency_property*>&
     static const std::vector<const Dependency_property*> s_properties{
         rest_translation_property().get_ptr(),
         rest_rotation_property   ().get_ptr(),
-        rest_scale_property      ().get_ptr()
+        rest_scale_property      ().get_ptr(),
+        tail_property            ().get_ptr(),
+        connected_property       ().get_ptr()
     };
     return s_properties;
 }

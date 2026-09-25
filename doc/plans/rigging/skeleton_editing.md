@@ -10,19 +10,20 @@ makes a skeleton something the editor can create, change and pose by verb.
 
 ## 0. Where erhe stands
 
-- A bone is an ordinary node with `Item_flags::bone`, and that flag is
-  derived: `erhe::scene::mark_skin_joints` sets it on every joint a `Skin`
-  lists (`src/erhe/scene/erhe_scene/skin.{hpp,cpp}`). A node no skin lists is
-  not a bone, so a skeleton without a skinned mesh cannot exist today.
+- A bone is an ordinary node with `Item_flags::bone`, an authored,
+  persistent flag (R1); `erhe::scene::mark_skin_joints` also sets it on every
+  joint a `Skin` lists (`src/erhe/scene/erhe_scene/skin.{hpp,cpp}`), and a
+  node keeps it when no skin lists it.
 - A bone's rest pose is the attached `Rig.rest_*` values (R2), which default
   to the bind pose derived from a skin's inverse bind matrices
   (`erhe::scene::get_bind_pose_parent_from_node`, also what `Scene_commands::
   reset_bones_to_bind_pose` writes); `Ik.rest_rotation` defaults to
   `Rig.rest_rotation`.
-- A bone has a head (its node's origin) and no tail. `bone_tail_in_joint_space`
-  (`src/editor/tools/bone_visualization.cpp`) infers one for display: the
-  local translation the child joints agree on, otherwise a length from the
-  skinned vertices' bounds along a hierarchy-chosen direction.
+- A bone has a head (its node's origin) and a tail, `Rig.tail` (R3), whose
+  default for a skinned joint is `infer_skinned_bone_tail`
+  (`src/editor/rig/bone_tail.cpp`): the local translation the child joints
+  agree on, otherwise a length from the skinned vertices' bounds along a
+  hierarchy-chosen direction.
 - Undoable structure edits use `Item_insert_remove_operation`,
   `Node_transform_operation` and `Compound_operation`; `Scene_commands::
   add_bone_tip_nodes` and its Hierarchy context-menu entry are the pattern.
@@ -39,11 +40,17 @@ with the reason it lost. All three were confirmed by the user on 2026-09-25
 ### 1.1 Bone identity
 
 **R1.** Being a bone is an authored, persistent property of a node:
-`Item_flags::bone` is saved and loaded with the scene (glTF: the node's
-`ERHE_rig` extension, beside the IK values it already carries). Skin import
-still marks its joints (`mark_skin_joints`), so imported rigs are unchanged;
-a node stays a bone when no skin lists it, so a skeleton exists before and
-without any mesh. Alternative: keep bone-ness derived and give an authored
+`Item_flags::bone` is saved and loaded with the scene (glTF: the name `bone`
+in the node's `ERHE_node` `flags` list, the persistent flag names of
+`doc/gltf_extensions/flags.md`, next to the `properties` map that carries the
+`Ik.*` and `Rig.*` values). Skin import still marks its joints
+(`mark_skin_joints`), so imported rigs are unchanged, and that marking is
+authoring: the flag it sets is saved like one set by hand, so a saved rig
+lists its joints as bones itself. Nothing clears the flag but an edit (the
+`bone` property on nodes, Rig > Bone in the Properties window, or
+`set_item_flags`): a node stays a bone when no skin lists it - a skin's
+removal, the undo of an import that brought the skin - so a skeleton exists
+before and without any mesh. Alternative: keep bone-ness derived and give an authored
 skeleton a mesh-less `Skin` - rejected, because a skin's inverse binds would
 have to be invented and kept current through every structural edit before any
 mesh is bound.
@@ -69,18 +76,24 @@ unbound authored skeletons have no bind pose.
 ### 1.3 Bone tail
 
 **R3.** A bone's tail is its head plus the local vector `Rig.tail` (an
-attached vec3 in the bone's local frame). Its default is computed: the
-existing `bone_tail_in_joint_space` inference (single child's head, else the
-bounds-derived length along the hierarchy direction); a bone created in
-the editor records its tail as a local value (R4). Setting it stores a
-local value. The bone visualization draws from `Rig.tail` instead of calling
+attached vec3 in the bone's local frame). Its default is computed
+(`compute_default_bone_tail`, `src/editor/rig/bone_tail.hpp`): for a joint a
+skin lists, `infer_skinned_bone_tail` (the head the child joints agree on,
+else the bounds-derived length along the hierarchy direction, else the
+joint's own offset length along +Y); for any other bone, the first bone
+child's head; for an unskinned leaf, +Y as long as its bone parent's tail
+(a chain grown by hand keeps its bone length at the end), and one scene unit
+along +Y under a non-bone. A bone created in the editor records its tail as
+a local value (R4). Setting it stores a local value; on a bone a skin lists
+the write is refused (R9). The bone visualization draws from `Rig.tail` instead of calling
 the inference itself. Roll is the bone's rotation about its head-to-tail
 axis; no separate roll value exists.
 
 **R4.** A **connected** child (`Rig.connected`, bool attached property,
 default false) keeps its head on its parent's tail: setting it snaps the
 child's local translation to the parent's `Rig.tail`, and editing the
-parent's tail moves connected children with it. A new bone created without a
+parent's tail moves connected children with it, each in the same undo step
+as the edit. A new bone created without a
 parent tail to derive from gets tail `(0, length, 0)` with the length of the
 creation gesture (section 2), so +Y is the bone axis, matching glTF exporters
 and `derive_twist_axis`.
@@ -237,7 +250,7 @@ glTF round trip of the edited skeleton.
 
 ## Implementation status
 
-Slices A and B are implemented; slices C, D and the foundations are not.
+Slices A and B and the foundations are implemented; slices C and D are not.
 
 - R11 naming: `bone_side` / `flip_side_name` in `src/editor/rig/bone_naming.hpp`,
   unit tested by `editor_rig_tests` (`src/editor/rig/test/`).
@@ -293,6 +306,45 @@ Slices A and B are implemented; slices C, D and the foundations are not.
   and `Mcp_test.rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_animation`.
 - The USD save's "not written" warning counts nodes holding a local `Rig.*`
   value together with the `Ik.*` holders (`pole_target.md` R26).
+- R1: `erhe::scene::Node::bone_property` is the bridged `bone` flag property
+  (Properties: Rig > Bone, on every node), and `bone` is a persistent glTF
+  flag name (`gltf_item_flags.cpp`). `Xformable::handle_flag_bits_update`
+  reports every change of the bit (the property, `mark_skin_joints`,
+  `set_item_flags`) to the scene's node systems as a change of that property.
+  `erhe::scene::find_skin_joint` answers whether and where a skin lists a node.
+- R3: `Rig.tail` (`Rig::tail_property()`) with the computed default of
+  `rig/bone_tail.hpp`; its `Property_bridge::validate` refuses a write on a
+  node `find_skin_joint` finds (R9, the logged reason names the skin). The
+  refusal covers every writer, the Properties row and MCP `set_item_property`
+  included; clearing the value (back to the default) is allowed. Rest
+  transform edits on bound bones stay open until slice C.
+- Bone display: `Bone_visualization` keeps one proxy per bone of an editor
+  scene, skinned or not, shaped from `Rig.tail`. `Rig_system`
+  (`src/editor/rig/rig_system.hpp`, a node system of every `Scene_root`)
+  queues a `Bone_changed_message` when a bone enters or leaves its scene, the
+  bone flag changes or `Rig.tail` changes; the visualization reconciles the
+  node's proxy and reshapes its parent's. A default tail that follows a
+  child's head is refreshed by `Node_touched_message` as before. The line
+  style reads the proxy's tail (`Bone_visualization::get_bone_tail`), and Add
+  Bone Tip Nodes places tips at `Rig.tail` (unskinned leaf bones included).
+- R4: `Rig.connected` (`Rig::connected_property()`). The snaps are follow-ups
+  of the edit's `Property_set_operation` (`append_bone_connect_follow_ups`,
+  `src/editor/rig/bone_connect.hpp`): its first applied execute records a
+  `Node_transform_operation` per connected bone child a `Rig.tail` edit
+  moves (or for the node itself when `Rig.connected` becomes true, onto its
+  bone parent's tail), a redo reruns them after the write and an undo undoes
+  them before restoring the value - one undo step. A write that does not go
+  through an operation (a scene load, `set_value` in code) moves nothing, so
+  a load never re-snaps a saved skeleton.
+- Tests: `editor_rig_tests` (`test_bone_tail.cpp`: the default rules and the
+  skinned inference), `Mcp_test.unskinned_skeleton_keeps_its_bones_and_connected_children_follow_the_tail`
+  (a skeleton no skin lists survives save + reopen with its bones, tail and
+  connection; connect and tail edits are one undo step each) and
+  `Mcp_test.rig_tail_defaults_to_the_skinned_inference_and_is_refused_on_a_bound_bone`.
+  `scripts/skeleton_editing_verify.py` section D drives the Properties rows
+  Rig > Bone / Connected / Tail on a new skeleton, compares screenshots in
+  bone selection mode along the old and the new tail, and checks the glTF
+  save + reopen.
 - `scripts/skeleton_editing_verify.py` drives the context-menu entries on
   RiggedFigure through the Hierarchy filter and right-click, and checks the
   selections, the names and that Flip Names is one undo step Ctrl+Z reverts

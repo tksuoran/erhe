@@ -249,6 +249,13 @@ public:
     static const erhe::property::Property<bool> lock_scale_x_property;
     static const erhe::property::Property<bool> lock_scale_y_property;
     static const erhe::property::Property<bool> lock_scale_z_property;
+    // Skeleton bone (doc/plans/rigging/skeleton_editing.md R1): bridged over
+    // Item_flags::bone, an authored, persistent flag. A skin entering a scene
+    // sets it on its joints (mark_skin_joints) and nothing clears it but an
+    // edit, so a node stays a bone when no skin lists it. A change of the
+    // bit on a node in a scene reaches the scene's node systems as a change
+    // of this property (handle_flag_bits_update), whichever path wrote it.
+    static const erhe::property::Property<bool> bone_property;
 
     // Optional developer sanity check: when enabled, every transform write to
     // a node carrying Item_flags::no_transform_update logs a warning with the

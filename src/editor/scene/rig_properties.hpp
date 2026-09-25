@@ -48,6 +48,22 @@ public:
     [[nodiscard]] static auto rest_rotation_property   () -> const erhe::property::Property<glm::quat>&;
     [[nodiscard]] static auto rest_scale_property      () -> const erhe::property::Property<glm::vec3>&;
 
+    // R3: the bone's tail, head (the node origin) to tail in the bone's local
+    // frame. Per-object default (D31): compute_default_bone_tail
+    // (rig/bone_tail.hpp) - the skinned inference for a joint a skin lists,
+    // else the first bone child's head, else the parent's bone length along
+    // +Y. A write on a bone a skin lists is refused (R9, the bridge's
+    // validate names the skin): its tail belongs to the bind. A change
+    // reaches the scene's node systems (node_system_property_changed), which
+    // is how the bone display learns of it.
+    [[nodiscard]] static auto tail_property     () -> const erhe::property::Property<glm::vec3>&;
+    // R4: the bone's head stays on its parent's tail. Setting it snaps the
+    // node's local translation to the parent's Rig.tail and a parent's tail
+    // edit moves its connected children; both are follow-ups the edit's
+    // Property_set_operation records in its own undo step
+    // (rig/bone_connect.hpp).
+    [[nodiscard]] static auto connected_property() -> const erhe::property::Property<bool>&;
+
     // Every Rig.* property, registration order, for generic walks.
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };

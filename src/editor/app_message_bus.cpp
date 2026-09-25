@@ -14,6 +14,7 @@ void App_message_bus::update()
     create_scene.update();
     close_scene.update();
     skin_registered.update();
+    bone_changed.update();
 }
 
 }

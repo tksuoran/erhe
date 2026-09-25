@@ -243,8 +243,9 @@ Extension beyond the spec: non-bone drag handles (section 1) - nodes parented un
 a bone act as effector points, giving Blender-Auto-IK-style tail grabbing;
 pairs with the Hierarchy window's Add Bone Tip Nodes operation
 (`Scene_commands::add_bone_tip_nodes`), which places empty nodes at bone
-tips using the shared bone-tail rule (`bone_tail_in_joint_space`, now sized
-by the skinned-vertex bounds - see `src/editor/tools/bone_visualization.*`).
+tips at the bone's `Rig.tail` (its default for a skinned joint is
+`infer_skinned_bone_tail`, sized by the skinned-vertex bounds - see
+`src/editor/rig/bone_tail.*`).
 
 erhe-specific implementation notes (learned the hard way; relevant to
 Phase 2+):

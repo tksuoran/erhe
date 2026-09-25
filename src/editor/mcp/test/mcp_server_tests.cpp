@@ -33,6 +33,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -2748,6 +2749,197 @@ TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_a
     ASSERT_FALSE(pasted.is_error) << pasted.text;
     advance_frames(client, 2);
     EXPECT_FALSE(playing()) << "paste_pose stops the animation playing on the skeleton";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+namespace {
+
+using Rig_vec = std::array<float, 3>;
+
+[[nodiscard]] auto parse_rig_vec(const std::string& text) -> Rig_vec
+{
+    Rig_vec v{};
+    std::istringstream stream{text};
+    stream >> v[0] >> v[1] >> v[2];
+    return v;
+}
+
+[[nodiscard]] auto rig_vec_distance(const Rig_vec& a, const Rig_vec& b) -> float
+{
+    return std::sqrt(((a[0] - b[0]) * (a[0] - b[0])) + ((a[1] - b[1]) * (a[1] - b[1])) + ((a[2] - b[2]) * (a[2] - b[2])));
+}
+
+// One entry of get_item_properties by its qualified name; null when absent.
+[[nodiscard]] auto item_property(Mcp_client& client, const int item_id, const std::string& name) -> json
+{
+    Mcp_client::Tool_result result = client.call_tool("get_item_properties", json{{"item_id", item_id}});
+    EXPECT_FALSE(result.is_error) << result.text;
+    if (result.is_error) {
+        return json{};
+    }
+    for (const json& entry : result.payload.at("properties")) {
+        if (entry.value("name", "") == name) {
+            return entry;
+        }
+    }
+    return json{};
+}
+
+} // anonymous namespace
+
+// doc/plans/rigging/skeleton_editing.md R1, R3, R4 on a skeleton no skin
+// lists: the authored bone flag, Rig.tail and Rig.connected survive a save
+// and reopen; a connected child follows its parent's tail edit and snaps to
+// the parent's tail when connected, each edit one undo step.
+TEST_F(Mcp_test, unskinned_skeleton_keeps_its_bones_and_connected_children_follow_the_tail)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+
+    auto create = [&client, &scene](const char* name, const json& parent, const Rig_vec& position) -> int {
+        json args{{"scene_name", scene}, {"name", name}, {"position", {position[0], position[1], position[2]}}};
+        if (parent.is_number()) {
+            args["parent_node_id"] = parent;
+        }
+        Mcp_client::Tool_result result = client.call_tool("create_node", args);
+        EXPECT_FALSE(result.is_error) << result.text;
+        advance_frames(client, 2);
+        return result.payload.value("node_id", 0);
+    };
+    auto set_property = [&client](const int item_id, const char* name, const json& value) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool("set_item_property", json{{"item_id", item_id}, {"property", name}, {"value", value}});
+        advance_frames(client, 2);
+        return result;
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto local_translation = [&client](const std::string& scene_name, const char* name) -> Rig_vec {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene_name}, {"node_name", name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        const json& t = result.payload.at("local_transform").at("translation");
+        return Rig_vec{t[0].get<float>(), t[1].get<float>(), t[2].get<float>()};
+    };
+
+    const int root  = create("rig_root",  json(),     Rig_vec{0.0f, 0.0f, 0.0f});
+    const int upper = create("rig_upper", json(root), Rig_vec{0.0f, 1.0f, 0.0f});
+    const int side  = create("rig_side",  json(root), Rig_vec{1.0f, 0.0f, 0.0f});
+    for (const int id : {root, upper, side}) {
+        Mcp_client::Tool_result flagged = set_property(id, "bone", true);
+        ASSERT_FALSE(flagged.is_error) << flagged.text;
+    }
+    EXPECT_EQ(item_property(client, root, "bone").value("value", ""), "true");
+    const json default_tail = item_property(client, root, "Rig.tail");
+    EXPECT_EQ(default_tail.value("source", ""), "default");
+    EXPECT_LT(rig_vec_distance(parse_rig_vec(default_tail.value("value", "")), Rig_vec{0.0f, 1.0f, 0.0f}), 1.0e-4f)
+        << "an unskinned bone's default tail is its first bone child's head";
+
+    // Connecting rig_side snaps it onto the root's tail (the first child's head).
+    std::size_t undo_before = undo_depth();
+    ASSERT_FALSE(set_property(side, "Rig.connected", true).is_error);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "connect is one undo step";
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_side"), Rig_vec{0.0f, 1.0f, 0.0f}), 1.0e-4f) << "connected snaps the head onto the parent's tail";
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_side"), Rig_vec{1.0f, 0.0f, 0.0f}), 1.0e-4f) << "undo of connect restores the head";
+    EXPECT_EQ(undo_depth(), undo_before);
+
+    // A tail edit moves the connected child with it; the other child stays.
+    ASSERT_FALSE(set_property(upper, "Rig.connected", true).is_error);
+    undo_before = undo_depth();
+    Mcp_client::Tool_result tail_edit = set_property(root, "Rig.tail", "0.5 2 0");
+    ASSERT_FALSE(tail_edit.is_error) << tail_edit.text;
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "the tail edit and the child move are one undo step";
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_upper"), Rig_vec{0.5f, 2.0f, 0.0f}), 1.0e-4f) << "the connected child follows the tail";
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_side"), Rig_vec{1.0f, 0.0f, 0.0f}), 1.0e-4f) << "an unconnected child stays";
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_upper"), Rig_vec{0.0f, 1.0f, 0.0f}), 1.0e-4f) << "undo moves the child back";
+    EXPECT_EQ(item_property(client, root, "Rig.tail").value("source", ""), "default") << "undo restores the default tail";
+    client.call_tool("redo", json::object());
+    advance_frames(client, 4);
+    EXPECT_LT(rig_vec_distance(local_translation(scene, "rig_upper"), Rig_vec{0.5f, 2.0f, 0.0f}), 1.0e-4f) << "redo moves it again";
+
+    // Save, close, reopen: the bones, the tail and the connection persist.
+    const std::string path = (std::filesystem::temp_directory_path() / "erhe_mcp_unskinned_skeleton.glb").string();
+    Mcp_client::Tool_result saved = client.call_tool("save_scene", json{{"scene_name", scene}, {"path", path}});
+    ASSERT_FALSE(saved.is_error) << saved.text;
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+    Mcp_client::Tool_result opened = client.call_tool("open_scene", json{{"path", path}});
+    ASSERT_FALSE(opened.is_error) << opened.text;
+    advance_frames(client, 10);
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+    const std::string reopened = opened.payload.value("scene_name", "");
+    ASSERT_FALSE(reopened.empty());
+    auto id_in = [&client, &reopened](const char* name) -> int {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", reopened}, {"node_name", name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload.value("id", 0);
+    };
+    for (const char* name : {"rig_root", "rig_upper", "rig_side"}) {
+        EXPECT_EQ(item_property(client, id_in(name), "bone").value("value", ""), "true") << name << " is still a bone after reload";
+    }
+    const json reloaded_tail = item_property(client, id_in("rig_root"), "Rig.tail");
+    EXPECT_EQ(reloaded_tail.value("source", ""), "local");
+    EXPECT_LT(rig_vec_distance(parse_rig_vec(reloaded_tail.value("value", "")), Rig_vec{0.5f, 2.0f, 0.0f}), 1.0e-4f);
+    EXPECT_EQ(item_property(client, id_in("rig_upper"), "Rig.connected").value("value", ""), "true");
+    EXPECT_LT(rig_vec_distance(local_translation(reopened, "rig_upper"), Rig_vec{0.5f, 2.0f, 0.0f}), 1.0e-4f);
+
+    client.call_tool("close_scene", json{{"scene_name", reopened}});
+    advance_frames(client, 4);
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
+// R3 on RiggedFigure: Rig.tail defaults to the skinned inference (a joint
+// with one child joint points at it; the hand, a leaf, points along its +Y);
+// R9: a Rig.tail write on a joint a skin lists is refused, naming the skin.
+TEST_F(Mcp_test, rig_tail_defaults_to_the_skinned_inference_and_is_refused_on_a_bound_bone)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    auto details = [&client, &scene](const char* node_name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", node_name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload;
+    };
+    auto as_vec = [](const json& p) -> Rig_vec { return Rig_vec{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()}; };
+
+    const int  upper_id = details("arm_joint_L_1").value("id", 0);
+    const json tail     = item_property(client, upper_id, "Rig.tail");
+    EXPECT_EQ(tail.value("source", ""), "default");
+    EXPECT_LT(
+        rig_vec_distance(parse_rig_vec(tail.value("value", "")), as_vec(details("arm_joint_L_2").at("local_transform").at("translation"))),
+        1.0e-4f
+    ) << "a joint with one child joint: the child's head";
+
+    const int     hand_id   = details("arm_joint_L_3").value("id", 0);
+    const Rig_vec hand_tail = parse_rig_vec(item_property(client, hand_id, "Rig.tail").value("value", ""));
+    EXPECT_LT(std::abs(hand_tail[0]) + std::abs(hand_tail[2]), 1.0e-4f) << "a leaf joint points along its +Y";
+    EXPECT_GT(hand_tail[1], 0.01f);
+
+    Mcp_client::Tool_result refused = client.call_tool("set_item_property", json{{"item_id", upper_id}, {"property", "Rig.tail"}, {"value", "0 1 0"}});
+    EXPECT_TRUE(refused.is_error) << "a bound bone's tail is fixed by its bind";
+    EXPECT_NE(refused.text.find("skin"), std::string::npos) << refused.text;
+    advance_frames(client, 2);
+    EXPECT_EQ(item_property(client, upper_id, "Rig.tail").value("source", ""), "default");
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

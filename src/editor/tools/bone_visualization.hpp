@@ -30,33 +30,13 @@ class App_context;
 class App_message_bus;
 class Scene_root;
 
-// Where a bone's tail sits, expressed in its joint node's LOCAL space (the head
-// is always the joint origin). Local rather than world on purpose: the value
-// depends only on the child joint's local translation, so a rotation-only
-// animation - the common case - never changes it, and a proxy parented under
-// the joint needs no per-frame transform refresh at all.
-//
-// Rule (shared by the line and solid bone visualizations and by the item tree's
-// Add Bone Tip Nodes operation, so none can disagree):
-//   1. Child joints that agree on a location (a single child, or several with
-//      the same local translation): that translation.
-//   2. Leaf joints and joints whose children disagree (a hand fanning into
-//      fingers): the direction still follows the long-standing rules (the
-//      first child's direction when there were children, local +Y for a
-//      leaf), and the rest-pose bounds of the vertices the joint skins
-//      (Buffer_mesh::joint_bounding_boxes transformed into joint space)
-//      supply only the LENGTH - the farthest box corner's projection onto
-//      that direction.
-//   3. No skinned bounds: the first child's translation if there were
-//      (disagreeing) children; else, for a joint with a parent, the parent
-//      offset length along local +Y; else a short local +X stub.
-[[nodiscard]] auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, std::size_t joint_index) -> glm::vec3;
-
 // Editor-generated, pickable proxy geometry for skeleton bones.
 //
 // One shared unit-bone Primitive (head at the origin, tail at +Y, square ring at
-// y = 0.1) is instanced once per joint: a proxy Node parented under the joint
-// node, carrying a Mesh in the scene's bone layer. The per-instance transform
+// y = 0.1) is instanced once per bone (a node carrying Item_flags::bone in an
+// editor scene, skinned or not): a proxy Node parented under the bone node,
+// carrying a Mesh in the scene's bone layer. The tail is the bone's Rig.tail
+// (doc/plans/rigging/skeleton_editing.md R3), read at each shape refresh. The per-instance transform
 // does all the work - orient +Y onto the tail direction, scale by (width,
 // length, width) - which is what lets the raytrace side reuse a single BVH
 // geometry and pose it with the instance transform.
@@ -66,12 +46,15 @@ class Scene_root;
 // save, export and prefabs, and out of picking unless bone mode asks for them.
 //
 // Every input drives its own part of the state; there is no per-frame update:
+//   - Bone_changed_message (Rig_system, rig/rig_system.hpp: a bone entering or
+//     leaving its scene, the bone flag, a Rig.tail edit) creates, drops or
+//     reshapes the node's proxy and reshapes its parent's.
 //   - Skin_registered_message (Scene_root::register_skin / unregister_skin)
-//     creates and drops the proxy set.
+//     reconciles the skin's joints, whose default tails follow the skin.
 //   - Close_scene_message drops the closed scene's proxies and its material
 //     registration.
 //   - Node_touched_message and Animation_update_message refresh the bone shape
-//     (tail offset / length).
+//     (a default tail follows the child bone's head).
 //   - Selection_message and a direct call from Hover_tool (update_hover) swap
 //     the selected / hovered materials.
 //   - Mesh_component_mode_changed_message gates visibility and pickability on
@@ -110,18 +93,17 @@ public:
     // The joint a proxy mesh stands for; null when the mesh is not a bone proxy.
     [[nodiscard]] auto get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>;
 
+    // The bone's tail in its local frame as the display last read it (the
+    // proxy's shape), for the line style drawn every frame; Rig.tail read
+    // directly for a node without a proxy.
+    [[nodiscard]] auto get_bone_tail(const erhe::scene::Node& joint) const -> glm::vec3;
+
 
 private:
     class Proxy
     {
     public:
         std::weak_ptr<erhe::scene::Node>   joint     {};
-        // The skin this proxy was created for: the weak ref feeds
-        // bone_tail_in_joint_space on shape refresh, the raw key matches the
-        // unregister message without locking.
-        std::weak_ptr<erhe::scene::Skin>   skin      {};
-        const erhe::scene::Skin*           skin_key  {nullptr};
-        std::size_t                        joint_index{0};
         std::shared_ptr<erhe::scene::Node> node      {};
         std::shared_ptr<erhe::scene::Mesh> mesh      {};
         glm::vec3                          tail_local{0.0f}; // shape the transform was built from
@@ -139,14 +121,19 @@ private:
     // Message / call targets. Each updates exactly the state that depends on
     // the change it announces.
     void on_skin_registered  (Skin_registered_message& message);
+    void on_bone_changed     (Bone_changed_message& message);
     void on_close_scene      (Close_scene_message& message);
     void on_selection        (Selection_message& message);
     void on_node_touched     (erhe::scene::Node* node);
     void on_animation_update ();
     void on_mode_changed     ();
 
-    void add_skin_proxies    (const std::shared_ptr<erhe::scene::Skin>& skin);
-    void remove_skin_proxies (const erhe::scene::Skin* skin);
+    // Creates, refreshes or drops the node's proxy to match whether it is a
+    // bone of a scene now.
+    void reconcile_bone      (const std::shared_ptr<erhe::scene::Node>& node);
+    // Detaches the proxy's node; the caller erases the entry.
+    void remove_proxy        (Proxy& proxy);
+    void drop_expired_proxies();
     void refresh_proxy_shape (Proxy& proxy);
     void apply_proxy_flags   (Proxy& proxy);
     void update_proxy_material(Proxy& proxy);
@@ -162,14 +149,15 @@ private:
     bool                                       m_bone_mode  {false};
 
     erhe::message_bus::Subscription<Skin_registered_message>             m_skin_registered_subscription;
+    erhe::message_bus::Subscription<Bone_changed_message>                m_bone_changed_subscription;
     erhe::message_bus::Subscription<Close_scene_message>                 m_close_scene_subscription;
     erhe::message_bus::Subscription<Selection_message>                   m_selection_subscription;
     erhe::message_bus::Subscription<Node_touched_message>                m_node_touched_subscription;
     erhe::message_bus::Subscription<Animation_update_message>            m_animation_update_subscription;
     erhe::message_bus::Subscription<Mesh_component_mode_changed_message> m_mode_changed_subscription;
 
-    // Keyed by joint node pointer; the entry holds a weak ref so a dropped joint
-    // is detected when its skin unregisters or its scene closes.
+    // Keyed by bone node pointer; the entry holds a weak ref so a dropped bone
+    // is detected when it is reported again or its scene closes.
     std::unordered_map<const erhe::scene::Node*, Proxy> m_proxies;
     // Reverse lookup for picking: proxy mesh -> joint node.
     std::unordered_map<const erhe::scene::Mesh*, std::weak_ptr<erhe::scene::Node>> m_joint_by_proxy_mesh;

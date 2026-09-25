@@ -271,8 +271,8 @@ public:
     auto create_new_scope       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::Scope>;
 
     // Adds an empty child node at the tip of every leaf bone (a bone with no
-    // bone children) in the target subtrees, placed with
-    // bone_tail_in_joint_space. Targets: the selection when clicked_node is
+    // bone children) in the target subtrees, placed at the bone's Rig.tail.
+    // Targets: the selection when clicked_node is
     // selected, otherwise clicked_node's subtree alone. One undoable compound
     // operation; returns the number of tip nodes created.
     auto add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;

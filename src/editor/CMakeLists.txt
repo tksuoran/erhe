@@ -499,12 +499,18 @@ erhe_target_sources_grouped(
     renderers/viewport_config.hpp
     rig/bone_commands.cpp
     rig/bone_commands.hpp
+    rig/bone_connect.cpp
+    rig/bone_connect.hpp
     rig/bone_hierarchy.cpp
     rig/bone_hierarchy.hpp
     rig/bone_naming.cpp
     rig/bone_naming.hpp
     rig/bone_pose.cpp
     rig/bone_pose.hpp
+    rig/bone_tail.cpp
+    rig/bone_tail.hpp
+    rig/rig_system.cpp
+    rig/rig_system.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
