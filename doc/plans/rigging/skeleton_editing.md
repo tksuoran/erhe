@@ -31,7 +31,8 @@ makes a skeleton something the editor can create, change and pose by verb.
 
 Three decisions come before the editing verbs, because every verb reads them.
 Each is stated as the requirement; the alternative considered is recorded
-with the reason it lost.
+with the reason it lost. All three were confirmed by the user on 2026-09-25
+(persistent bone flag, `Rig.rest_transform`, stored `Rig.tail` vector).
 
 ### 1.1 Bone identity
 
