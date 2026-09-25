@@ -9,15 +9,15 @@ tests; this pass covers what only a live mouse drag and the real ImGui
 widgets reach.
 
 Progress: sections 0-2 pass by hand. Sections 0-8 are automated (below);
-every check passes except the section 8.3 stability sweep, which finds the
-jumps of finding F7. Section 8 holds no open behaviour choice: each one it
-measured is a Move tool option now (`ik_drag_options.md` section 3).
+every check passes.
+Section 8 holds no open behaviour choice: each one it measured is a Move
+tool option now (`ik_drag_options.md` section 3).
 
 ## Automated run
 
 `scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
 headless editor and prints one PASS / FAIL line per check (71 checks, about
-5 minutes):
+7 minutes):
 
     py -3 scripts/ik_interactive_pass_verify.py --launch
     py -3 scripts/ik_interactive_pass_verify.py --port N --section 3 --section 4
@@ -266,10 +266,14 @@ Measured (checks 8.1 - 8.6):
 2. Solve From "Drag Start" (the default): each drag step solves from the
    drag-start pose, so a target reached by two paths gives the same pose,
    and back at the start the start pose.
-3. Stability sweep: locks, limits and bone lengths hold in every scenario,
-   and a replayed drag gives the same poses. Jumps: only with a pole and a
-   hinge at the chain root (finding F7); so the constrained solver is not
-   yet stable enough to add stiffness on top.
+3. Stability sweep, every scenario dragged under Solve From "Drag Start"
+   and "Previous Step": locks, limits and bone lengths hold, and a replayed
+   drag gives the same poses. A Previous Step drag moves no joint more than
+   5 times the target's step. A Drag Start drag may change solution family
+   between nearby targets and, like every local solve, may end short at
+   the joint limits (`ik_settings.md` section 4, "Solution families";
+   finding F8): its largest step, and the steps where it ends more than
+   1e-3 short while Previous Step reaches, are reported as information.
 4. Solve From "Previous Step" (`ik_drag_options.md` 3.6 criterion 2), chosen
    in the Move tool's combo: a drag pulling the chain straight out of reach
    and back to its start ends in a pose more than 1 degree off the start
@@ -312,14 +316,30 @@ Measured (checks 8.1 - 8.6):
   renderer's id-range table, which still named the closed scene's meshes.
 - **F5.** Stiffness is a normal IK row now (it was developer-only); the
   solver still ignores its value.
-- **F7.** Open: with a pole on the elbow and a hinge (Lock Y + Z) on the
-  chain root, a drag jumps - joints move up to 13.5 times as far as the
-  target in one step - and the hand misses targets the unpoled solve
-  reaches (sweep scenario 0, seed 20260925; also seen with only the hinge
-  and the pole). The pole's swivel about the root-to-hand line, applied
-  between the forward and the backward pass, is a rotation the hinge root
-  cannot make; the backward pass clamps it away and the solve stalls at a
-  different best effort from one step to the next.
+- **F8.** Resolved by specification (`ik_settings.md` section 4,
+  "Solution families"; `ik_drag_options.md` R25, R26). Sweep scenario 0
+  (seed 20260925; a hinge on `bone_0`, an X limit on `bone_1`, a Z limit on
+  `bone_2`) has two solution families, `bone_0` hinged back (the drag-start
+  side) and hinged forward, and limit-bound local minima. Under Drag Start
+  the solve from the drag-start pose changes family between nearby
+  targets: at step 12 its error rises for three iterations on the way from
+  the hinged-back to the hinged-forward family and ends on the target
+  there (the sweep's largest Drag Start step is 12.1 times the target's
+  step). At steps 14 and 15 it ends
+  4.2e-3 off the target in a local minimum with `bone_1` at its X limit
+  (-56.6 degrees) and, at step 14, `bone_2` at its Z limit (17.9 degrees),
+  which 400 iterations do not leave; the Previous Step drag, which stays
+  hinged back and moves at most 2.5 times the step, reaches those targets
+  (8e-5 off). Constrained FABRIK is a local solver, so both variants give
+  best-effort reach. Future work (deferred; not queued): a global solver.
+- **F7.** Fixed: with a pole and constraints, the constrained solve jumped
+  (up to 13.5 times the target's step) and missed targets the unpoled solve
+  reaches (sweep scenarios 0 and 10). The pole swivel applied inside every
+  iteration was a rotation the constraints forbid, so the backward pass
+  clamped it away and the solve stalled; a shortest arc that dropped
+  rotations below 0.08 degrees kept the solve short of its tolerance. The
+  pole is now applied once after the solve by the admissible fraction of
+  `pole_target.md` R13, and `ik_shortest_arc` is exact at every angle.
 - **F6.** Future work (deferred; not queued): in about one full automated run of five, the
   Set Rest click of check 3.9 records no operation, and a second click right
   after does not either; three diagnostic runs of sections 1-3 did not

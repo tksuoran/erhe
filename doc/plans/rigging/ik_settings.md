@@ -296,10 +296,30 @@ formulation adapted to swing/twist limits:
   the joint by (1 - stiffness) before clamping, biasing the solve toward
   moving less-stiff joints first. Purely a solve-quality knob; no
   correctness requirement beyond stability.
-- Termination and fallbacks: same tolerance / max-iteration scheme as
-  Phase 1. With constraints, the target is often unreachable; the solver
-  must converge to a stable best-effort pose (no oscillation between
-  iterations - if the error stops decreasing, stop).
+- Termination and fallbacks: the constrained solve iterates until the
+  effector is within the tolerance or max_iterations is reached, and
+  returns the best pose it saw - the lowest effector error, positions and
+  local rotations from that iteration's backward pass. The error of
+  constrained FABRIK is not monotone - on the way from one solution family
+  to another it rises for several iterations - so no rise ends the solve;
+  with constraints the target is often unreachable, the iteration cap
+  bounds the cost, and the best pose is the stable best effort.
+- Solution families: constrained FABRIK is a local solver. It converges
+  to a solution whose basin depends on its start pose, and under
+  constraints a target can be reachable by one family of poses and not by
+  another (for a chain with a hinge root, the root hinged back or hinged
+  forward); it can also end in a local minimum pinned at joint limits a
+  little short of a target that a solve from another start pose reaches.
+  Both Solve From variants (`ik_drag_options.md` R25, R26) therefore give
+  best-effort reach - the lowest-error pose found within max_iterations
+  from the step's start pose - with constraints and bone lengths holding
+  and the result deterministic. A drag that solves every step from the
+  drag-start pose ("Drag Start") is a function of the target and may
+  change family - and the pose jump - between nearby targets. A drag that
+  solves from its previous step ("Previous Step") stays in its family and
+  follows the target continuously. Neither promises to reach every
+  reachable target; a global solver is future work. Check 8.3 of
+  `interactive_test_pass.md` measures both (finding F8).
 - Fully locked joints (all axes) transmit rigidly: their local rotation
   never changes; the chain effectively has a rigid multi-segment link.
   Chains whose every non-effector joint is fully locked leave the pose

@@ -45,15 +45,14 @@ void fabrik_solve(
 // intermediate joint), a chain folded onto its root, a straight chain (or
 // one whose intermediate offsets cancel), or a pole on the root-to-effector
 // line. The three guarded lengths are the only divisions, so the result is
-// always finite. Allocation-free: it is called per solver iteration.
+// always finite. Allocation-free: the constrained solve calls it once per
+// probe of its admissible pole fraction.
 //
 // weight scales the swivel (doc/plans/rigging/ik_drag_options.md R28): the
 // rotation about the root-to-effector line is weight times the full angle,
 // so 0 leaves the positions untouched and 1 aims the bend at the pole.
 // Returns the full swivel angle (radians, right-handed about the
-// root-to-effector direction), or nothing when the swivel is undefined, so a
-// caller can hold the residual (1 - weight) times it fixed over later
-// applications.
+// root-to-effector direction), or nothing when the swivel is undefined.
 auto ik_apply_pole(
     std::vector<glm::vec3>& positions,
     glm::vec3               pole_position,
@@ -62,7 +61,10 @@ auto ik_apply_pole(
 ) -> std::optional<float>;
 
 // Minimal rotation taking direction a to direction b (both non-unit, world
-// space). Identity when either is degenerate. In the antiparallel case the
+// space). Identity when either is degenerate or the two are parallel; every
+// other angle, however small, gives its exact rotation (a rotation dropped
+// below some angle would stall the constrained solve short of its
+// tolerance). In the antiparallel case the
 // shortest-arc axis is undefined; the axis of reference_orientation's basis
 // most orthogonal to a (projected into a's orthogonal plane) makes the 180
 // degree flip deterministic (roll preservation is forfeited there - see
@@ -130,21 +132,39 @@ public:
 // positional write-back). With constraints, each iteration runs the forward
 // pass unconstrained and enforces constraints in the backward pass with
 // parent frames propagated root to tip; the solved pose is returned in both
-// positions and local_rotations, already satisfying the constraints.
-// A pole (Ik_chain::has_pole) is applied once on the final positions of the
-// unconstrained path and inside every iteration of the constrained path,
-// between the forward and the backward pass, so the constraint-clamping
-// backward pass always runs last and limits and locks win over the pole
-// (doc/plans/rigging/pole_target.md R13, R14). A pole_weight below 1 swivels
-// the unconstrained result by that fraction of the full angle; the
-// constrained path swivels its first iteration's forward pass by that
-// fraction and then holds the bend at the same residual angle off the pole
-// in every later iteration, so iterating does not compound the weight toward
-// a full snap (ik_drag_options.md R28).
+// positions and local_rotations, already satisfying the constraints. The
+// constrained iteration returns the best pose it saw
+// (doc/plans/rigging/ik_settings.md section 4).
+// A pole (Ik_chain::has_pole) is applied once, after the solve, as a rigid
+// swivel about the solved root-to-effector line by pole_weight times the full
+// angle (doc/plans/rigging/pole_target.md R13, R14; ik_drag_options.md R28).
+// The unconstrained path swivels its final positions by that angle. The
+// constrained path iterates without the pole and then swivels by the largest
+// fraction of that angle whose pose the constraint-enforcing backward pass
+// reproduces, and returns that pass's positions and local_rotations: limits
+// and locks win over the pole, the effector stays where the solve put it,
+// and the result follows the target continuously.
 class Fabrik_solver final : public Ik_solver
 {
 public:
     void solve(Ik_chain& chain) override;
+
+private:
+    void apply_constrained_pole(Ik_chain& chain, glm::vec3 root);
+    // Swivels the solved pose by fraction times the weighted swivel into
+    // m_pole_positions, runs the constraint-enforcing backward pass on it
+    // into m_pole_solved_positions / m_pole_locals, and returns whether the
+    // pass reproduced every joint within chain.tolerance.
+    [[nodiscard]] auto try_pole_fraction(const Ik_chain& chain, glm::vec3 root, float fraction) -> bool;
+
+    // Per-solve scratch, refilled in place so a steady-state drag allocates
+    // nothing once the chain length's high-water mark is reached.
+    std::vector<glm::quat> m_solved_locals;
+    std::vector<glm::vec3> m_pole_positions;
+    std::vector<glm::vec3> m_pole_solved_positions;
+    std::vector<glm::quat> m_pole_locals;
+    std::vector<glm::vec3> m_best_positions;
+    std::vector<glm::quat> m_best_locals;
 };
 
 // Chain visualization of a running IK drag

@@ -4,7 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <optional>
 
 namespace editor {
 
@@ -236,9 +236,6 @@ auto ik_shortest_arc(const vec3 a_in, const vec3 b_in, const quat& reference_ori
     const vec3 a = a_in / len_a;
     const vec3 b = b_in / len_b;
     const float cos_angle = dot(a, b);
-    if (cos_angle > 1.0f - c_epsilon) {
-        return quat{1.0f, 0.0f, 0.0f, 0.0f};
-    }
     if (cos_angle < -1.0f + c_epsilon) {
         const mat3 basis = mat3_cast(reference_orientation);
         vec3 axis{basis[0]};
@@ -253,8 +250,12 @@ auto ik_shortest_arc(const vec3 a_in, const vec3 b_in, const quat& reference_ori
         axis = ik_safe_direction(axis - a * dot(axis, a), vec3{0.0f, 1.0f, 0.0f});
         return angleAxis(pi<float>(), axis);
     }
-    const vec3 axis = normalize(cross(a, b));
-    return angleAxis(std::acos(std::clamp(cos_angle, -1.0f, 1.0f)), axis);
+    // Half-angle form: (1 + cos, sin * axis) is the rotation's quaternion
+    // scaled by 2 cos(angle / 2), so normalizing it is exact down to parallel
+    // directions (where it is identity) - no acos, and no small angle that
+    // rounds to identity.
+    const vec3 axis_sin = cross(a, b);
+    return normalize(quat{1.0f + cos_angle, axis_sin.x, axis_sin.y, axis_sin.z});
 }
 
 auto ik_apply_pole(
@@ -379,6 +380,54 @@ auto Ik_chain::has_constraints() const -> bool
     return false;
 }
 
+namespace {
+
+// The constraint-enforcing backward pass of the constrained solve
+// (doc/plans/rigging/ik_settings.md section 4): from the fixed root toward
+// the tip, each joint is turned by the shortest arc from its current child
+// direction (the parent's solved frame times the joint's entry in locals)
+// toward the next position, the result is clamped to the joint's
+// constraint, and the child is placed one segment length along the clamped
+// direction. positions is read as the desired pose and overwritten with the
+// solved one; locals holds the frames the pass starts from and receives the
+// solved local rotations, so positions and locals leave it consistent and
+// satisfying every constraint.
+void constrained_backward_pass(
+    const Ik_chain&    chain,
+    const vec3         root,
+    std::vector<vec3>& positions,
+    std::vector<quat>& locals
+)
+{
+    const std::size_t joint_count = positions.size();
+    positions[0] = root;
+    quat parent_world = chain.root_parent_world_rotation;
+    for (std::size_t i = 0; i + 1 < joint_count; ++i) {
+        const quat world_rotation    = parent_world * locals[i];
+        const vec3 current_child_dir = world_rotation * chain.child_dir_local[i];
+        const vec3 desired_child_dir = ik_safe_direction(positions[i + 1] - positions[i], current_child_dir);
+        const quat delta             = ik_shortest_arc(current_child_dir, desired_child_dir, world_rotation);
+        quat       candidate_local   = normalize(inverse(parent_world) * (delta * world_rotation));
+        candidate_local = constrain_local_rotation(chain.constraints[i], chain.local_rotations[i], candidate_local);
+        locals[i] = candidate_local;
+        const quat solved_world = parent_world * candidate_local;
+        positions[i + 1] =
+            positions[i] +
+            ik_safe_direction(solved_world * chain.child_dir_local[i], vec3{0.0f, 1.0f, 0.0f}) * chain.lengths[i];
+        parent_world = solved_world;
+    }
+}
+
+// Search of the admissible pole fraction: the weighted swivel is walked from
+// the solved pose in steps of at most c_pole_march_step radians, so a
+// constraint that the swivel leaves and re-enters is noticed, and the last
+// admissible step and the first inadmissible one are then bisected
+// c_pole_bisection_steps times.
+constexpr float c_pole_march_step      = 0.035f; // about 2 degrees
+constexpr int   c_pole_bisection_steps = 12;
+
+} // anonymous namespace
+
 void Fabrik_solver::solve(Ik_chain& chain)
 {
     const std::size_t joint_count = chain.positions.size();
@@ -402,31 +451,28 @@ void Fabrik_solver::solve(Ik_chain& chain)
     // unconstrained; the backward pass enforces constraints with parent
     // world orientations propagated root to tip, so every iteration ends in
     // a constraint-satisfying pose. The unreachable-target shortcut is
-    // skipped - a straight layout could violate limits; the iteration
-    // converges to the constrained best effort and stops when the error
-    // stops decreasing.
+    // skipped - a straight layout could violate limits. The iteration runs
+    // until the effector is within the tolerance or max_iterations is
+    // reached and returns the best pose it saw: FABRIK's error is not
+    // monotone under constraints, so an early stop on a rise would end a
+    // solve that is still on its way to the target. The cap bounds the cost
+    // of an unreachable target - max_iterations backward passes per solve,
+    // a few microseconds for a limb-length chain. The pole takes no part in
+    // the iteration; it is applied once to the solved pose
+    // (apply_constrained_pole).
     const vec3 root = chain.positions.front();
-    std::vector<quat> solved_locals = chain.local_rotations;
-    float previous_error = std::numeric_limits<float>::max();
+    m_solved_locals.assign(chain.local_rotations.begin(), chain.local_rotations.end());
 
-    // The pole as the iterations apply it. A partial weight (R28) swivels the
-    // first defined application by that fraction; from then on the bend is
-    // aimed, fully, at the angle off the pole that application left, so the
-    // residual stays fixed instead of shrinking with every iteration.
-    float pole_angle  = chain.pole_angle;
-    float pole_weight = chain.pole_weight;
+    // The start pose is the first best pose: it satisfies the constraints
+    // (the no-teleport extension of ik_settings.md section 4 contains it).
+    m_best_positions.assign(chain.positions.begin(), chain.positions.end());
+    m_best_locals.assign(m_solved_locals.begin(), m_solved_locals.end());
+    float best_error = distance(chain.positions.back(), chain.target);
 
     for (int iteration = 0; iteration < chain.max_iterations; ++iteration) {
-        const float error = distance(chain.positions.back(), chain.target);
-        if (error <= chain.tolerance) {
+        if (best_error <= chain.tolerance) {
             break;
         }
-        if (error >= previous_error - (0.01f * chain.tolerance)) {
-            if (iteration > 0) {
-                break; // stalled (constrained target unreachable) - stable best effort
-            }
-        }
-        previous_error = error;
 
         // Forward-reaching, unconstrained (Phase 1 math).
         chain.positions[joint_count - 1] = chain.target;
@@ -435,42 +481,89 @@ void Fabrik_solver::solve(Ik_chain& chain)
             chain.positions[i - 1] = chain.positions[i] + direction * chain.lengths[i - 1];
         }
 
-        // Aim the bend at the pole on the forward pass's positions, so the
-        // constraint-clamping backward pass still runs last and produces the
-        // returned positions and local_rotations together - limits and locks
-        // win over the pole (R13, R14).
-        if (chain.has_pole) {
-            const std::optional<float> full_swivel =
-                ik_apply_pole(chain.positions, chain.pole_position, pole_angle, pole_weight);
-            if (full_swivel.has_value() && (pole_weight < 1.0f)) {
-                pole_angle  = chain.pole_angle - ((1.0f - pole_weight) * full_swivel.value());
-                pole_weight = 1.0f;
-            }
-        }
-
         // Backward-reaching with constraint enforcement and root-to-tip
         // frame propagation.
-        chain.positions[0] = root;
-        quat parent_world = chain.root_parent_world_rotation;
-        for (std::size_t i = 0; i + 1 < joint_count; ++i) {
-            const quat world_rotation      = parent_world * solved_locals[i];
-            const vec3 current_child_dir   = world_rotation * chain.child_dir_local[i];
-            const vec3 desired_child_dir   = ik_safe_direction(chain.positions[i + 1] - chain.positions[i], current_child_dir);
-            const quat delta               = ik_shortest_arc(current_child_dir, desired_child_dir, world_rotation);
-            quat       candidate_local     = normalize(inverse(parent_world) * (delta * world_rotation));
-            candidate_local = constrain_local_rotation(chain.constraints[i], chain.local_rotations[i], candidate_local);
-            solved_locals[i] = candidate_local;
-            const quat solved_world = parent_world * candidate_local;
-            chain.positions[i + 1] =
-                chain.positions[i] +
-                ik_safe_direction(solved_world * chain.child_dir_local[i], vec3{0.0f, 1.0f, 0.0f}) * chain.lengths[i];
-            parent_world = solved_world;
+        constrained_backward_pass(chain, root, chain.positions, m_solved_locals);
+
+        const float error = distance(chain.positions.back(), chain.target);
+        if (error < best_error) {
+            best_error = error;
+            m_best_positions.assign(chain.positions.begin(), chain.positions.end());
+            m_best_locals.assign(m_solved_locals.begin(), m_solved_locals.end());
         }
+    }
+    chain.positions.assign(m_best_positions.begin(), m_best_positions.end());
+    m_solved_locals.assign(m_best_locals.begin(), m_best_locals.end());
+
+    if (chain.has_pole) {
+        apply_constrained_pole(chain, root);
     }
 
     for (std::size_t i = 0; i + 1 < joint_count; ++i) {
-        chain.local_rotations[i] = solved_locals[i];
+        chain.local_rotations[i] = m_solved_locals[i];
     }
+}
+
+auto Fabrik_solver::try_pole_fraction(const Ik_chain& chain, const vec3 root, const float fraction) -> bool
+{
+    m_pole_positions.assign(chain.positions.begin(), chain.positions.end());
+    ik_apply_pole(m_pole_positions, chain.pole_position, chain.pole_angle, fraction * chain.pole_weight);
+    m_pole_solved_positions.assign(m_pole_positions.begin(), m_pole_positions.end());
+    m_pole_locals.assign(m_solved_locals.begin(), m_solved_locals.end());
+    constrained_backward_pass(chain, root, m_pole_solved_positions, m_pole_locals);
+    for (std::size_t i = 0; i < m_pole_positions.size(); ++i) {
+        if (distance(m_pole_positions[i], m_pole_solved_positions[i]) > chain.tolerance) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Fabrik_solver::apply_constrained_pole(Ik_chain& chain, const vec3 root)
+{
+    // Weight 0 measures the full swivel without moving anything; an
+    // undefined swivel (R11's degenerate cases) or a zero weight leaves the
+    // solved pose as it is.
+    const std::optional<float> full_swivel = ik_apply_pole(chain.positions, chain.pole_position, chain.pole_angle, 0.0f);
+    if (!full_swivel.has_value() || (chain.pole_weight <= 0.0f)) {
+        return;
+    }
+
+    // The solved pose (fraction 0) is admissible by construction: it is the
+    // backward pass's own output. Walk toward the full weighted swivel and
+    // stop at the first inadmissible pose, so every pose along [0, f] is
+    // admissible - a later fraction the constraints happen to allow again
+    // is never reached by jumping over the poses between.
+    const float weighted_angle = std::abs(chain.pole_weight * full_swivel.value());
+    const int   march_steps    = std::max(1, static_cast<int>(std::ceil(weighted_angle / c_pole_march_step)));
+    float admissible   = 0.0f;
+    float inadmissible = -1.0f;
+    for (int step = 1; step <= march_steps; ++step) {
+        const float fraction = static_cast<float>(step) / static_cast<float>(march_steps);
+        if (!try_pole_fraction(chain, root, fraction)) {
+            inadmissible = fraction;
+            break;
+        }
+        admissible = fraction;
+    }
+    if (inadmissible >= 0.0f) {
+        for (int step = 0; step < c_pole_bisection_steps; ++step) {
+            const float middle = 0.5f * (admissible + inadmissible);
+            if (try_pole_fraction(chain, root, middle)) {
+                admissible = middle;
+            } else {
+                inadmissible = middle;
+            }
+        }
+        if (admissible == 0.0f) {
+            return; // the constraints allow no swivel: the solved pose stands
+        }
+        // Re-run the admissible fraction so the scratch holds its pose; the
+        // last probe may have been an inadmissible one.
+        static_cast<void>(try_pole_fraction(chain, root, admissible));
+    }
+    chain.positions.assign(m_pole_solved_positions.begin(), m_pole_solved_positions.end());
+    m_solved_locals.assign(m_pole_locals.begin(), m_pole_locals.end());
 }
 
 namespace {

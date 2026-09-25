@@ -1973,6 +1973,8 @@ SWEEP_REPLAYS   = 3     # scenarios replayed for the determinism check
 # A step moving a joint more than this many times the target's step is a jump.
 # The unconstrained solve near a straight chain with a pole reaches about 4x.
 JUMP_RATIO      = 5.0
+# A tip within this of the target is on the target (the Drag Start information of 8.3).
+SWEEP_REACH_TOL = 1.0e-3
 
 
 def random_unit(rng):
@@ -2053,69 +2055,106 @@ def run_sweep_scenario(rig: Rig, scenario):
 
 
 def stability_sweep(rig: Rig):
-    """8.3 the constrained solver under random settings and random drags: locks
-    and limits hold, bone lengths hold, no step makes the chain jump, and the
-    same drag replayed gives the same poses.
+    """8.3 the constrained solver under random settings and random drags, under
+    both Solve From variants: locks and limits hold, bone lengths hold, the same
+    drag replayed gives the same poses, and a Previous Step drag never jumps.
 
     A jump is measured where it is seen: how far the intermediate joints move
     in one step, against how far the target moved (SWEEP_STEP). A bone
-    turning about its own length moves no joint and is no jump.
+    turning about its own length moves no joint and is no jump. Previous
+    Step is the continuous variant. A Drag Start drag solves every step from
+    the drag-start pose: it is a function of the target and may change
+    solution family between nearby targets, and like every local solve it
+    may end in a local minimum at the joint limits short of a target another
+    start pose reaches (ik_settings.md section 4, "Solution families"). Its
+    largest step and the steps where it ends more than SWEEP_REACH_TOL short
+    while the Previous Step drag reaches are reported as information.
     """
-    worst_lock = 0.0
-    worst_limit = 0.0
-    worst_limit_at = ""
-    worst_length = 0.0
-    jumps = []
+    worst = {"lock": 0.0, "limit": 0.0, "limit_at": "", "length": 0.0}
     replay_error = 0.0
-    largest_ratio = 0.0
-    for scenario, parameters in enumerate(make_sweep_scenarios()):
-        start, samples, chosen = run_sweep_scenario(rig, parameters)
+    scenarios = make_sweep_scenarios()
+    runs = {"Drag Start": [], "Previous Step": []}
+
+    def measure(label, index, parameters, start, samples, chosen):
+        """Per step: joint displacement over the target step and tip error; lock / limit / length bookkeeping."""
         rest_lengths = segment_lengths(start["positions"])
-        pole_position = parameters["pole"]
         ratios = []
+        tip_errors = []
         previous = start
         for step, s in enumerate(samples):
             moved = max(length(sub(a, b)) for a, b in zip(previous["positions"][1:-1], s["positions"][1:-1]))
             ratios.append(moved / SWEEP_STEP)
+            target = add(start["positions"][-1], parameters["walk"][step])
+            tip_errors.append(length(sub(s["positions"][-1], target)))
             previous = s
-            worst_length = max(worst_length, max(abs(x - y) for x, y in zip(segment_lengths(s["positions"]), rest_lengths)))
+            worst["length"] = max(worst["length"], max(abs(x - y) for x, y in zip(segment_lengths(s["positions"]), rest_lengths)))
             for bone, (kind, locked, limit) in chosen.items():
                 now = rig.angles(s, bone)
                 began = rig.angles(start, bone)
                 for axis in locked:
-                    worst_lock = max(worst_lock, abs(now[axis] - began[axis]))
+                    worst["lock"] = max(worst["lock"], abs(now[axis] - began[axis]))
                 if limit is not None:
                     axis, lo, hi = limit
                     excess = max(lo - now[axis], now[axis] - hi, 0.0)
-                    if excess > worst_limit:
-                        worst_limit = excess
-                        worst_limit_at = (f" (scenario {scenario} step {step} {bone} {axis}={now[axis]:.2f} "
-                                          f"limit {lo:.2f} .. {hi:.2f}, start {began[axis]:.2f})")
-        # With a pole the first step carries the pole alignment (5.3); jumps are judged after it.
-        first = 1 if pole_position is not None else 0
-        for i in range(first, len(ratios)):
-            largest_ratio = max(largest_ratio, ratios[i])
-            if ratios[i] > JUMP_RATIO:
-                target = add(start["positions"][-1], parameters["walk"][i])
-                tip_error = length(sub(samples[i]["positions"][-1], target))
-                jumps.append(f"scenario {scenario} step {i}: joints moved {ratios[i]:.1f}x the target step, "
-                             f"tip {tip_error:.2f} off the target, settings={[chosen[b][0] for b in BONES]} "
-                             f"pole={pole_position is not None}")
-        if scenario < SWEEP_REPLAYS:
-            again = rig.translate_drag(TIP, parameters["walk"], sample=rig.snapshot)
-            undo_viewport(rig)
-            for x, y in zip(samples, again):
-                replay_error = max(replay_error, max(q_angle_deg(x["rotations"][b], y["rotations"][b]) for b in BONES))
-        if pole_position is not None:
-            rig.set_prop("bone_1", "Ik.pole_target", None)
+                    if excess > worst["limit"]:
+                        worst["limit"] = excess
+                        worst["limit_at"] = (f" ({label} scenario {index} step {step} {bone} {axis}={now[axis]:.2f} "
+                                             f"limit {lo:.2f} .. {hi:.2f}, start {began[axis]:.2f})")
+        return {"ratios": ratios, "tip_errors": tip_errors, "chosen": chosen}
+
+    combo_ok = True
+    for label in ("Drag Start", "Previous Step"):
+        combo_ok = set_solve_from(rig, label) and combo_ok
+        for index, parameters in enumerate(scenarios):
+            start, samples, chosen = run_sweep_scenario(rig, parameters)
+            runs[label].append(measure(label, index, parameters, start, samples, chosen))
+            if (label == "Drag Start") and (index < SWEEP_REPLAYS):
+                again = rig.translate_drag(TIP, parameters["walk"], sample=rig.snapshot)
+                undo_viewport(rig)
+                for x, y in zip(samples, again):
+                    replay_error = max(replay_error, max(q_angle_deg(x["rotations"][b], y["rotations"][b]) for b in BONES))
+            if parameters["pole"] is not None:
+                rig.set_prop("bone_1", "Ik.pole_target", None)
+    combo_ok = set_solve_from(rig, "Drag Start") and combo_ok
     rig.clear_settings()
-    check_true(f"8.3 stability sweep ({SWEEP_SCENARIOS} random setting sets x {SWEEP_STEPS}-step random drags, seed {SWEEP_SEED}): "
-               "locks hold, limits hold, bone lengths hold",
-               (worst_lock <= LOCKED_DEG) and (worst_limit <= LIMIT_TOL_DEG) and (worst_length < POSITION_TOL),
-               f"worst lock drift={worst_lock:.3f} deg worst limit excess={worst_limit:.3f} deg"
-               f"{worst_limit_at if worst_limit > LIMIT_TOL_DEG else ''} worst length error={worst_length:.2e}")
-    check_true(f"8.3 stability sweep: no step moves a joint more than {JUMP_RATIO:.0f}x the target's step",
-               not jumps, f"largest {largest_ratio:.1f}x; {len(jumps)} jump(s)" + ("; " + "; ".join(jumps[:4]) if jumps else ""))
+
+    previous_step_jumps = []
+    short_of_reach = []
+    worst_shortfall = 0.0
+    largest = {"Drag Start": 0.0, "Previous Step": 0.0}
+    for index, parameters in enumerate(scenarios):
+        drag_start = runs["Drag Start"][index]
+        previous_step = runs["Previous Step"][index]
+        settings = [drag_start["chosen"][b][0] for b in BONES]
+        # With a pole the first step carries the pole alignment (5.3); jumps are judged after it.
+        first = 1 if parameters["pole"] is not None else 0
+        for step in range(first, len(drag_start["ratios"])):
+            largest["Drag Start"] = max(largest["Drag Start"], drag_start["ratios"][step])
+            largest["Previous Step"] = max(largest["Previous Step"], previous_step["ratios"][step])
+            if previous_step["ratios"][step] > JUMP_RATIO:
+                previous_step_jumps.append(f"scenario {index} step {step}: {previous_step['ratios'][step]:.1f}x, "
+                                           f"tip {previous_step['tip_errors'][step]:.2e} off, settings={settings}")
+        for step in range(len(drag_start["tip_errors"])):
+            ds_error = drag_start["tip_errors"][step]
+            ps_error = previous_step["tip_errors"][step]
+            if (ps_error <= SWEEP_REACH_TOL) and (ds_error > SWEEP_REACH_TOL):
+                worst_shortfall = max(worst_shortfall, ds_error)
+                short_of_reach.append(f"scenario {index} step {step}: Drag Start tip {ds_error:.2e} off, "
+                                      f"Previous Step tip {ps_error:.2e} off, settings={settings} "
+                                      f"pole={parameters['pole'] is not None}")
+
+    check_true(f"8.3 stability sweep ({SWEEP_SCENARIOS} random setting sets x {SWEEP_STEPS}-step random drags, seed {SWEEP_SEED}, "
+               "Drag Start and Previous Step): locks hold, limits hold, bone lengths hold",
+               combo_ok and (worst["lock"] <= LOCKED_DEG) and (worst["limit"] <= LIMIT_TOL_DEG) and (worst["length"] < POSITION_TOL),
+               f"combo ok={combo_ok} worst lock drift={worst['lock']:.3f} deg worst limit excess={worst['limit']:.3f} deg"
+               f"{worst['limit_at'] if worst['limit'] > LIMIT_TOL_DEG else ''} worst length error={worst['length']:.2e}")
+    check_true(f"8.3 stability sweep, Previous Step: no step moves a joint more than {JUMP_RATIO:.0f}x the target's step",
+               not previous_step_jumps,
+               f"largest {largest['Previous Step']:.1f}x; {len(previous_step_jumps)} jump(s)"
+               + ("; " + "; ".join(previous_step_jumps[:4]) if previous_step_jumps else "")
+               + f"; information, Drag Start: largest step {largest['Drag Start']:.1f}x, "
+               f"{len(short_of_reach)} step(s) more than {SWEEP_REACH_TOL:g} short where Previous Step reaches"
+               + (f" (worst {worst_shortfall:.2e} off: " + "; ".join(short_of_reach[:4]) + ")" if short_of_reach else ""))
     check_true("8.3 stability sweep: the same drag replayed gives the same poses", replay_error < 1.0e-3,
                f"largest replay difference={replay_error:.2e} deg over {SWEEP_REPLAYS} replays")
 

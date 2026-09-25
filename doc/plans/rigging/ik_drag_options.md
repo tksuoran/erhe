@@ -320,14 +320,26 @@ marker in the root color - it is held fixed the way the root is.
 **R25.** `drag_start` is the behavior of sections 1-2, unchanged: every
 `apply` restores the drag-start pose and solves from it, so a drag is path
 independent - a target reached by two paths gives one pose, and dragging back
-to the start restores the start pose exactly.
+to the start restores the start pose exactly. Each step is a function of the
+target and takes whichever solution family the solve from the drag-start
+pose converges to, so the pose may change family - and jump - between nearby
+targets. Reach is best effort: the lowest-error pose the solve finds from the
+drag-start pose, which may be a local minimum at the joint limits
+(`ik_settings.md` section 4, "Solution families"). Constraints and bone
+lengths hold and the result is deterministic.
 
 **R26.** `previous_step` solves each `apply` from the pose the previous
 `apply` of the same gesture left, so the pose carries what the drag picked up
 on the way: dragging back to the start does not in general restore the start
 pose. The first `apply` of a gesture solves from the drag-start pose, as under
-`drag_start`. The joints' constraints keep their drag-start resolution; the
-no-teleport extension of a limit (`ik_settings.md` section 4) is taken from
+`drag_start`. Each step starts in the solution family the previous step
+ended in, so the pose follows the target continuously within that family,
+with no jumps: `previous_step` is the continuous variant. Reach is best
+effort as under `drag_start`, from the previous step's pose, so the pose may
+stop short of a target that another solution family reaches
+(`ik_settings.md` section 4, "Solution families"). Neither variant promises
+to reach every reachable target. The joints' constraints keep their
+drag-start resolution; the no-teleport extension of a limit (`ik_settings.md` section 4) is taken from
 the pose the step solves from, which lies inside the drag-start extension, so
 over a gesture the admissible region only narrows toward the authored limit.
 The undo step still records the drag-start pose as "before". Under
@@ -473,11 +485,10 @@ Section 3 is implemented as specified:
   `Mcp_test.ik_drag_path_and_solve_from`.
 - Pole Alignment - `ik_apply_pole` takes the weight and returns the full
   swivel angle, `Ik_chain::pole_weight` carries it (`ik_solver.{hpp,cpp}`,
-  R28). The unconstrained path swivels its result by the weight; the
-  constrained path swivels its first defined per-iteration application by the
-  weight and then aims every later iteration at the residual angle that left,
-  so iterating holds the partial swivel instead of compounding it into a
-  snap. `Ik_drag::apply` computes the weight (`Ik_drag::pole_weight`: 1 under
+  R28). Both paths apply the pole once to the solved pose, so the weight
+  scales that one swivel: the unconstrained path swivels by the weight, the
+  constrained path by the admissible fraction of the weighted swivel
+  (`pole_target.md` R13). `Ik_drag::apply` computes the weight (`Ik_drag::pole_weight`: 1 under
   `snap`, the R28 ramp under `ease_in`) and reports the last one through
   `Ik_drag::get_pole_weight()`.
 - Move tool - "Pole Alignment" combo after "Solve From", and "Pole Ease

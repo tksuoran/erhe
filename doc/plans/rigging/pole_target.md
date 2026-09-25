@@ -183,23 +183,32 @@ data. When `has_pole` is false the solver runs unchanged.
   it moves neither the root nor the effector and changes no segment length -
   a converged solution maps to another converged solution, and the iteration
   count is unaffected.
-- **Constrained path**: inside every iteration, between the forward pass and
-  the backward pass, on the forward pass's positions. The constraint-clamping
-  backward pass therefore always runs last and always produces the returned
-  `positions` and `local_rotations` together, so the returned pose satisfies
-  the joint limits and locks of `ik_settings.md` section 4 and its positions
-  and rotations stay consistent. No pole step runs after the loop on this
-  path.
+- **Constrained path**: once, after the iteration, which runs without the
+  pole. The solved pose is swiveled rigidly about its own root-to-effector
+  line by the largest fraction `f` in [0, 1] of the (weighted) swivel of
+  R11 step 7 such that every pose along [0, f] is **admissible**: the
+  constraint-enforcing backward pass of `ik_settings.md` section 4, run on
+  the swiveled positions from the solved local rotations, reproduces every
+  joint within the chain's tolerance. `f = 0` is the solved pose, the
+  backward pass's own output, so it is admissible by construction. The
+  search walks the swivel from 0 in steps of at most about 2 degrees and
+  stops at the first inadmissible pose, then bisects between it and the
+  last admissible one. The returned `positions` and `local_rotations` are
+  that backward pass's output for fraction `f`, so the returned pose
+  satisfies the joint limits and locks and its positions and rotations stay
+  consistent. The swivel is rigid about a line through the root and the
+  effector, so the pole never moves the effector and never costs reach.
 
 **R14.** Precedence: **limits and locks win over the pole.** The pole selects
 among the poses a chain may take; a limit or lock states which poses are
 authored as legal, and `ik_settings.md` section 4 requires the pose handed to
 write-back to satisfy them. Under tight limits the pole is therefore honored
-only partially - the solver aims the bend at the pole and the clamp pulls it
-back to the legal region - and the result is best effort, not an error. The
-pole step is a deterministic function of the positions it is given, so it
-adds no oscillation and the existing stall detector of
-`ik_settings.md` section 4 keeps terminating the iteration.
+only partially - the swivel stops where the first constraint would be
+violated (R13) - and the result is best effort, not an error. A chain whose
+root is a hinge cannot swivel about its root-to-effector line at all, so
+there the pole has no effect. The iteration runs without the pole, so the
+pole adds nothing to what the stall detector of `ik_settings.md` section 4
+sees, and the swivel it adds follows the target continuously.
 
 **R15.** `Ik_drag::apply` routes both paths through `Ik_solver::solve` and
 reads `m_chain.positions` for the unconstrained rotation-only write-back,
@@ -228,7 +237,13 @@ no scene involved, covering:
 - a two-joint chain with a pole set: identical to the same chain without one
   (R10);
 - a poled chain with an unreachable target: the straight layout is returned
-  unchanged (R11 step 3) and is finite.
+  unchanged (R11 step 3) and is finite;
+- scenarios 0 and 10 of the `interactive_test_pass.md` check 8.3 sweep
+  replayed on the solver (a hinge root with a pole; Z limits and a twist
+  lock with a pole) under both Solve From variants, with the 8.3 rule: a
+  previous-step drag moves no intermediate joint more than 5 times the
+  target's step, bone lengths hold under both, and the poled drag-start
+  solve reaches every target the unpoled one reaches (R13).
 
 ### 4. Properties UI and undo
 
@@ -406,7 +421,8 @@ against.
   beside `fabrik_solve`; `Ik_chain::has_pole` / `pole_position` /
   `pole_angle` carry it, and `Fabrik_solver::solve` applies it on the
   unconstrained path once after `fabrik_solve` and on the constrained path
-  between the forward and backward passes of every iteration. Unit tests:
+  once after the iteration, by the admissible fraction of R13
+  (`Fabrik_solver::apply_constrained_pole`). Unit tests:
   `src/editor/transform/test/test_ik_solver.cpp` (`editor_ik_solver_tests`
   target, `ERHE_BUILD_TESTS=ON` trees).
 - Values - `Ik::pole_target_property` and `Ik::pole_angle_property`
