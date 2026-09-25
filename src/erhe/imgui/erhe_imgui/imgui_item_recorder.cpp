@@ -101,7 +101,8 @@ void Imgui_item_recorder::on_item_add(
     const ImGuiID            id,
     const ImGuiID            window_id,
     const ImRect&            bb,
-    const ImGuiLastItemData* item_data
+    const ImGuiLastItemData* item_data,
+    const int                clip_status_flags
 )
 {
     ++m_hook_call_count;
@@ -114,7 +115,7 @@ void Imgui_item_recorder::on_item_add(
     record.y1            = bb.Max.y;
     record.has_item_data = (item_data != nullptr);
     if (item_data != nullptr) {
-        record.status_flags = static_cast<int>(item_data->StatusFlags);
+        record.status_flags = static_cast<int>(item_data->StatusFlags) | clip_status_flags;
         record.item_flags   = static_cast<int>(item_data->ItemFlags);
     }
     m_records.push_back(record);
@@ -280,7 +281,14 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb
         return;
     }
     const ImGuiID window_id = (ctx->CurrentWindow != nullptr) ? ctx->CurrentWindow->ID : 0;
-    recorder->on_item_add(id, window_id, bb, item_data);
+    // Dear ImGui calls this hook before ItemAdd() sets ImGuiItemStatusFlags_Visible,
+    // and a widget that never reports ItemInfo (a combo box) would stay recorded
+    // as clipped. Apply ItemAdd()'s own clipping test to the item rectangle.
+    const int clip_status_flags =
+        ((item_data != nullptr) && (ctx->CurrentWindow != nullptr) && item_data->Rect.Overlaps(ctx->CurrentWindow->ClipRect))
+            ? ImGuiItemStatusFlags_Visible
+            : 0;
+    recorder->on_item_add(id, window_id, bb, item_data, clip_status_flags);
 }
 
 void ImGuiTestEngineHook_ItemInfo(ImGuiContext* ctx, ImGuiID id, const char* label, ImGuiItemStatusFlags flags)

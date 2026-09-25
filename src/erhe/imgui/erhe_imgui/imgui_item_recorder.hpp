@@ -83,7 +83,7 @@ public:
     [[nodiscard]] auto get_hook_call_count() const -> uint64_t;
 
     // Called by the four extern hook functions.
-    void on_item_add (ImGuiID id, ImGuiID window_id, const ImRect& bb, const ImGuiLastItemData* item_data);
+    void on_item_add (ImGuiID id, ImGuiID window_id, const ImRect& bb, const ImGuiLastItemData* item_data, int clip_status_flags);
     void on_item_info(ImGuiID id, const char* label, int status_flags);
     void on_log      ();
 

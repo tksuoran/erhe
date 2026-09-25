@@ -121,6 +121,11 @@ what Dear ImGui submitted in one frame, which is what the editor's
   `get_imgui_hosts`'s `hook_calls_total` shows. The record vector and the
   label arena are cleared with their capacity kept, so a recorded frame
   reaches a high-water mark and stops allocating.
+- **Visibility is recorded at ItemAdd.** Dear ImGui calls the ItemAdd hook
+  before it sets `ImGuiItemStatusFlags_Visible`, and some widgets (a combo
+  box) never report ItemInfo, so the ItemAdd hook applies ItemAdd's own
+  clipping test (the item rectangle against the window clip rectangle) and
+  records the result; an ItemInfo that follows replaces the status flags.
 - **One recorder per `ImGuiContext`**, owned by the `Imgui_host` that owns
   the context; the hooks find it through a registry keyed by context.
 - **The first non-empty label wins.** A widget built out of another one
