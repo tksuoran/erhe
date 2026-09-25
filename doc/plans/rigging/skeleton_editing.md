@@ -104,23 +104,44 @@ Depends on section 1. Every verb is one undoable `Compound_operation`, an
 entry in the Hierarchy context menu for a bone (the `add_bone_tip_nodes`
 pattern) and an MCP tool with explicit arguments.
 
-- **R5. Create bone**: a new bone node, child of the active node (or at the
-  scene root), head at the 3D cursor or the parent's tail, tail length 1 in
-  scene units along the parent's bone axis (world +Y at the root);
-  `Rig.rest_transform` recorded as its creation transform.
-- **R6. Extrude**: from each selected bone, a new child bone whose head is the
-  parent's tail, connected, same direction and length; the new bones become
-  the selection (so a repeated extrude grows a chain).
-- **R7. Subdivide**: a bone becomes N connected bones (N >= 2) along its
-  head-to-tail segment; children re-parent to the last; names `<name>.001`...
+- **R5. Create bone**: a new bone node, last child of the node the verb names
+  (the clicked Hierarchy row, the scene root from the Scene row). The editor
+  has no 3D cursor, so the head is the parent's tail (`Rig.tail`) when the
+  parent is a bone and the parent's origin otherwise (the scene origin under
+  the root); the local rotation is identity and the tail is one scene unit
+  along the parent's bone axis (the direction of the parent's `Rig.tail`),
+  +Y under a non-bone. The new bone carries the bone flag, a local
+  `Rig.tail` and its creation local TRS as local `Rig.rest_*` values; it is
+  not connected, and it becomes the selection and the active item. Its name
+  is `Bone` (or the name the MCP tool is given), made unique among the
+  parent's children and the parent's skeleton as `Bone.001`, ...
+- **R6. Extrude**: from each target bone, a new child bone whose head is the
+  parent's tail, connected, same direction and length (the tail vector copied,
+  local rotation identity), rest recorded as for R5; the new bones become the
+  selection, the first one active (so a repeated extrude grows a chain).
+- **R7. Subdivide**: a bone becomes N connected bones (N >= 2; the menu offers
+  2, 3 and 4) along its head-to-tail segment. The bone keeps its name, head
+  and rest, and its tail becomes tail / N; N - 1 new bones follow as a chain
+  of children, each translated by tail / N with identity rotation, rest
+  recorded. The bone's other children re-parent to the last piece keeping
+  their world transforms (a connected child's head exactly on the last
+  piece's tail), and an unbound child bone's `Rig.rest_translation` moves by
+  the same offset so its rest stays where it was. The bone and its pieces
+  become the selection.
 - **R8. Delete / dissolve**: delete removes bones and re-parents their
-  children to the deleted bone's parent keeping world transforms; dissolve
-  additionally extends the parent's tail to the removed bone's tail when the
-  removed bone was its only connected child.
-- **R9. Bound skeletons**: on a bone that a `Skin` lists, R6-R8 and any
-  change of `Rig.tail` / `Rig.rest_transform` are refused with a logged
-  message naming the skin (inverse binds and weights would go stale; Phase 6).
-  Posing a bound skeleton is unaffected.
+  children to the deleted bone's parent keeping world transforms; an unbound
+  child bone's rest becomes rest(removed) * rest(child), and a connected
+  child is disconnected (its head is no longer on its parent's tail).
+  Dissolve additionally extends the parent's tail to the removed bone's tail
+  when the parent is an unbound bone and the removed bone was its only
+  connected child; the removed bone's connected children then stay connected
+  (their heads are on the extended tail). Both clear the selection.
+- **R9. Bound skeletons**: on a bone that a `Skin` lists, R6-R8, R5 under
+  such a bone, and any write of `Rig.tail` / `Rig.rest_transform` are
+  refused with a logged message naming the skin (inverse binds and weights
+  would go stale; Phase 6). A verb whose targets include such a bone is
+  refused whole, and its Hierarchy menu entries are disabled with the
+  message as tooltip. Posing a bound skeleton is unaffected.
 
 ## 3. Selection helpers (slice A - independent of section 1)
 
@@ -250,7 +271,9 @@ glTF round trip of the edited skeleton.
 
 ## Implementation status
 
-Slices A and B and the foundations are implemented; slices C and D are not.
+Slices A and B, the foundations and the structure verbs of slice C (R5-R9)
+are implemented; Symmetrize (R13) and roll (R16) of slice C and slice D are
+not.
 
 - R11 naming: `bone_side` / `flip_side_name` in `src/editor/rig/bone_naming.hpp`,
   unit tested by `editor_rig_tests` (`src/editor/rig/test/`).
@@ -316,8 +339,8 @@ Slices A and B and the foundations are implemented; slices C and D are not.
   `rig/bone_tail.hpp`; its `Property_bridge::validate` refuses a write on a
   node `find_skin_joint` finds (R9, the logged reason names the skin). The
   refusal covers every writer, the Properties row and MCP `set_item_property`
-  included; clearing the value (back to the default) is allowed. Rest
-  transform edits on bound bones stay open until slice C.
+  included; clearing the value (back to the default) is allowed. The
+  `Rig.rest_*` properties refuse the same way (slice C, below).
 - Bone display: `Bone_visualization` keeps one proxy per bone of an editor
   scene, skinned or not, shaped from `Rig.tail`. `Rig_system`
   (`src/editor/rig/rig_system.hpp`, a node system of every `Scene_root`)
@@ -353,3 +376,47 @@ Slices A and B and the foundations are implemented; slices C and D are not.
   one undo step Ctrl+Z reverts, and the USD save warning for a local
   `Rig.rest_rotation` (section C). It closes the scenes it opened before the
   editor exits, so the editor's window-visibility file is left as found.
+- R5-R9 (slice C, structure): `create_bone`, `extrude_bones`,
+  `subdivide_bones`, `delete_bones` (`Bone_delete_mode::delete_bones` /
+  `dissolve`) and the refusal `get_bound_bone_refusal` in
+  `src/editor/rig/bone_structure.hpp`. Each queues one `Compound_operation`:
+  new bones are `Xform` nodes carrying the bone flag and their `Rig.*`
+  values from construction, inserted with `Item_insert_remove_operation` and
+  pinned to their local transform by a `Node_transform_operation` (the
+  `add_bone_tip_nodes` pattern); re-parents (`Item_parent_change_operation`,
+  or the child promotion of an `Item_insert_remove_operation` removal) keep
+  world transforms and are bracketed by transform pins, so undo restores the
+  local transforms exactly; `Rig.tail`, `Rig.connected` and `Rig.rest_*`
+  changes of existing bones are `Property_set_operation`s (a tail edit's
+  connected-children follow-ups run after the re-parents); the creating
+  verbs end with a selection step that selects the new bones and puts the
+  previous selection back on undo. Delete / Dissolve plan several targets
+  parents first, tracking the planned parents, rests, connected flags and
+  tails.
+- R9 on the properties: `Rig.rest_translation` / `rest_rotation` /
+  `rest_scale` refuse a write on a node a skin lists in their
+  `Property_bridge::validate`, as `Rig.tail` does (the Properties rows, MCP
+  `set_item_property` and every other writer included; clearing is allowed).
+- Entry points: `Create > Bone` in the Hierarchy context menu of every node
+  row and the Scene row (disabled under a bone a skin lists), and on a bone's
+  menu `Extrude`, `Subdivide > 2 / 3 / 4 Bones`, `Delete Bone` and `Dissolve
+  Bone` (targets as the slice A verbs; disabled, the refusal as tooltip, when
+  a target is a bone a skin lists); the MCP tools `create_bone` (`parent`,
+  `name`), `extrude_bones` (`bones`), `subdivide_bones` (`bones`, `count`)
+  and `delete_bones` (`bones`, `mode` `delete` | `dissolve`), which return
+  the refusal as their error text, covered by
+  `Mcp_test.bone_structure_verbs_build_an_unskinned_chain_and_undo_exactly`
+  (create + extrude x2, subdivide, dissolve and delete, each one undo step
+  whose undo restores parents, transforms, tails, rests and the connected
+  flag; an IK drag on the authored chain) and
+  `Mcp_test.bone_structure_verbs_are_refused_on_a_bound_bone`.
+  `Mcp_test.rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_animation`
+  checks the rest-rotation limits frame on an authored chain, a bound bone
+  refusing the write.
+- `scripts/skeleton_editing_verify.py` section E drives the menu entries on
+  a skeleton authored in a scene of its own (Create > Bone, Extrude twice,
+  Subdivide > 2 Bones, Delete Bone, Dissolve Bone, each checked, one undo
+  step, Ctrl+Z), checks the entries are disabled on a RiggedFigure joint
+  and `extrude_bones` refused with the skin in the log, and checks that a
+  glTF save + reopen keeps the authored bones, tails, connected flags and
+  rest values.

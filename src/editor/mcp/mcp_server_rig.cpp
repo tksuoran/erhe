@@ -1,6 +1,8 @@
 // Mcp_server skeleton editing tools (doc/plans/rigging/skeleton_editing.md
-// slices A and B): select_bones (R10), flip_bone_names (R13 Flip Names),
-// clear_pose (R14), copy_pose and paste_pose (R15). They act on the bones
+// slices A, B and C): select_bones (R10), flip_bone_names (R13 Flip Names),
+// clear_pose (R14), copy_pose and paste_pose (R15), create_bone (R5),
+// extrude_bones (R6), subdivide_bones (R7) and delete_bones (R8), the last
+// four refused on bones a skin lists (R9). They act on the bones
 // their arguments name, never on the selection or on UI state - paste_pose
 // takes the pose as an argument and never reads the editor's pose buffer;
 // the verbs are the ones the Hierarchy context menu of a bone runs
@@ -12,6 +14,8 @@
 #include "app_context.hpp"
 #include "rig/bone_commands.hpp"
 #include "rig/bone_pose.hpp"
+#include "rig/bone_structure.hpp"
+#include "scene/rig_properties.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -164,6 +168,32 @@ constexpr std::array<Mode_name, 5> c_mode_names{{
         out.bones.push_back(std::move(bone));
     }
     return std::nullopt;
+}
+
+// A structure verb's result: the created and removed bones, or the refusal
+// as an error result (the text is the message the verb logged).
+[[nodiscard]] auto structure_result(const Bone_structure_result& result) -> std::string
+{
+    if (result.refusal.has_value()) {
+        return error_result(result.refusal.value());
+    }
+    json created = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& bone : result.created) {
+        json entry = node_json(*bone);
+        const glm::vec3 tail = bone->get_value(Rig::tail_property());
+        entry["tail"] = {tail.x, tail.y, tail.z};
+        created.push_back(entry);
+    }
+    json removed = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& bone : result.removed) {
+        removed.push_back(node_json(*bone));
+    }
+    return make_json_content({
+        {"created", created},
+        {"removed", removed},
+        // One undoable operation, executed on the next editor frame.
+        {"queued",  result.queued}
+    }).dump();
 }
 
 } // anonymous namespace
@@ -347,6 +377,97 @@ auto Mcp_server::action_paste_pose(const json& args) -> std::string
     json result = plan_json(plan);
     result["mode"] = mode_text;
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_create_bone(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    // The parent: any node by id or name; the scene's root node when absent.
+    std::shared_ptr<erhe::scene::Node> parent;
+    const json parent_arg = args.value("parent", json{});
+    if (parent_arg.is_null()) {
+        parent = sr->get_scene().get_root_node();
+    } else {
+        const bool by_id = parent_arg.is_number_unsigned() || parent_arg.is_number_integer();
+        if (!by_id && !parent_arg.is_string()) {
+            return error_result("parent is a node name (string) or node id (integer): " + parent_arg.dump());
+        }
+        const std::size_t id   = by_id ? parent_arg.get<std::size_t>() : std::size_t{0};
+        const std::string name = by_id ? std::string{} : parent_arg.get<std::string>();
+        sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            const bool match = by_id ? (node->get_id() == id) : (node->get_name() == name);
+            if (match) {
+                parent = node;
+                return false;
+            }
+            return true;
+        });
+        if (!parent) {
+            return error_result("No node in scene " + sr->get_name() + " for parent " + parent_arg.dump());
+        }
+    }
+    const std::string name = args.value("name", "");
+    return structure_result(create_bone(m_context, parent, name));
+}
+
+auto Mcp_server::action_extrude_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(extrude_bones(m_context, targets));
+}
+
+auto Mcp_server::action_subdivide_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    const json count_arg = args.value("count", json(2));
+    if (!count_arg.is_number_integer() || (count_arg.get<long long>() < 2)) {
+        return error_result("count must be an integer >= 2; got " + count_arg.dump());
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(subdivide_bones(m_context, targets, static_cast<std::size_t>(count_arg.get<long long>())));
+}
+
+auto Mcp_server::action_delete_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    const std::string mode_text = args.value("mode", "");
+    Bone_delete_mode  mode      = Bone_delete_mode::delete_bones;
+    if (mode_text == "dissolve") {
+        mode = Bone_delete_mode::dissolve;
+    } else if (mode_text != "delete") {
+        return error_result("mode must be 'delete' or 'dissolve'; got '" + mode_text + "'");
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(delete_bones(m_context, targets, mode));
 }
 
 } // namespace editor

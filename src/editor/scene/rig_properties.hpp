@@ -38,7 +38,10 @@ public:
     // Attached to erhe::scene::Node, UI group "Rig", not inheriting, listed on
     // bones. Per-object default (D31): the channel of the node's bind-pose
     // local transform (erhe::scene::get_bind_pose_parent_from_node), the
-    // identity channel when no skin lists the node.
+    // identity channel when no skin lists the node. A write on a bone a skin
+    // lists is refused (R9, the bridge's validate names the skin): its rest
+    // is its bind pose. The bone structure verbs (rig/bone_structure.hpp)
+    // record the creation local TRS of the bones they create.
     //
     // Accessors registering on first use rather than static members: another
     // translation unit's static registration (Ik.rest_rotation, whose

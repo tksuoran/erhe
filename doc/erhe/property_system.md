@@ -2630,6 +2630,10 @@ the skin's inverse bind matrices encode (`inverse_bind(parent) *
 inverse(inverse_bind(joint))` under a joint parent of the same skin; a skin
 root anchored at the node of the mesh the skin deforms), and the identity
 channel when no skin lists the node. It does not follow the current pose.
+Their `Property_bridge::validate` refuses a write on a node a skin lists,
+naming the skin (R9): the rest of a bound bone is its bind pose; clearing a
+value stays allowed. The bone creation verbs (`rig/bone_structure.hpp`)
+record a created bone's creation local TRS as local values.
 `read_rest_transform(const Node&)` composes the three effective values and
 `has_local_rig_value` answers whether a node holds a local `Rig.*` value (the
 USD save counts those nodes in its "not written" warning, as it counts the

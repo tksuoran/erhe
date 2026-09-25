@@ -70,9 +70,11 @@ constexpr std::string_view c_rig_group = "Rig";
     return compute_default_bone_tail(*node);
 }
 
-// R9: a bone a skin lists keeps the tail its bind implies; the inverse bind
-// matrices and weights would go stale (editing a bound skeleton is Phase 6).
-[[nodiscard]] auto validate_tail(const Dependency_object& object, const Property_value&, std::string& out_error) -> bool
+// R9: a bone a skin lists keeps the tail and the rest pose its bind implies;
+// the inverse bind matrices and weights would go stale (editing a bound
+// skeleton is Phase 6). Clearing the value (back to the default) is not a
+// write and stays allowed.
+[[nodiscard]] auto validate_unbound(const Dependency_object& object, const char* const what, std::string& out_error) -> bool
 {
     const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
     if (node == nullptr) {
@@ -84,8 +86,18 @@ constexpr std::string_view c_rig_group = "Rig";
     }
     out_error =
         "'" + node->get_name() + "' is a joint of skin '" + skin_joint.value().skin->get_name() +
-        "': the tail of a bound bone is fixed by its bind (skeleton_editing.md R9)";
+        "': the " + what + " of a bound bone is fixed by its bind (skeleton_editing.md R9)";
     return false;
+}
+
+[[nodiscard]] auto validate_tail(const Dependency_object& object, const Property_value&, std::string& out_error) -> bool
+{
+    return validate_unbound(object, "tail", out_error);
+}
+
+[[nodiscard]] auto validate_rest(const Dependency_object& object, const Property_value&, std::string& out_error) -> bool
+{
+    return validate_unbound(object, "rest transform", out_error);
 }
 
 } // anonymous namespace
@@ -106,7 +118,8 @@ auto Rig::rest_translation_property() -> const Property<glm::vec3>&
         "rest_translation", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
         Property_metadata{
             .default_value   = glm::vec3{0.0f},
-            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local translation of the bone's rest pose (what Clear Location restores); unset, the bind-pose translation", .label = "Rest Translation", .visible_when = is_bone_node},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local translation of the bone's rest pose (what Clear Location restores); unset, the bind-pose translation. Refused on a bone a skin lists", .label = "Rest Translation", .visible_when = is_bone_node},
+            .bridge          = erhe::property::Property_bridge{.validate = validate_rest},
             .compute_default = compute_rest_translation
         }
     );
@@ -119,7 +132,8 @@ auto Rig::rest_rotation_property() -> const Property<glm::quat>&
         "rest_rotation", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
         Property_metadata{
             .default_value   = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
-            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local rotation of the bone's rest pose (what Clear Rotation restores, and the default zero of the IK limits); unset, the bind-pose rotation", .label = "Rest Rotation", .visible_when = is_bone_node},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local rotation of the bone's rest pose (what Clear Rotation restores, and the default zero of the IK limits); unset, the bind-pose rotation. Refused on a bone a skin lists", .label = "Rest Rotation", .visible_when = is_bone_node},
+            .bridge          = erhe::property::Property_bridge{.validate = validate_rest},
             .compute_default = compute_rest_rotation
         }
     );
@@ -132,7 +146,8 @@ auto Rig::rest_scale_property() -> const Property<glm::vec3>&
         "rest_scale", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
         Property_metadata{
             .default_value   = glm::vec3{1.0f},
-            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local scale of the bone's rest pose (what Clear Scale restores); unset, the bind-pose scale", .label = "Rest Scale", .visible_when = is_bone_node},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local scale of the bone's rest pose (what Clear Scale restores); unset, the bind-pose scale. Refused on a bone a skin lists", .label = "Rest Scale", .visible_when = is_bone_node},
+            .bridge          = erhe::property::Property_bridge{.validate = validate_rest},
             .compute_default = compute_rest_scale
         }
     );

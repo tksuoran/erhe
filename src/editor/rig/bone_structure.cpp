@@ -1,0 +1,655 @@
+#include "rig/bone_structure.hpp"
+#include "rig/bone_hierarchy.hpp"
+
+#include "app_context.hpp"
+#include "editor_log.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
+#include "operations/node_transform_operation.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/property_set_operation.hpp"
+#include "scene/rig_properties.hpp"
+#include "tools/selection_tool.hpp"
+
+#include "erhe_item/hierarchy.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_property/expression.hpp"
+#include "erhe_property/property_value.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform.hpp"
+
+#include <fmt/format.h>
+
+#include <algorithm>
+#include <limits>
+#include <unordered_map>
+#include <unordered_set>
+
+namespace editor {
+
+auto get_bound_bone_refusal(const erhe::scene::Node& bone) -> std::optional<std::string>
+{
+    const std::optional<erhe::scene::Skin_joint> skin_joint = erhe::scene::find_skin_joint(bone);
+    if (!skin_joint.has_value()) {
+        return std::nullopt;
+    }
+    return fmt::format(
+        "'{}' is a joint of skin '{}': the structure and rest pose of a bound skeleton are fixed by its bind (skeleton_editing.md R9)",
+        bone.get_name(), skin_joint.value().skin->get_name()
+    );
+}
+
+auto get_bound_bones_refusal(const std::vector<std::shared_ptr<erhe::scene::Node>>& bones) -> std::optional<std::string>
+{
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        if (!bone) {
+            continue;
+        }
+        std::optional<std::string> refusal = get_bound_bone_refusal(*bone);
+        if (refusal.has_value()) {
+            return refusal;
+        }
+    }
+    return std::nullopt;
+}
+
+auto get_bone_delete_mode_label(const Bone_delete_mode mode) -> const char*
+{
+    switch (mode) {
+        case Bone_delete_mode::delete_bones: return "Delete Bone";
+        case Bone_delete_mode::dissolve:     return "Dissolve Bone";
+        default:                             return "?";
+    }
+}
+
+namespace {
+
+using erhe::property::Local_state;
+using erhe::property::Property_value;
+
+// The selection a creating verb leaves: its execute selects the new bones
+// (the first one active), its undo puts back the selection it was built
+// over. Last in its compound, so it runs after the inserts on execute and
+// first on undo.
+class Bone_selection_operation : public Operation
+{
+public:
+    Bone_selection_operation(Selection& selection, std::vector<std::shared_ptr<erhe::Item_base>> after)
+        : m_before       {selection.get_selected_items()}
+        , m_active_before{selection.get_active_item()}
+        , m_after        {std::move(after)}
+    {
+        m_active_after = m_after.empty() ? std::shared_ptr<erhe::Item_base>{} : m_after.front();
+        set_description(fmt::format("[{}] Bone_selection {} bone(s)", get_serial(), m_after.size()));
+    }
+
+    void execute(App_context& context) override
+    {
+        if (context.selection != nullptr) {
+            context.selection->set_selection(m_after, m_active_after);
+        }
+    }
+
+    void undo(App_context& context) override
+    {
+        if (context.selection != nullptr) {
+            context.selection->set_selection(m_before, m_active_before.lock());
+        }
+    }
+
+private:
+    std::vector<std::shared_ptr<erhe::Item_base>> m_before;
+    std::weak_ptr<erhe::Item_base>                m_active_before;
+    std::vector<std::shared_ptr<erhe::Item_base>> m_after;
+    std::shared_ptr<erhe::Item_base>              m_active_after;
+};
+
+// A transform operation that writes `transform` as the node's local
+// transform on execute and `before` on undo. With before == after it pins a
+// local transform: Xformable::set_parent preserves the WORLD transform, so a
+// re-parent recomputes the local one (with rounding); a pin placed before
+// the re-parent in a compound makes its undo exact, one placed after it
+// makes the result exact.
+[[nodiscard]] auto make_pin(const std::shared_ptr<erhe::scene::Node>& node, const erhe::scene::Trs_transform& transform) -> std::shared_ptr<Operation>
+{
+    return std::make_shared<Node_transform_operation>(
+        Node_transform_operation::Parameters{
+            .node                    = node,
+            .parent_from_node_before = transform,
+            .parent_from_node_after  = transform,
+            .xform_op_stack_before   = node->copy_xform_op_stack(),
+            .time_duration           = 0.0f
+        }
+    );
+}
+
+[[nodiscard]] auto make_property_set(
+    const std::shared_ptr<erhe::scene::Node>&  node,
+    const erhe::property::Dependency_property& property,
+    std::optional<Local_state>                 before,
+    std::optional<Local_state>                 after
+) -> std::shared_ptr<Operation>
+{
+    return std::make_shared<Property_set_operation>(node, property, std::move(before), std::move(after));
+}
+
+[[nodiscard]] auto is_bone_node(const std::shared_ptr<erhe::Hierarchy>& item) -> std::shared_ptr<erhe::scene::Node>
+{
+    std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    if (!node || !erhe::scene::is_bone(node.get())) {
+        return {};
+    }
+    return node;
+}
+
+// Names a verb must not reuse: the bones of `bone`'s skeleton and the
+// children of `parent`, plus the names the verb already chose.
+class Bone_names
+{
+public:
+    void add_skeleton(const std::shared_ptr<erhe::scene::Node>& bone)
+    {
+        const std::shared_ptr<erhe::scene::Node> root = get_skeleton_root(bone);
+        if (!root) {
+            return;
+        }
+        add_bone_subtree(*root);
+    }
+
+    void add_children(const erhe::Hierarchy& parent)
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+            m_taken.insert(child->get_name());
+        }
+    }
+
+    [[nodiscard]] auto is_taken(const std::string& name) const -> bool
+    {
+        return m_taken.contains(name);
+    }
+
+    void take(const std::string& name)
+    {
+        m_taken.insert(name);
+    }
+
+    // `wanted` itself when it is free, else the first free `<base>.NNN`.
+    [[nodiscard]] auto make(const std::string& wanted) -> std::string
+    {
+        if (!is_taken(wanted)) {
+            take(wanted);
+            return wanted;
+        }
+        return make_indexed(wanted);
+    }
+
+    // The first free `<base>.NNN` counting from 1; `base` is `source` without
+    // a trailing `.<digits>` index group.
+    [[nodiscard]] auto make_indexed(const std::string& source) -> std::string
+    {
+        std::string base = source;
+        const std::size_t dot = base.find_last_of('.');
+        if ((dot != std::string::npos) && (dot + 1 < base.size()) && (dot > 0)) {
+            const bool digits = std::all_of(base.begin() + static_cast<std::ptrdiff_t>(dot + 1), base.end(), [](const char c) { return (c >= '0') && (c <= '9'); });
+            if (digits) {
+                base.resize(dot);
+            }
+        }
+        for (std::size_t index = 1; ; ++index) {
+            std::string candidate = fmt::format("{}.{:03}", base, index);
+            if (!is_taken(candidate)) {
+                take(candidate);
+                return candidate;
+            }
+        }
+    }
+
+private:
+    void add_bone_subtree(const erhe::scene::Node& bone)
+    {
+        m_taken.insert(bone.get_name());
+        for (const std::shared_ptr<erhe::Hierarchy>& child : bone.get_children()) {
+            const std::shared_ptr<erhe::scene::Node> child_bone = is_bone_node(child);
+            if (child_bone) {
+                add_bone_subtree(*child_bone);
+            }
+        }
+    }
+
+    std::unordered_set<std::string> m_taken;
+};
+
+class New_bone
+{
+public:
+    std::string                        name;
+    std::shared_ptr<erhe::scene::Node> parent;
+    glm::vec3                          head     {0.0f};
+    glm::vec3                          tail     {0.0f, 1.0f, 0.0f};
+    bool                               connected{false};
+};
+
+// A new bone node carrying the bone flag and its Rig values (tail, connected,
+// rest = the creation local TRS), inserted as the last child of its parent
+// and pinned to its local transform: the insert preserves the orphan's world
+// transform, so the local one is written after it (the add_bone_tip_nodes
+// pattern). The values live on the node itself, so undo (removal) and redo
+// (re-insert) carry them along.
+[[nodiscard]] auto append_new_bone(App_context& context, const New_bone& spec, std::vector<std::shared_ptr<Operation>>& operations) -> std::shared_ptr<erhe::scene::Node>
+{
+    std::shared_ptr<erhe::scene::Xform> bone = std::make_shared<erhe::scene::Xform>(spec.name);
+    bone->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::bone);
+    const erhe::scene::Trs_transform local{spec.head, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f}};
+    static_cast<void>(bone->set_value(Rig::tail_property(),             spec.tail));
+    static_cast<void>(bone->set_value(Rig::rest_translation_property(), local.get_translation()));
+    static_cast<void>(bone->set_value(Rig::rest_rotation_property(),    local.get_rotation()));
+    static_cast<void>(bone->set_value(Rig::rest_scale_property(),       local.get_scale()));
+    if (spec.connected) {
+        static_cast<void>(bone->set_value(Rig::connected_property(), true));
+    }
+    operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context         = context,
+                .item            = bone,
+                .parent          = spec.parent,
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
+            }
+        )
+    );
+    operations.push_back(make_pin(bone, local));
+    return bone;
+}
+
+void queue_compound(App_context& context, std::vector<std::shared_ptr<Operation>>&& operations)
+{
+    Compound_operation::Parameters parameters;
+    parameters.operations = std::move(operations);
+    context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+}
+
+void queue_with_selection(App_context& context, std::vector<std::shared_ptr<Operation>>&& operations, const std::vector<std::shared_ptr<erhe::scene::Node>>& selected)
+{
+    if (context.selection != nullptr) {
+        std::vector<std::shared_ptr<erhe::Item_base>> items;
+        items.reserve(selected.size());
+        for (const std::shared_ptr<erhe::scene::Node>& node : selected) {
+            items.push_back(node);
+        }
+        operations.push_back(std::make_shared<Bone_selection_operation>(*context.selection, std::move(items)));
+    }
+    queue_compound(context, std::move(operations));
+}
+
+// The bones of `targets`, deduplicated, non-bones left out.
+[[nodiscard]] auto unique_bones(const std::vector<std::shared_ptr<erhe::scene::Node>>& targets) -> std::vector<std::shared_ptr<erhe::scene::Node>>
+{
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones;
+    for (const std::shared_ptr<erhe::scene::Node>& target : targets) {
+        if (!target || !erhe::scene::is_bone(target.get())) {
+            continue;
+        }
+        if (std::find(bones.begin(), bones.end(), target) == bones.end()) {
+            bones.push_back(target);
+        }
+    }
+    return bones;
+}
+
+[[nodiscard]] auto refuse(const char* const verb, std::string reason) -> Bone_structure_result
+{
+    Bone_structure_result result;
+    result.refusal = fmt::format("{} refused: {}", verb, reason);
+    log_operations->warn("{}", result.refusal.value());
+    return result;
+}
+
+// The refusal of a verb over `bones`: none named, or one bound (R9).
+[[nodiscard]] auto check_targets(const char* const verb, const std::vector<std::shared_ptr<erhe::scene::Node>>& bones) -> std::optional<Bone_structure_result>
+{
+    if (bones.empty()) {
+        return refuse(verb, "no bone to act on");
+    }
+    std::optional<std::string> bound = get_bound_bones_refusal(bones);
+    if (bound.has_value()) {
+        return refuse(verb, std::move(bound.value()));
+    }
+    return std::nullopt;
+}
+
+} // anonymous namespace
+
+auto create_bone(
+    App_context&                              context,
+    const std::shared_ptr<erhe::scene::Node>& parent,
+    const std::string_view                    name
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Create Bone";
+    if (!parent) {
+        return refuse(verb, "no parent node");
+    }
+    const bool parent_is_bone = erhe::scene::is_bone(parent.get());
+    if (parent_is_bone) {
+        std::optional<std::string> bound = get_bound_bone_refusal(*parent);
+        if (bound.has_value()) {
+            return refuse(verb, std::move(bound.value()));
+        }
+    }
+
+    New_bone spec{.parent = parent};
+    if (parent_is_bone) {
+        const glm::vec3 parent_tail = parent->get_value(Rig::tail_property());
+        const float     length      = glm::length(parent_tail);
+        spec.head = parent_tail;
+        spec.tail = (length > 0.0f) ? (parent_tail / length) : glm::vec3{0.0f, 1.0f, 0.0f};
+    }
+    Bone_names names;
+    names.add_children(*parent);
+    if (parent_is_bone) {
+        names.add_skeleton(parent);
+    }
+    spec.name = names.make(name.empty() ? std::string{"Bone"} : std::string{name});
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    Bone_structure_result result;
+    result.created.push_back(append_new_bone(context, spec, operations));
+    queue_with_selection(context, std::move(operations), result.created);
+    result.queued = true;
+    log_operations->info("{}: '{}' under '{}'", verb, spec.name, parent->get_name());
+    return result;
+}
+
+auto extrude_bones(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Extrude";
+    const std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+
+    Bone_names names;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        names.add_skeleton(bone);
+        names.add_children(*bone);
+    }
+    std::vector<std::shared_ptr<Operation>> operations;
+    Bone_structure_result result;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const glm::vec3 tail = bone->get_value(Rig::tail_property());
+        const New_bone spec{
+            .name      = names.make_indexed(bone->get_name()),
+            .parent    = bone,
+            .head      = tail,
+            .tail      = tail,
+            .connected = true
+        };
+        result.created.push_back(append_new_bone(context, spec, operations));
+        log_operations->info("{}: '{}' from '{}'", verb, spec.name, bone->get_name());
+    }
+    queue_with_selection(context, std::move(operations), result.created);
+    result.queued = true;
+    return result;
+}
+
+auto subdivide_bones(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets,
+    const std::size_t                                      count
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Subdivide";
+    if (count < 2) {
+        return refuse(verb, fmt::format("the number of pieces must be at least 2, got {}", count));
+    }
+    const std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+
+    Bone_names names;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        names.add_skeleton(bone);
+        names.add_children(*bone);
+    }
+    std::vector<std::shared_ptr<Operation>>         operations;
+    std::vector<std::shared_ptr<erhe::scene::Node>> selected;
+    Bone_structure_result                           result;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const glm::vec3 tail    = bone->get_value(Rig::tail_property());
+        const glm::vec3 segment = tail / static_cast<float>(count);
+        // The pieces relative to the target are pure translations, so the
+        // last one sits at (count - 1) * segment in the target's frame.
+        const glm::vec3 last_offset = segment * static_cast<float>(count - 1);
+
+        // The target's children, before any piece is added.
+        std::vector<std::shared_ptr<erhe::Hierarchy>> children;
+        for (const std::shared_ptr<erhe::Hierarchy>& child : bone->get_children()) {
+            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+                continue; // editor-generated display proxies stay with their bone
+            }
+            children.push_back(child);
+        }
+
+        selected.push_back(bone);
+        std::shared_ptr<erhe::scene::Node> previous = bone;
+        for (std::size_t piece = 1; piece < count; ++piece) {
+            const New_bone spec{
+                .name      = names.make_indexed(bone->get_name()),
+                .parent    = previous,
+                .head      = segment,
+                .tail      = segment,
+                .connected = true
+            };
+            previous = append_new_bone(context, spec, operations);
+            result.created.push_back(previous);
+            selected.push_back(previous);
+        }
+        const std::shared_ptr<erhe::scene::Node>& last = previous;
+
+        // Re-parent the children to the last piece. Before: pins of the
+        // current local transforms, so undo is exact; after: the local
+        // transform the move implies (translation minus last_offset; a
+        // connected child exactly on the last piece's tail).
+        for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
+            const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+            if (child_node) {
+                operations.push_back(make_pin(child_node, child_node->parent_from_node_transform()));
+            }
+            operations.push_back(std::make_shared<Item_parent_change_operation>(last, child, std::shared_ptr<erhe::Hierarchy>{}, std::shared_ptr<erhe::Hierarchy>{}));
+            if (!child_node) {
+                continue;
+            }
+            erhe::scene::Trs_transform moved = child_node->parent_from_node_transform();
+            const bool connected = erhe::scene::is_bone(child_node.get()) && child_node->get_value(Rig::connected_property());
+            moved.set_translation(connected ? segment : (moved.get_translation() - last_offset));
+            operations.push_back(make_pin(child_node, moved));
+            if (erhe::scene::is_bone(child_node.get()) && !get_bound_bone_refusal(*child_node).has_value()) {
+                const glm::vec3 rest_translation = child_node->get_value(Rig::rest_translation_property());
+                operations.push_back(
+                    make_property_set(
+                        child_node, Rig::rest_translation_property().get(),
+                        child_node->read_local_state(Rig::rest_translation_property().get()),
+                        Local_state{Property_value{rest_translation - last_offset}}
+                    )
+                );
+            }
+        }
+
+        // The target's own tail shrinks to one segment. After the re-parents,
+        // so its connected-children follow-up (rig/bone_connect.hpp) sees only
+        // the first piece, already on the new tail.
+        operations.push_back(
+            make_property_set(
+                bone, Rig::tail_property().get(),
+                bone->read_local_state(Rig::tail_property().get()),
+                Local_state{Property_value{segment}}
+            )
+        );
+        log_operations->info("{}: '{}' into {} bones", verb, bone->get_name(), count);
+    }
+    queue_with_selection(context, std::move(operations), selected);
+    result.queued = true;
+    return result;
+}
+
+auto delete_bones(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets,
+    const Bone_delete_mode                                 mode
+) -> Bone_structure_result
+{
+    const char* const verb = get_bone_delete_mode_label(mode);
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+    // Parents before children: a removed bone's children have moved to its
+    // parent by the time a removed child is planned.
+    std::stable_sort(
+        bones.begin(), bones.end(),
+        [](const std::shared_ptr<erhe::scene::Node>& lhs, const std::shared_ptr<erhe::scene::Node>& rhs) {
+            return lhs->get_depth() < rhs->get_depth();
+        }
+    );
+
+    // The scene as the plan leaves it, before it executes: where each moved
+    // node ends up, its rest, its connected flag and each tail written.
+    std::unordered_map<const erhe::scene::Node*, std::shared_ptr<erhe::Hierarchy>> planned_parent;
+    std::unordered_map<const erhe::scene::Node*, erhe::scene::Trs_transform>       planned_rest;
+    std::unordered_map<const erhe::scene::Node*, bool>                             planned_connected;
+    std::unordered_map<const erhe::scene::Node*, std::optional<Local_state>>       planned_tail_state;
+    std::unordered_set<const erhe::scene::Node*>                                   removed;
+
+    const auto get_parent = [&planned_parent](const erhe::scene::Node& node) -> std::shared_ptr<erhe::Hierarchy> {
+        const auto i = planned_parent.find(&node);
+        return (i != planned_parent.end()) ? i->second : node.get_parent().lock();
+    };
+    const auto get_rest = [&planned_rest](const erhe::scene::Node& node) -> erhe::scene::Trs_transform {
+        const auto i = planned_rest.find(&node);
+        return (i != planned_rest.end()) ? i->second : read_rest_transform(node);
+    };
+    const auto is_connected = [&planned_connected](const erhe::scene::Node& node) -> bool {
+        const auto i = planned_connected.find(&node);
+        return (i != planned_connected.end()) ? i->second : node.get_value(Rig::connected_property());
+    };
+    const auto get_tail_state = [&planned_tail_state](const erhe::scene::Node& node) -> std::optional<Local_state> {
+        const auto i = planned_tail_state.find(&node);
+        return (i != planned_tail_state.end()) ? i->second : node.read_local_state(Rig::tail_property().get());
+    };
+    // The connected bone children `parent` has in the planned scene.
+    const auto count_connected_children = [&](const erhe::Hierarchy& parent) -> std::size_t {
+        std::size_t connected_count = 0;
+        const auto visit = [&](const erhe::scene::Node& node) {
+            if (!removed.contains(&node) && erhe::scene::is_bone(&node) && (get_parent(node).get() == &parent) && is_connected(node)) {
+                ++connected_count;
+            }
+        };
+        for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+            const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+            if (child_node) {
+                visit(*child_node);
+            }
+        }
+        for (const auto& [node, new_parent] : planned_parent) {
+            if ((new_parent.get() == &parent) && (node->get_parent().lock().get() != &parent)) {
+                visit(*node);
+            }
+        }
+        return connected_count;
+    };
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    Bone_structure_result                   result;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const std::shared_ptr<erhe::Hierarchy>   parent      = get_parent(*bone);
+        const std::shared_ptr<erhe::scene::Node> parent_bone = is_bone_node(parent);
+
+        // Dissolve: the parent's tail reaches the removed bone's tail when it
+        // was the parent's only connected bone child. A bound parent's tail
+        // is fixed by its bind (R9), so it is not extended.
+        const bool extend_parent =
+            (mode == Bone_delete_mode::dissolve) &&
+            parent_bone &&
+            !get_bound_bone_refusal(*parent_bone).has_value() &&
+            is_connected(*bone) &&
+            (count_connected_children(*parent_bone) == 1);
+
+        std::vector<std::shared_ptr<erhe::scene::Node>> child_nodes;
+        for (const std::shared_ptr<erhe::Hierarchy>& child : bone->get_children()) {
+            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+                continue; // removed with the bone, as Item_insert_remove_operation does
+            }
+            const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+            if (child_node) {
+                child_nodes.push_back(child_node);
+                operations.push_back(make_pin(child_node, child_node->parent_from_node_transform()));
+            }
+        }
+
+        // Removal: Item_insert_remove_operation re-parents the children to
+        // the bone's parent (world transforms kept) before detaching it.
+        operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = context,
+                    .item    = bone,
+                    .parent  = parent,
+                    .mode    = Item_insert_remove_operation::Mode::remove
+                }
+            )
+        );
+        removed.insert(bone.get());
+        result.removed.push_back(bone);
+
+        const erhe::scene::Trs_transform bone_rest = get_rest(*bone);
+        for (const std::shared_ptr<erhe::scene::Node>& child : child_nodes) {
+            planned_parent[child.get()] = parent;
+            if (!erhe::scene::is_bone(child.get()) || get_bound_bone_refusal(*child).has_value()) {
+                continue;
+            }
+            // The rest stays where it was: rest(removed) * rest(child).
+            const erhe::scene::Trs_transform child_rest = erhe::scene::Trs_transform{bone_rest.get_matrix() * get_rest(*child).get_matrix()};
+            planned_rest[child.get()] = child_rest;
+            operations.push_back(make_property_set(child, Rig::rest_translation_property().get(), child->read_local_state(Rig::rest_translation_property().get()), Local_state{Property_value{child_rest.get_translation()}}));
+            operations.push_back(make_property_set(child, Rig::rest_rotation_property   ().get(), child->read_local_state(Rig::rest_rotation_property   ().get()), Local_state{Property_value{child_rest.get_rotation()}}));
+            operations.push_back(make_property_set(child, Rig::rest_scale_property      ().get(), child->read_local_state(Rig::rest_scale_property      ().get()), Local_state{Property_value{child_rest.get_scale()}}));
+            if (is_connected(*child) && !extend_parent) {
+                operations.push_back(make_property_set(child, Rig::connected_property().get(), child->read_local_state(Rig::connected_property().get()), std::nullopt));
+                planned_connected[child.get()] = false;
+            }
+        }
+
+        if (extend_parent) {
+            // The removed bone's tail in the parent's frame; world transforms
+            // are what the re-parents keep, so they are the plan's too.
+            const glm::vec3 bone_tail = bone->get_value(Rig::tail_property());
+            const glm::vec4 tail_in_world  = bone->world_from_node() * glm::vec4{bone_tail, 1.0f};
+            const glm::vec4 tail_in_parent = glm::inverse(parent_bone->world_from_node()) * tail_in_world;
+            const glm::vec3 new_tail{tail_in_parent};
+            // After the removal, so the tail edit's connected-children
+            // follow-up snaps the moved connected children exactly onto it.
+            operations.push_back(make_property_set(parent_bone, Rig::tail_property().get(), get_tail_state(*parent_bone), Local_state{Property_value{new_tail}}));
+            planned_tail_state[parent_bone.get()] = Local_state{Property_value{new_tail}};
+            log_operations->info("{}: '{}' removed, tail of '{}' extended to its tail", verb, bone->get_name(), parent_bone->get_name());
+        } else {
+            log_operations->info("{}: '{}' removed, {} child node(s) re-parented", verb, bone->get_name(), child_nodes.size());
+        }
+    }
+    queue_compound(context, std::move(operations));
+    result.queued = true;
+    return result;
+}
+
+}

@@ -507,6 +507,8 @@ erhe_target_sources_grouped(
     rig/bone_naming.hpp
     rig/bone_pose.cpp
     rig/bone_pose.hpp
+    rig/bone_structure.cpp
+    rig/bone_structure.hpp
     rig/bone_tail.cpp
     rig/bone_tail.hpp
     rig/rig_system.cpp

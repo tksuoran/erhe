@@ -1588,6 +1588,131 @@
     "name": "paste_pose"
   },
   {
+    "description": "Create Bone (doc/plans/rigging/skeleton_editing.md R5): a new bone node (the persistent bone flag set) as the last child of 'parent' (any node; the scene root when absent), as ONE undoable operation executed on the next editor frame. Under a bone its head is the parent's tail (Rig.tail) and its tail is one scene unit along the parent's bone axis; under a non-bone the head is the parent's origin and the tail is +Y, one unit long. Local rotation identity; Rig.tail and the creation local TRS (Rig.rest_translation / rest_rotation / rest_scale) are recorded as local values; not connected. The new bone becomes the selection and the active item. Refused, with an error naming the skin, when the parent is a bone a skin lists (R9). Returns 'created' [{name, id, tail}].",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Name of the new bone (default 'Bone'); made unique among the parent's children and the parent's skeleton as '<name>.001', ...",
+          "type": "string"
+        },
+        "parent": {
+          "description": "Parent node: node name (the first node of that name) or node id. Default: the scene root",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "create_bone"
+  },
+  {
+    "description": "Extrude (doc/plans/rigging/skeleton_editing.md R6): from each named bone a new CONNECTED child bone whose head is the bone's tail, with the same tail vector (same direction and length) and identity local rotation, rest values recorded, named '<base>.NNN' (the first free index in the skeleton). ONE undoable operation executed on the next editor frame; the new bones become the selection (the first active), so a repeated extrude grows a chain. Refused, with an error naming the skin, when any named bone is a joint a skin lists (R9). Acts on the named bones only, never on the selection. Returns 'created' [{name, id, tail}].",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to extrude from: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "extrude_bones"
+  },
+  {
+    "description": "Subdivide (doc/plans/rigging/skeleton_editing.md R7): each named bone becomes 'count' connected bones along its head-to-tail segment: the bone keeps its name, head and rest, its tail becomes tail / count, and count - 1 new bones named '<base>.NNN' follow as a chain of children. The bone's other children re-parent to the last piece keeping their world transforms (and an unbound child bone's rest translation moves with them). ONE undoable operation executed on the next editor frame; the bone and its pieces become the selection. Refused, with an error naming the skin, when any named bone is a joint a skin lists (R9). Returns 'created' [{name, id, tail}] (the new pieces).",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to subdivide: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "count": {
+          "description": "Number of bones each named bone becomes (default 2)",
+          "minimum": 2,
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "subdivide_bones"
+  },
+  {
+    "description": "Delete / Dissolve (doc/plans/rigging/skeleton_editing.md R8): removes the named bones as ONE undoable operation executed on the next editor frame. Their children re-parent to the removed bone's parent keeping their world transforms; an unbound child bone's rest becomes rest(removed) * rest(child). mode 'dissolve' additionally extends the parent bone's tail (Rig.tail) to the removed bone's tail when the removed bone was its only connected child, and the removed bone's connected children stay connected to it; every other connected child of a removed bone is disconnected. The selection is cleared. Refused, with an error naming the skin, when any named bone is a joint a skin lists (R9). Returns 'removed' [{name, id}].",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to remove: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "mode": {
+          "description": "'delete' or 'dissolve'",
+          "enum": [
+            "delete",
+            "dissolve"
+          ],
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "name": "delete_bones"
+  },
+  {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {

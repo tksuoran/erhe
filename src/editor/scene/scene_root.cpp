@@ -30,6 +30,7 @@
 #include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "rig/bone_commands.hpp"
+#include "rig/bone_structure.hpp"
 #include "scene/child_prim_types.hpp"
 #include "scene/joint.hpp"
 #include "scene/joint_system.hpp"
@@ -617,6 +618,32 @@ auto Scene_root::make_browser_window(
                 entry("Xform", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_xform(&p)); });
                 // A Scope: children and nothing else (C5).
                 entry("Scope", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_scope(&p)); });
+                // Skeleton editing R5 (doc/plans/rigging/skeleton_editing.md):
+                // a bone under any node, the scene root included; refused
+                // under a bone a skin lists (R9), so the entry is greyed there.
+                const std::shared_ptr<erhe::scene::Node> parent_node = std::dynamic_pointer_cast<erhe::scene::Node>(parent);
+                if (parent_node) {
+                    const std::optional<std::string> bone_refusal = erhe::scene::is_bone(parent_node.get())
+                        ? get_bound_bone_refusal(*parent_node)
+                        : std::optional<std::string>{};
+                    if (ImGui::MenuItem("Bone", nullptr, false, !bone_refusal.has_value())) {
+                        deferred_operations.push_back(
+                            [&context, parent_node]() {
+                                static_cast<void>(create_bone(context, parent_node, ""));
+                            }
+                        );
+                        close = true;
+                    }
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                        ImGui::SetTooltip(
+                            "%s",
+                            bone_refusal.has_value()
+                                ? bone_refusal.value().c_str()
+                                : "A new bone: head on this bone's tail (at this node's origin under a non-bone),\n"
+                                  "one unit long along this bone's axis (+Y under a non-bone); selected; one undo step"
+                        );
+                    }
+                }
                 for (const Child_prim_type_info& type_info : get_child_prim_types()) {
                     entry(std::string{type_info.display_name}.c_str(), type_info.make);
                 }
@@ -801,6 +828,63 @@ auto Scene_root::make_browser_window(
                 }
                 if (!has_pose) {
                     ImGui::EndDisabled();
+                }
+
+                // Slice C (R6-R9): structure verbs on the targets as above;
+                // greyed with the reason when a target is a bone a skin lists.
+                ImGui::Separator();
+                const std::optional<std::string> structure_refusal = get_bound_bones_refusal(get_bone_command_targets(context, node));
+                const bool structure_enabled = !structure_refusal.has_value();
+                const auto structure_tooltip = [&structure_refusal](const char* const tooltip) {
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                        ImGui::SetTooltip("%s", structure_refusal.has_value() ? structure_refusal.value().c_str() : tooltip);
+                    }
+                };
+                if (ImGui::MenuItem("Extrude", nullptr, false, structure_enabled)) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            static_cast<void>(extrude_bones(context, get_bone_command_targets(context, node)));
+                        }
+                    );
+                    close = true;
+                }
+                structure_tooltip("A new connected child bone from the tail of each target bone, same direction\nand length; the new bones become the selection; one undo step");
+                if (ImGui::BeginMenu("Subdivide", structure_enabled)) {
+                    for (const std::size_t count : {std::size_t{2}, std::size_t{3}, std::size_t{4}}) {
+                        const std::string label = fmt::format("{} Bones", count);
+                        if (ImGui::MenuItem(label.c_str())) {
+                            deferred_operations.push_back(
+                                [&context, node, count]() {
+                                    static_cast<void>(subdivide_bones(context, get_bone_command_targets(context, node), count));
+                                }
+                            );
+                            close = true;
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                structure_tooltip("Split each target bone into connected bones along its head-to-tail segment;\nits children move to the last piece; one undo step");
+                class Delete_entry
+                {
+                public:
+                    Bone_delete_mode mode;
+                    const char*      tooltip;
+                };
+                static constexpr Delete_entry delete_entries[] = {
+                    {Bone_delete_mode::delete_bones, "Remove the target bones; their children move to the removed bone's parent,\nkeeping their world transforms; one undo step"},
+                    {Bone_delete_mode::dissolve,     "Remove the target bones as Delete Bone does; a parent bone whose only connected\nchild was removed extends its tail to the removed bone's tail; one undo step"}
+                };
+                for (const Delete_entry& entry : delete_entries) {
+                    if (ImGui::MenuItem(get_bone_delete_mode_label(entry.mode), nullptr, false, structure_enabled)) {
+                        const Bone_delete_mode mode = entry.mode;
+                        deferred_operations.push_back(
+                            [&context, node, mode]() {
+                                static_cast<void>(delete_bones(context, get_bone_command_targets(context, node), mode));
+                            }
+                        );
+                        close = true;
+                    }
+                    structure_tooltip(entry.tooltip);
                 }
             }
             // Lightmapped (undoable): the lightmapped property is inherited

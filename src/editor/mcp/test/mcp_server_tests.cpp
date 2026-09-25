@@ -2599,7 +2599,8 @@ TEST_F(Mcp_test, clear_pose_respects_locks_and_paste_pose_flipped_mirrors_the_ar
 // doc/plans/rigging/skeleton_editing.md R2: Ik.rest_rotation defaults to
 // Rig.rest_rotation (D31 default_from), so a Rig.rest_rotation local value
 // moves the IK limits frame - a joint whose limits are all zero ends an
-// ik_drag exactly on it. R14 / R15: Clear and Paste Pose stop an animation
+// ik_drag exactly on it; checked on an authored, unskinned chain (a bound
+// bone refuses the write, R9), which the IK drag routes through as bones. R14 / R15: Clear and Paste Pose stop an animation
 // playing on the bones first, as Reset Bones to Bind Pose does.
 TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_animation)
 {
@@ -2650,11 +2651,28 @@ TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_a
         EXPECT_FALSE(result.is_error) << name << ": " << result.text;
     };
 
-    const json l2      = details("arm_joint_L_2");
+    // The limits frame check runs on an authored, unskinned chain: a bone a
+    // skin lists refuses a Rig.rest_rotation write (R9).
+    Mcp_client::Tool_result refused_rest = client.call_tool(
+        "set_item_property", json{{"item_id", details("arm_joint_L_2").value("id", 0)}, {"property", "Rig.rest_rotation"}, {"value", "0 0 0.3826834 0.9238795"}}
+    );
+    EXPECT_TRUE(refused_rest.is_error) << "the rest of a bound bone is its bind pose";
+    EXPECT_NE(refused_rest.text.find("skin"), std::string::npos) << refused_rest.text;
+
+    Mcp_client::Tool_result created = client.call_tool("create_bone", json{{"scene_name", scene}, {"name", "ik_chain"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    advance_frames(client, 2);
+    for (const char* from : {"ik_chain", "ik_chain.001"}) {
+        Mcp_client::Tool_result extruded = client.call_tool("extrude_bones", json{{"scene_name", scene}, {"bones", {from}}});
+        ASSERT_FALSE(extruded.is_error) << extruded.text;
+        advance_frames(client, 2);
+    }
+
+    const json l2      = details("ik_chain.001");
     const int  l2_id   = l2.value("id", 0);
     const Quat l2_rest = as_quat(l2.at("local_transform").at("rotation_xyzw"));
 
-    // Every IK limit of arm_joint_L_2 closed to zero: the constrained solve
+    // Every IK limit of the middle bone closed to zero: the constrained solve
     // holds it exactly on its limits frame.
     for (const char* name : {"Ik.limit_x", "Ik.limit_y", "Ik.limit_z"}) {
         set_property(l2_id, name, true);
@@ -2662,7 +2680,7 @@ TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_a
     set_property(l2_id, "Ik.limit_min", "0 0 0");
     set_property(l2_id, "Ik.limit_max", "0 0 0");
 
-    // A rest rotation 25 degrees about the bone's own X away from the bind pose.
+    // A rest rotation 25 degrees about the bone's own X away from its creation rest.
     const Quat turn{0.2164396f, 0.0f, 0.0f, 0.9762960f};
     const Quat rest = multiply(l2_rest, turn);
     std::ostringstream rest_text;
@@ -2679,44 +2697,42 @@ TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_a
     // The drag starts on the new rest: the solve never teleports a joint
     // into its limits (the region is extended to hold the drag-start pose),
     // so a joint starting on the limits frame is held there, while a limits
-    // frame on the bind pose would leave it room to turn back toward it.
+    // frame on the creation rest would leave it room to turn back toward it.
     Mcp_client::Tool_result placed = client.call_tool(
         "set_node_transform",
-        json{{"scene_name", scene}, {"node_name", "arm_joint_L_2"}, {"space", "local"}, {"rotation_xyzw", {rest[0], rest[1], rest[2], rest[3]}}}
+        json{{"scene_name", scene}, {"node_name", "ik_chain.001"}, {"space", "local"}, {"rotation_xyzw", {rest[0], rest[1], rest[2], rest[3]}}}
     );
     ASSERT_FALSE(placed.is_error) << placed.text;
     advance_frames(client, 2);
 
-    const json l3 = details("arm_joint_L_3").at("world_transform").at("translation");
+    // The authored chain is unskinned: the IK drag routes through its bones
+    // all the same (erhe::scene::is_bone, the persistent flag).
+    const json l3 = details("ik_chain.002").at("world_transform").at("translation");
+    const json drag_target = {l3[0].get<float>() + 0.1f, l3[1].get<float>() + 0.1f, l3[2].get<float>() - 0.05f};
     Mcp_client::Tool_result dragged = client.call_tool(
-        "ik_drag",
-        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"},
-             {"target", {l3[0].get<float>() + 0.1f, l3[1].get<float>() + 0.1f, l3[2].get<float>() - 0.05f}}}
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "ik_chain.002"}, {"target", drag_target}}
     );
     ASSERT_FALSE(dragged.is_error) << dragged.text;
     advance_frames(client, 4);
-    const Quat l2_after = as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw"));
+    const Quat l2_after = as_quat(details("ik_chain.001").at("local_transform").at("rotation_xyzw"));
     EXPECT_LT(angle_deg(l2_after, rest), 0.5f) << "the drag holds the joint on the Rig.rest_rotation limits frame";
-    EXPECT_GT(angle_deg(l2_after, l2_rest), 20.0f) << "not on the bind pose";
-
-    // Control: with the Rig value cleared the limits frame is the bind pose
-    // again, and the same drag from the same start turns the joint.
+    EXPECT_GT(angle_deg(l2_after, l2_rest), 20.0f) << "not on the creation rest";
+    // Control: with the Rig value cleared the limits frame is the creation
+    // rest again, and the same drag from the same start turns the joint.
     client.call_tool("undo", json::object()); // the drag
     advance_frames(client, 4);
     Mcp_client::Tool_result unset = client.call_tool("set_item_property", json{{"item_id", l2_id}, {"property", "Rig.rest_rotation"}, {"value", nullptr}});
     ASSERT_FALSE(unset.is_error) << unset.text;
     advance_frames(client, 2);
-    EXPECT_LT(angle_deg(parse_quat(property(l2_id, "Ik.rest_rotation").value("value", "")), l2_rest), 0.05f) << "Ik.rest_rotation follows back to the bind pose";
-    ASSERT_LT(angle_deg(as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw")), rest), 0.05f);
+    EXPECT_LT(angle_deg(parse_quat(property(l2_id, "Ik.rest_rotation").value("value", "")), l2_rest), 0.05f) << "Ik.rest_rotation follows back to the creation rest";
+    ASSERT_LT(angle_deg(as_quat(details("ik_chain.001").at("local_transform").at("rotation_xyzw")), rest), 0.05f);
     Mcp_client::Tool_result control = client.call_tool(
-        "ik_drag",
-        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"},
-             {"target", {l3[0].get<float>() + 0.1f, l3[1].get<float>() + 0.1f, l3[2].get<float>() - 0.05f}}}
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "ik_chain.002"}, {"target", drag_target}}
     );
     ASSERT_FALSE(control.is_error) << control.text;
     advance_frames(client, 4);
-    EXPECT_GT(angle_deg(as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw")), rest), 1.0f)
-        << "on the bind-pose limits frame the joint is not held at the former rest";
+    EXPECT_GT(angle_deg(as_quat(details("ik_chain.001").at("local_transform").at("rotation_xyzw")), rest), 1.0f)
+        << "on the creation-rest limits frame the joint is not held at the former rest";
 
     // Clear and Paste Pose stop an animation playing on the bones.
     const std::string animation = first_animation_name(client, scene);
@@ -2940,6 +2956,207 @@ TEST_F(Mcp_test, rig_tail_defaults_to_the_skinned_inference_and_is_refused_on_a_
     EXPECT_NE(refused.text.find("skin"), std::string::npos) << refused.text;
     advance_frames(client, 2);
     EXPECT_EQ(item_property(client, upper_id, "Rig.tail").value("source", ""), "default");
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// doc/plans/rigging/skeleton_editing.md R5-R8: an unskinned chain built by
+// create_bone + extrude_bones x2, then subdivided, dissolved and deleted;
+// every verb is one undo step whose undo restores parents, local
+// transforms, tails, rest values and the connected flag.
+TEST_F(Mcp_test, bone_structure_verbs_build_an_unskinned_chain_and_undo_exactly)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto details = [&client, &scene](const char* name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", name}});
+        return result.is_error ? json::object() : result.payload;
+    };
+    auto exists = [&details](const char* name) -> bool {
+        return details(name).contains("id");
+    };
+    auto vec_of = [](const json& v) -> Rig_vec { return Rig_vec{v[0].get<float>(), v[1].get<float>(), v[2].get<float>()}; };
+    auto local_t = [&details, &vec_of](const char* name) -> Rig_vec { return vec_of(details(name).at("local_transform").at("translation")); };
+    auto world_t = [&details, &vec_of](const char* name) -> Rig_vec { return vec_of(details(name).at("world_transform").at("translation")); };
+    auto parent_of = [&details](const char* name) -> std::string { return details(name).value("parent", ""); };
+    auto rig = [&client, &details](const char* name, const char* property) -> json {
+        return item_property(client, details(name).value("id", 0), property);
+    };
+    auto rig_vec = [&rig](const char* name, const char* property) -> Rig_vec { return parse_rig_vec(rig(name, property).value("value", "")); };
+    auto call = [&client](const char* tool, const json& args) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool(tool, args);
+        advance_frames(client, 3);
+        return result;
+    };
+    auto undo = [&client]() { client.call_tool("undo", json::object()); advance_frames(client, 4); };
+    auto redo = [&client]() { client.call_tool("redo", json::object()); advance_frames(client, 4); };
+    constexpr float eps = 1.0e-4f;
+
+    // R5: at the scene root the head is the origin and the tail +Y, one unit.
+    std::size_t depth = undo_depth();
+    Mcp_client::Tool_result created = call("create_bone", json{{"scene_name", scene}, {"name", "chain"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    EXPECT_EQ(undo_depth(), depth + 1) << "create_bone is one undo step";
+    ASSERT_TRUE(exists("chain"));
+    EXPECT_EQ(rig("chain", "bone").value("value", ""), "true");
+    EXPECT_LT(rig_vec_distance(local_t("chain"), Rig_vec{0.0f, 0.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(rig_vec("chain", "Rig.tail"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+    EXPECT_EQ(rig("chain", "Rig.tail").value("source", ""), "local") << "the creation records the tail";
+    EXPECT_EQ(rig("chain", "Rig.rest_translation").value("source", ""), "local") << "the creation records the rest";
+    EXPECT_TRUE(details("chain").value("selected", false)) << "the new bone is selected";
+
+    // R6: two extrudes grow a connected chain along +Y.
+    for (const char* from : {"chain", "chain.001"}) {
+        depth = undo_depth();
+        Mcp_client::Tool_result extruded = call("extrude_bones", json{{"scene_name", scene}, {"bones", {from}}});
+        ASSERT_FALSE(extruded.is_error) << extruded.text;
+        EXPECT_EQ(undo_depth(), depth + 1) << "extrude_bones is one undo step";
+    }
+    ASSERT_TRUE(exists("chain.001"));
+    ASSERT_TRUE(exists("chain.002"));
+    EXPECT_EQ(parent_of("chain.001"), "chain");
+    EXPECT_EQ(parent_of("chain.002"), "chain.001");
+    EXPECT_LT(rig_vec_distance(world_t("chain.001"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(world_t("chain.002"), Rig_vec{0.0f, 2.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.002", "Rig.tail"), Rig_vec{0.0f, 1.0f, 0.0f}), eps) << "same direction and length as the parent";
+    EXPECT_EQ(rig("chain.002", "Rig.connected").value("value", ""), "true");
+    EXPECT_TRUE(details("chain.002").value("selected", false)) << "the extruded bone is the selection";
+    EXPECT_FALSE(details("chain.001").value("selected", false));
+    undo();
+    EXPECT_FALSE(exists("chain.002")) << "undo removes the extruded bone";
+    EXPECT_TRUE(details("chain.001").value("selected", false)) << "undo restores the selection";
+    redo();
+    ASSERT_TRUE(exists("chain.002"));
+    EXPECT_LT(rig_vec_distance(world_t("chain.002"), Rig_vec{0.0f, 2.0f, 0.0f}), eps);
+
+    // R7: chain.001 into three; chain.002 moves to the last piece, world kept.
+    depth = undo_depth();
+    Mcp_client::Tool_result divided = call("subdivide_bones", json{{"scene_name", scene}, {"bones", {"chain.001"}}, {"count", 3}});
+    ASSERT_FALSE(divided.is_error) << divided.text;
+    EXPECT_EQ(undo_depth(), depth + 1) << "subdivide_bones is one undo step";
+    ASSERT_EQ(divided.payload.at("created").size(), 2u);
+    ASSERT_TRUE(exists("chain.003"));
+    ASSERT_TRUE(exists("chain.004"));
+    EXPECT_EQ(parent_of("chain.003"), "chain.001");
+    EXPECT_EQ(parent_of("chain.004"), "chain.003");
+    EXPECT_EQ(parent_of("chain.002"), "chain.004") << "children re-parent to the last piece";
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.001", "Rig.tail"), Rig_vec{0.0f, 1.0f / 3.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(world_t("chain.004"), Rig_vec{0.0f, 1.0f + (2.0f / 3.0f), 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(world_t("chain.002"), Rig_vec{0.0f, 2.0f, 0.0f}), eps) << "the child keeps its world transform";
+    EXPECT_LT(rig_vec_distance(local_t("chain.002"), Rig_vec{0.0f, 1.0f / 3.0f, 0.0f}), eps) << "a connected child sits on the last piece's tail";
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.002", "Rig.rest_translation"), Rig_vec{0.0f, 1.0f / 3.0f, 0.0f}), eps) << "the child's rest moves with it";
+    undo();
+    EXPECT_FALSE(exists("chain.003"));
+    EXPECT_FALSE(exists("chain.004"));
+    EXPECT_EQ(parent_of("chain.002"), "chain.001");
+    EXPECT_LT(rig_vec_distance(local_t("chain.002"), Rig_vec{0.0f, 1.0f, 0.0f}), eps) << "undo restores the local transform";
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.001", "Rig.tail"), Rig_vec{0.0f, 1.0f, 0.0f}), eps) << "undo restores the tail";
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.002", "Rig.rest_translation"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+
+    // R8 dissolve: chain.001 was chain's only connected child, so chain's
+    // tail reaches chain.001's tail and chain.002 stays connected under it.
+    depth = undo_depth();
+    Mcp_client::Tool_result dissolved = call("delete_bones", json{{"scene_name", scene}, {"bones", {"chain.001"}}, {"mode", "dissolve"}});
+    ASSERT_FALSE(dissolved.is_error) << dissolved.text;
+    EXPECT_EQ(undo_depth(), depth + 1) << "dissolve is one undo step";
+    EXPECT_FALSE(exists("chain.001"));
+    EXPECT_EQ(parent_of("chain.002"), "chain");
+    EXPECT_LT(rig_vec_distance(rig_vec("chain", "Rig.tail"), Rig_vec{0.0f, 2.0f, 0.0f}), eps) << "the parent's tail is extended";
+    EXPECT_LT(rig_vec_distance(local_t("chain.002"), Rig_vec{0.0f, 2.0f, 0.0f}), eps);
+    EXPECT_EQ(rig("chain.002", "Rig.connected").value("value", ""), "true");
+    undo();
+    ASSERT_TRUE(exists("chain.001"));
+    EXPECT_EQ(parent_of("chain.002"), "chain.001");
+    EXPECT_LT(rig_vec_distance(rig_vec("chain", "Rig.tail"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(local_t("chain.002"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(local_t("chain.001"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+
+    // R8 delete: chain.002 moves to chain keeping its world transform, and is
+    // disconnected (its head is not on chain's tail).
+    depth = undo_depth();
+    Mcp_client::Tool_result deleted = call("delete_bones", json{{"scene_name", scene}, {"bones", {"chain.001"}}, {"mode", "delete"}});
+    ASSERT_FALSE(deleted.is_error) << deleted.text;
+    EXPECT_EQ(undo_depth(), depth + 1) << "delete is one undo step";
+    EXPECT_FALSE(exists("chain.001"));
+    EXPECT_EQ(parent_of("chain.002"), "chain");
+    EXPECT_LT(rig_vec_distance(world_t("chain.002"), Rig_vec{0.0f, 2.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(rig_vec("chain", "Rig.tail"), Rig_vec{0.0f, 1.0f, 0.0f}), eps) << "delete leaves the parent's tail";
+    EXPECT_EQ(rig("chain.002", "Rig.connected").value("value", ""), "false");
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.002", "Rig.rest_translation"), Rig_vec{0.0f, 2.0f, 0.0f}), eps) << "rest(removed) * rest(child)";
+    undo();
+    ASSERT_TRUE(exists("chain.001"));
+    EXPECT_EQ(parent_of("chain.002"), "chain.001");
+    EXPECT_EQ(rig("chain.002", "Rig.connected").value("value", ""), "true");
+    EXPECT_LT(rig_vec_distance(local_t("chain.002"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+    EXPECT_LT(rig_vec_distance(rig_vec("chain.002", "Rig.rest_translation"), Rig_vec{0.0f, 1.0f, 0.0f}), eps);
+
+    // R5 under a bone: the head is the parent's tail; not connected.
+    Mcp_client::Tool_result child = call("create_bone", json{{"scene_name", scene}, {"parent", "chain.002"}});
+    ASSERT_FALSE(child.is_error) << child.text;
+    ASSERT_TRUE(exists("Bone"));
+    EXPECT_EQ(parent_of("Bone"), "chain.002");
+    EXPECT_LT(rig_vec_distance(world_t("Bone"), Rig_vec{0.0f, 3.0f, 0.0f}), eps);
+    EXPECT_EQ(rig("Bone", "Rig.connected").value("value", ""), "false");
+
+    // The authored chain is unskinned: an IK drag of its leaf routes through
+    // its bones (erhe::scene::is_bone, the persistent flag) and reaches a
+    // reachable target.
+    const Rig_vec head = world_t("Bone");
+    const Rig_vec target{head[0] + 0.5f, head[1] - 0.5f, head[2] + 0.3f};
+    Mcp_client::Tool_result dragged = call("ik_drag", json{{"scene_name", scene}, {"node_name", "Bone"}, {"target", {target[0], target[1], target[2]}}});
+    ASSERT_FALSE(dragged.is_error) << dragged.text;
+    EXPECT_EQ(dragged.payload.at("joints").size(), 4u) << "the chain is Bone and its three bone ancestors";
+    EXPECT_LT(rig_vec_distance(world_t("Bone"), target), 1.0e-2f) << "the drag solves";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// R9: every structure verb is refused on a bone a skin lists, naming the
+// skin, and queues nothing.
+TEST_F(Mcp_test, bone_structure_verbs_are_refused_on_a_bound_bone)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    const std::size_t depth = undo_depth();
+    const std::vector<std::pair<std::string, json>> calls{
+        {"create_bone",     json{{"scene_name", scene}, {"parent", "arm_joint_L_1"}}},
+        {"extrude_bones",   json{{"scene_name", scene}, {"bones", {"arm_joint_L_3"}}}},
+        {"subdivide_bones", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1"}}, {"count", 2}}},
+        {"delete_bones",    json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"mode", "delete"}}},
+        {"delete_bones",    json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"mode", "dissolve"}}}
+    };
+    for (const std::pair<std::string, json>& entry : calls) {
+        Mcp_client::Tool_result refused = client.call_tool(entry.first, entry.second);
+        EXPECT_TRUE(refused.is_error) << entry.first << " is refused on a bound bone";
+        EXPECT_NE(refused.text.find("is a joint of skin '"), std::string::npos) << entry.first << ": " << refused.text;
+        advance_frames(client, 2);
+    }
+    EXPECT_EQ(undo_depth(), depth) << "a refused verb queues nothing";
+    Mcp_client::Tool_result node = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_2"}});
+    EXPECT_FALSE(node.is_error) << "the bound bone is still there";
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

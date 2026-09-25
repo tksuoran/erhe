@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Skeleton editing slices A and B and the foundations (doc/plans/rigging/skeleton_editing.md R1-R4, R10-R15), driven as a user does.
+"""Skeleton editing slices A, B, the foundations and slice C structure (doc/plans/rigging/skeleton_editing.md R1-R15), driven as a user does.
 
 On res/editor/assets/RiggedFigure/RiggedFigure.glb (its bones carry the side
 before a trailing index: arm_joint_L_1 .. arm_joint_R_3, leg_joint_L_1 ..
@@ -18,6 +18,14 @@ connected child follows, one undo step, Ctrl+Z restores), the bone proxies
 redrawn from the new tail (bone selection mode, screenshots compared along
 the old and the new tail) and a glTF save + reopen that keeps the bones, the
 tail and the connection.
+
+Section E authors a skeleton in another scene through the Hierarchy menu:
+Create > Bone on a plain node, Extrude twice, Subdivide > 2 Bones, Delete
+Bone and Dissolve Bone, each checked for its result, exactly one undo step
+and Ctrl+Z restoring it; on RiggedFigure's skin joints the structure entries
+are offered disabled and extrude_bones is refused with the skin named in the
+log; a glTF save + reopen keeps the authored bones, tails, connected flags
+and rest values.
 
     py -3 scripts/skeleton_editing_verify.py [--port N] [--launch]
 
@@ -330,7 +338,7 @@ def posing_checks(figure: Figure):
 
 
 def usd_warning_check(e: Editor, opened):
-    """A local Rig.* value is counted by the USD save's 'not written' warning, as Ik.* values are."""
+    """Local Rig.* values are counted by the USD save's 'not written' warning, as Ik.* values are."""
     usd_scene = load_scene_file(e, USD_PATH)
     opened.append(usd_scene)
     formats = {sc["name"]: sc.get("source_format") for sc in e.call("list_scenes")["scenes"]}
@@ -339,17 +347,20 @@ def usd_warning_check(e: Editor, opened):
         return
     e.call("import_gltf", {"scene_name": usd_scene, "path": ASSET_PATH})
     e.wait_idle()
-    bone = [n["id"] for n in e.call("get_scene_nodes", {"scene_name": usd_scene})["nodes"]
-            if (n["name"] == "arm_joint_L_2") and n.get("content", False)][0]
-    e.call("set_item_property", {"item_id": bone, "property": "Rig.rest_rotation", "value": "0 0 0.3826834 0.9238795"})
+    # A bound bone refuses a Rig.* write (R9): the local value goes on a bone
+    # created in the scene, whose creation records its Rig.tail and rest.
+    e.call("create_bone", {"scene_name": usd_scene, "name": "usd_rest_bone"})
     e.advance(4)
+    # Create Bone selects the new bone; later sections select in their own scenes.
+    e.call("select_items", {"scene_name": usd_scene, "ids": []})
+    e.advance(2)
     usd_path = os.path.join(tempfile.mkdtemp(prefix="erhe_skeleton_editing_"), "rest.usda")
     offset = log_size()
     e.call("save_scene", {"scene_name": usd_scene, "path": usd_path})
     e.wait_idle()
     text = log_since(offset)
     warned = ("carry IK settings or rest transforms" in text) and ("1 node(s)" in text)
-    check_true("C.10 saving as USD warns that the one node's rest transform (Rig.*) is not written",
+    check_true("C.10 saving as USD warns that the one created bone's Rig.* values (its rest transform) are not written",
                warned and os.path.isfile(usd_path), f"warned={warned} file={os.path.isfile(usd_path)}")
 
 
@@ -497,6 +508,229 @@ def foundations_checks(e: Editor, opened):
                f"missing={missing} bone={bones} Rig.tail={tail['value'] if tail else None}")
 
 
+# --- section E: bone creation and structure (R5-R9) -------------------------
+
+STRUCTURE_ENTRIES = ["Extrude", "Subdivide", "Delete Bone", "Dissolve Bone"]
+
+
+class Skeleton:
+    """A scene of its own for the authored skeleton, driven through its Hierarchy window like Figure."""
+
+    def __init__(self, editor: Editor, scene: str) -> None:
+        self.e = editor
+        self.scene = scene
+        windows = [w["name"] for w in editor.call("get_imgui_windows")["windows"]]
+        hierarchy = [name for name in windows if name.startswith("Scene Hierarchy")]
+        own = [name for name in hierarchy if scene in name]
+        self.hierarchy = own[-1] if own else hierarchy[-1]
+        self.viewport = [v for v in editor.call("get_viewports")["viewports"] if v["scene"] == scene][0]
+
+    def set_filter(self, text):
+        self.e.click(self.hierarchy, "##Filter")
+        self.e.key("a", ["ctrl"])
+        self.e.key("backspace")
+        if text:
+            self.e.call("type_text", {"text": text})
+        self.e.advance(4)
+
+    def run(self, node, *entries):
+        """Right-click the node's row, then click the menu entries in turn (a submenu, then its item)."""
+        self.set_filter(node)
+        self.e.click(self.hierarchy, node, button="right")
+        self.e.advance(2)
+        for entry in entries:
+            self.e.click(None, entry)
+            self.e.advance(2)
+        self.e.advance(4)
+        self.set_filter("")
+
+    def details(self, name):
+        try:
+            return self.e.call("get_node_details", {"scene_name": self.scene, "node_name": name})
+        except RuntimeError:
+            return None
+
+    def exists(self, name):
+        return self.details(name) is not None
+
+    def parent(self, name):
+        d = self.details(name)
+        return d["parent"] if d else None
+
+    def world(self, name):
+        return self.details(name)["world_transform"]["translation"]
+
+    def local(self, name):
+        return self.details(name)["local_transform"]["translation"]
+
+    def prop(self, name, prop):
+        d = self.details(name)
+        if d is None:
+            return None
+        for entry in self.e.call("get_item_properties", {"item_id": d["id"]})["properties"]:
+            if entry.get("name") == prop:
+                return entry
+        return None
+
+    def vec(self, name, prop):
+        return parse_vec(self.prop(name, prop)["value"])
+
+    def undo(self):
+        v = self.viewport
+        self.e.move(v["x"] + (v["width"] / 2.0), v["y"] + (v["height"] / 2.0))
+        self.e.key("z", ["ctrl"])
+        self.e.advance(4)
+
+
+def vec_close(a, b, eps=1.0e-4):
+    return (len(a) == len(b)) and all(abs(a[i] - b[i]) < eps for i in range(len(a)))
+
+
+def near(a, b, eps=1.0e-4):
+    return (a is not None) and (b is not None) and (distance(a, b) < eps)
+
+
+def structure_refusal_checks(figure: Figure):
+    """R9 on RiggedFigure, while its Hierarchy window is the visible one."""
+    print("\n== Bone structure refused on a bound skeleton (R9) ==")
+    e = figure.e
+    figure.set_filter("arm_joint_L_2")
+    e.click(figure.hierarchy, "arm_joint_L_2", button="right")
+    e.advance(2)
+    items = {item.get("label"): item for item in e.items(visible_only=True) if item.get("label") in STRUCTURE_ENTRIES}
+    e.key("escape")
+    figure.set_filter("")
+    disabled = {label: items[label].get("status", {}).get("disabled", False) for label in items}
+    check_true("E.1 on RiggedFigure's 'arm_joint_L_2' (a skin joint) the structure entries are offered disabled",
+               (set(disabled) == set(STRUCTURE_ENTRIES)) and all(disabled.values()), f"disabled={disabled}")
+    offset = log_size()
+    depth = e.undo_depth()
+    try:
+        e.call("extrude_bones", {"scene_name": figure.scene, "bones": ["arm_joint_L_2"]})
+        refused_call = False
+    except RuntimeError:
+        refused_call = True
+    e.advance(2)
+    text = log_since(offset)
+    check_true("E.2 extrude_bones on it is refused and the log names the skin; nothing is queued",
+               refused_call and ("is a joint of skin '" in text) and (e.undo_depth() == depth),
+               f"refused={refused_call} logged={'is a joint of skin' in text}")
+
+
+def structure_checks(e: Editor, opened):
+    print("\n== Bone creation and structure (R5-R9) ==")
+    scene = e.create_scene()
+    opened.append(scene)
+    e.call("create_node", {"scene_name": scene, "name": "skeleton_base", "position": [0.0, 0.0, 0.0]})
+    e.advance(3)
+    s = Skeleton(e, scene)
+
+    # E.3 / E.4: Create > Bone on a non-bone node.
+    depth = e.undo_depth()
+    s.run("skeleton_base", "Create", "Bone")
+    created = s.exists("Bone") and (s.parent("Bone") == "skeleton_base")
+    tail = s.prop("Bone", "Rig.tail") if created else None
+    selected = created and s.details("Bone")["selected"]
+    check_true("E.3 Create > Bone on 'skeleton_base' adds bone 'Bone' at the node's origin, tail +Y (local value), "
+               "selected, one undo step",
+               created and near(s.world("Bone"), [0.0, 0.0, 0.0]) and (tail["source"] == "local")
+               and near(parse_vec(tail["value"]), [0.0, 1.0, 0.0]) and selected
+               and (s.prop("Bone", "bone")["value"] == "true") and (e.undo_depth() == depth + 1),
+               f"created={created} tail={tail['value'] if tail else None} selected={selected} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("E.4 Ctrl+Z removes the created bone", (not s.exists("Bone")) and (e.undo_depth() == depth),
+               f"exists={s.exists('Bone')} undo depth {e.undo_depth()}")
+    s.run("skeleton_base", "Create", "Bone")
+
+    # E.5 - E.7: Extrude twice grows a connected chain.
+    depth = e.undo_depth()
+    s.run("Bone", "Extrude")
+    ok = s.exists("Bone.001") and (s.parent("Bone.001") == "Bone")
+    check_true("E.5 Extrude on 'Bone' adds the connected child 'Bone.001' on its tail (0, 1, 0), same tail, selected, one undo step",
+               ok and near(s.world("Bone.001"), [0.0, 1.0, 0.0]) and near(s.vec("Bone.001", "Rig.tail"), [0.0, 1.0, 0.0])
+               and (s.prop("Bone.001", "Rig.connected")["value"] == "true") and s.details("Bone.001")["selected"]
+               and (not s.details("Bone")["selected"]) and (e.undo_depth() == depth + 1),
+               f"exists={ok} world={s.world('Bone.001') if ok else None} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("E.6 Ctrl+Z removes the extruded bone", not s.exists("Bone.001"), f"exists={s.exists('Bone.001')}")
+    s.run("Bone", "Extrude")
+    depth = e.undo_depth()
+    s.run("Bone.001", "Extrude")
+    ok = s.exists("Bone.002") and (s.parent("Bone.002") == "Bone.001")
+    check_true("E.7 a second Extrude on 'Bone.001' adds 'Bone.002' at (0, 2, 0), one undo step",
+               ok and near(s.world("Bone.002"), [0.0, 2.0, 0.0]) and (e.undo_depth() == depth + 1),
+               f"exists={ok} world={s.world('Bone.002') if ok else None} undo depth {depth} -> {e.undo_depth()}")
+
+    # E.8 / E.9: Subdivide > 2 Bones.
+    depth = e.undo_depth()
+    s.run("Bone.001", "Subdivide", "2 Bones")
+    ok = s.exists("Bone.003") and (s.parent("Bone.003") == "Bone.001") and (s.parent("Bone.002") == "Bone.003")
+    check_true("E.8 Subdivide > 2 Bones on 'Bone.001' halves its tail, adds 'Bone.003' at (0, 1.5, 0) and moves 'Bone.002' "
+               "under it keeping its world position, one undo step",
+               ok and near(s.vec("Bone.001", "Rig.tail"), [0.0, 0.5, 0.0]) and near(s.world("Bone.003"), [0.0, 1.5, 0.0])
+               and near(s.world("Bone.002"), [0.0, 2.0, 0.0]) and near(s.local("Bone.002"), [0.0, 0.5, 0.0])
+               and (e.undo_depth() == depth + 1),
+               f"structure={ok} Bone.002 parent={s.parent('Bone.002')} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("E.9 Ctrl+Z restores 'Bone.001' whole: its tail, 'Bone.002' back under it at local (0, 1, 0)",
+               (not s.exists("Bone.003")) and (s.parent("Bone.002") == "Bone.001") and near(s.vec("Bone.001", "Rig.tail"), [0.0, 1.0, 0.0])
+               and near(s.local("Bone.002"), [0.0, 1.0, 0.0]) and (e.undo_depth() == depth),
+               f"Bone.003 exists={s.exists('Bone.003')} Bone.002 parent={s.parent('Bone.002')}")
+
+    # E.10 / E.11: Delete Bone.
+    depth = e.undo_depth()
+    s.run("Bone.001", "Delete Bone")
+    ok = (not s.exists("Bone.001")) and (s.parent("Bone.002") == "Bone")
+    check_true("E.10 Delete Bone on 'Bone.001' moves 'Bone.002' to 'Bone' keeping (0, 2, 0), disconnected, 'Bone' tail kept, one undo step",
+               ok and near(s.world("Bone.002"), [0.0, 2.0, 0.0]) and (s.prop("Bone.002", "Rig.connected")["value"] == "false")
+               and near(s.vec("Bone", "Rig.tail"), [0.0, 1.0, 0.0]) and (e.undo_depth() == depth + 1),
+               f"removed={ok} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("E.11 Ctrl+Z restores 'Bone.001' with 'Bone.002' connected under it",
+               s.exists("Bone.001") and (s.parent("Bone.002") == "Bone.001") and (s.prop("Bone.002", "Rig.connected")["value"] == "true")
+               and near(s.local("Bone.002"), [0.0, 1.0, 0.0]) and (e.undo_depth() == depth),
+               f"Bone.002 parent={s.parent('Bone.002')}")
+
+    # E.12 / E.13: Dissolve Bone.
+    depth = e.undo_depth()
+    s.run("Bone.001", "Dissolve Bone")
+    ok = (not s.exists("Bone.001")) and (s.parent("Bone.002") == "Bone")
+    check_true("E.12 Dissolve Bone on 'Bone.001' extends 'Bone''s tail to (0, 2, 0); 'Bone.002' stays connected on it, one undo step",
+               ok and near(s.vec("Bone", "Rig.tail"), [0.0, 2.0, 0.0]) and near(s.local("Bone.002"), [0.0, 2.0, 0.0])
+               and (s.prop("Bone.002", "Rig.connected")["value"] == "true") and (e.undo_depth() == depth + 1),
+               f"removed={ok} Bone tail={s.prop('Bone', 'Rig.tail')['value']} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("E.13 Ctrl+Z restores 'Bone.001' and 'Bone''s tail",
+               s.exists("Bone.001") and (s.parent("Bone.002") == "Bone.001") and near(s.vec("Bone", "Rig.tail"), [0.0, 1.0, 0.0])
+               and (e.undo_depth() == depth),
+               f"Bone tail={s.prop('Bone', 'Rig.tail')['value']}")
+
+    # E.14: glTF save + reopen keeps the authored skeleton.
+    path = os.path.join(tempfile.mkdtemp(prefix="erhe_skeleton_editing_"), "authored_skeleton.glb")
+    names = ("Bone", "Bone.001", "Bone.002")
+    before = {name: {prop: s.prop(name, prop)["value"] for prop in ("bone", "Rig.tail", "Rig.connected", "Rig.rest_translation", "Rig.rest_rotation", "Rig.rest_scale")}
+              for name in names}
+    e.call("save_scene", {"scene_name": scene, "path": path})
+    e.wait_idle()
+    reopened = load_scene_file(e, path)
+    opened.append(reopened)
+    r = Skeleton(e, reopened)
+    after = {}
+    for name in names:
+        if not r.exists(name):
+            after[name] = None
+            continue
+        after[name] = {prop: r.prop(name, prop)["value"] for prop in before[name]}
+    same = all((after[name] is not None) and all(
+        (after[name][prop] == before[name][prop]) if prop in ("bone", "Rig.connected")
+        else vec_close(parse_vec(after[name][prop]), parse_vec(before[name][prop]))
+        for prop in before[name]) for name in names)
+    parents = [r.parent(name) for name in names]
+    check_true("E.14 a glTF save + reopen keeps the authored bones, tails, connected flags and rest values",
+               same and (parents == ["skeleton_base", "Bone", "Bone.001"]),
+               f"parents={parents} after={after}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=None)
@@ -519,8 +753,10 @@ def main():
         selection_checks(figure)
         flip_names_checks(figure)
         posing_checks(figure)
+        structure_refusal_checks(figure)
         usd_warning_check(e, opened)
         foundations_checks(e, opened)
+        structure_checks(e, opened)
     finally:
         # Closing the scenes closes their viewport windows, which the editor
         # would otherwise record as open in desktop_windows.json at exit.

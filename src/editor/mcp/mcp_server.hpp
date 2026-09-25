@@ -260,6 +260,10 @@ private:
     auto action_clear_pose         (const nlohmann::json& args) -> std::string;
     auto action_copy_pose          (const nlohmann::json& args) -> std::string;
     auto action_paste_pose         (const nlohmann::json& args) -> std::string;
+    auto action_create_bone        (const nlohmann::json& args) -> std::string;
+    auto action_extrude_bones      (const nlohmann::json& args) -> std::string;
+    auto action_subdivide_bones    (const nlohmann::json& args) -> std::string;
+    auto action_delete_bones       (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
     auto action_create_node     (const nlohmann::json& args) -> std::string;

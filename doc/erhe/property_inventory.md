@@ -256,7 +256,7 @@ and each is listed on a node carrying `Item_flags::bone`.
 
 | Property | Storage | Notes |
 |---|---|---|
-| Rig.rest_translation, Rig.rest_rotation, Rig.rest_scale | attached | the bone's rest transform (local TRS), one property per channel; computed default (D31): the channel of the bind-pose local transform (erhe::scene::get_bind_pose_parent_from_node), identity without a skin; Ik.rest_rotation defaults to Rig.rest_rotation |
+| Rig.rest_translation, Rig.rest_rotation, Rig.rest_scale | attached | the bone's rest transform (local TRS), one property per channel; computed default (D31): the channel of the bind-pose local transform (erhe::scene::get_bind_pose_parent_from_node), identity without a skin; Ik.rest_rotation defaults to Rig.rest_rotation; bridge validate refuses a write on a bone a skin lists (R9); the bone creation verbs record a created bone's creation local TRS |
 | Rig.tail | attached | head-to-tail vector in the bone's local frame; computed default (D31): compute_default_bone_tail (rig/bone_tail.hpp); bridge validate refuses a write on a bone a skin lists (R9); a change reaches the node systems (Rig_system -> bone display); an edit moves the connected children in its undo step |
 | Rig.connected | attached | bool, default false; an edit to true snaps the node's head onto its bone parent's Rig.tail in the edit's undo step |
 
