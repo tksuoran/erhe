@@ -439,7 +439,6 @@ private:
     std::shared_ptr<erhe::scene::Node>  m_tool_node;
     Subtool*                            m_hover_tool      {nullptr};
     Subtool*                            m_active_tool     {nullptr};
-    Subtool*                            m_last_active_tool{nullptr};
     Subtool*                            m_rotate_subtool  {nullptr};
     Subtool*                            m_scale_subtool   {nullptr};
     // Dynamic bodies of the dragged nodes, taken over for the drag: jointed

@@ -650,13 +650,6 @@ def setup(e: Editor) -> Rig:
     # High enough that every translate plane handle faces the camera.
     rig.place_camera([4.5, 5.5, 7.0], [0.0, 1.5, 0.0])
 
-    # The Transform window shows the Move tool group only after a first gizmo
-    # drag (finding F1): prime it with one short drag, undone.
-    depth = e.undo_depth()
-    rig.translate_drag_pointer(TIP, ramp([0.0, -0.2, 0.0], 3), "Translate Y")
-    if e.undo_depth() > depth:
-        e.call("undo")
-        e.advance(3)
     # Move tool parameters are session state: a reused editor keeps what an
     # earlier run left, so set them rather than assume the startup values.
     bone_ik = e.find_item("Transform", "Bone IK")

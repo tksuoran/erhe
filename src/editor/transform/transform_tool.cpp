@@ -498,20 +498,18 @@ void Transform_tool::window_imgui()
 
     transform_properties();
 
-    if (m_active_tool != nullptr) {
-        m_last_active_tool = m_active_tool;
-    }
-    if (m_last_active_tool != nullptr) {
-        ImGui::Separator();
+    // Every subtool's parameter group is shown from startup, so its
+    // settings (Move tool: Bone IK, Effector Orientation) can be set
+    // before the first drag.
+    ImGui::Separator();
+    m_context.move_tool  ->imgui(m_property_editor);
+    m_context.rotate_tool->imgui(m_property_editor);
+    m_context.scale_tool ->imgui(m_property_editor);
 
-        m_last_active_tool->imgui(m_property_editor);
+    ImGui::Separator();
 
-        ImGui::Separator();
-
-        ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
-        ImGui::Text("Active handle: %s", c_str(m_active_handle));
-
-    }
+    ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
+    ImGui::Text("Active handle: %s", c_str(m_active_handle));
 
     ImGui::Separator();
 }

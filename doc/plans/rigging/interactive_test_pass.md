@@ -77,8 +77,8 @@ menu), aims the scene camera, and restores the rig before each check.
 
 - **Move tool parameters** (Snap Enable, Bone IK, Effector Orientation):
   the Transform window, below the translation / rotation / scale / skew
-  fields, in a "Move tool" group. The group appears once a gizmo handle has
-  been hovered or dragged (finding F1).
+  fields, in a "Move tool" group (next to the "Rotate Tool" group), shown
+  from startup.
 - **Lock / Limit / Stiffness / Rest Rotation / Pole Target / Pole Angle
   rows**: Properties, group "IK" of the bone node itself. They appear on any
   node the rig marks as a bone; nothing has to be added first.
@@ -249,9 +249,9 @@ for a pole to aim.
 
 ## Findings
 
-- **F1.** The Transform window shows no tool parameter group until a gizmo
-  handle has been dragged once. Queued in `prompt_queue.txt`, to fix after
-  this pass; the script primes it with one drag, undone.
+- **F1.** Fixed: the Transform window showed no tool parameter group until a
+  gizmo handle had been dragged once. The Move and Rotate tool groups are now
+  drawn from startup.
 - **F2.** Fixed: the default Rest Rotation of a bone (its bind pose) followed
   the current pose, so limits without an explicit rest were measured from
   the pose (a bone at 20 degrees stopped at 20 + 45). The bind pose is now
