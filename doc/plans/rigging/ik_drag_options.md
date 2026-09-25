@@ -449,7 +449,8 @@ Section 2 is implemented as specified:
   (`src/editor/config/definitions/debug_visualizations_style.py`, struct
   version 2).
 
-Section 3 is implemented in part - the shared option plumbing and Solve From:
+Section 3 is implemented in part - the shared option plumbing, Solve From and
+Pole Alignment:
 
 - Options - `Ik_mid_chain_drag`, `Ik_solve_from`, `Ik_pole_alignment` with
   their `c_..._strings` labels, and `Ik_drag_options`, in
@@ -471,13 +472,31 @@ Section 3 is implemented in part - the shared option plumbing and Solve From:
   `path` as the alternative to `target` (R31, R32; schema in
   `config/editor/mcp_tools.json`), exercised by
   `Mcp_test.ik_drag_path_and_solve_from`.
-- Acceptance verification - criterion 2 of 3.6 is check 8.4 of
-  `scripts/ik_interactive_pass_verify.py`.
+- Pole Alignment - `ik_apply_pole` takes the weight and returns the full
+  swivel angle, `Ik_chain::pole_weight` carries it (`ik_solver.{hpp,cpp}`,
+  R28). The unconstrained path swivels its result by the weight; the
+  constrained path swivels its first defined per-iteration application by the
+  weight and then aims every later iteration at the residual angle that left,
+  so iterating holds the partial swivel instead of compounding it into a
+  snap. `Ik_drag::apply` computes the weight (`Ik_drag::pole_weight`: 1 under
+  `snap`, the R28 ramp under `ease_in`) and reports the last one through
+  `Ik_drag::get_pole_weight()`.
+- Move tool - "Pole Alignment" combo after "Solve From", and "Pole Ease
+  Distance" (slider in [0.05, 2]) while Ease In is chosen (R30).
+- MCP - the `pole_alignment` and `pole_ease_distance` arguments of `ik_drag`,
+  refused before any joint moves when unrecognized or out of range, echoed
+  with the last step's `pole_weight` (R31), exercised by
+  `Mcp_test.ik_drag_pole_alignment_ease_in`.
+- Acceptance verification - criterion 2 of 3.6 is check 8.4 and criterion 3
+  is check 8.5 of `scripts/ik_interactive_pass_verify.py`; criterion 5 is
+  `Ik_solver.pole_weight_scales_the_swivel` and
+  `Ik_solver.pole_weight_applies_on_both_solver_paths`
+  (`src/editor/transform/test/test_ik_solver.cpp`).
 
-Not implemented yet: Mid-Chain Drag `pin_chain_end` (R20-R24), Pole
-Alignment `ease_in` and `pole_ease_distance` (R27, R28), their Move tool rows
-(R30) and `ik_drag` arguments (R31), and acceptance criteria 1, 3 and 5 of
-3.6.
+Not implemented yet: Mid-Chain Drag `pin_chain_end` (R20-R24, including the
+lower chain's use of the pole weight in R28), its Move tool row (R30) and
+`ik_drag` argument (R31), and acceptance criterion 1 of 3.6 (criterion 4 for
+the Pin Chain End combinations).
 
 Outstanding: interactive (windowed) verification of the Move tool combo, of a
 live gizmo drag under `follow_last_segment`, and of the chain visualization

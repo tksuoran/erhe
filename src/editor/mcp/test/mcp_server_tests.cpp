@@ -2003,6 +2003,188 @@ TEST_F(Mcp_test, ik_drag_path_and_solve_from)
     advance_frames(client, 4);
 }
 
+// doc/plans/rigging/ik_drag_options.md R27, R28, R31: pole_alignment and
+// pole_ease_distance are explicit arguments, echoed, and refused before any
+// joint moves when unrecognized or out of range. Under ease_in a drag shorter
+// than the ease distance leaves the bend partly swiveled toward the pole
+// (by w = d / (pole_ease_distance * reach)); at or past it the bend is on the
+// pole, as under snap.
+TEST_F(Mcp_test, ik_drag_pole_alignment_ease_in)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Vec = std::array<float, 3>;
+    auto sub   = [](const Vec& a, const Vec& b) -> Vec { return Vec{a[0] - b[0], a[1] - b[1], a[2] - b[2]}; };
+    auto add   = [](const Vec& a, const Vec& b) -> Vec { return Vec{a[0] + b[0], a[1] + b[1], a[2] + b[2]}; };
+    auto scale = [](const Vec& a, const float s) -> Vec { return Vec{a[0] * s, a[1] * s, a[2] * s}; };
+    auto dot   = [](const Vec& a, const Vec& b) -> float { return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]); };
+    auto cross = [](const Vec& a, const Vec& b) -> Vec {
+        return Vec{(a[1] * b[2]) - (a[2] * b[1]), (a[2] * b[0]) - (a[0] * b[2]), (a[0] * b[1]) - (a[1] * b[0])};
+    };
+    auto norm      = [&dot](const Vec& a) -> float { return std::sqrt(dot(a, a)); };
+    auto normalize = [&norm, &scale](const Vec& a) -> Vec { return scale(a, 1.0f / norm(a)); };
+    auto as_json   = [](const Vec& p) -> json { return json::array({p[0], p[1], p[2]}); };
+    auto joint_positions = [](const json& payload) -> std::vector<Vec> {
+        std::vector<Vec> positions;
+        for (const json& joint : payload.at("joints")) {
+            const json& p = joint.at("position");
+            positions.push_back(Vec{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()});
+        }
+        return positions;
+    };
+    // Perpendicular offset of point from the root-to-effector line (pole_target.md R11 step 2).
+    auto perpendicular = [&](const std::vector<Vec>& positions, const Vec& point) -> Vec {
+        const Vec axis   = normalize(sub(positions.back(), positions.front()));
+        const Vec offset = sub(point, positions.front());
+        return sub(offset, scale(axis, dot(offset, axis)));
+    };
+    // Mean bend direction (R11 step 3).
+    auto bend = [&](const std::vector<Vec>& positions) -> Vec {
+        Vec sum{0.0f, 0.0f, 0.0f};
+        for (std::size_t i = 1; i + 1 < positions.size(); ++i) {
+            sum = add(sum, perpendicular(positions, positions[i]));
+        }
+        return normalize(sum);
+    };
+    // Signed angle (degrees) about the root-to-effector line from the pole's
+    // direction to the bend.
+    auto off_pole_deg = [&](const std::vector<Vec>& positions, const Vec& pole_position) -> float {
+        const Vec axis    = normalize(sub(positions.back(), positions.front()));
+        const Vec to_pole = normalize(perpendicular(positions, pole_position));
+        const Vec b       = bend(positions);
+        return std::atan2(dot(cross(to_pole, b), axis), dot(to_pole, b)) * (180.0f / 3.14159265f);
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto effector_position = [&]() -> Vec {
+        Mcp_client::Tool_result details = client.call_tool(
+            "get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+        );
+        const json& t = details.payload.at("world_transform").at("translation");
+        return Vec{t[0].get<float>(), t[1].get<float>(), t[2].get<float>()};
+    };
+    // One measured gesture, undone again, so every drag starts from the same pose.
+    auto drag = [&](const Vec& target, const json& extra) -> Mcp_client::Tool_result {
+        json args{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", as_json(target)}};
+        for (auto it = extra.begin(); it != extra.end(); ++it) {
+            args[it.key()] = it.value();
+        }
+        Mcp_client::Tool_result result = client.call_tool("ik_drag", args);
+        advance_frames(client, 4);
+        if (!result.is_error && result.payload.at("recorded").get<bool>()) {
+            client.call_tool("undo", json::object());
+            advance_frames(client, 4);
+        }
+        return result;
+    };
+
+    const Vec start = effector_position();
+    Mcp_client::Tool_result rest = drag(start, json::object());
+    ASSERT_FALSE(rest.is_error) << rest.text;
+    const std::vector<Vec> rest_positions = joint_positions(rest.payload);
+    ASSERT_GE(rest_positions.size(), std::size_t{3}) << "the arm chain has an intermediate joint";
+    float reach = 0.0f;
+    for (std::size_t i = 0; i + 1 < rest_positions.size(); ++i) {
+        reach += norm(sub(rest_positions[i + 1], rest_positions[i]));
+    }
+    ASSERT_GT(reach, 0.0f);
+
+    // The unpoled bend toward a target 0.15 reach sideways; the pole is
+    // placed 60 degrees about the axis away from it.
+    const float drag_fraction = 0.15f;
+    const Vec   target{start[0] + (drag_fraction * reach), start[1], start[2]};
+    Mcp_client::Tool_result unpoled = drag(target, json::object());
+    ASSERT_FALSE(unpoled.is_error) << unpoled.text;
+    const std::vector<Vec> unpoled_positions = joint_positions(unpoled.payload);
+    const Vec   axis     = normalize(sub(unpoled_positions.back(), unpoled_positions.front()));
+    const Vec   b        = bend(unpoled_positions);
+    const Vec   side     = cross(axis, b);
+    const Vec   pole_dir = add(scale(b, 0.5f), scale(side, 0.8660254f)); // 60 degrees from b
+    const Vec   pole     = add(unpoled_positions.front(), scale(pole_dir, reach));
+    const float unpoled_off_pole = off_pole_deg(unpoled_positions, pole);
+    ASSERT_GT(std::abs(unpoled_off_pole), 50.0f);
+
+    Mcp_client::Tool_result created = client.call_tool(
+        "create_node", json{{"scene_name", scene}, {"name", "ik_pole"}, {"position", as_json(pole)}}
+    );
+    ASSERT_FALSE(created.is_error) << created.text;
+    advance_frames(client, 6);
+    Mcp_client::Tool_result pole_details = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "ik_pole"}}
+    );
+    ASSERT_FALSE(pole_details.is_error) << pole_details.text;
+    Mcp_client::Tool_result effector_details = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+    );
+    ASSERT_FALSE(effector_details.is_error) << effector_details.text;
+    Mcp_client::Tool_result set_pole = client.call_tool(
+        "set_item_property",
+        json{
+            {"item_id",      effector_details.payload.at("id")},
+            {"property",     "Ik.pole_target"},
+            {"reference_id", pole_details.payload.at("id")}
+        }
+    );
+    ASSERT_FALSE(set_pole.is_error) << set_pole.text;
+    advance_frames(client, 6);
+
+    // Snap (the default): the bend is on the pole, the options are echoed.
+    Mcp_client::Tool_result snapped = drag(target, json::object());
+    ASSERT_FALSE(snapped.is_error) << snapped.text;
+    ASSERT_FALSE(snapped.payload.at("pole").is_null()) << "the pole governs the drag";
+    EXPECT_EQ(snapped.payload.at("pole_alignment").get<std::string>(), "snap") << "the pole_alignment default is snap";
+    EXPECT_NEAR(snapped.payload.at("pole_ease_distance").get<float>(), 0.5f, 1.0e-6f);
+    EXPECT_EQ(snapped.payload.at("pole_weight").get<float>(), 1.0f);
+    EXPECT_NEAR(off_pole_deg(joint_positions(snapped.payload), pole), 0.0f, 2.0f) << "snap puts the bend on the pole";
+
+    // Ease In with the drag at half the ease distance: w = 0.5, so the bend
+    // sits half way between the unpoled bend and the pole.
+    const float half_ease = 2.0f * drag_fraction;
+    Mcp_client::Tool_result half = drag(target, json{{"pole_alignment", "ease_in"}, {"pole_ease_distance", half_ease}});
+    ASSERT_FALSE(half.is_error) << half.text;
+    EXPECT_EQ(half.payload.at("pole_alignment").get<std::string>(), "ease_in");
+    EXPECT_NEAR(half.payload.at("pole_ease_distance").get<float>(), half_ease, 1.0e-6f);
+    const float half_weight = half.payload.at("pole_weight").get<float>();
+    EXPECT_NEAR(half_weight, 0.5f, 1.0e-3f);
+    const float half_off_pole = off_pole_deg(joint_positions(half.payload), pole);
+    EXPECT_NEAR(half_off_pole, (1.0f - half_weight) * unpoled_off_pole, 2.0f)
+        << "below the ease distance the bend is partly swiveled (unpoled " << unpoled_off_pole << " deg off the pole)";
+    EXPECT_GT(std::abs(half_off_pole), 10.0f) << "not on the pole yet";
+    EXPECT_LT(std::abs(half_off_pole), std::abs(unpoled_off_pole) - 10.0f) << "swiveled toward the pole";
+
+    // At and past the ease distance the bend is fully on the pole.
+    for (const float ease : { drag_fraction, 0.5f * drag_fraction }) {
+        Mcp_client::Tool_result full = drag(target, json{{"pole_alignment", "ease_in"}, {"pole_ease_distance", ease}});
+        ASSERT_FALSE(full.is_error) << full.text;
+        EXPECT_NEAR(full.payload.at("pole_weight").get<float>(), 1.0f, 1.0e-3f) << "ease distance " << ease;
+        EXPECT_NEAR(off_pole_deg(joint_positions(full.payload), pole), 0.0f, 2.0f) << "ease distance " << ease;
+    }
+
+    // Refusals change nothing.
+    const std::size_t undo_before = undo_depth();
+    const std::array<json, 4> refused_arguments{
+        json{{"pole_alignment", "gradual"}},
+        json{{"pole_alignment", "ease_in"}, {"pole_ease_distance", 0.01f}},
+        json{{"pole_alignment", "ease_in"}, {"pole_ease_distance", 2.5f}},
+        json{{"pole_alignment", "ease_in"}, {"pole_ease_distance", "far"}}
+    };
+    for (const json& bad : refused_arguments) {
+        Mcp_client::Tool_result refused = drag(target, bad);
+        EXPECT_TRUE(refused.is_error) << "must be refused: " << bad.dump();
+    }
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before) << "refused calls record nothing";
+    EXPECT_LT(norm(sub(effector_position(), start)), 1.0e-4f) << "refused calls move no joint";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
 // The producer side, independent of whether any subscriber happened to hold
 // the content: the undo must announce the removed items.
 TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)

@@ -89,6 +89,42 @@ void Move_tool::imgui(Property_editor& property_editor)
             );
         }
     });
+    p.add_entry("Pole Alignment", [this]() {
+        Transform_tool_settings& settings = get_shared().settings;
+        const int current = static_cast<int>(settings.ik_drag_options.pole_alignment);
+        if (ImGui::BeginCombo("##", c_ik_pole_alignment_strings[current])) {
+            for (int i = 0, end = IM_ARRAYSIZE(c_ik_pole_alignment_strings); i < end; ++i) {
+                bool selected = (i == current);
+                if (ImGui::Selectable(c_ik_pole_alignment_strings[i], &selected, ImGuiSelectableFlags_None)) {
+                    settings.ik_drag_options.pole_alignment = static_cast<Ik_pole_alignment>(i);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "How an IK drag brings the chain's bend onto its pole target: "
+                "Snap swivels the bend fully onto the pole from the first step of the drag; "
+                "Ease In swivels it by a fraction that grows with the distance dragged, reaching the pole "
+                "at the Pole Ease Distance, and eases back out when the drag returns to its start"
+            );
+        }
+    });
+    // doc/plans/rigging/ik_drag_options.md R30: only while Ease In is chosen.
+    if (get_shared().settings.ik_drag_options.pole_alignment == Ik_pole_alignment::ease_in) {
+        p.add_entry("Pole Ease Distance", [this]() {
+            Transform_tool_settings& settings = get_shared().settings;
+            ImGui::SliderFloat(
+                "##", &settings.ik_drag_options.pole_ease_distance, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp
+            );
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "How far the drag goes before the bend is fully on the pole, as a fraction of the chain's "
+                    "reach (its total bone length)"
+                );
+            }
+        });
+    }
     // Persistent preference (Transform_tool_config); touch() schedules the autosave.
     p.add_entry("Snap Absolute", [this]() {
         if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.translate_snap_absolute)) {

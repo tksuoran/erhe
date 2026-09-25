@@ -664,9 +664,9 @@ def setup(e: Editor) -> Rig:
     bone_ik = e.find_item("Transform", "Bone IK")
     was_on = (bone_ik is not None) and bone_ik["status"].get("checked", False)
     ok = (set_bone_ik(rig, True) and set_effector_orientation(rig, "Keep World")
-          and set_solve_from(rig, "Drag Start"))
+          and set_solve_from(rig, "Drag Start") and set_pole_alignment(rig, "Snap"))
     check_true("0.2 Move tool group in the Transform window: Bone IK on, Effector Orientation 'Keep World', "
-               "Solve From 'Drag Start'", ok,
+               "Solve From 'Drag Start', Pole Alignment 'Snap'", ok,
                f"Bone IK was {'on' if was_on else 'off'} before")
     return rig
 
@@ -689,6 +689,26 @@ def set_effector_orientation(rig: Rig, label: str):
 def set_solve_from(rig: Rig, label: str):
     """Pick Move tool > Solve From in the Transform window, as a user does."""
     return set_move_tool_combo(rig, "Solve From", label)
+
+
+def set_pole_alignment(rig: Rig, label: str):
+    """Pick Move tool > Pole Alignment in the Transform window, as a user does."""
+    return set_move_tool_combo(rig, "Pole Alignment", label)
+
+
+def set_move_tool_slider(rig: Rig, row: str, text: str):
+    """Type `text` into the Move tool slider `row` of the Transform window, as a
+    user does: Ctrl+click turns an ImGui slider into a text field, Ctrl+A
+    selects its content, Enter commits."""
+    e = rig.e
+    if e.find_item("Transform", row) is None:
+        return False
+    e.click("Transform", row, modifiers=["ctrl"])
+    e.key("a", ["ctrl"])
+    e.call("type_text", {"text": text})
+    e.advance(2)
+    e.key("enter")
+    return True
 
 
 def set_bone_ik(rig: Rig, on: bool):
@@ -1502,15 +1522,16 @@ def section_5(rig: Rig):
     rig.release_drag()
     final = rig.snapshot()
     swivel = swivel_to(final["positions"], pole_position)
-    first_jump = q_angle_deg(before["rotations"]["bone_1"], samples[0]["rotations"]["bone_1"])
     check_true("5.3 dragging the hand swings the elbow toward the pole", abs(swivel) <= 2.0, f"swivel={swivel:+.2f} deg")
-    # The first step turns the bend plane onto the pole at once; after it the
-    # bend stays on the pole and the steps are the drag's own.
+    # Pole Alignment 'Snap' (set by setup): the first step turns the bend
+    # plane onto the pole at once; after it the bend stays on the pole and
+    # the steps are the drag's own. Ease In is check 8.5.
     start_off = swivel_to(before["positions"], pole_position)
     swivels = [swivel_to(sample["positions"], pole_position) for sample in samples]
     later = [max(q_angle_deg(samples[i]["rotations"][b], samples[i + 1]["rotations"][b]) for b in BONES)
              for i in range(len(samples) - 1)]
-    check_true("5.3 the first step is the pole alignment alone: the bend is on the pole from step 1 on, later steps small",
+    check_true("5.3 Pole Alignment 'Snap': the first step is the pole alignment alone, the bend is on the pole from step 1 on, "
+               "later steps small",
                (max(abs(v) for v in swivels) <= 2.0) and (max(later) <= 5.0),
                f"start pose {start_off:+.1f} deg off the pole, bend off the pole over the steps <= {max(abs(v) for v in swivels):.2f} deg, "
                f"largest later step {max(later):.2f} deg")
@@ -1521,9 +1542,6 @@ def section_5(rig: Rig):
                    (coverage >= 0.8) and cross, f"line coverage={coverage:.2f} pole cross={cross}")
     else:
         MANUAL.append("5.3: magenta pole line / cross (PIL not installed)")
-    DECISIONS.append(f"5.3: a drag whose start pose is off the pole plane snaps onto it in the first step "
-                     f"(here the bend plane turns {abs(start_off):.1f} deg, the elbow {first_jump:.1f} deg); "
-                     f"the alternative is easing the swivel in over the first part of the drag")
     undo_viewport(rig)
 
     rig.set_prop("bone_1", "Ik.pole_angle", math.pi / 2.0)
@@ -1738,6 +1756,7 @@ def section_8(rig: Rig):
     undo_viewport(rig)
 
     solve_from_check(rig)
+    pole_ease_check(rig)
     stability_sweep(rig)
 
 
@@ -1788,6 +1807,80 @@ def solve_from_check(rig: Rig):
     check_true(f"8.4 Solve From: no step of either drag moves a joint more than {JUMP_RATIO:.0f}x the target's step",
                (ratio_prev <= JUMP_RATIO) and (ratio_start <= JUMP_RATIO),
                f"largest Previous Step {ratio_prev:.2f}x, Drag Start {ratio_start:.2f}x")
+
+
+POLE_EASE_DISTANCE = 0.4  # Move tool > Pole Ease Distance, typed in by pole_ease_check (not the 0.5 default, so the slider is exercised)
+
+
+def pole_ease_check(rig: Rig):
+    """8.5 (ik_drag_options.md 3.6 criterion 3): under Pole Alignment 'Ease In'
+    a drag moving away from its start swivels the bend onto the pole
+    gradually - its angle off the pole is (1 - w) times the drag-start angle,
+    w = min(d / (Pole Ease Distance * reach), 1), so it falls from the start
+    angle to 0 and stays 0 once w reaches 1 - and dragging back to the start
+    restores the start pose (Solve From 'Drag Start'); one undo step. The
+    'Pole Ease Distance' row is shown only while Ease In is chosen. Pole
+    Alignment goes back to 'Snap' afterwards."""
+    e = rig.e
+    rig.clear_settings()
+    rig.pose(BENT)
+    start = rig.snapshot()
+    root = start["positions"][0]
+    tip = start["positions"][-1]
+    reach = sum(segment_lengths(start["positions"]))
+    # The pole 60 degrees about the root-to-tip line off the drag-start bend.
+    bend, axis = bend_direction(start["positions"])
+    pole_position = add(add(root, scale(axis, 0.5 * length(sub(tip, root)))),
+                        scale(rotate_about(bend, axis, math.radians(60.0)), reach))
+    pole = ensure_pole(rig, pole_position)
+    rig.set_prop("bone_1", "Ik.pole_target", reference_id=rig.ids[pole])
+
+    hidden_under_snap = e.find_item("Transform", "Pole Ease Distance") is None
+    ok = set_pole_alignment(rig, "Ease In")
+    shown_under_ease = e.find_item("Transform", "Pole Ease Distance") is not None
+    ok = ok and set_move_tool_slider(rig, "Pole Ease Distance", f"{POLE_EASE_DISTANCE}")
+
+    # Straight toward the root (a reachable, ever more bent chain, so the
+    # unpoled bend stays in the start bend's plane), to 1.2 ease distances,
+    # then back to the start.
+    ease_length = POLE_EASE_DISTANCE * reach
+    out = scale(normalize(sub(root, tip)), 1.2 * ease_length)
+    steps = 12
+    path = ramp(out, steps) + [scale(out, 1.0 - ((i + 1) / steps)) for i in range(steps)]
+    start_off = swivel_to(start["positions"], pole_position)
+    depth = e.undo_depth()
+    samples = rig.translate_drag(TIP, path, sample=rig.snapshot)
+    undo_steps = e.undo_depth() - depth
+    undo_viewport(rig)
+
+    worst_curve = 0.0
+    worst_on_pole = 0.0
+    increases = 0
+    previous = abs(start_off)
+    for delta, s in zip(path[:steps], samples[:steps]):
+        w = min(length(delta) / ease_length, 1.0)
+        off = swivel_to(s["positions"], pole_position)
+        worst_curve = max(worst_curve, abs(off - ((1.0 - w) * start_off)))
+        if w >= 1.0:
+            worst_on_pole = max(worst_on_pole, abs(off))
+        if abs(off) > previous + 0.05:
+            increases += 1
+        previous = abs(off)
+    back = max(q_angle_deg(start["rotations"][b], samples[-1]["rotations"][b]) for b in BONES)
+
+    restored = set_pole_alignment(rig, "Snap")
+    hidden_again = e.find_item("Transform", "Pole Ease Distance") is None
+    rig.set_prop("bone_1", "Ik.pole_target", None)
+    check_true("8.5 Pole Alignment 'Ease In': the bend's angle off the pole falls from the start angle as (1 - w) of it "
+               "and is 0 once w reaches 1; back at the start the start pose; one undo step; "
+               "'Pole Ease Distance' shown only under Ease In",
+               ok and restored and hidden_under_snap and shown_under_ease and hidden_again
+               and (worst_curve <= 2.0) and (worst_on_pole <= 2.0) and (increases == 0)
+               and (back < 1.0e-3) and (undo_steps == 1),
+               f"combo ok={ok and restored}, row hidden/shown/hidden={hidden_under_snap}/{shown_under_ease}/{hidden_again}; "
+               f"start {start_off:+.1f} deg off the pole, largest deviation from (1 - w) x start={worst_curve:.2f} deg, "
+               f"off the pole at w >= 1 <= {worst_on_pole:.2f} deg, increases={increases}; "
+               f"back-at-start difference={back:.2e} deg; undo steps {undo_steps}")
 
 
 # The random sweep: settings per bone, one of these, drawn per scenario.

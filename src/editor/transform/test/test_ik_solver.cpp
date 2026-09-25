@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
+#include <vector>
 
 namespace {
 
@@ -161,7 +163,7 @@ TEST(Ik_solver, pole_on_long_chain_rotates_rigidly)
     const std::vector<vec3> before_pole = chain.positions;
 
     chain.pole_position = vec3{0.0f, 1.0f, 7.0f};
-    editor::ik_apply_pole(chain.positions, chain.pole_position, 0.0f);
+    editor::ik_apply_pole(chain.positions, chain.pole_position, 0.0f, 1.0f);
 
     const vec3 a = chain_axis(chain);
     const vec3 b = chain_bend_direction(chain);
@@ -188,28 +190,116 @@ TEST(Ik_solver, pole_degenerate_cases_leave_positions_untouched)
     {
         std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 0.0f, 0.0f}, vec3{0.0f, 0.0f, 0.0f} };
         const std::vector<vec3> before = positions;
-        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f, 1.0f);
         EXPECT_EQ(positions, before);
     }
     // Straight chain: no bend to aim (R11 step 3).
     {
         std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
         const std::vector<vec3> before = positions;
-        editor::ik_apply_pole(positions, vec3{5.0f, 0.0f, 0.0f}, 0.3f);
+        editor::ik_apply_pole(positions, vec3{5.0f, 0.0f, 0.0f}, 0.3f, 1.0f);
         EXPECT_EQ(positions, before);
     }
     // Pole on the root-to-effector line: it names no direction (R11 step 4).
     {
         std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
         const std::vector<vec3> before = positions;
-        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+        editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f, 1.0f);
         EXPECT_EQ(positions, before);
     }
     // All of them finite.
     std::vector<vec3> positions = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
-    editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f);
+    editor::ik_apply_pole(positions, vec3{0.0f, 5.0f, 0.0f}, 0.3f, 1.0f);
     for (const vec3& p : positions) {
         EXPECT_TRUE(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
+    }
+}
+
+// doc/plans/rigging/ik_drag_options.md R28, 3.6 criterion 5: the weight
+// scales the swivel - 0 leaves the positions untouched, 1 is the full swivel,
+// 0.5 half the angle - and the full angle is returned either way.
+TEST(Ik_solver, pole_weight_scales_the_swivel)
+{
+    // Bend toward +X about the +Y root-to-effector line; the pole is +Z, a
+    // quarter turn away.
+    const std::vector<vec3> bent = { vec3{0.0f, 0.0f, 0.0f}, vec3{1.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
+    const vec3 pole{0.0f, 1.0f, 5.0f};
+    const vec3 a   {0.0f, 1.0f, 0.0f};
+    const vec3 d   {0.0f, 0.0f, 1.0f};
+    const float full = signed_angle_about(a, vec3{1.0f, 0.0f, 0.0f}, d);
+    ASSERT_NEAR(std::abs(full), 0.5f * c_pi, 1.0e-6f);
+
+    for (const float weight : { 0.0f, 0.5f, 1.0f }) {
+        std::vector<vec3> positions = bent;
+        const std::optional<float> swivel = editor::ik_apply_pole(positions, pole, 0.0f, weight);
+        ASSERT_TRUE(swivel.has_value()) << "weight " << weight;
+        EXPECT_NEAR(swivel.value(), full, 1.0e-5f) << "the full angle is returned at weight " << weight;
+        if (weight == 0.0f) {
+            EXPECT_EQ(positions, bent) << "weight 0 leaves the positions untouched";
+            continue;
+        }
+        // The swivel is a rotation about the axis by weight times the full angle.
+        const vec3 offset = positions[1] - positions[0];
+        const vec3 b      = normalize(offset - (a * dot(offset, a)));
+        EXPECT_NEAR(signed_angle_about(a, vec3{1.0f, 0.0f, 0.0f}, b), weight * full, 1.0e-5f) << "weight " << weight;
+        EXPECT_NEAR(signed_angle_about(a, b, d), (1.0f - weight) * full, 1.0e-5f) << "weight " << weight;
+        EXPECT_EQ(positions.front(), bent.front());
+        EXPECT_EQ(positions.back(),  bent.back());
+        EXPECT_NEAR(distance(positions[0], positions[1]), distance(bent[0], bent[1]), 1.0e-5f);
+    }
+
+    // An undefined swivel returns nothing.
+    std::vector<vec3> straight = { vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f, 1.0f, 0.0f}, vec3{0.0f, 2.0f, 0.0f} };
+    EXPECT_FALSE(editor::ik_apply_pole(straight, pole, 0.0f, 0.5f).has_value());
+}
+
+// R28: the weight applies on both solver paths. The solved bend sits
+// (1 - weight) times the unpoled bend's angle off the pole; the constrained
+// path's iterations hold that residual rather than compounding the weight
+// toward a full snap.
+TEST(Ik_solver, pole_weight_applies_on_both_solver_paths)
+{
+    for (const bool constrained : { false, true }) {
+        // Five joints, so the solve takes several iterations: a weight applied
+        // afresh in each would compound toward the full swivel.
+        const auto make_chain = [constrained]() -> editor::Ik_chain {
+            editor::Ik_chain chain = make_straight_five_joint_chain();
+            if (constrained) {
+                // Enabled with no lock or limit: the constrained path, nothing clamped.
+                chain.constraints[1].enabled    = true;
+                chain.constraints[1].twist_axis = 1;
+            }
+            chain.target        = vec3{1.5f, 1.5f, 0.3f};
+            chain.pole_position = vec3{0.0f, 1.0f, 7.0f};
+            return chain;
+        };
+        editor::Fabrik_solver solver;
+
+        editor::Ik_chain unpoled = make_chain();
+        ASSERT_EQ(unpoled.has_constraints(), constrained);
+        solver.solve(unpoled);
+        const vec3  a        = chain_axis(unpoled);
+        const vec3  d        = normalize(perpendicular_offset(unpoled.pole_position, unpoled.positions.front(), a));
+        const float off_pole = signed_angle_about(a, chain_bend_direction(unpoled), d);
+        ASSERT_GT(std::abs(off_pole), 0.25f * c_pi) << "the unpoled bend is well off the pole";
+
+        for (const float weight : { 0.0f, 0.25f, 0.5f, 1.0f }) {
+            editor::Ik_chain chain = make_chain();
+            chain.has_pole    = true;
+            chain.pole_weight = weight;
+            solver.solve(chain);
+            const vec3 solved_axis = chain_axis(chain);
+            const vec3 solved_d    = normalize(perpendicular_offset(chain.pole_position, chain.positions.front(), solved_axis));
+            EXPECT_NEAR(
+                signed_angle_about(solved_axis, chain_bend_direction(chain), solved_d),
+                (1.0f - weight) * off_pole,
+                2.0e-3f
+            ) << (constrained ? "constrained" : "unconstrained") << " weight " << weight;
+            EXPECT_LT(distance(chain.positions.back(), chain.target), 1.0e-2f);
+            for (std::size_t i = 0; i + 1 < chain.positions.size(); ++i) {
+                EXPECT_NEAR(distance(chain.positions[i], chain.positions[i + 1]), 1.0f, 1.0e-4f) << "segment " << i;
+            }
+        }
     }
 }
 

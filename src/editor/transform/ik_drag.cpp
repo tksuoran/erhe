@@ -282,6 +282,28 @@ auto Ik_drag::make_transform_operation() const -> std::shared_ptr<Operation>
     return std::make_shared<Compound_operation>(std::move(parameters));
 }
 
+auto Ik_drag::pole_weight(const glm::vec3 target_position_in_world) const -> float
+{
+    // Snap: the full swivel from the first apply() (ik_drag_options.md R27).
+    if (m_options.pole_alignment == Ik_pole_alignment::snap) {
+        return 1.0f;
+    }
+    // Ease In (R28): w = clamp(d / (pole_ease_distance * reach), 0, 1), d the
+    // distance from the effector's drag-start position to the target. It
+    // depends on the target only, so a Drag Start drag stays path independent
+    // and dragging back to the start eases the pole back out.
+    float reach = 0.0f;
+    for (const float segment_length : m_lengths) {
+        reach += segment_length;
+    }
+    const float ease_length = m_options.pole_ease_distance * reach;
+    if (ease_length <= 0.0f) {
+        return 1.0f; // a chain of zero-length segments: nothing to ease over
+    }
+    const float d = distance(m_initial_positions.back(), target_position_in_world);
+    return std::clamp(d / ease_length, 0.0f, 1.0f);
+}
+
 void Ik_drag::apply(const glm::vec3 target_position_in_world)
 {
     if (!is_active()) {
@@ -340,6 +362,8 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
     m_chain.has_pole        = m_has_pole;
     m_chain.pole_position   = m_pole_position;
     m_chain.pole_angle      = m_pole_angle;
+    m_pole_weight           = pole_weight(target_position_in_world);
+    m_chain.pole_weight     = m_pole_weight;
     m_solver.solve(m_chain);
 
     if (m_has_constraints) {
@@ -425,6 +449,7 @@ void Ik_drag::reset()
     m_has_pole      = false;
     m_pole_position = vec3{0.0f};
     m_pole_angle    = 0.0f;
+    m_pole_weight   = 1.0f;
     m_pole_node.reset();
 }
 

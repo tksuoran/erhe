@@ -46,7 +46,20 @@ void fabrik_solve(
 // one whose intermediate offsets cancel), or a pole on the root-to-effector
 // line. The three guarded lengths are the only divisions, so the result is
 // always finite. Allocation-free: it is called per solver iteration.
-void ik_apply_pole(std::vector<glm::vec3>& positions, glm::vec3 pole_position, float pole_angle);
+//
+// weight scales the swivel (doc/plans/rigging/ik_drag_options.md R28): the
+// rotation about the root-to-effector line is weight times the full angle,
+// so 0 leaves the positions untouched and 1 aims the bend at the pole.
+// Returns the full swivel angle (radians, right-handed about the
+// root-to-effector direction), or nothing when the swivel is undefined, so a
+// caller can hold the residual (1 - weight) times it fixed over later
+// applications.
+auto ik_apply_pole(
+    std::vector<glm::vec3>& positions,
+    glm::vec3               pole_position,
+    float                   pole_angle,
+    float                   weight
+) -> std::optional<float>;
 
 // Minimal rotation taking direction a to direction b (both non-unit, world
 // space). Identity when either is degenerate. In the antiparallel case the
@@ -95,6 +108,10 @@ public:
     bool                             has_pole{false};
     glm::vec3                        pole_position{0.0f};
     float                            pole_angle{0.0f};
+    // Fraction of the full swivel onto the pole, [0, 1]
+    // (doc/plans/rigging/ik_drag_options.md R28); 1 is the snap of
+    // pole_target.md.
+    float                            pole_weight{1.0f};
     float                            tolerance{1.0e-4f};
     int                              max_iterations{16};
 
@@ -118,7 +135,12 @@ public:
 // unconstrained path and inside every iteration of the constrained path,
 // between the forward and the backward pass, so the constraint-clamping
 // backward pass always runs last and limits and locks win over the pole
-// (doc/plans/rigging/pole_target.md R13, R14).
+// (doc/plans/rigging/pole_target.md R13, R14). A pole_weight below 1 swivels
+// the unconstrained result by that fraction of the full angle; the
+// constrained path swivels its first iteration's forward pass by that
+// fraction and then holds the bend at the same residual angle off the pole
+// in every later iteration, so iterating does not compound the weight toward
+// a full snap (ik_drag_options.md R28).
 class Fabrik_solver final : public Ik_solver
 {
 public:

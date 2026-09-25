@@ -10,13 +10,13 @@ widgets reach.
 
 Progress: sections 0-2 pass by hand. Sections 0-8 are automated (below);
 every check passes except the section 8.3 stability sweep, which finds the
-jumps of finding F7. What is left for a person is the two behaviour
-choices the script prints as DECISION lines (section 8).
+jumps of finding F7. What is left for a person is the behaviour choice
+the script prints as a DECISION line (section 8).
 
 ## Automated run
 
 `scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
-headless editor and prints one PASS / FAIL line per check (68 checks, about
+headless editor and prints one PASS / FAIL line per check (69 checks, about
 5 minutes), then the DECISION lines - behaviour the checks measure but a
 person chooses:
 
@@ -64,8 +64,10 @@ menu), aims the scene camera, and restores the rig before each check.
   the target. `make_sweep_scenarios()` / `run_sweep_scenario()` replay one
   scenario alone.
 - **Session state.** Move tool parameters (Bone IK, Effector Orientation,
-  Solve From) live as long as the editor runs; the script sets them instead
-  of assuming the startup values.
+  Solve From, Pole Alignment, Pole Ease Distance) live as long as the editor
+  runs; the script sets them instead of assuming the startup values. It
+  types the Pole Ease Distance into its slider (Ctrl+click, Ctrl+A, the
+  value, Enter).
 
 ## Setup
 
@@ -227,10 +229,10 @@ for a pole to aim.
    of a chain naming a pole, the one nearest the hand governs.
 3. Drag the hand: the elbow swings to point at the pole; the visualization
    adds a magenta line from the pole to the root and a magenta cross at the
-   pole. A start pose whose bend is off the pole snaps onto the pole in
-   the first drag step, and only then (measured: the bend is on the pole
-   from step 1 on, later steps small); whether to ease that snap in is a
-   section 8 decision.
+   pole. Under Pole Alignment "Snap" (the default) a start pose whose bend
+   is off the pole snaps onto the pole in the first drag step, and only
+   then (measured: the bend is on the pole from step 1 on, later steps
+   small); "Ease In" is check 8.5.
 4. Pole Angle 90 (the row is in degrees), drag again: the bend turns a
    quarter turn about the root-to-hand line.
 5. Move the pole node, drag again: the elbow follows the new side. The pole
@@ -258,7 +260,7 @@ for a pole to aim.
 
 ## 8. Behaviour and decisions - automated, decisions wanted
 
-Measured (checks 8.1 - 8.4):
+Measured (checks 8.1 - 8.5):
 
 1. Mid-chain drag: dragging `bone_1` makes it the effector - `bone_0` aims
    at the target, `bone_1` keeps its world orientation and everything below
@@ -276,12 +278,19 @@ Measured (checks 8.1 - 8.4):
    pose on some bone, where "Drag Start" restores the start pose; no step of
    either drag moves a joint more than 5 times the target's step, and each
    drag is one undo step. The check leaves Solve From at "Drag Start".
+5. Pole Alignment "Ease In" (`ik_drag_options.md` 3.6 criterion 3), chosen
+   in the Move tool's combo with Pole Ease Distance 0.4 typed into its
+   slider, a pole on `bone_1` 60 degrees off the start bend: over a drag of
+   the hand straight toward the root, the bend's angle off the pole is
+   (1 - w) times the drag-start angle, w = min(d / (0.4 * reach), 1), so it
+   falls to 0 and stays there once w reaches 1; back at the start the start
+   pose; one undo step. The Pole Ease Distance row is shown only while Ease
+   In is chosen. The check leaves Pole Alignment at "Snap".
 
 Decisions for the user (the script prints them as DECISION lines):
 
 - Mid-chain drag keeps the children rigid (1.) - or keep the chain's end in
   place (a two-target solve)?
-- The pole snap on the first step (5.3) - or ease the swivel in?
 
 ## Findings
 

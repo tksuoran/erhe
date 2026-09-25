@@ -1287,7 +1287,7 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target - or against each position of path in turn, within the one gesture - and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled), the effective effector_orientation and solve_from, and the number of solve steps.",
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target - or against each position of path in turn, within the one gesture - and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled), the effective effector_orientation, solve_from, pole_alignment and pole_ease_distance, the pole weight of the last step (pole_weight: 1 under snap), and the number of solve steps.",
     "inputSchema": {
       "properties": {
         "effector_orientation": {
@@ -1318,6 +1318,20 @@
           },
           "minItems": 1,
           "type": "array"
+        },
+        "pole_alignment": {
+          "description": "How the bend comes onto the governing pole: 'snap' (default) swivels it fully onto the pole from the first step; 'ease_in' swivels it by the weight w = clamp(d / (pole_ease_distance * reach), 0, 1), d the distance from the effector's drag-start position to the target and reach the chain's total segment length",
+          "enum": [
+            "snap",
+            "ease_in"
+          ],
+          "type": "string"
+        },
+        "pole_ease_distance": {
+          "description": "Under pole_alignment 'ease_in': the drag distance at which the bend is fully on the pole, as a fraction of the chain's reach, in [0.05, 2] (default 0.5)",
+          "maximum": 2.0,
+          "minimum": 0.05,
+          "type": "number"
         },
         "scene_name": {
           "description": "Name of the scene",

@@ -150,6 +150,10 @@ public:
     // capture, so the chain visualization's pole line does not chase a pole
     // that moves during the gesture. Meaningless when has_pole() is false.
     [[nodiscard]] auto get_pole_position() const -> glm::vec3 { return m_pole_position; }
+    // The fraction of the full swivel onto the pole the last apply() made
+    // (ik_drag_options.md R27, R28): 1 under Ik_pole_alignment::snap, the
+    // ease-in weight under ease_in; 1 before the first apply().
+    [[nodiscard]] auto get_pole_weight() const -> float { return m_pole_weight; }
 
     // One Compound_operation of Node_transform_operation covering the joints
     // whose parent_from_node changed since begin(), so a complete gesture is
@@ -167,6 +171,10 @@ private:
     // by begin() while every joint still sits at its drag-start transform, so
     // the pole's world position is a drag-start capture (R9, R12).
     void discover_pole();
+
+    // The pole weight of one apply() toward target under the gesture's
+    // Ik_pole_alignment (ik_drag_options.md R27, R28).
+    [[nodiscard]] auto pole_weight(glm::vec3 target_position_in_world) const -> float;
 
     std::vector<std::shared_ptr<erhe::scene::Node>> m_joints; // root .. effector
     std::vector<erhe::scene::Trs_transform> m_parent_from_joint_before;
@@ -186,6 +194,7 @@ private:
     bool                                    m_has_pole{false};
     glm::vec3                               m_pole_position{0.0f};
     float                                   m_pole_angle{0.0f};
+    float                                   m_pole_weight{1.0f};
     std::weak_ptr<erhe::scene::Node>        m_pole_node; // weak: a drag never keeps a scene node alive
     Ik_chain                                m_chain;
     Fabrik_solver                           m_solver;

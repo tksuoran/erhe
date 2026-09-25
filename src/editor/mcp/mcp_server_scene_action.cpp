@@ -1879,6 +1879,22 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
     } else if (solve_from_string != "drag_start") {
         return error_result("Invalid solve_from: " + solve_from_string + " (drag_start, previous_step)");
     }
+    const std::string pole_alignment_string = args.value("pole_alignment", "snap");
+    if (pole_alignment_string == "ease_in") {
+        options.pole_alignment = Ik_pole_alignment::ease_in;
+    } else if (pole_alignment_string != "snap") {
+        return error_result("Invalid pole_alignment: " + pole_alignment_string + " (snap, ease_in)");
+    }
+    if (args.contains("pole_ease_distance")) {
+        const json& value = args.at("pole_ease_distance");
+        const float ease_distance = value.is_number() ? value.get<float>() : 0.0f;
+        if (!value.is_number() || !(ease_distance >= 0.05f) || !(ease_distance <= 2.0f)) {
+            return error_result(
+                "Invalid pole_ease_distance: " + value.dump() + " (a number in [0.05, 2], a fraction of the chain's reach)"
+            );
+        }
+        options.pole_ease_distance = ease_distance;
+    }
 
     // One complete gesture: discovery, one solve per target against an
     // absolute world target, and one compound operation covering the joints
@@ -1925,6 +1941,9 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         {"pole_angle",    drag.has_pole() ? drag.get_pole_angle() : 0.0f},
         {"effector_orientation", orientation_string},
         {"solve_from",    solve_from_string},
+        {"pole_alignment",     pole_alignment_string},
+        {"pole_ease_distance", options.pole_ease_distance},
+        {"pole_weight",        drag.get_pole_weight()},
         {"steps",         targets.size()},
         {"recorded",      operation ? true : false}
     };
