@@ -133,6 +133,32 @@ public:
     [[nodiscard]] auto has_constraints() const -> bool;
 };
 
+// How a joint moves in the constrained solve (doc/plans/rigging/ik_settings.md
+// section 4, "Rigid joints"): a rigid joint admits only its drag-start local
+// rotation.
+enum class Ik_joint_motion : unsigned int
+{
+    turns,
+    rigid
+};
+
+// The links the constrained FABRIK passes see, derived per solve from the
+// chain's start pose. A link starts at the root and at every non-rigid joint
+// and spans the rigid joints after it up to the next link start or the
+// effector: the rigid joints carry their segments with the link's first
+// joint as one rigid body. Entries are per non-effector joint; the link
+// entries of a rigid joint inside a link are unused.
+class Ik_chain_links
+{
+public:
+    std::vector<Ik_joint_motion> motion;         // per non-effector joint
+    std::vector<std::size_t>     end;            // joint index at the link's far end
+    std::vector<glm::vec3>       dir_local;      // unit start-to-end vector in the link start joint's local frame
+    std::vector<float>           length;         // start-to-end distance
+
+    [[nodiscard]] auto is_link_start(std::size_t joint) const -> bool;
+};
+
 class Ik_solver
 {
 public:
@@ -149,7 +175,9 @@ public:
 // stiffness and then enforces its constraints; the solved pose is returned
 // in both positions and local_rotations, already satisfying the constraints.
 // The constrained iteration returns the best pose it saw
-// (doc/plans/rigging/ik_settings.md section 4).
+// (doc/plans/rigging/ik_settings.md section 4). A rigid joint (every axis
+// admits only its drag-start value) merges its segment into its parent's
+// link, so both passes aim the rigid part's far end (Ik_chain_links).
 // A pole (Ik_chain::has_pole) is applied once, after the solve, as a rigid
 // swivel about the solved root-to-effector line by pole_weight times the full
 // angle (doc/plans/rigging/pole_target.md R13, R14; ik_drag_options.md R28).
@@ -181,6 +209,7 @@ private:
     std::vector<glm::quat> m_pole_locals;
     std::vector<glm::vec3> m_best_positions;
     std::vector<glm::quat> m_best_locals;
+    Ik_chain_links         m_links;
 };
 
 // Chain visualization of a running IK drag

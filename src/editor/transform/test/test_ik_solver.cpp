@@ -926,6 +926,123 @@ TEST(Ik_solver, stiff_solve_is_deterministic)
     }
 }
 
+// Rigid middle joint (finding F9 of doc/plans/rigging/interactive_test_pass.md;
+// ik_settings.md section 4, "Rigid joints"): the middle joint of the chain is
+// bent 40 degrees about X and admits only that rotation, either by locks on
+// all three axes or by limits closed on all three axes with the limits frame
+// on the drag-start pose. joint_count 3 is root, rigid middle, effector;
+// joint_count 4 adds a free tip joint before the effector. Unit segments
+// along each joint's local +Y.
+enum class Rigid_kind : unsigned int
+{
+    locked,
+    closed_limits
+};
+
+[[nodiscard]] auto make_rigid_middle_chain(const std::size_t joint_count, const Rigid_kind kind) -> editor::Ik_chain
+{
+    const quat bend = angleAxis(0.6981317f, vec3{1.0f, 0.0f, 0.0f}); // 40 degrees
+    editor::Ik_chain chain;
+    chain.local_rotations.assign(joint_count, quat{1.0f, 0.0f, 0.0f, 0.0f});
+    chain.local_rotations[1] = bend;
+    chain.child_dir_local.assign(joint_count - 1, vec3{0.0f, 1.0f, 0.0f});
+    chain.lengths.assign(joint_count - 1, 1.0f);
+    chain.constraints.resize(joint_count);
+    chain.positions.assign(joint_count, vec3{0.0f});
+    quat world{1.0f, 0.0f, 0.0f, 0.0f};
+    for (std::size_t i = 0; i + 1 < joint_count; ++i) {
+        world = world * chain.local_rotations[i];
+        chain.positions[i + 1] = chain.positions[i] + (world * chain.child_dir_local[i]) * chain.lengths[i];
+    }
+    editor::Ik_joint_constraint& middle = chain.constraints[1];
+    middle.enabled    = true;
+    middle.twist_axis = 1;
+    if (kind == Rigid_kind::locked) {
+        middle.lock = {true, true, true};
+    } else {
+        middle.limit         = {true, true, true};
+        middle.limit_min     = vec3{0.0f};
+        middle.limit_max     = vec3{0.0f};
+        middle.rest_rotation = bend;
+    }
+    return chain;
+}
+
+[[nodiscard]] auto rigid_kind_name(const Rigid_kind kind) -> const char*
+{
+    return (kind == Rigid_kind::locked) ? "locked" : "closed_limits";
+}
+
+// A root rotation of 50 degrees about a skew axis.
+[[nodiscard]] auto root_turn() -> quat
+{
+    return angleAxis(0.8726646f, normalize(vec3{1.0f, 0.3f, 1.0f}));
+}
+
+void expect_rigid_middle_held(const editor::Ik_chain& solved, const editor::Ik_chain& start, const char* label)
+{
+    EXPECT_LT(rotation_angle(inverse(start.local_rotations[1]) * solved.local_rotations[1]), 1.0e-3f) << label;
+    for (std::size_t i = 0; i + 1 < solved.positions.size(); ++i) {
+        EXPECT_NEAR(distance(solved.positions[i], solved.positions[i + 1]), 1.0f, 1.0e-4f) << label << " segment " << i;
+    }
+    EXPECT_EQ(solved.positions[0], start.positions[0]) << label; // root fixed
+}
+
+TEST(Ik_solver, rigid_middle_root_turns_to_reach_a_target_on_its_sphere)
+{
+    for (const Rigid_kind kind : { Rigid_kind::locked, Rigid_kind::closed_limits }) {
+        const editor::Ik_chain start = make_rigid_middle_chain(3, kind);
+        editor::Ik_chain       chain = start;
+        chain.target = root_turn() * start.positions[2];
+
+        editor::Fabrik_solver solver;
+        solver.solve(chain);
+
+        EXPECT_LT(distance(chain.positions[2], chain.target), 1.0e-3f) << rigid_kind_name(kind);
+        expect_rigid_middle_held(chain, start, rigid_kind_name(kind));
+    }
+}
+
+TEST(Ik_solver, rigid_middle_root_turns_toward_an_unreachable_target)
+{
+    for (const Rigid_kind kind : { Rigid_kind::locked, Rigid_kind::closed_limits }) {
+        const editor::Ik_chain start = make_rigid_middle_chain(3, kind);
+        editor::Ik_chain       chain = start;
+        // Off the sphere the rigid chain sweeps: the closest reachable point
+        // is on the target's direction from the root, 0.3 times the sphere's
+        // radius short of it.
+        chain.target = 1.3f * (root_turn() * start.positions[2]);
+        const float start_error = distance(start.positions[2], chain.target);
+        const float best_error  = 0.3f * length(start.positions[2]);
+
+        editor::Fabrik_solver solver;
+        solver.solve(chain);
+
+        const float error = distance(chain.positions[2], chain.target);
+        EXPECT_LT(error, start_error) << rigid_kind_name(kind);
+        EXPECT_LT(error, best_error + 1.0e-3f) << rigid_kind_name(kind);
+        expect_rigid_middle_held(chain, start, rigid_kind_name(kind));
+    }
+}
+
+TEST(Ik_solver, rigid_middle_with_free_tip_reaches)
+{
+    for (const Rigid_kind kind : { Rigid_kind::locked, Rigid_kind::closed_limits }) {
+        const editor::Ik_chain start = make_rigid_middle_chain(4, kind);
+        editor::Ik_chain       chain = start;
+        // One tip segment from the turned rigid part's end, bent off its
+        // drag-start direction: the root and the tip joint both have to turn.
+        const vec3 tip_direction = normalize(vec3{0.6f, 0.2f, -0.5f});
+        chain.target = (root_turn() * start.positions[2]) + tip_direction;
+
+        editor::Fabrik_solver solver;
+        solver.solve(chain);
+
+        EXPECT_LT(distance(chain.positions[3], chain.target), 1.0e-3f) << rigid_kind_name(kind);
+        expect_rigid_middle_held(chain, start, rigid_kind_name(kind));
+    }
+}
+
 // Chain visualization line list (doc/plans/rigging/ik_drag_options.md R16,
 // R17). A bent three-joint chain: root, elbow, effector.
 [[nodiscard]] auto make_drag_line_positions() -> std::vector<vec3>

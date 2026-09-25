@@ -352,14 +352,18 @@ Measured (checks 8.1 - 8.6):
   after does not either; three diagnostic runs of sections 1-3 did not
   reproduce it. Not yet known whether the button or the injected click is at
   fault. The script reports it as a 3.9 FAIL.
-- **F9.** Open: with the middle joint of a three-bone chain limited to a
-  closed range (a rigid middle), an IK drag of the tip was seen not to
-  rotate the chain's root (reported while building the authored-chain
-  Mcp_test of skeleton_editing.md slice C). A rigid sub-chain should still
-  let the root turn to aim it; suspected: the forward pass aims the root at
-  a joint position the rigid sub-chain cannot take, no iteration beats the
-  start pose, and the best-pose rule returns the start pose. To reproduce
-  as a solver unit test first.
+- **F9.** Fixed: with the middle joint of a three-bone chain limited to a
+  closed range (a rigid middle), an IK drag of the tip left the chain's
+  root unturned (reported while building the
+  authored-chain Mcp_test of skeleton_editing.md slice C). The forward pass
+  aimed the root at the middle joint's forward-pass position, which
+  converges to the middle joint one segment from the target as if the
+  middle could bend; the rigid bend then left the effector off by the
+  bend's mismatch (0.25 on the unit test rig, 16 iterations), a fixed
+  point no iteration improved, so a short drag, starting closer than
+  that, kept its start pose by the best-pose rule. Rigid joints now merge into their parent's link and
+  both passes aim the rigid shape's far end (`ik_settings.md` section 4,
+  "Rigid joints"); unit tests `Ik_solver.rigid_middle_*`.
 
 ## Reporting a problem
 

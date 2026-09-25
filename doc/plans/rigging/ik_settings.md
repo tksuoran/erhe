@@ -338,11 +338,30 @@ formulation adapted to swing/twist limits:
   follows the target continuously. Neither promises to reach every
   reachable target; a global solver is future work. Check 8.3 of
   `interactive_test_pass.md` measures both (finding F8).
-- Fully locked joints (all axes) transmit rigidly: their local rotation
-  never changes; the chain effectively has a rigid multi-segment link.
-  Chains whose every non-effector joint is fully locked leave the pose
-  unchanged (the drag does nothing IK-wise; the gizmo still moves as in
-  the Phase 1 out-of-reach case).
+- Rigid joints: a joint whose every axis admits only its drag-start
+  value - locked, or limited to an interval (the authored limit extended
+  to the drag-start value) narrower than the solver's numerical
+  resolution, i.e. a range closed on the drag-start value - is rigid. Its
+  local rotation never changes, so its segment moves as one body with its
+  parent's segment. Both passes see that body as one link: a link starts
+  at the root and at every non-rigid joint and spans the rigid joints
+  after it, up to the next link start or the effector. The forward pass
+  places each link start one link length (the start-to-end distance of
+  the rigid shape) from its link's far end; the backward pass turns the
+  link start by the shortest arc taking the link's start-to-end direction
+  onto the direction toward the far end's forward-pass position, and the
+  rigid joints then follow at their drag-start rotations. Aiming the rigid
+  shape's far end rather than its first segment is what makes the
+  iteration converge: aimed at the next joint, the forward pass settles
+  that joint one segment from the target as if it could bend, and the
+  rigid bend leaves the effector off by the bend's mismatch, a fixed point
+  no iteration improves (finding F9 of `interactive_test_pass.md`). A chain
+  without rigid joints has one link per segment and solves exactly as
+  without links. A chain whose root and every other non-effector joint is
+  rigid leaves the pose unchanged (the drag does nothing IK-wise; the
+  gizmo still moves as in the Phase 1 out-of-reach case). A joint that
+  starts off a closed range is not rigid: the no-teleport extension lets
+  it turn back toward the range.
 - Write-back: unchanged sequential root-to-effector scheme from Phase 1,
   except constrained joints take their solved local rotation from the
   solver output (already clamped) rather than recomputing shortest-arc

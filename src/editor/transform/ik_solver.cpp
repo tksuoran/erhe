@@ -45,6 +45,32 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
     return (axis == 0) ? swing.x : (axis == 1) ? swing.y : swing.z;
 }
 
+// Interval of sin(half-angle) values the joint admits about one local axis:
+// the authored limit (or the whole range when the axis is not limited),
+// extended to contain the drag-start component (the no-teleport rule of
+// doc/plans/rigging/ik_settings.md section 4).
+class Admitted_interval
+{
+public:
+    float lo;
+    float hi;
+};
+
+[[nodiscard]] auto admitted_interval(const Ik_joint_constraint& constraint, const int axis, const float start_component) -> Admitted_interval
+{
+    const float lo = constraint.limit[axis] ? std::sin(0.5f * constraint.limit_min[axis]) : -1.0f;
+    const float hi = constraint.limit[axis] ? std::sin(0.5f * constraint.limit_max[axis]) :  1.0f;
+    return Admitted_interval{.lo = std::min(lo, start_component), .hi = std::max(hi, start_component)};
+}
+
+// Twist component (sin(half-angle) about the twist axis) of a twist
+// quaternion, in the canonical w >= 0 hemisphere.
+[[nodiscard]] auto canonical_twist_component(const quat& twist, const int twist_axis) -> float
+{
+    const float t = (twist_axis == 0) ? twist.x : (twist_axis == 1) ? twist.y : twist.z;
+    return (twist.w < 0.0f) ? -t : t;
+}
+
 // Clamps the candidate local rotation to the joint's constraint, relative
 // to the drag-start local rotation (which defines the no-teleport extension
 // of the constraint region). See doc/plans/rigging/ik_settings.md section 4.
@@ -94,12 +120,11 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
         // cross-section below. Branches test locked[] first, so lock still
         // wins over limit on the same axis.
         limited[k] = constraint.limit[axis];
-        lo[k] = limited[k] ? std::sin(0.5f * constraint.limit_min[axis]) : -1.0f;
-        hi[k] = limited[k] ? std::sin(0.5f * constraint.limit_max[axis]) :  1.0f;
         // No-teleport extension (1-D part): the interval always contains
         // the drag-start component.
-        lo[k] = std::min(lo[k], s0[k]);
-        hi[k] = std::max(hi[k], s0[k]);
+        const Admitted_interval interval = admitted_interval(constraint, axis, s0[k]);
+        lo[k] = interval.lo;
+        hi[k] = interval.hi;
     }
     // Twist. Each backward-pass delta is a twist-free shortest arc in world
     // space, but composed onto a bent parent chain it does carry twist about
@@ -112,18 +137,13 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
     const bool twist_locked  = constraint.lock [constraint.twist_axis];
     const bool twist_limited = constraint.limit[constraint.twist_axis];
     if (twist_locked || twist_limited) {
-        const auto canonical_twist_component = [&constraint](const quat& q) -> float {
-            const float t = (constraint.twist_axis == 0) ? q.x : (constraint.twist_axis == 1) ? q.y : q.z;
-            return (q.w < 0.0f) ? -t : t;
-        };
-        const float t0 = canonical_twist_component(twist_0);
-        float       t  = canonical_twist_component(twist);
+        const float t0 = canonical_twist_component(twist_0, constraint.twist_axis);
+        float       t  = canonical_twist_component(twist,   constraint.twist_axis);
         if (twist_locked) {
             t = t0;
         } else {
-            const float twist_lo = std::min(std::sin(0.5f * constraint.limit_min[constraint.twist_axis]), t0);
-            const float twist_hi = std::max(std::sin(0.5f * constraint.limit_max[constraint.twist_axis]), t0);
-            t = std::clamp(t, twist_lo, twist_hi);
+            const Admitted_interval interval = admitted_interval(constraint, constraint.twist_axis, t0);
+            t = std::clamp(t, interval.lo, interval.hi);
         }
         vec3 twist_vector{0.0f};
         twist_vector[constraint.twist_axis] = t;
@@ -218,7 +238,84 @@ void swing_twist_decompose(const quat& q, const int twist_axis, quat& swing, qua
     return normalize(constraint.rest_rotation * (clamped_swing * twist));
 }
 
+// Whether the joint admits only its drag-start local rotation
+// (doc/plans/rigging/ik_settings.md section 4, "Rigid joints"): every one of
+// its three axes is locked, or limited to an interval - the authored limit
+// extended to the drag-start value - narrower than the solver's numerical
+// resolution c_epsilon (a range closed on the drag-start value).
+[[nodiscard]] auto admits_only_start_rotation(const Ik_joint_constraint& constraint, const quat& start_local) -> bool
+{
+    if (!constraint.enabled || (constraint.twist_axis < 0)) {
+        return false;
+    }
+    const quat rel_0 = normalize(inverse(constraint.rest_rotation) * start_local);
+    quat swing_0{1.0f, 0.0f, 0.0f, 0.0f};
+    quat twist_0{1.0f, 0.0f, 0.0f, 0.0f};
+    swing_twist_decompose(rel_0, constraint.twist_axis, swing_0, twist_0);
+    for (int axis = 0; axis < 3; ++axis) {
+        if (constraint.lock[axis]) {
+            continue;
+        }
+        if (!constraint.limit[axis]) {
+            return false;
+        }
+        const float start_component = (axis == constraint.twist_axis)
+            ? canonical_twist_component(twist_0, axis)
+            : swing_component(swing_0, axis);
+        const Admitted_interval interval = admitted_interval(constraint, axis, start_component);
+        if ((interval.hi - interval.lo) >= c_epsilon) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Derives the links of the constrained passes from the chain's start pose
+// (Ik_chain_links). A single-segment link keeps the segment's own direction
+// and length, so a chain without rigid joints solves exactly as before; a
+// link over rigid joints takes its start-to-end vector from the start local
+// rotations of the rigid joints, the rotations they keep throughout the
+// solve.
+void build_chain_links(const Ik_chain& chain, Ik_chain_links& links)
+{
+    const std::size_t segment_count = chain.lengths.size();
+    links.motion   .assign(segment_count, Ik_joint_motion::turns);
+    links.end      .assign(segment_count, 0);
+    links.dir_local.assign(segment_count, vec3{0.0f});
+    links.length   .assign(segment_count, 0.0f);
+    for (std::size_t i = 0; i < segment_count; ++i) {
+        if (admits_only_start_rotation(chain.constraints[i], chain.local_rotations[i])) {
+            links.motion[i] = Ik_joint_motion::rigid;
+        }
+    }
+    for (std::size_t i = 0; i < segment_count; ++i) {
+        std::size_t end = i + 1;
+        while ((end < segment_count) && (links.motion[end] == Ik_joint_motion::rigid)) {
+            ++end;
+        }
+        links.end[i] = end;
+        if (!links.is_link_start(i) || (end == i + 1)) {
+            links.dir_local[i] = chain.child_dir_local[i];
+            links.length   [i] = chain.lengths[i];
+            continue;
+        }
+        vec3 link_vector = chain.child_dir_local[i] * chain.lengths[i];
+        quat rigid_frame{1.0f, 0.0f, 0.0f, 0.0f};
+        for (std::size_t j = i + 1; j < end; ++j) {
+            rigid_frame = rigid_frame * chain.local_rotations[j];
+            link_vector += rigid_frame * (chain.child_dir_local[j] * chain.lengths[j]);
+        }
+        links.dir_local[i] = ik_safe_direction(link_vector, chain.child_dir_local[i]);
+        links.length   [i] = length(link_vector);
+    }
+}
+
 } // anonymous namespace
+
+auto Ik_chain_links::is_link_start(const std::size_t joint) const -> bool
+{
+    return (joint == 0) || (motion[joint] == Ik_joint_motion::turns);
+}
 
 auto ik_safe_direction(const vec3 v, const vec3 fallback) -> vec3
 {
@@ -428,35 +525,41 @@ enum class Stiffness_mode : unsigned int
 
 // The constraint-enforcing backward pass of the constrained solve
 // (doc/plans/rigging/ik_settings.md section 4): from the fixed root toward
-// the tip, each joint is turned by the shortest arc from its current child
-// direction (the parent's solved frame times the joint's entry in locals)
-// toward the next position; with Stiffness_mode::apply, the change from the
-// joint's entry in locals is scaled by the joint's stiffness; the result is
-// clamped to the joint's constraint, and the child is placed one segment
-// length along the clamped direction. positions is read as the desired pose
-// and overwritten with the solved one; locals holds the frames the pass
-// starts from and receives the solved local rotations, so positions and
-// locals leave it consistent and satisfying every constraint.
+// the tip, each link start joint is turned by the shortest arc from its
+// link's current direction (the parent's solved frame times the joint's entry
+// in locals, applied to the link's local direction) toward the desired
+// position of the link's far end - for a single-segment link its child; with
+// Stiffness_mode::apply, the change from the joint's entry in locals is
+// scaled by the joint's stiffness. A rigid joint keeps its drag-start local
+// rotation. Each result is clamped to the joint's constraint, and the child is
+// placed one segment length along the clamped direction. positions is read
+// as the desired pose and overwritten with the solved one; locals holds the
+// frames the pass starts from and receives the solved local rotations, so
+// positions and locals leave it consistent and satisfying every constraint.
 void constrained_backward_pass(
-    const Ik_chain&      chain,
-    const vec3           root,
-    std::vector<vec3>&   positions,
-    std::vector<quat>&   locals,
-    const Stiffness_mode stiffness_mode
+    const Ik_chain&       chain,
+    const Ik_chain_links& links,
+    const vec3            root,
+    std::vector<vec3>&    positions,
+    std::vector<quat>&    locals,
+    const Stiffness_mode  stiffness_mode
 )
 {
     const std::size_t joint_count = positions.size();
     positions[0] = root;
     quat parent_world = chain.root_parent_world_rotation;
     for (std::size_t i = 0; i + 1 < joint_count; ++i) {
-        const quat world_rotation    = parent_world * locals[i];
-        const vec3 current_child_dir = world_rotation * chain.child_dir_local[i];
-        const vec3 desired_child_dir = ik_safe_direction(positions[i + 1] - positions[i], current_child_dir);
-        const quat delta             = ik_shortest_arc(current_child_dir, desired_child_dir, world_rotation);
-        quat       candidate_local   = normalize(inverse(parent_world) * (delta * world_rotation));
         const Ik_joint_constraint& constraint = chain.constraints[i];
-        if ((stiffness_mode == Stiffness_mode::apply) && constraint.has_stiffness()) {
-            candidate_local = apply_stiffness(constraint.stiffness, locals[i], candidate_local);
+        quat candidate_local = chain.local_rotations[i];
+        if (links.motion[i] == Ik_joint_motion::turns) {
+            const quat world_rotation   = parent_world * locals[i];
+            const vec3 current_link_dir = world_rotation * links.dir_local[i];
+            const vec3 desired_link_dir = ik_safe_direction(positions[links.end[i]] - positions[i], current_link_dir);
+            const quat delta            = ik_shortest_arc(current_link_dir, desired_link_dir, world_rotation);
+            candidate_local = normalize(inverse(parent_world) * (delta * world_rotation));
+            if ((stiffness_mode == Stiffness_mode::apply) && constraint.has_stiffness()) {
+                candidate_local = apply_stiffness(constraint.stiffness, locals[i], candidate_local);
+            }
         }
         candidate_local = constrain_local_rotation(constraint, chain.local_rotations[i], candidate_local);
         locals[i] = candidate_local;
@@ -512,6 +615,7 @@ void Fabrik_solver::solve(Ik_chain& chain)
     // (apply_constrained_pole).
     const vec3 root = chain.positions.front();
     m_solved_locals.assign(chain.local_rotations.begin(), chain.local_rotations.end());
+    build_chain_links(chain, m_links);
 
     // The start pose is the first best pose: it satisfies the constraints
     // (the no-teleport extension of ik_settings.md section 4 contains it).
@@ -524,16 +628,25 @@ void Fabrik_solver::solve(Ik_chain& chain)
             break;
         }
 
-        // Forward-reaching, unconstrained (Phase 1 math).
+        // Forward-reaching, unconstrained (Phase 1 math) over the links: each
+        // link start is placed one link length from its link's far end,
+        // which is the Phase 1 pass itself when no joint is rigid. A rigid
+        // joint inside a link keeps its position; the backward pass places it.
         chain.positions[joint_count - 1] = chain.target;
+        std::size_t link_end = joint_count - 1;
         for (std::size_t i = joint_count - 1; i > 0; --i) {
-            const vec3 direction = ik_safe_direction(chain.positions[i - 1] - chain.positions[i], vec3{0.0f, 1.0f, 0.0f});
-            chain.positions[i - 1] = chain.positions[i] + direction * chain.lengths[i - 1];
+            const std::size_t start = i - 1;
+            if (!m_links.is_link_start(start)) {
+                continue;
+            }
+            const vec3 direction = ik_safe_direction(chain.positions[start] - chain.positions[link_end], vec3{0.0f, 1.0f, 0.0f});
+            chain.positions[start] = chain.positions[link_end] + direction * m_links.length[start];
+            link_end = start;
         }
 
         // Backward-reaching with constraint enforcement and root-to-tip
         // frame propagation.
-        constrained_backward_pass(chain, root, chain.positions, m_solved_locals, Stiffness_mode::apply);
+        constrained_backward_pass(chain, m_links, root, chain.positions, m_solved_locals, Stiffness_mode::apply);
 
         const float error = distance(chain.positions.back(), chain.target);
         if (error < best_error) {
@@ -560,7 +673,7 @@ auto Fabrik_solver::try_pole_fraction(const Ik_chain& chain, const vec3 root, co
     ik_apply_pole(m_pole_positions, chain.pole_position, chain.pole_angle, fraction * chain.pole_weight);
     m_pole_solved_positions.assign(m_pole_positions.begin(), m_pole_positions.end());
     m_pole_locals.assign(m_solved_locals.begin(), m_solved_locals.end());
-    constrained_backward_pass(chain, root, m_pole_solved_positions, m_pole_locals, Stiffness_mode::ignore);
+    constrained_backward_pass(chain, m_links, root, m_pole_solved_positions, m_pole_locals, Stiffness_mode::ignore);
     for (std::size_t i = 0; i < m_pole_positions.size(); ++i) {
         if (distance(m_pole_positions[i], m_pole_solved_positions[i]) > chain.tolerance) {
             return false;
