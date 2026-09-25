@@ -62,10 +62,9 @@ window and persist with the scene.
     twist range from the twist-axis limits).
   - `stiffness[3]` (float 0..0.99, default 0) - resistance to rotation
     about the axis; 0 = free. Capped below 1 (as Blender caps it at 0.99)
-    so stiffness can never alias a hard DOF lock. **Inert in this slice**:
-    the value exists, serializes and has its property row, but the
-    solver ignores it until the constrained solver is proven stable; enforcement (per-iteration
-    scale-down, see section 4) is a later slice.
+    so stiffness can never alias a hard DOF lock. It scales the joint's
+    per-iteration change in the constrained solve (section 4): a solve
+    bias toward the less stiff joints, never a constraint.
 - `rest_rotation` (quaternion): the reference orientation that defines the
   zero of the limits. The limited quantity is
   `rel = inverse(rest_rotation) * parent_from_node_rotation`, decomposed
@@ -197,8 +196,9 @@ plan:
   drag-start local rotation instead, because a channel lock states only
   that an axis must not move.
 - The unconstrained path must behave bit-for-bit as Phase 1 (a chain whose
-  joints hold no lock or limit, from either source, takes the
-  constraint-free code path - no behavior or performance regression).
+  joints hold no lock or limit, from either source, and no nonzero
+  stiffness takes the constraint-free code path - no behavior or
+  performance regression).
 - Unit tests: the solver factoring makes the constrained solve testable
   headlessly; add tests next to the code covering: unconstrained
   equivalence with Phase 1 expectations, the swing-twist decomposition
@@ -291,11 +291,26 @@ formulation adapted to swing/twist limits:
   deterministic, monotone, time-independent, and preserves Phase 1's
   "drag back to start restores the start pose" property; the drag-start
   pose is never teleported.
-- Stiffness (deferred to a later slice; the field is inert in this one  - 
-  section 1): when implemented, scales down the per-iteration angular change of
-  the joint by (1 - stiffness) before clamping, biasing the solve toward
-  moving less-stiff joints first. Purely a solve-quality knob; no
-  correctness requirement beyond stability.
+- **Stiffness**: in each iteration's backward pass, before the clamp, the
+  joint's change of local rotation relative to its previous iteration -
+  `inverse(previous_local) * candidate_local` as a rotation vector in the
+  joint's own frame - is scaled per axis by (1 - stiffness[axis]), and the
+  joint turns by the scaled change. A stiff joint therefore moves less per
+  iteration and the solve takes up the motion with the free joints first.
+  Stiffness is a solve-quality bias, never a constraint: the clamp that
+  follows enforces locks and limits exactly as without it, and the pole's
+  admissibility test (the backward pass of the admissible pole fraction,
+  `pole_target.md` R13) does not scale. A joint with any nonzero stiffness
+  routes the chain into the constrained solver, as a lock or limit does -
+  the unconstrained positional path has no per-joint rotation to scale. A
+  joint with a zero-length child offset (no twist axis) is never turned by
+  the solve, so its stiffness is not resolved. A chain whose stiffness is 0
+  everywhere solves exactly as without the value. Reach stays best effort
+  within max_iterations: stiffness slows the stiff joint's approach, not the
+  iteration's fixed point, so a very stiff joint can leave the effector
+  short when the iterations run out (measured on the three-bone test rig,
+  `bone_0` at stiffness 0.9: up to 2.8e-2 short of a 0.64 drag, against
+  2.7e-4 at 0.5 and 1e-4 at 0).
 - Termination and fallbacks: the constrained solve iterates until the
   effector is within the tolerance or max_iterations is reached, and
   returns the best pose it saw - the lowest effector error, positions and
@@ -346,7 +361,7 @@ formulation adapted to swing/twist limits:
   Lock X/Y/Z and Limit X/Y/Z checkboxes, Limit Min / Limit Max as vec3 rows
   edited in degrees and stored in radians (coerced per component to
   [-180 deg, 0 deg] and [0 deg, 180 deg] per section 1), Stiffness
-  (shown; the value is inert - section 1), Rest Rotation as Euler
+  as a vec3 row coerced to [0, 0.99], Rest Rotation as Euler
   degrees, and the pole rows of `pole_target.md` R17. The `visible_when` of
   section 1 decides which nodes show them, so there is nothing to add and
   nothing to gate.
@@ -411,8 +426,8 @@ formulation adapted to swing/twist limits:
   stopgap and migrates there later.
 - Enforcing channel locks against animation, physics, or programmatic
   transform writes.
-- Stiffness UI and solver enforcement (deferred wholesale to a later
-  slice - section 1); weighting schemes beyond the simple scale-down.
+- Stiffness weighting schemes beyond the per-iteration scale-down of
+  section 4.
 - Translation/scale IK limits (IK only rotates; loc/scale limits would be
   constraint-stack material, Phase 4's Limit Location/Scale).
 
@@ -466,8 +481,9 @@ formulation adapted to swing/twist limits:
 3. **Channel locks**: 9 `Item_flags` bits (bits 42-50), chosen for
    zero-cost persistence through `ERHE_node.flags` and any-item
    applicability.
-4. **Stiffness**: serialized but inert in this slice (section 1); solver
-   enforcement and UI wait until the constrained solver is proven.
+4. **Stiffness**: a per-iteration scale-down of the joint's change in the
+   constrained backward pass (section 4), carried in `Ik_joint_constraint`
+   next to the locks and limits it routes with; a bias, not a constraint.
 5. **Limit parameterization**: swing/twist (Blender-solver style -
    per-joint derived twist axis, swing ellipse with per-quadrant radii
    from the per-axis limits, twist interval from the twist-axis limit), NOT
@@ -496,15 +512,17 @@ formulation adapted to swing/twist limits:
 - Solver - `src/editor/transform/ik_solver.{hpp,cpp}`: `Ik_chain` /
   `Ik_solver` / `Fabrik_solver`; constrained enforcement in
   `constrain_local_rotation` (swing/twist decomposition, sin(half-angle)
-  clamp space, per-quadrant ellipse, pinned locks, no-teleport extension).
+  clamp space, per-quadrant ellipse, pinned locks, no-teleport extension),
+  preceded by `apply_stiffness` in `constrained_backward_pass`.
   Unconstrained chains take the untouched Phase 1 `fabrik_solve` path.
   Unit tests: `src/editor/transform/test/test_ik_solver.cpp`
   (`editor_ik_solver_tests` target, `ERHE_BUILD_TESTS=ON` trees).
 - IK integration - `Ik_drag::begin` resolves per-joint constraints
   (`resolve_constraint`: the node's `Ik.*` values OR its channel-lock
   flags, the rest-frame rule of section 3, twist axis via
-  `derive_twist_axis`; any lock or limit, the twist axis included, routes
-  the chain into the constrained solver); constrained write-back sets
+  `derive_twist_axis`; any lock or limit, the twist axis included, or any
+  nonzero stiffness routes the chain into the constrained solver -
+  `Ik_joint_constraint::needs_constrained_solve`); constrained write-back sets
   solver-produced local rotations directly.
 - Properties UI - the generic rows of group "IK" plus the "Set Rest" row
   action (`properties.cpp`). Property tests:

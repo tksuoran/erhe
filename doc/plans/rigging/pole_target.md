@@ -336,9 +336,9 @@ model.
 - **Effector orientation option** owns the Transform tool setting choosing
   between the effector keeping its world orientation and following the last
   segment. Implemented; requirements: `ik_drag_options.md` section 1.
-- **Stiffness** owns the solver enforcement and the UI of the
-  `Ik.stiffness` value, which stays inert here
-  (`ik_settings.md` section 1).
+- **Stiffness** scales a stiff joint's per-iteration change in the
+  constrained solve and never enters the pole's admissibility test
+  (`ik_settings.md` section 4).
 - **Phase 4** owns persistent IK constraints, where a pole becomes a field of
   a stored constraint on a stored chain, and owns the USD form of rig data
   (R26).

@@ -337,7 +337,7 @@ class Rig:
 
     IK_PROPS = [
         "ik_lock", "Ik.lock_x", "Ik.lock_y", "Ik.lock_z", "Ik.limit_x", "Ik.limit_y", "Ik.limit_z",
-        "Ik.limit_min", "Ik.limit_max", "Ik.rest_rotation", "Ik.pole_target", "Ik.pole_angle",
+        "Ik.limit_min", "Ik.limit_max", "Ik.stiffness", "Ik.rest_rotation", "Ik.pole_target", "Ik.pole_angle",
         "lock_rotation_x", "lock_rotation_y", "lock_rotation_z",
         "lock_translation_x", "lock_translation_y", "lock_translation_z",
     ]
@@ -956,6 +956,25 @@ def ui_drag_field(rig: Rig, node, group, label, pixels):
     return True
 
 
+def ui_type_field(rig: Rig, node, group, label, text):
+    """Type `text` into the numeric field `label` (for example 'Stiffness.x'), as a user
+    does: Ctrl+click turns the field into a text field, Ctrl+A selects its content,
+    Enter commits."""
+    e = rig.e
+    if not select_for_properties(rig, node) or not ensure_group_open(e, group):
+        return False
+    item = ensure_row_visible(e, label)
+    if item is None:
+        return False
+    e.call("imgui_click", {"window": "Properties", "id": item["id"], "modifiers": ["ctrl"]})
+    e.advance(2)
+    e.key("a", ["ctrl"])
+    e.call("type_text", {"text": text})
+    e.advance(2)
+    e.key("enter")
+    return True
+
+
 def float_list_prop(rig: Rig, node, prop):
     return [float(v) for v in rig.prop(node, prop)["value"].replace(",", " ").split()]
 
@@ -1337,6 +1356,39 @@ def section_3(rig: Rig):
     check_true("3.9 limits are measured from the rest pose: bone_1 stops at rest + 45 and rest - 10",
                (abs(high - (rotated_x + 45.0)) <= 1.0) and (abs(low - (rotated_x - 10.0)) <= 1.0),
                f"reached X {low:.2f} .. {high:.2f} deg, rest {rotated_x:.2f} deg")
+    rig.clear_settings()
+
+    # 3.10 stiffness: the same reachable drag with and without Stiffness X 0.5 on bone_0
+    # (typed into the Properties row); the stiff root turns less, the others take up the
+    # bend, the tip still reaches the target. Reach under stiffness is best effort within
+    # the solver's 16 iterations (ik_settings.md section 4): at 0.9 this drag ends up to
+    # 2.8e-2 short, so the check uses a stiffness the solve converges under.
+    def stiffness_drag():
+        rig.pose(BENT)
+        start = rig.snapshot()
+        rest_lengths = segment_lengths(start["positions"])
+        delta = [0.0, -0.4, 0.5]
+        samples = rig.translate_drag(TIP, ramp(delta, 12), sample=rig.snapshot)
+        end = samples[-1]
+        turned = q_angle_deg(start["rotations"]["bone_0"], end["rotations"]["bone_0"])
+        reach = max(length(sub(s["positions"][-1], add(start["positions"][-1], d)))
+                    for s, d in zip(samples, ramp(delta, 12)))
+        worst_length = max(
+            max(abs(a - b) for a, b in zip(segment_lengths(s["positions"]), rest_lengths)) for s in samples
+        )
+        undo_viewport(rig)
+        return turned, reach, worst_length
+    control_turn, control_reach, _ = stiffness_drag()
+    ok = ui_type_field(rig, "bone_0", "IK", "Stiffness.x", "0.5")
+    stiffness = float_list_prop(rig, "bone_0", "Ik.stiffness")
+    stiff_turn, stiff_reach, stiff_length = stiffness_drag()
+    check_true("3.10 Stiffness X 0.5 on bone_0 (typed into the Properties row): the same reachable drag turns bone_0 "
+               "less than without it, bone lengths hold and the tip stays on the target in every step",
+               ok and (abs(stiffness[0] - 0.5) < 1.0e-4) and (control_turn >= MOVED_DEG) and (stiff_turn < control_turn)
+               and (stiff_reach < POSITION_TOL) and (stiff_length < POSITION_TOL),
+               f"field ok={ok} Stiffness={stiffness} bone_0 turned {stiff_turn:.2f} deg (without stiffness "
+               f"{control_turn:.2f} deg) worst tip error={stiff_reach:.2e} (without {control_reach:.2e}) "
+               f"worst length error={stiff_length:.2e}")
     rig.clear_settings()
 
 

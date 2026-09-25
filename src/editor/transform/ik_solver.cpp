@@ -370,10 +370,20 @@ void fabrik_solve(
     }
 }
 
+auto Ik_joint_constraint::has_stiffness() const -> bool
+{
+    return (stiffness.x != 0.0f) || (stiffness.y != 0.0f) || (stiffness.z != 0.0f);
+}
+
+auto Ik_joint_constraint::needs_constrained_solve() const -> bool
+{
+    return (enabled && (twist_axis >= 0)) || has_stiffness();
+}
+
 auto Ik_chain::has_constraints() const -> bool
 {
     for (const Ik_joint_constraint& constraint : constraints) {
-        if (constraint.enabled && (constraint.twist_axis >= 0)) {
+        if (constraint.needs_constrained_solve()) {
             return true;
         }
     }
@@ -382,21 +392,57 @@ auto Ik_chain::has_constraints() const -> bool
 
 namespace {
 
+// Whether a constrained backward pass scales each joint's change by the
+// joint's stiffness: the solve's iterations do, the pole admissibility test
+// does not (stiffness is a solve-quality bias, never a constraint).
+enum class Stiffness_mode : unsigned int
+{
+    apply,
+    ignore
+};
+
+// Scales the change from previous_local to candidate_local - the rotation
+// vector of inverse(previous_local) * candidate_local, in the joint's own
+// frame - per axis by (1 - stiffness) and returns previous_local turned by
+// the scaled change (doc/plans/rigging/ik_settings.md section 4).
+[[nodiscard]] auto apply_stiffness(const vec3 stiffness, const quat& previous_local, const quat& candidate_local) -> quat
+{
+    quat change = normalize(inverse(previous_local) * candidate_local);
+    if (change.w < 0.0f) {
+        change = quat{-change.w, -change.x, -change.y, -change.z}; // shorter way round
+    }
+    const vec3  change_sin{change.x, change.y, change.z};
+    const float sin_half = length(change_sin);
+    if (sin_half < c_epsilon) {
+        return candidate_local; // no change to scale
+    }
+    const float angle           = 2.0f * std::atan2(sin_half, change.w);
+    const vec3  rotation_vector = (change_sin / sin_half) * angle;
+    const vec3  scaled_vector   = rotation_vector * (vec3{1.0f} - stiffness);
+    const float scaled_angle    = length(scaled_vector);
+    if (scaled_angle < c_epsilon) {
+        return previous_local;
+    }
+    return normalize(previous_local * angleAxis(scaled_angle, scaled_vector / scaled_angle));
+}
+
 // The constraint-enforcing backward pass of the constrained solve
 // (doc/plans/rigging/ik_settings.md section 4): from the fixed root toward
 // the tip, each joint is turned by the shortest arc from its current child
 // direction (the parent's solved frame times the joint's entry in locals)
-// toward the next position, the result is clamped to the joint's
-// constraint, and the child is placed one segment length along the clamped
-// direction. positions is read as the desired pose and overwritten with the
-// solved one; locals holds the frames the pass starts from and receives the
-// solved local rotations, so positions and locals leave it consistent and
-// satisfying every constraint.
+// toward the next position; with Stiffness_mode::apply, the change from the
+// joint's entry in locals is scaled by the joint's stiffness; the result is
+// clamped to the joint's constraint, and the child is placed one segment
+// length along the clamped direction. positions is read as the desired pose
+// and overwritten with the solved one; locals holds the frames the pass
+// starts from and receives the solved local rotations, so positions and
+// locals leave it consistent and satisfying every constraint.
 void constrained_backward_pass(
-    const Ik_chain&    chain,
-    const vec3         root,
-    std::vector<vec3>& positions,
-    std::vector<quat>& locals
+    const Ik_chain&      chain,
+    const vec3           root,
+    std::vector<vec3>&   positions,
+    std::vector<quat>&   locals,
+    const Stiffness_mode stiffness_mode
 )
 {
     const std::size_t joint_count = positions.size();
@@ -408,7 +454,11 @@ void constrained_backward_pass(
         const vec3 desired_child_dir = ik_safe_direction(positions[i + 1] - positions[i], current_child_dir);
         const quat delta             = ik_shortest_arc(current_child_dir, desired_child_dir, world_rotation);
         quat       candidate_local   = normalize(inverse(parent_world) * (delta * world_rotation));
-        candidate_local = constrain_local_rotation(chain.constraints[i], chain.local_rotations[i], candidate_local);
+        const Ik_joint_constraint& constraint = chain.constraints[i];
+        if ((stiffness_mode == Stiffness_mode::apply) && constraint.has_stiffness()) {
+            candidate_local = apply_stiffness(constraint.stiffness, locals[i], candidate_local);
+        }
+        candidate_local = constrain_local_rotation(constraint, chain.local_rotations[i], candidate_local);
         locals[i] = candidate_local;
         const quat solved_world = parent_world * candidate_local;
         positions[i + 1] =
@@ -483,7 +533,7 @@ void Fabrik_solver::solve(Ik_chain& chain)
 
         // Backward-reaching with constraint enforcement and root-to-tip
         // frame propagation.
-        constrained_backward_pass(chain, root, chain.positions, m_solved_locals);
+        constrained_backward_pass(chain, root, chain.positions, m_solved_locals, Stiffness_mode::apply);
 
         const float error = distance(chain.positions.back(), chain.target);
         if (error < best_error) {
@@ -510,7 +560,7 @@ auto Fabrik_solver::try_pole_fraction(const Ik_chain& chain, const vec3 root, co
     ik_apply_pole(m_pole_positions, chain.pole_position, chain.pole_angle, fraction * chain.pole_weight);
     m_pole_solved_positions.assign(m_pole_positions.begin(), m_pole_positions.end());
     m_pole_locals.assign(m_solved_locals.begin(), m_solved_locals.end());
-    constrained_backward_pass(chain, root, m_pole_solved_positions, m_pole_locals);
+    constrained_backward_pass(chain, root, m_pole_solved_positions, m_pole_locals, Stiffness_mode::ignore);
     for (std::size_t i = 0; i < m_pole_positions.size(); ++i) {
         if (distance(m_pole_positions[i], m_pole_solved_positions[i]) > chain.tolerance) {
             return false;

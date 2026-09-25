@@ -810,6 +810,122 @@ TEST(Ik_solver, twist_and_swing_lock_make_a_hinge)
     EXPECT_TRUE(any_bend) << "the hinge axis stays free";
 }
 
+// Stiffness (doc/plans/rigging/ik_settings.md section 4). A chain whose
+// every stiffness is 0 takes the Phase 1 path unchanged.
+TEST(Ik_solver, zero_stiffness_matches_unstiffened_solve)
+{
+    editor::Ik_chain reference = make_straight_chain();
+    reference.target = vec3{0.8f, 1.2f, 0.3f};
+    editor::Ik_chain zeroed = reference;
+    for (editor::Ik_joint_constraint& constraint : zeroed.constraints) {
+        constraint.stiffness = vec3{0.0f};
+    }
+    ASSERT_FALSE(zeroed.has_constraints());
+
+    editor::Fabrik_solver solver;
+    solver.solve(reference);
+    solver.solve(zeroed);
+    for (std::size_t i = 0; i < reference.positions.size(); ++i) {
+        EXPECT_EQ(zeroed.positions[i], reference.positions[i]) << "joint " << i;
+        EXPECT_EQ(zeroed.local_rotations[i], reference.local_rotations[i]) << "joint " << i;
+    }
+
+    // With a limit present, zero stiffness leaves the constrained solve as
+    // it is: a limited chain with and without explicit zero stiffness.
+    editor::Ik_chain limited = make_straight_chain();
+    limited.constraints[1].enabled    = true;
+    limited.constraints[1].twist_axis = 1;
+    limited.constraints[1].limit[0]   = true;
+    limited.constraints[1].limit_min  = vec3{-2.0f, -c_pi, -c_pi};
+    limited.constraints[1].limit_max  = vec3{0.0f, c_pi, c_pi};
+    limited.target = vec3{0.3f, 1.4f, 0.7f};
+    editor::Ik_chain limited_zeroed = limited;
+    limited_zeroed.constraints[0].stiffness = vec3{0.0f};
+    solver.solve(limited);
+    solver.solve(limited_zeroed);
+    for (std::size_t i = 0; i < limited.positions.size(); ++i) {
+        EXPECT_EQ(limited_zeroed.positions[i], limited.positions[i]) << "joint " << i;
+        EXPECT_EQ(limited_zeroed.local_rotations[i], limited.local_rotations[i]) << "joint " << i;
+    }
+}
+
+// Rotation angle of a local rotation relative to identity (the drag-start
+// local rotation of make_straight_five_joint_chain).
+[[nodiscard]] auto rotation_angle(const quat& q) -> float
+{
+    const float w = std::min(1.0f, std::abs(q.w));
+    return 2.0f * std::acos(w);
+}
+
+[[nodiscard]] auto solve_bend_chain(const vec3 root_stiffness) -> editor::Ik_chain
+{
+    editor::Ik_chain chain = make_straight_five_joint_chain();
+    chain.constraints[0].stiffness = root_stiffness;
+    chain.target = vec3{1.5f, 3.0f, 0.0f}; // reachable, bends in the XY plane (about Z)
+    editor::Fabrik_solver solver;
+    solver.solve(chain);
+    return chain;
+}
+
+TEST(Ik_solver, stiff_joint_turns_less_and_the_effector_still_reaches)
+{
+    const editor::Ik_chain free_chain  = solve_bend_chain(vec3{0.0f});
+    const editor::Ik_chain stiff_chain = solve_bend_chain(vec3{0.0f, 0.0f, 0.9f}); // stiff about the bend axis Z
+    ASSERT_TRUE(stiff_chain.has_constraints()); // stiffness alone routes into the constrained solve
+
+    // The unstiffened reference took the positional path; recover its root
+    // rotation from the solved root-to-joint-1 direction.
+    const vec3  free_dir   = normalize(free_chain.positions[1] - free_chain.positions[0]);
+    const float free_angle = std::acos(std::clamp(dot(free_dir, vec3{0.0f, 1.0f, 0.0f}), -1.0f, 1.0f));
+    const float stiff_angle = rotation_angle(stiff_chain.local_rotations[0]);
+    EXPECT_LT(stiff_angle, 0.5f * free_angle) << "free " << free_angle << " stiff " << stiff_angle;
+
+    EXPECT_LT(distance(stiff_chain.positions.back(), stiff_chain.target), 1.0e-3f);
+    for (std::size_t i = 0; i + 1 < stiff_chain.positions.size(); ++i) {
+        EXPECT_NEAR(distance(stiff_chain.positions[i], stiff_chain.positions[i + 1]), 1.0f, 1.0e-4f) << "segment " << i;
+    }
+    EXPECT_EQ(stiff_chain.positions[0], (vec3{0.0f, 0.0f, 0.0f})); // root fixed
+}
+
+TEST(Ik_solver, stiffness_never_exceeds_limits_or_locks)
+{
+    editor::Ik_chain chain = make_straight_chain();
+    const float max_bend = 0.4f;
+    for (int j = 0; j < 2; ++j) {
+        chain.constraints[j].enabled    = true;
+        chain.constraints[j].twist_axis = 1;
+        chain.constraints[j].lock[2]    = true;
+        chain.constraints[j].limit[0]   = true;
+        chain.constraints[j].limit_min  = vec3{-max_bend, -c_pi, -c_pi};
+        chain.constraints[j].limit_max  = vec3{max_bend, c_pi, c_pi};
+    }
+    chain.constraints[0].stiffness = vec3{0.5f, 0.9f, 0.9f};
+    chain.constraints[1].stiffness = vec3{0.2f, 0.0f, 0.7f};
+    chain.target = vec3{1.0f, -1.0f, 1.5f}; // far outside what the limits allow
+
+    editor::Fabrik_solver solver;
+    solver.solve(chain);
+
+    for (int j = 0; j < 2; ++j) {
+        const float x_angle = swing_angle_about(quat{1.0f, 0.0f, 0.0f, 0.0f}, chain.local_rotations[j], 0, 1);
+        const float z_angle = swing_angle_about(quat{1.0f, 0.0f, 0.0f, 0.0f}, chain.local_rotations[j], 2, 1);
+        EXPECT_LE(std::abs(x_angle), max_bend + 1.0e-3f) << "joint " << j;
+        EXPECT_NEAR(z_angle, 0.0f, 1.0e-4f) << "joint " << j;
+    }
+    EXPECT_NEAR(distance(chain.positions[0], chain.positions[1]), 1.0f, 1.0e-4f);
+    EXPECT_NEAR(distance(chain.positions[1], chain.positions[2]), 1.0f, 1.0e-4f);
+}
+
+TEST(Ik_solver, stiff_solve_is_deterministic)
+{
+    const editor::Ik_chain first  = solve_bend_chain(vec3{0.3f, 0.6f, 0.9f});
+    const editor::Ik_chain second = solve_bend_chain(vec3{0.3f, 0.6f, 0.9f});
+    for (std::size_t i = 0; i < first.positions.size(); ++i) {
+        EXPECT_EQ(first.positions[i], second.positions[i]) << "joint " << i;
+        EXPECT_EQ(first.local_rotations[i], second.local_rotations[i]) << "joint " << i;
+    }
+}
+
 // Chain visualization line list (doc/plans/rigging/ik_drag_options.md R16,
 // R17). A bent three-joint chain: root, elbow, effector.
 [[nodiscard]] auto make_drag_line_positions() -> std::vector<vec3>

@@ -55,8 +55,8 @@ constexpr int   c_max_iterations  = 16;
 }
 
 // Per-joint constraint from the node's Ik.* values OR-ed with its
-// lock_rotation_* channel-lock flags. A joint whose locks and limits are
-// all off is unconstrained; a joint constrained by channel locks alone takes
+// lock_rotation_* channel-lock flags, plus its Ik.stiffness. A joint whose
+// locks and limits are all off is unconstrained (it may still be stiff); a joint constrained by channel locks alone takes
 // the drag-start local rotation as its rest orientation (the rest-frame rule
 // of doc/plans/rigging/ik_settings.md section 3).
 [[nodiscard]] auto resolve_constraint(
@@ -101,6 +101,13 @@ constexpr int   c_max_iterations  = 16;
         }
     }
     constraint.enabled = (twist_axis >= 0) && any_constraint;
+
+    // Stiffness scales the joint's per-iteration change in the constrained
+    // solve and, when nonzero, routes the chain there as a lock or limit
+    // does (ik_settings.md section 4). A joint without a twist axis has a
+    // zero-length child offset, which the solve never turns: its stiffness
+    // has nothing to act on.
+    constraint.stiffness = (twist_axis >= 0) ? data.stiffness : vec3{0.0f};
     return constraint;
 }
 
@@ -139,7 +146,7 @@ void Ik_drag_chain::capture(std::vector<std::shared_ptr<erhe::scene::Node>>&& jo
 
     m_has_constraints = false;
     for (const Ik_joint_constraint& constraint : m_constraints) {
-        if (constraint.enabled && (constraint.twist_axis >= 0)) {
+        if (constraint.needs_constrained_solve()) {
             m_has_constraints = true;
             break;
         }

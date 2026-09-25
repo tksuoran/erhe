@@ -16,7 +16,7 @@ tool option now (`ik_drag_options.md` section 3).
 ## Automated run
 
 `scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
-headless editor and prints one PASS / FAIL line per check (71 checks, about
+headless editor and prints one PASS / FAIL line per check (72 checks, about
 7 minutes):
 
     py -3 scripts/ik_interactive_pass_verify.py --launch
@@ -174,6 +174,13 @@ values set, unless the step says otherwise. "Drag" means: select
    IK group now holds that rotation. Set Limit X to -10 .. 45 again and drag:
    `bone_1` now stops at 30 - 10 = 20 and 30 + 45 = 75 degrees, the limits
    being measured from the rest pose. One Ctrl+Z undoes the Set rest press.
+10. **Stiffness.** Clear everything and bend the chain (`bone_1` and
+   `bone_2` at 30 degrees about X). Drag the tip toward -Y +Z and note how
+   far `bone_0` turns; Ctrl+Z. On `bone_0` set Stiffness X to 0.5 (Ctrl+click
+   the field and type) and repeat the drag: `bone_0` turns less, `bone_1` and
+   `bone_2` take up the bend, bone lengths hold and the tip stays on the
+   target. Very stiff joints (towards 0.99) may leave the tip a little short
+   (`ik_settings.md` section 4).
 
 ## 4. Channel locks - PASS (automated)
 
@@ -314,8 +321,8 @@ Measured (checks 8.1 - 8.6):
   child's old position; the next drag started from there.
 - **F4.** Fixed: closing a scene could crash the next hover through the ID
   renderer's id-range table, which still named the closed scene's meshes.
-- **F5.** Stiffness is a normal IK row now (it was developer-only); the
-  solver still ignores its value.
+- **F5.** Fixed: Stiffness is a normal IK row (it was developer-only) and
+  the solver reads it (`ik_settings.md` section 4; check 3.10).
 - **F8.** Resolved by specification (`ik_settings.md` section 4,
   "Solution families"; `ik_drag_options.md` R25, R26). Sweep scenario 0
   (seed 20260925; a hinge on `bone_0`, an X limit on `bone_1`, a Z limit on

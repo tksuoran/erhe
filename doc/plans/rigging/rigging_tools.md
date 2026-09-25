@@ -204,8 +204,8 @@ Builds directly on Phase 1's solver and drag UX.
 - **Per-bone IK settings**: DOF locks per axis and joint rotation limits
   (min/max per axis), held as `Ik.*` attached properties of the bone node and
   edited in Properties. Solver enforces them via constrained FABRIK
-  (per-iteration reprojection). Stiffness if it falls out naturally.
-  Implemented; requirements: `ik_settings.md`.
+  (per-iteration reprojection); per-axis stiffness scales a joint's
+  per-iteration change. Implemented; requirements: `ik_settings.md`.
 - **Solver interface**: factor the solver behind an interface (chain in /
   posed chain out) so a damped-least-squares Jacobian solver can replace or
   complement FABRIK if constrained FABRIK proves unstable.

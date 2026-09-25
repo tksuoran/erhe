@@ -20,8 +20,8 @@ namespace editor {
 //
 // Parameters are per local axis x = 0, y = 1, z = 2. lock wins over limit
 // on the same axis. Limits are radians with min in [-pi, 0] and max in
-// [0, pi], so the rest angle 0 is always legal. stiffness (0..0.99) is
-// serialized but inert in this slice (no solver enforcement yet).
+// [0, pi], so the rest angle 0 is always legal. stiffness (0..0.99) scales
+// the joint's per-iteration change in the constrained solve (section 4).
 class Ik_settings_data
 {
 public:
@@ -66,8 +66,7 @@ public:
     // Attached to erhe::scene::Node, UI group "IK", none of them inheriting
     // (a shared limit set is a Style holding the Ik.* values). limit_min
     // / limit_max are radians shown in degrees, coerced per component to
-    // [-pi, 0] and [0, pi]; stiffness is coerced to [0, 0.99] and
-    // developer-only (inert).
+    // [-pi, 0] and [0, pi]; stiffness is coerced to [0, 0.99].
     static const erhe::property::Property<bool>      lock_x_property;
     static const erhe::property::Property<bool>      lock_y_property;
     static const erhe::property::Property<bool>      lock_z_property;

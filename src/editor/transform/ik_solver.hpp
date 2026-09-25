@@ -78,6 +78,13 @@ auto ik_apply_pole(
 // solver; swing is clamped in sin(half-angle) quaternion-component space
 // (Blender's SphericalRangeParameters / EllipseClamp space) with the
 // constraint region extended to include the drag-start state (no-teleport).
+//
+// stiffness is the joint's Ik.stiffness per local axis, [0, 0.99]: in each
+// constrained iteration's backward pass the joint's change of local rotation
+// since the previous iteration, as a rotation vector in the joint's own
+// frame, is scaled per axis by (1 - stiffness) before the clamp
+// (doc/plans/rigging/ik_settings.md section 4). It biases the solve toward
+// the free joints and is never a constraint.
 class Ik_joint_constraint
 {
 public:
@@ -88,6 +95,12 @@ public:
     glm::vec3           limit_max{0.0f}; // radians, [0, pi], per local axis
     glm::quat           rest_rotation{1.0f, 0.0f, 0.0f, 0.0f}; // parent-space zero of the limits
     int                 twist_axis{-1}; // 0/1/2; -1 = undefined (joint unconstrained)
+    glm::vec3           stiffness{0.0f}; // per local axis, [0, 0.99]; 0 = free
+
+    [[nodiscard]] auto has_stiffness() const -> bool;
+    // A lock or limit to enforce, or a nonzero stiffness: either routes the
+    // chain into the constrained solver.
+    [[nodiscard]] auto needs_constrained_solve() const -> bool;
 };
 
 // Chain in / posed chain out. Joints in root..effector order. The effector
@@ -129,11 +142,13 @@ public:
 
 // FABRIK implementation. Without constraints this is exactly the Phase 1
 // positional solve (local_rotations untouched - the caller keeps its
-// positional write-back). With constraints, each iteration runs the forward
-// pass unconstrained and enforces constraints in the backward pass with
-// parent frames propagated root to tip; the solved pose is returned in both
-// positions and local_rotations, already satisfying the constraints. The
-// constrained iteration returns the best pose it saw
+// positional write-back). With constraints (a lock, a limit or a nonzero
+// stiffness - Ik_joint_constraint::needs_constrained_solve), each iteration
+// runs the forward pass unconstrained and, in the backward pass with parent
+// frames propagated root to tip, scales each stiff joint's change by its
+// stiffness and then enforces its constraints; the solved pose is returned
+// in both positions and local_rotations, already satisfying the constraints.
+// The constrained iteration returns the best pose it saw
 // (doc/plans/rigging/ik_settings.md section 4).
 // A pole (Ik_chain::has_pole) is applied once, after the solve, as a rigid
 // swivel about the solved root-to-effector line by pole_weight times the full
@@ -153,8 +168,9 @@ private:
     void apply_constrained_pole(Ik_chain& chain, glm::vec3 root);
     // Swivels the solved pose by fraction times the weighted swivel into
     // m_pole_positions, runs the constraint-enforcing backward pass on it
-    // into m_pole_solved_positions / m_pole_locals, and returns whether the
-    // pass reproduced every joint within chain.tolerance.
+    // (without stiffness: it tests admissibility, and stiffness is no
+    // constraint) into m_pole_solved_positions / m_pole_locals, and returns
+    // whether the pass reproduced every joint within chain.tolerance.
     [[nodiscard]] auto try_pole_fraction(const Ik_chain& chain, glm::vec3 root, float fraction) -> bool;
 
     // Per-solve scratch, refilled in place so a steady-state drag allocates
