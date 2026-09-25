@@ -2,10 +2,12 @@
 
 Status: in progress
 
-This document specifies two slices of Phase 2 of the rigging roadmap in
-`rigging_tools.md`: the **effector orientation option** (section 1) and the
-**chain visualization** (section 2). Both are implemented (see Implementation
-status at the end); both act on the interactive IK drag of
+This document specifies three slices of Phase 2 of the rigging roadmap in
+`rigging_tools.md`: the **effector orientation option** (section 1), the
+**chain visualization** (section 2) and the **drag behavior options**
+(section 3: mid-chain drag, solve from, pole alignment). Sections 1 and 2 are
+implemented (see Implementation status at the end); all three act on the
+interactive IK drag of
 `fabrik_ik.md` (Phase 1) as extended by `ik_settings.md` (per-bone locks and
 limits) and `pole_target.md` (the pole).
 
@@ -229,6 +231,181 @@ renders, so `capture_screenshot` can never catch an active drag. R16 exists
 so that the part of this slice that can be checked without a display - the
 line list - is checked by a test rather than by eye.
 
+## 3. Drag behavior options
+
+Three behaviors of the IK drag each come in two variants, and the user picks
+the variant per drag through the Move tool, the way section 1 picks the
+effector orientation. The first variant of each option is the behavior the
+drag has always had and stays the default; the second is new.
+
+| Option | Default variant | Other variant |
+|---|---|---|
+| Mid-chain drag (3.1) | Rigid Children | Pin Chain End |
+| Solve from (3.2) | Drag Start | Previous Step |
+| Pole alignment (3.3) | Snap | Ease In |
+
+**R18.** Each option is an `enum class` in `src/editor/transform/ik_drag.hpp`
+with a `c_..._strings` label array in declaration order, in the shape of
+`Ik_effector_orientation` (R1): `Ik_mid_chain_drag { rigid_children,
+pin_chain_end }`, `Ik_solve_from { drag_start, previous_step }`,
+`Ik_pole_alignment { snap, ease_in }`. The ease-in variant has one parameter,
+`pole_ease_distance` (R27).
+
+**R19.** The options of one gesture travel together in one value class,
+`Ik_drag_options`, which also holds the effector orientation of section 1:
+
+```
+class Ik_drag_options
+{
+public:
+    Ik_effector_orientation effector_orientation{Ik_effector_orientation::keep_world};
+    Ik_mid_chain_drag       mid_chain_drag      {Ik_mid_chain_drag::rigid_children};
+    Ik_solve_from           solve_from          {Ik_solve_from::drag_start};
+    Ik_pole_alignment       pole_alignment      {Ik_pole_alignment::snap};
+    float                   pole_ease_distance  {0.5f};
+};
+```
+
+`Ik_drag::begin` takes an `Ik_drag_options` as its second argument in place
+of the bare effector orientation and stores it for the gesture (R2 extended
+to every option): one gesture solves under one set of options, and `apply`
+reads no setting and no UI state. `Ik_drag::reset` returns the stored options
+to their defaults.
+
+### 3.1 Mid-chain drag
+
+A drag of a bone that has bone children in the middle of a chain moves that
+bone (the effector) and aims its ancestors at it. What happens to the bones
+below the effector is the option.
+
+**R20.** `rigid_children` is the behavior of sections 1-2, unchanged: the
+bones below the effector follow it rigidly - their local transforms do not
+change - so the chain's end moves with the effector.
+
+**R21.** `pin_chain_end` keeps the chain's end where it was at drag start.
+The **lower chain** runs from the effector down: starting at the effector,
+it follows the only bone child of each bone and stops at the first bone with
+no bone child or with more than one (the **end joint**; a hand with fingers
+is an end joint). The lower chain exists when it holds at least two joints,
+so an effector with no bone child or with several bone children has none,
+and a non-bone drag handle (R6) never has one; a drag without a lower chain
+behaves as under `rigid_children`.
+
+**R22.** Under `pin_chain_end` each `apply` first solves the chain of
+sections 1-2 (the **upper chain**, root..effector) exactly as before, then
+solves the lower chain as a chain of its own: its root is the effector at its
+solved position, its target is the end joint's drag-start world position,
+and its joints' constraints (`ik_settings.md`) and governing pole
+(`pole_target.md` R5, scanned from the end joint toward the effector) are
+resolved at `begin` by the same rules as the upper chain's. The end joint
+keeps its drag-start world rotation, so everything below it stays in place in
+the world; when the pinned position is out of the lower chain's reach the
+lower chain reaches toward it (FABRIK's closest reachable pose) and the end
+joint lies where that pose puts it.
+
+**R23.** Under `pin_chain_end` with a lower chain, the effector is the lower
+chain's root: the lower solve sets its rotation, and the effector orientation
+(section 1) does not apply to it. The effector orientation still applies
+under `rigid_children`, and to any drag without a lower chain.
+
+**R24.** Every joint of the lower chain takes part in the gesture's undo step
+(`Ik_drag::make_transform_operation`, and the joints
+`Transform_tool::try_translate_ik` appends to the transform entries), and in
+the chain visualization of section 2: the chain polyline continues from the
+effector through the lower chain to the end joint, and the end joint gets a
+marker in the root color - it is held fixed the way the root is.
+
+### 3.2 Solve from
+
+**R25.** `drag_start` is the behavior of sections 1-2, unchanged: every
+`apply` restores the drag-start pose and solves from it, so a drag is path
+independent - a target reached by two paths gives one pose, and dragging back
+to the start restores the start pose exactly.
+
+**R26.** `previous_step` solves each `apply` from the pose the previous
+`apply` of the same gesture left, so the pose carries what the drag picked up
+on the way: dragging back to the start does not in general restore the start
+pose. The first `apply` of a gesture solves from the drag-start pose, as under
+`drag_start`. The joints' constraints keep their drag-start resolution; the
+no-teleport extension of a limit (`ik_settings.md` section 4) is taken from
+the pose the step solves from, which lies inside the drag-start extension, so
+over a gesture the admissible region only narrows toward the authored limit.
+The undo step still records the drag-start pose as "before". Under
+`pin_chain_end` the lower chain solves from its previous step too, with the
+same drag-start target.
+
+### 3.3 Pole alignment
+
+**R27.** `snap` is the behavior of `pole_target.md`, unchanged: from the first
+`apply` the bend is swiveled fully onto the pole, however far that is from the
+drag-start bend.
+
+**R28.** `ease_in` swivels the bend by a fraction `w` of the swivel `snap`
+would make (`ik_apply_pole` gains the weight; the rotation about the
+root-to-effector line is `w` times the full angle):
+`w = clamp(d / (pole_ease_distance * reach), 0, 1)`, where `d` is the distance
+from the effector's drag-start position to the current target and `reach` is
+the chain's total segment length. `pole_ease_distance` is a fraction of the
+reach in [0.05, 2], default 0.5. So the pole takes over gradually over the
+first part of the drag and fully from there on; `w` depends on the target
+only, so under `drag_start` a drag stays path independent and dragging back
+to the start eases the pole back out. The weight applies wherever the pole
+applies (both solver paths, and the lower chain of R22).
+
+### 3.4 Transform tool settings
+
+**R29.** `Transform_tool_settings::ik_drag_options` (an `Ik_drag_options`)
+replaces `Transform_tool_settings::effector_orientation`; it is session state
+that is not persisted, as R7 states for the effector orientation.
+
+**R30.** `Move_tool::imgui` draws the options after "Effector Orientation",
+in this order: "Mid-Chain Drag" (combo), "Solve From" (combo), "Pole
+Alignment" (combo), and "Pole Ease Distance" (a slider in [0.05, 2], shown
+only while Pole Alignment is Ease In). Each has a tooltip stating what its
+variants do. `Transform_tool::try_translate_ik` passes the settings' options
+to `Ik_drag::begin` (R9).
+
+### 3.5 MCP surface
+
+**R31.** The `ik_drag` tool gains the optional arguments `mid_chain_drag`
+(`"rigid_children"` default, `"pin_chain_end"`), `solve_from`
+(`"drag_start"` default, `"previous_step"`), `pole_alignment` (`"snap"`
+default, `"ease_in"`) and `pole_ease_distance` (number, default 0.5, refused
+outside [0.05, 2]). An unrecognized value is refused with `isError` naming the
+accepted values, before any joint moves. As R10 states for
+`effector_orientation`, the handler never reads the Transform tool settings,
+and the result echoes every effective option.
+
+**R32.** Because `previous_step` only differs from `drag_start` over several
+steps, `ik_drag` takes either `target` (one world position, as before) or
+`path` (an array of world positions, applied in order within the one gesture;
+the last is the final target); giving both, or neither, is refused. A path is
+one gesture and one undo step (`pole_target.md` R22).
+
+### 3.6 Acceptance criteria
+
+Measured by `scripts/ik_interactive_pass_verify.py` section 8
+(`interactive_test_pass.md`), which sets the options through the Move tool's
+combos in the Transform window, as a user does:
+
+1. Pin Chain End: dragging `bone_1` of `skin_test_3_boxes` along the circle
+   of positions that keep `bone_2` in reach (a swivel of `bone_1` about the
+   `bone_0`-to-`bone_2` line) leaves `bone_2`'s world position and rotation
+   unchanged (within 1e-3 / 0.05 degrees) while `bone_1` follows the drag; a
+   drag off that circle keeps bone lengths and moves `bone_2` only as far as
+   the lower chain cannot reach.
+2. Previous Step: a drag that pulls the chain straight out of reach and back
+   to its start ends in a pose that differs from the start pose (by more than
+   1 degree on some bone), where Drag Start restores it exactly; no step of
+   either moves a joint more than 5 times the target's step.
+3. Ease In: over a drag moving away from the start, the bend's angle off the
+   pole decreases from the drag-start angle to 0 as `w` grows and is 0 once
+   `w` reaches 1; dragging back to the start restores the start pose (Drag
+   Start).
+4. Each option combination above is one undo step per drag.
+5. The unit tests of `ik_apply_pole` cover the weight: 0 leaves the positions
+   untouched, 1 is the full swivel, 0.5 half the angle.
+
 ## Out of scope
 
 - An effector orientation that blends between the two modes, or one authored
@@ -271,6 +448,8 @@ Section 2 is implemented as specified:
   / `ik_root_color` / `ik_pole_color` / `ik_marker_width`
   (`src/editor/config/definitions/debug_visualizations_style.py`, struct
   version 2).
+
+Section 3 is not implemented yet.
 
 Outstanding: interactive (windowed) verification of the Move tool combo, of a
 live gizmo drag under `follow_last_segment`, and of the chain visualization
