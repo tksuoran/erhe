@@ -1,6 +1,6 @@
 # Skeleton Editing and Posing Basics - Phase 3 Requirements
 
-Status: proposed
+Status: in progress
 
 This document specifies Phase 3 of the rigging roadmap in `rigging_tools.md`:
 authoring skeletons in the editor rather than only importing them, plus the
@@ -110,16 +110,32 @@ pattern) and an MCP tool with explicit arguments.
   and down to the first branching or leaf), Select Mirror (R12's name
   counterpart). Hierarchy context menu and MCP; they change the selection
   only (no undo entry, as selection changes are not undoable today).
+  A chain is a maximal run of bones in which every link's parent has exactly
+  one bone child: the walk goes up while the bone parent has one bone child
+  (a branching parent belongs to the chain above) and down while the bone has
+  one bone child (a branching bone is the last bone of its chain). Every verb
+  replaces the selection within the scene by its result; a verb whose result
+  is empty leaves the selection unchanged.
 
 ## 4. Naming conventions and symmetry (slice A for naming, slice C for symmetrize)
 
 - **R11.** Side suffixes recognized: `.L`/`.R`, `_L`/`_R`, `.l`/`.r`,
   `_l`/`_r`, `Left`/`Right` and `left`/`right` as a whole trailing word; the
-  flip keeps the spelling family. One free function pair
-  (`bone_side(name)`, `flip_side_name(name)`) in the editor, unit tested.
+  flip keeps the spelling family. The side is recognized at the end of the
+  name after an optional trailing index group (`.` or `_` plus digits, as in
+  `arm.L.001` or RiggedFigure's `arm_joint_L_1`), which the flip keeps. A
+  separator suffix needs a character before it (`_L` alone has no side);
+  `Left`/`Right` is a word after a non-letter or a lowercase letter
+  (`HandLeft`), `left`/`right` after a character that is neither a letter nor
+  a digit (`hand_left`). One free function pair (`bone_side(name)`,
+  `flip_side_name(name)`) in the editor, unit tested.
 - **R12.** Mirror counterpart of a bone = the bone in the same skeleton
   (same root) whose name is `flip_side_name(name)`; none when the name has
-  no side or no such bone exists.
+  no side or no such bone exists. Until a skeleton root concept exists, the
+  root of a bone is its topmost bone ancestor-or-self (the first bone whose
+  parent is not a bone), and the counterpart is the first bone of that name
+  in pre-order from the root; sibling bones under a non-bone node are
+  separate skeletons.
 - **R13. Flip Names**: renames the selected bones to their flipped names
   (one undo step). **Symmetrize** (slice C, R9 applies): for each selected
   one-sided bone without a counterpart, creates the mirrored bone across the
@@ -190,4 +206,26 @@ glTF round trip of the edited skeleton.
 
 ## Implementation status
 
-Nothing is implemented yet.
+Slice A is implemented; slices B, C, D and the foundations are not.
+
+- R11 naming: `bone_side` / `flip_side_name` in `src/editor/rig/bone_naming.hpp`,
+  unit tested by `editor_rig_tests` (`src/editor/rig/test/`).
+- R10, R12 skeleton walks: `collect_bone_selection`, `collect_bone_chain`,
+  `find_mirror_bone`, `get_skeleton_root` in `src/editor/rig/bone_hierarchy.hpp`,
+  unit tested by `editor_rig_tests`.
+- R10 verbs and R13 Flip Names: `select_bones` / `flip_bone_names` in
+  `src/editor/rig/bone_commands.hpp`. Flip Names records one
+  `Property_set_operation` per rename of `Item_base::name_property` in one
+  `Compound_operation`; two sibling targets whose names flip into each other
+  swap through a temporary name inside the operation, and a bone whose
+  flipped name a non-target sibling holds is skipped with a logged warning.
+- Entry points: the Hierarchy context menu of a bone (`Select Parent`,
+  `Select Children`, `Select Children (All)`, `Select Chain`, `Select Mirror`,
+  `Flip Names`; targets are the selected bones when the clicked bone is
+  selected, otherwise the clicked bone), and the MCP tools `select_bones`
+  (`bones`, `mode`) and `flip_bone_names` (`bones`) in
+  `src/editor/mcp/mcp_server_rig.cpp`, covered by
+  `Mcp_test.select_bones_modes_and_flip_bone_names_undo`.
+- `scripts/skeleton_editing_verify.py` drives the context-menu entries on
+  RiggedFigure through the Hierarchy filter and right-click, and checks the
+  selections, the names and that Flip Names is one undo step Ctrl+Z reverts.

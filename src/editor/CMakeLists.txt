@@ -341,6 +341,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_properties.cpp
     mcp/mcp_server_mesh_components.cpp
     mcp/mcp_server_references.cpp
+    mcp/mcp_server_rig.cpp
     mcp/mcp_server_physics.cpp
     mcp/mcp_server_scene_action.cpp
     mcp/mcp_server_scene_query.cpp
@@ -496,6 +497,12 @@ erhe_target_sources_grouped(
     renderers/sky_renderer.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
+    rig/bone_commands.cpp
+    rig/bone_commands.hpp
+    rig/bone_hierarchy.cpp
+    rig/bone_hierarchy.hpp
+    rig/bone_naming.cpp
+    rig/bone_naming.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
@@ -1251,5 +1258,6 @@ if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(brushes/test)
     add_subdirectory(mcp/test)
+    add_subdirectory(rig/test)
     add_subdirectory(transform/test)
 endif ()

@@ -1371,6 +1371,74 @@
     "name": "ik_drag"
   },
   {
+    "description": "Select bones relative to the named bones (doc/plans/rigging/skeleton_editing.md R10), as the Hierarchy context menu of a bone does: the selection within the scene is replaced by the bones mode selects, and the first of them becomes the active item (for 'chain', the first named bone). Acts on the named bones only, never on the current selection. When mode selects nothing the selection is left unchanged ('changed' false). Selection changes are not undoable.",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to select from: bone node names (the first bone node of that name) or node ids. Every entry must name a bone",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "mode": {
+          "description": "'parent': the bone parent of each bone; 'children': the immediate bone children; 'children_recursive': every bone below; 'chain': the chain each bone is on (up while the bone parent has exactly one bone child, down while the bone has exactly one bone child); 'mirror': the bone of the same skeleton (same topmost bone) whose name is the side-flipped name (arm.L <-> arm.R, arm_joint_L_1 <-> arm_joint_R_1, HandLeft <-> HandRight)",
+          "enum": [
+            "parent",
+            "children",
+            "children_recursive",
+            "chain",
+            "mirror"
+          ],
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "name": "select_bones"
+  },
+  {
+    "description": "Flip Names (doc/plans/rigging/skeleton_editing.md R13): rename the named bones to their side-flipped names (arm.L -> arm.R, hand_l -> hand_r, HandLeft -> HandRight, a trailing index such as _1 or .001 kept) as ONE undoable operation, executed on the next editor frame. Two named sibling bones whose names flip into each other swap names. A bone whose name has no side, or whose flipped name a sibling outside the named bones already holds, is reported in 'skipped'. Acts on the named bones only, never on the current selection.",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to rename: bone node names (the first bone node of that name) or node ids. Every entry must name a bone",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "flip_bone_names"
+  },
+  {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {

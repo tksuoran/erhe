@@ -29,6 +29,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
+#include "rig/bone_commands.hpp"
 #include "scene/child_prim_types.hpp"
 #include "scene/joint.hpp"
 #include "scene/joint_system.hpp"
@@ -671,6 +672,54 @@ auto Scene_root::make_browser_window(
                         "Put every bone in the selected subtrees (this subtree when nothing\n"
                         "relevant is selected) on the pose its skin was bound in; stops an\n"
                         "animation playing on them"
+                    );
+                }
+            }
+            // Skeleton editing, slice A (doc/plans/rigging/skeleton_editing.md
+            // R10, R13): offered on a bone. Targets: the selected bones when
+            // the clicked bone is selected, otherwise the clicked bone
+            // (get_bone_command_targets, resolved when the entry runs).
+            if (erhe::scene::is_bone(node.get())) {
+                ImGui::Separator();
+                class Bone_select_entry
+                {
+                public:
+                    Bone_select_mode mode;
+                    const char*      tooltip;
+                };
+                static constexpr Bone_select_entry bone_select_entries[] = {
+                    {Bone_select_mode::parent,             "Select the parent bone of the target bones"},
+                    {Bone_select_mode::children,           "Select the immediate child bones of the target bones"},
+                    {Bone_select_mode::children_recursive, "Select every bone below the target bones"},
+                    {Bone_select_mode::chain,              "Select the chain of linked bones the target bones are on,\nup to a branching parent or the root and down to a branching bone or a leaf"},
+                    {Bone_select_mode::mirror,             "Select the bones of the same skeleton with the side-flipped names\n(arm.L <-> arm.R, hand_l <-> hand_r, HandLeft <-> HandRight)"}
+                };
+                for (const Bone_select_entry& entry : bone_select_entries) {
+                    if (ImGui::MenuItem(get_bone_select_mode_label(entry.mode))) {
+                        const Bone_select_mode mode = entry.mode;
+                        deferred_operations.push_back(
+                            [&context, node, mode]() {
+                                static_cast<void>(select_bones(context, get_bone_command_targets(context, node), mode));
+                            }
+                        );
+                        close = true;
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", entry.tooltip);
+                    }
+                }
+                if (ImGui::MenuItem("Flip Names")) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            static_cast<void>(flip_bone_names(context, get_bone_command_targets(context, node)));
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Rename the target bones to their side-flipped names\n"
+                        "(arm.L -> arm.R, leg_joint_R_1 -> leg_joint_L_1); one undo step"
                     );
                 }
             }

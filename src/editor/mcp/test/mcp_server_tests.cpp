@@ -2320,6 +2320,118 @@ TEST_F(Mcp_test, ik_drag_mid_chain_drag_pin_chain_end)
     advance_frames(client, 4);
 }
 
+// doc/plans/rigging/skeleton_editing.md R10, R12, R13 (slice A): the
+// select_bones modes on RiggedFigure (torso_joint_1 is its skeleton root;
+// torso_joint_3 branches into neck and both arms; torso_joint_1 into the
+// torso and both legs; the side marker sits before a trailing index,
+// arm_joint_L_1), and flip_bone_names as one undo step that undo restores.
+TEST_F(Mcp_test, select_bones_modes_and_flip_bone_names_undo)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    auto selected_names = [&client, &scene]() -> std::vector<std::string> {
+        std::vector<std::string> names;
+        Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
+        for (const json& item : selection.payload.at("items")) {
+            if (item.value("scene_name", "") == scene) {
+                names.push_back(item.value("name", ""));
+            }
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    };
+    auto select = [&client, &scene](const std::vector<std::string>& bones, const char* mode) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool(
+            "select_bones", json{{"scene_name", scene}, {"bones", bones}, {"mode", mode}}
+        );
+        advance_frames(client, 2);
+        return result;
+    };
+    using Names = std::vector<std::string>;
+
+    Mcp_client::Tool_result parent = select({"arm_joint_L_2"}, "parent");
+    ASSERT_FALSE(parent.is_error) << parent.text;
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_L_1"}));
+    EXPECT_EQ(parent.payload.at("active_item").value("name", ""), "arm_joint_L_1");
+
+    ASSERT_FALSE(select({"torso_joint_3"}, "children").is_error);
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_L_1", "arm_joint_R_1", "neck_joint_1"}));
+
+    ASSERT_FALSE(select({"torso_joint_3"}, "children_recursive").is_error);
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_L_1", "arm_joint_L_2", "arm_joint_L_3", "arm_joint_R_1", "arm_joint_R_2", "arm_joint_R_3", "neck_joint_1", "neck_joint_2"}));
+
+    Mcp_client::Tool_result chain = select({"arm_joint_R_2"}, "chain");
+    ASSERT_FALSE(chain.is_error) << chain.text;
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_R_1", "arm_joint_R_2", "arm_joint_R_3"}));
+    EXPECT_EQ(chain.payload.at("active_item").value("name", ""), "arm_joint_R_2") << "chain keeps the named bone active";
+
+    ASSERT_FALSE(select({"torso_joint_2"}, "chain").is_error);
+    EXPECT_EQ(selected_names(), (Names{"torso_joint_2", "torso_joint_3"})) << "torso_joint_1 branches above, torso_joint_3 below";
+
+    ASSERT_FALSE(select({"arm_joint_L_2", "leg_joint_R_5"}, "mirror").is_error);
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_R_2", "leg_joint_L_5"}));
+
+    // Nothing to select: the selection stays.
+    Mcp_client::Tool_result nothing = select({"torso_joint_2"}, "mirror");
+    ASSERT_FALSE(nothing.is_error) << nothing.text;
+    EXPECT_FALSE(nothing.payload.at("changed").get<bool>());
+    EXPECT_EQ(selected_names(), (Names{"arm_joint_R_2", "leg_joint_L_5"}));
+
+    EXPECT_TRUE(select({"torso_joint_2"}, "sideways").is_error) << "an unrecognized mode is refused";
+    EXPECT_TRUE(select({"Armature"}, "parent").is_error) << "a non-bone is refused";
+
+    // Flip Names: the two leg roots are siblings, so they swap; the arm hand
+    // bone flips onto a name its (non-sibling) counterpart also has; the
+    // torso bone has no side.
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto node_exists = [&client, &scene](const std::string& name, const int id) -> bool {
+        Mcp_client::Tool_result details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_id", id}});
+        return !details.is_error && (details.payload.value("name", "") == name);
+    };
+    auto id_of = [&client, &scene](const std::string& name) -> int {
+        Mcp_client::Tool_result selected = client.call_tool(
+            "select_bones", json{{"scene_name", scene}, {"bones", {name}}, {"mode", "chain"}}
+        );
+        return selected.payload.at("active_item").value("id", 0);
+    };
+    const int leg_l = id_of("leg_joint_L_1");
+    const int leg_r = id_of("leg_joint_R_1");
+    const int hand  = id_of("arm_joint_L_3");
+    advance_frames(client, 4);
+    const std::size_t undo_before = undo_depth();
+
+    Mcp_client::Tool_result flipped = client.call_tool(
+        "flip_bone_names",
+        json{{"scene_name", scene}, {"bones", {"leg_joint_L_1", "leg_joint_R_1", "arm_joint_L_3", "torso_joint_2"}}}
+    );
+    ASSERT_FALSE(flipped.is_error) << flipped.text;
+    EXPECT_EQ(flipped.payload.at("renamed").size(), std::size_t{3});
+    ASSERT_EQ(flipped.payload.at("skipped").size(), std::size_t{1});
+    EXPECT_EQ(flipped.payload.at("skipped")[0].value("name", ""), "torso_joint_2");
+    advance_frames(client, 4);
+
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "Flip Names is one undo step";
+    EXPECT_TRUE(node_exists("leg_joint_R_1", leg_l));
+    EXPECT_TRUE(node_exists("leg_joint_L_1", leg_r));
+    EXPECT_TRUE(node_exists("arm_joint_R_3", hand));
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_TRUE(node_exists("leg_joint_L_1", leg_l)) << "undo restores the names";
+    EXPECT_TRUE(node_exists("leg_joint_R_1", leg_r));
+    EXPECT_TRUE(node_exists("arm_joint_L_3", hand));
+    EXPECT_EQ(undo_depth(), undo_before);
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
 // The producer side, independent of whether any subscriber happened to hold
 // the content: the undo must announce the removed items.
 TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)
