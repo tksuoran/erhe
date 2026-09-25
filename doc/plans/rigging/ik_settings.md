@@ -63,9 +63,8 @@ window and persist with the scene.
   - `stiffness[3]` (float 0..0.99, default 0) - resistance to rotation
     about the axis; 0 = free. Capped below 1 (as Blender caps it at 0.99)
     so stiffness can never alias a hard DOF lock. **Inert in this slice**:
-    the value exists and serializes, but its
-    property row is developer-only and the solver ignores it until the
-    constrained solver is proven stable; enforcement (per-iteration
+    the value exists, serializes and has its property row, but the
+    solver ignores it until the constrained solver is proven stable; enforcement (per-iteration
     scale-down, see section 4) is a later slice.
 - `rest_rotation` (quaternion): the reference orientation that defines the
   zero of the limits. The limited quantity is
@@ -327,7 +326,7 @@ formulation adapted to swing/twist limits:
   Lock X/Y/Z and Limit X/Y/Z checkboxes, Limit Min / Limit Max as vec3 rows
   edited in degrees and stored in radians (coerced per component to
   [-180 deg, 0 deg] and [0 deg, 180 deg] per section 1), Stiffness
-  developer-only (the value is inert - section 1), Rest Rotation as Euler
+  (shown; the value is inert - section 1), Rest Rotation as Euler
   degrees, and the pole rows of `pole_target.md` R17. The `visible_when` of
   section 1 decides which nodes show them, so there is nothing to add and
   nothing to gate.

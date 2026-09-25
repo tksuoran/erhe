@@ -243,7 +243,7 @@ and each is listed on a node carrying `Item_flags::bone`.
 |---|---|---|
 | Ik.lock_x, Ik.lock_y, Ik.lock_z, Ik.limit_x, Ik.limit_y, Ik.limit_z | attached | read into the Ik_settings_data record by read_ik_settings |
 | Ik.limit_min, Ik.limit_max | attached | radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
-| Ik.stiffness | attached | developer-only (inert); coerced to [0, 0.99] |
+| Ik.stiffness | attached | inert (solver does not read it yet); coerced to [0, 0.99] |
 | Ik.rest_rotation | attached | computed default (D31): the bone's bind-pose local rotation, identity without one; "Set rest from current pose" writes the local value |
 | Ik.pole_target | attached | weak object reference (D28), Item_type::xformable; any node is accepted and admissibility is decided per drag |
 | Ik.pole_angle | attached | radians shown in degrees, not coerced (the angle is periodic) |

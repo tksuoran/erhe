@@ -2106,8 +2106,8 @@ type `erhe::scene::Node`, UI group `IK`, qualified `Ik.lock_x` ..
 `Ik.pole_angle`: `lock_x`, `lock_y`, `lock_z`, `limit_x`, `limit_y`,
 `limit_z` (bool), `limit_min` and `limit_max` (vec3 radians,
 `angle_degrees` presentation, coerced per component to [-pi, 0] and
-[0, pi]), `stiffness` (vec3, coerced to [0, 0.99], `developer_only`
-because the solver does not read it yet), `rest_rotation` (quat),
+[0, pi]), `stiffness` (vec3, coerced to [0, 0.99]; shown and saved,
+not yet read by the solver), `rest_rotation` (quat),
 `pole_target` and `pole_angle` (float radians, `angle_degrees`
 presentation over a -180 to +180 drag range and no coercion, because the
 swivel angle is periodic). `Ik` is a registration holder with static

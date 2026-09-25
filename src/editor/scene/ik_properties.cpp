@@ -114,7 +114,7 @@ const Property<glm::vec3> Ik::stiffness_property = Property<glm::vec3>::register
     Property_metadata{
         .default_value = glm::vec3{0.0f},
         .coerce        = [](const Dependency_object&, const Property_value& value) -> Property_value { return clamp_vec3(value, 0.0f, 0.99f); },
-        .ui            = Property_ui{.min = 0.0f, .max = 0.99f, .step = 0.01f, .group = c_ik_group, .tooltip = "Per-axis resistance to rotation (0..0.99); serialized, not yet enforced by the solver", .developer_only = true, .label = "Stiffness", .visible_when = is_bone_node}
+        .ui            = Property_ui{.min = 0.0f, .max = 0.99f, .step = 0.01f, .group = c_ik_group, .tooltip = "Per-axis resistance to rotation (0..0.99); serialized, not yet enforced by the solver", .label = "Stiffness", .visible_when = is_bone_node}
     }
 );
 const Property<glm::quat> Ik::rest_rotation_property = Property<glm::quat>::register_attached(
