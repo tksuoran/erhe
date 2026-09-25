@@ -699,7 +699,9 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
                 }
             );
         } else {
-            if (node.get() == node_filter) {
+            // A touched ancestor moves the target too (a parent bone edited
+            // while its child is selected), so its baselines are stale as well.
+            if ((node.get() == node_filter) || node->is_ancestor(node_filter)) {
                 shared.entries.at(i).parent_from_node_before = node->parent_from_node_transform();
                 shared.entries.at(i).xform_op_stack_before   = node->copy_xform_op_stack();
                 shared.entries.at(i).world_from_node_before  = node->world_from_node_transform();
