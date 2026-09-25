@@ -345,6 +345,7 @@ Every document states its standing in its first ten lines:
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)
+- [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (proposed): Rigging Phase 3 - skeleton editing and posing basics requirements
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
 - [plans/spirv_cache.md](plans/spirv_cache.md) (proposed): SPIR-V cache robustness
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog
