@@ -2,7 +2,10 @@
 
 #include "erhe_window/window.hpp"
 
+#include <glm/glm.hpp>
 #include <imgui/imgui.h>
+
+#include <optional>
 
 struct ImGuiIO;
 
