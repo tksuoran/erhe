@@ -18,13 +18,15 @@ states the measures.
 --launch starts build_vs2026_vulkan_headless/bin/Debug/editor.exe (or
 --editor), reads its MCP port from logs/log.txt and asks it to exit at the
 end. Without it the script drives an already running editor. One PASS/FAIL
-line per check, exit code 1 when any check fails. Checks that need a human
-(feel verdicts, the picker widget) are printed as MANUAL lines.
+line per check, exit code 1 when any check fails. Behaviour the checks
+measure but a person chooses is printed as DECISION lines; a check that
+cannot run (no Pillow for the screenshot analysis) becomes a MANUAL line.
 """
 
 import argparse
 import math
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -49,8 +51,15 @@ LOCKED_DEG        = 0.5    # a locked axis moves at most this much ("a fraction 
 MOVED_DEG         = 2.0    # an unlocked axis that should move moves at least this much
 LIMIT_TOL_DEG     = 0.5    # a limit holds to within this
 POSITION_TOL      = 2.0e-3 # world units
+# X-ray legibility: RGB distance (0..441) between the drawn line and the mesh
+# pixel behind it. 441 is black vs white; a cyan line over a mid-grey surface
+# is about 150.
+XRAY_MEDIAN_DISTANCE = 100.0
+XRAY_LEAST_DISTANCE  = 60.0
 
 MANUAL: list[str] = []
+# Behaviour choices the checks measure but cannot decide: printed with the facts.
+DECISIONS: list[str] = []
 
 
 # --- vector / quaternion helpers (no numpy dependency) --------------------
@@ -864,6 +873,39 @@ def ui_button(rig: Rig, node, group, label):
     return False
 
 
+def ui_click_row(rig: Rig, node, group, label):
+    """Click the Properties item `label` (a row, or a named part of one such as 'Pole Target.clear')."""
+    e = rig.e
+    if not select_for_properties(rig, node) or not ensure_group_open(e, group):
+        return False
+    item = ensure_row_visible(e, label)
+    if (item is None) or item["status"].get("disabled", False):
+        return False
+    e.call("imgui_click", {"window": "Properties", "id": item["id"]})
+    e.advance(3)
+    return True
+
+
+def ui_pick_reference(rig: Rig, node, group, row, choice):
+    """Open the picker of reference row `row` (its '<row>.pick' arrow) and click `choice` in the list.
+
+    Returns the names the list offered, or None when the picker did not open
+    or did not offer `choice` exactly once.
+    """
+    e = rig.e
+    if not ui_click_row(rig, node, group, row + ".pick"):
+        return None
+    listed = [i for i in e.items() if (i.get("window") or "").startswith("##Popup")]
+    offered = [i.get("display_label") or i.get("label") for i in listed]
+    target = [i for i in listed if Editor.label_matches(i, choice)]
+    if len(target) != 1:
+        e.key("escape")
+        return None
+    e.call("imgui_click", {"window": target[0]["window"], "id": target[0]["id"]})
+    e.advance(3)
+    return offered
+
+
 def ui_drag_field(rig: Rig, node, group, label, pixels):
     """Drag the numeric field `label` (for example 'Limit Min.x') horizontally by `pixels`."""
     e = rig.e
@@ -1017,8 +1059,74 @@ def section_2(rig: Rig):
                (cyan_held >= 0.6) and root_held, f"polyline coverage={cyan_held:.2f} root cross={root_held}")
     check_true("2 after release both are gone", (cyan_released <= 0.2) and not root_released,
                f"polyline coverage={cyan_released:.2f} root cross={root_released}")
-    MANUAL.append("2: the chain lines read well through the mesh (x-ray) - look once in the windowed editor")
+    check_xray(rig, held, released, chain)
     undo_viewport(rig)
+
+
+def check_xray(rig: Rig, held, released, chain):
+    """The chain lines read through the skinned mesh: where the mesh covers the
+    chain, the cyan line is still drawn, in a colour far from the mesh behind it.
+
+    Which chain pixels the mesh covers is measured, not assumed: the released
+    frame (mesh, no lines) is compared with the same frame with the mesh
+    hidden. The released pose is the held pose (a drag commits where it ends).
+    """
+    e = rig.e
+    no_mesh = os.path.join(SHOT_DIR, "2_released_no_mesh.png")
+    mesh_id = node_id(e, rig.scene, "skin_test_3_boxes_mesh")
+    depth = e.undo_depth()
+    e.call("set_item_property", {"item_id": mesh_id, "property": "visible", "value": False})
+    e.advance(3)
+    e.call("capture_screenshot", {"path": no_mesh})
+    for _ in range(e.undo_depth() - depth):
+        e.call("undo")
+    e.advance(3)
+    image, held_px = load_rgb(held)
+    _, released_px = load_rgb(released)
+    _, bare_px = load_rgb(no_mesh)
+    size = image.size
+    occluded = 0
+    shown = 0
+    distances = []
+    for i in range(len(chain) - 1):
+        for k in range(12):
+            f = (k + 0.5) / 12
+            x, y = rig.project(add(chain[i], scale(sub(chain[i + 1], chain[i]), f)))
+            xi, yi = int(x), int(y)
+            if not ((0 <= xi < size[0]) and (0 <= yi < size[1])):
+                continue
+            if sum(abs(a - b) for a, b in zip(released_px[xi, yi], bare_px[xi, yi])) < 40:
+                continue  # the mesh does not cover this chain point
+            occluded += 1
+            line_pixel = nearest_matching(held_px, size, x, y, 3, is_chain_cyan)
+            if line_pixel is None:
+                continue
+            shown += 1
+            behind = released_px[line_pixel[0], line_pixel[1]]
+            drawn = held_px[line_pixel[0], line_pixel[1]]
+            distances.append(math.sqrt(sum((a - b) ** 2 for a, b in zip(drawn, behind))))
+    distances.sort()
+    fraction = shown / max(occluded, 1)
+    median = distances[len(distances) // 2] if distances else 0.0
+    least = distances[0] if distances else 0.0
+    check_true("2 x-ray: where the mesh covers the chain the cyan line still shows, well apart from the mesh colour behind it",
+               (occluded >= 12) and (fraction >= 0.9) and (median >= XRAY_MEDIAN_DISTANCE) and (least >= XRAY_LEAST_DISTANCE),
+               f"covered samples={occluded} line shown on {fraction:.2f} of them, RGB distance line vs mesh behind: "
+               f"median {median:.0f} least {least:.0f} (need {XRAY_MEDIAN_DISTANCE:.0f} / {XRAY_LEAST_DISTANCE:.0f})")
+
+
+def nearest_matching(pixels, size, x, y, radius, predicate):
+    """The pixel within `radius` of (x, y) nearest to it that satisfies `predicate`, or None."""
+    best = None
+    best_d2 = None
+    for py in range(int(y) - radius, int(y) + radius + 1):
+        for px in range(int(x) - radius, int(x) + radius + 1):
+            if (0 <= px < size[0]) and (0 <= py < size[1]) and predicate(pixels[px, py]):
+                d2 = ((px - x) ** 2) + ((py - y) ** 2)
+                if (best_d2 is None) or (d2 < best_d2):
+                    best = (px, py)
+                    best_d2 = d2
+    return best
 
 
 # --- section 3: per-bone IK settings ----------------------------------------
@@ -1036,7 +1144,7 @@ def section_3(rig: Rig):
     on_bone = ensure_group_open(e, "IK")
     rows = {(i.get("display_label") or "").removeprefix("* ") for i in e.items(window="Properties", visible_only=False)}
     wanted = {"IK Lock", "Lock X", "Lock Y", "Lock Z", "Limit X", "Limit Y", "Limit Z", "Limit Min.x", "Limit Max.x",
-              "Stiffness.x", "Rest Rotation.x", "Set Rest", "Pole Target.x", "Pole Angle"}
+              "Stiffness.x", "Rest Rotation.x", "Set Rest", "Pole Target", "Pole Target.pick", "Pole Angle"}
     missing = sorted(wanted - rows)
     rig.select("skin_test_3_boxes")
     e.advance(2)
@@ -1359,13 +1467,19 @@ def section_5(rig: Rig):
     pole_position = [1.5, 1.2, 0.5]
     pole = ensure_pole(rig, pole_position)
 
+    # 5.2 through the widget: the picker arrow of the Pole Target row, then
+    # the node in the list it opens.
     depth = e.undo_depth()
-    rig.set_prop("bone_1", "Ik.pole_target", reference_id=rig.ids[pole])
+    offered = ui_pick_reference(rig, "bone_1", "IK", "Pole Target", pole)
     entry = rig.prop("bone_1", "Ik.pole_target")
-    check_true("5.2 Pole Target of the elbow names the pole node, one undo step",
-               (entry.get("reference_id") == rig.ids[pole]) and (e.undo_depth() - depth == 1),
-               f"row value={entry.get('value')!r} undo delta={e.undo_depth() - depth}")
-    MANUAL.append("5.2: the Pole Target picker offers nodes and shows the chosen one (widget interaction)")
+    wanted = set(BONES + [TIP, pole])
+    missing = sorted(wanted - set(offered or []))
+    check_true("5.2 the Pole Target picker (arrow) lists the scene's nodes, picking one names it, one undo step",
+               (offered is not None) and not missing and (entry.get("reference_id") == rig.ids[pole])
+               and (e.undo_depth() - depth == 1),
+               f"offered {len(offered or [])} missing={missing} row value={entry.get('value')!r} undo delta={e.undo_depth() - depth}")
+    shows = select_for_properties(rig, "bone_1") and (ensure_row_visible(e, "Pole Target.clear") is not None)
+    check_true("5.2 the row then shows the reference (its clear button is drawn only while it holds one)", shows)
 
     shots = SHOT_DIR
     os.makedirs(shots, exist_ok=True)
@@ -1378,6 +1492,16 @@ def section_5(rig: Rig):
     swivel = swivel_to(final["positions"], pole_position)
     first_jump = q_angle_deg(before["rotations"]["bone_1"], samples[0]["rotations"]["bone_1"])
     check_true("5.3 dragging the hand swings the elbow toward the pole", abs(swivel) <= 2.0, f"swivel={swivel:+.2f} deg")
+    # The first step turns the bend plane onto the pole at once; after it the
+    # bend stays on the pole and the steps are the drag's own.
+    start_off = swivel_to(before["positions"], pole_position)
+    swivels = [swivel_to(sample["positions"], pole_position) for sample in samples]
+    later = [max(q_angle_deg(samples[i]["rotations"][b], samples[i + 1]["rotations"][b]) for b in BONES)
+             for i in range(len(samples) - 1)]
+    check_true("5.3 the first step is the pole alignment alone: the bend is on the pole from step 1 on, later steps small",
+               (max(abs(v) for v in swivels) <= 2.0) and (max(later) <= 5.0),
+               f"start pose {start_off:+.1f} deg off the pole, bend off the pole over the steps <= {max(abs(v) for v in swivels):.2f} deg, "
+               f"largest later step {max(later):.2f} deg")
     if have_pil():
         coverage = line_coverage(held, rig, [pole_position, samples[-1]["positions"][0]], is_pole_magenta)
         cross = marker_present(held, rig, pole_position, is_pole_magenta)
@@ -1385,7 +1509,9 @@ def section_5(rig: Rig):
                    (coverage >= 0.8) and cross, f"line coverage={coverage:.2f} pole cross={cross}")
     else:
         MANUAL.append("5.3: magenta pole line / cross (PIL not installed)")
-    MANUAL.append(f"5.3: the elbow turns {first_jump:.1f} deg toward the pole on the first drag step - acceptable feel?")
+    DECISIONS.append(f"5.3: a drag whose start pose is off the pole plane snaps onto it in the first step "
+                     f"(here the bend plane turns {abs(start_off):.1f} deg, the elbow {first_jump:.1f} deg); "
+                     f"the alternative is easing the swivel in over the first part of the drag")
     undo_viewport(rig)
 
     rig.set_prop("bone_1", "Ik.pole_angle", math.pi / 2.0)
@@ -1427,10 +1553,11 @@ def section_5(rig: Rig):
     undo_viewport(rig)
 
     depth = e.undo_depth()
-    rig.set_prop("bone_1", "Ik.pole_target", None)
+    clicked = ui_click_row(rig, "bone_1", "IK", "Pole Target.clear")
     cleared = rig.prop("bone_1", "Ik.pole_target").get("reference_id")
-    check_true("5.6 clearing the pole is one undo step", (e.undo_depth() - depth == 1) and not cleared,
-               f"undo delta={e.undo_depth() - depth} reference after clear={cleared}")
+    check_true("5.6 clearing the pole (the row's clear button) is one undo step",
+               clicked and (e.undo_depth() - depth == 1) and not cleared,
+               f"clicked={clicked} undo delta={e.undo_depth() - depth} reference after clear={cleared}")
     rig.clear_settings()
 
 
@@ -1552,10 +1679,211 @@ def section_7(rig: Rig):
 
 
 def section_8(rig: Rig):
-    MANUAL.append("8: mid-chain drag (drag bone_1: its children follow rigidly) - acceptable?")
-    MANUAL.append("8: each drag re-solves from the drag-start pose (dragging back restores it exactly) - right feel, or incremental?")
-    MANUAL.append("8: is the constrained solver stable enough that stiffness is worth adding next?")
+    print("\n== 8. Behaviour the verdicts rest on ==")
+    rig.clear_settings()
 
+    # 8.1 mid-chain drag: the dragged bone is the effector, bone_0 alone aims
+    # at the target (one segment: the bone lands on the root-target line) and
+    # everything below the dragged bone follows rigidly.
+    rig.pose(BENT)
+    before = rig.snapshot()
+    world_before = rig.world_rotation("bone_1")
+    delta = [0.3, -0.2, 0.2]
+    rig.translate_drag("bone_1", ramp(delta, 8))
+    after = rig.snapshot()
+    root = before["positions"][0]
+    target = add(before["positions"][1], delta)
+    on_line = add(root, scale(normalize(sub(target, root)), length(sub(before["positions"][1], root))))
+    aim_error = length(sub(after["positions"][1], on_line))
+    children = max(q_angle_deg(before["rotations"][n], after["rotations"][n]) for n in ("bone_2", TIP))
+    world_turn = q_angle_deg(world_before, rig.world_rotation("bone_1"))
+    bone0 = q_angle_deg(before["rotations"]["bone_0"], after["rotations"]["bone_0"])
+    check_true("8.1 mid-chain drag (bone_1): bone_0 aims at the target, bone_1 keeps its world orientation, "
+               "its children follow rigidly",
+               (aim_error < POSITION_TOL) and (children < 1.0e-3) and (world_turn < 0.01) and (bone0 > MOVED_DEG),
+               f"bone_1 off the root-target line by {aim_error:.2e}, children turned {children:.4f} deg, "
+               f"bone_1 world turn {world_turn:.4f} deg, bone_0 turned {bone0:.2f} deg")
+    undo_viewport(rig)
+    DECISIONS.append("8: a mid-chain drag makes the dragged bone the effector; the bones below it follow rigidly "
+                     "(8.1). The alternative is keeping the chain's end in place (a two-target solve)")
+
+    # 8.2 each drag step solves from the drag-start pose: a target visited
+    # twice by different paths gives the same pose, back at the start gives
+    # the start pose.
+    rig.pose(BENT)
+    start = rig.snapshot()
+    a = [0.4, -0.3, 0.2]
+    path = ramp(a, 6) + [add(a, d) for d in ([0.3, 0.0, 0.0], [0.3, 0.3, -0.2], [0.0, 0.3, -0.4], [0.0, 0.0, 0.0])]
+    path += [scale(a, 1.0 - ((i + 1) / 6)) for i in range(6)]
+    samples = rig.translate_drag(TIP, path, sample=rig.snapshot)
+    first_a = samples[5]
+    second_a = samples[9]
+    revisit = max(q_angle_deg(first_a["rotations"][b], second_a["rotations"][b]) for b in BONES)
+    back = max(q_angle_deg(start["rotations"][b], samples[-1]["rotations"][b]) for b in BONES)
+    check_true("8.2 path independence: the same target by two paths gives the same pose, back at the start the start pose",
+               (revisit < 1.0e-3) and (back < 1.0e-3), f"revisit difference={revisit:.2e} deg back-at-start difference={back:.2e} deg")
+    undo_viewport(rig)
+    DECISIONS.append("8: each drag step solves from the drag-start pose, so a drag is path independent (8.2); "
+                     "an incremental solve would keep bends picked up on the way and drift")
+
+    stability_sweep(rig)
+
+
+# The random sweep: settings per bone, one of these, drawn per scenario.
+SWEEP_KINDS = ["free", "lock_y", "lock_z", "hinge", "limit_x", "limit_z"]
+SWEEP_SCENARIOS = 12
+SWEEP_STEPS     = 24
+SWEEP_STEP      = 0.05  # world units per step of the target's random walk
+SWEEP_SEED      = 20260925
+SWEEP_REPLAYS   = 3     # scenarios replayed for the determinism check
+# A step moving a joint more than this many times the target's step is a jump.
+# The unconstrained solve near a straight chain with a pole reaches about 4x.
+JUMP_RATIO      = 5.0
+
+
+def random_unit(rng):
+    while True:
+        v = [rng.uniform(-1.0, 1.0) for _ in range(3)]
+        n = length(v)
+        if 0.1 < n <= 1.0:
+            return scale(v, 1.0 / n)
+
+
+def random_walk(rng, steps, step):
+    p = [0.0, 0.0, 0.0]
+    heading = random_unit(rng)
+    out = []
+    for _ in range(steps):
+        heading = normalize(add(heading, scale(random_unit(rng), 0.6)))
+        p = add(p, scale(heading, step))
+        out.append(p)
+    return out
+
+
+def make_sweep_scenarios(seed=SWEEP_SEED, count=SWEEP_SCENARIOS):
+    """Every scenario of the sweep, drawn up front, so one can be replayed alone (run_sweep_scenario)."""
+    rng = random.Random(seed)
+    scenarios = []
+    for _ in range(count):
+        scenario = {
+            "bends": [rng.uniform(-40.0, 40.0) for _ in BONES],
+            "kinds": [rng.choice(SWEEP_KINDS) for _ in BONES],
+            "margins": [(rng.uniform(10.0, 40.0), rng.uniform(10.0, 40.0)) for _ in BONES],
+            "pole": add([0.0, 1.5, 0.0], scale(random_unit(rng), 1.5)) if (rng.random() < 0.35) else None,
+        }
+        scenario["walk"] = random_walk(rng, SWEEP_STEPS, SWEEP_STEP)
+        scenarios.append(scenario)
+    return scenarios
+
+
+def apply_sweep_settings(rig: Rig, scenario, start):
+    """Set one scenario's per-bone settings; returns {bone: (kind, locked axes, (axis, lo, hi) | None)}.
+
+    A limit spans the rest angle 0 (Limit Min is in [-180, 0], Limit Max in
+    [0, 180]) and the bone's drag-start angle, plus the scenario's margins,
+    so the start pose is inside it (no widening)."""
+    chosen = {}
+    for bone, kind, (below, above) in zip(BONES, scenario["kinds"], scenario["margins"]):
+        locked = {"lock_y": ["y"], "lock_z": ["z"], "hinge": ["y", "z"]}.get(kind, [])
+        for axis in locked:
+            rig.set_prop(bone, f"Ik.lock_{axis}", True)
+        limit = None
+        if kind in ("limit_x", "limit_z"):
+            axis = kind[-1]
+            now = rig.angles(start, bone)[axis]
+            lo = max(min(now, 0.0) - below, -180.0)
+            hi = min(max(now, 0.0) + above, 180.0)
+            lo_value, hi_value = limit_value(lo, hi, axis={"x": 0, "z": 2}[axis])
+            rig.set_prop(bone, f"Ik.limit_{axis}", True)
+            rig.set_prop(bone, "Ik.limit_min", lo_value)
+            rig.set_prop(bone, "Ik.limit_max", hi_value)
+            limit = (axis, lo, hi)
+        chosen[bone] = (kind, locked, limit)
+    return chosen
+
+
+def run_sweep_scenario(rig: Rig, scenario):
+    """Pose, set up and drag one sweep scenario; the drag is undone, the settings are left set.
+
+    Returns (start snapshot, per-step snapshots, chosen settings)."""
+    rig.clear_settings()
+    rig.pose(tuple(scenario["bends"]))
+    start = rig.snapshot()
+    chosen = apply_sweep_settings(rig, scenario, start)
+    if scenario["pole"] is not None:
+        pole = ensure_pole(rig, scenario["pole"])
+        rig.set_prop("bone_1", "Ik.pole_target", reference_id=rig.ids[pole])
+    samples = rig.translate_drag(TIP, scenario["walk"], sample=rig.snapshot)
+    undo_viewport(rig)
+    return start, samples, chosen
+
+
+def stability_sweep(rig: Rig):
+    """8.3 the constrained solver under random settings and random drags: locks
+    and limits hold, bone lengths hold, no step makes the chain jump, and the
+    same drag replayed gives the same poses.
+
+    A jump is measured where it is seen: how far the intermediate joints move
+    in one step, against how far the target moved (SWEEP_STEP). A bone
+    turning about its own length moves no joint and is no jump.
+    """
+    worst_lock = 0.0
+    worst_limit = 0.0
+    worst_limit_at = ""
+    worst_length = 0.0
+    jumps = []
+    replay_error = 0.0
+    largest_ratio = 0.0
+    for scenario, parameters in enumerate(make_sweep_scenarios()):
+        start, samples, chosen = run_sweep_scenario(rig, parameters)
+        rest_lengths = segment_lengths(start["positions"])
+        pole_position = parameters["pole"]
+        ratios = []
+        previous = start
+        for step, s in enumerate(samples):
+            moved = max(length(sub(a, b)) for a, b in zip(previous["positions"][1:-1], s["positions"][1:-1]))
+            ratios.append(moved / SWEEP_STEP)
+            previous = s
+            worst_length = max(worst_length, max(abs(x - y) for x, y in zip(segment_lengths(s["positions"]), rest_lengths)))
+            for bone, (kind, locked, limit) in chosen.items():
+                now = rig.angles(s, bone)
+                began = rig.angles(start, bone)
+                for axis in locked:
+                    worst_lock = max(worst_lock, abs(now[axis] - began[axis]))
+                if limit is not None:
+                    axis, lo, hi = limit
+                    excess = max(lo - now[axis], now[axis] - hi, 0.0)
+                    if excess > worst_limit:
+                        worst_limit = excess
+                        worst_limit_at = (f" (scenario {scenario} step {step} {bone} {axis}={now[axis]:.2f} "
+                                          f"limit {lo:.2f} .. {hi:.2f}, start {began[axis]:.2f})")
+        # With a pole the first step carries the pole alignment (5.3); jumps are judged after it.
+        first = 1 if pole_position is not None else 0
+        for i in range(first, len(ratios)):
+            largest_ratio = max(largest_ratio, ratios[i])
+            if ratios[i] > JUMP_RATIO:
+                target = add(start["positions"][-1], parameters["walk"][i])
+                tip_error = length(sub(samples[i]["positions"][-1], target))
+                jumps.append(f"scenario {scenario} step {i}: joints moved {ratios[i]:.1f}x the target step, "
+                             f"tip {tip_error:.2f} off the target, settings={[chosen[b][0] for b in BONES]} "
+                             f"pole={pole_position is not None}")
+        if scenario < SWEEP_REPLAYS:
+            again = rig.translate_drag(TIP, parameters["walk"], sample=rig.snapshot)
+            undo_viewport(rig)
+            for x, y in zip(samples, again):
+                replay_error = max(replay_error, max(q_angle_deg(x["rotations"][b], y["rotations"][b]) for b in BONES))
+        if pole_position is not None:
+            rig.set_prop("bone_1", "Ik.pole_target", None)
+    rig.clear_settings()
+    check_true(f"8.3 stability sweep ({SWEEP_SCENARIOS} random setting sets x {SWEEP_STEPS}-step random drags, seed {SWEEP_SEED}): "
+               "locks hold, limits hold, bone lengths hold",
+               (worst_lock <= LOCKED_DEG) and (worst_limit <= LIMIT_TOL_DEG) and (worst_length < POSITION_TOL),
+               f"worst lock drift={worst_lock:.3f} deg worst limit excess={worst_limit:.3f} deg"
+               f"{worst_limit_at if worst_limit > LIMIT_TOL_DEG else ''} worst length error={worst_length:.2e}")
+    check_true(f"8.3 stability sweep: no step moves a joint more than {JUMP_RATIO:.0f}x the target's step",
+               not jumps, f"largest {largest_ratio:.1f}x; {len(jumps)} jump(s)" + ("; " + "; ".join(jumps[:4]) if jumps else ""))
+    check_true("8.3 stability sweep: the same drag replayed gives the same poses", replay_error < 1.0e-3,
+               f"largest replay difference={replay_error:.2e} deg over {SWEEP_REPLAYS} replays")
 
 SECTIONS = {
     1: section_1,
@@ -1600,6 +1928,10 @@ def main():
             print("\nNeeds a human (interactive_test_pass.md):")
             for line in MANUAL:
                 print(f"  [MANUAL] {line}")
+        if DECISIONS:
+            print("\nBehaviour choices for the user (measured above, not pass / fail):")
+            for line in DECISIONS:
+                print(f"  [DECISION] {line}")
         if process is not None:
             try:
                 client.call("request_exit")

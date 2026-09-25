@@ -8,16 +8,17 @@ Everything listed here is already verified headlessly over MCP or by unit
 tests; this pass covers what only a live mouse drag and the real ImGui
 widgets reach.
 
-Progress: sections 0-2 pass by hand. Sections 0-7 are automated (below)
-and pass; what is left for a person is the list the script prints as
-MANUAL - the look of the drawn lines, the Pole Target picker widget and the
-feel verdicts of section 8.
+Progress: sections 0-2 pass by hand. Sections 0-8 are automated (below);
+every check passes except the section 8.3 stability sweep, which finds the
+jumps of finding F7. What is left for a person is the three behaviour
+choices the script prints as DECISION lines (section 8).
 
 ## Automated run
 
-`scripts/ik_interactive_pass_verify.py` runs sections 0-7 against the
-headless editor and prints one PASS / FAIL line per check (58 checks, about
-2.5 minutes), then the MANUAL items:
+`scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
+headless editor and prints one PASS / FAIL line per check (66 checks, about
+5 minutes), then the DECISION lines - behaviour the checks measure but a
+person chooses:
 
     py -3 scripts/ik_interactive_pass_verify.py --launch
     py -3 scripts/ik_interactive_pass_verify.py --port N --section 3 --section 4
@@ -45,10 +46,22 @@ menu), aims the scene camera, and restores the rig before each check.
   locked axis may move at most 0.5 degrees; "smooth" means the step onto a
   limit is at most three times the drag's median step; "steady" means the
   samples at the limit stay within 1 degree; "no shaking" means the
-  per-step motion reverses direction at most once.
+  per-step motion reverses direction at most once. A "jump" is a drag step
+  that moves a joint more than 5 times as far as the target moved.
 - **Screenshots** of the visualization checks are kept in
   `logs/ik_interactive_pass/`; they need Pillow (`py -3 -m pip install
-  pillow`), without it those checks become MANUAL lines.
+  pillow`), without it those checks become MANUAL lines. The x-ray check
+  finds the chain pixels the mesh covers by comparing the frame with the
+  same frame with the mesh hidden, and measures the RGB distance between the
+  drawn line and the mesh behind it there.
+- **The Pole Target picker** is driven as a user does: the row's picker
+  arrow (`Pole Target.pick`, doc/erhe/imgui.md "Item recorder"), then the
+  node in the list it opens; the row's clear button is `Pole Target.clear`.
+- **The stability sweep** (8.3) draws 12 scenarios from a fixed seed: per
+  bone a lock, a hinge, a limit around the rest and the start angle, or
+  nothing; a pole on the elbow in about a third; a 24-step random walk of
+  the target. `make_sweep_scenarios()` / `run_sweep_scenario()` replay one
+  scenario alone.
 - **Session state.** Move tool parameters (Bone IK, Effector Orientation)
   live as long as the editor runs; the script sets them instead of assuming
   the startup values.
@@ -107,12 +120,14 @@ Orientation reads "Keep World".
 5. IK Lock on `bone_1`: `bone_0` stops moving.
 6. Add Bone Tip Nodes, drag a tip node: its parent bone aims at it.
 
-## 2. Chain visualization - PASS
+## 2. Chain visualization - PASS (automated)
 
 During every IK drag: a cyan polyline along the chain, an orange cross at
 the fixed root, a cyan cross at the effector, visible through the mesh, gone
 at release. Colors and widths are the `ik_*` fields of the debug
-visualization style settings.
+visualization style settings. Measured through the mesh: the line shows on
+97% of the chain points the mesh covers, at a median RGB distance of 269
+from the mesh colour behind it.
 
 ## 3. Per-bone IK settings - PASS (automated)
 
@@ -198,7 +213,7 @@ only IK reads.
    drag made under a lock is one step.
 5. Untick every channel lock before section 5.
 
-## 5. Pole target - PASS (automated, picker widget MANUAL)
+## 5. Pole target - PASS (automated)
 
 Here the root is `bone_0`, the elbow is `bone_1` and the hand is
 `bone_2 tip`. Bend the chain a little first - a straight chain has no bend
@@ -211,8 +226,10 @@ for a pole to aim.
    of a chain naming a pole, the one nearest the hand governs.
 3. Drag the hand: the elbow swings to point at the pole; the visualization
    adds a magenta line from the pole to the root and a magenta cross at the
-   pole. On the first small movement the elbow may jump toward the pole -
-   judge whether that feels acceptable.
+   pole. A start pose whose bend is off the pole snaps onto the pole in
+   the first drag step, and only then (measured: the bend is on the pole
+   from step 1 on, later steps small); whether to ease that snap in is a
+   section 8 decision.
 4. Pole Angle 90 (the row is in degrees), drag again: the bend turns a
    quarter turn about the root-to-hand line.
 5. Move the pole node, drag again: the elbow follows the new side. The pole
@@ -238,14 +255,26 @@ for a pole to aim.
 4. After closing a scene wait a few seconds: `logs/log.txt` holds no
    `scene-close leak` line.
 
-## 8. Verdicts wanted
+## 8. Behaviour and decisions - automated, decisions wanted
 
-- Mid-chain drag (for example the elbow): the dragged bone is the effector
-  and its children follow rigidly - acceptable?
-- Each drag re-solves from the drag-start pose, so dragging back restores
-  the start pose exactly - right feel, or should the solve be incremental?
-- Is the constrained solver stable enough that stiffness is worth adding
-  next (`ik_settings.md` section 1)?
+Measured (checks 8.1 - 8.3):
+
+1. Mid-chain drag: dragging `bone_1` makes it the effector - `bone_0` aims
+   at the target, `bone_1` keeps its world orientation and everything below
+   it follows rigidly.
+2. Each drag step solves from the drag-start pose: a target reached by two
+   paths gives the same pose, and back at the start the start pose.
+3. Stability sweep: locks, limits and bone lengths hold in every scenario,
+   and a replayed drag gives the same poses. Jumps: only with a pole and a
+   hinge at the chain root (finding F7); so the constrained solver is not
+   yet stable enough to add stiffness on top.
+
+Decisions for the user (the script prints them as DECISION lines):
+
+- Mid-chain drag keeps the children rigid (1.) - or keep the chain's end in
+  place (a two-target solve)?
+- Path-independent drags (2.) - or an incremental solve?
+- The pole snap on the first step (5.3) - or ease the swivel in?
 
 ## Findings
 
@@ -263,6 +292,14 @@ for a pole to aim.
   renderer's id-range table, which still named the closed scene's meshes.
 - **F5.** Stiffness is a normal IK row now (it was developer-only); the
   solver still ignores its value.
+- **F7.** Open: with a pole on the elbow and a hinge (Lock Y + Z) on the
+  chain root, a drag jumps - joints move up to 13.5 times as far as the
+  target in one step - and the hand misses targets the unpoled solve
+  reaches (sweep scenario 0, seed 20260925; also seen with only the hinge
+  and the pole). The pole's swivel about the root-to-hand line, applied
+  between the forward and the backward pass, is a rotation the hinge root
+  cannot make; the backward pass clamps it away and the solve stalls at a
+  different best effort from one step to the next.
 - **F6.** Future work (deferred; not queued): in about one full automated run of five, the
   Set Rest click of check 3.9 records no operation, and a second click right
   after does not either; three diagnostic runs of sections 1-3 did not

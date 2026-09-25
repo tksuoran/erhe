@@ -7,4 +7,4 @@
 ✓effector-orientation{ebf606ff2;verify-5/5}+chain-visualization{edaf10d98;solver-tests-26;visual-check-interactive-only}
 ?left::stiffness+Phase-1-feel-questions{need-user-hands-on}->Phase-3
 ?user-interactive-deferred{ik_settings-slice;pole-picker+angle-rows;live-drag-with-pole;Move-tool-Effector-Orientation-combo;chain/root/pole-visualization-during-drag}
-⚡interactive-pass{doc/plans/rigging/interactive_test_pass.md;0-7-AUTOMATED-PASS-2026-09-25{scripts/ik_interactive_pass_verify.py};left=MANUAL-lines+section-8-verdicts{user}}
+⚡interactive-pass{doc/plans/rigging/interactive_test_pass.md;0-8-AUTOMATED-2026-09-25{scripts/ik_interactive_pass_verify.py;65/66-pass};left=3-DECISION-lines{user}+F7-pole+hinge-jumps{8.3-FAIL;AI-fix-next}}
