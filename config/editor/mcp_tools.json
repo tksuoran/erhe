@@ -7301,9 +7301,19 @@
     "name": "type_text"
   },
   {
-    "description": "Report where the transform gizmo's handles are, in the editor window pixels mouse_drag aims at. The gizmo has no meshes - it is hit tested analytically - so this runs the editor's own handle pick over a grid of rays through the gizmo's screen area and returns, per handle currently shown, a point that picks that handle (the sample deepest inside its region) plus the world point the ray hits. Each entry carries the handle's name (which names the axis, not the direction) and handle_value, the Handle enumerator debug_set_transform_hover takes. Also reports the gizmo anchor and its radius. Requires a selection; pass 'viewport' to probe a viewport other than the first.",
+    "description": "Report where the transform gizmo's handles are, in the editor window pixels mouse_drag aims at. The gizmo has no meshes - it is hit tested analytically - so this runs the editor's own handle pick over a grid of rays through the gizmo's screen area and returns, per handle currently shown, a point that picks that handle (the sample deepest inside its region) plus the world point the ray hits. Each entry carries the handle's name (which names the axis, not the direction) and handle_value, the Handle enumerator debug_set_transform_hover takes. Also reports the gizmo anchor and its radius. Requires a selection; pass 'viewport' to probe a viewport other than the first. A rotate ring entry also carries ring_axis, the world axis that ring turns about, and euler_gimbal: in Euler gimbal mode (Transform window Rotation shown as Euler Angles, Orthogonal Gizmo off) the rings are the Euler order's rings, so the handle named 'Rotate X' is the first ring of the order (for ZYX it turns about Z) - choose a ring by ring_axis, not by name. Pass probe_points to also get, per given window point, the handle it picks (handle / handle_value, 'None' / 0 for no handle) in 'probes' - to confirm a grab point before a mouse_drag, since a rotate ring is only a few pixels wide where it crosses another.",
     "inputSchema": {
       "properties": {
+        "probe_points": {
+          "description": "Window points [[x, y], ...] to report the picked handle for",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
         "viewport": {
           "description": "Viewport window title (default: the first viewport showing a scene through a camera)",
           "type": "string"

@@ -54,6 +54,7 @@
 #include "tools/selection_tool.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
+#include "transform/rotate_tool.hpp"
 #include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -1329,6 +1330,12 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         }
     }
 
+    // The ring a rotate handle stands for: in Euler gimbal mode (Euler Angles
+    // shown, orthogonal gizmo off) handle k is the k-th ring of the Euler
+    // order, so 'Rotate X' of a ZYX gimbal turns about Z. The same frames
+    // Rotate_tool::begin() takes its plane from.
+    const Rotate_ring_frames ring_frames = m_context.transform_tool->get_rotate_ring_frames(m_context.rotate_tool->get_basis());
+
     nlohmann::json handles = nlohmann::json::array();
     for (std::size_t i = 0; i < best_cells.size(); ++i) {
         const int       ix                  = best_index[i] % c_handle_probe_samples;
@@ -1348,7 +1355,48 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         if (pick.has_value()) {
             entry["world"] = {pick->position.x, pick->position.y, pick->position.z};
         }
+        const Handle ring_handle = best_cells[i].handle;
+        const int    ring        =
+            (ring_handle == Handle::e_handle_rotate_x) ? 0 :
+            (ring_handle == Handle::e_handle_rotate_y) ? 1 :
+            (ring_handle == Handle::e_handle_rotate_z) ? 2 : -1;
+        if (ring >= 0) {
+            const glm::vec3 axis = ring_frames.frames[ring][0];
+            entry["ring_axis"]    = {axis.x, axis.y, axis.z};
+            entry["euler_gimbal"] = ring_frames.euler_gimbal;
+        }
         handles.push_back(entry);
+    }
+
+    // probe_points: the handle each given window point picks, so a caller can
+    // confirm a grab point (and its neighbourhood) before pressing there - a
+    // rotate ring is only a few pixels wide where it crosses another.
+    nlohmann::json probes = nlohmann::json::array();
+    if (args.contains("probe_points")) {
+        const nlohmann::json& points = args.at("probe_points");
+        if (!points.is_array()) {
+            return make_error_content("probe_points must be an array of [x, y] window points");
+        }
+        for (const nlohmann::json& point : points) {
+            if (!point.is_array() || (point.size() != 2) || !point[0].is_number() || !point[1].is_number()) {
+                return make_error_content("probe_points must be an array of [x, y] window points");
+            }
+            const float x = point[0].get<float>();
+            const float y = point[1].get<float>();
+            const float content_y = y - static_cast<float>(window_viewport.y);
+            const glm::vec2 position_in_viewport{
+                x - static_cast<float>(window_viewport.x),
+                flip_y ? (static_cast<float>(window_viewport.height) - content_y) : content_y
+            };
+            const std::optional<Handle_pick> pick = pick_at(position_in_viewport);
+            const Handle handle = pick.has_value() ? pick->handle : Handle::e_handle_none;
+            probes.push_back({
+                {"x",            x},
+                {"y",            y},
+                {"handle",       c_str(handle)},
+                {"handle_value", static_cast<unsigned int>(handle)}
+            });
+        }
     }
 
     const glm::vec2 anchor_in_window = window_from_viewport(glm::vec2{anchor_projected.value()});
@@ -1360,7 +1408,8 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
             {"y",     anchor_in_window.y},
             {"world", {anchor.x, anchor.y, anchor.z}}
         }},
-        {"handles", handles}
+        {"handles", handles},
+        {"probes",  probes}
     }).dump();
 }
 

@@ -41,12 +41,14 @@ public:
 
     [[nodiscard]] auto is_active    () const -> bool;
     [[nodiscard]] auto get_axis_mask() const -> unsigned int;
+    // The drag basis: world axes, or the anchor orientation when the
+    // reference frame uses it.
+    [[nodiscard]] auto get_basis    () const -> glm::mat3;
 
     void set_transform_shared(Transform_tool_shared& shared, std::function<void()> record_operation);
 
 protected:
     [[nodiscard]] auto get_shared              () const -> Transform_tool_shared&;
-    [[nodiscard]] auto get_basis               () const -> glm::mat3;
     [[nodiscard]] auto get_basis               (bool world) const -> glm::mat3;
     [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, glm::vec3 n, glm::vec3 p) -> std::optional<glm::vec3>;
     [[nodiscard]] auto offset_plane_origo      (glm::vec3 p) const -> glm::vec3;

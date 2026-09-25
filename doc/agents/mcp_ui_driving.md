@@ -96,7 +96,7 @@ these rather than clicking at a guessed offset. See
 | `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus, one 31-byte chunk per frame |
 | `inject_input_events` | `events` | The raw form: `erhe::window::Input_event` values with a `frame` offset each. Field names are the `*_event` member names; `modifiers` is a list of `ctrl` / `shift` / `super` / `menu` |
 | `get_input_state` | - | Pointer position, held buttons, modifier mask, whether cursor-enter / focus were sent, and the stepping gesture if one runs |
-| `get_transform_handles` | `viewport` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`; plus the gizmo anchor and radius. Needs a selection |
+| `get_transform_handles` | `viewport`, `probe_points` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`, and for a rotate ring `ring_axis` (the world axis it turns about) and `euler_gimbal`; plus the gizmo anchor and radius. `probe_points` adds `probes`: the handle each given window point picks. Needs a selection |
 | `get_transform_rotation` | - | What the Transform window's Rotation group shows: representation, Euler order, the Euler angles in degrees as displayed, and the quaternion. The values a widget shows are not in `get_imgui_items`, which records labels and rectangles |
 | `capture_screenshot` | `path`, `annotate_imgui_items`, `annotate_window`, `annotate_limit` | The frame as a PNG; with annotation, numbered magenta rectangles over the recorded items and the number -> item table |
 
@@ -131,6 +131,23 @@ these rather than clicking at a guessed offset. See
   view's viewport windows are written to `config/editor/desktop_windows.json`
   when the editor exits, so restore that file with `git checkout` after a run
   that opened one.
+- **Choose a rotate ring by `ring_axis`, not by name.** In Euler gimbal mode
+  (the Transform window shows Rotation as Euler Angles with Orthogonal Gizmo
+  off) the three ring handles are the rings of the Euler order: the handle
+  named "Rotate X" is the first ring, which for order ZYX turns about Z, and
+  the rings sit at different radii. A ring is a few pixels wide where it
+  crosses another; confirm a grab point with `probe_points` (the point and
+  its neighbours picking the wanted ring) before pressing there.
+- **A property row with a local value is labelled `* <name>`.** The
+  asterisk marks a value set on the item itself; match both spellings when a
+  checkbox click gives the property a local value.
+- **Drive the gesture through the tool when the gesture is not the point.**
+  `drag_selection` runs the Transform tool's drag with exact world deltas -
+  as the active Move / Rotate / Scale subtool, so a translate drag of a bone
+  solves IK - and a held drag (`release: false`) is retargeted per step with
+  `action: "move"`, so the scene can be read between steps. Keep pointer
+  drags on the handles for checks of the input path itself (hover, pick,
+  press, ray-plane mapping).
 - **The windowed build interleaves injected and real input.** Every tool works
   there, and a person at the keyboard is a second source of events; the
   headless build is the reproducible one.
