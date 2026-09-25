@@ -13,4 +13,10 @@
 ✓commit-2{82b9db1be:Ik.*-attached-properties-on-Node+bind-pose-rest-default+Ik_settings/ERHE_rig-code-removed;ik-solver-tests-29}
 ✓commit-3{2beea77db:ERHE_node.property_node_refs+by-name-resolution-after-node-inserts;roundtrip-426/429}
 ✓commit-4{5387c7e30:docs+plans/node_attachments_to_properties.md}
-?user-interactive{interactive_test_pass.md-resume-note-at-section-4}
+?user-interactive{interactive_test_pass.md-section-8-verdicts+MANUAL-lines}
+[TASK::interactive-pass-automation]{DONE-2026-09-25;UNPUSHED}
+✓scripts/ik_interactive_pass_verify.py{--launch;58-checks;~2.5min;sections-0-7;real-UI-clicks+key-chords+some-gizmo-mouse-drags;other-drags=drag_selection-held+action-move-per-step;angles=solver-swing-twist-measure;screenshots-logs/ik_interactive_pass/}
+✓fixes-found-by-it{043b47f40-Id_range-weak-mesh(scene-close-crash)+d2d488b8a-baseline-refresh-below-touched-node+0092e1d50-bind-pose-from-inverse-binds(rest-default-followed-pose)+20741fec0-recorder-combo-visibility+b9db41973-stiffness-row-visible(c)User}
+✓MCP{0a9347f0e-drag_selection-active-subtool(IK-runs)+action-move;c928ee459-get_transform_handles-ring_axis+euler_gimbal+probe_points}
+?F6-open{Set-Rest-click-intermittently-records-no-op-~1/5-full-runs;not-reproduced-in-3-diag-runs}
+!traps{Euler-gimbal-mode:'Rotate X'-handle=first-Euler-ring(ZYX->about-Z)-choose-by-ring_axis;property-row-with-local-value-labelled-'* name';bone-proxy-meshes-carry-bone-names(filter-content-nodes);set_node_transform-honours-channel-locks;Move-tool-settings=session-state;pointer-move-needs-1-frame-before-sampling;Transform-window-greys-only-translation/scale-locks-in-Local-mode(rotation-by-design-not)}
