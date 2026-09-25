@@ -143,12 +143,14 @@ auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>
         if ((node_index == joints.size()) || (parent_index == joints.size())) {
             continue;
         }
-        const std::optional<glm::mat4> world_from_bind_joint  = skin->skin_data.get_world_from_bind(node_index);
-        const std::optional<glm::mat4> world_from_bind_parent = skin->skin_data.get_world_from_bind(parent_index);
-        if (!world_from_bind_joint.has_value() || !world_from_bind_parent.has_value()) {
-            continue;
-        }
-        const glm::mat4 parent_from_joint_bind = glm::inverse(world_from_bind_parent.value()) * world_from_bind_joint.value();
+        // An inverse bind matrix maps the skin's bind space into the joint's
+        // space at bind time, so its inverse is the joint's bind-time frame.
+        // Not get_world_from_bind(): that is the skinning matrix, the joint's
+        // deviation from bind, which follows the current pose.
+        const std::vector<glm::mat4>& inverse_binds = skin->skin_data.inverse_bind_matrices;
+        const glm::mat4 joint_from_bind  = (node_index   < inverse_binds.size()) ? inverse_binds[node_index]   : glm::mat4{1.0f};
+        const glm::mat4 parent_from_bind = (parent_index < inverse_binds.size()) ? inverse_binds[parent_index] : glm::mat4{1.0f};
+        const glm::mat4 parent_from_joint_bind = parent_from_bind * glm::inverse(joint_from_bind);
         const glm::mat3 basis{
             glm::normalize(glm::vec3{parent_from_joint_bind[0]}),
             glm::normalize(glm::vec3{parent_from_joint_bind[1]}),

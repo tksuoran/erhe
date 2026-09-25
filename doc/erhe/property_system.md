@@ -2129,9 +2129,12 @@ reference and never an ownership edge: it accepts any node, a node of a
 closed scene simply stops locking, and `Ik_drag::begin` decides
 admissibility once per drag (`doc/plans/rigging/pole_target.md` R8).
 `rest_rotation` has a per-object default (D31): the bone's bind-pose local
-rotation from `erhe::scene::get_bind_pose_local_rotation`, identity when
-the node and its parent are not joints of one skin - so the value is
-correct without any creation-time capture, and a local value overrides it.
+rotation from `erhe::scene::get_bind_pose_local_rotation` (the rotation of
+`inverse_bind(parent) * inverse(inverse_bind(joint))`, read from the skin's
+inverse bind matrices alone, so it does not follow the current pose),
+identity when the node and its parent are not joints of one skin - so the
+value is correct without any creation-time capture, and a local value
+overrides it.
 
 Readers go through `read_ik_settings(const erhe::scene::Node&) ->
 Ik_settings_data`, a plain record of one node's effective values that the

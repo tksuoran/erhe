@@ -175,18 +175,25 @@ TEST(Ik_properties, rest_rotation_default_is_the_bind_pose_with_a_skin)
     parent->set_parent(root);
     bone->set_parent(parent);
 
-    // Bind pose: the parent at the identity, the bone rotated 0.5 rad about
-    // Z. The skin carries no inverse bind matrices, so Skin_data's identity
-    // fallback makes world_from_bind the joint's own world matrix and the
-    // bind-pose local rotation the bone's local rotation.
-    const glm::mat4 bind_parent{1.0f};
-    const glm::mat4 bind_bone = glm::rotate(glm::mat4{1.0f}, 0.5f, glm::vec3{0.0f, 0.0f, 1.0f});
-    parent->set_parent_from_node(bind_parent);
-    bone->set_parent_from_node(bind_bone);
+    // Bind pose: the parent turned 0.3 rad about X, the bone 0.5 rad about Z
+    // in the parent's frame, one unit up. The inverse bind matrices are the
+    // inverses of those bind-time world matrices.
+    const glm::mat4 bind_parent = glm::rotate(glm::mat4{1.0f}, 0.3f, glm::vec3{1.0f, 0.0f, 0.0f});
+    const glm::mat4 bind_bone   =
+        glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}) *
+        glm::rotate(glm::mat4{1.0f}, 0.5f, glm::vec3{0.0f, 0.0f, 1.0f});
 
     auto skin = std::make_shared<erhe::scene::Skin>("skin");
-    skin->skin_data.joints = {parent, bone};
+    skin->skin_data.joints                = {parent, bone};
+    skin->skin_data.inverse_bind_matrices = {glm::inverse(bind_parent), glm::inverse(bind_parent * bind_bone)};
     scene.register_skin(skin);
+
+    // Posed away from the bind pose: the default must not follow the pose.
+    parent->set_parent_from_node(glm::rotate(glm::mat4{1.0f}, -0.7f, glm::vec3{0.0f, 1.0f, 0.0f}));
+    bone->set_parent_from_node(
+        glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}) *
+        glm::rotate(glm::mat4{1.0f}, 1.1f, glm::vec3{1.0f, 0.0f, 0.0f})
+    );
 
     const glm::quat expected = glm::quat_cast(glm::mat3{bind_bone});
     EXPECT_EQ  (bone->get_value_source(Ik::rest_rotation_property), Value_source::default_value);

@@ -78,7 +78,9 @@ public:
 
 // The node's local rotation in the bind pose, when the node and its parent
 // node are joints of the same skin: the orthonormalized rotation of
-// inverse(world_from_bind(parent)) * world_from_bind(joint), using the first
+// inverse_bind(parent) * inverse(inverse_bind(joint)) - the parent-from-joint
+// transform the inverse bind matrices encode, independent of the current
+// pose (a missing inverse bind matrix counts as identity) - using the first
 // such skin in Scene::get_skins() order so the answer is deterministic for a
 // node that several skins list. Returns nullopt when the node has no parent
 // node, belongs to no scene, or no skin lists both the node and its parent.
