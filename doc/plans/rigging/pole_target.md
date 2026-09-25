@@ -321,9 +321,10 @@ form for `Node_physics` and `Joint` (through the physics description),
 the composition arcs of a prim, `Draw_mode` (`GeomModelAPI`) and
 `Geometry_graph_mesh` (the `erhe:scene` block), and none for rig data.
 `save_scene_usd` (`parsers/usd.cpp`) counts the nodes holding a local `Ik.*`
-value (`count_ik_value_holders` over `has_local_ik_value`) and logs one
-warning per save naming that count, stating that USD has no form for IK
-settings and that they are not written.
+or `Rig.*` value (`count_rig_value_holders` over `has_local_ik_value` and
+`has_local_rig_value`, `skeleton_editing.md` R2) and logs one warning per
+save naming that count, stating that USD has no form for IK settings and
+rest transforms and that they are not written.
 A USD form for rig data is Phase 4 work, with the persistent constraint
 model.
 

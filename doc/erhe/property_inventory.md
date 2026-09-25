@@ -244,9 +244,18 @@ and each is listed on a node carrying `Item_flags::bone`.
 | Ik.lock_x, Ik.lock_y, Ik.lock_z, Ik.limit_x, Ik.limit_y, Ik.limit_z | attached | read into the Ik_settings_data record by read_ik_settings |
 | Ik.limit_min, Ik.limit_max | attached | radians shown in degrees; coerced per component to [-pi, 0] / [0, pi] |
 | Ik.stiffness | attached | scales the joint's per-iteration change in the constrained IK solve; coerced to [0, 0.99] |
-| Ik.rest_rotation | attached | computed default (D31): the bone's bind-pose local rotation, identity without one; "Set rest from current pose" writes the local value |
+| Ik.rest_rotation | attached | computed default (D31): the bone's Rig.rest_rotation (the bind-pose local rotation unless a rest is authored, identity without a skin); "Set rest from current pose" writes the local value |
 | Ik.pole_target | attached | weak object reference (D28), Item_type::xformable; any node is accepted and admissibility is decided per drag |
 | Ik.pole_angle | attached | radians shown in degrees, not coerced (the angle is periodic) |
+
+### Rig, attached (`src/editor/scene/rig_properties.cpp`, section 4.28)
+
+Attached to `erhe::scene::Node`, set on the bone node; none of them inherits,
+and each is listed on a node carrying `Item_flags::bone`.
+
+| Property | Storage | Notes |
+|---|---|---|
+| Rig.rest_translation, Rig.rest_rotation, Rig.rest_scale | attached | the bone's rest transform (local TRS), one property per channel; computed default (D31): the channel of the bind-pose local transform (erhe::scene::get_bind_pose_parent_from_node), identity without a skin; Ik.rest_rotation defaults to Rig.rest_rotation |
 
 ### Layout (`src/erhe/scene/erhe_scene/layout.cpp`, section 4.13)
 

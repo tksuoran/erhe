@@ -86,16 +86,19 @@ window and persist with the scene.
     start by the no-teleport rule. Twist is a distinct solver DOF, as in
     Blender, rather than an Euler component.
   - `Ik.rest_rotation` has a per-object default (D31 `compute_default`, no
-    creation-time capture): the orthonormalized rotation of
+    creation-time capture): the effective `Rig.rest_rotation` of the bone
+    (`doc/plans/rigging/skeleton_editing.md` R2), whose own default is the
+    rotation of the bind-pose local transform
+    `erhe::scene::get_bind_pose_parent_from_node(const Node&) ->
+    std::optional<glm::mat4>` (`erhe_scene/skin.{hpp,cpp}`):
     `inverse(world_from_bind(parent)) * world_from_bind(joint)` when the
-    node and its parent node are joints of the same `erhe::scene::Skin`,
-    and identity otherwise. The first skin in `Scene::get_skins()` order
-    that lists both is used, so a node several skins list has one
-    deterministic answer. The lookup is
-    `erhe::scene::get_bind_pose_local_rotation(const Node&) ->
-    std::optional<glm::quat>` (`erhe_scene/skin.{hpp,cpp}`). A local value
-    overrides the default, so the bone tracks its bind pose until a rest
-    orientation is authored.
+    node and its parent node are joints of the same `erhe::scene::Skin`, a
+    skin root's bind-time world anchored at the skinned mesh node, and
+    identity when no skin lists the node. The first skin in
+    `Scene::get_skins()` order that lists both is used, so a node several
+    skins list has one deterministic answer. A local value overrides the
+    default, so the bone tracks its rest pose until a limits zero is
+    authored.
   - Authored from Properties with the "Set rest from current pose" button
     (section 5), which writes the bone's current local rotation as the
     local value - needed because there is no rest-pose store on nodes yet
@@ -498,8 +501,9 @@ formulation adapted to swing/twist limits:
 - Values - `editor::Ik` (`src/editor/scene/ik_properties.{hpp,cpp}`): the
   registrations, `read_ik_settings`, `get_ik_pole_target` /
   `set_ik_pole_target`, and `has_local_ik_value`, which a writer with no
-  form for IK data counts. The bind-pose lookup behind the rest default is
-  `erhe::scene::get_bind_pose_local_rotation` (`erhe_scene/skin.{hpp,cpp}`).
+  form for IK data counts. The rest default is `Rig.rest_rotation`
+  (`src/editor/scene/rig_properties.{hpp,cpp}`), over the bind-pose lookup
+  `erhe::scene::get_bind_pose_parent_from_node` (`erhe_scene/skin.{hpp,cpp}`).
 - Channel locks - `Item_flags::lock_translation_x` .. `lock_scale_z`
   (bits 42-50, `item.hpp`, with `lock_*_mask` composites), persisted via
   `gltf_item_flags.cpp`; enforced by `enforce_channel_locks`

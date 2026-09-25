@@ -55,6 +55,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "parsers/physics_import.hpp"
 #include "scene/draw_mode_properties.hpp"
 #include "scene/ik_properties.hpp"
+#include "scene/rig_properties.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -2613,15 +2614,15 @@ void collect_usd_draw_modes(
     );
 }
 
-// The nodes of the tree holding a local Ik.* value
-// (doc/plans/rigging/pole_target.md R26). USD has no form for rig data, so the
-// save names the count and writes none of it.
-[[nodiscard]] auto count_ik_value_holders(erhe::scene::Node& root_node) -> std::size_t
+// The nodes of the tree holding a local Ik.* or Rig.* value
+// (doc/plans/rigging/pole_target.md R26, skeleton_editing.md R2). USD has no
+// form for rig data, so the save names the count and writes none of it.
+[[nodiscard]] auto count_rig_value_holders(erhe::scene::Node& root_node) -> std::size_t
 {
     std::size_t count = 0;
     root_node.for_each<erhe::scene::Xformable>(
         [&count](erhe::scene::Xformable& prim) -> bool {
-            if (has_local_ik_value(prim)) {
+            if (has_local_ik_value(prim) || has_local_rig_value(prim)) {
                 ++count;
             }
             return true;
@@ -3876,15 +3877,16 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     // the plan below, which turns each item into a path.
     collect_usd_draw_modes(*root_node.get(), save_arguments.draw_modes);
 
-    // IK settings (doc/plans/rigging/pole_target.md R26): USD has no form for
-    // rig data, so the bones' Ik.* values - locks, limits, stiffness, rest
-    // orientation, pole target and pole angle - are not written. A USD form is
+    // IK settings and rest transforms (doc/plans/rigging/pole_target.md R26,
+    // skeleton_editing.md R2): USD has no form for rig data, so the bones'
+    // Ik.* values - locks, limits, stiffness, rest orientation, pole target
+    // and pole angle - and Rig.* rest transforms are not written. A USD form is
     // Phase 4 work (doc/plans/rigging/rigging_tools.md).
-    const std::size_t ik_settings_count = count_ik_value_holders(*root_node.get());
-    if (ik_settings_count > 0) {
+    const std::size_t rig_values_count = count_rig_value_holders(*root_node.get());
+    if (rig_values_count > 0) {
         log_parsers->warn(
-            "save_scene_usd '{}': {} node(s) carry IK settings, which USD has no form for - the IK settings are not written",
-            erhe::file::to_string(path), ik_settings_count
+            "save_scene_usd '{}': {} node(s) carry IK settings or rest transforms (Ik.*, Rig.*), which USD has no form for - they are not written",
+            erhe::file::to_string(path), rig_values_count
         );
     }
 

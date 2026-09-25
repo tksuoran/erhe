@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace erhe::scene {
@@ -45,6 +46,11 @@ void collect_bone_chain(const std::shared_ptr<erhe::scene::Node>& bone, std::vec
 // name has no side, no such bone exists in the skeleton, or `bone` is not a
 // bone.
 [[nodiscard]] auto find_mirror_bone(const std::shared_ptr<erhe::scene::Node>& bone) -> std::shared_ptr<erhe::scene::Node>;
+
+// The first bone named `name`, in pre-order from `root` over the bones of its
+// skeleton (a non-bone node ends the walk below it: its descendants belong to
+// another skeleton). Null when there is none or `root` is not a bone.
+[[nodiscard]] auto find_skeleton_bone(const std::shared_ptr<erhe::scene::Node>& root, const std::string& name) -> std::shared_ptr<erhe::scene::Node>;
 
 // The bones `mode` selects from `targets`, deduplicated, in target order
 // (for each target, its results in hierarchy order). Non-bone targets

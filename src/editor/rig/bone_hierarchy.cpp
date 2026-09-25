@@ -123,15 +123,18 @@ auto find_mirror_bone(const std::shared_ptr<erhe::scene::Node>& bone) -> std::sh
     if (bone_side(name) == Bone_side::none) {
         return {};
     }
-    const std::string mirror_name = flip_side_name(name);
-    const std::shared_ptr<erhe::scene::Node> root = get_skeleton_root(bone);
+    return find_skeleton_bone(get_skeleton_root(bone), flip_side_name(name));
+}
 
-    // Pre-order over the skeleton's bones (a non-bone node ends the walk
-    // below it: its descendants belong to another skeleton).
+auto find_skeleton_bone(const std::shared_ptr<erhe::scene::Node>& root, const std::string& name) -> std::shared_ptr<erhe::scene::Node>
+{
+    if (!root || !erhe::scene::is_bone(root.get())) {
+        return {};
+    }
     const std::function<std::shared_ptr<erhe::scene::Node>(const std::shared_ptr<erhe::scene::Node>&)> search =
         [&](const std::shared_ptr<erhe::scene::Node>& node) -> std::shared_ptr<erhe::scene::Node>
         {
-            if (node->get_name() == mirror_name) {
+            if (node->get_name() == name) {
                 return node;
             }
             for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {

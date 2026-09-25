@@ -76,18 +76,28 @@ public:
 // updates, not per-primitive render code.
 [[nodiscard]] auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>;
 
-// The node's local rotation in the bind pose, when the node and its parent
-// node are joints of the same skin: the orthonormalized rotation of
-// inverse_bind(parent) * inverse(inverse_bind(joint)) - the parent-from-joint
-// transform the inverse bind matrices encode, independent of the current
-// pose (a missing inverse bind matrix counts as identity) - using the first
-// such skin in Scene::get_skins() order so the answer is deterministic for a
-// node that several skins list. Returns nullopt when the node has no parent
-// node, belongs to no scene, or no skin lists both the node and its parent.
+// The node's local (parent-from-node) transform in the bind pose its skin's
+// inverse bind matrices encode (a missing inverse bind matrix counts as
+// identity), independent of the node's own current pose. The skin is the
+// first in Scene::get_skins() order that lists both the node and its parent
+// node, else the first that lists the node, so the answer is deterministic
+// for a node that several skins list.
 //
-// It is what a rest orientation of a joint is taken from (the IK limits'
-// zero angle, doc/plans/rigging/ik_settings.md section 1).
-[[nodiscard]] auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>;
+// - The parent is a joint of that skin:
+//   inverse_bind(parent) * inverse(inverse_bind(joint)).
+// - Otherwise the bind-time world of the joint is anchored at the node of
+//   the mesh the skin deforms (glTF inverse bind matrices are relative to
+//   the skinned mesh node; a skin no mesh uses anchors at the world):
+//   world_from_bind = world_from_mesh * inverse(inverse_bind(joint)), and the
+//   parent's world is that of the nearest ancestor joint of the skin at its
+//   bind-time world, carried down by the current local transforms of the
+//   nodes between (the parent's current world when no ancestor is a joint).
+//
+// Returns nullopt when the node belongs to no scene or no skin lists it.
+// It is what Reset Bones to Bind Pose writes and the default of a bone's rest
+// transform (Rig.rest_translation / rest_rotation / rest_scale,
+// doc/plans/rigging/skeleton_editing.md R2).
+[[nodiscard]] auto get_bind_pose_parent_from_node(const Node& node) -> std::optional<glm::mat4>;
 
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;

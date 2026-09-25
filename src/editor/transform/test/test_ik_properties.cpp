@@ -1,10 +1,11 @@
 // Per-bone IK settings as attached erhe::property properties of the bone
 // node (doc/plans/rigging/ik_settings.md section 1): the values live on the
 // node, none of them inherits, a Style can supply a shared limit set, and
-// Ik.rest_rotation's per-object default is the node's bind-pose local
-// rotation.
+// Ik.rest_rotation's per-object default is the node's rest rotation
+// (Rig.rest_rotation), which defaults to its bind-pose local rotation.
 
 #include "scene/ik_properties.hpp"
+#include "scene/rig_properties.hpp"
 
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_scene/node.hpp"
@@ -23,6 +24,7 @@
 
 using namespace erhe::property;
 using editor::Ik;
+using editor::Rig;
 using editor::Ik_settings_data;
 using erhe::scene::Node;
 
@@ -206,10 +208,71 @@ TEST(Ik_properties, rest_rotation_default_is_the_bind_pose_with_a_skin)
     EXPECT_EQ  (bone->get_value_source(Ik::rest_rotation_property), Value_source::local);
     EXPECT_TRUE(quat_close(bone->get_value(Ik::rest_rotation_property), authored));
 
-    // The root bone of the skin has no joint parent: identity.
-    EXPECT_TRUE(quat_close(parent->get_value(Ik::rest_rotation_property), glm::quat{1.0f, 0.0f, 0.0f, 0.0f}));
+    // The root bone of the skin has no joint parent: its bind-time world is
+    // anchored at the world (no mesh uses the skin) and its parent is the
+    // scene root, so its rest is its bind-time world rotation.
+    EXPECT_TRUE(quat_close(parent->get_value(Ik::rest_rotation_property), glm::quat_cast(glm::mat3{bind_parent})));
+
+    // The rest transform (Rig.rest_*, doc/plans/rigging/skeleton_editing.md
+    // R2) carries the bind pose's translation and scale too.
+    EXPECT_EQ  (bone->get_value_source(Rig::rest_translation_property()), Value_source::default_value);
+    EXPECT_LT  (glm::length(bone->get_value(Rig::rest_translation_property()) - glm::vec3{0.0f, 1.0f, 0.0f}), 1.0e-5f);
+    EXPECT_LT  (glm::length(bone->get_value(Rig::rest_scale_property()) - glm::vec3{1.0f}), 1.0e-5f);
+    EXPECT_TRUE(quat_close(bone->get_value(Rig::rest_rotation_property()), expected));
 
     scene.unregister_skin(skin);
+}
+
+TEST(Ik_properties, rest_rotation_default_follows_the_rig_rest_rotation)
+{
+    // Ik.rest_rotation's default is Rig.rest_rotation's effective value, so
+    // the limits frame and the rest pose are one thing.
+    const std::shared_ptr<erhe::scene::Xform> parent = make_bone("parent");
+    const std::shared_ptr<Node> bone = make_bone("bone");
+    bone->set_parent(parent);
+    EXPECT_TRUE(quat_close(bone->get_value(Rig::rest_rotation_property()), glm::quat{1.0f, 0.0f, 0.0f, 0.0f}));
+
+    // An observer of Ik.rest_rotation hears the change of its default (D31
+    // default_from), with the old and new effective values.
+    int       notifications = 0;
+    glm::quat notified_old{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::quat notified_new{0.0f, 0.0f, 0.0f, 0.0f};
+    const Observer_token token = bone->add_observer(
+        Ik::rest_rotation_property.get(),
+        [&](Dependency_object&, const Property_changed_args& args) {
+            ++notifications;
+            notified_old = std::get<glm::quat>(args.old_value);
+            notified_new = std::get<glm::quat>(args.new_value);
+        }
+    );
+
+    const glm::quat rest = glm::angleAxis(0.6f, glm::vec3{0.0f, 1.0f, 0.0f});
+    bone->set_value(Rig::rest_rotation_property(), rest);
+    EXPECT_EQ  (bone->get_value_source(Ik::rest_rotation_property), Value_source::default_value);
+    EXPECT_TRUE(quat_close(bone->get_value(Ik::rest_rotation_property), rest));
+    EXPECT_TRUE(quat_close(editor::read_ik_settings(*bone).rest_rotation, rest)) << "the IK drag reads the new limits frame";
+    EXPECT_EQ  (notifications, 1);
+    EXPECT_TRUE(quat_close(notified_old, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(quat_close(notified_new, rest));
+    EXPECT_TRUE(editor::has_local_rig_value(*bone));
+    EXPECT_FALSE(editor::has_local_ik_value(*bone));
+
+    // A local Ik.rest_rotation still wins, and then a Rig change no longer
+    // moves it (no notification).
+    const glm::quat limits_zero = glm::angleAxis(-0.2f, glm::vec3{1.0f, 0.0f, 0.0f});
+    bone->set_value(Ik::rest_rotation_property, limits_zero);
+    EXPECT_TRUE(quat_close(bone->get_value(Ik::rest_rotation_property), limits_zero));
+    EXPECT_EQ(notifications, 2);
+    bone->set_value(Rig::rest_rotation_property(), glm::angleAxis(0.1f, glm::vec3{0.0f, 0.0f, 1.0f}));
+    EXPECT_EQ(notifications, 2);
+    EXPECT_TRUE(quat_close(bone->get_value(Ik::rest_rotation_property), limits_zero));
+
+    // Cleared, it follows the rest rotation again.
+    bone->clear_value(Ik::rest_rotation_property);
+    EXPECT_EQ(notifications, 3);
+    bone->clear_value(Rig::rest_rotation_property());
+    EXPECT_EQ(notifications, 4);
+    EXPECT_TRUE(quat_close(notified_new, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}));
 }
 
 TEST(Ik_properties, pole_target_is_a_weak_reference)

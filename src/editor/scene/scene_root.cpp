@@ -722,6 +722,79 @@ auto Scene_root::make_browser_window(
                         "(arm.L -> arm.R, leg_joint_R_1 -> leg_joint_L_1); one undo step"
                     );
                 }
+
+                // Slice B (R14, R15): posing verbs. Clear and Copy Pose act on
+                // the targets as above; Paste writes onto the clicked bone's
+                // skeleton.
+                ImGui::Separator();
+                static constexpr Pose_channels clear_entries[] = {
+                    Pose_channels{.location = true,  .rotation = false, .scale = false},
+                    Pose_channels{.location = false, .rotation = true,  .scale = false},
+                    Pose_channels{.location = false, .rotation = false, .scale = true },
+                    Pose_channels{.location = true,  .rotation = true,  .scale = true }
+                };
+                for (const Pose_channels& channels : clear_entries) {
+                    if (ImGui::MenuItem(get_clear_pose_label(channels))) {
+                        deferred_operations.push_back(
+                            [&context, node, channels]() {
+                                static_cast<void>(clear_bone_pose(context, get_bone_command_targets(context, node), channels));
+                            }
+                        );
+                        close = true;
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "Set these channels of the target bones back to their rest transform\n"
+                            "(Rig Rest Translation / Rotation / Scale); locked channels and\n"
+                            "lock_edit bones are kept; one undo step"
+                        );
+                    }
+                }
+                if (ImGui::MenuItem("Copy Pose")) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            const std::vector<std::shared_ptr<erhe::scene::Node>> targets = get_bone_command_targets(context, node);
+                            context.scene_commands->set_pose_buffer(copy_bone_pose(targets));
+                            log_operations->info("Copy Pose: {} bone(s) copied to the pose buffer", targets.size());
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Record the target bones' names and local transforms in the pose buffer");
+                }
+                const bool has_pose = !context.scene_commands->get_pose_buffer().bones.empty();
+                if (!has_pose) {
+                    ImGui::BeginDisabled();
+                }
+                class Paste_entry
+                {
+                public:
+                    const char*     label;
+                    Paste_pose_mode mode;
+                    const char*     tooltip;
+                };
+                static constexpr Paste_entry paste_entries[] = {
+                    {"Paste Pose",         Paste_pose_mode::normal,  "Write the pose buffer onto the bones of the same names in this bone's skeleton;\nlocked channels and lock_edit bones are kept; one undo step"},
+                    {"Paste Pose Flipped", Paste_pose_mode::flipped, "Write the pose buffer mirrored onto the side-flipped bones (arm_L -> arm_R)\nof this bone's skeleton, across the skeleton root's X = 0 plane; one undo step"}
+                };
+                for (const Paste_entry& entry : paste_entries) {
+                    if (ImGui::MenuItem(entry.label)) {
+                        const Paste_pose_mode mode = entry.mode;
+                        deferred_operations.push_back(
+                            [&context, node, mode]() {
+                                static_cast<void>(paste_bone_pose(context, node, context.scene_commands->get_pose_buffer(), mode));
+                            }
+                        );
+                        close = true;
+                    }
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                        ImGui::SetTooltip("%s", has_pose ? entry.tooltip : "The pose buffer is empty: Copy Pose first");
+                    }
+                }
+                if (!has_pose) {
+                    ImGui::EndDisabled();
+                }
             }
             // Lightmapped (undoable): the lightmapped property is inherited
             // down the node tree (D23), so the recursive command writes the

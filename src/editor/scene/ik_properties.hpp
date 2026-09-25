@@ -38,8 +38,8 @@ public:
 
     // Reference orientation defining the zero of the limits: the limited
     // quantity is inverse(rest_rotation) * parent_from_node_rotation. Its
-    // per-object default is the node's bind-pose local rotation
-    // (doc/plans/rigging/ik_settings.md section 1).
+    // per-object default is the node's Rig.rest_rotation
+    // (doc/plans/rigging/skeleton_editing.md R2).
     glm::quat           rest_rotation{1.0f, 0.0f, 0.0f, 0.0f};
 
     auto operator==(const Ik_settings_data&) const -> bool = default;
@@ -76,8 +76,8 @@ public:
     static const erhe::property::Property<glm::vec3> limit_min_property;
     static const erhe::property::Property<glm::vec3> limit_max_property;
     static const erhe::property::Property<glm::vec3> stiffness_property;
-    // Per-object default from the bind pose, identity when the node is not
-    // a joint whose parent is a joint of the same skin.
+    // Per-object default: the bone's rest rotation, Rig.rest_rotation
+    // (scene/rig_properties.hpp), which defaults to the bind pose.
     static const erhe::property::Property<glm::quat> rest_rotation_property;
     // A weak object reference, so a pole is never an ownership edge.
     // Any node is accepted, including the bone itself and nodes of

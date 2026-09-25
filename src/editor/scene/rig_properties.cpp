@@ -1,0 +1,150 @@
+#include "scene/rig_properties.hpp"
+
+#include "erhe_property/property_metadata.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_scene/trs_transform.hpp"
+
+#include <optional>
+
+namespace editor {
+
+namespace {
+
+using erhe::property::Dependency_object;
+using erhe::property::Dependency_property;
+using erhe::property::Property;
+using erhe::property::Property_metadata;
+using erhe::property::Property_ui;
+using erhe::property::Property_value;
+
+constexpr std::string_view c_rig_group = "Rig";
+
+[[nodiscard]] auto is_bone_node(const Dependency_object& object) -> bool
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+    return (node != nullptr) && erhe::scene::is_bone(node);
+}
+
+// R2: the rest transform defaults to the bind pose the skin's inverse bind
+// matrices encode, identity when no skin lists the node. The object is not
+// always a Node - a Style holds every class's properties (D30) - so the cast
+// is checked.
+[[nodiscard]] auto get_bind_pose_trs(const Dependency_object& object) -> erhe::scene::Trs_transform
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+    if (node != nullptr) {
+        const std::optional<glm::mat4> bind_pose = erhe::scene::get_bind_pose_parent_from_node(*node);
+        if (bind_pose.has_value()) {
+            return erhe::scene::Trs_transform{bind_pose.value()};
+        }
+    }
+    return erhe::scene::Trs_transform{};
+}
+
+[[nodiscard]] auto compute_rest_translation(const Dependency_object& object) -> Property_value
+{
+    return get_bind_pose_trs(object).get_translation();
+}
+
+[[nodiscard]] auto compute_rest_rotation(const Dependency_object& object) -> Property_value
+{
+    return get_bind_pose_trs(object).get_rotation();
+}
+
+[[nodiscard]] auto compute_rest_scale(const Dependency_object& object) -> Property_value
+{
+    return get_bind_pose_trs(object).get_scale();
+}
+
+} // anonymous namespace
+
+auto Rig::property_owner_type() -> erhe::property::Owner_type
+{
+    // As Ik: no Item<> allocates the id, so it sits directly under the root
+    // and serves only to qualify the names (Rig.rest_rotation).
+    static const erhe::property::Owner_type s_id = erhe::property::allocate_owner_type(
+        erhe::property::root_owner_type, "Rig"
+    );
+    return s_id;
+}
+
+auto Rig::rest_translation_property() -> const Property<glm::vec3>&
+{
+    static const Property<glm::vec3> s_property = Property<glm::vec3>::register_attached(
+        "rest_translation", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value   = glm::vec3{0.0f},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local translation of the bone's rest pose (what Clear Location restores); unset, the bind-pose translation", .label = "Rest Translation", .visible_when = is_bone_node},
+            .compute_default = compute_rest_translation
+        }
+    );
+    return s_property;
+}
+
+auto Rig::rest_rotation_property() -> const Property<glm::quat>&
+{
+    static const Property<glm::quat> s_property = Property<glm::quat>::register_attached(
+        "rest_rotation", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value   = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local rotation of the bone's rest pose (what Clear Rotation restores, and the default zero of the IK limits); unset, the bind-pose rotation", .label = "Rest Rotation", .visible_when = is_bone_node},
+            .compute_default = compute_rest_rotation
+        }
+    );
+    return s_property;
+}
+
+auto Rig::rest_scale_property() -> const Property<glm::vec3>&
+{
+    static const Property<glm::vec3> s_property = Property<glm::vec3>::register_attached(
+        "rest_scale", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value   = glm::vec3{1.0f},
+            .ui              = Property_ui{.group = c_rig_group, .tooltip = "Local scale of the bone's rest pose (what Clear Scale restores); unset, the bind-pose scale", .label = "Rest Scale", .visible_when = is_bone_node},
+            .compute_default = compute_rest_scale
+        }
+    );
+    return s_property;
+}
+
+// Registered at static initialization like every other property, so the
+// registry lists them (and finds them by qualified name, as a scene load
+// does) before anything else runs; the accessors' own statics keep the order
+// safe for a registration in another translation unit that names them.
+namespace {
+[[maybe_unused]] const Property<glm::vec3>& rest_translation_registration = Rig::rest_translation_property();
+[[maybe_unused]] const Property<glm::quat>& rest_rotation_registration    = Rig::rest_rotation_property();
+[[maybe_unused]] const Property<glm::vec3>& rest_scale_registration       = Rig::rest_scale_property();
+} // anonymous namespace
+
+auto Rig::all_properties() -> const std::vector<const Dependency_property*>&
+{
+    static const std::vector<const Dependency_property*> s_properties{
+        rest_translation_property().get_ptr(),
+        rest_rotation_property   ().get_ptr(),
+        rest_scale_property      ().get_ptr()
+    };
+    return s_properties;
+}
+
+auto read_rest_transform(const erhe::scene::Node& node) -> erhe::scene::Trs_transform
+{
+    return erhe::scene::Trs_transform{
+        node.get_value(Rig::rest_translation_property()),
+        node.get_value(Rig::rest_rotation_property()),
+        node.get_value(Rig::rest_scale_property())
+    };
+}
+
+auto has_local_rig_value(const erhe::scene::Node& node) -> bool
+{
+    for (const Dependency_property* const property : Rig::all_properties()) {
+        if (node.has_local_value(*property)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace editor

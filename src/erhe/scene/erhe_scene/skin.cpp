@@ -1,4 +1,5 @@
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -118,47 +119,105 @@ auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>
     return root;
 }
 
-auto get_bind_pose_local_rotation(const Node& node) -> std::optional<glm::quat>
+namespace {
+
+[[nodiscard]] auto find_joint_index(const Skin& skin, const Node* const node) -> std::optional<std::size_t>
 {
-    const std::shared_ptr<Node> parent = node.get_parent_node();
-    const Scene* const          scene  = node.get_scene();
-    if (!parent || (scene == nullptr)) {
-        return std::nullopt;
-    }
-    for (const std::shared_ptr<Skin>& skin : scene->get_skins()) {
-        if (!skin) {
-            continue;
+    const std::vector<std::shared_ptr<Node>>& joints = skin.skin_data.joints;
+    for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
+        if (joints[i].get() == node) {
+            return i;
         }
-        const std::vector<std::shared_ptr<Node>>& joints = skin->skin_data.joints;
-        std::size_t node_index  {joints.size()};
-        std::size_t parent_index{joints.size()};
-        for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-            if (joints[i].get() == &node) {
-                node_index = i;
-            }
-            if (joints[i] == parent) {
-                parent_index = i;
-            }
-        }
-        if ((node_index == joints.size()) || (parent_index == joints.size())) {
-            continue;
-        }
-        // An inverse bind matrix maps the skin's bind space into the joint's
-        // space at bind time, so its inverse is the joint's bind-time frame.
-        // Not get_world_from_bind(): that is the skinning matrix, the joint's
-        // deviation from bind, which follows the current pose.
-        const std::vector<glm::mat4>& inverse_binds = skin->skin_data.inverse_bind_matrices;
-        const glm::mat4 joint_from_bind  = (node_index   < inverse_binds.size()) ? inverse_binds[node_index]   : glm::mat4{1.0f};
-        const glm::mat4 parent_from_bind = (parent_index < inverse_binds.size()) ? inverse_binds[parent_index] : glm::mat4{1.0f};
-        const glm::mat4 parent_from_joint_bind = parent_from_bind * glm::inverse(joint_from_bind);
-        const glm::mat3 basis{
-            glm::normalize(glm::vec3{parent_from_joint_bind[0]}),
-            glm::normalize(glm::vec3{parent_from_joint_bind[1]}),
-            glm::normalize(glm::vec3{parent_from_joint_bind[2]})
-        };
-        return glm::normalize(glm::quat_cast(basis));
     }
     return std::nullopt;
+}
+
+// An inverse bind matrix maps the skin's bind space into the joint's space at
+// bind time, so its inverse is the joint's bind-time frame. Not
+// get_world_from_bind(): that is the skinning matrix, the joint's deviation
+// from bind, which follows the current pose.
+[[nodiscard]] auto get_joint_from_bind(const Skin& skin, const std::size_t joint_index) -> glm::mat4
+{
+    const std::vector<glm::mat4>& inverse_binds = skin.skin_data.inverse_bind_matrices;
+    return (joint_index < inverse_binds.size()) ? inverse_binds[joint_index] : glm::mat4{1.0f};
+}
+
+// World transform of the node of the first mesh that the skin deforms;
+// identity when no mesh uses the skin.
+[[nodiscard]] auto get_world_from_skinned_mesh(const Skin& skin, const Scene& scene) -> glm::mat4
+{
+    for (const std::shared_ptr<Mesh_layer>& layer : scene.get_mesh_layers()) {
+        for (const std::shared_ptr<Mesh>& mesh : layer->meshes) {
+            if (mesh && (mesh->skin.get() == &skin)) {
+                return mesh->world_from_node();
+            }
+        }
+    }
+    return glm::mat4{1.0f};
+}
+
+} // anonymous namespace
+
+auto get_bind_pose_parent_from_node(const Node& node) -> std::optional<glm::mat4>
+{
+    const Scene* const scene = node.get_scene();
+    if (scene == nullptr) {
+        return std::nullopt;
+    }
+    const std::shared_ptr<Node> parent = node.get_parent_node();
+
+    // The skin: the first listing the node and its parent, else the first
+    // listing the node.
+    const Skin*                skin{nullptr};
+    std::size_t                joint_index{0};
+    std::optional<std::size_t> parent_index{};
+    for (const std::shared_ptr<Skin>& candidate : scene->get_skins()) {
+        if (!candidate) {
+            continue;
+        }
+        const std::optional<std::size_t> index = find_joint_index(*candidate, &node);
+        if (!index.has_value()) {
+            continue;
+        }
+        const std::optional<std::size_t> candidate_parent_index = parent ? find_joint_index(*candidate, parent.get()) : std::nullopt;
+        if (candidate_parent_index.has_value()) {
+            skin         = candidate.get();
+            joint_index  = index.value();
+            parent_index = candidate_parent_index;
+            break;
+        }
+        if (skin == nullptr) {
+            skin        = candidate.get();
+            joint_index = index.value();
+        }
+    }
+    if (skin == nullptr) {
+        return std::nullopt;
+    }
+
+    const glm::mat4 joint_from_bind = get_joint_from_bind(*skin, joint_index);
+    if (parent_index.has_value()) {
+        return get_joint_from_bind(*skin, parent_index.value()) * glm::inverse(joint_from_bind);
+    }
+
+    const glm::mat4 world_from_mesh = get_world_from_skinned_mesh(*skin, *scene);
+    const glm::mat4 world_from_bind = world_from_mesh * glm::inverse(joint_from_bind);
+    if (!parent) {
+        return world_from_bind;
+    }
+    // The parent's world once the skin's joints sit on their bind pose: the
+    // nearest ancestor joint's bind-time world carried down by the local
+    // transforms of the non-joint nodes between.
+    glm::mat4 ancestor_from_parent{1.0f};
+    for (std::shared_ptr<Node> ancestor = parent; ancestor; ancestor = ancestor->get_parent_node()) {
+        const std::optional<std::size_t> ancestor_index = find_joint_index(*skin, ancestor.get());
+        if (ancestor_index.has_value()) {
+            const glm::mat4 world_from_parent = world_from_mesh * glm::inverse(get_joint_from_bind(*skin, ancestor_index.value())) * ancestor_from_parent;
+            return glm::inverse(world_from_parent) * world_from_bind;
+        }
+        ancestor_from_parent = ancestor->parent_from_node() * ancestor_from_parent;
+    }
+    return glm::inverse(parent->world_from_node()) * world_from_bind;
 }
 
 using namespace erhe::utility;

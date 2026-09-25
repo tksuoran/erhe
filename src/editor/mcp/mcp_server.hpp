@@ -257,6 +257,9 @@ private:
     auto action_ik_drag            (const nlohmann::json& args) -> std::string;
     auto action_select_bones       (const nlohmann::json& args) -> std::string;
     auto action_flip_bone_names    (const nlohmann::json& args) -> std::string;
+    auto action_clear_pose         (const nlohmann::json& args) -> std::string;
+    auto action_copy_pose          (const nlohmann::json& args) -> std::string;
+    auto action_paste_pose         (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
     auto action_create_node     (const nlohmann::json& args) -> std::string;

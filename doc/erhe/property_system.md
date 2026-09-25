@@ -1198,6 +1198,19 @@ table, see D2a), and references to other objects (D28).
   `Item_base::purpose_property` (`doc/erhe/usd_compatibility_design.md` M3),
   whose default is derived from the item's editor-only flag bits and
   refreshed by `Item_base::set_flag_bits`.
+  When the default is another property of the same object, the
+  registration declares it instead of computing it:
+  `Property_metadata::default_from` names the source property (registered
+  first, same type, exclusive with `compute_default`), the default layer
+  reads the source's effective value, and the registry lists the follower
+  on the source (`Dependency_property::get_default_followers`). A delivered
+  change of the source on an object then notifies each follower on that
+  object whose value comes from its default, with the source's old and new
+  values (coerced by the follower) - observers, `property_changed`,
+  expression dependents and the Properties row follow without polling, and
+  a follower holding any higher layer is not notified. The user is
+  `Ik.rest_rotation`, whose default is `Rig.rest_rotation` (sections 4.19,
+  4.28).
 
 - D32 A local value is an authored value. `Value_source::local` means
   the value was authored - by a user edit, or by a file that carried an
@@ -2128,13 +2141,13 @@ gate.
 reference and never an ownership edge: it accepts any node, a node of a
 closed scene simply stops locking, and `Ik_drag::begin` decides
 admissibility once per drag (`doc/plans/rigging/pole_target.md` R8).
-`rest_rotation` has a per-object default (D31): the bone's bind-pose local
-rotation from `erhe::scene::get_bind_pose_local_rotation` (the rotation of
-`inverse_bind(parent) * inverse(inverse_bind(joint))`, read from the skin's
-inverse bind matrices alone, so it does not follow the current pose),
-identity when the node and its parent are not joints of one skin - so the
-value is correct without any creation-time capture, and a local value
-overrides it.
+`rest_rotation` has a per-object default (D31): the effective value of the
+bone's `Rig.rest_rotation` (section 4.28), declared as its `default_from`,
+so the limits frame and the rest pose are one thing - the bind-pose local
+rotation unless a rest is authored, identity when no skin lists the node - and
+a change of `Rig.rest_rotation` notifies `Ik.rest_rotation` where it follows
+its default. The value is correct without any creation-time capture, and a
+local value overrides it.
 
 Readers go through `read_ik_settings(const erhe::scene::Node&) ->
 Ik_settings_data`, a plain record of one node's effective values that the
@@ -2597,6 +2610,39 @@ and the file carriers - a glTF `externalAsset` reference and the USD
 `references` / `payload` list ops with their `variants` selection - state them
 as prim metadata. So the record is read and written directly and the property
 exists for the Properties window and MCP alone.
+
+### 4.28 Rig (attached to Node)
+
+`editor::Rig` (`src/editor/scene/rig_properties.{hpp,cpp}`) registers the
+per-bone rig values of `doc/plans/rigging/skeleton_editing.md` as attached
+properties, owner type `Rig`, holder type `erhe::scene::Node`, UI group
+`Rig`, the same registration-holder pattern as `Ik` (section 4.19): not
+inheriting, listed on nodes carrying `Item_flags::bone` (`visible_when`).
+
+The rest transform (R2, `Rig.rest_transform` in the plan) is three
+properties, one per TRS channel - `rest_translation` (vec3), `rest_rotation`
+(quat) and `rest_scale` (vec3), together the bone's local (parent-from-node)
+transform at rest - because the property system has no TRS value type and
+the posing verbs read the channels separately (Clear Location / Rotation /
+Scale). Each has a per-object default (D31): that channel of
+`erhe::scene::get_bind_pose_parent_from_node`, the bind-pose local transform
+the skin's inverse bind matrices encode (`inverse_bind(parent) *
+inverse(inverse_bind(joint))` under a joint parent of the same skin; a skin
+root anchored at the node of the mesh the skin deforms), and the identity
+channel when no skin lists the node. It does not follow the current pose.
+`read_rest_transform(const Node&)` composes the three effective values and
+`has_local_rig_value` answers whether a node holds a local `Rig.*` value (the
+USD save counts those nodes in its "not written" warning, as it counts the
+`Ik.*` holders). The properties are reached through accessors
+(`Rig::rest_rotation_property()`) that register on first use, and a
+namespace-scope reference registers them at static initialization: the `Ik`
+registration in another translation unit names `rest_rotation` as its
+`default_from`, and static initialization order across translation units is
+unspecified.
+The values ride the node's `ERHE_node` `properties` map by their qualified
+names (D14), as the `Ik.*` values do. Tests: `test_ik_properties.cpp`
+(`editor_ik_solver_tests`) and `test_bone_pose.cpp` (`editor_rig_tests`),
+both of which compile `rig_properties.cpp`.
 
 ## 5. Out of scope
 

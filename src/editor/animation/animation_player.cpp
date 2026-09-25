@@ -141,6 +141,21 @@ void Animation_player::pause()
     m_playing = false;
 }
 
+auto Animation_player::stop_if_targeting(const std::function<bool(const erhe::scene::Node&)>& is_affected) -> bool
+{
+    if (!m_animation) {
+        return false;
+    }
+    for (const erhe::scene::Animation_channel& channel : m_animation->channels) {
+        const std::shared_ptr<erhe::scene::Node> target = erhe::scene::get_target_node(channel);
+        if (target && is_affected(*target)) {
+            stop();
+            return true;
+        }
+    }
+    return false;
+}
+
 void Animation_player::stop()
 {
     m_playing         = false;

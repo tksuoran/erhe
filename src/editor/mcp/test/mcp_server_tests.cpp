@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -2427,6 +2428,326 @@ TEST_F(Mcp_test, select_bones_modes_and_flip_bone_names_undo)
     EXPECT_TRUE(node_exists("leg_joint_R_1", leg_r));
     EXPECT_TRUE(node_exists("arm_joint_L_3", hand));
     EXPECT_EQ(undo_depth(), undo_before);
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// doc/plans/rigging/skeleton_editing.md R14, R15 (slice B) on RiggedFigure:
+// clear_pose restores the rest (the imported pose is the bind pose, which the
+// Rig.rest_* values default to) while a locked channel keeps its value, and
+// paste_pose 'flipped' of copy_pose's left-arm pose gives the right arm world
+// positions mirrored across the skeleton root's X = 0 plane. Each is one
+// undo step that undo reverts.
+TEST_F(Mcp_test, clear_pose_respects_locks_and_paste_pose_flipped_mirrors_the_arm)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Vec  = std::array<float, 3>;
+    using Quat = std::array<float, 4>; // x, y, z, w
+    auto as_vec  = [](const json& p) -> Vec { return Vec{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()}; };
+    auto as_quat = [](const json& q) -> Quat { return Quat{q[0].get<float>(), q[1].get<float>(), q[2].get<float>(), q[3].get<float>()}; };
+    auto distance = [](const Vec& a, const Vec& b) -> float {
+        return std::sqrt(((a[0] - b[0]) * (a[0] - b[0])) + ((a[1] - b[1]) * (a[1] - b[1])) + ((a[2] - b[2]) * (a[2] - b[2])));
+    };
+    auto angle_deg = [](const Quat& a, const Quat& b) -> float {
+        const float d = std::min(1.0f, std::abs((a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]) + (a[3] * b[3])));
+        return 2.0f * std::acos(d) * (180.0f / 3.14159265f);
+    };
+    // Rotates v by the unit quaternion q (x, y, z, w).
+    auto rotate = [](const Quat& q, const Vec& v) -> Vec {
+        const Vec   u{q[0], q[1], q[2]};
+        const float w = q[3];
+        const Vec   t{
+            2.0f * ((u[1] * v[2]) - (u[2] * v[1])),
+            2.0f * ((u[2] * v[0]) - (u[0] * v[2])),
+            2.0f * ((u[0] * v[1]) - (u[1] * v[0]))
+        };
+        return Vec{
+            v[0] + (w * t[0]) + ((u[1] * t[2]) - (u[2] * t[1])),
+            v[1] + (w * t[1]) + ((u[2] * t[0]) - (u[0] * t[2])),
+            v[2] + (w * t[2]) + ((u[0] * t[1]) - (u[1] * t[0]))
+        };
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto details = [&client, &scene](const char* node_name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", node_name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload;
+    };
+    auto local_rotation    = [&](const char* name) -> Quat { return as_quat(details(name).at("local_transform").at("rotation_xyzw")); };
+    auto local_translation = [&](const char* name) -> Vec  { return as_vec (details(name).at("local_transform").at("translation")); };
+    auto world_position    = [&](const char* name) -> Vec  { return as_vec (details(name).at("world_transform").at("translation")); };
+    auto set_local = [&client, &scene](const char* name, const json& components) {
+        json args{{"scene_name", scene}, {"node_name", name}, {"space", "local"}};
+        for (const auto& [key, value] : components.items()) {
+            args[key] = value;
+        }
+        Mcp_client::Tool_result result = client.call_tool("set_node_transform", args);
+        EXPECT_FALSE(result.is_error) << result.text;
+        advance_frames(client, 2);
+    };
+
+    // Rest (= imported bind pose) values.
+    const Quat l1_rest   = local_rotation("arm_joint_L_1");
+    const Quat l2_rest   = local_rotation("arm_joint_L_2");
+    const Vec  l3_rest_t = local_translation("arm_joint_L_3");
+    const Quat r1_rest   = local_rotation("arm_joint_R_1");
+    const Quat r2_rest   = local_rotation("arm_joint_R_2");
+
+    const json root = details("torso_joint_1").at("world_transform");
+    const Vec  root_t = as_vec(root.at("translation"));
+    const Quat root_q = as_quat(root.at("rotation_xyzw"));
+    auto mirrored = [&](const Vec& p) -> Vec {
+        const Quat inverse_q{-root_q[0], -root_q[1], -root_q[2], root_q[3]};
+        Vec local = rotate(inverse_q, Vec{p[0] - root_t[0], p[1] - root_t[1], p[2] - root_t[2]});
+        local[0] = -local[0];
+        const Vec back = rotate(root_q, local);
+        return Vec{back[0] + root_t[0], back[1] + root_t[1], back[2] + root_t[2]};
+    };
+    const std::array<Vec, 2> right_rest_positions{world_position("arm_joint_R_2"), world_position("arm_joint_R_3")};
+    const std::array<float, 2> right_rest_errors{
+        distance(right_rest_positions[0], mirrored(world_position("arm_joint_L_2"))),
+        distance(right_rest_positions[1], mirrored(world_position("arm_joint_L_3")))
+    };
+
+    // Pose the left arm; lock every rotation axis of L_2 and translation Y of L_3.
+    const Quat bent{0.2588190f, 0.0f, 0.0f, 0.9659258f}; // 30 degrees about X
+    set_local("arm_joint_L_1", json{{"rotation_xyzw", {0.0f, 0.0f, 0.3826834f, 0.9238795f}}}); // 45 degrees about Z
+    set_local("arm_joint_L_2", json{{"rotation_xyzw", {bent[0], bent[1], bent[2], bent[3]}}});
+    set_local("arm_joint_L_3", json{{"translation", {0.05f, 0.25f, 0.02f}}});
+    const Quat l2_posed = local_rotation("arm_joint_L_2");
+    ASSERT_GT(angle_deg(local_rotation("arm_joint_L_1"), l1_rest), 5.0f);
+    ASSERT_GT(angle_deg(l2_posed, l2_rest), 5.0f);
+
+    // Copy the posed left arm (explicit JSON; the editor pose buffer is not involved).
+    Mcp_client::Tool_result copied = client.call_tool(
+        "copy_pose", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1", "arm_joint_L_2", "arm_joint_L_3"}}}
+    );
+    ASSERT_FALSE(copied.is_error) << copied.text;
+    const json pose = copied.payload.at("pose");
+    ASSERT_EQ(pose.size(), std::size_t{3});
+    EXPECT_EQ(pose[1].value("name", ""), "arm_joint_L_2");
+
+    // Paste flipped onto the right arm: one undo entry, world positions mirrored.
+    std::size_t undo_before = undo_depth();
+    Mcp_client::Tool_result pasted = client.call_tool(
+        "paste_pose", json{{"scene_name", scene}, {"skeleton", "torso_joint_1"}, {"pose", pose}, {"mode", "flipped"}}
+    );
+    ASSERT_FALSE(pasted.is_error) << pasted.text;
+    EXPECT_TRUE(pasted.payload.at("unmatched").empty());
+    EXPECT_EQ(pasted.payload.at("changed").size(), std::size_t{3});
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "paste_pose is one undo step";
+
+    // RiggedFigure is symmetric about the world X = 0 plane, and its
+    // skeleton root is tilted from it by about a third of a degree, so its
+    // rest pose is itself mirror-asymmetric by a few millimeters in the root
+    // frame: the pasted arm must mirror the posed arm to within that.
+    for (std::size_t i = 0; i < 2; ++i) {
+        const char* const left  = (i == 0) ? "arm_joint_L_2" : "arm_joint_L_3";
+        const char* const right = (i == 0) ? "arm_joint_R_2" : "arm_joint_R_3";
+        const float error = distance(world_position(right), mirrored(world_position(left)));
+        EXPECT_GT(distance(world_position(right), right_rest_positions[i]), 2.0e-2f) << right << " moved";
+        EXPECT_LT(error, right_rest_errors[i] + 1.0e-3f)
+            << right << " sits at the mirror of " << left << " (rest asymmetry " << right_rest_errors[i] << ")";
+    }
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_LT(angle_deg(local_rotation("arm_joint_R_1"), r1_rest), 0.1f) << "undo restores the right arm";
+    EXPECT_LT(angle_deg(local_rotation("arm_joint_R_2"), r2_rest), 0.1f);
+    EXPECT_EQ(undo_depth(), undo_before);
+
+    // Clear: locks set after posing.
+    client.call_tool("set_item_flags", json{{"scene_name", scene}, {"ids", {details("arm_joint_L_2").value("id", 0)}}, {"flags", {"lock_rotation_x", "lock_rotation_y", "lock_rotation_z"}}});
+    client.call_tool("set_item_flags", json{{"scene_name", scene}, {"ids", {details("arm_joint_L_3").value("id", 0)}}, {"flags", {"lock_translation_y"}}});
+    advance_frames(client, 2);
+
+    EXPECT_TRUE(client.call_tool("clear_pose", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1"}}, {"channels", "sideways"}}).is_error)
+        << "an unrecognized channel is refused";
+    undo_before = undo_depth();
+    Mcp_client::Tool_result cleared = client.call_tool(
+        "clear_pose", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1", "arm_joint_L_2", "arm_joint_L_3"}}, {"channels", "all"}}
+    );
+    ASSERT_FALSE(cleared.is_error) << cleared.text;
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "clear_pose is one undo step";
+    EXPECT_LT(angle_deg(local_rotation("arm_joint_L_1"), l1_rest), 0.1f) << "Clear restores the rest rotation";
+    EXPECT_LT(angle_deg(local_rotation("arm_joint_L_2"), l2_posed), 0.1f) << "a bone with every rotation axis locked keeps its rotation";
+    const Vec l3_cleared = local_translation("arm_joint_L_3");
+    EXPECT_LT(std::abs(l3_cleared[0] - l3_rest_t[0]), 1.0e-4f) << "unlocked translation x returns to rest";
+    EXPECT_LT(std::abs(l3_cleared[1] - 0.25f), 1.0e-4f)         << "locked translation y keeps its value";
+    EXPECT_LT(std::abs(l3_cleared[2] - l3_rest_t[2]), 1.0e-4f)  << "unlocked translation z returns to rest";
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_GT(angle_deg(local_rotation("arm_joint_L_1"), l1_rest), 5.0f) << "undo restores the pose";
+    EXPECT_EQ(undo_depth(), undo_before);
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// doc/plans/rigging/skeleton_editing.md R2: Ik.rest_rotation defaults to
+// Rig.rest_rotation (D31 default_from), so a Rig.rest_rotation local value
+// moves the IK limits frame - a joint whose limits are all zero ends an
+// ik_drag exactly on it. R14 / R15: Clear and Paste Pose stop an animation
+// playing on the bones first, as Reset Bones to Bind Pose does.
+TEST_F(Mcp_test, rig_rest_rotation_is_the_ik_limits_frame_and_posing_stops_the_animation)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Quat = std::array<float, 4>; // x, y, z, w
+    auto as_quat = [](const json& q) -> Quat { return Quat{q[0].get<float>(), q[1].get<float>(), q[2].get<float>(), q[3].get<float>()}; };
+    auto parse_quat = [](const std::string& text) -> Quat {
+        Quat q{};
+        std::istringstream stream{text};
+        stream >> q[0] >> q[1] >> q[2] >> q[3];
+        return q;
+    };
+    auto angle_deg = [](const Quat& a, const Quat& b) -> float {
+        const float d = std::min(1.0f, std::abs((a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]) + (a[3] * b[3])));
+        return 2.0f * std::acos(d) * (180.0f / 3.14159265f);
+    };
+    // a * b, both (x, y, z, w).
+    auto multiply = [](const Quat& a, const Quat& b) -> Quat {
+        return Quat{
+            (a[3] * b[0]) + (a[0] * b[3]) + (a[1] * b[2]) - (a[2] * b[1]),
+            (a[3] * b[1]) - (a[0] * b[2]) + (a[1] * b[3]) + (a[2] * b[0]),
+            (a[3] * b[2]) + (a[0] * b[1]) - (a[1] * b[0]) + (a[2] * b[3]),
+            (a[3] * b[3]) - (a[0] * b[0]) - (a[1] * b[1]) - (a[2] * b[2])
+        };
+    };
+    auto details = [&client, &scene](const char* node_name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", node_name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload;
+    };
+    auto property = [&client](const int item_id, const char* name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_item_properties", json{{"item_id", item_id}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        for (const json& entry : result.payload.at("properties")) {
+            if (entry.value("name", "") == name) {
+                return entry;
+            }
+        }
+        return json{};
+    };
+    auto set_property = [&client](const int item_id, const char* name, const json& value) {
+        Mcp_client::Tool_result result = client.call_tool("set_item_property", json{{"item_id", item_id}, {"property", name}, {"value", value}});
+        EXPECT_FALSE(result.is_error) << name << ": " << result.text;
+    };
+
+    const json l2      = details("arm_joint_L_2");
+    const int  l2_id   = l2.value("id", 0);
+    const Quat l2_rest = as_quat(l2.at("local_transform").at("rotation_xyzw"));
+
+    // Every IK limit of arm_joint_L_2 closed to zero: the constrained solve
+    // holds it exactly on its limits frame.
+    for (const char* name : {"Ik.limit_x", "Ik.limit_y", "Ik.limit_z"}) {
+        set_property(l2_id, name, true);
+    }
+    set_property(l2_id, "Ik.limit_min", "0 0 0");
+    set_property(l2_id, "Ik.limit_max", "0 0 0");
+
+    // A rest rotation 25 degrees about the bone's own X away from the bind pose.
+    const Quat turn{0.2164396f, 0.0f, 0.0f, 0.9762960f};
+    const Quat rest = multiply(l2_rest, turn);
+    std::ostringstream rest_text;
+    rest_text.precision(9);
+    rest_text << rest[0] << " " << rest[1] << " " << rest[2] << " " << rest[3];
+    set_property(l2_id, "Rig.rest_rotation", rest_text.str());
+    advance_frames(client, 2);
+
+    const json ik_rest = property(l2_id, "Ik.rest_rotation");
+    ASSERT_TRUE(ik_rest.is_object());
+    EXPECT_EQ(ik_rest.value("source", ""), "default") << "Ik.rest_rotation follows its default";
+    EXPECT_LT(angle_deg(parse_quat(ik_rest.value("value", "")), rest), 0.05f) << "Ik.rest_rotation is Rig.rest_rotation";
+
+    // The drag starts on the new rest: the solve never teleports a joint
+    // into its limits (the region is extended to hold the drag-start pose),
+    // so a joint starting on the limits frame is held there, while a limits
+    // frame on the bind pose would leave it room to turn back toward it.
+    Mcp_client::Tool_result placed = client.call_tool(
+        "set_node_transform",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_2"}, {"space", "local"}, {"rotation_xyzw", {rest[0], rest[1], rest[2], rest[3]}}}
+    );
+    ASSERT_FALSE(placed.is_error) << placed.text;
+    advance_frames(client, 2);
+
+    const json l3 = details("arm_joint_L_3").at("world_transform").at("translation");
+    Mcp_client::Tool_result dragged = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"},
+             {"target", {l3[0].get<float>() + 0.1f, l3[1].get<float>() + 0.1f, l3[2].get<float>() - 0.05f}}}
+    );
+    ASSERT_FALSE(dragged.is_error) << dragged.text;
+    advance_frames(client, 4);
+    const Quat l2_after = as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw"));
+    EXPECT_LT(angle_deg(l2_after, rest), 0.5f) << "the drag holds the joint on the Rig.rest_rotation limits frame";
+    EXPECT_GT(angle_deg(l2_after, l2_rest), 20.0f) << "not on the bind pose";
+
+    // Control: with the Rig value cleared the limits frame is the bind pose
+    // again, and the same drag from the same start turns the joint.
+    client.call_tool("undo", json::object()); // the drag
+    advance_frames(client, 4);
+    Mcp_client::Tool_result unset = client.call_tool("set_item_property", json{{"item_id", l2_id}, {"property", "Rig.rest_rotation"}, {"value", nullptr}});
+    ASSERT_FALSE(unset.is_error) << unset.text;
+    advance_frames(client, 2);
+    EXPECT_LT(angle_deg(parse_quat(property(l2_id, "Ik.rest_rotation").value("value", "")), l2_rest), 0.05f) << "Ik.rest_rotation follows back to the bind pose";
+    ASSERT_LT(angle_deg(as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw")), rest), 0.05f);
+    Mcp_client::Tool_result control = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"},
+             {"target", {l3[0].get<float>() + 0.1f, l3[1].get<float>() + 0.1f, l3[2].get<float>() - 0.05f}}}
+    );
+    ASSERT_FALSE(control.is_error) << control.text;
+    advance_frames(client, 4);
+    EXPECT_GT(angle_deg(as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw")), rest), 1.0f)
+        << "on the bind-pose limits frame the joint is not held at the former rest";
+
+    // Clear and Paste Pose stop an animation playing on the bones.
+    const std::string animation = first_animation_name(client, scene);
+    ASSERT_FALSE(animation.empty()) << "test glTF carries no animation";
+    auto play = [&client, &scene, &animation]() -> bool {
+        Mcp_client::Tool_result result = client.call_tool(
+            "animation_playback", json{{"animation", animation}, {"scene_name", scene}, {"action", "play"}}
+        );
+        advance_frames(client, 3);
+        return !result.is_error && result.payload.value("playing", false);
+    };
+    auto playing = [&client]() -> bool {
+        return client.call_tool("animation_playback", json::object()).payload.value("playing", false);
+    };
+
+    ASSERT_TRUE(play());
+    Mcp_client::Tool_result cleared = client.call_tool(
+        "clear_pose", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1"}}, {"channels", "rotation"}}
+    );
+    ASSERT_FALSE(cleared.is_error) << cleared.text;
+    advance_frames(client, 2);
+    EXPECT_FALSE(playing()) << "clear_pose stops the animation playing on the bone";
+
+    ASSERT_TRUE(play());
+    Mcp_client::Tool_result copied = client.call_tool("copy_pose", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1"}}});
+    ASSERT_FALSE(copied.is_error) << copied.text;
+    Mcp_client::Tool_result pasted = client.call_tool(
+        "paste_pose", json{{"scene_name", scene}, {"skeleton", "torso_joint_1"}, {"pose", copied.payload.at("pose")}, {"mode", "normal"}}
+    );
+    ASSERT_FALSE(pasted.is_error) << pasted.text;
+    advance_frames(client, 2);
+    EXPECT_FALSE(playing()) << "paste_pose stops the animation playing on the skeleton";
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

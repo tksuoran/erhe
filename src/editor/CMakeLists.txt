@@ -503,6 +503,8 @@ erhe_target_sources_grouped(
     rig/bone_hierarchy.hpp
     rig/bone_naming.cpp
     rig/bone_naming.hpp
+    rig/bone_pose.cpp
+    rig/bone_pose.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
@@ -552,6 +554,8 @@ erhe_target_sources_grouped(
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp
+    scene/rig_properties.cpp
+    scene/rig_properties.hpp
     scene/make_mesh_config.hpp
     scene/scene_builder.cpp
     scene/scene_commit_queue.cpp
@@ -655,6 +659,8 @@ erhe_target_sources_grouped(
     tools/weight_paint_tool.hpp
     transform/handle_enums.cpp
     transform/handle_enums.hpp
+    transform/channel_locks.cpp
+    transform/channel_locks.hpp
     transform/handle_visualizations.cpp
     transform/handle_visualizations.hpp
     transform/mesh_component_extrude.cpp

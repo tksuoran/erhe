@@ -5,10 +5,11 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <functional>
 #include <memory>
 
 namespace erhe        { class Item_host; }
-namespace erhe::scene { class Animation; }
+namespace erhe::scene { class Animation; class Xformable; using Node = Xformable; }
 
 namespace editor {
 
@@ -46,6 +47,13 @@ public:
     // (doc/erhe/property_system.md D5), so each target holds the transform it
     // authored again.
     void stop ();
+
+    // stop() when the active animation has a channel targeting a node
+    // `is_affected` accepts. What an authored-pose edit (Reset Bones to Bind
+    // Pose, Clear, Paste Pose) calls first: the animated layer would hide the
+    // transforms it writes, and after the stop the transforms it reads are the
+    // authored ones. Returns true when it stopped playback.
+    auto stop_if_targeting(const std::function<bool(const erhe::scene::Node&)>& is_affected) -> bool;
 
     // Seek to an absolute animation time (clamped to [start, end]) and apply.
     void seek(float time);

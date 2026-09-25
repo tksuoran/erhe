@@ -866,36 +866,18 @@ auto Scene_commands::reset_bones_to_bind_pose(const std::shared_ptr<erhe::scene:
         roots.push_back(clicked_node);
     }
 
-    // Every bone of the subtrees, parents before children (pre-order), with
-    // the skin that lists it. Deduplicated: selected roots can overlap.
-    class Bone_entry
-    {
-    public:
-        std::shared_ptr<erhe::scene::Node> node;
-        const erhe::scene::Skin*           skin{nullptr};
-        std::size_t                        joint_index{0};
-    };
-    std::vector<Bone_entry>                      bones;
-    std::unordered_set<const erhe::scene::Node*> visited;
+    // Every bone of the subtrees, parents before children (pre-order).
+    // Deduplicated: selected roots can overlap.
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones;
+    std::unordered_set<const erhe::scene::Node*>    visited;
     const std::function<void(const std::shared_ptr<erhe::scene::Node>&)> visit =
         [&](const std::shared_ptr<erhe::scene::Node>& node)
         {
             if (!visited.insert(node.get()).second) {
                 return;
             }
-            const erhe::scene::Scene* const scene = node->get_scene();
-            if (erhe::scene::is_bone(node.get()) && (scene != nullptr)) {
-                for (const std::shared_ptr<erhe::scene::Skin>& skin : scene->get_skins()) {
-                    if (!skin) {
-                        continue;
-                    }
-                    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
-                    const auto i = std::find(joints.begin(), joints.end(), node);
-                    if (i != joints.end()) {
-                        bones.push_back(Bone_entry{.node = node, .skin = skin.get(), .joint_index = static_cast<std::size_t>(i - joints.begin())});
-                        break;
-                    }
-                }
+            if (erhe::scene::is_bone(node.get())) {
+                bones.push_back(node);
             }
             for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
                 const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
@@ -913,96 +895,55 @@ auto Scene_commands::reset_bones_to_bind_pose(const std::shared_ptr<erhe::scene:
 
     // An animation playing on the bones writes their animated layer
     // (doc/erhe/property_system.md D5), which would hide the reset authored
-    // transforms: stop it first, so the current worlds read below are the
-    // authored ones too.
-    Animation_player* const player = m_context.animation_player;
-    if ((player != nullptr) && player->get_animation()) {
-        for (const erhe::scene::Animation_channel& channel : player->get_animation()->channels) {
-            const std::shared_ptr<erhe::scene::Node> target = erhe::scene::get_target_node(channel);
-            if (target && visited.contains(target.get())) {
-                player->stop();
-                break;
-            }
-        }
+    // transforms: stop it first, so the current worlds read below (a skin
+    // root's parent, the skinned mesh) are the authored ones too.
+    if (m_context.animation_player != nullptr) {
+        static_cast<void>(m_context.animation_player->stop_if_targeting(
+            [&visited](const erhe::scene::Node& node) { return visited.contains(&node); }
+        ));
     }
 
-    // glTF inverse bind matrices are relative to the skinned mesh node: at
-    // the bind pose world_from_joint = world_from_mesh * inverse(IBM) (erhe
-    // skinning itself ignores the mesh node). Anchoring there keeps the reset
-    // mesh where its mesh node is; a skin no mesh uses anchors at the world.
-    std::unordered_map<const erhe::scene::Skin*, glm::mat4> world_from_mesh_by_skin;
-    const auto get_world_from_mesh = [&world_from_mesh_by_skin](const erhe::scene::Skin* const skin, const erhe::scene::Scene& scene) -> glm::mat4 {
-        const auto i = world_from_mesh_by_skin.find(skin);
-        if (i != world_from_mesh_by_skin.end()) {
-            return i->second;
-        }
-        glm::mat4 world_from_mesh{1.0f};
-        bool      found = false;
-        for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene.get_mesh_layers()) {
-            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
-                if (mesh && (mesh->skin.get() == skin)) {
-                    world_from_mesh = mesh->world_from_node();
-                    found = true;
-                    break;
-                }
-            }
-            if (found) {
-                break;
-            }
-        }
-        world_from_mesh_by_skin.emplace(skin, world_from_mesh);
-        return world_from_mesh;
-    };
-
-    // World transform each node has once the bones sit on their bind pose:
-    // a reset bone from its inverse bind matrix, any other node carried by
-    // its (possibly reset) parent with its own local transform.
-    std::unordered_map<const erhe::scene::Node*, glm::mat4> bind_world_from_bone;
-    for (const Bone_entry& bone : bones) {
-        const erhe::scene::Skin_data& skin_data       = bone.skin->skin_data;
-        const glm::mat4               joint_from_bind = (bone.joint_index < skin_data.inverse_bind_matrices.size())
-            ? skin_data.inverse_bind_matrices[bone.joint_index]
-            : glm::mat4{1.0f};
-        bind_world_from_bone.emplace(
-            bone.node.get(),
-            get_world_from_mesh(bone.skin, *bone.node->get_scene()) * glm::inverse(joint_from_bind)
-        );
-    }
-    const std::function<glm::mat4(const erhe::scene::Node&)> new_world_from_node =
-        [&](const erhe::scene::Node& node) -> glm::mat4
-        {
-            const auto i = bind_world_from_bone.find(&node);
-            if (i != bind_world_from_bone.end()) {
-                return i->second;
-            }
-            const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
-            if (!parent) {
-                return node.world_from_node();
-            }
-            return new_world_from_node(*parent) * node.parent_from_node();
-        };
-
+    // Each bone's local transform in the bind pose, from the skin's inverse
+    // bind matrices (erhe::scene::get_bind_pose_parent_from_node - the value
+    // the Rig.rest_* properties default to): relative to the parent joint's
+    // bind frame, a skin root anchored at the world transform of a mesh using
+    // that skin, so the reset mesh stays where its mesh node is.
     Compound_operation::Parameters compound_parameters;
-    for (const Bone_entry& bone : bones) {
-        const std::shared_ptr<erhe::scene::Node> parent            = bone.node->get_parent_node();
-        const glm::mat4                          world_from_parent = parent ? new_world_from_node(*parent) : glm::mat4{1.0f};
-        const glm::mat4                          parent_from_node  = glm::inverse(world_from_parent) * new_world_from_node(*bone.node);
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const std::optional<glm::mat4> parent_from_node = erhe::scene::get_bind_pose_parent_from_node(*bone);
+        if (!parent_from_node.has_value()) {
+            continue; // a bone no skin lists has no bind pose
+        }
         compound_parameters.operations.push_back(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Parameters{
-                    .node                    = bone.node,
-                    .parent_from_node_before = bone.node->parent_from_node_transform(),
-                    .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_node},
-                    .xform_op_stack_before   = bone.node->copy_xform_op_stack(),
+                    .node                    = bone,
+                    .parent_from_node_before = bone->parent_from_node_transform(),
+                    .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_node.value()},
+                    .xform_op_stack_before   = bone->copy_xform_op_stack(),
                     .time_duration           = 0.0f
                 }
             )
         );
     }
+    if (compound_parameters.operations.empty()) {
+        return 0;
+    }
+    const std::size_t reset_count = compound_parameters.operations.size();
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_parameters))
     );
-    return bones.size();
+    return reset_count;
+}
+
+void Scene_commands::set_pose_buffer(Bone_pose pose)
+{
+    m_pose_buffer = std::move(pose);
+}
+
+auto Scene_commands::get_pose_buffer() const -> const Bone_pose&
+{
+    return m_pose_buffer;
 }
 
 auto Scene_commands::create_new_light(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Light>

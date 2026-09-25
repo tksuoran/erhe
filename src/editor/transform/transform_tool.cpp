@@ -1,4 +1,5 @@
 ﻿#include "transform/transform_tool.hpp"
+#include "transform/channel_locks.hpp"
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
@@ -749,66 +750,11 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 // this too, so programmatic edits cannot bypass the locks.
 void enforce_channel_locks(erhe::scene::Node& node, const erhe::scene::Trs_transform& parent_from_node_before)
 {
-    using namespace erhe::utility;
-    using Item_flags = erhe::Item_flags;
-    const uint64_t flags = node.get_flag_bits();
-    const uint64_t locks = flags & Item_flags::lock_channel_mask;
+    const uint64_t locks = node.get_flag_bits() & erhe::Item_flags::lock_channel_mask;
     if (locks == 0) {
         return;
     }
-    erhe::scene::Trs_transform parent_from_node = node.parent_from_node_transform();
-    if ((locks & Item_flags::lock_translation_mask) != 0) {
-        glm::vec3       translation = parent_from_node.get_translation();
-        const glm::vec3 before      = parent_from_node_before.get_translation();
-        if (test_bit_set(locks, Item_flags::lock_translation_x)) { translation.x = before.x; }
-        if (test_bit_set(locks, Item_flags::lock_translation_y)) { translation.y = before.y; }
-        if (test_bit_set(locks, Item_flags::lock_translation_z)) { translation.z = before.z; }
-        parent_from_node.set_translation(translation);
-    }
-    if ((locks & Item_flags::lock_rotation_mask) != 0) {
-        // Any 3-D rotation has two Euler XYZ representations: (x, y, z) and
-        // the alternate branch (x + pi, pi - y, z + pi). glm::eulerAngles
-        // returns whichever is canonical, which can jump branches as the
-        // rotation crosses ~90 degrees - masking components across two
-        // independent decompositions would then snap the node to a wildly
-        // wrong orientation. Pick the branch of the NEW rotation closest to
-        // the reference decomposition before masking, so the locked
-        // component compares within one consistent branch.
-        const auto wrap_angle = [](float angle) -> float {
-            while (angle >  glm::pi<float>()) { angle -= glm::two_pi<float>(); }
-            while (angle < -glm::pi<float>()) { angle += glm::two_pi<float>(); }
-            return angle;
-        };
-        const glm::vec3 before = glm::eulerAngles(parent_from_node_before.get_rotation());
-        glm::vec3       euler  = glm::eulerAngles(parent_from_node.get_rotation());
-        const glm::vec3 alternate{
-            wrap_angle(euler.x + glm::pi<float>()),
-            wrap_angle(glm::pi<float>() - euler.y),
-            wrap_angle(euler.z + glm::pi<float>())
-        };
-        const auto branch_distance = [&](const glm::vec3& e) -> float {
-            return
-                std::abs(wrap_angle(e.x - before.x)) +
-                std::abs(wrap_angle(e.y - before.y)) +
-                std::abs(wrap_angle(e.z - before.z));
-        };
-        if (branch_distance(alternate) < branch_distance(euler)) {
-            euler = alternate;
-        }
-        if (test_bit_set(locks, Item_flags::lock_rotation_x)) { euler.x = before.x; }
-        if (test_bit_set(locks, Item_flags::lock_rotation_y)) { euler.y = before.y; }
-        if (test_bit_set(locks, Item_flags::lock_rotation_z)) { euler.z = before.z; }
-        parent_from_node.set_rotation(glm::quat{euler});
-    }
-    if ((locks & Item_flags::lock_scale_mask) != 0) {
-        glm::vec3       scale  = parent_from_node.get_scale();
-        const glm::vec3 before = parent_from_node_before.get_scale();
-        if (test_bit_set(locks, Item_flags::lock_scale_x)) { scale.x = before.x; }
-        if (test_bit_set(locks, Item_flags::lock_scale_y)) { scale.y = before.y; }
-        if (test_bit_set(locks, Item_flags::lock_scale_z)) { scale.z = before.z; }
-        parent_from_node.set_scale(scale);
-    }
-    node.set_parent_from_node(parent_from_node);
+    node.set_parent_from_node(apply_channel_locks(parent_from_node_before, node.parent_from_node_transform(), locks));
 }
 
 void Transform_tool::adjust(const mat4& updated_world_from_anchor)

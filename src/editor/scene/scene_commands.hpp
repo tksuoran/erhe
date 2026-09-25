@@ -6,6 +6,7 @@
 #include "scene/make_mesh_config.hpp"
 
 #include "app_message.hpp"
+#include "rig/bone_pose.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_item/scope.hpp"
@@ -282,6 +283,12 @@ public:
     // (its animated layer would hide the result). One undoable compound
     // operation; returns the number of bones reset.
     auto reset_bones_to_bind_pose(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
+    // The editor's pose buffer (doc/plans/rigging/skeleton_editing.md R15):
+    // what the Hierarchy menu's Copy Pose recorded and its Paste Pose /
+    // Paste Pose Flipped write, separate from the node clipboard. Bone names
+    // and local TRS only. The MCP pose tools never read it.
+    void set_pose_buffer(Bone_pose pose);
+    [[nodiscard]] auto get_pose_buffer() const -> const Bone_pose&;
     auto create_new_light       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
     // An Xform holding a Rendertarget_mesh showing a viewport of the selected
     // camera; returns empty when no camera is selected.
@@ -366,6 +373,8 @@ private:
     Add_curved_shapes_command       m_add_curved_shapes_command;
     Add_chain_command               m_add_chain_command;
     Add_toruses_command             m_add_toruses_command;
+
+    Bone_pose                       m_pose_buffer;
 
     // TODO Figure out who should have ownership of these. The views are
     // declared before the hosts so that, at destruction, the hosts (which hold

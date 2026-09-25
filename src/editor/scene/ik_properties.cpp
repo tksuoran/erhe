@@ -1,4 +1,5 @@
 #include "scene/ik_properties.hpp"
+#include "scene/rig_properties.hpp"
 
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/node.hpp"
@@ -33,21 +34,6 @@ constexpr std::string_view c_ik_group = "IK";
 {
     const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
     return (node != nullptr) && erhe::scene::is_bone(node);
-}
-
-// P5: the bind-pose local rotation of a joint whose parent is a joint of the
-// same skin, identity otherwise. The object is not always a Node - a Style
-// holds every class's properties (D30) - so the cast is checked.
-[[nodiscard]] auto compute_rest_rotation(const Dependency_object& object) -> Property_value
-{
-    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
-    if (node != nullptr) {
-        const std::optional<glm::quat> bind_pose = erhe::scene::get_bind_pose_local_rotation(*node);
-        if (bind_pose.has_value()) {
-            return bind_pose.value();
-        }
-    }
-    return glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
 }
 
 constexpr const char* c_lock_tooltip =
@@ -121,8 +107,12 @@ const Property<glm::quat> Ik::rest_rotation_property = Property<glm::quat>::regi
     "rest_rotation", Ik::property_owner_type(), erhe::scene::Node::property_owner_type(),
     Property_metadata{
         .default_value   = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
-        .ui              = Property_ui{.group = c_ik_group, .tooltip = "Reference orientation that defines the zero angle of the limits (parent-from-bone rotation); unset, the bone's bind-pose local rotation", .label = "Rest Rotation", .visible_when = is_bone_node},
-        .compute_default = compute_rest_rotation
+        .ui              = Property_ui{.group = c_ik_group, .tooltip = "Reference orientation that defines the zero angle of the limits (parent-from-bone rotation); unset, the bone's rest rotation (Rig Rest Rotation)", .label = "Rest Rotation", .visible_when = is_bone_node},
+        // P5: the rotation of the bone's rest transform
+        // (doc/plans/rigging/skeleton_editing.md R2), so the limits frame and
+        // the rest pose are one thing; a change of Rig.rest_rotation notifies
+        // this property where it follows its default (D31 default_from).
+        .default_from    = Rig::rest_rotation_property().get_ptr()
     }
 );
 // P1: the weak reference kind, so a pole is never a strong node-to-node edge.

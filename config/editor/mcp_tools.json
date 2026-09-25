@@ -1439,6 +1439,155 @@
     "name": "flip_bone_names"
   },
   {
+    "description": "Clear Location / Rotation / Scale / All (doc/plans/rigging/skeleton_editing.md R14): set the chosen TRS channels of the named bones back to their rest transform (the Rig.rest_translation / rest_rotation / rest_scale properties, which default to the skin's bind pose) as ONE undoable operation, executed on the next editor frame. Channels locked by the lock_translation_* / lock_rotation_* / lock_scale_* flags (per axis, as the Transform tool enforces them) keep their values; bones with lock_edit are left alone and listed in 'sealed'. The result lists the bones that change ('changed'; unchanged bones are not written) and whether an operation was queued. Acts on the named bones only, never on the current selection.",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to clear: bone node names (the first bone node of that name) or node ids. Every entry must name a bone",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "channels": {
+          "description": "'all', or a non-empty array of 'location', 'rotation', 'scale' (the channels to clear)",
+          "items": {
+            "enum": [
+              "location",
+              "rotation",
+              "scale",
+              "all"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "string",
+            "array"
+          ]
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones",
+        "channels"
+      ],
+      "type": "object"
+    },
+    "name": "clear_pose"
+  },
+  {
+    "description": "Copy Pose (doc/plans/rigging/skeleton_editing.md R15): return the named bones' names and current local (parent-space) TRS as 'pose', an array of {name, translation [x, y, z], rotation_xyzw [x, y, z, w], scale [x, y, z]} in the order named - the argument paste_pose takes. Changes nothing, and does not touch the editor's pose buffer (the Hierarchy menu's Copy Pose).",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to copy: bone node names (the first bone node of that name) or node ids. Every entry must name a bone",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "copy_pose"
+  },
+  {
+    "description": "Paste Pose / Paste Pose Flipped (doc/plans/rigging/skeleton_editing.md R15): write a pose (copy_pose's 'pose' array) onto the skeleton the 'skeleton' bone is on, as ONE undoable operation executed on the next editor frame. mode 'normal' writes each entry's local TRS to the bone of the same name; 'flipped' writes it to the bone of the side-flipped name (arm_L_1 -> arm_R_1; a name without a side onto itself), mirrored across the X = 0 plane of the skeleton root's rest frame (the entry's change from its own bone's rest carried through the mirror of the parents' rest frames). Channel locks and lock_edit are respected as in clear_pose. Entries without a matching bone are listed in 'unmatched', not an error. Never reads the editor's pose buffer or the selection.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "'normal' (default) or 'flipped'",
+          "enum": [
+            "normal",
+            "flipped"
+          ],
+          "type": "string"
+        },
+        "pose": {
+          "description": "The pose: an array of {name, translation, rotation_xyzw, scale} as copy_pose returns it; omitted components default to identity",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Bone name",
+                "type": "string"
+              },
+              "rotation_xyzw": {
+                "description": "Local rotation quaternion [x, y, z, w]",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              },
+              "scale": {
+                "description": "Local scale [x, y, z]",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "translation": {
+                "description": "Local translation [x, y, z]",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "skeleton": {
+          "description": "Any bone of the target skeleton: a bone node name (the first bone node of that name) or node id",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "scene_name",
+        "skeleton",
+        "pose"
+      ],
+      "type": "object"
+    },
+    "name": "paste_pose"
+  },
+  {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {
