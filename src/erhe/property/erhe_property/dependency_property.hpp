@@ -83,6 +83,10 @@ public:
     // (WPF AddOwner).
     void add_owner(Owner_type owner_type, Property_metadata metadata);
 
+    // D31: the properties whose registration metadata names this one as
+    // default_from, in registration order.
+    [[nodiscard]] auto get_default_followers() const -> const std::vector<const Dependency_property*>& { return m_default_followers; }
+
 private:
     friend class Property_registry;
     Dependency_property(uint16_t index, Registration&& registration);
@@ -105,6 +109,7 @@ private:
     Validate_callback     m_validate;
     Property_metadata     m_default_metadata;
     std::vector<Override> m_overrides;
+    std::vector<const Dependency_property*> m_default_followers;
 };
 
 class Property_registry

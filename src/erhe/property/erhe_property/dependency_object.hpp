@@ -363,6 +363,11 @@ protected:
     void refresh_computed_default(const Dependency_property& property, const Property_value& old_value, Value_source old_source);
 
 private:
+    // The DEFAULT layer of a property on this object (D31): the effective
+    // value of metadata.default_from, else compute_default, else the
+    // registration-time default_value.
+    [[nodiscard]] auto get_default_layer_value(const Property_metadata& metadata) const -> Property_value;
+
     // Whether a read applies the animated layer (D5) or resolves the base
     // value below it.
     enum class Animated_layer : uint8_t {

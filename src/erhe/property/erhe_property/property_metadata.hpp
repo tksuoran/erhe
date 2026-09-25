@@ -185,10 +185,20 @@ public:
     // is what a reader without an object shows); `compute_default` is what
     // an object reads.
     Compute_default_callback      compute_default {};
+    // D31: bound when the default layer is the effective value of another
+    // property of the same object (Ik.rest_rotation defaults to
+    // Rig.rest_rotation). The source must be registered first and have the
+    // same type; exclusive with compute_default. A change of the source's
+    // effective value on an object notifies this property there too (as a
+    // default-layer change, only while the object's value comes from its
+    // default), so observers, expression dependents and property_changed
+    // follow the source without polling. Registration metadata only (not an
+    // override).
+    const Dependency_property*    default_from    {nullptr};
 
     [[nodiscard]] auto is_computed         () const -> bool { return static_cast<bool>(compute); }
     [[nodiscard]] auto is_computed_writable() const -> bool { return static_cast<bool>(compute_set); }
-    [[nodiscard]] auto has_computed_default() const -> bool { return static_cast<bool>(compute_default); }
+    [[nodiscard]] auto has_computed_default() const -> bool { return static_cast<bool>(compute_default) || (default_from != nullptr); }
 };
 
 } // namespace erhe::property

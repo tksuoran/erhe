@@ -184,7 +184,17 @@ auto Property_registry::register_property(Dependency_property::Registration&& re
         ERHE_FATAL("property '%s' is already registered for owner type %u (%s)", key.name.c_str(), static_cast<unsigned int>(key.owner_type), m_owner_types[key.owner_type].name.c_str());
     }
     const uint16_t index = static_cast<uint16_t>(m_properties.size());
+    const Dependency_property* const default_from = registration.metadata.default_from;
+    if (default_from != nullptr) {
+        // D31: the source is registered already and of the same type.
+        ERHE_VERIFY(default_from->get_index() < m_properties.size());
+        ERHE_VERIFY(default_from->get_type() == registration.type);
+        ERHE_VERIFY(!registration.metadata.compute_default);
+    }
     m_properties.push_back(std::unique_ptr<Dependency_property>{new Dependency_property{index, std::move(registration)}});
+    if (default_from != nullptr) {
+        m_properties[default_from->get_index()]->m_default_followers.push_back(m_properties.back().get());
+    }
     m_by_owner_and_name.emplace(key, index);
     if (m_by_owner.size() <= key.owner_type) {
         m_by_owner.resize(static_cast<std::size_t>(key.owner_type) + 1);

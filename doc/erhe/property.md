@@ -141,7 +141,11 @@ inventory (and the owner's design section when the design changed).
   protected `refresh_computed_default`, which notifies that object alone
   (a default is below every inherited layer, so no descendant moves with
   it). User: `erhe::Item_base::purpose_property`, whose default follows the
-  item's editor-only flag bits.
+  item's editor-only flag bits. A default that is another property of the
+  same object is declared with `Property_metadata::default_from` instead:
+  the default layer reads the source's effective value, and a change of the
+  source notifies the follower where its value comes from its default
+  (user: `Ik.rest_rotation` following `Rig.rest_rotation`).
 - **`Dependency_object`** - the per-object store: sparse vector of entries
   sorted by property index, binary-searched; an entry exists for a property
   with a local value, an expression or an animated value, and holds each of
@@ -180,7 +184,8 @@ inventory (and the owner's design section when the design changed).
 
 Effective value = coerced(base), base = animated > local > style >
 reference > inherited > default (the default being
-`Property_metadata::compute_default` for the object when that is bound,
+`Property_metadata::default_from`'s effective value or
+`Property_metadata::compute_default` for the object when one is bound,
 D31); a computed property (D26) bypasses all of it and reads its provider.
 The coerced value of a stored layer is kept in the entry and refreshed by
 `set_value`, `set_animated_value` and `coerce_value`; a property without a

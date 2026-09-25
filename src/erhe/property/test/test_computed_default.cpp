@@ -40,7 +40,47 @@ const Property<int> defaulted_mode = Property<int>::register_property(
     }
 );
 
+// D31 default_from: the default layer of "followed_mode" is the effective
+// value of "source_mode" on the same object.
+const Property<int> source_mode = Property<int>::register_property(
+    "source_mode", type_c(),
+    Property_metadata{.default_value = 2}
+);
+const Property<int> followed_mode = Property<int>::register_property(
+    "followed_mode", type_c(),
+    Property_metadata{.default_value = 0, .default_from = source_mode.get_ptr()}
+);
+
 } // namespace
+
+TEST(Computed_default, default_from_follows_the_source_and_notifies)
+{
+    Defaulted_object object{};
+    EXPECT_EQ(object.get_value(followed_mode), 2);
+    EXPECT_EQ(object.get_value_source(followed_mode.get()), Value_source::default_value);
+    EXPECT_EQ(object.get_default_value(followed_mode.get()), Property_value{2});
+
+    object.changes.clear();
+    object.set_value(source_mode, 9);
+    EXPECT_EQ(object.get_value(followed_mode), 9);
+    ASSERT_EQ(object.changes.size(), std::size_t{2});
+    EXPECT_EQ(object.changes[0].property_name, "source_mode");
+    EXPECT_EQ(object.changes[1].property_name, "followed_mode");
+    EXPECT_EQ(object.changes[1].old_value, Property_value{2});
+    EXPECT_EQ(object.changes[1].new_value, Property_value{9});
+    EXPECT_EQ(object.changes[1].new_source, Value_source::default_value);
+
+    // A local value of the follower shadows the source: no follower change.
+    object.set_value(followed_mode, 4);
+    object.changes.clear();
+    object.set_value(source_mode, 11);
+    ASSERT_EQ(object.changes.size(), std::size_t{1});
+    EXPECT_EQ(object.get_value(followed_mode), 4);
+
+    // Cleared, it follows again.
+    EXPECT_TRUE(object.clear_value(followed_mode.get()));
+    EXPECT_EQ(object.get_value(followed_mode), 11);
+}
 
 TEST(Computed_default, default_layer_is_per_object)
 {

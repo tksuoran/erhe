@@ -451,7 +451,7 @@ auto Dependency_object::get_effective_value_below_reference(const Dependency_pro
         }
     }
     out_source = Value_source::default_value;
-    value = metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
+    value = get_default_layer_value(metadata);
     return metadata.coerce ? metadata.coerce(*this, value) : value;
 }
 
@@ -607,7 +607,7 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
     out_source = Value_source::default_value;
     // D31: a per-object default is the bottom layer, so an inherited,
     // reference, style or local value still overrides it.
-    return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
+    return get_default_layer_value(metadata);
 }
 
 auto Dependency_object::get_effective_value(const Dependency_property& property, Value_source& out_source, const Animated_layer layer) const -> Property_value
@@ -984,6 +984,14 @@ void Dependency_object::coerce_value(const Dependency_property& property)
 auto Dependency_object::get_default_value(const Dependency_property& property) const -> Property_value
 {
     const Property_metadata& metadata = get_metadata(property);
+    return get_default_layer_value(metadata);
+}
+
+auto Dependency_object::get_default_layer_value(const Property_metadata& metadata) const -> Property_value
+{
+    if (metadata.default_from != nullptr) {
+        return get_value(*metadata.default_from);
+    }
     return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
 }
 
@@ -1459,6 +1467,22 @@ void Dependency_object::deliver(const Property_changed_args& args)
     invalidate_dependents(args.property);
     propagate_to_style_users(args);
     propagate_to_reference_users(args);
+
+    // D31 default_from: a property whose default layer is this one's
+    // effective value moved with it, where this object's value comes from
+    // that default.
+    for (const Dependency_property* const follower : args.property.get_default_followers()) {
+        const Property_metadata& follower_metadata = get_metadata(*follower);
+        if (follower_metadata.default_from != &args.property) {
+            continue;
+        }
+        if (get_value_source(*follower) != Value_source::default_value) {
+            continue;
+        }
+        const Property_value old_value = follower_metadata.coerce ? follower_metadata.coerce(*this, args.old_value) : args.old_value;
+        const Property_value new_value = follower_metadata.coerce ? follower_metadata.coerce(*this, args.new_value) : args.new_value;
+        notify_self(*follower, old_value, Value_source::default_value, new_value, Value_source::default_value);
+    }
 }
 
 void Dependency_object::propagate_to_descendants(
