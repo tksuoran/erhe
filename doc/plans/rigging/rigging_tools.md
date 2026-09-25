@@ -390,6 +390,9 @@ Collected from the survey; explicitly not scheduled:
 - Muscle/jiggle simulation, cloth-driven bones.
 - Sculpted corrective shape authoring (editing morph target geometry
   in-editor; Phase 7 only drives existing targets).
+- Set Rest intermittently records no operation in the automated pass
+  (finding F6 of `interactive_test_pass.md`): root cause (the button or the
+  injected click) not yet found; deferred.
 
 ## Suggested implementation order - summary
 

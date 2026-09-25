@@ -263,7 +263,7 @@ for a pole to aim.
   renderer's id-range table, which still named the closed scene's meshes.
 - **F5.** Stiffness is a normal IK row now (it was developer-only); the
   solver still ignores its value.
-- **F6.** Open, intermittent: in about one full automated run of five, the
+- **F6.** Future work (deferred; not queued): in about one full automated run of five, the
   Set Rest click of check 3.9 records no operation, and a second click right
   after does not either; three diagnostic runs of sections 1-3 did not
   reproduce it. Not yet known whether the button or the injected click is at
