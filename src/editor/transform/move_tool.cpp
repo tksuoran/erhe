@@ -67,6 +67,27 @@ void Move_tool::imgui(Property_editor& property_editor)
             );
         }
     });
+    p.add_entry("Mid-Chain Drag", [this]() {
+        Transform_tool_settings& settings = get_shared().settings;
+        const int current = static_cast<int>(settings.ik_drag_options.mid_chain_drag);
+        if (ImGui::BeginCombo("##", c_ik_mid_chain_drag_strings[current])) {
+            for (int i = 0, end = IM_ARRAYSIZE(c_ik_mid_chain_drag_strings); i < end; ++i) {
+                bool selected = (i == current);
+                if (ImGui::Selectable(c_ik_mid_chain_drag_strings[i], &selected, ImGuiSelectableFlags_None)) {
+                    settings.ik_drag_options.mid_chain_drag = static_cast<Ik_mid_chain_drag>(i);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "What dragging a bone in the middle of a chain does to the bones below it: "
+                "Rigid Children moves them rigidly with the dragged bone; "
+                "Pin Chain End keeps the chain's end bone where it was (the first bone below with no or several "
+                "bone children) and bends the bones between to reach it"
+            );
+        }
+    });
     p.add_entry("Solve From", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
         const int current = static_cast<int>(settings.ik_drag_options.solve_from);

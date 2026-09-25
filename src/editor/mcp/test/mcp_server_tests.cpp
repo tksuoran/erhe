@@ -2185,6 +2185,141 @@ TEST_F(Mcp_test, ik_drag_pole_alignment_ease_in)
     advance_frames(client, 4);
 }
 
+// doc/plans/rigging/ik_drag_options.md R21-R24, R31: mid_chain_drag is an
+// explicit argument, echoed, and refused before any joint moves when
+// unrecognized. Under pin_chain_end a drag of arm_joint_L_2 (whose only bone
+// child arm_joint_L_3 has no bone child, so the lower chain is L_2..L_3) along
+// positions that keep L_3 in reach leaves L_3's world position and rotation
+// where they were, and the one undo entry covers every moved joint, the lower
+// chain's included. Under rigid_children L_3 rides rigidly on L_2.
+TEST_F(Mcp_test, ik_drag_mid_chain_drag_pin_chain_end)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Vec  = std::array<float, 3>;
+    using Quat = std::array<float, 4>; // x, y, z, w
+    auto sub   = [](const Vec& a, const Vec& b) -> Vec { return Vec{a[0] - b[0], a[1] - b[1], a[2] - b[2]}; };
+    auto add   = [](const Vec& a, const Vec& b) -> Vec { return Vec{a[0] + b[0], a[1] + b[1], a[2] + b[2]}; };
+    auto scale = [](const Vec& a, const float s) -> Vec { return Vec{a[0] * s, a[1] * s, a[2] * s}; };
+    auto dot   = [](const Vec& a, const Vec& b) -> float { return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]); };
+    auto cross = [](const Vec& a, const Vec& b) -> Vec {
+        return Vec{(a[1] * b[2]) - (a[2] * b[1]), (a[2] * b[0]) - (a[0] * b[2]), (a[0] * b[1]) - (a[1] * b[0])};
+    };
+    auto norm      = [&dot](const Vec& a) -> float { return std::sqrt(dot(a, a)); };
+    auto normalize = [&norm, &scale](const Vec& a) -> Vec { return scale(a, 1.0f / norm(a)); };
+    auto as_json   = [](const Vec& p) -> json { return json::array({p[0], p[1], p[2]}); };
+    auto as_vec    = [](const json& p) -> Vec { return Vec{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()}; };
+    auto as_quat   = [](const json& q) -> Quat { return Quat{q[0].get<float>(), q[1].get<float>(), q[2].get<float>(), q[3].get<float>()}; };
+    // The angle between two rotations, in degrees.
+    auto angle_deg = [](const Quat& a, const Quat& b) -> float {
+        const float d = std::min(1.0f, std::abs((a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]) + (a[3] * b[3])));
+        return 2.0f * std::acos(d) * (180.0f / 3.14159265f);
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto details = [&client, &scene](const char* node_name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", node_name}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload;
+    };
+    auto drag = [&client, &scene, &as_json](const Vec& target, const json& extra) -> Mcp_client::Tool_result {
+        json args{{"scene_name", scene}, {"node_name", "arm_joint_L_2"}, {"target", as_json(target)}};
+        for (const auto& [key, value] : extra.items()) {
+            args[key] = value;
+        }
+        return client.call_tool("ik_drag", args);
+    };
+
+    // Drag-start state.
+    const json l1_start = details("arm_joint_L_1");
+    const json l2_start = details("arm_joint_L_2");
+    const json l3_start = details("arm_joint_L_3");
+    const Vec  l1       = as_vec(l1_start.at("world_transform").at("translation"));
+    const Vec  l2       = as_vec(l2_start.at("world_transform").at("translation"));
+    const Vec  l3       = as_vec(l3_start.at("world_transform").at("translation"));
+    const Quat l3_world_rotation = as_quat(l3_start.at("world_transform").at("rotation_xyzw"));
+    const Quat l2_local_rotation = as_quat(l2_start.at("local_transform").at("rotation_xyzw"));
+    const Quat l3_local_rotation = as_quat(l3_start.at("local_transform").at("rotation_xyzw"));
+
+    // A target that keeps L_3 in reach: L_2's start position rotated 30
+    // degrees about the L_1-to-L_3 line keeps |L_2 - L_1| and |L_2 - L_3|
+    // (Rodrigues' rotation of the offset from the line's foot point).
+    const Vec   axis   = normalize(sub(l3, l1));
+    const Vec   offset = sub(l2, l1);
+    const Vec   along  = scale(axis, dot(offset, axis));
+    const Vec   radial = sub(offset, along);
+    ASSERT_GT(norm(radial), 1.0e-3f) << "arm_joint_L_2 must not lie on the L_1-to-L_3 line";
+    const float angle  = 30.0f * (3.14159265f / 180.0f);
+    const Vec   target = add(add(l1, along), add(scale(radial, std::cos(angle)), scale(cross(axis, radial), std::sin(angle))));
+
+    // pin_chain_end: echoed, the lower chain reported, L_3 pinned.
+    advance_frames(client, 4);
+    std::size_t undo_before = undo_depth();
+    Mcp_client::Tool_result pinned = drag(target, json{{"mid_chain_drag", "pin_chain_end"}});
+    ASSERT_FALSE(pinned.is_error) << pinned.text;
+    EXPECT_EQ(pinned.payload.at("mid_chain_drag").get<std::string>(), "pin_chain_end");
+    EXPECT_TRUE(pinned.payload.at("recorded").get<bool>());
+    const json& lower_joints = pinned.payload.at("lower_joints");
+    ASSERT_EQ(lower_joints.size(), std::size_t{2}) << "the lower chain is arm_joint_L_2 .. arm_joint_L_3";
+    EXPECT_EQ(lower_joints[0].at("name").get<std::string>(), "arm_joint_L_2");
+    EXPECT_EQ(lower_joints[1].at("name").get<std::string>(), "arm_joint_L_3");
+    EXPECT_LT(norm(sub(as_vec(pinned.payload.at("joints").back().at("position")), target)), 1.0e-2f)
+        << "the effector reaches the target";
+    advance_frames(client, 4);
+    const json l2_pinned = details("arm_joint_L_2");
+    const json l3_pinned = details("arm_joint_L_3");
+    EXPECT_LT(norm(sub(as_vec(l3_pinned.at("world_transform").at("translation")), l3)), 1.0e-3f)
+        << "the end joint keeps its drag-start world position";
+    EXPECT_LT(angle_deg(as_quat(l3_pinned.at("world_transform").at("rotation_xyzw")), l3_world_rotation), 0.05f)
+        << "the end joint keeps its drag-start world rotation";
+    EXPECT_GT(angle_deg(as_quat(l3_pinned.at("local_transform").at("rotation_xyzw")), l3_local_rotation), 1.0f)
+        << "the end joint's local rotation changed, so the undo entry must cover it";
+    EXPECT_GT(angle_deg(as_quat(l2_pinned.at("local_transform").at("rotation_xyzw")), l2_local_rotation), 1.0f)
+        << "the effector turned to aim at the end joint";
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "one ik_drag records exactly one undo entry";
+
+    // Undo restores every moved joint, the lower chain's included.
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_LT(angle_deg(as_quat(details("arm_joint_L_2").at("local_transform").at("rotation_xyzw")), l2_local_rotation), 0.01f);
+    EXPECT_LT(angle_deg(as_quat(details("arm_joint_L_3").at("local_transform").at("rotation_xyzw")), l3_local_rotation), 0.01f);
+    EXPECT_LT(norm(sub(as_vec(details("arm_joint_L_2").at("world_transform").at("translation")), l2)), 1.0e-4f);
+
+    // rigid_children (the default): no lower chain, L_3's local transform
+    // unchanged, so it follows L_2.
+    undo_before = undo_depth();
+    Mcp_client::Tool_result rigid = drag(target, json::object());
+    ASSERT_FALSE(rigid.is_error) << rigid.text;
+    EXPECT_EQ(rigid.payload.at("mid_chain_drag").get<std::string>(), "rigid_children") << "the mid_chain_drag default";
+    EXPECT_TRUE(rigid.payload.at("lower_joints").empty());
+    advance_frames(client, 4);
+    const json l3_rigid = details("arm_joint_L_3");
+    EXPECT_LT(angle_deg(as_quat(l3_rigid.at("local_transform").at("rotation_xyzw")), l3_local_rotation), 0.01f)
+        << "under rigid_children the bones below the effector keep their local transforms";
+    EXPECT_GT(norm(sub(as_vec(l3_rigid.at("world_transform").at("translation")), l3)), 1.0e-3f)
+        << "under rigid_children the end joint moves with the effector";
+    EXPECT_EQ(undo_depth(), undo_before + 1);
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    // Refusal changes nothing.
+    undo_before = undo_depth();
+    Mcp_client::Tool_result refused = drag(target, json{{"mid_chain_drag", "pinned"}});
+    EXPECT_TRUE(refused.is_error) << "an unrecognized mid_chain_drag must be refused";
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before) << "refused calls record nothing";
+    EXPECT_LT(norm(sub(as_vec(details("arm_joint_L_2").at("world_transform").at("translation")), l2)), 1.0e-4f)
+        << "refused calls move no joint";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
 // The producer side, independent of whether any subscriber happened to hold
 // the content: the undo must announce the removed items.
 TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)

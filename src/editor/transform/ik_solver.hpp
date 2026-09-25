@@ -192,6 +192,9 @@ class Ik_drag_line_input
 {
 public:
     std::span<const glm::vec3> joint_positions;      // root .. effector
+    // Effector .. end joint of a Pin Chain End drag's lower chain
+    // (ik_drag_options.md R24); empty (or a single position) without one.
+    std::span<const glm::vec3> lower_joint_positions;
     std::optional<glm::vec3>   pole_position;        // unset = unpoled drag
     float                      marker_scale{0.05f};  // marker arm / chain reach
     glm::vec4                  chain_color{0.2f, 0.9f, 1.0f, 1.0f};
@@ -203,9 +206,11 @@ public:
 // first. Produces one line per chain segment through joint_positions, a
 // three-axis cross at the root and at the effector, and - when
 // pole_position is set - a line from the pole to the root plus a cross at
-// the pole. Marker arms are marker_scale times the chain's reach (the sum of
-// its segment lengths), so they scale with the rig rather than with the
-// scene's units. Fewer than two joints, or a chain of zero reach, leaves the
+// the pole. A lower chain of at least two positions continues the polyline
+// from the effector to the end joint and puts a cross in the root color at
+// the end joint, which is held fixed the way the root is. Marker arms are
+// marker_scale times the reach of the drawn polyline (the sum of its segment
+// lengths), so they scale with the rig rather than with the scene's units. Fewer than two joints, or a chain of zero reach, leaves the
 // corresponding lines out; nothing else is drawn and no scene is touched.
 void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& buffer);
 

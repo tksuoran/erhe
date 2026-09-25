@@ -1873,6 +1873,12 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
     } else if (orientation_string != "keep_world") {
         return error_result("Invalid effector_orientation: " + orientation_string + " (keep_world, follow_last_segment)");
     }
+    const std::string mid_chain_drag_string = args.value("mid_chain_drag", "rigid_children");
+    if (mid_chain_drag_string == "pin_chain_end") {
+        options.mid_chain_drag = Ik_mid_chain_drag::pin_chain_end;
+    } else if (mid_chain_drag_string != "rigid_children") {
+        return error_result("Invalid mid_chain_drag: " + mid_chain_drag_string + " (rigid_children, pin_chain_end)");
+    }
     const std::string solve_from_string = args.value("solve_from", "drag_start");
     if (solve_from_string == "previous_step") {
         options.solve_from = Ik_solve_from::previous_step;
@@ -1914,17 +1920,25 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
     }
     const glm::vec3 target = targets.back();
 
-    json joints = json::array();
-    for (const std::shared_ptr<erhe::scene::Node>& joint : drag.get_joints()) {
-        const glm::vec3 position = glm::vec3{joint->position_in_world()};
-        joints.push_back(
-            json{
-                {"id",       joint->get_id()},
-                {"name",     joint->get_name()},
-                {"position", {position.x, position.y, position.z}}
-            }
-        );
-    }
+    auto joints_to_json = [](const std::vector<std::shared_ptr<erhe::scene::Node>>& chain_joints) -> json {
+        json out = json::array();
+        for (const std::shared_ptr<erhe::scene::Node>& joint : chain_joints) {
+            const glm::vec3 position = glm::vec3{joint->position_in_world()};
+            out.push_back(
+                json{
+                    {"id",       joint->get_id()},
+                    {"name",     joint->get_name()},
+                    {"position", {position.x, position.y, position.z}}
+                }
+            );
+        }
+        return out;
+    };
+    // joints: the upper chain, root .. effector; lower_joints: under
+    // pin_chain_end the lower chain, effector .. end joint (empty without one,
+    // doc/plans/rigging/ik_drag_options.md R21).
+    const json joints       = joints_to_json(drag.get_upper_joints());
+    const json lower_joints = joints_to_json(drag.get_lower_joints());
 
     const std::shared_ptr<Operation> operation = drag.make_transform_operation();
     if (operation) {
@@ -1937,9 +1951,11 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         {"effector_name", effector->get_name()},
         {"target",        {target.x, target.y, target.z}},
         {"joints",        joints},
+        {"lower_joints",  lower_joints},
         {"pole",          nullptr},
         {"pole_angle",    drag.has_pole() ? drag.get_pole_angle() : 0.0f},
         {"effector_orientation", orientation_string},
+        {"mid_chain_drag", mid_chain_drag_string},
         {"solve_from",    solve_from_string},
         {"pole_alignment",     pole_alignment_string},
         {"pole_ease_distance", options.pole_ease_distance},

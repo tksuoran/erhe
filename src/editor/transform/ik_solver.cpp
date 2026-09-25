@@ -508,10 +508,20 @@ void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& b
         reach += distance(positions[i - 1], positions[i]);
         buffer.path_lines.push_back(Ik_drag_line{.p0 = positions[i - 1], .p1 = positions[i], .color = input.chain_color});
     }
+    const std::span<const glm::vec3>& lower_positions = input.lower_joint_positions;
+    const std::size_t                 lower_count     = lower_positions.size();
+    for (std::size_t i = 1; i < lower_count; ++i) {
+        reach += distance(lower_positions[i - 1], lower_positions[i]);
+        buffer.path_lines.push_back(Ik_drag_line{.p0 = lower_positions[i - 1], .p1 = lower_positions[i], .color = input.chain_color});
+    }
 
     const float arm = reach * input.marker_scale;
     add_ik_drag_marker(buffer.marker_lines, positions[0],               arm, input.root_color);
     add_ik_drag_marker(buffer.marker_lines, positions[joint_count - 1], arm, input.chain_color);
+    if (lower_count >= 2) {
+        // The pinned end joint is held fixed the way the root is (R24).
+        add_ik_drag_marker(buffer.marker_lines, lower_positions[lower_count - 1], arm, input.root_color);
+    }
 
     if (input.pole_position.has_value()) {
         const vec3 pole_position = input.pole_position.value();

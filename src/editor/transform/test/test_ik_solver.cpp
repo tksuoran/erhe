@@ -670,6 +670,47 @@ TEST(Ik_drag_lines, pole_adds_line_to_root_and_marker)
     }
 }
 
+TEST(Ik_drag_lines, lower_chain_continues_polyline_and_marks_pinned_end)
+{
+    // ik_drag_options.md R24: under Pin Chain End the polyline continues from
+    // the effector through the lower chain, and the end joint gets a cross in
+    // the root color.
+    const std::vector<vec3> upper = make_drag_line_positions();
+    const std::vector<vec3> lower = { upper.back(), upper.back() + vec3{0.0f, 1.0f, 0.0f}, upper.back() + vec3{0.5f, 2.0f, 0.0f} };
+    editor::Ik_drag_line_input input{};
+    input.joint_positions       = upper;
+    input.lower_joint_positions = lower;
+
+    editor::Ik_drag_line_buffer buffer;
+    editor::build_ik_drag_lines(input, buffer);
+
+    ASSERT_EQ(buffer.path_lines.size(),   4u); // two upper segments, two lower
+    ASSERT_EQ(buffer.marker_lines.size(), 9u); // root, effector, end joint
+    EXPECT_EQ(buffer.path_lines[2].p0,    lower[0]);
+    EXPECT_EQ(buffer.path_lines[2].p1,    lower[1]);
+    EXPECT_EQ(buffer.path_lines[3].p0,    lower[1]);
+    EXPECT_EQ(buffer.path_lines[3].p1,    lower[2]);
+    EXPECT_EQ(buffer.path_lines[3].color, input.chain_color);
+
+    // Marker arms are a fraction of the whole drawn polyline's reach.
+    const float reach =
+        distance(upper[0], upper[1]) + distance(upper[1], upper[2]) +
+        distance(lower[0], lower[1]) + distance(lower[1], lower[2]);
+    const float arm = reach * input.marker_scale;
+    for (std::size_t i = 6; i < 9; ++i) {
+        const vec3 center = 0.5f * (buffer.marker_lines[i].p0 + buffer.marker_lines[i].p1);
+        EXPECT_LT(distance(center, lower[2]), 1.0e-5f);
+        EXPECT_NEAR(distance(buffer.marker_lines[i].p0, buffer.marker_lines[i].p1), 2.0f * arm, 1.0e-5f);
+        EXPECT_EQ(buffer.marker_lines[i].color, input.root_color); // held fixed like the root
+    }
+
+    // A lower span of one position (the effector alone) is no lower chain.
+    input.lower_joint_positions = std::span<const vec3>{lower}.first(1);
+    editor::build_ik_drag_lines(input, buffer);
+    EXPECT_EQ(buffer.path_lines.size(),   2u);
+    EXPECT_EQ(buffer.marker_lines.size(), 6u);
+}
+
 TEST(Ik_drag_lines, refill_is_stable_and_allocation_free)
 {
     const std::vector<vec3>    positions = make_drag_line_positions();

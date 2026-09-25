@@ -449,8 +449,7 @@ Section 2 is implemented as specified:
   (`src/editor/config/definitions/debug_visualizations_style.py`, struct
   version 2).
 
-Section 3 is implemented in part - the shared option plumbing, Solve From and
-Pole Alignment:
+Section 3 is implemented as specified:
 
 - Options - `Ik_mid_chain_drag`, `Ik_solve_from`, `Ik_pole_alignment` with
   their `c_..._strings` labels, and `Ik_drag_options`, in
@@ -487,16 +486,41 @@ Pole Alignment:
   refused before any joint moves when unrecognized or out of range, echoed
   with the last step's `pole_weight` (R31), exercised by
   `Mcp_test.ik_drag_pole_alignment_ease_in`.
-- Acceptance verification - criterion 2 of 3.6 is check 8.4 and criterion 3
-  is check 8.5 of `scripts/ik_interactive_pass_verify.py`; criterion 5 is
+- Mid-Chain Drag - `Ik_drag_chain` (`ik_drag.{hpp,cpp}`) holds one chain's
+  drag-start capture, constraints, pole and solver input, and solves and
+  writes back through one path; `Ik_drag` holds the upper chain
+  (root..effector) and, under `pin_chain_end`, the lower chain
+  (effector..end joint) that `Ik_drag::begin` discovers from a bone
+  effector (R21), with its constraints and its pole (scanned from the end
+  joint) resolved by the upper chain's rules. `Ik_drag::apply` solves the
+  upper chain, then the lower chain from the pose it rides in toward the
+  end joint's drag-start world position, with the effector's solved parent
+  as the lower root's parent frame and the gesture's pole weight (R22,
+  R28), and puts the end joint back at its drag-start world rotation; the
+  effector orientation applies only without a lower chain (R23). Under
+  `previous_step` a drag with a lower chain keeps the effector's previous
+  local rotation too, as a solved joint of the lower chain (R26).
+- Joints - `Ik_drag::get_upper_joints()` and `get_lower_joints()`;
+  `Ik_drag::make_transform_operation` and `Transform_tool::try_translate_ik`
+  cover both chains (R24).
+- Visualization - `Ik_drag_line_input::lower_joint_positions`:
+  `build_ik_drag_lines` continues the polyline through the lower chain and
+  marks the end joint in the root color (R24), unit test
+  `Ik_drag_lines.lower_chain_continues_polyline_and_marks_pinned_end`;
+  `Transform_tool::render_ik_drag` fills both spans from one scratch vector.
+- Move tool - "Mid-Chain Drag" combo after "Effector Orientation", before
+  "Solve From" (R30).
+- MCP - the `mid_chain_drag` argument of `ik_drag`, refused before any joint
+  moves when unrecognized, echoed, with the lower chain's joints in
+  `lower_joints` (R31), exercised by
+  `Mcp_test.ik_drag_mid_chain_drag_pin_chain_end`.
+- Acceptance verification - criterion 1 of 3.6 is check 8.6, criterion 2 is
+  check 8.4 and criterion 3 is check 8.5 of
+  `scripts/ik_interactive_pass_verify.py`, each measuring one undo step per
+  drag (criterion 4); criterion 5 is
   `Ik_solver.pole_weight_scales_the_swivel` and
   `Ik_solver.pole_weight_applies_on_both_solver_paths`
   (`src/editor/transform/test/test_ik_solver.cpp`).
-
-Not implemented yet: Mid-Chain Drag `pin_chain_end` (R20-R24, including the
-lower chain's use of the pole weight in R28), its Move tool row (R30) and
-`ik_drag` argument (R31), and acceptance criterion 1 of 3.6 (criterion 4 for
-the Pin Chain End combinations).
 
 Outstanding: interactive (windowed) verification of the Move tool combo, of a
 live gizmo drag under `follow_last_segment`, and of the chain visualization

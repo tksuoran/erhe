@@ -1287,7 +1287,7 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target - or against each position of path in turn, within the one gesture - and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled), the effective effector_orientation, solve_from, pole_alignment and pole_ease_distance, the pole weight of the last step (pole_weight: 1 under snap), and the number of solve steps.",
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target - or against each position of path in turn, within the one gesture - and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, the lower chain's joints in effector-to-end-joint order under mid_chain_drag 'pin_chain_end' (lower_joints, empty without a lower chain), plus the governing pole's reference path and angle (null and 0 when the solve was unpoled), the effective effector_orientation, mid_chain_drag, solve_from, pole_alignment and pole_ease_distance, the pole weight of the last step (pole_weight: 1 under snap), and the number of solve steps.",
     "inputSchema": {
       "properties": {
         "effector_orientation": {
@@ -1295,6 +1295,14 @@
           "enum": [
             "keep_world",
             "follow_last_segment"
+          ],
+          "type": "string"
+        },
+        "mid_chain_drag": {
+          "description": "What happens to the bones below a dragged bone in the middle of a chain: 'rigid_children' (default) moves them rigidly with it; 'pin_chain_end' keeps the lower chain's end joint (the first bone below the effector, through single bone children, with no bone child or several) at its drag-start world position and rotation and solves the bones between toward it. With 'pin_chain_end' the effector is the lower chain's root, so effector_orientation does not apply to it",
+          "enum": [
+            "rigid_children",
+            "pin_chain_end"
           ],
           "type": "string"
         },

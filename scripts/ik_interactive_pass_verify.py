@@ -18,9 +18,8 @@ states the measures.
 --launch starts build_vs2026_vulkan_headless/bin/Debug/editor.exe (or
 --editor), reads its MCP port from logs/log.txt and asks it to exit at the
 end. Without it the script drives an already running editor. One PASS/FAIL
-line per check, exit code 1 when any check fails. Behaviour the checks
-measure but a person chooses is printed as DECISION lines; a check that
-cannot run (no Pillow for the screenshot analysis) becomes a MANUAL line.
+line per check, exit code 1 when any check fails. A check that cannot run
+(no Pillow for the screenshot analysis) becomes a MANUAL line.
 """
 
 import argparse
@@ -58,8 +57,6 @@ XRAY_MEDIAN_DISTANCE = 100.0
 XRAY_LEAST_DISTANCE  = 60.0
 
 MANUAL: list[str] = []
-# Behaviour choices the checks measure but cannot decide: printed with the facts.
-DECISIONS: list[str] = []
 
 
 # --- vector / quaternion helpers (no numpy dependency) --------------------
@@ -664,9 +661,10 @@ def setup(e: Editor) -> Rig:
     bone_ik = e.find_item("Transform", "Bone IK")
     was_on = (bone_ik is not None) and bone_ik["status"].get("checked", False)
     ok = (set_bone_ik(rig, True) and set_effector_orientation(rig, "Keep World")
+          and set_mid_chain_drag(rig, "Rigid Children")
           and set_solve_from(rig, "Drag Start") and set_pole_alignment(rig, "Snap"))
     check_true("0.2 Move tool group in the Transform window: Bone IK on, Effector Orientation 'Keep World', "
-               "Solve From 'Drag Start', Pole Alignment 'Snap'", ok,
+               "Mid-Chain Drag 'Rigid Children', Solve From 'Drag Start', Pole Alignment 'Snap'", ok,
                f"Bone IK was {'on' if was_on else 'off'} before")
     return rig
 
@@ -684,6 +682,11 @@ def set_move_tool_combo(rig: Rig, row: str, label: str):
 def set_effector_orientation(rig: Rig, label: str):
     """Pick Move tool > Effector Orientation in the Transform window, as a user does."""
     return set_move_tool_combo(rig, "Effector Orientation", label)
+
+
+def set_mid_chain_drag(rig: Rig, label: str):
+    """Pick Move tool > Mid-Chain Drag in the Transform window, as a user does."""
+    return set_move_tool_combo(rig, "Mid-Chain Drag", label)
 
 
 def set_solve_from(rig: Rig, label: str):
@@ -1728,14 +1731,12 @@ def section_8(rig: Rig):
     children = max(q_angle_deg(before["rotations"][n], after["rotations"][n]) for n in ("bone_2", TIP))
     world_turn = q_angle_deg(world_before, rig.world_rotation("bone_1"))
     bone0 = q_angle_deg(before["rotations"]["bone_0"], after["rotations"]["bone_0"])
-    check_true("8.1 mid-chain drag (bone_1): bone_0 aims at the target, bone_1 keeps its world orientation, "
-               "its children follow rigidly",
+    check_true("8.1 Mid-Chain Drag 'Rigid Children' (the default), drag of bone_1: bone_0 aims at the target, "
+               "bone_1 keeps its world orientation, its children follow rigidly",
                (aim_error < POSITION_TOL) and (children < 1.0e-3) and (world_turn < 0.01) and (bone0 > MOVED_DEG),
                f"bone_1 off the root-target line by {aim_error:.2e}, children turned {children:.4f} deg, "
                f"bone_1 world turn {world_turn:.4f} deg, bone_0 turned {bone0:.2f} deg")
     undo_viewport(rig)
-    DECISIONS.append("8: a mid-chain drag makes the dragged bone the effector; the bones below it follow rigidly "
-                     "(8.1). The alternative is keeping the chain's end in place (a two-target solve)")
 
     # 8.2 each drag step solves from the drag-start pose: a target visited
     # twice by different paths gives the same pose, back at the start gives
@@ -1757,6 +1758,7 @@ def section_8(rig: Rig):
 
     solve_from_check(rig)
     pole_ease_check(rig)
+    pin_chain_end_check(rig)
     stability_sweep(rig)
 
 
@@ -1807,6 +1809,84 @@ def solve_from_check(rig: Rig):
     check_true(f"8.4 Solve From: no step of either drag moves a joint more than {JUMP_RATIO:.0f}x the target's step",
                (ratio_prev <= JUMP_RATIO) and (ratio_start <= JUMP_RATIO),
                f"largest Previous Step {ratio_prev:.2f}x, Drag Start {ratio_start:.2f}x")
+
+
+def pin_chain_end_check(rig: Rig):
+    """8.6 (ik_drag_options.md 3.6 criterion 1, and criterion 4 for Pin Chain
+    End): under Mid-Chain Drag 'Pin Chain End' a drag of bone_1 - whose lower
+    chain is bone_1 .. bone_2 - along the circle that keeps bone_2 in reach
+    (bone_1's start position rotated about the bone_0-to-bone_2 line, which
+    keeps |bone_1 - bone_0| and |bone_1 - bone_2|) leaves bone_2's world
+    position (1e-3) and rotation (0.05 deg) unchanged while bone_1 follows the
+    drag; a drag off that circle keeps the bone lengths and moves bone_2 only
+    as far as the lower chain cannot reach (straight toward its drag-start
+    position, by |bone_1 - bone_2 start| - |bone_1 - bone_2|). Each drag is one
+    undo step. Mid-Chain Drag goes back to 'Rigid Children' afterwards."""
+    e = rig.e
+    rig.clear_settings()
+    rig.pose(BENT)
+    start = rig.snapshot()
+    p0, p1, p2 = start["positions"][0], start["positions"][1], start["positions"][2]
+    l01 = length(sub(p1, p0))
+    l12 = length(sub(p2, p1))
+    b2_rotation = rig.world_rotation("bone_2")
+
+    def sample():
+        state = rig.snapshot()
+        state["bone_2_world_rotation"] = rig.world_rotation("bone_2")
+        return state
+
+    ok = set_mid_chain_drag(rig, "Pin Chain End")
+
+    # On the circle: 60 degrees about the bone_0-to-bone_2 line in 12 steps.
+    axis = normalize(sub(p2, p0))
+    offset = sub(p1, p0)
+    steps = 12
+    on_circle = [sub(add(p0, rotate_about(offset, axis, math.radians(60.0 * (i + 1) / steps))), p1) for i in range(steps)]
+    depth = e.undo_depth()
+    samples = rig.translate_drag("bone_1", on_circle, sample=sample)
+    undo_circle = e.undo_depth() - depth
+    undo_viewport(rig)
+    circle_position = max(length(sub(s["positions"][2], p2)) for s in samples)
+    circle_rotation = max(q_angle_deg(s["bone_2_world_rotation"], b2_rotation) for s in samples)
+    circle_follow = max(length(sub(s["positions"][1], add(p1, d))) for d, s in zip(on_circle, samples))
+
+    # Off the circle: bone_1 swung about bone_0 in the bone_0 / bone_1 / bone_2
+    # plane, away from bone_2 (the upper chain reaches it; bone_2 is out of
+    # the lower chain's reach).
+    normal = normalize(cross(sub(p1, p0), sub(p2, p0)))
+    swings = [rotate_about(offset, normal, math.radians(sign * 25.0)) for sign in (1.0, -1.0)]
+    sign = 1.0 if length(sub(add(p0, swings[0]), p2)) > length(sub(add(p0, swings[1]), p2)) else -1.0
+    off_circle = [sub(add(p0, rotate_about(offset, normal, math.radians(sign * 25.0 * (i + 1) / 8))), p1) for i in range(8)]
+    depth = e.undo_depth()
+    off_samples = rig.translate_drag("bone_1", off_circle, sample=sample)
+    undo_off = e.undo_depth() - depth
+    undo_viewport(rig)
+    off_lengths = 0.0
+    off_reach = 0.0
+    off_rotation = 0.0
+    for s in off_samples:
+        b0, b1, b2 = s["positions"][0], s["positions"][1], s["positions"][2]
+        off_lengths = max(off_lengths, abs(length(sub(b1, b0)) - l01), abs(length(sub(b2, b1)) - l12))
+        # The lower chain reaches straight toward the pinned position.
+        expected = add(b1, scale(normalize(sub(p2, b1)), l12)) if length(sub(p2, b1)) > l12 else p2
+        off_reach = max(off_reach, length(sub(b2, expected)))
+        off_rotation = max(off_rotation, q_angle_deg(s["bone_2_world_rotation"], b2_rotation))
+    off_moved = length(sub(off_samples[-1]["positions"][2], p2))
+
+    restored = set_mid_chain_drag(rig, "Rigid Children")
+    check_true("8.6 Mid-Chain Drag 'Pin Chain End', drag of bone_1 on the circle that keeps bone_2 in reach: "
+               "bone_2 keeps its world position (1e-3) and rotation (0.05 deg) while bone_1 follows; one undo step",
+               ok and restored and (circle_position < 1.0e-3) and (circle_rotation < 0.05)
+               and (circle_follow < POSITION_TOL) and (undo_circle == 1),
+               f"combo ok={ok and restored}; bone_2 moved {circle_position:.2e}, turned {circle_rotation:.4f} deg; "
+               f"bone_1 off the drag by {circle_follow:.2e}; undo steps {undo_circle}")
+    check_true("8.6 Mid-Chain Drag 'Pin Chain End', drag of bone_1 off that circle: bone lengths hold, bone_2 moves only "
+               "as far as the lower chain cannot reach and keeps its world rotation; one undo step",
+               (off_lengths < 1.0e-3) and (off_reach < 1.0e-3) and (off_rotation < 0.05) and (off_moved > 1.0e-2)
+               and (undo_off == 1),
+               f"largest length change {off_lengths:.2e}, bone_2 off the reach-toward pose by {off_reach:.2e}, "
+               f"turned {off_rotation:.4f} deg, moved {off_moved:.3f} at the end; undo steps {undo_off}")
 
 
 POLE_EASE_DISTANCE = 0.4  # Move tool > Pole Ease Distance, typed in by pole_ease_check (not the 0.5 default, so the slider is exercised)
@@ -2082,10 +2162,6 @@ def main():
             print("\nNeeds a human (interactive_test_pass.md):")
             for line in MANUAL:
                 print(f"  [MANUAL] {line}")
-        if DECISIONS:
-            print("\nBehaviour choices for the user (measured above, not pass / fail):")
-            for line in DECISIONS:
-                print(f"  [DECISION] {line}")
         if process is not None:
             try:
                 client.call("request_exit")

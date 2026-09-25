@@ -907,22 +907,31 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
                 effector &&
                 erhe::utility::test_bit_set(effector->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
             if (effector && !effector_locked && m_ik_drag.begin(effector, shared.settings.ik_drag_options)) {
-                // Append the ancestor joints so record_transform_operation()
-                // (undo, autokey) covers every node the solve changes. The
+                // Append the ancestor joints and, under Pin Chain End, the
+                // lower chain's joints below the effector, so
+                // record_transform_operation() (undo, autokey) covers every
+                // node the solve changes (ik_drag_options.md R24). The
                 // effector is entries[0] already.
-                const auto& joints = m_ik_drag.get_joints();
-                for (std::size_t i = 0; i + 1 < joints.size(); ++i) {
+                const std::vector<std::shared_ptr<erhe::scene::Node>>& upper_joints = m_ik_drag.get_upper_joints();
+                const std::vector<std::shared_ptr<erhe::scene::Node>>& lower_joints = m_ik_drag.get_lower_joints();
+                const auto append_joint_entry = [this](const std::shared_ptr<erhe::scene::Node>& joint) {
                     shared.entries.push_back(
                         Transform_entry{
-                            .node                    = joints[i],
-                            .parent_from_node_before = joints[i]->parent_from_node_transform(),
-                            .xform_op_stack_before   = joints[i]->copy_xform_op_stack(),
-                            .world_from_node_before  = joints[i]->world_from_node_transform(),
+                            .node                    = joint,
+                            .parent_from_node_before = joint->parent_from_node_transform(),
+                            .xform_op_stack_before   = joint->copy_xform_op_stack(),
+                            .world_from_node_before  = joint->world_from_node_transform(),
                             .original_motion_mode    = {}
                         }
                     );
+                };
+                for (std::size_t i = 0; i + 1 < upper_joints.size(); ++i) {
+                    append_joint_entry(upper_joints[i]);
                 }
-                m_ik_entries_appended = joints.size() > 1;
+                for (std::size_t i = 1; i < lower_joints.size(); ++i) {
+                    append_joint_entry(lower_joints[i]);
+                }
+                m_ik_entries_appended = shared.entries.size() > 1;
             }
         }
     }
@@ -1776,18 +1785,26 @@ void Transform_tool::render_ik_drag(const Render_context& context)
         return;
     }
 
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = m_ik_drag.get_joints();
+    // One scratch vector holds root .. effector .. end joint; the upper and
+    // lower chain spans share the effector's position.
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& upper_joints = m_ik_drag.get_upper_joints();
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& lower_joints = m_ik_drag.get_lower_joints();
     m_ik_drag_positions.clear(); // capacity kept
-    for (const std::shared_ptr<erhe::scene::Node>& joint : joints) {
-        if (!joint) {
-            continue;
-        }
+    for (const std::shared_ptr<erhe::scene::Node>& joint : upper_joints) {
         m_ik_drag_positions.push_back(vec3{joint->position_in_world()});
     }
+    const std::size_t upper_count = m_ik_drag_positions.size();
+    for (std::size_t i = 1; i < lower_joints.size(); ++i) {
+        m_ik_drag_positions.push_back(vec3{lower_joints[i]->position_in_world()});
+    }
+    const std::span<const glm::vec3> all_positions{m_ik_drag_positions};
 
     const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
     const Ik_drag_line_input input{
-        .joint_positions = m_ik_drag_positions,
+        .joint_positions       = all_positions.first(upper_count),
+        .lower_joint_positions = lower_joints.empty()
+            ? std::span<const glm::vec3>{}
+            : all_positions.subspan(upper_count - 1),
         .pole_position   = m_ik_drag.has_pole()
             ? std::optional<glm::vec3>{m_ik_drag.get_pole_position()}
             : std::optional<glm::vec3>{},

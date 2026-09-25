@@ -10,15 +10,14 @@ widgets reach.
 
 Progress: sections 0-2 pass by hand. Sections 0-8 are automated (below);
 every check passes except the section 8.3 stability sweep, which finds the
-jumps of finding F7. What is left for a person is the behaviour choice
-the script prints as a DECISION line (section 8).
+jumps of finding F7. Section 8 holds no open behaviour choice: each one it
+measured is a Move tool option now (`ik_drag_options.md` section 3).
 
 ## Automated run
 
 `scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
-headless editor and prints one PASS / FAIL line per check (69 checks, about
-5 minutes), then the DECISION lines - behaviour the checks measure but a
-person chooses:
+headless editor and prints one PASS / FAIL line per check (71 checks, about
+5 minutes):
 
     py -3 scripts/ik_interactive_pass_verify.py --launch
     py -3 scripts/ik_interactive_pass_verify.py --port N --section 3 --section 4
@@ -31,9 +30,8 @@ the asset of Setup below (Add Bone Tip Nodes through the Hierarchy context
 menu), aims the scene camera, and restores the rig before each check.
 
 - **The gestures a check is about are real input.** Checkboxes, the Set
-  Rest button, the Limit Min slider and the Effector Orientation and Solve
-  From combos are
-  clicked in the Properties / Transform windows; Ctrl+Z / Ctrl+Y are key
+  Rest button, the Limit Min slider and the Effector Orientation, Mid-Chain
+  Drag, Solve From and Pole Alignment combos are clicked in the Properties / Transform windows; Ctrl+Z / Ctrl+Y are key
   chords over the viewport; the plain drag of 1.1, the channel-lock masking
   of 4.1 and one long ring drag of 4.3 are mouse drags on the gizmo handles
   (`doc/agents/mcp_ui_driving.md`). Every other drag goes through the
@@ -64,7 +62,7 @@ menu), aims the scene camera, and restores the rig before each check.
   the target. `make_sweep_scenarios()` / `run_sweep_scenario()` replay one
   scenario alone.
 - **Session state.** Move tool parameters (Bone IK, Effector Orientation,
-  Solve From, Pole Alignment, Pole Ease Distance) live as long as the editor
+  Mid-Chain Drag, Solve From, Pole Alignment, Pole Ease Distance) live as long as the editor
   runs; the script sets them instead of assuming the startup values. It
   types the Pole Ease Distance into its slider (Ctrl+click, Ctrl+A, the
   value, Enter).
@@ -258,13 +256,13 @@ for a pole to aim.
 4. After closing a scene wait a few seconds: `logs/log.txt` holds no
    `scene-close leak` line.
 
-## 8. Behaviour and decisions - automated, decisions wanted
+## 8. Drag behaviour - automated
 
-Measured (checks 8.1 - 8.5):
+Measured (checks 8.1 - 8.6):
 
-1. Mid-chain drag: dragging `bone_1` makes it the effector - `bone_0` aims
-   at the target, `bone_1` keeps its world orientation and everything below
-   it follows rigidly.
+1. Mid-Chain Drag "Rigid Children" (the default): dragging `bone_1` makes
+   it the effector - `bone_0` aims at the target, `bone_1` keeps its world
+   orientation and everything below it follows rigidly.
 2. Solve From "Drag Start" (the default): each drag step solves from the
    drag-start pose, so a target reached by two paths gives the same pose,
    and back at the start the start pose.
@@ -286,11 +284,17 @@ Measured (checks 8.1 - 8.5):
    falls to 0 and stays there once w reaches 1; back at the start the start
    pose; one undo step. The Pole Ease Distance row is shown only while Ease
    In is chosen. The check leaves Pole Alignment at "Snap".
-
-Decisions for the user (the script prints them as DECISION lines):
-
-- Mid-chain drag keeps the children rigid (1.) - or keep the chain's end in
-  place (a two-target solve)?
+6. Mid-Chain Drag "Pin Chain End" (`ik_drag_options.md` 3.6 criterion 1),
+   chosen in the Move tool's combo: dragging `bone_1` along the circle that
+   keeps `bone_2` in reach (`bone_1`'s start position rotated 60 degrees
+   about the `bone_0`-to-`bone_2` line) leaves `bone_2`'s world position
+   within 1e-3 and its world rotation within 0.05 degrees while `bone_1`
+   follows the drag; a drag swinging `bone_1` about `bone_0` away from
+   `bone_2` keeps the bone lengths, and `bone_2` moves only as far as the
+   lower chain cannot reach - it lies on the line from `bone_1` toward its
+   drag-start position, one bone length from `bone_1` - and keeps its world
+   rotation. Each drag is one undo step. The check leaves Mid-Chain Drag at
+   "Rigid Children".
 
 ## Findings
 
