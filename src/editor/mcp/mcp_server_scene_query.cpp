@@ -563,12 +563,23 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             mesh_json["skin_id"]     = mesh->skin->get_id();
             mesh_json["joint_count"] = skin_data.joints.size();
             json joints_json = json::array();
-            for (const std::shared_ptr<erhe::scene::Node>& joint : skin_data.joints) {
-                if (joint) {
-                    joints_json.push_back({{"node_name", joint->get_name()}, {"node_id", joint->get_id()}});
-                } else {
-                    joints_json.push_back(json::object());
+            for (std::size_t joint_index = 0, joint_end = skin_data.joints.size(); joint_index < joint_end; ++joint_index) {
+                const std::shared_ptr<erhe::scene::Node>& joint = skin_data.joints[joint_index];
+                json joint_json = joint
+                    ? json{{"node_name", joint->get_name()}, {"node_id", joint->get_id()}}
+                    : json::object();
+                // Column-major, the glTF inverseBindMatrices layout.
+                if (joint_index < skin_data.inverse_bind_matrices.size()) {
+                    const glm::mat4& m = skin_data.inverse_bind_matrices[joint_index];
+                    json matrix = json::array();
+                    for (int column = 0; column < 4; ++column) {
+                        for (int row = 0; row < 4; ++row) {
+                            matrix.push_back(m[column][row]);
+                        }
+                    }
+                    joint_json["inverse_bind_matrix"] = matrix;
                 }
+                joints_json.push_back(joint_json);
             }
             mesh_json["joints"] = joints_json;
             if (skin_data.skeleton) {

@@ -45,7 +45,13 @@ void Rig_system::on_node_unregistered(erhe::scene::Node& node)
 
 void Rig_system::on_values_changed(erhe::scene::Node& node, const erhe::property::Dependency_property& property)
 {
-    if ((&property == &erhe::scene::Node::bone_property.get()) || (&property == &Rig::tail_property().get())) {
+    const bool bone_display_input =
+        (&property == &erhe::scene::Node::bone_property.get()) ||
+        (&property == &Rig::tail_property().get()) ||
+        (&property == &Rig::display_color_mode_property().get()) ||
+        (&property == &Rig::display_color_property().get()) ||
+        (&property == &Rig::display_shape_property().get());
+    if (bone_display_input) {
         report(node);
     }
 }

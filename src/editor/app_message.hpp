@@ -170,7 +170,7 @@ struct Skin_registered_message
 // Queued by Rig_system (the per-scene node system of the bone values,
 // rig/rig_system.hpp) when a node's bone display may have changed: the node
 // entered or left its scene while carrying Item_flags::bone, its bone flag
-// changed, or its Rig.tail changed. Queued rather than sent because node
+// changed, or its Rig.tail or a Rig.display_* value changed. Queued rather than sent because node
 // systems are called in the middle of node attach traversals (and a proxy
 // node must not be attached there). Weak references: the node may be gone by
 // delivery. `parent` is the node's parent at the change - the parent's

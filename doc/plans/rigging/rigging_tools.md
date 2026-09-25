@@ -227,7 +227,9 @@ joints.
 
 Authoring skeletons in-editor rather than only importing them, plus the
 non-IK posing verbs. Mostly editor UX over existing Node machinery.
-Requirements: `skeleton_editing.md`.
+Requirements: `skeleton_editing.md`. Status: implemented (every slice of
+`skeleton_editing.md`, the display and rigid-bind stub included); the
+user's hands-on pass remains.
 
 - **Bone creation**: create bone (child of selection or at cursor), extrude
   bone from selected tip, subdivide, delete/dissolve; connected vs offset

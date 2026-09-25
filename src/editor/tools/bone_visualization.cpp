@@ -100,6 +100,92 @@ void make_bone(GEO::Mesh& mesh)
     mesh.vertices.set_single_precision();
 }
 
+// Unit prism of the stick and box shapes: x and z in [-1, 1], y from 0 (head)
+// to 1 (tail); scaled like the octahedron by the instance transform.
+void make_box(GEO::Mesh& mesh)
+{
+    mesh.vertices.set_double_precision();
+    {
+        const GEO::vec3 vertices[] = {
+            {-1.0, 0.0, -1.0}, // 0
+            { 1.0, 0.0, -1.0}, // 1
+            { 1.0, 0.0,  1.0}, // 2
+            {-1.0, 0.0,  1.0}, // 3
+            {-1.0, 1.0, -1.0}, // 4
+            { 1.0, 1.0, -1.0}, // 5
+            { 1.0, 1.0,  1.0}, // 6
+            {-1.0, 1.0,  1.0}  // 7
+        };
+        const GEO::index_t vertex_count = sizeof(vertices) / sizeof(vertices[0]);
+        const GEO::index_t base_vertex  = mesh.vertices.create_vertices(vertex_count);
+        for (GEO::index_t i = 0; i < vertex_count; ++i) {
+            mesh.vertices.point(base_vertex + i) = vertices[i];
+        }
+    }
+    {
+        // Counter-clockwise seen from outside, two triangles per side; e.g.
+        // the bottom {0, 1, 2}: (v1 - v0) x (v2 - v0) = (0, -4, 0), outward.
+        const std::array<GEO::index_t, 3> facets[] = {
+            { 0, 1, 2 }, { 0, 2, 3 }, // -y (head end)
+            { 4, 6, 5 }, { 4, 7, 6 }, // +y (tail end)
+            { 3, 2, 6 }, { 3, 6, 7 }, // +z
+            { 0, 5, 1 }, { 0, 4, 5 }, // -z
+            { 1, 5, 6 }, { 1, 6, 2 }, // +x
+            { 0, 3, 7 }, { 0, 7, 4 }  // -x
+        };
+        const GEO::index_t facet_count = sizeof(facets) / sizeof(facets[0]);
+        const GEO::index_t base_facet  = mesh.facets.create_facets(facet_count, 3);
+        for (GEO::index_t i = 0; i < facet_count; ++i) {
+            for (GEO::index_t j = 0; j < 3; ++j) {
+                mesh.facets.set_vertex(base_facet + i, j, facets[i][j]);
+            }
+        }
+    }
+    mesh.facets.connect();
+    mesh.vertices.set_single_precision();
+}
+
+// Half-width of a bone shape as a fraction of the octahedron's (the style's
+// aspect ratio times the bone length): the stick is a quarter as wide.
+[[nodiscard]] auto get_shape_width_factor(const Bone_display_shape shape) -> float
+{
+    return (shape == Bone_display_shape::stick) ? 0.25f : 1.0f;
+}
+
+// The shared primitive of one unit shape: render and raytrace geometry built
+// by `build`, facet normals for the N.V shading.
+[[nodiscard]] auto make_shape_primitive(
+    void                               (*build)(GEO::Mesh&),
+    erhe::scene_renderer::Mesh_memory& mesh_memory
+) -> std::shared_ptr<erhe::primitive::Primitive>
+{
+    auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    build(render_geometry->get_mesh());
+    build(raytrace_geometry->get_mesh());
+    // A hand-built GEO::Mesh carries no normal attribute, and the primitive
+    // builder writes vertex normals from facet_normal. The solid bone style
+    // shades with Shader_debug::vdotn_tinted - dot(V, N) times the material
+    // color - so without this the bones would come out flat black.
+    {
+        erhe::geometry::Mesh_attributes attributes{render_geometry->get_mesh()};
+        erhe::geometry::compute_facet_normals(render_geometry->get_mesh(), attributes);
+    }
+
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(render_geometry, raytrace_geometry);
+    const bool render_ok = primitive->make_renderable_mesh(
+        erhe::primitive::Build_info{
+            .primitive_types{ .fill_triangles = true },
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
+        },
+        erhe::primitive::Normal_style::corner_normals
+    );
+    ERHE_VERIFY(render_ok);
+    const bool raytrace_ok = primitive->make_raytrace();
+    ERHE_VERIFY(raytrace_ok);
+    return primitive;
+}
+
 // Rotation taking +Y onto `direction` (unit). Uses an arbitrary perpendicular
 // when the two are antiparallel, where the axis is undefined.
 [[nodiscard]] auto orient_y_to(const glm::vec3 direction) -> glm::mat4
@@ -169,43 +255,23 @@ void Bone_visualization::ensure_primitive()
         m_solid        = style.bone_solid;
     }
 
-    auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
-    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
-    make_bone(render_geometry->get_mesh());
-    make_bone(raytrace_geometry->get_mesh());
-    // A hand-built GEO::Mesh carries no normal attribute, and the primitive
-    // builder writes vertex normals from facet_normal. The solid bone style
-    // shades with Shader_debug::vdotn - literally dot(V, N) - so without this
-    // the bones would come out flat black.
-    {
-        erhe::geometry::Mesh_attributes attributes{render_geometry->get_mesh()};
-        erhe::geometry::compute_facet_normals(render_geometry->get_mesh(), attributes);
-    }
+    m_bone_primitive = make_shape_primitive(make_bone, m_mesh_memory);
+    m_box_primitive  = make_shape_primitive(make_box,  m_mesh_memory);
 
-    m_bone_primitive = std::make_shared<erhe::primitive::Primitive>(render_geometry, raytrace_geometry);
-    const bool render_ok = m_bone_primitive->make_renderable_mesh(
-        erhe::primitive::Build_info{
-            .primitive_types{ .fill_triangles = true },
-            .buffer_info = m_mesh_memory.make_primitive_buffer_info()
-        },
-        erhe::primitive::Normal_style::corner_normals
-    );
-    ERHE_VERIFY(render_ok);
-    const bool raytrace_ok = m_bone_primitive->make_raytrace();
-    ERHE_VERIFY(raytrace_ok);
-
+    // The material of a bone in the style colors: white, so the solid pass's
+    // tinted N.V (Shader_debug::vdotn_tinted) is the plain N.V grey.
     m_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "bone",
             .values = {
+                .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
                 .bxdf_model = erhe::primitive::Bxdf_model::unlit
             }
         }
     );
-    // Selected bones read as a different color in the solid style. The vdotn
-    // pass overrides the fragment color outright, so this only shows through in
-    // the plain-material path; the solid pass gets its selected tint from the
-    // same style entry.
+    // Selected bones read as a different color in the solid style. The solid
+    // pass's N.V override skips selected and hovered proxies (its filter), so
+    // they draw flat in this material's color.
     m_selected_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "bone selected",
@@ -252,7 +318,6 @@ void Bone_visualization::apply_style_colors()
         return;
     }
     const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
-    m_material         ->set_base_color(glm::vec3{style.skin_bone_color_a});
     m_selected_material->set_base_color(glm::vec3{style.bone_selected_color});
     m_hover_material   ->set_base_color(glm::vec3{style.bone_hover_color});
 }
@@ -270,7 +335,8 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
     const std::string& joint_name = joint->get_name();
     proxy.node  = std::make_shared<erhe::scene::Xform>(fmt::format("bone proxy {}", joint_name));
     proxy.mesh  = std::make_shared<erhe::scene::Mesh>(joint_name);
-    proxy.mesh->add_primitive(m_bone_primitive, m_material);
+    proxy.shape = joint->get_value(Rig::display_shape_property());
+    proxy.mesh->add_primitive(get_shape_primitive(proxy.shape), get_display_material(*joint));
     proxy.mesh->layer_id = Mesh_layer_id::bone;
 
     // bone_proxy is what keeps this out of the item tree, save, export and
@@ -295,7 +361,7 @@ void Bone_visualization::set_proxy_transform(Proxy& proxy, const glm::vec3 tail_
     const std::shared_ptr<erhe::scene::Node> joint       = proxy.joint.lock();
     const float                              world_scale = joint ? glm::length(glm::vec3{joint->world_from_node()[0]}) : 1.0f;
     const float                              min_local   = (world_scale > 0.0f) ? (c_min_half_width / world_scale) : c_min_half_width;
-    const float                              half_width  = std::max(m_aspect_ratio * length, min_local);
+    const float                              half_width  = std::max(get_shape_width_factor(proxy.shape) * m_aspect_ratio * length, min_local);
 
     glm::mat4 transform{1.0f};
     if (length > 0.0f) {
@@ -321,8 +387,17 @@ void Bone_visualization::refresh_proxy_shape(Proxy& proxy)
     // common case - the child's local translation is constant, so this is a
     // compare and nothing else; the joint's own animation reaches the proxy
     // through the parent link.
-    const glm::vec3 tail_local = joint->get_value(Rig::tail_property());
-    if ((tail_local != proxy.tail_local) || (m_aspect_ratio != proxy.aspect_ratio)) {
+    const glm::vec3          tail_local = joint->get_value(Rig::tail_property());
+    const Bone_display_shape shape      = joint->get_value(Rig::display_shape_property());
+    const bool               reshape    = (shape != proxy.shape);
+    if (reshape) {
+        // R17: the other unit shape; the material stays.
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = proxy.mesh->get_primitives();
+        const std::shared_ptr<erhe::primitive::Material> material = primitives.empty() ? m_material : primitives.front().material;
+        proxy.mesh->set_primitives({erhe::scene::Mesh_primitive{get_shape_primitive(shape), material}});
+        proxy.shape = shape;
+    }
+    if (reshape || (tail_local != proxy.tail_local) || (m_aspect_ratio != proxy.aspect_ratio)) {
         set_proxy_transform(proxy, tail_local);
     }
 }
@@ -362,16 +437,20 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
     // Hover wins over selection, matching the content mesh convention.
     // Hover_tool sets hovered_in_viewport on the JOINT (get_hover_node resolves
     // a hovered proxy to its joint), so it is read from there.
+    // The bone's own display color (R17) when neither applies.
     const bool selected = joint->is_selected();
     const bool hovered  = joint->is_hovered();
-    if ((selected == proxy.selected) && (hovered == proxy.hovered)) {
+    const std::shared_ptr<erhe::primitive::Material> material =
+        hovered  ? m_hover_material    :
+        selected ? m_selected_material : get_display_material(*joint);
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = proxy.mesh->get_primitives();
+    const bool material_applied = !primitives.empty() && (primitives.front().material == material);
+    if ((selected == proxy.selected) && (hovered == proxy.hovered) && material_applied) {
         return;
     }
-    proxy.mesh->set_primitive_material(
-        0,
-        hovered  ? m_hover_material    :
-        selected ? m_selected_material : m_material
-    );
+    if (!material_applied) {
+        proxy.mesh->set_primitive_material(0, material);
+    }
     if (selected) {
         proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
     } else {
@@ -599,6 +678,48 @@ void Bone_visualization::update_hover(const erhe::scene::Node* old_joint, const 
             update_proxy_material(i->second);
         }
     }
+}
+
+auto Bone_visualization::get_shape_primitive(const Bone_display_shape shape) const -> const std::shared_ptr<erhe::primitive::Primitive>&
+{
+    return (shape == Bone_display_shape::octahedral) ? m_bone_primitive : m_box_primitive;
+}
+
+auto Bone_visualization::get_display_material(const erhe::scene::Node& joint) -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::optional<glm::vec3> color = get_bone_display_color(joint);
+    if (!color.has_value()) {
+        return m_material;
+    }
+    // One material per distinct 8-bit color, so bones of one color share it
+    // and the count stays bounded by the colors actually used.
+    const auto to_byte = [](const float value) -> uint32_t {
+        return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+    };
+    const uint32_t r   = to_byte(color.value().r);
+    const uint32_t g   = to_byte(color.value().g);
+    const uint32_t b   = to_byte(color.value().b);
+    const uint32_t key = (r << 16u) | (g << 8u) | b;
+    const auto i = m_display_color_materials.find(key);
+    if (i != m_display_color_materials.end()) {
+        return i->second;
+    }
+    std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name = fmt::format("bone color #{:06x}", key),
+            .values = {
+                .base_color = glm::vec3{static_cast<float>(r), static_cast<float>(g), static_cast<float>(b)} / 255.0f,
+                .bxdf_model = erhe::primitive::Bxdf_model::unlit
+            }
+        }
+    );
+    // A builtin like the other bone materials: editor-owned, shared by the
+    // proxies of every scene, so a mesh registration finds it a home.
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->register_builtin(Asset_type::material, material);
+    }
+    m_display_color_materials.emplace(key, material);
+    return material;
 }
 
 auto Bone_visualization::get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>

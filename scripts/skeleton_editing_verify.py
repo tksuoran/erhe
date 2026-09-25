@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Skeleton editing slices A, B, the foundations and slice C (doc/plans/rigging/skeleton_editing.md R1-R16), driven as a user does.
+"""Skeleton editing slices A, B, the foundations, C and D (doc/plans/rigging/skeleton_editing.md R1-R18), driven as a user does.
 
 On res/editor/assets/RiggedFigure/RiggedFigure.glb (its bones carry the side
 before a trailing index: arm_joint_L_1 .. arm_joint_R_3, leg_joint_L_1 ..
@@ -33,6 +33,18 @@ checked), Recalculate Roll > X to World Z (the X axis aimed, the bone axis and
 the child kept) and Align to Active, each one undo step Ctrl+Z reverts; on
 RiggedFigure's skin joints the three entries are offered disabled.
 
+Section G runs first, before any other scene's viewport window can float over
+its own, which its screenshots read. It sets a bone's display from its Properties rows in bone selection
+mode: Rig > Display Color Mode 'custom' (the bone draws in the default orange),
+Display Color.x typed to 0 (green) and Display Shape 'box' (the prism, wide
+beside the tail half where the octahedron is narrow), each checked in a
+screenshot and one undo step, Ctrl+Z restoring the shape. Then it grows the
+bone into a three-bone chain inside a box mesh, binds the mesh with the
+Hierarchy menu entry 'Bind to Selected Bones (Rigid)' of the mesh row (the
+bones selected; one undo step; the entry disabled once the mesh is skinned),
+checks that an IK drag of the top bone deforms the mesh (skinned bounds and a
+screenshot diff) and that Ctrl+Z undoes the drag and then the bind.
+
     py -3 scripts/skeleton_editing_verify.py [--port N] [--launch]
 
 --launch starts build_vs2026_vulkan_headless/bin/Debug/editor.exe (or
@@ -50,13 +62,25 @@ import sys
 import tempfile
 
 from erhe_mcp import DEFAULT_PORT, McpClient, check_true, report, wait_for_server
-from ik_interactive_pass_verify import (DEFAULT_EDITOR, ROW_PROPERTIES, USD_PATH, Editor, Rig, have_pil, launch_editor,
-                                       load_rgb, load_scene_file, log_since, log_size, select_for_properties, ui_checkbox,
-                                       ui_type_field, undo_viewport)
+from ik_interactive_pass_verify import (DEFAULT_EDITOR, ROW_PROPERTIES, USD_PATH, Editor, Rig, ensure_group_open,
+                                       ensure_row_visible, have_pil, launch_editor, load_rgb, load_scene_file, log_since,
+                                       log_size, select_for_properties, ui_checkbox, ui_type_field, undo_viewport)
 
 ASSET_PATH = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 BONE_ENTRIES = ["Select Parent", "Select Children", "Select Children (All)", "Select Chain", "Select Mirror", "Flip Names"]
 POSE_ENTRIES = ["Clear Location", "Clear Rotation", "Clear Scale", "Clear All", "Copy Pose", "Paste Pose", "Paste Pose Flipped"]
+
+
+def hierarchy_window(editor: Editor, scene: str) -> str:
+    """The Scene Hierarchy window listing `scene` (a closed scene's window can linger)."""
+    windows = [w["name"] for w in editor.call("get_imgui_windows")["windows"]]
+    hierarchy = [name for name in windows if name.startswith("Scene Hierarchy")]
+    if not hierarchy:
+        raise RuntimeError("no Scene Hierarchy window")
+    for name in reversed(hierarchy):
+        if any(Editor.label_matches(item, scene) for item in editor.items(window=name)):
+            return name
+    return hierarchy[-1]
 
 
 class Figure:
@@ -65,11 +89,7 @@ class Figure:
     def __init__(self, editor: Editor, scene: str) -> None:
         self.e = editor
         self.scene = scene
-        windows = [w["name"] for w in editor.call("get_imgui_windows")["windows"]]
-        hierarchy = [name for name in windows if name.startswith("Scene Hierarchy")]
-        if not hierarchy:
-            raise RuntimeError("no Scene Hierarchy window")
-        self.hierarchy = hierarchy[-1]
+        self.hierarchy = hierarchy_window(editor, scene)
         self.viewport = [v for v in editor.call("get_viewports")["viewports"] if v["scene"] == scene][0]
         nodes = editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]
         self.ids = {n["name"]: n["id"] for n in nodes if n.get("content", False)}
@@ -525,10 +545,7 @@ class Skeleton:
     def __init__(self, editor: Editor, scene: str) -> None:
         self.e = editor
         self.scene = scene
-        windows = [w["name"] for w in editor.call("get_imgui_windows")["windows"]]
-        hierarchy = [name for name in windows if name.startswith("Scene Hierarchy")]
-        own = [name for name in hierarchy if scene in name]
-        self.hierarchy = own[-1] if own else hierarchy[-1]
+        self.hierarchy = hierarchy_window(editor, scene)
         self.viewport = [v for v in editor.call("get_viewports")["viewports"] if v["scene"] == scene][0]
 
     def set_filter(self, text):
@@ -872,6 +889,209 @@ def symmetry_checks(e: Editor, opened):
                f"restored within {back:.2e} deg")
 
 
+# --- section G: bone display (R17) and Bind (rigid) (R18) -------------------
+
+def ui_combo(rig: Rig, node, group, row, choice):
+    """Pick `choice` in the Properties combo row `row` of group `group`, as a user does."""
+    e = rig.e
+    if not select_for_properties(rig, node) or not ensure_group_open(e, group):
+        return False
+    item = ensure_row_visible(e, row)
+    if item is None:
+        return False
+    # A new scene's viewport window may float over part of the Properties
+    # window: click along the combo until its popup lists `choice`.
+    for fraction in (0.03, 0.5, 0.97):
+        e.call("mouse_click", {"x": item["x"] + (fraction * item["width"]), "y": item["center_y"]})
+        e.advance(2)
+        popups = [w for w in e.call("get_imgui_windows")["windows"]
+                  if w.get("name", "").startswith("##Combo") and not w.get("hidden", True)]
+        if popups:
+            e.click(None, choice)
+            e.advance(3)
+            return True
+    return False
+
+
+def is_orange(p):
+    return (p[0] > 60) and (p[1] > 0.2 * p[0]) and (p[1] < 0.75 * p[0]) and (p[2] < 0.25 * p[0])
+
+
+def is_green(p):
+    return (p[1] > 40) and (p[0] < 0.3 * p[1]) and (p[2] < 0.3 * p[1])
+
+
+def pixel_fraction(path, rig, points, predicate, radius=1):
+    """Fraction of the projected world `points` with a `predicate` pixel within `radius`."""
+    image, pixels = load_rgb(path)
+    hits = 0
+    for point in points:
+        x, y = rig.project(point)
+        found = False
+        for py in range(int(y) - radius, int(y) + radius + 1):
+            for px in range(int(x) - radius, int(x) + radius + 1):
+                if (0 <= px < image.size[0]) and (0 <= py < image.size[1]) and predicate(pixels[px, py]):
+                    found = True
+        hits += 1 if found else 0
+    return hits / len(points)
+
+
+def changed_points(path_a, path_b, rig, points, radius=2, threshold=40):
+    """Fraction of the projected world `points` where the two screenshots differ within `radius`."""
+    image_a, pixels_a = load_rgb(path_a)
+    _, pixels_b = load_rgb(path_b)
+    hits = 0
+    for point in points:
+        x, y = rig.project(point)
+        found = False
+        for py in range(int(y) - radius, int(y) + radius + 1):
+            for px in range(int(x) - radius, int(x) + radius + 1):
+                if (0 <= px < image_a.size[0]) and (0 <= py < image_a.size[1]):
+                    a = pixels_a[px, py]
+                    b = pixels_b[px, py]
+                    if sum(abs(a[i] - b[i]) for i in range(3)) > threshold:
+                        found = True
+        hits += 1 if found else 0
+    return hits / len(points)
+
+
+def display_and_bind_checks(e: Editor, opened):
+    print("\n== Bone display and Bind (rigid) (R17, R18) ==")
+    scene = e.create_scene()
+    opened.append(scene)
+    s = Skeleton(e, scene)
+    rig = Rig(e, scene)
+    shots = tempfile.mkdtemp(prefix="erhe_skeleton_display_")
+
+    # Setup through explicit-argument tools: a bone 'arm' from the origin up +Y, one unit.
+    e.call("create_bone", {"scene_name": scene, "name": "arm"})
+    e.advance(3)
+    rig.ids["arm"] = s.details("arm")["id"]
+    e.call("select_items", {"scene_name": scene, "ids": []})
+    e.advance(2)
+    e.call("set_mesh_component_mode", {"mode": "bone"})
+    e.advance(3)
+    rig.place_camera([0.0, 0.5, 2.5], [0.0, 0.5, 0.0])
+    axis = [[0.0, 0.15 + (0.7 * (k / 11.0)), 0.0] for k in range(12)]
+    # Beside the tail half, where only the box is wide: the octahedron's
+    # half-width there is at most 0.033 of the bone length, the box's 0.1.
+    beside = [[side * 0.07, y, 0.0] for side in (-1.0, 1.0) for y in (0.7, 0.75, 0.8, 0.85, 0.9)]
+    have_shots = have_pil()
+
+    def shot(name):
+        path = os.path.join(shots, name)
+        e.call("select_items", {"scene_name": scene, "ids": []})
+        e.advance(4)
+        e.call("capture_screenshot", {"path": path})
+        return path
+
+    # G.1 / G.2: Display Color Mode 'custom' from its Properties combo: the solid bone turns orange (the default color).
+    before = shot("style.png") if have_shots else None
+    depth = e.undo_depth()
+    picked = ui_combo(rig, "arm", "Rig", "Display Color Mode", "custom")
+    mode = rig.prop("arm", "Rig.display_color_mode")["value"]
+    custom = shot("custom.png") if have_shots else None
+    if have_shots:
+        grey_orange = pixel_fraction(before, rig, axis, is_orange)
+        custom_orange = pixel_fraction(custom, rig, axis, is_orange)
+        check_true("G.1 'Rig > Display Color Mode' set to 'custom' in the Properties combo: the solid bone draws in the default "
+                   "display color (orange along its axis, not before), one undo step",
+                   picked and (mode == "custom") and (grey_orange < 0.2) and (custom_orange >= 0.8) and (e.undo_depth() == depth + 1),
+                   f"mode={mode} orange before {grey_orange:.2f} after {custom_orange:.2f} undo depth {depth} -> {e.undo_depth()} ({shots})")
+    else:
+        print("  [SKIP] G.1 display color screenshot (PIL missing)")
+
+    # G.2: typing 0 into 'Display Color.x' makes it green (0, 0.45, 0).
+    depth = e.undo_depth()
+    typed = ui_type_field(rig, "arm", "Rig", "Display Color.x", "0")
+    e.advance(4)
+    color = parse_vec(rig.prop("arm", "Rig.display_color")["value"])
+    green = shot("green.png") if have_shots else None
+    green_fraction = pixel_fraction(green, rig, axis, is_green) if have_shots else 1.0
+    check_true("G.2 typing 0 into 'Rig > Display Color.x' makes the display color (0, 0.45, 0): the bone draws green, one undo step",
+               typed and (distance(color, [0.0, 0.45, 0.0]) < 1.0e-4) and (green_fraction >= 0.8) and (e.undo_depth() == depth + 1),
+               f"color={color} green along the axis {green_fraction:.2f} undo depth {depth} -> {e.undo_depth()}")
+
+    # G.3 / G.4: Display Shape 'box' from its combo: the bone fills out beside its tail half; Ctrl+Z restores the octahedron.
+    depth = e.undo_depth()
+    picked = ui_combo(rig, "arm", "Rig", "Display Shape", "box")
+    shape = rig.prop("arm", "Rig.display_shape")["value"]
+    box = shot("box.png") if have_shots else None
+    if have_shots:
+        octahedral_beside = pixel_fraction(green, rig, beside, is_green)
+        box_beside = pixel_fraction(box, rig, beside, is_green)
+        check_true("G.3 'Rig > Display Shape' set to 'box' in the Properties combo: the bone is drawn as the prism "
+                   "(green beside its tail half, where the octahedron is not), one undo step",
+                   picked and (shape == "box") and (octahedral_beside <= 0.2) and (box_beside >= 0.8) and (e.undo_depth() == depth + 1),
+                   f"shape={shape} beside the tail: octahedral {octahedral_beside:.2f} box {box_beside:.2f} undo depth {depth} -> {e.undo_depth()}")
+    else:
+        print("  [SKIP] G.3 display shape screenshot (PIL missing)")
+    s.undo()
+    undone = shot("undone.png") if have_shots else None
+    undone_beside = pixel_fraction(undone, rig, beside, is_green) if have_shots else 0.0
+    check_true("G.4 Ctrl+Z puts the octahedron back", (rig.prop("arm", "Rig.display_shape")["value"] == "octahedral") and (undone_beside <= 0.2),
+               f"shape={rig.prop('arm', 'Rig.display_shape')['value']} green beside the tail {undone_beside:.2f}")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.advance(3)
+
+    # Setup: extend 'arm' into a three-bone chain along +Y and a box mesh around it.
+    e.call("extrude_bones", {"scene_name": scene, "bones": ["arm"]})
+    e.advance(3)
+    e.call("extrude_bones", {"scene_name": scene, "bones": ["arm.001"]})
+    e.advance(3)
+    e.call("create_shape", {"scene_name": scene, "shape": "box", "name": "body", "size": [0.3, 3.0, 0.3], "steps": [1, 6, 1],
+                            "position": [0.0, 1.5, 0.0], "motion_mode": "none"})
+    e.advance(4)
+    e.call("select_items", {"scene_name": scene, "paths": ["arm", "arm.001", "arm.002"], "active": "arm"})
+    e.advance(2)
+    rig.place_camera([0.0, 1.5, 6.0], [0.0, 1.5, 0.0])
+
+    # G.5 / G.6: 'Bind to Selected Bones (Rigid)' from the Hierarchy menu of the mesh.
+    depth = e.undo_depth()
+    s.run("body", "Bind to Selected Bones (Rigid)")
+    body = s.details("body")
+    mesh = body["mesh"] if (body is not None) and ("mesh" in body) else {}
+    joints = [j.get("node_name") for j in mesh.get("joints", [])]
+    check_true("G.5 'Bind to Selected Bones (Rigid)' on the 'body' row with the three bones selected skins 'body' to them "
+               "('body skin', joints in order), one undo step",
+               mesh.get("skinned", False) and (mesh.get("skin_name") == "body skin") and (joints == ["arm", "arm.001", "arm.002"])
+               and (e.undo_depth() == depth + 1),
+               f"skinned={mesh.get('skinned')} skin={mesh.get('skin_name')} joints={joints} undo depth {depth} -> {e.undo_depth()}")
+    s.set_filter("body")
+    e.click(s.hierarchy, "body", button="right")
+    e.advance(2)
+    entry = [item for item in e.items(visible_only=True) if item.get("label") == "Bind to Selected Bones (Rigid)"]
+    e.key("escape")
+    s.set_filter("")
+    check_true("G.6 on the now skinned 'body' the entry is offered disabled",
+               bool(entry) and entry[0].get("status", {}).get("disabled", False), f"entry={[i.get('status') for i in entry]}")
+
+    # G.7: an IK drag of the top bone deforms the mesh (skinned bounds and screenshot).
+    top = [[0.0, 2.2 + (0.7 * (k / 7.0)), 0.0] for k in range(8)]
+    e.call("select_items", {"scene_name": scene, "ids": []})
+    e.advance(2)
+    rest_png = shot("bound_rest.png") if have_shots else None
+    bounds_before = s.details("body")["mesh"]["world_aabb"]
+    e.call("ik_drag", {"scene_name": scene, "node_name": "arm.002", "target": [0.9, 1.6, 0.0]})
+    e.advance(4)
+    bounds_after = s.details("body")["mesh"]["world_aabb"]
+    dragged_png = shot("bound_dragged.png") if have_shots else None
+    moved = changed_points(rest_png, dragged_png, rig, top) if have_shots else 1.0
+    check_true("G.7 an IK drag of 'arm.002' toward (0.9, 1.6, 0) deforms the bound mesh: its skinned bounds grow toward +X "
+               "and the screenshot changes along the top bone's part",
+               (bounds_after["max"][0] > bounds_before["max"][0] + 0.3) and (moved >= 0.6),
+               f"max x {bounds_before['max'][0]:.3f} -> {bounds_after['max'][0]:.3f} changed along the top {moved:.2f}")
+
+    # G.8: Ctrl+Z twice: the drag, then the bind.
+    s.undo()
+    s.undo()
+    body = s.details("body")
+    mesh = body["mesh"] if (body is not None) and ("mesh" in body) else {}
+    check_true("G.8 Ctrl+Z undoes the drag, a second Ctrl+Z the bind: 'body' is unskinned again",
+               (body is not None) and (not mesh.get("skinned", True)) and (e.undo_depth() == depth),
+               f"skinned={mesh.get('skinned')} undo depth {e.undo_depth()} (before the bind {depth})")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=None)
@@ -889,6 +1109,8 @@ def main():
     e = Editor(client)
     opened = []
     try:
+        display_and_bind_checks(e, opened)
+        opened.clear()  # setup() resets the editor, which closes that scene
         figure = setup(e)
         opened.append(figure.scene)
         selection_checks(figure)

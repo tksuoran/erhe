@@ -18,7 +18,9 @@ add_executable(${_target}
     # bone_pose.cpp also the rest transforms (rig_properties.cpp, whose
     # Rig.tail default is bone_tail.cpp) and the channel-lock rule
     # (channel_locks.cpp); bone_mirror.cpp and bone_roll.cpp are pure glm
-    # math over erhe::scene::Trs_transform.
+    # math over erhe::scene::Trs_transform; bone_bind.cpp the nearest-segment
+    # rule and the rest world transforms over nodes and Rig.rest_* / tail.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bone_bind.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_hierarchy.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_mirror.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_naming.cpp
@@ -27,6 +29,7 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_tail.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/rig_properties.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../transform/channel_locks.cpp
+    test_bone_bind.cpp
     test_bone_hierarchy.cpp
     test_bone_mirror.cpp
     test_bone_naming.cpp

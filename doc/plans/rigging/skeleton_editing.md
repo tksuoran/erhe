@@ -28,7 +28,8 @@ makes a skeleton something the editor can create, change and pose by verb.
   `Node_transform_operation` and `Compound_operation`; `Scene_commands::
   add_bone_tip_nodes` and its Hierarchy context-menu entry are the pattern.
 - The MCP `create_skin` tool builds a `Skin` with inverse binds taken from the
-  joints' current world transforms and rigid weights.
+  joints' current world transforms and rigid weights; Bind (rigid), R18, shares
+  its core and takes the inverse binds from the rest pose.
 
 ## 1. Foundations (decisions)
 
@@ -288,12 +289,27 @@ pattern) and an MCP tool with explicit arguments.
 ## 7. Display and skin stub (slice D)
 
 - **R17.** Per-bone display color and shape (octahedral / stick / box) as
-  `Rig.display_*` attached properties read by `Bone_visualization`.
+  `Rig.display_*` attached properties read by `Bone_visualization`. The color
+  is two properties: `Rig.display_color_mode` (`style` | `custom`, default
+  `style`: the editor's bone style colors) and `Rig.display_color` (a color,
+  used by a `custom` bone). `Rig.display_shape` defaults to `octahedral`.
+  Selected and hovered bones keep the selection / hover colors. The values are
+  display only, so a bone a skin lists accepts them (R9 does not apply), and
+  an edit is an ordinary property edit (one undo step).
 - **R18. Bind (rigid)**: create a `Skin` for a selected mesh from a bone
   selection: inverse binds from the bones' rest transforms, weights rigid to
   the nearest bone segment (head-tail segment distance) - the editor-side
   counterpart of the MCP `create_skin`, for smoke-testing an authored
-  skeleton before Phase 5's weighting.
+  skeleton before Phase 5's weighting. The rest world transform of a bone is
+  its `Rig.rest_*` transform under the frame above it: the rest world of its
+  nearest ancestor among the bound bones carried down by the current local
+  transforms of the nodes between, else its parent's current world transform
+  - exactly what `get_bind_pose_parent_from_node` reads back, so the bind pose
+  the skin implies is each bone's rest. The segments are the bones' rest heads
+  and tails (`Rig.tail`). The bind is one undo step whose undo removes the
+  skin; afterwards the bones are joints of the skin and R9 applies to them.
+  Refused when the mesh already has a skin or a bone is already a joint of a
+  skin.
 
 ## 8. Slice order
 
@@ -323,8 +339,9 @@ glTF round trip of the edited skeleton.
 
 ## Implementation status
 
-Slices A and B, the foundations and slice C (R5-R9, Symmetrize of R13,
-R16) are implemented; slice D is not.
+Every slice is implemented: A and B, the foundations, C (R5-R9,
+Symmetrize of R13, R16) and D (R17, R18). What remains is the user's
+hands-on pass (`interactive_test_pass.md`).
 
 - R11 naming: `bone_side` / `flip_side_name` in `src/editor/rig/bone_naming.hpp`,
   unit tested by `editor_rig_tests` (`src/editor/rig/test/`).
@@ -496,6 +513,45 @@ R16) are implemented; slice D is not.
   `Mcp_test.recalculate_roll_and_align_to_active_keep_axes_and_children` and
   the three tools' refusals in
   `Mcp_test.bone_structure_verbs_are_refused_on_a_bound_bone`.
+- R17: `Rig.display_color_mode` (`Bone_color_mode`), `Rig.display_color`
+  (vec3, color presentation, listed while the mode is `custom`, default
+  orange) and `Rig.display_shape` (`Bone_display_shape`) in
+  `src/editor/scene/rig_properties.hpp`, with `node_system_property_changed`
+  as their `property_changed`, so `Rig_system` queues a `Bone_changed_message`
+  and `Bone_visualization` re-materials / reshapes that bone's proxy (no
+  polling). The proxy carries one of two shared unit primitives - the
+  octahedron, or a square prism for `box` (as wide as the octahedron's ring)
+  and `stick` (a quarter as wide). The solid style shades an unselected proxy
+  with `Shader_debug::vdotn_tinted` (N.V times the material's base color): a
+  `style` bone carries the white `bone` material (the plain N.V grey), a
+  `custom` bone a builtin material `bone color #rrggbb`, one per distinct
+  8-bit color, shared across scenes. The line style reads the same values
+  where it draws a skin joint (the display color over the alternating style
+  colors; a stick is the head-tail line, a box the prism's edges).
+- R18: `bind_mesh_to_bones_rigid` and `get_bind_refusal` in
+  `src/editor/rig/rigid_skin.hpp` over `make_rigid_skin`, the rigid skin core
+  the MCP `create_skin` also builds through (the parts' geometry merged in
+  world space, a vertex-to-joint callback, one `Compound_operation`: the skin
+  enters the content library, the parts leave the scene, the new mesh - named
+  like the bound mesh, at world identity under its parent - enters it). The
+  math is `src/editor/rig/bone_bind.hpp` (`get_rest_world_transforms`,
+  `get_rest_bone_segments`, `find_nearest_bone_segment`), unit tested by
+  `editor_rig_tests` (`test_bone_bind.cpp`).
+- Entry points: the Properties rows Rig > Display Color Mode / Display Color
+  / Display Shape; on a mesh row of the Hierarchy menu `Bind to Selected Bones
+  (Rigid)` (the selected bones; disabled with the refusal as tooltip); the
+  MCP tool `bind_mesh_to_bones` (`mesh`, `bones`), which returns each joint's
+  vertex count and inverse bind matrix. `get_node_details` lists a skinned
+  mesh's joints with their inverse bind matrices. Covered by
+  `Mcp_test.bone_display_properties_reshape_and_recolor_the_proxy` and
+  `Mcp_test.bind_mesh_to_bones_skins_rigidly_from_the_rest_pose_in_one_undo_step`.
+- `scripts/skeleton_editing_verify.py` section G (run first, so no other
+  scene's viewport floats over its own) sets Display Color Mode, Display
+  Color and Display Shape from their Properties rows in bone selection mode,
+  each checked in a screenshot and one undo step, binds a box around a
+  three-bone chain with the Hierarchy menu entry, checks that an IK drag
+  deforms the mesh (skinned bounds and a screenshot diff) and that Ctrl+Z
+  undoes the drag and then the bind.
 - `scripts/skeleton_editing_verify.py` section F mirrors a one-sided arm
   authored off the plane with Symmetrize from the menu of a selected bone
   (world heads and tails mirrored within 1e-5), runs Recalculate Roll > X to

@@ -1,14 +1,18 @@
-// Mcp_server skinning tools (create_skin).
+// Mcp_server skinning tool create_skin (bind_mesh_to_bones, Bind (rigid) of
+// doc/plans/rigging/skeleton_editing.md R18, is in mcp_server_rig.cpp with
+// the other skeleton editing tools).
 //
-// Builds a rigidly skinned mesh from mesh prims that are already in the
-// scene: each part contributes its geometry (world transform baked in) and
-// names the one joint node that drives every vertex of that part. The result
-// is a single new Mesh prim with one primitive, an erhe::scene::Skin listing
-// the distinct joints, and the part meshes taken out of the scene.
+// create_skin builds a rigidly skinned mesh from mesh prims that are already
+// in the scene: each part contributes its geometry (world transform baked in)
+// and names the one joint node that drives every vertex of that part. The
+// result is a single new Mesh prim with one primitive, an erhe::scene::Skin
+// listing the distinct joints (inverse binds from the joints' current world
+// transforms), and the part meshes taken out of the scene. It builds through
+// make_rigid_skin (rig/rigid_skin.hpp), as Bind (rigid) does.
 //
 // Rigid weights only: joint_indices_0 = (j, 0, 0, 0) and
-// joint_weights_0 = (1, 0, 0, 0) for every vertex of a part. Smooth weights
-// are the weight paint tool's job (src/editor/tools/weight_paint_tool.cpp).
+// joint_weights_0 = (1, 0, 0, 0) for every vertex. Smooth weights are the
+// weight paint tool's job (src/editor/tools/weight_paint_tool.cpp).
 
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
@@ -16,26 +20,18 @@
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
-#include "operations/compound_operation.hpp"
-#include "operations/item_insert_remove_operation.hpp"
-#include "operations/library_attach_operation.hpp"
-#include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/instance_structure.hpp"
+#include "rig/rigid_skin.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
-#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_inverse.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -56,45 +52,7 @@ public:
     std::shared_ptr<erhe::scene::Mesh> mesh;
     std::shared_ptr<erhe::scene::Node> joint;
     std::size_t                        joint_index{0};
-    std::size_t                        vertex_count{0};
 };
-
-// The vertex range one part contributed to the merged geometry.
-class Vertex_range
-{
-public:
-    std::size_t  part_index{0};
-    GEO::index_t first{0};
-    GEO::index_t end{0};
-};
-
-[[nodiscard]] auto is_bone_proxy(const erhe::scene::Mesh& mesh) -> bool
-{
-    return (mesh.get_flag_bits() & erhe::Item_flags::bone_proxy) != 0;
-}
-
-// The mesh a part node names: the prim itself when it is a Mesh, otherwise
-// the mesh of that node (a node whose mesh is a child prim).
-//
-// A bone proxy is skipped: Bone_visualization hangs one under every joint of
-// a registered skin, so naming a joint node as a part would otherwise pick up
-// that proxy's geometry - and a proxy is session-only visualization, not
-// content to be merged into an asset.
-[[nodiscard]] auto resolve_part_mesh(const std::shared_ptr<erhe::Hierarchy>& prim) -> std::shared_ptr<erhe::scene::Mesh>
-{
-    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(prim);
-    if (mesh) {
-        return is_bone_proxy(*mesh) ? std::shared_ptr<erhe::scene::Mesh>{} : mesh;
-    }
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
-    if (node) {
-        const std::shared_ptr<erhe::scene::Mesh> node_mesh = erhe::scene::get_mesh(node.get());
-        if (node_mesh && !is_bone_proxy(*node_mesh)) {
-            return node_mesh;
-        }
-    }
-    return {};
-}
 
 } // anonymous namespace
 
@@ -161,7 +119,7 @@ auto Mcp_server::action_create_skin(const json& args) -> std::string
                 "create_skin part node not found: " + std::to_string(part_json.value("node_id", std::size_t{0}))
             );
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = resolve_part_mesh(mesh_prim);
+        const std::shared_ptr<erhe::scene::Mesh> mesh = get_skinnable_mesh(mesh_prim);
         if (!mesh) {
             return make_error_content("create_skin part '" + mesh_prim->get_name() + "' carries no mesh");
         }
@@ -257,178 +215,55 @@ auto Mcp_server::action_create_skin(const json& args) -> std::string
         return make_error_content("No materials available");
     }
 
-    // Merge every part's geometry into one, world transform baked in, and
-    // write the part's rigid joint binding over the vertices it contributed.
+    // The joints' current world transforms are the bind pose.
     const std::string name = args.value("name", std::string{"skinned mesh"});
-    std::shared_ptr<erhe::geometry::Geometry> combined_geometry = std::make_shared<erhe::geometry::Geometry>(name);
-    erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::point_normals;
-    bool normal_style_taken = false;
-    std::vector<Vertex_range> vertex_ranges;
-    for (std::size_t part_index = 0, part_end = parts.size(); part_index < part_end; ++part_index) {
-        Skin_part& part = parts[part_index];
-        const glm::mat4 world_from_node = part.mesh->world_from_node();
-        for (const erhe::scene::Mesh_primitive& mesh_primitive : part.mesh->get_primitives()) {
-            if (!mesh_primitive.primitive) {
-                continue;
-            }
-            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape = mesh_primitive.primitive->render_shape;
-            if (!shape) {
-                continue;
-            }
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
-            if (!geometry) {
-                continue;
-            }
-            if (!normal_style_taken) {
-                normal_style       = shape->get_normal_style();
-                normal_style_taken = true;
-            }
-            const GEO::index_t base_vertex = combined_geometry->get_mesh().vertices.nb();
-            combined_geometry->merge_with_transform(*geometry.get(), erhe::geometry::to_geo_mat4f(world_from_node));
-            const GEO::index_t end_vertex = combined_geometry->get_mesh().vertices.nb();
-            vertex_ranges.push_back(Vertex_range{.part_index = part_index, .first = base_vertex, .end = end_vertex});
-            part.vertex_count += static_cast<std::size_t>(end_vertex - base_vertex);
-        }
-    }
-    if (combined_geometry->get_mesh().vertices.nb() == 0) {
-        return make_error_content("create_skin produced no vertices");
-    }
-
-    // Written after every merge: merge_attributes() copies the names the
-    // SOURCE geometry carries, so a source without joint attributes would not
-    // disturb what is written here - but writing once, at the end, keeps the
-    // rule from depending on that.
-    {
-        erhe::geometry::Mesh_attributes& attributes = combined_geometry->get_attributes();
-        for (const Vertex_range& range : vertex_ranges) {
-            const GEO::vec4u indices{static_cast<GEO::index_t>(parts[range.part_index].joint_index), 0u, 0u, 0u};
-            const GEO::vec4f weights{1.0f, 0.0f, 0.0f, 0.0f};
-            for (GEO::index_t vertex = range.first; vertex < range.end; ++vertex) {
-                attributes.vertex_joint_indices_0.set(vertex, indices);
-                attributes.vertex_joint_weights_0.set(vertex, weights);
-            }
-        }
-    }
-
-    // Same finishing pass every geometry producer runs (Merge_operation): a
-    // payload geometry must carry connectivity and edges.
-    const GEO::index_t vertex_count_before_process = combined_geometry->get_mesh().vertices.nb();
-    combined_geometry->process(
-        {
-            .flags =
-                erhe::geometry::Geometry::process_flag_connect |
-                erhe::geometry::Geometry::process_flag_build_edges |
-                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
-        }
-    );
-    const GEO::index_t vertex_count_after_process = combined_geometry->get_mesh().vertices.nb();
-    if (vertex_count_after_process != vertex_count_before_process) {
-        // The per-vertex joint binding is written by vertex index, so a pass
-        // that renumbers vertices would silently rebind them.
-        return make_error_content(
-            "create_skin geometry processing changed the vertex count from " +
-            std::to_string(vertex_count_before_process) + " to " + std::to_string(vertex_count_after_process)
-        );
-    }
-
-    // Skinned vertex format: the GPU vertex buffer must carry the joint
-    // indices / weights streams, which the non-skinned build info drops
-    // (src/editor/parsers/gltf.cpp).
-    const erhe::primitive::Build_info build_info{
-        .primitive_types = {
-            .fill_triangles          = true,
-            .fill_triangles_expanded = true,
-            .edge_lines              = true,
-            .corner_points           = true,
-            .centroid_points         = true
-        },
-        .buffer_info = m_context.mesh_memory->make_skinned_primitive_buffer_info()
-    };
-    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(combined_geometry);
-    if (!primitive->make_renderable_mesh(build_info, normal_style)) {
-        return make_error_content("create_skin failed to build the renderable mesh");
-    }
-    if (!primitive->make_raytrace()) {
-        return make_error_content("create_skin failed to build the raytrace mesh");
-    }
-
-    // Skeleton is left unset: erhe::scene::get_skin_transform_root() computes
-    // the closest common ancestor of the joints when the skin names none, so
-    // an explicit guess would only be able to be wrong.
-    std::shared_ptr<erhe::scene::Skin> skin = std::make_shared<erhe::scene::Skin>(name + " skin");
-    skin->skin_data.joints = joints;
-    skin->skin_data.inverse_bind_matrices.reserve(joints.size());
-    for (const std::shared_ptr<erhe::scene::Node>& joint : joints) {
-        skin->skin_data.inverse_bind_matrices.push_back(glm::inverse(joint->world_from_node()));
-    }
-    skin->enable_flag_bits(
-        erhe::Item_flags::content |
-        erhe::Item_flags::show_in_ui |
-        erhe::Item_flags::id
-    );
-
-    std::shared_ptr<erhe::scene::Mesh> new_mesh = std::make_shared<erhe::scene::Mesh>(name);
-    new_mesh->add_primitive(primitive, material);
-    new_mesh->layer_id = sr->layers().content()->id;
-    new_mesh->enable_flag_bits(
-        erhe::Item_flags::content |
-        erhe::Item_flags::id      |
-        erhe::Item_flags::show_in_ui
-    );
-    // glTF 2.0: the skinned mesh node's own transform is ignored, so the new
-    // prim sits at identity and the joints alone pose it.
-    new_mesh->set_world_from_node(glm::mat4{1.0f});
-    new_mesh->skin = skin;
-
-    // One undoable compound: the skin resource enters the library, the new
-    // mesh prim enters the scene (its insert is what registers the skin and
-    // marks the joints - Scene_root::register_skin), and the part meshes
-    // leave it.
-    std::vector<std::shared_ptr<Operation>> operations;
-    operations.push_back(make_library_insert_operation(m_context, library, skin));
-    operations.push_back(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_mesh,
-                .parent  = parent,
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> part_meshes;
+    part_meshes.reserve(parts.size());
     for (const Skin_part& part : parts) {
-        operations.push_back(
-            std::make_shared<Item_insert_remove_operation>(
-                Item_insert_remove_operation::Parameters{
-                    .context = m_context,
-                    .item    = part.mesh,
-                    .parent  = part.mesh->get_parent().lock(),
-                    .mode    = Item_insert_remove_operation::Mode::remove
-                }
-            )
-        );
+        part_meshes.push_back(part.mesh);
     }
-    m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+    std::vector<glm::mat4> inverse_bind_matrices;
+    inverse_bind_matrices.reserve(joints.size());
+    for (const std::shared_ptr<erhe::scene::Node>& joint : joints) {
+        inverse_bind_matrices.push_back(glm::inverse(joint->world_from_node()));
+    }
+    std::string error;
+    std::optional<Rigid_skin> rigid_skin = make_rigid_skin(
+        m_context,
+        Rigid_skin_parameters{
+            .scene_root            = sr,
+            .name                  = name,
+            .parent                = parent,
+            .material              = material,
+            .parts                 = std::move(part_meshes),
+            .joints                = joints,
+            .inverse_bind_matrices = std::move(inverse_bind_matrices),
+            .joint_for_vertex      = [&parts](const std::size_t part_index, const glm::vec3&) -> std::size_t {
+                return parts[part_index].joint_index;
+            }
+        },
+        error
     );
+    if (!rigid_skin.has_value()) {
+        return make_error_content("create_skin: " + error);
+    }
+    // One undoable compound (make_rigid_skin): the skin resource enters the
+    // library, the part meshes leave the scene, the new mesh prim enters it.
+    m_context.operation_stack->queue(rigid_skin.value().operation);
+    const std::shared_ptr<erhe::scene::Mesh>& new_mesh = rigid_skin.value().mesh;
+    const std::shared_ptr<erhe::scene::Skin>& skin     = rigid_skin.value().skin;
 
     json joints_json = json::array();
     for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-        std::size_t vertex_count = 0;
-        for (const Skin_part& part : parts) {
-            if (part.joint_index == i) {
-                vertex_count += part.vertex_count;
-            }
-        }
         joints_json.push_back({
             {"joint_index",  i},
             {"node_name",    joints[i]->get_name()},
             {"node_id",      joints[i]->get_id()},
-            {"vertex_count", vertex_count}
+            {"vertex_count", rigid_skin.value().joint_vertex_counts[i]}
         });
     }
 
-    log_mcp->info("create_skin '{}': {} joints, {} vertices", name, joints.size(), vertex_count_after_process);
+    log_mcp->info("create_skin '{}': {} joints, {} vertices", name, joints.size(), rigid_skin.value().vertex_count);
 
     return make_json_content({
         {"node_name",    new_mesh->get_name()},
@@ -436,7 +271,7 @@ auto Mcp_server::action_create_skin(const json& args) -> std::string
         {"skin_name",    skin->get_name()},
         {"skin_id",      skin->get_id()},
         {"joint_count",  joints.size()},
-        {"vertex_count", static_cast<std::size_t>(vertex_count_after_process)},
+        {"vertex_count", rigid_skin.value().vertex_count},
         {"material",     material->get_name()},
         {"joints",       joints_json},
         {"queued",       true} // the compound operation executes on the next editor frame

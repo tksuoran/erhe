@@ -560,18 +560,19 @@ App_rendering::App_rendering(
     );
 
     // Solid bone style: the pickable bone proxies rendered as N.V shaded
-    // octahedra, using the stencil-assisted multi-pass method of the tool
+    // shapes (Rig.display_shape: octahedral, stick, box), using the stencil-assisted multi-pass method of the tool
     // handles (see the bone1..bone6 pipelines) so a bone reads as solid where it
     // is in front of content and dimmed where it is inside it. Before that, a
     // bone inside a skinned mesh was drawn but lost the depth test against the
     // mesh's own fill and looked simply missing.
     //
-    // The N.V shading reuses the existing Shader_debug::vdotn variant -
-    // standard.frag already emits vec3(max(dot(V, N), 0.0)) for it - so this
-    // needs no new shader and no new Shader_key axis, only the per-pass
-    // shader_debug override. The override's own filter excludes the selected and
-    // hovered proxies, because vdotn replaces the fragment color outright and
-    // would swallow their color; those fall back to their plain unlit material
+    // The N.V shading is the Shader_debug::vdotn_tinted variant - standard.frag
+    // emits base_color * max(dot(V, N), 0.0) for it - through the per-pass
+    // shader_debug override. The base color is the proxy's material: white for
+    // a bone in the style colors (plain N.V grey), the bone's Rig.display_color
+    // for a custom-colored one (skeleton_editing.md R17, Bone_visualization).
+    // The override's own filter excludes the selected and hovered proxies, whose
+    // selection / hover color is drawn flat; those use their plain unlit material
     // (Bone_visualization swaps in the selected / hover material and mirrors the
     // joint's flags onto the proxy mesh). One pass therefore covers all three
     // appearances - the earlier split into three passes existed only to drop the
@@ -592,7 +593,7 @@ App_rendering::App_rendering(
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
-            .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn},
+            .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn_tinted},
             .shader_debug_override_filter {
                 .require_all_bits_set         = Item_flags::bone_proxy,
                 .require_at_least_one_bit_set = 0,

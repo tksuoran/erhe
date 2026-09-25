@@ -66,7 +66,7 @@
     "name": "get_composition_passes"
   },
   {
-    "description": "Get detailed info for a node (transform, meshes, cameras, lights, joints, physics). The node is named by name, by path or by id. A Mesh prim reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
+    "description": "Get detailed info for a node (transform, meshes, cameras, lights, joints, physics). The node is named by name, by path or by id. A Mesh prim reports world_aabb (world-space min/max) and skinned (a skinned mesh also its skin and joints, each joint with its inverse_bind_matrix, 16 floats column-major); for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -1820,6 +1820,42 @@
       "type": "object"
     },
     "name": "align_bones"
+  },
+  {
+    "description": "Bind (rigid) (doc/plans/rigging/skeleton_editing.md R18): creates an erhe::scene::Skin for 'mesh' from 'bones', the editor-side counterpart of create_skin for smoke-testing an authored skeleton. The mesh's geometry is baked into world space and replaced by a new skinned mesh prim of the same name under the same parent (at world identity) with the mesh's first material; the skin '<mesh> skin' lists the bones in the given order (duplicates dropped). Inverse bind matrices are the inverses of the bones' REST world transforms (each bone's Rig.rest_* composed up the chain, the frame above the topmost bound bone at its current world transform), so the bind pose the skin implies is the bones' rest pose; every vertex is bound with weight 1 to the bone whose rest head-tail segment (Rig.tail) is nearest to it. ONE undoable operation executed on the next editor frame; its undo removes the skin and the new mesh and puts the mesh back. Afterwards the bones are joints of the skin, so the bound-skeleton refusals (R9) apply to them. Refused, with an error naming the reason, when the mesh already has a skin, has no primitives, a named node is not a bone or is in another scene, or a bone is already a joint of a skin. Returns node_name / node_id of the new mesh, skin_name / skin_id and 'joints' [{name, id, joint_index, vertex_count, inverse_bind_matrix (16 floats, column-major)}].",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to bind to: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "mesh": {
+          "description": "The mesh to bind: node name (the first node of that name carrying a mesh) or node id; a Mesh prim or a node whose mesh is a child prim",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "mesh",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "bind_mesh_to_bones"
   },
   {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",

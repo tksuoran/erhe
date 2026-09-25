@@ -12,7 +12,8 @@ class App_message_bus;
 // queued Bone_changed_message - a node carrying Item_flags::bone entering or
 // leaving the scene, a change of the bone flag (Node::bone_property, which
 // Xformable::handle_flag_bits_update routes here for every writer of the
-// bit) and a change of Rig.tail. It keeps no per-node record: the
+// bit) and a change of Rig.tail or of the display properties
+// Rig.display_color_mode / display_color / display_shape (R17). It keeps no per-node record: the
 // visualization reconciles each reported node against its current state.
 class Rig_system : public erhe::scene::INode_system
 {

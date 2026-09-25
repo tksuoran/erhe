@@ -979,6 +979,11 @@ void main()
         // Dimmed (0.3x) version of vdotn, easier on the eyes when
         // editing vertices / edges / faces in mesh-component mode.
         out_color.rgb = vec3(0.3 * max(dot(V, N), 0.0));
+#  elif ERHE_SHADER_DEBUG == 35 // vdotn_tinted
+        // vdotn times the material's base color: N.V shading that keeps the
+        // surface's color (the solid bone style, where a bone's own display
+        // color tints its shading).
+        out_color.rgb = base_color * max(dot(V, N), 0.0);
 #  elif ERHE_SHADER_DEBUG == 34 // joint_weight_ramp
         // Blender-style single-joint weight ramp: hue sweeps 240deg (blue)
         // -> 0deg (red) with weight, brightness 0.5 -> 1.0 through a gamma

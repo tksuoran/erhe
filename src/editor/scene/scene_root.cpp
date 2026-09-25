@@ -37,6 +37,7 @@
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "rig/rig_system.hpp"
+#include "rig/rigid_skin.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
@@ -708,6 +709,43 @@ auto Scene_root::make_browser_window(
                         "Put every bone in the selected subtrees (this subtree when nothing\n"
                         "relevant is selected) on the pose its skin was bound in; stops an\n"
                         "animation playing on them"
+                    );
+                }
+            }
+            // Bind (rigid), skeleton_editing.md R18: on a mesh row, binds the
+            // mesh to the selected bones. Greyed with the reason (already
+            // skinned, no bone selected, a selected bone already bound).
+            const std::shared_ptr<erhe::scene::Mesh> bind_mesh = get_skinnable_mesh(node);
+            if (bind_mesh && !erhe::scene::is_bone(node.get())) {
+                const auto selected_bones = [&context]() -> std::vector<std::shared_ptr<erhe::scene::Node>> {
+                    std::vector<std::shared_ptr<erhe::scene::Node>> bones;
+                    if (context.selection == nullptr) {
+                        return bones;
+                    }
+                    for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
+                        std::shared_ptr<erhe::scene::Node> bone = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                        if (bone && erhe::scene::is_bone(bone.get())) {
+                            bones.push_back(std::move(bone));
+                        }
+                    }
+                    return bones;
+                };
+                const std::optional<std::string> bind_refusal = get_bind_refusal(bind_mesh, selected_bones());
+                if (ImGui::MenuItem("Bind to Selected Bones (Rigid)", nullptr, false, !bind_refusal.has_value())) {
+                    deferred_operations.push_back(
+                        [&context, bind_mesh, selected_bones]() {
+                            static_cast<void>(bind_mesh_to_bones_rigid(context, bind_mesh, selected_bones()));
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(
+                        "%s",
+                        bind_refusal.has_value()
+                            ? bind_refusal.value().c_str()
+                            : "Skin this mesh to the selected bones: each vertex follows the bone whose rest\n"
+                              "head-tail segment is nearest; the bones' rest pose is the bind pose; one undo step"
                     );
                 }
             }

@@ -497,6 +497,8 @@ erhe_target_sources_grouped(
     renderers/sky_renderer.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
+    rig/bone_bind.cpp
+    rig/bone_bind.hpp
     rig/bone_commands.cpp
     rig/bone_commands.hpp
     rig/bone_connect.cpp
@@ -517,6 +519,8 @@ erhe_target_sources_grouped(
     rig/bone_tail.hpp
     rig/rig_system.cpp
     rig/rig_system.hpp
+    rig/rigid_skin.cpp
+    rig/rigid_skin.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp

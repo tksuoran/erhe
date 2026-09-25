@@ -599,6 +599,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "symmetrize_bones",               &Mcp_server::action_symmetrize_bones              },
         { "recalculate_bone_roll",          &Mcp_server::action_recalculate_bone_roll         },
         { "align_bones",                    &Mcp_server::action_align_bones                   },
+        { "bind_mesh_to_bones",             &Mcp_server::action_bind_mesh_to_bones            },
         { "place_brush",                    &Mcp_server::action_place_brush                   },
         { "place_brush_instances",          &Mcp_server::action_place_brush_instances         },
         { "create_shape",                   &Mcp_server::action_create_shape                  },

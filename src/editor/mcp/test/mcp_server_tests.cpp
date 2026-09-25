@@ -3165,6 +3165,267 @@ TEST_F(Mcp_test, bone_structure_verbs_are_refused_on_a_bound_bone)
     advance_frames(client, 4);
 }
 
+// doc/plans/rigging/skeleton_editing.md R17: Rig.display_shape swaps the bone
+// proxy's shape (octahedron: 6 vertices, stick / box: the 8-vertex prism, the
+// stick a quarter as wide) and Rig.display_color_mode / display_color its
+// material; the selected material still wins; each edit is one undo step.
+// Display is not bind-affecting, so a bone a skin lists accepts the values.
+TEST_F(Mcp_test, bone_display_properties_reshape_and_recolor_the_proxy)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+
+    Mcp_client::Tool_result created = client.call_tool("create_bone", json{{"scene_name", scene}, {"name", "shown"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    advance_frames(client, 4);
+    client.call_tool("select_items", json{{"scene_name", scene}, {"ids", json::array()}});
+    advance_frames(client, 2);
+
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    const int bone_id = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "shown"}}).payload.value("id", 0);
+    ASSERT_NE(bone_id, 0);
+    // The proxy: the Mesh under the bone's "bone proxy <name>" node.
+    auto proxy = [&client, &scene]() -> json {
+        const json nodes = client.call_tool("get_scene_nodes", json{{"scene_name", scene}}).payload.value("nodes", json::array());
+        int proxy_node_id = 0;
+        int proxy_mesh_id = 0;
+        for (const json& node : nodes) {
+            if ((node.value("name", "") == "bone proxy shown") && (node.value("parent", "") == "shown")) {
+                proxy_node_id = node.value("id", 0);
+            }
+            if ((node.value("type", "") == "Mesh") && (node.value("parent", "") == "bone proxy shown")) {
+                proxy_mesh_id = node.value("id", 0);
+            }
+        }
+        const json node_details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_id", proxy_node_id}}).payload;
+        const json mesh_details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_id", proxy_mesh_id}}).payload;
+        return json{
+            {"half_width",   node_details.at("local_transform").at("scale")[0].get<float>()},
+            {"vertex_count", mesh_details.at("mesh").value("vertex_count", 0)},
+            {"material",     mesh_details.at("mesh").at("materials")[0].get<std::string>()}
+        };
+    };
+    auto set = [&client, bone_id](const char* property, const json& value) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool("set_item_property", json{{"item_id", bone_id}, {"property", property}, {"value", value}});
+        advance_frames(client, 4);
+        return result;
+    };
+
+    const json initial = proxy();
+    EXPECT_EQ(initial.value("vertex_count", 0), 6) << "octahedral by default";
+    EXPECT_EQ(initial.value("material", ""), "bone") << "the style colors by default";
+    const float octahedral_width = initial.value("half_width", 0.0f);
+    EXPECT_GT(octahedral_width, 0.0f);
+
+    std::size_t depth = undo_depth();
+    Mcp_client::Tool_result boxed = set("Rig.display_shape", "box");
+    ASSERT_FALSE(boxed.is_error) << boxed.text;
+    EXPECT_EQ(undo_depth(), depth + 1) << "a display edit is one undo step";
+    EXPECT_EQ(proxy().value("vertex_count", 0), 8) << "box: the prism";
+    EXPECT_NEAR(proxy().value("half_width", 0.0f), octahedral_width, 1.0e-5f) << "box: as wide as the octahedron's ring";
+    ASSERT_FALSE(set("Rig.display_shape", "stick").is_error);
+    EXPECT_EQ(proxy().value("vertex_count", 0), 8) << "stick: the prism";
+    EXPECT_NEAR(proxy().value("half_width", 0.0f), 0.25f * octahedral_width, 1.0e-5f) << "stick: a quarter as wide";
+
+    depth = undo_depth();
+    ASSERT_FALSE(set("Rig.display_color_mode", "custom").is_error);
+    ASSERT_FALSE(set("Rig.display_color", "1 0 0").is_error);
+    EXPECT_EQ(undo_depth(), depth + 2);
+    EXPECT_EQ(proxy().value("material", ""), "bone color #ff0000") << "custom: a material of the display color";
+
+    client.call_tool("select_items", json{{"scene_name", scene}, {"paths", {"shown"}}});
+    advance_frames(client, 3);
+    EXPECT_EQ(proxy().value("material", ""), "bone selected") << "the selected color wins over the display color";
+    client.call_tool("select_items", json{{"scene_name", scene}, {"ids", json::array()}});
+    advance_frames(client, 3);
+    EXPECT_EQ(proxy().value("material", ""), "bone color #ff0000") << "deselected: the display color again";
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_EQ(proxy().value("material", ""), "bone") << "undo restores the style colors";
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_EQ(proxy().value("vertex_count", 0), 8) << "undo of stick: box again";
+    EXPECT_NEAR(proxy().value("half_width", 0.0f), octahedral_width, 1.0e-5f);
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+    EXPECT_EQ(proxy().value("vertex_count", 0), 6) << "undo of box: octahedral again";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+
+    // A bone a skin lists accepts the display values (R9 covers only the
+    // bind-affecting Rig.tail and Rig.rest_*).
+    const std::string figure = import_into_new_scene(client);
+    ASSERT_FALSE(figure.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+    const int joint_id = client.call_tool("get_node_details", json{{"scene_name", figure}, {"node_name", "arm_joint_L_2"}}).payload.value("id", 0);
+    for (const std::pair<const char*, json>& write : std::vector<std::pair<const char*, json>>{
+        {"Rig.display_shape", "stick"}, {"Rig.display_color_mode", "custom"}, {"Rig.display_color", "0 1 0"}
+    }) {
+        Mcp_client::Tool_result accepted = client.call_tool("set_item_property", json{{"item_id", joint_id}, {"property", write.first}, {"value", write.second}});
+        EXPECT_FALSE(accepted.is_error) << write.first << " on a bound bone: " << accepted.text;
+        advance_frames(client, 2);
+    }
+    EXPECT_EQ(item_property(client, joint_id, "Rig.display_shape").value("value", ""), "stick");
+    client.call_tool("close_scene", json{{"scene_name", figure}});
+    advance_frames(client, 4);
+}
+
+// R18 Bind (rigid): a box along an authored three-bone chain binds with the
+// inverse binds of the bones' REST world transforms (the chain is posed off
+// rest while binding), each vertex rigidly to its nearest head-tail segment,
+// as one undo step; posing a bone moves the vertices it owns; afterwards the
+// bones are bound (R9 refusals, a second bind refused) and undo takes the
+// skin away again.
+TEST_F(Mcp_test, bind_mesh_to_bones_skins_rigidly_from_the_rest_pose_in_one_undo_step)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+
+    auto call = [&client](const char* tool, const json& args) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool(tool, args);
+        advance_frames(client, 4);
+        return result;
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto details = [&client, &scene](const char* name) -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", name}});
+        return result.is_error ? json::object() : result.payload;
+    };
+    auto set_rotation_z = [&call, &scene](const char* bone, const float angle) {
+        const float half = 0.5f * angle;
+        call("set_node_transform", json{{"scene_name", scene}, {"node_name", bone}, {"space", "local"}, {"rotation_xyzw", {0.0f, 0.0f, std::sin(half), std::cos(half)}}});
+    };
+
+    // Three bones along +Y: segments [0, 1], [1, 2], [2, 3].
+    ASSERT_FALSE(call("create_bone", json{{"scene_name", scene}, {"name", "spine"}}).is_error);
+    ASSERT_FALSE(call("extrude_bones", json{{"scene_name", scene}, {"bones", {"spine"}}}).is_error);
+    ASSERT_FALSE(call("extrude_bones", json{{"scene_name", scene}, {"bones", {"spine.001"}}}).is_error);
+    Mcp_client::Tool_result shape = call(
+        "create_shape",
+        json{{"scene_name", scene}, {"shape", "box"}, {"name", "body"}, {"size", {0.5, 3.0, 0.5}}, {"steps", {1, 6, 1}}, {"position", {0.0, 1.5, 0.0}}, {"motion_mode", "none"}}
+    );
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    // Posed off rest while binding: the inverse binds come from the rest.
+    set_rotation_z("spine.001", 0.7f);
+
+    std::size_t depth = undo_depth();
+    Mcp_client::Tool_result bound = call("bind_mesh_to_bones", json{{"scene_name", scene}, {"mesh", "body"}, {"bones", {"spine", "spine.001", "spine.002"}}});
+    ASSERT_FALSE(bound.is_error) << bound.text;
+    const std::size_t bound_depth = undo_depth();
+    EXPECT_EQ(bound_depth, depth + 1) << "the bind is one undo step";
+    const json body = details("body");
+    ASSERT_TRUE(body.contains("mesh")) << "the skinned mesh keeps the name 'body'";
+    EXPECT_TRUE(body.at("mesh").value("skinned", false));
+    EXPECT_EQ(body.at("mesh").value("skin_name", ""), "body skin");
+    const json joints = body.at("mesh").at("joints");
+    ASSERT_EQ(joints.size(), 3u);
+    for (std::size_t i = 0; i < 3; ++i) {
+        // inverse(rest world) of a bone at (0, i, 0) with identity rotation:
+        // a translation by -i along Y (column-major: element 13).
+        const json& matrix = joints[i].at("inverse_bind_matrix");
+        ASSERT_EQ(matrix.size(), 16u);
+        for (std::size_t k = 0; k < 16; ++k) {
+            const float expected = ((k % 5) == 0) ? 1.0f : (k == 13) ? -static_cast<float>(i) : 0.0f;
+            EXPECT_NEAR(matrix[k].get<float>(), expected, 1.0e-5f) << "joint " << i << " element " << k;
+        }
+    }
+
+    // Every vertex bound with weight 1 to its nearest segment (ties to the
+    // lower joint): y <= 1 -> spine, y <= 2 -> spine.001, else spine.002.
+    const int vertex_count = body.at("mesh").value("vertex_count", 0);
+    ASSERT_GT(vertex_count, 0);
+    std::vector<int> indices;
+    for (int i = 0; i < vertex_count; ++i) {
+        indices.push_back(i);
+    }
+    Mcp_client::Tool_result values = client.call_tool(
+        "get_mesh_attribute_values",
+        json{{"scene_name", scene}, {"node_name", "body"}, {"domain", "vertex"}, {"indices", indices}, {"attributes", {"vertex_joint_indices_0", "vertex_joint_weights_0"}}}
+    );
+    ASSERT_FALSE(values.is_error) << values.text;
+    std::array<int, 3> per_joint{0, 0, 0};
+    for (const json& element : values.payload.at("elements")) {
+        const float y        = element.at("position")[1].get<float>();
+        const int   expected = (y <= 1.0f + 1.0e-4f) ? 0 : (y <= 2.0f + 1.0e-4f) ? 1 : 2;
+        const json& attributes = element.at("attributes");
+        EXPECT_EQ(attributes.at("vertex_joint_indices_0").at("value")[0].get<int>(), expected) << "vertex at y = " << y;
+        EXPECT_FLOAT_EQ(attributes.at("vertex_joint_weights_0").at("value")[0].get<float>(), 1.0f);
+        ++per_joint[static_cast<std::size_t>(attributes.at("vertex_joint_indices_0").at("value")[0].get<int>())];
+    }
+    EXPECT_GT(per_joint[0], 0);
+    EXPECT_GT(per_joint[1], 0);
+    EXPECT_GT(per_joint[2], 0);
+
+    // Back at rest the skinned bounds are the box; turning spine.002 by 90
+    // degrees about +Z swings its part (y in [2, 3]) toward -X.
+    set_rotation_z("spine.001", 0.0f);
+    auto bounds = [&details]() -> json { return details("body").at("mesh").at("world_aabb"); };
+    json rest_bounds = bounds();
+    EXPECT_NEAR(rest_bounds.at("min")[0].get<float>(), -0.25f, 1.0e-3f);
+    EXPECT_NEAR(rest_bounds.at("max")[1].get<float>(),  3.0f,  1.0e-3f);
+    set_rotation_z("spine.002", 1.5707963f);
+    json posed_bounds = bounds();
+    EXPECT_LT(posed_bounds.at("min")[0].get<float>(), -0.9f) << "the top bone's vertices swing to -X";
+    EXPECT_LT(posed_bounds.at("max")[1].get<float>(), 2.3f) << "nothing is left above the top bone's head";
+    EXPECT_NEAR(posed_bounds.at("min")[1].get<float>(), 0.0f, 1.0e-3f) << "the lower bones' vertices stay";
+    set_rotation_z("spine.002", 0.0f);
+
+    // Bound now: R9 refuses structure and rest edits, a second bind is refused.
+    Mcp_client::Tool_result extrude = call("extrude_bones", json{{"scene_name", scene}, {"bones", {"spine.002"}}});
+    EXPECT_TRUE(extrude.is_error);
+    EXPECT_NE(extrude.text.find("is a joint of skin 'body skin'"), std::string::npos) << extrude.text;
+    Mcp_client::Tool_result rebind = call("bind_mesh_to_bones", json{{"scene_name", scene}, {"mesh", "body"}, {"bones", {"spine"}}});
+    EXPECT_TRUE(rebind.is_error);
+    EXPECT_NE(rebind.text.find("already has skin"), std::string::npos) << rebind.text;
+    ASSERT_FALSE(call("create_shape", json{{"scene_name", scene}, {"shape", "box"}, {"name", "other"}, {"motion_mode", "none"}}).is_error);
+    Mcp_client::Tool_result other = call("bind_mesh_to_bones", json{{"scene_name", scene}, {"mesh", "other"}, {"bones", {"spine.001"}}});
+    EXPECT_TRUE(other.is_error);
+    EXPECT_NE(other.text.find("already a joint of skin 'body skin'"), std::string::npos) << other.text;
+
+    // Undo what came after the bind (the 'other' box, the pose edits), then
+    // the bind itself: the plain box is back and the bones are free again.
+    while (undo_depth() >= bound_depth) {
+        client.call_tool("undo", json::object());
+        advance_frames(client, 4);
+    }
+    EXPECT_EQ(undo_depth(), bound_depth - 1);
+    const json unbound = details("body");
+    ASSERT_TRUE(unbound.contains("mesh")) << "undo puts the original mesh back";
+    EXPECT_FALSE(unbound.at("mesh").value("skinned", true)) << "undo removes the skin";
+    EXPECT_FALSE(call("extrude_bones", json{{"scene_name", scene}, {"bones", {"spine.002"}}}).is_error) << "the bones are free again";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
 namespace {
 
 // Double-precision helpers for the orientation checks of R13 / R16: the

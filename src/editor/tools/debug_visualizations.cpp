@@ -17,6 +17,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace.hpp"
+#include "scene/rig_properties.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
@@ -66,6 +67,9 @@
 #endif
 
 #include <geogram/mesh/mesh_geometry.h>
+
+#include <array>
+#include <optional>
 
 using erhe::geometry::Mesh_attributes;
 using erhe::geometry::get_pointf;
@@ -329,10 +333,14 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
 
         // A hovered / selected bone reads in its own color in the line style
         // too, so bone selection is legible without switching to solid bones.
-        // Hover wins over selection, as it does for content meshes.
+        // Hover wins over selection, as it does for content meshes; else the
+        // bone's own Rig.display_color (skeleton_editing.md R17), else the
+        // style's colors alternating with depth.
+        const std::optional<vec3> display_color = get_bone_display_color(*joint);
         line_renderer.set_line_color(
-            joint->is_hovered()  ? style.bone_hover_color    :
-            joint->is_selected() ? style.bone_selected_color :
+            joint->is_hovered()          ? style.bone_hover_color            :
+            joint->is_selected()         ? style.bone_selected_color         :
+            display_color.has_value()    ? glm::vec4{display_color.value(), 1.0f} :
             (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
         );
         // Head at the joint origin, tail at the bone's Rig.tail
@@ -347,18 +355,34 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         // For linear blend skinning, matrices to be used on the shader would be:
         //const mat4  joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
         //const mat4  world_from_bind  = world_from_joint * joint_from_bind;
+        // The bone's Rig.display_shape (R17): a stick is the head-tail line,
+        // a box the prism around it, octahedral the octahedron below.
+        const Bone_display_shape shape = joint->get_value(Rig::display_shape_property());
+        if (shape == Bone_display_shape::stick) {
+            line_renderer.add_lines( {{ a, b }} );
+            continue;
+        }
         float side_length = 0.1f * glm::distance(a, b);
-        vec3 mid_point = glm::mix(a, b, 0.1f);
         vec3 joint_local_axis_x = joint->transform_direction_from_local_to_world(axis_x);
         vec3 joint_local_axis_z = joint->transform_direction_from_local_to_world(axis_z);
+        if (shape == Bone_display_shape::box) {
+            const vec3 dx = side_length * joint_local_axis_x;
+            const vec3 dz = side_length * joint_local_axis_z;
+            const std::array<vec3, 4> head_ring{a + dx + dz, a - dx + dz, a - dx - dz, a + dx - dz};
+            const std::array<vec3, 4> tail_ring{b + dx + dz, b - dx + dz, b - dx - dz, b + dx - dz};
+            for (std::size_t k = 0; k < 4; ++k) {
+                const std::size_t next = (k + 1) % 4;
+                line_renderer.add_lines( {{ head_ring[k], head_ring[next] }} );
+                line_renderer.add_lines( {{ tail_ring[k], tail_ring[next] }} );
+                line_renderer.add_lines( {{ head_ring[k], tail_ring[k]    }} );
+            }
+            continue;
+        }
+        vec3 mid_point = glm::mix(a, b, 0.1f);
         vec3 m1 = mid_point + side_length * joint_local_axis_x;
         vec3 m2 = mid_point + side_length * joint_local_axis_z;
         vec3 m3 = mid_point - side_length * joint_local_axis_x;
         vec3 m4 = mid_point - side_length * joint_local_axis_z;
-        //line_renderer.add_lines( world_from_joint, red,   { { side_length * axis_x }});
-        //line_renderer.add_lines( world_from_joint, green, { { side_length * axis_y }});
-        //line_renderer.add_lines( world_from_joint, blue,  { { side_length * axis_z }});
-        //line_renderer.add_lines( cyan,  { { a, b }});
         line_renderer.add_lines( {{ a,  m1 }} );
         line_renderer.add_lines( {{ a,  m2 }} );
         line_renderer.add_lines( {{ a,  m3 }} );

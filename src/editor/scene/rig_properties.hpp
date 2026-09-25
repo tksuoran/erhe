@@ -1,11 +1,13 @@
 #pragma once
 
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_property/enum_info.hpp"
 #include "erhe_property/property_value.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <optional>
 #include <vector>
 
 namespace erhe::scene {
@@ -14,6 +16,30 @@ namespace erhe::scene {
 }
 
 namespace editor {
+
+// R17 (doc/plans/rigging/skeleton_editing.md): the shape a bone is drawn as,
+// in the solid style (the pickable bone proxy) and in the line style.
+enum class Bone_display_shape : int {
+    octahedral = 0, // the octahedron widest at a tenth of the bone
+    stick      = 1, // a thin square prism, a quarter of the octahedron's width
+    box        = 2  // a square prism as wide as the octahedron's ring
+};
+
+// R17: where a bone's display color comes from. `style` is the editor's
+// Debug_visualizations_style colors (the solid style's N.V grey, the line
+// style's alternating skin_bone_color_a / b); `custom` is the bone's own
+// Rig.display_color. Selected and hovered bones draw in the style's
+// selected / hover colors either way.
+enum class Bone_color_mode : int {
+    style  = 0,
+    custom = 1
+};
+
+[[nodiscard]] auto c_str(Bone_display_shape shape) -> const char*;
+[[nodiscard]] auto c_str(Bone_color_mode mode) -> const char*;
+
+extern const erhe::property::Enum_info c_bone_display_shape_enum_info;
+extern const erhe::property::Enum_info c_bone_color_mode_enum_info;
 
 // Per-bone rig values as attached properties of the bone node itself
 // (doc/plans/rigging/skeleton_editing.md section 1), owner type "Rig", UI
@@ -67,6 +93,21 @@ public:
     // (rig/bone_connect.hpp).
     [[nodiscard]] static auto connected_property() -> const erhe::property::Property<bool>&;
 
+    // R17: how the bone is drawn. Display only - nothing about the bind or
+    // the pose reads them - so, unlike Rig.tail and Rig.rest_*, a bone a
+    // skin lists accepts them. A change reaches the scene's node systems
+    // (node_system_property_changed): Rig_system reports it to the bone
+    // display, which re-materials / reshapes that bone's proxy. The line
+    // style reads them where it draws the bone.
+    //   Rig.display_color_mode: Bone_color_mode, default `style`.
+    //   Rig.display_color:      vec3 color presentation, the color of a
+    //                           `custom` bone (listed only then); default
+    //                           orange.
+    //   Rig.display_shape:      Bone_display_shape, default `octahedral`.
+    [[nodiscard]] static auto display_color_mode_property() -> const erhe::property::Property<Bone_color_mode>&;
+    [[nodiscard]] static auto display_color_property     () -> const erhe::property::Property<glm::vec3>&;
+    [[nodiscard]] static auto display_shape_property     () -> const erhe::property::Property<Bone_display_shape>&;
+
     // Every Rig.* property, registration order, for generic walks.
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
@@ -76,5 +117,9 @@ public:
 
 // True when the node holds a local value of any Rig.* property.
 [[nodiscard]] auto has_local_rig_value(const erhe::scene::Node& node) -> bool;
+
+// R17: the bone's own display color when its Rig.display_color_mode is
+// `custom`, nullopt when it draws in the style colors.
+[[nodiscard]] auto get_bone_display_color(const erhe::scene::Node& node) -> std::optional<glm::vec3>;
 
 } // namespace editor

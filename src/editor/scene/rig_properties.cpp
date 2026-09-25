@@ -100,7 +100,48 @@ constexpr std::string_view c_rig_group = "Rig";
     return validate_unbound(object, "rest transform", out_error);
 }
 
+// Rig.display_color is listed only while the bone draws in its own color.
+[[nodiscard]] auto is_custom_colored_bone(const Dependency_object& object) -> bool
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+    return (node != nullptr) && erhe::scene::is_bone(node) &&
+        (node->get_value(Rig::display_color_mode_property()) == Bone_color_mode::custom);
+}
+
+constexpr erhe::property::Enum_entry c_bone_display_shape_entries[] = {
+    { "octahedral", static_cast<int32_t>(Bone_display_shape::octahedral) },
+    { "stick",      static_cast<int32_t>(Bone_display_shape::stick)      },
+    { "box",        static_cast<int32_t>(Bone_display_shape::box)        }
+};
+
+constexpr erhe::property::Enum_entry c_bone_color_mode_entries[] = {
+    { "style",  static_cast<int32_t>(Bone_color_mode::style)  },
+    { "custom", static_cast<int32_t>(Bone_color_mode::custom) }
+};
+
 } // anonymous namespace
+
+const erhe::property::Enum_info c_bone_display_shape_enum_info{"Bone_display_shape", c_bone_display_shape_entries};
+const erhe::property::Enum_info c_bone_color_mode_enum_info   {"Bone_color_mode",    c_bone_color_mode_entries};
+
+auto c_str(const Bone_display_shape shape) -> const char*
+{
+    switch (shape) {
+        case Bone_display_shape::octahedral: return "octahedral";
+        case Bone_display_shape::stick:      return "stick";
+        case Bone_display_shape::box:        return "box";
+        default:                             return "?";
+    }
+}
+
+auto c_str(const Bone_color_mode mode) -> const char*
+{
+    switch (mode) {
+        case Bone_color_mode::style:  return "style";
+        case Bone_color_mode::custom: return "custom";
+        default:                      return "?";
+    }
+}
 
 auto Rig::property_owner_type() -> erhe::property::Owner_type
 {
@@ -181,6 +222,45 @@ auto Rig::connected_property() -> const Property<bool>&
     return s_property;
 }
 
+auto Rig::display_color_mode_property() -> const Property<Bone_color_mode>&
+{
+    static const Property<Bone_color_mode> s_property = Property<Bone_color_mode>::register_attached(
+        "display_color_mode", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(), c_bone_color_mode_enum_info,
+        Property_metadata{
+            .default_value    = erhe::property::make_value(Bone_color_mode::style),
+            .property_changed = erhe::scene::node_system_property_changed,
+            .ui               = Property_ui{.group = c_rig_group, .tooltip = "'style': the bone draws in the editor's bone colors; 'custom': in its own Display Color. Selected and hovered bones use the selection / hover colors either way", .label = "Display Color Mode", .visible_when = is_bone_node}
+        }
+    );
+    return s_property;
+}
+
+auto Rig::display_color_property() -> const Property<glm::vec3>&
+{
+    static const Property<glm::vec3> s_property = Property<glm::vec3>::register_attached(
+        "display_color", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(),
+        Property_metadata{
+            .default_value    = glm::vec3{1.0f, 0.45f, 0.0f},
+            .property_changed = erhe::scene::node_system_property_changed,
+            .ui               = Property_ui{.presentation = Property_ui::Presentation::color, .group = c_rig_group, .tooltip = "The bone's own color, in the solid (shaded) and the line style", .label = "Display Color", .visible_when = is_custom_colored_bone}
+        }
+    );
+    return s_property;
+}
+
+auto Rig::display_shape_property() -> const Property<Bone_display_shape>&
+{
+    static const Property<Bone_display_shape> s_property = Property<Bone_display_shape>::register_attached(
+        "display_shape", Rig::property_owner_type(), erhe::scene::Node::property_owner_type(), c_bone_display_shape_enum_info,
+        Property_metadata{
+            .default_value    = erhe::property::make_value(Bone_display_shape::octahedral),
+            .property_changed = erhe::scene::node_system_property_changed,
+            .ui               = Property_ui{.group = c_rig_group, .tooltip = "The shape the bone is drawn as: octahedral, stick (thin) or box", .label = "Display Shape", .visible_when = is_bone_node}
+        }
+    );
+    return s_property;
+}
+
 // Registered at static initialization like every other property, so the
 // registry lists them (and finds them by qualified name, as a scene load
 // does) before anything else runs; the accessors' own statics keep the order
@@ -191,6 +271,9 @@ namespace {
 [[maybe_unused]] const Property<glm::vec3>& rest_scale_registration       = Rig::rest_scale_property();
 [[maybe_unused]] const Property<glm::vec3>& tail_registration             = Rig::tail_property();
 [[maybe_unused]] const Property<bool>&      connected_registration        = Rig::connected_property();
+[[maybe_unused]] const Property<Bone_color_mode>&    display_color_mode_registration = Rig::display_color_mode_property();
+[[maybe_unused]] const Property<glm::vec3>&          display_color_registration      = Rig::display_color_property();
+[[maybe_unused]] const Property<Bone_display_shape>& display_shape_registration      = Rig::display_shape_property();
 } // anonymous namespace
 
 auto Rig::all_properties() -> const std::vector<const Dependency_property*>&
@@ -200,7 +283,10 @@ auto Rig::all_properties() -> const std::vector<const Dependency_property*>&
         rest_rotation_property   ().get_ptr(),
         rest_scale_property      ().get_ptr(),
         tail_property            ().get_ptr(),
-        connected_property       ().get_ptr()
+        connected_property       ().get_ptr(),
+        display_color_mode_property().get_ptr(),
+        display_color_property   ().get_ptr(),
+        display_shape_property   ().get_ptr()
     };
     return s_properties;
 }
@@ -222,6 +308,14 @@ auto has_local_rig_value(const erhe::scene::Node& node) -> bool
         }
     }
     return false;
+}
+
+auto get_bone_display_color(const erhe::scene::Node& node) -> std::optional<glm::vec3>
+{
+    if (node.get_value(Rig::display_color_mode_property()) != Bone_color_mode::custom) {
+        return std::nullopt;
+    }
+    return node.get_value(Rig::display_color_property());
 }
 
 } // namespace editor

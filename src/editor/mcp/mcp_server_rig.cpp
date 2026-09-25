@@ -3,7 +3,8 @@
 // clear_pose (R14), copy_pose and paste_pose (R15), create_bone (R5),
 // extrude_bones (R6), subdivide_bones (R7), delete_bones (R8),
 // symmetrize_bones (R13), recalculate_bone_roll and align_bones (R16), the
-// last seven refused on bones a skin lists (R9). They act on the bones
+// last seven refused on bones a skin lists (R9), and bind_mesh_to_bones
+// (R18, Bind (rigid); refused on bones a skin already lists). They act on the bones
 // their arguments name, never on the selection or on UI state - paste_pose
 // takes the pose as an argument and never reads the editor's pose buffer;
 // the verbs are the ones the Hierarchy context menu of a bone runs
@@ -16,10 +17,12 @@
 #include "rig/bone_commands.hpp"
 #include "rig/bone_pose.hpp"
 #include "rig/bone_structure.hpp"
+#include "rig/rigid_skin.hpp"
 #include "scene/rig_properties.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -566,6 +569,69 @@ auto Mcp_server::action_align_bones(const json& args) -> std::string
         return error_result(error.value());
     }
     return structure_result(align_bones_to_active(m_context, targets, active.front()));
+}
+
+auto Mcp_server::action_bind_mesh_to_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    // The mesh: a node id (integer) or name (string, the first node of that
+    // name); the mesh prim itself or a node carrying one.
+    const json mesh_arg = args.value("mesh", json{});
+    const bool by_id    = mesh_arg.is_number_unsigned() || mesh_arg.is_number_integer();
+    if (!by_id && !mesh_arg.is_string()) {
+        return error_result("mesh must be a node name (string) or node id (integer)");
+    }
+    const std::size_t mesh_id   = by_id ? mesh_arg.get<std::size_t>() : std::size_t{0};
+    const std::string mesh_name = by_id ? std::string{} : mesh_arg.get<std::string>();
+    std::shared_ptr<erhe::scene::Node> mesh_node;
+    sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+        const bool match = by_id ? (node->get_id() == mesh_id) : (node->get_name() == mesh_name);
+        if (match && get_skinnable_mesh(node)) {
+            mesh_node = node;
+            return false;
+        }
+        return true;
+    });
+    if (!mesh_node) {
+        return error_result("No mesh in scene " + scene_name + " for " + mesh_arg.dump());
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), bones);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    const Bone_bind_result result = bind_mesh_to_bones_rigid(m_context, get_skinnable_mesh(mesh_node), bones);
+    if (result.refusal.has_value()) {
+        return error_result(result.refusal.value());
+    }
+    json joints = json::array();
+    for (std::size_t i = 0, end = result.joints.size(); i < end; ++i) {
+        json entry = node_json(*result.joints[i]);
+        entry["joint_index"]  = i;
+        entry["vertex_count"] = result.joint_vertex_counts[i];
+        const glm::mat4& m = result.inverse_bind_matrices[i];
+        json matrix = json::array();
+        for (int column = 0; column < 4; ++column) {
+            for (int row = 0; row < 4; ++row) {
+                matrix.push_back(m[column][row]);
+            }
+        }
+        entry["inverse_bind_matrix"] = matrix;
+        joints.push_back(entry);
+    }
+    return make_json_content({
+        {"node_name", result.mesh->get_name()},
+        {"node_id",   result.mesh->get_id()},
+        {"skin_name", result.skin->get_name()},
+        {"skin_id",   result.skin->get_id()},
+        {"joints",    joints},
+        // One undoable operation, executed on the next editor frame.
+        {"queued",    result.queued}
+    }).dump();
 }
 
 } // namespace editor

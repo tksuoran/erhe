@@ -2658,6 +2658,15 @@ has no callback: the snaps it and a `Rig.tail` edit imply are follow-ups the
 edit's `Property_set_operation` records into its own undo step
 (`rig/bone_connect.hpp`), so a load moves nothing. The authored bone flag
 itself is `Node::bone_property`, a bridged flag property of erhe::scene.
+`Rig.display_color_mode` (enumeration `Bone_color_mode`, `style` |
+`custom`, `Enum_info` `c_bone_color_mode_enum_info` next to it),
+`Rig.display_color` (vec3, color presentation, `visible_when` the mode is
+`custom`) and `Rig.display_shape` (enumeration `Bone_display_shape`,
+`octahedral` | `stick` | `box`) are the bone display of R17: stored, no
+validate (display is not bind-affecting, so a bound bone accepts them), and
+`node_system_property_changed` as their `property_changed`, so the bone
+display re-materials / reshapes on the edit. `get_bone_display_color` answers
+the custom color or nullopt.
 The values ride the node's `ERHE_node` `properties` map by their qualified
 names (D14), as the `Ik.*` values do. Tests: `test_ik_properties.cpp`
 (`editor_ik_solver_tests`) and `test_bone_pose.cpp` (`editor_rig_tests`),
