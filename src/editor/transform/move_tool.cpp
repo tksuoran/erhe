@@ -49,12 +49,12 @@ void Move_tool::imgui(Property_editor& property_editor)
     });
     p.add_entry("Effector Orientation", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
-        const int current = static_cast<int>(settings.effector_orientation);
+        const int current = static_cast<int>(settings.ik_drag_options.effector_orientation);
         if (ImGui::BeginCombo("##", c_ik_effector_orientation_strings[current])) {
             for (int i = 0, end = IM_ARRAYSIZE(c_ik_effector_orientation_strings); i < end; ++i) {
                 bool selected = (i == current);
                 if (ImGui::Selectable(c_ik_effector_orientation_strings[i], &selected, ImGuiSelectableFlags_None)) {
-                    settings.effector_orientation = static_cast<Ik_effector_orientation>(i);
+                    settings.ik_drag_options.effector_orientation = static_cast<Ik_effector_orientation>(i);
                 }
             }
             ImGui::EndCombo();
@@ -64,6 +64,28 @@ void Move_tool::imgui(Property_editor& property_editor)
                 "What the dragged bone's own orientation does while the chain bends: "
                 "Keep World holds its world orientation (only its position follows the chain); "
                 "Follow Last Segment holds its local orientation, so it turns with the bone that aims at it"
+            );
+        }
+    });
+    p.add_entry("Solve From", [this]() {
+        Transform_tool_settings& settings = get_shared().settings;
+        const int current = static_cast<int>(settings.ik_drag_options.solve_from);
+        if (ImGui::BeginCombo("##", c_ik_solve_from_strings[current])) {
+            for (int i = 0, end = IM_ARRAYSIZE(c_ik_solve_from_strings); i < end; ++i) {
+                bool selected = (i == current);
+                if (ImGui::Selectable(c_ik_solve_from_strings[i], &selected, ImGuiSelectableFlags_None)) {
+                    settings.ik_drag_options.solve_from = static_cast<Ik_solve_from>(i);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Which pose each step of an IK drag solves from: "
+                "Drag Start solves every step from the pose the drag started in, so the pose depends only on "
+                "where the target is and dragging back restores the start pose; "
+                "Previous Step solves each step from the pose the previous step left, so the pose keeps what "
+                "the drag picked up on the way"
             );
         }
     });

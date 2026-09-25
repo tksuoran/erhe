@@ -107,11 +107,11 @@ constexpr int   c_max_iterations  = 16;
 
 auto Ik_drag::begin(
     const std::shared_ptr<erhe::scene::Node>& effector,
-    const Ik_effector_orientation             effector_orientation
+    const Ik_drag_options&                    options
 ) -> bool
 {
     reset();
-    m_effector_orientation = effector_orientation;
+    m_options = options;
     if (!effector) {
         return false;
     }
@@ -288,10 +288,40 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
         return;
     }
 
-    // Restore the drag-start pose: the target is absolute, so each solve
-    // starts from the same pose and dragging back to the start restores it.
-    for (std::size_t i = 0; i < m_joints.size(); ++i) {
-        m_joints[i]->set_parent_from_node(m_parent_from_joint_before[i]);
+    // The pose this step solves from (ik_drag_options.md R25, R26). The
+    // target is absolute either way.
+    const std::size_t joint_count = m_joints.size();
+    const bool solve_from_previous_step =
+        (m_options.solve_from == Ik_solve_from::previous_step) && m_has_previous_step;
+    m_has_previous_step = true;
+    if (solve_from_previous_step) {
+        // Previous Step: the solved joints keep the pose the previous apply()
+        // left, and the solve's input is that pose - the joints' current world
+        // positions (all the unconstrained path reads) and their current local
+        // rotations (the constrained path's start, from which the no-teleport
+        // extension of a limit is taken). The effector is not a solved joint:
+        // its local transform goes back to its drag-start value, so its own
+        // orientation is decided by the effector orientation alone (R3, R4)
+        // and never accumulates. Root-to-effector refreshes make every cached
+        // world transform read below current.
+        m_joints.back()->set_parent_from_node(m_parent_from_joint_before.back());
+        m_chain.positions      .resize(joint_count);
+        m_chain.local_rotations.resize(joint_count);
+        for (std::size_t i = 0; i < joint_count; ++i) {
+            erhe::scene::Node& joint = *m_joints[i];
+            joint.update_world_from_node();
+            m_chain.positions      [i] = vec3{joint.position_in_world()};
+            m_chain.local_rotations[i] = joint.parent_from_node_transform().get_rotation();
+        }
+    } else {
+        // Drag Start, and the first step of Previous Step: restore the
+        // drag-start pose, so each solve starts from the same pose and
+        // dragging back to the start restores it.
+        for (std::size_t i = 0; i < joint_count; ++i) {
+            m_joints[i]->set_parent_from_node(m_parent_from_joint_before[i]);
+        }
+        m_chain.positions       = m_initial_positions;
+        m_chain.local_rotations = m_local_rotations_before;
     }
 
     // Both paths solve through the Ik_solver interface, so the pole step has
@@ -299,9 +329,7 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
     // neither constraints nor a pole reaches the untouched Phase 1
     // fabrik_solve inside Fabrik_solver::solve, with the same arguments, so
     // it still produces Phase 1 results bit for bit.
-    m_chain.positions       = m_initial_positions;
     m_chain.lengths         = m_lengths;
-    m_chain.local_rotations = m_local_rotations_before;
     m_chain.child_dir_local = m_child_dir_local;
     m_chain.constraints     = m_constraints;
     m_chain.root_parent_world_rotation = m_root_parent_world_rotation;
@@ -365,14 +393,14 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
 
     // The effector's own orientation (ik_drag_options.md R3, R4). Its local
     // rotation was never touched: the write-back loops above stop before it,
-    // and the drag-start restore at the top of apply() put it back. So
+    // and the top of apply() put its drag-start value back. So
     // follow_last_segment only has to refresh the effector's cached world
     // transform under its solved parent - it then rides rigidly on that parent
     // like any other child. keep_world additionally rotates it back to its
     // drag-start world rotation, so only its position follows the chain.
     erhe::scene::Node& effector = *m_joints.back();
     effector.update_world_from_node(); // its parent joint is final
-    if (m_effector_orientation == Ik_effector_orientation::keep_world) {
+    if (m_options.effector_orientation == Ik_effector_orientation::keep_world) {
         const quat effector_rotation = effector.world_from_node_transform().get_rotation();
         const quat restore_delta = m_effector_world_rotation_before * inverse(effector_rotation);
         effector.set_world_from_node(erhe::scene::rotate(effector.world_from_node_transform(), restore_delta));
@@ -392,7 +420,8 @@ void Ik_drag::reset()
     m_root_parent_world_rotation = quat{1.0f, 0.0f, 0.0f, 0.0f};
     m_has_constraints = false;
     m_effector_world_rotation_before = quat{1.0f, 0.0f, 0.0f, 0.0f};
-    m_effector_orientation = Ik_effector_orientation::keep_world;
+    m_options = Ik_drag_options{};
+    m_has_previous_step = false;
     m_has_pole      = false;
     m_pole_position = vec3{0.0f};
     m_pole_angle    = 0.0f;

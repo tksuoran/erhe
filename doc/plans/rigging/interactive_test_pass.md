@@ -10,13 +10,13 @@ widgets reach.
 
 Progress: sections 0-2 pass by hand. Sections 0-8 are automated (below);
 every check passes except the section 8.3 stability sweep, which finds the
-jumps of finding F7. What is left for a person is the three behaviour
+jumps of finding F7. What is left for a person is the two behaviour
 choices the script prints as DECISION lines (section 8).
 
 ## Automated run
 
 `scripts/ik_interactive_pass_verify.py` runs sections 0-8 against the
-headless editor and prints one PASS / FAIL line per check (66 checks, about
+headless editor and prints one PASS / FAIL line per check (68 checks, about
 5 minutes), then the DECISION lines - behaviour the checks measure but a
 person chooses:
 
@@ -31,7 +31,8 @@ the asset of Setup below (Add Bone Tip Nodes through the Hierarchy context
 menu), aims the scene camera, and restores the rig before each check.
 
 - **The gestures a check is about are real input.** Checkboxes, the Set
-  Rest button, the Limit Min slider and the Effector Orientation combo are
+  Rest button, the Limit Min slider and the Effector Orientation and Solve
+  From combos are
   clicked in the Properties / Transform windows; Ctrl+Z / Ctrl+Y are key
   chords over the viewport; the plain drag of 1.1, the channel-lock masking
   of 4.1 and one long ring drag of 4.3 are mouse drags on the gizmo handles
@@ -62,9 +63,9 @@ menu), aims the scene camera, and restores the rig before each check.
   nothing; a pole on the elbow in about a third; a 24-step random walk of
   the target. `make_sweep_scenarios()` / `run_sweep_scenario()` replay one
   scenario alone.
-- **Session state.** Move tool parameters (Bone IK, Effector Orientation)
-  live as long as the editor runs; the script sets them instead of assuming
-  the startup values.
+- **Session state.** Move tool parameters (Bone IK, Effector Orientation,
+  Solve From) live as long as the editor runs; the script sets them instead
+  of assuming the startup values.
 
 ## Setup
 
@@ -257,23 +258,29 @@ for a pole to aim.
 
 ## 8. Behaviour and decisions - automated, decisions wanted
 
-Measured (checks 8.1 - 8.3):
+Measured (checks 8.1 - 8.4):
 
 1. Mid-chain drag: dragging `bone_1` makes it the effector - `bone_0` aims
    at the target, `bone_1` keeps its world orientation and everything below
    it follows rigidly.
-2. Each drag step solves from the drag-start pose: a target reached by two
-   paths gives the same pose, and back at the start the start pose.
+2. Solve From "Drag Start" (the default): each drag step solves from the
+   drag-start pose, so a target reached by two paths gives the same pose,
+   and back at the start the start pose.
 3. Stability sweep: locks, limits and bone lengths hold in every scenario,
    and a replayed drag gives the same poses. Jumps: only with a pole and a
    hinge at the chain root (finding F7); so the constrained solver is not
    yet stable enough to add stiffness on top.
+4. Solve From "Previous Step" (`ik_drag_options.md` 3.6 criterion 2), chosen
+   in the Move tool's combo: a drag pulling the chain straight out of reach
+   and back to its start ends in a pose more than 1 degree off the start
+   pose on some bone, where "Drag Start" restores the start pose; no step of
+   either drag moves a joint more than 5 times the target's step, and each
+   drag is one undo step. The check leaves Solve From at "Drag Start".
 
 Decisions for the user (the script prints them as DECISION lines):
 
 - Mid-chain drag keeps the children rigid (1.) - or keep the chain's end in
   place (a two-target solve)?
-- Path-independent drags (2.) - or an incremental solve?
 - The pole snap on the first step (5.3) - or ease the swivel in?
 
 ## Findings

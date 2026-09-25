@@ -1817,42 +1817,75 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    if (!args.contains("target") || !args.at("target").is_array() || (args.at("target").size() != 3)) {
-        json r = make_text_content("target must be an array of 3 numbers (world coordinates)");
+    // doc/plans/rigging/ik_drag_options.md R32: either one world target or a
+    // path of world targets applied in order within the one gesture.
+    auto error_result = [](const std::string& message) -> std::string {
+        json r = make_text_content(message);
         r["isError"] = true;
         return r.dump();
-    }
-    glm::vec3 target{0.0f};
-    for (std::size_t i = 0; i < 3; ++i) {
-        const json& component = args.at("target")[i];
-        if (!component.is_number()) {
-            json r = make_text_content("target must be an array of 3 numbers (world coordinates)");
-            r["isError"] = true;
-            return r.dump();
+    };
+    auto parse_position = [](const json& value, glm::vec3& out) -> bool {
+        if (!value.is_array() || (value.size() != 3)) {
+            return false;
         }
-        target[static_cast<glm::length_t>(i)] = component.get<float>();
+        for (std::size_t i = 0; i < 3; ++i) {
+            if (!value[i].is_number()) {
+                return false;
+            }
+            out[static_cast<glm::length_t>(i)] = value[i].get<float>();
+        }
+        return true;
+    };
+    const bool has_target = args.contains("target");
+    const bool has_path   = args.contains("path");
+    if (has_target == has_path) {
+        return error_result("give exactly one of target (one world position) or path (an array of world positions)");
+    }
+    std::vector<glm::vec3> targets;
+    if (has_target) {
+        glm::vec3 target{0.0f};
+        if (!parse_position(args.at("target"), target)) {
+            return error_result("target must be an array of 3 numbers (world coordinates)");
+        }
+        targets.push_back(target);
+    } else {
+        const json& path = args.at("path");
+        if (!path.is_array() || path.empty()) {
+            return error_result("path must be a non-empty array of [x, y, z] world positions");
+        }
+        targets.reserve(path.size());
+        for (const json& entry : path) {
+            glm::vec3 target{0.0f};
+            if (!parse_position(entry, target)) {
+                return error_result("path must be a non-empty array of [x, y, z] world positions");
+            }
+            targets.push_back(target);
+        }
     }
 
-    // doc/plans/rigging/ik_drag_options.md R10: an explicit argument with its
-    // own fixed default, never the Move tool's combo.
+    // doc/plans/rigging/ik_drag_options.md R10, R31: explicit arguments with
+    // their own fixed defaults, never the Move tool's combos. Every value is
+    // checked before any joint moves.
+    Ik_drag_options options;
     const std::string orientation_string = args.value("effector_orientation", "keep_world");
-    Ik_effector_orientation effector_orientation = Ik_effector_orientation::keep_world;
     if (orientation_string == "follow_last_segment") {
-        effector_orientation = Ik_effector_orientation::follow_last_segment;
+        options.effector_orientation = Ik_effector_orientation::follow_last_segment;
     } else if (orientation_string != "keep_world") {
-        json r = make_text_content(
-            "Invalid effector_orientation: " + orientation_string + " (keep_world, follow_last_segment)"
-        );
-        r["isError"] = true;
-        return r.dump();
+        return error_result("Invalid effector_orientation: " + orientation_string + " (keep_world, follow_last_segment)");
+    }
+    const std::string solve_from_string = args.value("solve_from", "drag_start");
+    if (solve_from_string == "previous_step") {
+        options.solve_from = Ik_solve_from::previous_step;
+    } else if (solve_from_string != "drag_start") {
+        return error_result("Invalid solve_from: " + solve_from_string + " (drag_start, previous_step)");
     }
 
-    // One complete gesture: discovery, one solve against an absolute world
-    // target, and one compound operation covering the joints it moved
-    // (doc/plans/rigging/pole_target.md R22). Nothing here reads UI state -
-    // no selection, no gizmo, no Transform tool setting.
+    // One complete gesture: discovery, one solve per target against an
+    // absolute world target, and one compound operation covering the joints
+    // it moved (doc/plans/rigging/pole_target.md R22). Nothing here reads UI
+    // state - no selection, no gizmo, no Transform tool setting.
     Ik_drag drag;
-    if (!drag.begin(effector, effector_orientation)) {
+    if (!drag.begin(effector, options)) {
         json r = make_text_content(
             "No IK chain for '" + effector->get_name() +
             "': the effector must be a bone (or a node parented under one) that is not ik_lock, with at least one bone ancestor"
@@ -1860,7 +1893,10 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    drag.apply(target);
+    for (const glm::vec3& step_target : targets) {
+        drag.apply(step_target);
+    }
+    const glm::vec3 target = targets.back();
 
     json joints = json::array();
     for (const std::shared_ptr<erhe::scene::Node>& joint : drag.get_joints()) {
@@ -1888,6 +1924,8 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         {"pole",          nullptr},
         {"pole_angle",    drag.has_pole() ? drag.get_pole_angle() : 0.0f},
         {"effector_orientation", orientation_string},
+        {"solve_from",    solve_from_string},
+        {"steps",         targets.size()},
         {"recorded",      operation ? true : false}
     };
     if (pole) {

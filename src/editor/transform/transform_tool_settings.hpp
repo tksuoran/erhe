@@ -52,11 +52,11 @@ public:
     // with FABRIK IK instead of translating the bone (see
     // doc/plans/rigging/fabrik_ik.md). Off = plain FK translation.
     bool                     translate_ik_enable  {true};
-    // What the effector's own orientation does during an IK drag
-    // (doc/plans/rigging/ik_drag_options.md R7). Session state, like
-    // translate_ik_enable: a drag-behavior choice owned by the running tool,
-    // not a persisted preference of Transform_tool_config.
-    Ik_effector_orientation  effector_orientation {Ik_effector_orientation::keep_world};
+    // The IK drag's options - effector orientation, mid-chain drag, solve
+    // from, pole alignment (doc/plans/rigging/ik_drag_options.md R7, R29).
+    // Session state, like translate_ik_enable: drag-behavior choices owned by
+    // the running tool, not persisted preferences of Transform_tool_config.
+    Ik_drag_options          ik_drag_options      {};
     bool                     rotate_snap_enable   {false};
     float                    rotate_snap          {15.0f};
     Scale_gizmo_mode         scale_gizmo_mode     {Scale_gizmo_mode::basic};

@@ -39,12 +39,68 @@ static constexpr const char* c_ik_effector_orientation_strings[] = {
     "Follow Last Segment"
 };
 
+// The drag behavior options of doc/plans/rigging/ik_drag_options.md section 3.
+// The first value of each is the behavior the drag has always had and the
+// default; the second is the alternative the Move tool offers.
+
+// What a drag of a bone with bone children does to the bones below it (3.1):
+//   rigid_children - they follow the dragged bone rigidly (R20).
+//   pin_chain_end  - the chain's end stays where it was at drag start (R21-R24).
+enum class Ik_mid_chain_drag : unsigned int {
+    rigid_children = 0,
+    pin_chain_end  = 1
+};
+
+static constexpr const char* c_ik_mid_chain_drag_strings[] = {
+    "Rigid Children",
+    "Pin Chain End"
+};
+
+// Which pose each apply() of a gesture solves from (3.2):
+//   drag_start    - the drag-start pose, so a drag is path independent (R25).
+//   previous_step - the pose the previous apply() left, so the pose carries
+//                   what the drag picked up on the way (R26).
+enum class Ik_solve_from : unsigned int {
+    drag_start    = 0,
+    previous_step = 1
+};
+
+static constexpr const char* c_ik_solve_from_strings[] = {
+    "Drag Start",
+    "Previous Step"
+};
+
+// How the bend comes onto the governing pole (3.3):
+//   snap    - fully from the first apply() (R27).
+//   ease_in - by a weight growing with the drag distance (R28).
+enum class Ik_pole_alignment : unsigned int {
+    snap    = 0,
+    ease_in = 1
+};
+
+static constexpr const char* c_ik_pole_alignment_strings[] = {
+    "Snap",
+    "Ease In"
+};
+
+// The options of one gesture, captured by Ik_drag::begin() (R19).
+class Ik_drag_options
+{
+public:
+    Ik_effector_orientation effector_orientation{Ik_effector_orientation::keep_world};
+    Ik_mid_chain_drag       mid_chain_drag      {Ik_mid_chain_drag::rigid_children};
+    Ik_solve_from           solve_from          {Ik_solve_from::drag_start};
+    Ik_pole_alignment       pole_alignment      {Ik_pole_alignment::snap};
+    float                   pole_ease_distance  {0.5f}; // fraction of the chain's reach, [0.05, 2]
+};
+
 // Interactive IK state for one translate drag of a bone (see
 // doc/plans/rigging/fabrik_ik.md and doc/plans/rigging/ik_settings.md).
 // Captures the chain, its drag-start pose, and the per-joint constraints
 // (the joints' Ik.* values OR-ed with lock_rotation_* channel-lock flags)
-// in begin(); each apply() re-solves from that pose against an absolute
-// world-space target through the Ik_solver interface and writes
+// in begin(); each apply() re-solves from that pose (or, under
+// Ik_solve_from::previous_step, from the previous apply()'s pose) against an
+// absolute world-space target through the Ik_solver interface and writes
 // rotation-only changes back to the joint nodes (local translations never
 // change, so bone lengths are preserved).
 class Ik_drag
@@ -59,22 +115,27 @@ public:
     // when the effector is an ik_lock bone, or when neither the effector nor
     // its parent is a bone (chain of at least two joints required).
     //
-    // effector_orientation is captured for the whole gesture, beside the chain
-    // and the pole, so every apply() of one drag solves under one mode and
-    // reads no setting (ik_drag_options.md R2).
+    // options are captured for the whole gesture, beside the chain and the
+    // pole, so every apply() of one drag solves under one set of options and
+    // reads no setting (ik_drag_options.md R2, R19).
     auto begin(
         const std::shared_ptr<erhe::scene::Node>& effector,
-        Ik_effector_orientation                   effector_orientation
+        const Ik_drag_options&                    options
     ) -> bool;
 
-    // Solve against target and write the pose to the joint nodes. Restores
-    // the drag-start pose first, so the target is absolute and dragging back
-    // to the start position restores the starting pose exactly.
+    // Solve against target and write the pose to the joint nodes. The target
+    // is absolute. Under Ik_solve_from::drag_start every apply() restores the
+    // drag-start pose first, so dragging back to the start position restores
+    // the starting pose exactly (R25); under previous_step every apply() after
+    // the first solves from the pose the previous one left (R26).
     void apply(glm::vec3 target_position_in_world);
 
     void reset();
 
     [[nodiscard]] auto is_active() const -> bool { return !m_joints.empty(); }
+
+    // The options begin() captured (defaults when inactive).
+    [[nodiscard]] auto get_options() const -> const Ik_drag_options& { return m_options; }
 
     // Joints in root..effector order (valid while active).
     [[nodiscard]] auto get_joints() const -> const std::vector<std::shared_ptr<erhe::scene::Node>>& { return m_joints; }
@@ -118,7 +179,10 @@ private:
     glm::quat                               m_root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                                    m_has_constraints{false};
     glm::quat                               m_effector_world_rotation_before{1.0f, 0.0f, 0.0f, 0.0f};
-    Ik_effector_orientation                 m_effector_orientation{Ik_effector_orientation::keep_world};
+    Ik_drag_options                         m_options;
+    // Under Ik_solve_from::previous_step: false until the gesture's first
+    // apply(), which solves from the drag-start pose (R26).
+    bool                                    m_has_previous_step{false};
     bool                                    m_has_pole{false};
     glm::vec3                               m_pole_position{0.0f};
     float                                   m_pole_angle{0.0f};

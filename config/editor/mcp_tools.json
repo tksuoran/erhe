@@ -1287,7 +1287,7 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled) and the effective effector_orientation.",
+    "description": "Perform one complete inverse-kinematics drag gesture on a bone chain (undoable, one undo entry). The chain is discovered from the named effector node upward: bone ancestors are collected, stopping at (and including, as the fixed root) the first ik_lock bone. The chain is solved against the absolute world-space target - or against each position of path in turn, within the one gesture - and the solved rotations are written to the joints. The bone nodes' Ik.* properties supply DOF locks, rotation limits and the pole target; the governing pole is the one authored nearest the effector. Nothing here reads UI state (no selection, no gizmo, no Transform tool setting). The result lists the chain joints in root-to-effector order with their solved world positions, plus the governing pole's reference path and angle (null and 0 when the solve was unpoled), the effective effector_orientation and solve_from, and the number of solve steps.",
     "inputSchema": {
       "properties": {
         "effector_orientation": {
@@ -1306,12 +1306,33 @@
           "description": "Effector node name (alternative to node_id)",
           "type": "string"
         },
+        "path": {
+          "description": "World-space target positions [[x, y, z], ...] applied in order within one gesture (one undo entry); the last is the final target. Give exactly one of target and path",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
         "scene_name": {
           "description": "Name of the scene",
           "type": "string"
         },
+        "solve_from": {
+          "description": "Which pose each solve step starts from: 'drag_start' (default) solves every step from the drag-start pose, so the result depends only on the target; 'previous_step' solves each step from the pose the previous step left (the first from the drag-start pose), so a path's result depends on the way it went",
+          "enum": [
+            "drag_start",
+            "previous_step"
+          ],
+          "type": "string"
+        },
         "target": {
-          "description": "World-space target position [x, y, z] for the effector",
+          "description": "World-space target position [x, y, z] for the effector. Give exactly one of target and path",
           "items": {
             "type": "number"
           },
@@ -1321,8 +1342,7 @@
         }
       },
       "required": [
-        "scene_name",
-        "target"
+        "scene_name"
       ],
       "type": "object"
     },

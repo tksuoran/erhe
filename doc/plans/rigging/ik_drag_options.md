@@ -424,8 +424,8 @@ Section 1 is implemented as specified:
 
 - `Ik_effector_orientation` and the stored mode -
   `src/editor/transform/ik_drag.{hpp,cpp}`.
-- Transform tool setting - `Transform_tool_settings::effector_orientation`
-  (`transform_tool_settings.hpp`), drawn by `Move_tool::imgui`
+- Transform tool setting - `Transform_tool_settings::ik_drag_options`
+  `.effector_orientation` (`transform_tool_settings.hpp`), drawn by `Move_tool::imgui`
   (`move_tool.cpp`), passed at `Transform_tool::try_translate_ik`
   (`transform_tool.cpp`).
 - MCP - the `effector_orientation` argument of `ik_drag`
@@ -449,7 +449,35 @@ Section 2 is implemented as specified:
   (`src/editor/config/definitions/debug_visualizations_style.py`, struct
   version 2).
 
-Section 3 is not implemented yet.
+Section 3 is implemented in part - the shared option plumbing and Solve From:
+
+- Options - `Ik_mid_chain_drag`, `Ik_solve_from`, `Ik_pole_alignment` with
+  their `c_..._strings` labels, and `Ik_drag_options`, in
+  `src/editor/transform/ik_drag.hpp` (R18, R19). `Ik_drag::begin` takes an
+  `Ik_drag_options` and stores it for the gesture (`Ik_drag::get_options()`);
+  `Ik_drag::reset` restores the defaults.
+- Solve From - `Ik_drag::apply` (`ik_drag.cpp`, R25, R26): under
+  `previous_step` every apply after the gesture's first
+  (`m_has_previous_step`) fills the chain's positions and local rotations from
+  the joints' current pose instead of restoring the drag-start pose, so the
+  constrained solver's no-teleport extension is taken from that pose; the
+  effector's local transform returns to its drag-start value each step, so
+  R3 / R4 hold under either effector orientation.
+- Transform tool setting - `Transform_tool_settings::ik_drag_options`
+  replaces `effector_orientation` (R29); `Move_tool::imgui` draws the "Solve
+  From" combo after "Effector Orientation" (R30);
+  `Transform_tool::try_translate_ik` passes the options to `Ik_drag::begin`.
+- MCP - the `solve_from` argument of `ik_drag`, echoed in the result, and
+  `path` as the alternative to `target` (R31, R32; schema in
+  `config/editor/mcp_tools.json`), exercised by
+  `Mcp_test.ik_drag_path_and_solve_from`.
+- Acceptance verification - criterion 2 of 3.6 is check 8.4 of
+  `scripts/ik_interactive_pass_verify.py`.
+
+Not implemented yet: Mid-Chain Drag `pin_chain_end` (R20-R24), Pole
+Alignment `ease_in` and `pole_ease_distance` (R27, R28), their Move tool rows
+(R30) and `ik_drag` arguments (R31), and acceptance criteria 1, 3 and 5 of
+3.6.
 
 Outstanding: interactive (windowed) verification of the Move tool combo, of a
 live gizmo drag under `follow_last_segment`, and of the chain visualization

@@ -1838,6 +1838,171 @@ TEST_F(Mcp_test, ik_drag_solves_a_bone_chain_and_records_one_undo_entry)
     advance_frames(client, 4);
 }
 
+// doc/plans/rigging/ik_drag_options.md R25, R26, R31, R32: a path of targets
+// is one gesture and one undo entry; solve_from picks the pose each step
+// solves from, is echoed, and an unrecognized value is refused; target and
+// path are exclusive.
+TEST_F(Mcp_test, ik_drag_path_and_solve_from)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    ASSERT_TRUE(wait_until_idle(client, 60000));
+
+    using Position = std::array<float, 3>;
+    auto joint_positions = [](const json& payload) -> std::vector<Position> {
+        std::vector<Position> positions;
+        for (const json& joint : payload.at("joints")) {
+            const json& p = joint.at("position");
+            positions.push_back(Position{p[0].get<float>(), p[1].get<float>(), p[2].get<float>()});
+        }
+        return positions;
+    };
+    auto distance = [](const Position& a, const Position& b) -> float {
+        const float dx = a[0] - b[0];
+        const float dy = a[1] - b[1];
+        const float dz = a[2] - b[2];
+        return std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    };
+    auto largest_difference = [&distance](const std::vector<Position>& a, const std::vector<Position>& b) -> float {
+        float largest = 0.0f;
+        for (std::size_t i = 0; (i < a.size()) && (i < b.size()); ++i) {
+            largest = std::max(largest, distance(a[i], b[i]));
+        }
+        return largest;
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto as_json = [](const Position& p) -> json { return json::array({p[0], p[1], p[2]}); };
+
+    Mcp_client::Tool_result details = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+    );
+    ASSERT_FALSE(details.is_error) << details.text;
+    const json& world = details.payload.at("world_transform").at("translation");
+    const Position start{world[0].get<float>(), world[1].get<float>(), world[2].get<float>()};
+
+    // The drag-start geometry: a solve toward the effector's own position.
+    Mcp_client::Tool_result rest = client.call_tool(
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", as_json(start)}}
+    );
+    ASSERT_FALSE(rest.is_error) << rest.text;
+    const std::vector<Position> rest_positions = joint_positions(rest.payload);
+    ASSERT_GE(rest_positions.size(), std::size_t{3}) << "the arm chain has an intermediate joint";
+    EXPECT_EQ(rest.payload.at("solve_from").get<std::string>(), "drag_start") << "the solve_from default is drag_start";
+    EXPECT_EQ(rest.payload.at("steps").get<std::size_t>(), std::size_t{1});
+
+    // A path pulling the chain straight out of reach and back to the start.
+    float reach = 0.0f;
+    for (std::size_t i = 0; i + 1 < rest_positions.size(); ++i) {
+        reach += distance(rest_positions[i], rest_positions[i + 1]);
+    }
+    ASSERT_GT(reach, 0.0f);
+    const Position root = rest_positions.front();
+    const float root_distance = distance(start, root);
+    ASSERT_GT(root_distance, 0.0f);
+    Position far_target{};
+    for (std::size_t i = 0; i < 3; ++i) {
+        far_target[i] = root[i] + (((start[i] - root[i]) / root_distance) * (2.0f * reach));
+    }
+    const json out_and_back = json::array({as_json(far_target), as_json(start)});
+
+    advance_frames(client, 4);
+    std::size_t undo_before = undo_depth();
+    Mcp_client::Tool_result from_start = client.call_tool(
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"path", out_and_back}}
+    );
+    ASSERT_FALSE(from_start.is_error) << from_start.text;
+    EXPECT_EQ(from_start.payload.at("steps").get<std::size_t>(), std::size_t{2});
+    EXPECT_LT(largest_difference(joint_positions(from_start.payload), rest_positions), 1.0e-4f)
+        << "under drag_start, back at the start is the start pose (R25)";
+    advance_frames(client, 4);
+    if (from_start.payload.at("recorded").get<bool>()) {
+        EXPECT_EQ(undo_depth(), undo_before + 1) << "a path is one gesture and one undo entry (R32)";
+        client.call_tool("undo", json::object());
+        advance_frames(client, 4);
+    }
+
+    // The out steps move joints: a path is one undo entry however many steps it has.
+    undo_before = undo_depth();
+    Mcp_client::Tool_result out_path = client.call_tool(
+        "ik_drag",
+        json{
+            {"scene_name", scene},
+            {"node_name",  "arm_joint_L_3"},
+            {"path",       json::array({as_json(start), as_json(far_target), as_json(far_target)})}
+        }
+    );
+    ASSERT_FALSE(out_path.is_error) << out_path.text;
+    EXPECT_TRUE(out_path.payload.at("recorded").get<bool>());
+    EXPECT_EQ(out_path.payload.at("steps").get<std::size_t>(), std::size_t{3});
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "a path is one gesture and one undo entry (R32)";
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    undo_before = undo_depth();
+    Mcp_client::Tool_result from_previous = client.call_tool(
+        "ik_drag",
+        json{
+            {"scene_name", scene},
+            {"node_name",  "arm_joint_L_3"},
+            {"path",       out_and_back},
+            {"solve_from", "previous_step"}
+        }
+    );
+    ASSERT_FALSE(from_previous.is_error) << from_previous.text;
+    EXPECT_EQ(from_previous.payload.at("solve_from").get<std::string>(), "previous_step");
+    const std::vector<Position> previous_positions = joint_positions(from_previous.payload);
+    EXPECT_GT(largest_difference(previous_positions, rest_positions), 1.0e-3f)
+        << "under previous_step, back at the start keeps what the drag picked up (R26)";
+    EXPECT_LT(distance(previous_positions.back(), start), 1.0e-2f) << "the effector still reaches the final target";
+    for (std::size_t i = 0; i + 1 < previous_positions.size(); ++i) {
+        EXPECT_NEAR(
+            distance(previous_positions[i], previous_positions[i + 1]),
+            distance(rest_positions[i],     rest_positions[i + 1]),
+            1.0e-3f
+        ) << "segment " << i << " changed length";
+    }
+    advance_frames(client, 4);
+    EXPECT_EQ(undo_depth(), undo_before + 1) << "a previous_step path is one undo entry";
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    // Refusals change nothing.
+    Mcp_client::Tool_result bad_solve_from = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", as_json(far_target)}, {"solve_from", "sometimes"}}
+    );
+    EXPECT_TRUE(bad_solve_from.is_error) << "an unrecognized solve_from must be refused";
+    Mcp_client::Tool_result both = client.call_tool(
+        "ik_drag",
+        json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"target", as_json(far_target)}, {"path", out_and_back}}
+    );
+    EXPECT_TRUE(both.is_error) << "target and path together must be refused";
+    Mcp_client::Tool_result neither = client.call_tool(
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+    );
+    EXPECT_TRUE(neither.is_error) << "neither target nor path must be refused";
+    Mcp_client::Tool_result empty_path = client.call_tool(
+        "ik_drag", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}, {"path", json::array()}}
+    );
+    EXPECT_TRUE(empty_path.is_error) << "an empty path must be refused";
+    advance_frames(client, 4);
+    Mcp_client::Tool_result after = client.call_tool(
+        "get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_3"}}
+    );
+    ASSERT_FALSE(after.is_error) << after.text;
+    const json& after_world = after.payload.at("world_transform").at("translation");
+    const Position after_position{after_world[0].get<float>(), after_world[1].get<float>(), after_world[2].get<float>()};
+    EXPECT_LT(distance(after_position, start), 1.0e-4f) << "refused calls move no joint";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
 // The producer side, independent of whether any subscriber happened to hold
 // the content: the undo must announce the removed items.
 TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)

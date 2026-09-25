@@ -663,20 +663,32 @@ def setup(e: Editor) -> Rig:
     # earlier run left, so set them rather than assume the startup values.
     bone_ik = e.find_item("Transform", "Bone IK")
     was_on = (bone_ik is not None) and bone_ik["status"].get("checked", False)
-    ok = set_bone_ik(rig, True) and set_effector_orientation(rig, "Keep World")
-    check_true("0.2 Move tool group in the Transform window: Bone IK on, Effector Orientation 'Keep World'", ok,
+    ok = (set_bone_ik(rig, True) and set_effector_orientation(rig, "Keep World")
+          and set_solve_from(rig, "Drag Start"))
+    check_true("0.2 Move tool group in the Transform window: Bone IK on, Effector Orientation 'Keep World', "
+               "Solve From 'Drag Start'", ok,
                f"Bone IK was {'on' if was_on else 'off'} before")
     return rig
 
 
-def set_effector_orientation(rig: Rig, label: str):
-    """Pick Move tool > Effector Orientation in the Transform window, as a user does."""
+def set_move_tool_combo(rig: Rig, row: str, label: str):
+    """Pick `label` in the Move tool combo `row` of the Transform window, as a user does."""
     e = rig.e
-    if e.find_item("Transform", "Effector Orientation") is None:
+    if e.find_item("Transform", row) is None:
         return False
-    e.click("Transform", "Effector Orientation")
+    e.click("Transform", row)
     e.click(None, label)
     return True
+
+
+def set_effector_orientation(rig: Rig, label: str):
+    """Pick Move tool > Effector Orientation in the Transform window, as a user does."""
+    return set_move_tool_combo(rig, "Effector Orientation", label)
+
+
+def set_solve_from(rig: Rig, label: str):
+    """Pick Move tool > Solve From in the Transform window, as a user does."""
+    return set_move_tool_combo(rig, "Solve From", label)
 
 
 def set_bone_ik(rig: Rig, on: bool):
@@ -1720,13 +1732,62 @@ def section_8(rig: Rig):
     second_a = samples[9]
     revisit = max(q_angle_deg(first_a["rotations"][b], second_a["rotations"][b]) for b in BONES)
     back = max(q_angle_deg(start["rotations"][b], samples[-1]["rotations"][b]) for b in BONES)
-    check_true("8.2 path independence: the same target by two paths gives the same pose, back at the start the start pose",
+    check_true("8.2 Solve From 'Drag Start' (the default): the same target by two paths gives the same pose, "
+               "back at the start the start pose",
                (revisit < 1.0e-3) and (back < 1.0e-3), f"revisit difference={revisit:.2e} deg back-at-start difference={back:.2e} deg")
     undo_viewport(rig)
-    DECISIONS.append("8: each drag step solves from the drag-start pose, so a drag is path independent (8.2); "
-                     "an incremental solve would keep bends picked up on the way and drift")
 
+    solve_from_check(rig)
     stability_sweep(rig)
+
+
+def solve_from_check(rig: Rig):
+    """8.4 (ik_drag_options.md 3.6 criterion 2): a drag pulling the chain
+    straight out of reach and back to its start keeps what it picked up on
+    the way under Solve From 'Previous Step' - the end pose differs from the
+    start pose by more than 1 degree on some bone - where 'Drag Start'
+    restores the start pose; no step of either moves a joint more than
+    JUMP_RATIO times the target's step; each drag is one undo step."""
+    e = rig.e
+    rig.pose(BENT)
+    start = rig.snapshot()
+    root = start["positions"][0]
+    tip = start["positions"][-1]
+    reach = sum(segment_lengths(start["positions"]))
+    outward = normalize(sub(tip, root))
+    out = scale(outward, (1.25 * reach) - length(sub(tip, root)))
+    steps = 8
+    path = ramp(out, steps) + [scale(out, 1.0 - ((i + 1) / steps)) for i in range(steps)]
+
+    def run(label):
+        ok = set_solve_from(rig, label)
+        depth = e.undo_depth()
+        samples = rig.translate_drag(TIP, path, sample=rig.snapshot)
+        undo_steps = e.undo_depth() - depth
+        undo_viewport(rig)
+        back = max(q_angle_deg(start["rotations"][b], samples[-1]["rotations"][b]) for b in BONES)
+        largest = 0.0
+        previous_state = start
+        previous_delta = [0.0, 0.0, 0.0]
+        for delta, s in zip(path, samples):
+            target_step = length(sub(delta, previous_delta))
+            moved = max(length(sub(a, b)) for a, b in zip(previous_state["positions"][1:], s["positions"][1:]))
+            if target_step > 0.0:
+                largest = max(largest, moved / target_step)
+            previous_state = s
+            previous_delta = delta
+        return ok, back, largest, undo_steps
+
+    ok_prev, back_prev, ratio_prev, undo_prev = run("Previous Step")
+    ok_start, back_start, ratio_start, undo_start = run("Drag Start")  # also restores the default
+    check_true("8.4 Solve From 'Previous Step': out of reach and back ends in a different pose (> 1 deg on some bone), "
+               "'Drag Start' restores the start pose; each drag is one undo step",
+               ok_prev and ok_start and (back_prev > 1.0) and (back_start < 1.0e-3) and (undo_prev == 1) and (undo_start == 1),
+               f"combo ok={ok_prev and ok_start} Previous Step back-at-start difference={back_prev:.2f} deg, "
+               f"Drag Start {back_start:.2e} deg; undo steps {undo_prev} / {undo_start}")
+    check_true(f"8.4 Solve From: no step of either drag moves a joint more than {JUMP_RATIO:.0f}x the target's step",
+               (ratio_prev <= JUMP_RATIO) and (ratio_start <= JUMP_RATIO),
+               f"largest Previous Step {ratio_prev:.2f}x, Drag Start {ratio_start:.2f}x")
 
 
 # The random sweep: settings per bone, one of these, drawn per scenario.
