@@ -352,6 +352,14 @@ Measured (checks 8.1 - 8.6):
   after does not either; three diagnostic runs of sections 1-3 did not
   reproduce it. Not yet known whether the button or the injected click is at
   fault. The script reports it as a 3.9 FAIL.
+- **F9.** Open: with the middle joint of a three-bone chain limited to a
+  closed range (a rigid middle), an IK drag of the tip was seen not to
+  rotate the chain's root (reported while building the authored-chain
+  Mcp_test of skeleton_editing.md slice C). A rigid sub-chain should still
+  let the root turn to aim it; suspected: the forward pass aims the root at
+  a joint position the rigid sub-chain cannot take, no iteration beats the
+  start pose, and the best-pose rule returns the start pose. To reproduce
+  as a solver unit test first.
 
 ## Reporting a problem
 
