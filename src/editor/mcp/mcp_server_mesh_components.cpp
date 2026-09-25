@@ -441,14 +441,15 @@ auto Mcp_server::query_id_range_mapping(const json& args) -> std::string
             {"triangle_count", range.length / 3u},
             {"primitive_index", range.index_of_gltf_primitive_in_mesh}
         };
-        if (range.mesh != nullptr) {
-            entry["mesh_name"] = range.mesh->get_name();
-            entry["node_id"]   = range.mesh->get_id();
-            entry["node_name"] = range.mesh->get_name();
+        const std::shared_ptr<erhe::scene::Mesh> mesh = range.lock_mesh();
+        if (mesh) {
+            entry["mesh_name"] = mesh->get_name();
+            entry["node_id"]   = mesh->get_id();
+            entry["node_name"] = mesh->get_name();
             // The per-primitive base vertex in the shared pool: the ID shader
             // subtracts this from gl_VertexID so the packed triangle id is the
             // 0-based local facet index. Surfaced so the encoding can be verified.
-            const std::vector<erhe::scene::Mesh_primitive>& primitives = range.mesh->get_primitives();
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
             if (range.index_of_gltf_primitive_in_mesh < primitives.size()) {
                 const erhe::primitive::Primitive* primitive = primitives[range.index_of_gltf_primitive_in_mesh].primitive.get();
                 if (primitive != nullptr) {

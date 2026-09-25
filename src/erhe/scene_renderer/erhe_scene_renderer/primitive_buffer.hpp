@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -204,13 +205,19 @@ public:
         const Primitive_interface_settings&                        primitive_settings
     ) -> erhe::graphics::Ring_buffer_range;
 
+    // One drawn primitive's id interval. The table outlives the frame that
+    // built it (a readback resolves it frames later), and a mesh can be
+    // destroyed in between (its scene closed, its undo history dropped), so
+    // the mesh is held weakly: lock_mesh() is null once the mesh is gone.
     class Id_range
     {
     public:
-        uint32_t           offset                         {0};
-        uint32_t           length                         {0};
-        erhe::scene::Mesh* mesh                           {nullptr};
-        std::size_t        index_of_gltf_primitive_in_mesh{0};
+        [[nodiscard]] auto lock_mesh() const -> std::shared_ptr<erhe::scene::Mesh>;
+
+        uint32_t                      offset                         {0};
+        uint32_t                      length                         {0};
+        std::weak_ptr<erhe::Item_base> mesh                          {};
+        std::size_t                   index_of_gltf_primitive_in_mesh{0};
     };
 
     void reset_id_ranges();

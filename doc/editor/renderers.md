@@ -12,7 +12,7 @@ Low-level rendering infrastructure for the editor: shader programs, GPU memory m
 
 - **`Mesh_memory`** -- Allocates and manages shared GPU buffers for vertex and index data. Provides three vertex buffer streams (position, non-position attributes, custom attributes) and a single index buffer. Includes a `Buffer_transfer_queue` for staging uploads. All editor meshes share this memory pool. Uses `Free_list_allocator` per `Pool_block` for reclaimable allocation; a destroyed mesh's ranges are RETIRED (Pool_block implements `Buffer_allocation_owner`) and freed from a device frame-completion handler registered in `Mesh_memory::flush()`, so no in-flight frame can still read memory a new mesh is uploaded into.
 
-- **`Id_renderer`** -- GPU-based object picking. Renders mesh IDs and triangle IDs to an offscreen framebuffer, then reads back a small region around the cursor. Uses a ring buffer for async readback across frames. Returns `Id_query_result` with mesh, primitive index, triangle ID, and depth.
+- **`Id_renderer`** -- GPU-based object picking. Renders mesh IDs and triangle IDs to an offscreen framebuffer, then reads back a small region around the cursor. Uses a ring buffer for async readback across frames. Returns `Id_query_result` with mesh, primitive index, triangle ID, and depth. The id-range table that maps an id back to its mesh holds each mesh weakly (`Primitive_buffer::Id_range::lock_mesh()`): a readback resolves frames after the draw, and a mesh destroyed in between (its scene closed) resolves to no hit.
 
 - **`Composer`** -- Composites multiple render passes (content, selection, tools, etc.) for final viewport output.
 

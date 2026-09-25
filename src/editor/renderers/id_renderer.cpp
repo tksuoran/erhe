@@ -1124,14 +1124,20 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
     for (const erhe::scene_renderer::Primitive_buffer::Id_range& r : m_primitive_buffers.id_ranges()) {
         // log_id_render->info(
         //     "  id_range: offset={} length={} mesh={}",
-        //     r.offset, r.length, (r.mesh != nullptr) ? r.mesh->get_name() : std::string{"(null)"}
+        //     r.offset, r.length, r.lock_mesh() ? r.lock_mesh()->get_name() : std::string{"(null)"}
         // );
         if (
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))
         ) {
+            // The mesh was drawn frames ago; it is gone when its scene closed
+            // since, and then the pixel names nothing.
+            std::shared_ptr<erhe::scene::Mesh> mesh = r.lock_mesh();
+            if (!mesh) {
+                return result;
+            }
             result.valid                           = true;
-            result.mesh                            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
+            result.mesh                            = std::move(mesh);
             result.index_of_gltf_primitive_in_mesh = r.index_of_gltf_primitive_in_mesh;
             result.facet_id                        = result.id - r.offset;
             return result;
@@ -1208,8 +1214,12 @@ auto Id_renderer::take_scan_result() -> const Scan_result&
     for (const uint32_t id : m_scan_id_scratch) {
         for (const erhe::scene_renderer::Primitive_buffer::Id_range& range : ranges) {
             if ((id >= range.offset) && (id < (range.offset + range.length))) {
+                std::shared_ptr<erhe::scene::Mesh> mesh = range.lock_mesh();
+                if (!mesh) {
+                    break; // destroyed since the scan frame (see Id_range)
+                }
                 Scan_hit hit;
-                hit.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(range.mesh->shared_from_this());
+                hit.mesh            = std::move(mesh);
                 hit.primitive_index = range.index_of_gltf_primitive_in_mesh;
                 hit.facet_id        = id - range.offset;
                 m_scan_result.hits.push_back(std::move(hit));

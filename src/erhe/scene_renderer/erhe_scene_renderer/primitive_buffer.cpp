@@ -105,6 +105,12 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
     return m_id_ranges;
 }
 
+auto Primitive_buffer::Id_range::lock_mesh() const -> std::shared_ptr<erhe::scene::Mesh>
+{
+    // Only write_primitive() fills the table, always with a Mesh.
+    return std::static_pointer_cast<erhe::scene::Mesh>(mesh.lock());
+}
+
 void Primitive_buffer::write_primitive(
     erhe::scene::Mesh&                    mesh_ref,
     const Material_set*                   material_source,
@@ -216,7 +222,7 @@ void Primitive_buffer::write_primitive(
             Id_range{
                 .offset                          = m_id_offset,
                 .length                          = count,
-                .mesh                            = mesh,
+                .mesh                            = mesh->weak_from_this(),
                 .index_of_gltf_primitive_in_mesh = mesh_primitive_index
             }
         );
