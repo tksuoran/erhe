@@ -178,10 +178,43 @@ pattern) and an MCP tool with explicit arguments.
   separate skeletons.
 - **R13. Flip Names**: renames the selected bones to their flipped names
   (one undo step). **Symmetrize** (slice C, R9 applies): for each selected
-  one-sided bone without a counterpart, creates the mirrored bone across the
-  skeleton root's local X = 0 plane, parented to the counterpart of its parent
-  (or the same parent when that has no side), copying `Ik.*` and `Rig.*`
-  values mirrored.
+  bone whose name has a side and that has no counterpart (R12; for a
+  skeleton root, no sibling of the flipped name), creates the mirror bone
+  across the X = 0 plane of the **skeleton frame**: the frame of the
+  skeleton root's parent node, the frame the root's own local transform and
+  rest sit in (Blender's armature space; world when the root has no parent).
+  With S = diag(-1, 1, 1) and S_w = F * S * inverse(F) the reflection across
+  that plane in world (F the skeleton frame's world transform), the mirror
+  bone's world transform is S_w * W(bone) * S: a point with local
+  coordinates (x, y, z) in the bone is at (-x, y, z) in the mirror bone, whose
+  frame stays proper. Selected bones are mirrored parents first, so a whole
+  selected side is mirrored in one undo step. The mirror bone is named
+  `flip_side_name(name)` and is the last child of the mirror bone created
+  for its parent in the same step, else its parent's counterpart, else its
+  parent (a parent without a side or without a counterpart, a skeleton
+  root's parent). It carries:
+  - local transform: S_w * W(bone) * S expressed under the new parent -
+    S * local * S (translation x negated, quaternion (w, x, y, z) ->
+    (w, x, -y, -z)) when the new parent is the mirror of the bone's parent or
+    the bone is a skeleton root;
+  - `Rig.tail` (x, y, z) -> (-x, y, z); `Rig.rest_*` the mirror of the bone's
+    rest in the skeleton frame (the rest product from the root down),
+    expressed under the new parent's rest;
+  - `Rig.connected` copied, and cleared (logged) when the mirrored head is
+    not on the new parent's tail;
+  - the bone's local `Ik.*` values: locks, limit flags and stiffness copied;
+    `limit_min` / `limit_max` with the X range kept and the Y and Z ranges
+    negated and swapped ([min, max] -> [-max, -min]), because the limited
+    rotation inverse(rest_rotation) * rotation is conjugated by S, which
+    keeps an angle about X and negates angles about Y and Z;
+    `rest_rotation` mirrored like the rest; `pole_angle` negated; `pole_target`
+    mapped to the pole's mirror (the mirror bone created for it, the pole
+    bone's counterpart, or the pole's sibling of the flipped name), not
+    copied otherwise.
+
+  The new bones become the selection. Bones without a side or with a
+  counterpart are skipped (logged). R9: refused when a selected bone, or an
+  existing bone a mirror bone would be created under, is a bone a skin lists.
 
 ## 5. Posing verbs (slice B - needs R2's default only)
 
@@ -227,11 +260,30 @@ pattern) and an MCP tool with explicit arguments.
 ## 6. Bone roll and orientation (slice C)
 
 - **R16.** Recalculate Roll: rotates each selected bone about its
-  head-to-tail axis so a chosen local axis (X or Z) points as close as
-  possible to a reference (world axis, view direction, 3D cursor); children
-  keep their world transforms. Align to Active: sets each selected bone's
-  head-to-tail direction and roll to the active bone's. R9 applies to both
-  (they change the rest frame of bound bones).
+  head-to-tail axis (the direction of `Rig.tail`) so a chosen local axis (X
+  or Z) points as close as possible to a reference: the signed angle, about
+  the bone's world axis, from the chosen axis to the reference with both
+  projected onto the plane perpendicular to the bone. The references are the
+  world X, Y and Z axes and the view direction (toward the viewer of the last
+  viewport, when it shows the bone's scene); the editor has no 3D cursor. The
+  tail is on the rotation axis, so the tail point stays put in world. A bone
+  whose chosen axis or reference is parallel to its bone axis is skipped.
+  Align to Active: gives each selected bone other than the active bone the
+  active bone's head-to-tail direction and roll - its world rotation becomes
+  the active bone's, times the shortest rotation between the two bones'
+  local tail directions when they differ; the head stays, the tail keeps its
+  length and turns onto the active bone's direction, and a default
+  `Rig.tail` is recorded as a local value so a default that follows a
+  child's head does not turn it back.
+
+  Both turn a bone's frame about its head by a change C in its own frame
+  (local L -> L * C). Children keep their world transforms (local ->
+  inverse(C) * local), except that a connected child bone keeps its head on
+  the moved tail and its world rotation. The rest transform
+  (`Rig.rest_translation` / `rest_rotation`) of every changed unbound bone
+  gets the same change, so the pose relative to rest is unchanged, and a
+  local `Ik.rest_rotation` turns with it. One undo step each. R9 applies to
+  both (they change the rest frame of bound bones).
 
 ## 7. Display and skin stub (slice D)
 
@@ -271,9 +323,8 @@ glTF round trip of the edited skeleton.
 
 ## Implementation status
 
-Slices A and B, the foundations and the structure verbs of slice C (R5-R9)
-are implemented; Symmetrize (R13) and roll (R16) of slice C and slice D are
-not.
+Slices A and B, the foundations and slice C (R5-R9, Symmetrize of R13,
+R16) are implemented; slice D is not.
 
 - R11 naming: `bone_side` / `flip_side_name` in `src/editor/rig/bone_naming.hpp`,
   unit tested by `editor_rig_tests` (`src/editor/rig/test/`).
@@ -420,3 +471,34 @@ not.
   and `extrude_bones` refused with the skin in the log, and checks that a
   glTF save + reopen keeps the authored bones, tails, connected flags and
   rest values.
+- R13 Symmetrize and R16 (slice C): `symmetrize_bones`,
+  `recalculate_bone_roll` and `align_bones_to_active` in
+  `src/editor/rig/bone_structure.hpp`, over the pure math of
+  `src/editor/rig/bone_mirror.hpp` (`mirror_trs_x`, `mirror_local_transform`,
+  `mirror_ik_limits`, ...) and `src/editor/rig/bone_roll.hpp`
+  (`compute_roll_angle`, `compute_align_change`, `apply_frame_change`), unit
+  tested by `editor_rig_tests` (`test_bone_mirror.cpp`, `test_bone_roll.cpp`).
+  Symmetrize builds its bones with the creation machinery of R5 (bone flag,
+  `Rig.*` and `Ik.*` values set on the new node before its insert, transform
+  pin, selection step) in one `Compound_operation`; the roll verbs queue one
+  `Compound_operation` of `Node_transform_operation`s for the bones and their
+  children and `Property_set_operation`s for the rest, `Ik.rest_rotation`
+  and (Align) the recorded tail.
+- Entry points: on a bone's Hierarchy menu `Symmetrize`, `Recalculate Roll >
+  X to World X / Y / Z / View` and `Z to World X / Y / Z / View` (View
+  disabled until a viewport shows the scene), and `Align to Active` (enabled
+  when the selection has an active bone and another target), targets as the
+  slice A verbs and disabled with the refusal as tooltip like the structure
+  verbs; the MCP tools `symmetrize_bones` (`bones`), `recalculate_bone_roll`
+  (`bones`, `axis` `x` | `z`, `reference` `x` | `y` | `z` | `-x` | `-y` |
+  `-z` | `[x, y, z]`) and `align_bones` (`bones`, `active`), covered by
+  `Mcp_test.symmetrize_mirrors_an_authored_arm_in_one_undo_step`,
+  `Mcp_test.recalculate_roll_and_align_to_active_keep_axes_and_children` and
+  the three tools' refusals in
+  `Mcp_test.bone_structure_verbs_are_refused_on_a_bound_bone`.
+- `scripts/skeleton_editing_verify.py` section F mirrors a one-sided arm
+  authored off the plane with Symmetrize from the menu of a selected bone
+  (world heads and tails mirrored within 1e-5), runs Recalculate Roll > X to
+  World Z (the X axis aimed within 1e-4 degrees, the bone axis and the child
+  kept) and Align to Active, each one undo step Ctrl+Z reverts, and checks
+  the three entries are disabled on a RiggedFigure joint.

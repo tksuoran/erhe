@@ -1,5 +1,7 @@
 #include "rig/bone_structure.hpp"
 #include "rig/bone_hierarchy.hpp"
+#include "rig/bone_mirror.hpp"
+#include "rig/bone_naming.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -10,6 +12,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
+#include "scene/ik_properties.hpp"
 #include "scene/rig_properties.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -226,11 +229,16 @@ private:
 class New_bone
 {
 public:
-    std::string                        name;
-    std::shared_ptr<erhe::scene::Node> parent;
-    glm::vec3                          head     {0.0f};
-    glm::vec3                          tail     {0.0f, 1.0f, 0.0f};
-    bool                               connected{false};
+    std::string                               name;
+    std::shared_ptr<erhe::scene::Node>        parent;
+    glm::vec3                                 head     {0.0f};
+    glm::vec3                                 tail     {0.0f, 1.0f, 0.0f};
+    bool                                      connected{false};
+    glm::quat                                 rotation {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                                 scale    {1.0f};
+    // The rest transform; the creation local TRS (head, rotation, scale)
+    // when absent.
+    std::optional<erhe::scene::Trs_transform> rest;
 };
 
 // A new bone node carrying the bone flag and its Rig values (tail, connected,
@@ -243,11 +251,12 @@ public:
 {
     std::shared_ptr<erhe::scene::Xform> bone = std::make_shared<erhe::scene::Xform>(spec.name);
     bone->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::bone);
-    const erhe::scene::Trs_transform local{spec.head, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f}};
+    const erhe::scene::Trs_transform local{spec.head, spec.rotation, spec.scale};
+    const erhe::scene::Trs_transform rest = spec.rest.has_value() ? spec.rest.value() : local;
     static_cast<void>(bone->set_value(Rig::tail_property(),             spec.tail));
-    static_cast<void>(bone->set_value(Rig::rest_translation_property(), local.get_translation()));
-    static_cast<void>(bone->set_value(Rig::rest_rotation_property(),    local.get_rotation()));
-    static_cast<void>(bone->set_value(Rig::rest_scale_property(),       local.get_scale()));
+    static_cast<void>(bone->set_value(Rig::rest_translation_property(), rest.get_translation()));
+    static_cast<void>(bone->set_value(Rig::rest_rotation_property(),    rest.get_rotation()));
+    static_cast<void>(bone->set_value(Rig::rest_scale_property(),       rest.get_scale()));
     if (spec.connected) {
         static_cast<void>(bone->set_value(Rig::connected_property(), true));
     }
@@ -650,6 +659,450 @@ auto delete_bones(
     queue_compound(context, std::move(operations));
     result.queued = true;
     return result;
+}
+
+namespace {
+
+// Rs(node) of rig/bone_mirror.hpp: the rest transform of `node` relative to
+// the skeleton frame - the product of the Rig.rest_* local transforms from
+// `root` down to `node`; identity for the skeleton frame's own node (the
+// root's parent, not a bone).
+[[nodiscard]] auto get_rest_in_skeleton_frame(const std::shared_ptr<erhe::scene::Node>& node, const std::shared_ptr<erhe::scene::Node>& root) -> glm::mat4
+{
+    glm::mat4 rest{1.0f};
+    for (std::shared_ptr<erhe::scene::Node> current = node; current && erhe::scene::is_bone(current.get()); current = current->get_parent_node()) {
+        rest = read_rest_transform(*current).get_matrix() * rest;
+        if (current == root) {
+            break;
+        }
+    }
+    return rest;
+}
+
+[[nodiscard]] auto find_child_named(const erhe::Hierarchy& parent, const std::string& name) -> std::shared_ptr<erhe::scene::Node>
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+        if (node && (node->get_name() == name)) {
+            return node;
+        }
+    }
+    return {};
+}
+
+using Mirror_map = std::unordered_map<const erhe::scene::Node*, std::shared_ptr<erhe::scene::Node>>;
+
+// The pole target of a mirror bone: the mirror of the source's pole - the
+// mirror bone Symmetrize creates for it, the pole bone's counterpart, or the
+// pole's sibling of the flipped name. Null when there is none.
+[[nodiscard]] auto find_mirror_pole(const std::shared_ptr<erhe::scene::Node>& pole, const Mirror_map& mirror_of) -> std::shared_ptr<erhe::scene::Node>
+{
+    if (!pole) {
+        return {};
+    }
+    const auto created = mirror_of.find(pole.get());
+    if (created != mirror_of.end()) {
+        return created->second;
+    }
+    if (bone_side(pole->get_name()) == Bone_side::none) {
+        return {};
+    }
+    if (erhe::scene::is_bone(pole.get())) {
+        std::shared_ptr<erhe::scene::Node> counterpart = find_mirror_bone(pole);
+        if (counterpart) {
+            return counterpart;
+        }
+    }
+    const std::shared_ptr<erhe::scene::Node> parent = pole->get_parent_node();
+    return parent ? find_child_named(*parent, flip_side_name(pole->get_name())) : std::shared_ptr<erhe::scene::Node>{};
+}
+
+// How a mirror bone's parent frame relates to its source's.
+enum class Mirror_parent : unsigned int {
+    // The new parent is the mirror of the source's parent, or the source is a
+    // skeleton root (its parent frame is the skeleton frame): the parent map
+    // is S itself, and the TRS forms of rig/bone_mirror.hpp are exact.
+    mirrored = 0,
+    // Any other new parent: the general parent map.
+    general  = 1
+};
+
+// Copies the local Ik.* values of `source` onto its new mirror bone `target`
+// (an orphan node before its insert, so plain writes: the insert carries
+// them), mirrored as rig/bone_mirror.hpp says.
+void copy_mirrored_ik_values(const erhe::scene::Node& source, erhe::scene::Node& target, const glm::mat4& rest_parent_map, const Mirror_parent mirror_parent)
+{
+    for (int axis = 0; axis < 3; ++axis) {
+        if (source.has_local_value(Ik::lock_property(axis).get())) {
+            target.set_value(Ik::lock_property(axis), source.get_value(Ik::lock_property(axis)));
+        }
+        if (source.has_local_value(Ik::limit_property(axis).get())) {
+            target.set_value(Ik::limit_property(axis), source.get_value(Ik::limit_property(axis)));
+        }
+    }
+    if (source.has_local_value(Ik::limit_min_property.get()) || source.has_local_value(Ik::limit_max_property.get())) {
+        const Ik_limit_range range = mirror_ik_limits(source.get_value(Ik::limit_min_property), source.get_value(Ik::limit_max_property));
+        target.set_value(Ik::limit_min_property, range.min);
+        target.set_value(Ik::limit_max_property, range.max);
+    }
+    if (source.has_local_value(Ik::stiffness_property.get())) {
+        target.set_value(Ik::stiffness_property, source.get_value(Ik::stiffness_property));
+    }
+    if (source.has_local_value(Ik::rest_rotation_property.get())) {
+        const glm::quat rest_rotation = source.get_value(Ik::rest_rotation_property);
+        const glm::quat mirrored = (mirror_parent == Mirror_parent::mirrored)
+            ? mirror_rotation_x(rest_rotation)
+            : glm::normalize(mirror_local_transform(rest_parent_map, glm::mat4_cast(rest_rotation)).get_rotation());
+        target.set_value(Ik::rest_rotation_property, mirrored);
+    }
+    if (source.has_local_value(Ik::pole_angle_property.get())) {
+        target.set_value(Ik::pole_angle_property, mirror_pole_angle(source.get_value(Ik::pole_angle_property)));
+    }
+}
+
+} // anonymous namespace
+
+auto symmetrize_bones(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Symmetrize";
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+    // Parents before children: a target's mirror parent exists (planned) by
+    // the time the target is mirrored.
+    std::stable_sort(
+        bones.begin(), bones.end(),
+        [](const std::shared_ptr<erhe::scene::Node>& lhs, const std::shared_ptr<erhe::scene::Node>& rhs) {
+            return lhs->get_depth() < rhs->get_depth();
+        }
+    );
+
+    Bone_names names;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        names.add_skeleton(bone);
+    }
+
+    class Pole_link
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> source;
+        std::shared_ptr<erhe::scene::Node> mirror;
+    };
+
+    Mirror_map                                              mirror_of;    // target -> its new mirror bone
+    std::unordered_map<const erhe::scene::Node*, glm::vec3> planned_tail; // new mirror bone -> its tail
+    std::vector<Pole_link>                                  pole_links;
+    std::vector<std::shared_ptr<Operation>>                 operations;
+    Bone_structure_result                                   result;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const std::string& name = bone->get_name();
+        if (bone_side(name) == Bone_side::none) {
+            log_operations->info("{}: '{}' has no side in its name, skipped", verb, name);
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> root    = get_skeleton_root(bone);
+        const std::shared_ptr<erhe::scene::Node> parent  = bone->get_parent_node();
+        const bool                               is_root = (root == bone);
+        const std::string                        flipped = flip_side_name(name);
+        if (!parent) {
+            log_operations->info("{}: '{}' has no parent node, skipped", verb, name);
+            continue;
+        }
+        // A skeleton root's counterpart is a separate skeleton (R12): its
+        // sibling of the flipped name.
+        const std::shared_ptr<erhe::scene::Node> counterpart = is_root ? find_child_named(*parent, flipped) : find_mirror_bone(bone);
+        if (counterpart) {
+            log_operations->info("{}: '{}' already has its counterpart '{}', skipped", verb, name, counterpart->get_name());
+            continue;
+        }
+
+        std::shared_ptr<erhe::scene::Node> new_parent;
+        Mirror_parent                      mirror_parent = Mirror_parent::mirrored;
+        const auto created_parent = mirror_of.find(parent.get());
+        if (created_parent != mirror_of.end()) {
+            new_parent = created_parent->second;
+        } else if (is_root) {
+            new_parent = parent;
+        } else {
+            const bool parent_has_side = (bone_side(parent->get_name()) != Bone_side::none);
+            const std::shared_ptr<erhe::scene::Node> parent_counterpart = parent_has_side ? find_mirror_bone(parent) : std::shared_ptr<erhe::scene::Node>{};
+            if (parent_has_side && !parent_counterpart) {
+                log_operations->info("{}: parent '{}' of '{}' has no counterpart, the mirror bone goes under it", verb, parent->get_name(), name);
+            }
+            new_parent    = parent_counterpart ? parent_counterpart : parent;
+            mirror_parent = Mirror_parent::general;
+            // R9, as for Create Bone: no new bone under a bone a skin lists.
+            std::optional<std::string> bound = get_bound_bone_refusal(*new_parent);
+            if (bound.has_value()) {
+                return refuse(verb, std::move(bound.value()));
+            }
+        }
+
+        // The mirror in the skeleton frame, of the current pose and of the
+        // rest (rig/bone_mirror.hpp).
+        const erhe::scene::Trs_transform& local = bone->parent_from_node_transform();
+        const erhe::scene::Trs_transform  rest  = read_rest_transform(*bone);
+        erhe::scene::Trs_transform        new_local;
+        erhe::scene::Trs_transform        new_rest;
+        glm::mat4                         rest_parent_map = get_mirror_x_matrix();
+        if (mirror_parent == Mirror_parent::mirrored) {
+            new_local = mirror_trs_x(local);
+            new_rest  = mirror_trs_x(rest);
+        } else {
+            const std::shared_ptr<erhe::scene::Node> frame_node = root->get_parent_node();
+            const glm::mat4 frame           = frame_node ? frame_node->world_from_node() : glm::mat4{1.0f};
+            const glm::mat4 pose_parent_map = glm::inverse(new_parent->world_from_node()) * get_mirror_plane_matrix(frame) * parent->world_from_node();
+            rest_parent_map = glm::inverse(get_rest_in_skeleton_frame(new_parent, root)) * get_mirror_x_matrix() * get_rest_in_skeleton_frame(parent, root);
+            new_local = mirror_local_transform(pose_parent_map, local.get_matrix());
+            new_rest  = mirror_local_transform(rest_parent_map, rest.get_matrix());
+        }
+
+        const glm::vec3 tail      = mirror_vector_x(bone->get_value(Rig::tail_property()));
+        bool            connected = bone->get_value(Rig::connected_property());
+        if (connected && erhe::scene::is_bone(new_parent.get())) {
+            const auto      planned     = planned_tail.find(new_parent.get());
+            const glm::vec3 parent_tail = (planned != planned_tail.end()) ? planned->second : new_parent->get_value(Rig::tail_property());
+            const float     tolerance   = 1.0e-4f * std::max(1.0f, glm::length(parent_tail));
+            if (glm::length(new_local.get_translation() - parent_tail) > tolerance) {
+                connected = false;
+                log_operations->info("{}: the mirror of '{}' is not on the tail of '{}', so it is not connected", verb, name, new_parent->get_name());
+            }
+        }
+
+        if (created_parent == mirror_of.end()) {
+            names.add_children(*new_parent);
+        }
+        const New_bone spec{
+            .name      = names.make(flipped),
+            .parent    = new_parent,
+            .head      = new_local.get_translation(),
+            .tail      = tail,
+            .connected = connected,
+            .rotation  = new_local.get_rotation(),
+            .scale     = new_local.get_scale(),
+            .rest      = new_rest
+        };
+        const std::shared_ptr<erhe::scene::Node> mirror = append_new_bone(context, spec, operations);
+        copy_mirrored_ik_values(*bone, *mirror, rest_parent_map, mirror_parent);
+        if (bone->has_local_value(Ik::pole_target_property.get())) {
+            pole_links.push_back(Pole_link{.source = bone, .mirror = mirror});
+        }
+        mirror_of[bone.get()]      = mirror;
+        planned_tail[mirror.get()] = tail;
+        result.created.push_back(mirror);
+        log_operations->info("{}: '{}' mirrored as '{}' under '{}'", verb, name, spec.name, new_parent->get_name());
+    }
+
+    // Poles last, so a pole mirrored in this same step is found.
+    for (const Pole_link& link : pole_links) {
+        const std::shared_ptr<erhe::scene::Node> pole     = get_ik_pole_target(*link.source);
+        const std::shared_ptr<erhe::scene::Node> mirrored = find_mirror_pole(pole, mirror_of);
+        if (mirrored) {
+            set_ik_pole_target(*link.mirror, mirrored);
+        } else if (pole) {
+            log_operations->info("{}: pole target '{}' of '{}' has no mirror, not copied", verb, pole->get_name(), link.source->get_name());
+        }
+    }
+
+    if (result.created.empty()) {
+        log_operations->info("{}: nothing to mirror", verb);
+        return result;
+    }
+    queue_with_selection(context, std::move(operations), result.created);
+    result.queued = true;
+    return result;
+}
+
+auto get_roll_axis_label(const Roll_axis axis) -> const char*
+{
+    switch (axis) {
+        case Roll_axis::x: return "X";
+        case Roll_axis::z: return "Z";
+        default:           return "?";
+    }
+}
+
+namespace {
+
+class Bone_frame_change
+{
+public:
+    std::shared_ptr<erhe::scene::Node> bone;
+    glm::quat                          change{1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+// Whether a frame-changing verb records a target's default Rig.tail as a
+// local value.
+enum class Tail_record : unsigned int {
+    keep         = 0,
+    record_local = 1
+};
+
+// The compound of Recalculate Roll / Align to Active (bone_structure.hpp).
+[[nodiscard]] auto apply_bone_frame_changes(App_context& context, const std::vector<Bone_frame_change>& changes, const Tail_record tail_record) -> Bone_structure_result
+{
+    const glm::quat identity{1.0f, 0.0f, 0.0f, 0.0f};
+    std::unordered_map<const erhe::scene::Node*, glm::quat> own_changes;
+    for (const Bone_frame_change& change : changes) {
+        own_changes[change.bone.get()] = change.change;
+    }
+    const auto own_change_of = [&own_changes, &identity](const erhe::scene::Node* node) -> glm::quat {
+        const auto i = own_changes.find(node);
+        return (i != own_changes.end()) ? i->second : identity;
+    };
+
+    // The targets and their children: the nodes whose local transform
+    // changes.
+    std::vector<std::shared_ptr<erhe::scene::Node>> affected;
+    const auto add = [&affected](const std::shared_ptr<erhe::scene::Node>& node) {
+        if (std::find(affected.begin(), affected.end(), node) == affected.end()) {
+            affected.push_back(node);
+        }
+    };
+    for (const Bone_frame_change& change : changes) {
+        add(change.bone);
+        for (const std::shared_ptr<erhe::Hierarchy>& child : change.bone->get_children()) {
+            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+                continue; // editor-generated display proxies follow their bone
+            }
+            const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+            if (child_node) {
+                add(child_node);
+            }
+        }
+    }
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    std::vector<std::shared_ptr<Operation>> tail_operations;
+    Bone_structure_result                   result;
+    for (const std::shared_ptr<erhe::scene::Node>& node : affected) {
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const bool              parent_changes = parent && own_changes.contains(parent.get());
+        const glm::quat         parent_change  = parent_changes ? own_change_of(parent.get()) : identity;
+        const glm::quat         own_change     = own_change_of(node.get());
+        const bool              is_bone        = erhe::scene::is_bone(node.get());
+        const Frame_change_head head           = (is_bone && parent_changes && node->get_value(Rig::connected_property()))
+            ? Frame_change_head::on_parent_tail
+            : Frame_change_head::keep_world;
+
+        const erhe::scene::Trs_transform& before = node->parent_from_node_transform();
+        operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = node,
+                    .parent_from_node_before = before,
+                    .parent_from_node_after  = apply_frame_change(before, parent_change, own_change, head),
+                    .xform_op_stack_before   = node->copy_xform_op_stack(),
+                    .time_duration           = 0.0f
+                }
+            )
+        );
+        // The rest turns with the frame, so the pose relative to rest is
+        // unchanged. A bound bone's rest is its bind (R9): only a bound
+        // child of a target gets here, and its rest is left alone.
+        if (is_bone && !get_bound_bone_refusal(*node).has_value()) {
+            const erhe::scene::Trs_transform new_rest = apply_frame_change(read_rest_transform(*node), parent_change, own_change, head);
+            operations.push_back(make_property_set(node, Rig::rest_translation_property().get(), node->read_local_state(Rig::rest_translation_property().get()), Local_state{Property_value{new_rest.get_translation()}}));
+            operations.push_back(make_property_set(node, Rig::rest_rotation_property   ().get(), node->read_local_state(Rig::rest_rotation_property   ().get()), Local_state{Property_value{new_rest.get_rotation()}}));
+        }
+        // A local IK limits frame turns with it too; a default one follows
+        // Rig.rest_rotation.
+        if (node->has_local_value(Ik::rest_rotation_property.get())) {
+            const glm::quat ik_rest     = node->get_value(Ik::rest_rotation_property);
+            const glm::quat new_ik_rest = glm::normalize(glm::inverse(parent_change) * ik_rest * own_change);
+            operations.push_back(make_property_set(node, Ik::rest_rotation_property.get(), node->read_local_state(Ik::rest_rotation_property.get()), Local_state{Property_value{new_ik_rest}}));
+        }
+        if (own_changes.contains(node.get())) {
+            result.changed.push_back(node);
+            if ((tail_record == Tail_record::record_local) && !node->has_local_value(Rig::tail_property().get())) {
+                tail_operations.push_back(make_property_set(node, Rig::tail_property().get(), std::nullopt, Local_state{Property_value{node->get_value(Rig::tail_property())}}));
+            }
+        }
+    }
+    // Tail records last: their connected-children follow-ups
+    // (rig/bone_connect.hpp) then find the children already in place.
+    for (std::shared_ptr<Operation>& operation : tail_operations) {
+        operations.push_back(std::move(operation));
+    }
+    queue_compound(context, std::move(operations));
+    result.queued = true;
+    return result;
+}
+
+} // anonymous namespace
+
+auto recalculate_bone_roll(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets,
+    const Roll_axis                                        axis,
+    const glm::vec3&                                       reference
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Recalculate Roll";
+    const std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+    const glm::vec3 local_axis = get_roll_axis_vector(axis);
+    std::vector<Bone_frame_change> changes;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const glm::quat                world_rotation = bone->world_from_node_transform().get_rotation();
+        const glm::vec3                tail           = bone->get_value(Rig::tail_property());
+        const std::optional<float>     angle          = compute_roll_angle(world_rotation, tail, local_axis, reference);
+        const std::optional<glm::quat> change         = angle.has_value() ? make_roll_change(tail, angle.value()) : std::optional<glm::quat>{};
+        if (!change.has_value()) {
+            log_operations->info("{}: '{}' skipped: its {} axis or the reference is parallel to its bone axis", verb, bone->get_name(), get_roll_axis_label(axis));
+            continue;
+        }
+        changes.push_back(Bone_frame_change{.bone = bone, .change = change.value()});
+        log_operations->info("{}: '{}' rolled by {:.4f} degrees", verb, bone->get_name(), glm::degrees(angle.value()));
+    }
+    if (changes.empty()) {
+        return refuse(verb, fmt::format("no target bone can aim its {} axis at the reference (parallel to the bone axis)", get_roll_axis_label(axis)));
+    }
+    return apply_bone_frame_changes(context, changes, Tail_record::keep);
+}
+
+auto align_bones_to_active(
+    App_context&                                           context,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& targets,
+    const std::shared_ptr<erhe::scene::Node>&              active
+) -> Bone_structure_result
+{
+    constexpr const char* verb = "Align to Active";
+    if (!active || !erhe::scene::is_bone(active.get())) {
+        return refuse(verb, "the active item is not a bone");
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> bones = unique_bones(targets);
+    bones.erase(std::remove(bones.begin(), bones.end(), active), bones.end());
+    std::optional<Bone_structure_result> refused = check_targets(verb, bones);
+    if (refused.has_value()) {
+        return std::move(refused.value());
+    }
+    const glm::quat active_rotation = active->world_from_node_transform().get_rotation();
+    const glm::vec3 active_tail     = active->get_value(Rig::tail_property());
+    std::vector<Bone_frame_change> changes;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : bones) {
+        const std::optional<glm::quat> change = compute_align_change(
+            bone->world_from_node_transform().get_rotation(), bone->get_value(Rig::tail_property()), active_rotation, active_tail
+        );
+        if (!change.has_value()) {
+            log_operations->info("{}: '{}' skipped: it or '{}' has a zero tail", verb, bone->get_name(), active->get_name());
+            continue;
+        }
+        changes.push_back(Bone_frame_change{.bone = bone, .change = change.value()});
+        log_operations->info("{}: '{}' aligned to '{}'", verb, bone->get_name(), active->get_name());
+    }
+    if (changes.empty()) {
+        return refuse(verb, fmt::format("no target bone can be aligned to '{}' (zero tail)", active->get_name()));
+    }
+    return apply_bone_frame_changes(context, changes, Tail_record::record_local);
 }
 
 }

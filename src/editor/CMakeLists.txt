@@ -503,10 +503,14 @@ erhe_target_sources_grouped(
     rig/bone_connect.hpp
     rig/bone_hierarchy.cpp
     rig/bone_hierarchy.hpp
+    rig/bone_mirror.cpp
+    rig/bone_mirror.hpp
     rig/bone_naming.cpp
     rig/bone_naming.hpp
     rig/bone_pose.cpp
     rig/bone_pose.hpp
+    rig/bone_roll.cpp
+    rig/bone_roll.hpp
     rig/bone_structure.cpp
     rig/bone_structure.hpp
     rig/bone_tail.cpp

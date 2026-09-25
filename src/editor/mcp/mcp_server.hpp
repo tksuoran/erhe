@@ -264,6 +264,9 @@ private:
     auto action_extrude_bones      (const nlohmann::json& args) -> std::string;
     auto action_subdivide_bones    (const nlohmann::json& args) -> std::string;
     auto action_delete_bones       (const nlohmann::json& args) -> std::string;
+    auto action_symmetrize_bones   (const nlohmann::json& args) -> std::string;
+    auto action_recalculate_bone_roll(const nlohmann::json& args) -> std::string;
+    auto action_align_bones        (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
     auto action_create_node     (const nlohmann::json& args) -> std::string;

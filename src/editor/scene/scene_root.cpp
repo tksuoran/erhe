@@ -40,6 +40,8 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "tools/selection_tool.hpp"
@@ -885,6 +887,98 @@ auto Scene_root::make_browser_window(
                         close = true;
                     }
                     structure_tooltip(entry.tooltip);
+                }
+
+                // R13 Symmetrize and R16 roll verbs on the targets as above;
+                // greyed with the reason as the structure verbs are.
+                if (ImGui::MenuItem("Symmetrize", nullptr, false, structure_enabled)) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            static_cast<void>(symmetrize_bones(context, get_bone_command_targets(context, node)));
+                        }
+                    );
+                    close = true;
+                }
+                structure_tooltip("Create the mirror bone (arm.L -> arm.R) of each target bone that has a side\nand no counterpart, across the X = 0 plane of the skeleton root's parent;\nthe new bones become the selection; one undo step");
+                if (ImGui::BeginMenu("Recalculate Roll", structure_enabled)) {
+                    // The view direction: toward the viewer of the last
+                    // viewport, when it shows this bone's scene.
+                    std::optional<glm::vec3> view_direction;
+                    if (context.scene_views != nullptr) {
+                        const std::shared_ptr<Viewport_scene_view> scene_view = context.scene_views->last_scene_view();
+                        const std::shared_ptr<erhe::scene::Camera> camera     = scene_view ? scene_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
+                        if (camera && (static_cast<erhe::Item_host*>(scene_view->get_scene_root().get()) == node->get_item_host())) {
+                            view_direction = glm::normalize(glm::vec3{camera->world_from_node()[2]});
+                        }
+                    }
+                    class Roll_reference_entry
+                    {
+                    public:
+                        const char*              label;
+                        std::optional<glm::vec3> direction;
+                    };
+                    const Roll_reference_entry roll_references[] = {
+                        {"World X", glm::vec3{1.0f, 0.0f, 0.0f}},
+                        {"World Y", glm::vec3{0.0f, 1.0f, 0.0f}},
+                        {"World Z", glm::vec3{0.0f, 0.0f, 1.0f}},
+                        {"View",    view_direction}
+                    };
+                    for (const Roll_axis axis : {Roll_axis::x, Roll_axis::z}) {
+                        for (const Roll_reference_entry& reference : roll_references) {
+                            const std::string label = fmt::format("{} to {}", get_roll_axis_label(axis), reference.label);
+                            if (ImGui::MenuItem(label.c_str(), nullptr, false, reference.direction.has_value())) {
+                                const glm::vec3 direction = reference.direction.value();
+                                deferred_operations.push_back(
+                                    [&context, node, axis, direction]() {
+                                        static_cast<void>(recalculate_bone_roll(context, get_bone_command_targets(context, node), axis, direction));
+                                    }
+                                );
+                                close = true;
+                            }
+                            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                                ImGui::SetTooltip(
+                                    "%s",
+                                    reference.direction.has_value()
+                                        ? "Turn each target bone about its head-to-tail axis so this local axis points\nas close as possible to the direction; the tail and the children stay; one undo step"
+                                        : "No viewport shows this scene yet"
+                                );
+                            }
+                        }
+                        if (axis == Roll_axis::x) {
+                            ImGui::Separator();
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                structure_tooltip("Turn the target bones about their head-to-tail axis so their local X or Z axis\npoints to a world axis or toward the viewer; one undo step");
+                // Align to Active: the targets other than the active bone.
+                const std::shared_ptr<erhe::scene::Node> active_bone = (context.selection != nullptr)
+                    ? std::dynamic_pointer_cast<erhe::scene::Node>(context.selection->get_active_item())
+                    : std::shared_ptr<erhe::scene::Node>{};
+                const bool has_active_bone = active_bone && erhe::scene::is_bone(active_bone.get());
+                bool has_align_target = false;
+                if (has_active_bone) {
+                    for (const std::shared_ptr<erhe::scene::Node>& target : get_bone_command_targets(context, node)) {
+                        has_align_target = has_align_target || (target != active_bone);
+                    }
+                }
+                if (ImGui::MenuItem("Align to Active", nullptr, false, structure_enabled && has_align_target)) {
+                    deferred_operations.push_back(
+                        [&context, node, active_bone]() {
+                            static_cast<void>(align_bones_to_active(context, get_bone_command_targets(context, node), active_bone));
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(
+                        "%s",
+                        structure_refusal.has_value()
+                            ? structure_refusal.value().c_str()
+                            : has_align_target
+                                ? "Give each target bone the active bone's head-to-tail direction and roll;\nthe heads stay, the children keep their world transforms; one undo step"
+                                : "Needs an active bone and another target bone"
+                    );
                 }
             }
             // Lightmapped (undoable): the lightmapped property is inherited

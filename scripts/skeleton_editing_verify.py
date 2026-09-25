@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Skeleton editing slices A, B, the foundations and slice C structure (doc/plans/rigging/skeleton_editing.md R1-R15), driven as a user does.
+"""Skeleton editing slices A, B, the foundations and slice C (doc/plans/rigging/skeleton_editing.md R1-R16), driven as a user does.
 
 On res/editor/assets/RiggedFigure/RiggedFigure.glb (its bones carry the side
 before a trailing index: arm_joint_L_1 .. arm_joint_R_3, leg_joint_L_1 ..
@@ -26,6 +26,12 @@ and Ctrl+Z restoring it; on RiggedFigure's skin joints the structure entries
 are offered disabled and extrude_bones is refused with the skin named in the
 log; a glTF save + reopen keeps the authored bones, tails, connected flags
 and rest values.
+
+Section F mirrors a one-sided arm authored off the X = 0 plane: Symmetrize
+from the menu of a selected bone (the mirrored bones' world heads and tails
+checked), Recalculate Roll > X to World Z (the X axis aimed, the bone axis and
+the child kept) and Align to Active, each one undo step Ctrl+Z reverts; on
+RiggedFigure's skin joints the three entries are offered disabled.
 
     py -3 scripts/skeleton_editing_verify.py [--port N] [--launch]
 
@@ -731,6 +737,141 @@ def structure_checks(e: Editor, opened):
                f"parents={parents} after={after}")
 
 
+# --- section F: Symmetrize (R13) and bone roll (R16) -------------------------
+
+SYMMETRY_ENTRIES = ["Symmetrize", "Recalculate Roll", "Align to Active"]
+
+
+def symmetry_refusal_checks(figure: Figure):
+    """R9 for the slice C symmetry and roll entries on RiggedFigure, while its Hierarchy window is the visible one."""
+    print("\n== Symmetrize and roll refused on a bound skeleton (R9) ==")
+    e = figure.e
+    figure.clear_selection()
+    figure.set_filter("arm_joint_L_2")
+    e.click(figure.hierarchy, "arm_joint_L_2", button="right")
+    e.advance(2)
+    items = {item.get("label"): item for item in e.items(visible_only=True) if item.get("label") in SYMMETRY_ENTRIES}
+    e.key("escape")
+    figure.set_filter("")
+    disabled = {label: items[label].get("status", {}).get("disabled", False) for label in items}
+    check_true("F.1 on RiggedFigure's 'arm_joint_L_2' (a skin joint) Symmetrize, Recalculate Roll and Align to Active are offered disabled",
+               (set(disabled) == set(SYMMETRY_ENTRIES)) and all(disabled.values()), f"disabled={disabled}")
+
+
+def normalized(q):
+    length = math.sqrt(sum(c * c for c in q))
+    return [c / length for c in q]
+
+
+def world_rotation(s, name):
+    return s.details(name)["world_transform"]["rotation_xyzw"]
+
+
+def world_tail(s, name):
+    head = s.world(name)
+    tail = quat_rotate(world_rotation(s, name), s.vec(name, "Rig.tail"))
+    return [head[i] + tail[i] for i in range(3)]
+
+
+def mirror_x(p):
+    return [-p[0], p[1], p[2]]
+
+
+def vec_angle_deg(a, b):
+    cross = [(a[1] * b[2]) - (a[2] * b[1]), (a[2] * b[0]) - (a[0] * b[2]), (a[0] * b[1]) - (a[1] * b[0])]
+    return math.degrees(math.atan2(math.sqrt(sum(c * c for c in cross)), sum(a[i] * b[i] for i in range(3))))
+
+
+def rotation_angle_deg(a, b):
+    """The angle of conj(a) * b, both [x, y, z, w], well conditioned near zero."""
+    va, vb = a[:3], b[:3]
+    cross = [(va[1] * vb[2]) - (va[2] * vb[1]), (va[2] * vb[0]) - (va[0] * vb[2]), (va[0] * vb[1]) - (va[1] * vb[0])]
+    w = (a[3] * b[3]) + sum(va[i] * vb[i] for i in range(3))
+    v = [(a[3] * vb[i]) - (b[3] * va[i]) - cross[i] for i in range(3)]
+    return math.degrees(2.0 * math.atan2(math.sqrt(sum(c * c for c in v)), abs(w)))
+
+
+def symmetry_checks(e: Editor, opened):
+    print("\n== Symmetrize and bone roll (R13, R16) ==")
+    scene = e.create_scene()
+    opened.append(scene)
+    e.call("create_node", {"scene_name": scene, "name": "rig_base", "position": [0.0, 0.0, 0.0]})
+    e.advance(3)
+    s = Skeleton(e, scene)
+    # Setup through explicit-argument tools: a spine and a one-sided two-bone
+    # arm off the X = 0 plane of the skeleton frame (rig_base's frame).
+    e.call("create_bone", {"scene_name": scene, "parent": "rig_base", "name": "spine"})
+    e.advance(3)
+    e.call("create_bone", {"scene_name": scene, "parent": "spine", "name": "arm_L"})
+    e.advance(3)
+    e.call("set_node_transform", {"scene_name": scene, "node_name": "arm_L", "space": "local",
+                                  "translation": [0.3, 1.1, 0.2], "rotation_xyzw": normalized([0.1, 0.2, -0.55, 0.67])})
+    e.advance(3)
+    e.call("extrude_bones", {"scene_name": scene, "bones": ["arm_L"]})
+    e.advance(3)
+    e.call("select_items", {"scene_name": scene, "paths": ["arm_L", "arm_L.001"], "active": "arm_L"})
+    e.advance(2)
+    heads = {name: s.world(name) for name in ("arm_L", "arm_L.001")}
+    tails = {name: world_tail(s, name) for name in ("arm_L", "arm_L.001")}
+
+    # F.2 / F.3: Symmetrize on the selected side, from the menu of a selected bone.
+    depth = e.undo_depth()
+    s.run("arm_L", "Symmetrize")
+    ok = s.exists("arm_R") and s.exists("arm_R.001") and (s.parent("arm_R") == "spine") and (s.parent("arm_R.001") == "arm_R")
+    mirrored = ok and all(near(s.world(flip), mirror_x(heads[name]), 1.0e-5) and near(world_tail(s, flip), mirror_x(tails[name]), 1.0e-5)
+                          for name, flip in (("arm_L", "arm_R"), ("arm_L.001", "arm_R.001")))
+    check_true("F.2 Symmetrize on the selected 'arm_L' + 'arm_L.001' creates 'arm_R' under 'spine' and 'arm_R.001' under it, "
+               "world heads and tails mirrored across X = 0 (1e-5), connected kept, one undo step",
+               ok and mirrored and (s.prop("arm_R.001", "Rig.connected")["value"] == "true") and (e.undo_depth() == depth + 1),
+               f"structure={ok} mirrored={mirrored} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    check_true("F.3 Ctrl+Z removes the mirrored side", (not s.exists("arm_R")) and (not s.exists("arm_R.001")) and (e.undo_depth() == depth),
+               f"arm_R exists={s.exists('arm_R')} undo depth {e.undo_depth()}")
+
+    # F.4 / F.5: Recalculate Roll > X to World Z on 'arm_L' (the clicked bone alone).
+    e.call("select_items", {"scene_name": scene, "ids": []})
+    e.advance(2)
+    local_before = s.details("arm_L")["local_transform"]["rotation_xyzw"]
+    axis_before = quat_rotate(world_rotation(s, "arm_L"), s.vec("arm_L", "Rig.tail"))
+    child_before = s.details("arm_L.001")["world_transform"]
+    depth = e.undo_depth()
+    s.run("arm_L", "Recalculate Roll", "X to World Z")
+    q = world_rotation(s, "arm_L")
+    axis = quat_rotate(q, s.vec("arm_L", "Rig.tail"))
+    length = math.sqrt(sum(a * a for a in axis))
+    unit = [a / length for a in axis]
+    z_in_plane = [0.0 - (unit[2] * unit[0]), 0.0 - (unit[2] * unit[1]), 1.0 - (unit[2] * unit[2])]
+    aim = vec_angle_deg(quat_rotate(q, [1.0, 0.0, 0.0]), z_in_plane)
+    turned = vec_angle_deg(axis, axis_before)
+    child_after = s.details("arm_L.001")["world_transform"]
+    child_kept = near(child_after["translation"], child_before["translation"], 1.0e-5) and \
+        (rotation_angle_deg(child_after["rotation_xyzw"], child_before["rotation_xyzw"]) < 1.0e-3)
+    check_true("F.4 Recalculate Roll > X to World Z on 'arm_L': its X axis points to +Z in the plane across the bone (1e-4 deg), "
+               "the head-to-tail axis and the child 'arm_L.001' stay, one undo step",
+               (aim < 1.0e-4) and (turned < 1.0e-4) and child_kept and (e.undo_depth() == depth + 1),
+               f"aim={aim:.2e} deg axis turn={turned:.2e} deg child kept={child_kept} undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    restored = rotation_angle_deg(s.details("arm_L")["local_transform"]["rotation_xyzw"], local_before)
+    check_true("F.5 Ctrl+Z restores 'arm_L''s local rotation", (restored < 1.0e-4) and (e.undo_depth() == depth),
+               f"restored within {restored:.2e} deg")
+
+    # F.6 / F.7: Align to Active: 'arm_L.001' onto the active 'spine'.
+    e.call("select_items", {"scene_name": scene, "paths": ["arm_L.001", "spine"], "active": "spine"})
+    e.advance(2)
+    head_before = s.world("arm_L.001")
+    rotation_before = world_rotation(s, "arm_L.001")
+    depth = e.undo_depth()
+    s.run("arm_L.001", "Align to Active")
+    same = rotation_angle_deg(world_rotation(s, "arm_L.001"), world_rotation(s, "spine"))
+    check_true("F.6 Align to Active on the selected 'arm_L.001' with 'spine' active gives it the spine's world frame, head kept, one undo step",
+               (same < 1.0e-3) and near(s.world("arm_L.001"), head_before, 1.0e-5) and (e.undo_depth() == depth + 1),
+               f"frame differs by {same:.2e} deg undo depth {depth} -> {e.undo_depth()}")
+    s.undo()
+    back = rotation_angle_deg(world_rotation(s, "arm_L.001"), rotation_before)
+    check_true("F.7 Ctrl+Z restores 'arm_L.001''s rotation", (back < 1.0e-3) and (e.undo_depth() == depth),
+               f"restored within {back:.2e} deg")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=None)
@@ -754,9 +895,11 @@ def main():
         flip_names_checks(figure)
         posing_checks(figure)
         structure_refusal_checks(figure)
+        symmetry_refusal_checks(figure)
         usd_warning_check(e, opened)
         foundations_checks(e, opened)
         structure_checks(e, opened)
+        symmetry_checks(e, opened)
     finally:
         # Closing the scenes closes their viewport windows, which the editor
         # would otherwise record as open in desktop_windows.json at exit.

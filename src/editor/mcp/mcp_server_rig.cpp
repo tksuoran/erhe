@@ -1,8 +1,9 @@
 // Mcp_server skeleton editing tools (doc/plans/rigging/skeleton_editing.md
 // slices A, B and C): select_bones (R10), flip_bone_names (R13 Flip Names),
 // clear_pose (R14), copy_pose and paste_pose (R15), create_bone (R5),
-// extrude_bones (R6), subdivide_bones (R7) and delete_bones (R8), the last
-// four refused on bones a skin lists (R9). They act on the bones
+// extrude_bones (R6), subdivide_bones (R7), delete_bones (R8),
+// symmetrize_bones (R13), recalculate_bone_roll and align_bones (R16), the
+// last seven refused on bones a skin lists (R9). They act on the bones
 // their arguments name, never on the selection or on UI state - paste_pose
 // takes the pose as an argument and never reads the editor's pose buffer;
 // the verbs are the ones the Hierarchy context menu of a bone runs
@@ -188,9 +189,14 @@ constexpr std::array<Mode_name, 5> c_mode_names{{
     for (const std::shared_ptr<erhe::scene::Node>& bone : result.removed) {
         removed.push_back(node_json(*bone));
     }
+    json changed = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& bone : result.changed) {
+        changed.push_back(node_json(*bone));
+    }
     return make_json_content({
         {"created", created},
         {"removed", removed},
+        {"changed", changed},
         // One undoable operation, executed on the next editor frame.
         {"queued",  result.queued}
     }).dump();
@@ -468,6 +474,98 @@ auto Mcp_server::action_delete_bones(const json& args) -> std::string
         return error_result(error.value());
     }
     return structure_result(delete_bones(m_context, targets, mode));
+}
+
+auto Mcp_server::action_symmetrize_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(symmetrize_bones(m_context, targets));
+}
+
+auto Mcp_server::action_recalculate_bone_roll(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    const std::string axis_text = args.value("axis", "");
+    Roll_axis         axis      = Roll_axis::x;
+    if (axis_text == "z") {
+        axis = Roll_axis::z;
+    } else if (axis_text != "x") {
+        return error_result("axis must be 'x' or 'z'; got '" + axis_text + "'");
+    }
+    // The reference: a world axis name or an explicit world direction.
+    const json reference_arg = args.value("reference", json{});
+    glm::vec3  reference{0.0f};
+    if (reference_arg.is_string()) {
+        class Named_direction
+        {
+        public:
+            const char* name;
+            glm::vec3   direction;
+        };
+        static const std::array<Named_direction, 6> c_named{{
+            {"x",  glm::vec3{ 1.0f,  0.0f,  0.0f}},
+            {"y",  glm::vec3{ 0.0f,  1.0f,  0.0f}},
+            {"z",  glm::vec3{ 0.0f,  0.0f,  1.0f}},
+            {"-x", glm::vec3{-1.0f,  0.0f,  0.0f}},
+            {"-y", glm::vec3{ 0.0f, -1.0f,  0.0f}},
+            {"-z", glm::vec3{ 0.0f,  0.0f, -1.0f}}
+        }};
+        const std::string text = reference_arg.get<std::string>();
+        bool found = false;
+        for (const Named_direction& named : c_named) {
+            if (text == named.name) {
+                reference = named.direction;
+                found     = true;
+            }
+        }
+        if (!found) {
+            return error_result("reference must be 'x', 'y', 'z', '-x', '-y', '-z' or [x, y, z]; got '" + text + "'");
+        }
+    } else if (reference_arg.is_array() && (reference_arg.size() == 3) && reference_arg[0].is_number() && reference_arg[1].is_number() && reference_arg[2].is_number()) {
+        reference = glm::vec3{reference_arg[0].get<float>(), reference_arg[1].get<float>(), reference_arg[2].get<float>()};
+    } else {
+        return error_result("reference must be 'x', 'y', 'z', '-x', '-y', '-z' or [x, y, z]; got " + reference_arg.dump());
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(recalculate_bone_roll(m_context, targets, axis, reference));
+}
+
+auto Mcp_server::action_align_bones(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return error_result("Scene not found: " + scene_name);
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> active;
+    const json active_arg = args.value("active", json{});
+    const std::optional<std::string> active_error = resolve_bones(*sr, json::array({active_arg}), active);
+    if (active_error.has_value()) {
+        return error_result("active: " + active_error.value());
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> targets;
+    const std::optional<std::string> error = resolve_bones(*sr, args.value("bones", json{}), targets);
+    if (error.has_value()) {
+        return error_result(error.value());
+    }
+    return structure_result(align_bones_to_active(m_context, targets, active.front()));
 }
 
 } // namespace editor

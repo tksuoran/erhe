@@ -3127,8 +3127,8 @@ TEST_F(Mcp_test, bone_structure_verbs_build_an_unskinned_chain_and_undo_exactly)
     advance_frames(client, 4);
 }
 
-// R9: every structure verb is refused on a bone a skin lists, naming the
-// skin, and queues nothing.
+// R9: every structure verb (Symmetrize and the roll verbs included) is
+// refused on a bone a skin lists, naming the skin, and queues nothing.
 TEST_F(Mcp_test, bone_structure_verbs_are_refused_on_a_bound_bone)
 {
     Mcp_client& client = Mcp_env::get().client();
@@ -3146,7 +3146,10 @@ TEST_F(Mcp_test, bone_structure_verbs_are_refused_on_a_bound_bone)
         {"extrude_bones",   json{{"scene_name", scene}, {"bones", {"arm_joint_L_3"}}}},
         {"subdivide_bones", json{{"scene_name", scene}, {"bones", {"arm_joint_L_1"}}, {"count", 2}}},
         {"delete_bones",    json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"mode", "delete"}}},
-        {"delete_bones",    json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"mode", "dissolve"}}}
+        {"delete_bones",    json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"mode", "dissolve"}}},
+        {"symmetrize_bones",      json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}}},
+        {"recalculate_bone_roll", json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"axis", "x"}, {"reference", "z"}}},
+        {"align_bones",           json{{"scene_name", scene}, {"bones", {"arm_joint_L_2"}}, {"active", "arm_joint_L_1"}}}
     };
     for (const std::pair<std::string, json>& entry : calls) {
         Mcp_client::Tool_result refused = client.call_tool(entry.first, entry.second);
@@ -3157,6 +3160,364 @@ TEST_F(Mcp_test, bone_structure_verbs_are_refused_on_a_bound_bone)
     EXPECT_EQ(undo_depth(), depth) << "a refused verb queues nothing";
     Mcp_client::Tool_result node = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "arm_joint_L_2"}});
     EXPECT_FALSE(node.is_error) << "the bound bone is still there";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+namespace {
+
+// Double-precision helpers for the orientation checks of R13 / R16: the
+// node details carry float values, and angles near zero need more than
+// float's acos resolution.
+using Dvec  = std::array<double, 3>;
+using Dquat = std::array<double, 4>; // x, y, z, w
+
+[[nodiscard]] auto dvec_of(const json& v) -> Dvec
+{
+    return Dvec{v[0].get<double>(), v[1].get<double>(), v[2].get<double>()};
+}
+
+[[nodiscard]] auto dquat_of(const json& q) -> Dquat
+{
+    return Dquat{q[0].get<double>(), q[1].get<double>(), q[2].get<double>(), q[3].get<double>()};
+}
+
+[[nodiscard]] auto dcross(const Dvec& a, const Dvec& b) -> Dvec
+{
+    return Dvec{(a[1] * b[2]) - (a[2] * b[1]), (a[2] * b[0]) - (a[0] * b[2]), (a[0] * b[1]) - (a[1] * b[0])};
+}
+
+[[nodiscard]] auto ddot(const Dvec& a, const Dvec& b) -> double
+{
+    return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]);
+}
+
+[[nodiscard]] auto dlength(const Dvec& a) -> double
+{
+    return std::sqrt(ddot(a, a));
+}
+
+[[nodiscard]] auto ddistance(const Dvec& a, const Dvec& b) -> double
+{
+    return dlength(Dvec{a[0] - b[0], a[1] - b[1], a[2] - b[2]});
+}
+
+[[nodiscard]] auto dnormalize(const Dvec& a) -> Dvec
+{
+    const double length = dlength(a);
+    return Dvec{a[0] / length, a[1] / length, a[2] / length};
+}
+
+// v rotated by the unit quaternion q.
+[[nodiscard]] auto drotate(const Dquat& q, const Dvec& v) -> Dvec
+{
+    const Dvec   u{q[0], q[1], q[2]};
+    const double w = q[3];
+    const Dvec   t = dcross(u, v);
+    const Dvec   t2{2.0 * t[0], 2.0 * t[1], 2.0 * t[2]};
+    const Dvec   c = dcross(u, t2);
+    return Dvec{v[0] + (w * t2[0]) + c[0], v[1] + (w * t2[1]) + c[1], v[2] + (w * t2[2]) + c[2]};
+}
+
+// The angle between two directions in degrees, well conditioned near zero.
+[[nodiscard]] auto dangle_deg(const Dvec& a, const Dvec& b) -> double
+{
+    return std::atan2(dlength(dcross(a, b)), ddot(a, b)) * (180.0 / 3.14159265358979323846);
+}
+
+// The angle between two rotations in degrees: the angle of conj(a) * b from
+// its vector part and scalar part, well conditioned near zero (an angle from
+// |dot(a, b)| alone is not, for quaternions read back as floats).
+[[nodiscard]] auto dquat_angle_deg(const Dquat& a, const Dquat& b) -> double
+{
+    const Dvec   va{a[0], a[1], a[2]};
+    const Dvec   vb{b[0], b[1], b[2]};
+    const Dvec   c = dcross(va, vb);
+    const double w = (a[3] * b[3]) + ddot(va, vb);
+    const Dvec   v{(a[3] * vb[0]) - (b[3] * va[0]) - c[0], (a[3] * vb[1]) - (b[3] * va[1]) - c[1], (a[3] * vb[2]) - (b[3] * va[2]) - c[2]};
+    return 2.0 * std::atan2(dlength(v), std::abs(w)) * (180.0 / 3.14159265358979323846);
+}
+
+// The mirror across the world X = 0 plane (the skeleton frame of a skeleton
+// whose root is a child of an identity scene root node).
+[[nodiscard]] auto dmirror(const Dvec& a) -> Dvec
+{
+    return Dvec{-a[0], a[1], a[2]};
+}
+
+// S * R(q) * S: (x, y, z, w) -> (x, -y, -z, w).
+[[nodiscard]] auto dmirror_rotation(const Dquat& q) -> Dquat
+{
+    return Dquat{q[0], -q[1], -q[2], q[3]};
+}
+
+[[nodiscard]] auto parse_dvec(const std::string& text) -> Dvec
+{
+    Dvec v{};
+    std::istringstream stream{text};
+    stream >> v[0] >> v[1] >> v[2];
+    return v;
+}
+
+[[nodiscard]] auto parse_dquat(const std::string& text) -> Dquat
+{
+    Dquat q{};
+    std::istringstream stream{text};
+    stream >> q[0] >> q[1] >> q[2] >> q[3];
+    return q;
+}
+
+[[nodiscard]] auto create_new_scene(Mcp_client& client) -> std::string
+{
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    return scene;
+}
+
+// The node-detail accessors the R13 / R16 tests share, over one scene.
+class Rig_probe
+{
+public:
+    Rig_probe(Mcp_client& client, std::string scene) : m_client{client}, m_scene{std::move(scene)} {}
+
+    [[nodiscard]] auto details(const std::string& name) const -> json
+    {
+        Mcp_client::Tool_result result = m_client.call_tool("get_node_details", json{{"scene_name", m_scene}, {"node_name", name}});
+        return result.is_error ? json::object() : result.payload;
+    }
+    [[nodiscard]] auto exists     (const std::string& name) const -> bool        { return details(name).contains("id"); }
+    [[nodiscard]] auto parent     (const std::string& name) const -> std::string { return details(name).value("parent", ""); }
+    [[nodiscard]] auto world_t    (const std::string& name) const -> Dvec        { return dvec_of (details(name).at("world_transform").at("translation")); }
+    [[nodiscard]] auto world_q    (const std::string& name) const -> Dquat       { return dquat_of(details(name).at("world_transform").at("rotation_xyzw")); }
+    [[nodiscard]] auto local_t    (const std::string& name) const -> Dvec        { return dvec_of (details(name).at("local_transform").at("translation")); }
+    [[nodiscard]] auto local_q    (const std::string& name) const -> Dquat       { return dquat_of(details(name).at("local_transform").at("rotation_xyzw")); }
+    [[nodiscard]] auto property   (const std::string& name, const char* property_name) const -> json
+    {
+        return item_property(m_client, details(name).value("id", 0), property_name);
+    }
+    [[nodiscard]] auto property_vec(const std::string& name, const char* property_name) const -> Dvec
+    {
+        return parse_dvec(property(name, property_name).value("value", ""));
+    }
+    // The world position of the bone's tail: head + world rotation * Rig.tail
+    // (unit scale).
+    [[nodiscard]] auto world_tail(const std::string& name) const -> Dvec
+    {
+        const Dvec head = world_t(name);
+        const Dvec tail = drotate(world_q(name), property_vec(name, "Rig.tail"));
+        return Dvec{head[0] + tail[0], head[1] + tail[1], head[2] + tail[2]};
+    }
+    void set_property(const std::string& name, const char* property_name, const json& value) const
+    {
+        Mcp_client::Tool_result result = m_client.call_tool("set_item_property", json{{"item_id", details(name).value("id", 0)}, {"property", property_name}, {"value", value}});
+        EXPECT_FALSE(result.is_error) << property_name << ": " << result.text;
+        advance_frames(m_client, 2);
+    }
+    void set_local(const std::string& name, const Dvec& translation, const Dquat& rotation) const
+    {
+        Mcp_client::Tool_result result = m_client.call_tool(
+            "set_node_transform",
+            json{
+                {"scene_name", m_scene}, {"node_name", name}, {"space", "local"},
+                {"translation", {translation[0], translation[1], translation[2]}},
+                {"rotation_xyzw", {rotation[0], rotation[1], rotation[2], rotation[3]}}
+            }
+        );
+        EXPECT_FALSE(result.is_error) << result.text;
+        advance_frames(m_client, 2);
+    }
+    [[nodiscard]] auto call(const char* tool, json args) const -> Mcp_client::Tool_result
+    {
+        args["scene_name"] = m_scene;
+        Mcp_client::Tool_result result = m_client.call_tool(tool, args);
+        advance_frames(m_client, 3);
+        return result;
+    }
+    [[nodiscard]] auto undo_depth() const -> std::size_t
+    {
+        return m_client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    }
+    void undo() const { m_client.call_tool("undo", json::object()); advance_frames(m_client, 4); }
+    void redo() const { m_client.call_tool("redo", json::object()); advance_frames(m_client, 4); }
+
+private:
+    Mcp_client& m_client;
+    std::string m_scene;
+};
+
+[[nodiscard]] auto normalized_quat(const Dquat& q) -> Dquat
+{
+    const double length = std::sqrt((q[0] * q[0]) + (q[1] * q[1]) + (q[2] * q[2]) + (q[3] * q[3]));
+    return Dquat{q[0] / length, q[1] / length, q[2] / length, q[3] / length};
+}
+
+} // anonymous namespace
+
+// R13 Symmetrize on an authored, unskinned arm: selecting the whole one-sided
+// arm creates its mirror across the skeleton frame's X = 0 plane (the scene
+// root's frame here, the root 'spine' being its child) in one undo step:
+// flipped names, parents mapped, world heads and tails mirrored, the tail,
+// the rest and the connected flag carried over mirrored, and the IK limits
+// mapped (X range kept, Y and Z ranges negated and swapped).
+TEST_F(Mcp_test, symmetrize_mirrors_an_authored_arm_in_one_undo_step)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    const std::string scene = create_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+    const Rig_probe p{client, scene};
+    constexpr double eps = 1.0e-5;
+
+    ASSERT_FALSE(p.call("create_bone", json{{"name", "spine"}}).is_error);
+    ASSERT_FALSE(p.call("create_bone", json{{"parent", "spine"}, {"name", "arm_L"}}).is_error);
+    // Off the plane and turned about every axis, with its rest on the pose.
+    const Dvec  arm_translation{0.3, 1.1, 0.2};
+    const Dquat arm_rotation = normalized_quat(Dquat{0.1, 0.2, -0.55, 0.8});
+    p.set_local("arm_L", arm_translation, arm_rotation);
+    p.set_property("arm_L", "Rig.rest_translation", "0.3 1.1 0.2");
+    {
+        std::ostringstream text;
+        text.precision(17);
+        text << arm_rotation[0] << " " << arm_rotation[1] << " " << arm_rotation[2] << " " << arm_rotation[3];
+        p.set_property("arm_L", "Rig.rest_rotation", text.str());
+    }
+    ASSERT_FALSE(p.call("extrude_bones", json{{"bones", {"arm_L"}}}).is_error);
+    ASSERT_TRUE(p.exists("arm_L.001"));
+    p.set_property("arm_L.001", "Ik.lock_x",     true);
+    p.set_property("arm_L.001", "Ik.limit_y",    true);
+    p.set_property("arm_L.001", "Ik.limit_z",    true);
+    p.set_property("arm_L.001", "Ik.limit_min",  "-0.1 -0.2 -0.3");
+    p.set_property("arm_L.001", "Ik.limit_max",  "0.4 0.5 0.6");
+    p.set_property("arm_L.001", "Ik.pole_angle", "0.25");
+
+    const Dvec head_l      = p.world_t   ("arm_L");
+    const Dvec tail_l      = p.world_tail("arm_L");
+    const Dvec head_l1     = p.world_t   ("arm_L.001");
+    const Dvec tail_l1     = p.world_tail("arm_L.001");
+    const Dvec limit_min_l = p.property_vec("arm_L.001", "Ik.limit_min");
+    const Dvec limit_max_l = p.property_vec("arm_L.001", "Ik.limit_max");
+    const Dvec rig_tail_l1 = p.property_vec("arm_L.001", "Rig.tail");
+
+    // The child named first: the verb orders parents first itself.
+    const std::size_t depth = p.undo_depth();
+    Mcp_client::Tool_result mirrored = p.call("symmetrize_bones", json{{"bones", {"arm_L.001", "arm_L"}}});
+    ASSERT_FALSE(mirrored.is_error) << mirrored.text;
+    EXPECT_EQ(p.undo_depth(), depth + 1) << "symmetrize_bones is one undo step";
+    EXPECT_EQ(mirrored.payload.at("created").size(), 2u);
+    ASSERT_TRUE(p.exists("arm_R"));
+    ASSERT_TRUE(p.exists("arm_R.001"));
+    EXPECT_EQ(p.parent("arm_R"),     "spine")  << "the unsided parent is kept";
+    EXPECT_EQ(p.parent("arm_R.001"), "arm_R")  << "the parent's mirror is the new parent";
+    EXPECT_LT(ddistance(p.world_t   ("arm_R"),     dmirror(head_l)),  eps);
+    EXPECT_LT(ddistance(p.world_tail("arm_R"),     dmirror(tail_l)),  eps);
+    EXPECT_LT(ddistance(p.world_t   ("arm_R.001"), dmirror(head_l1)), eps);
+    EXPECT_LT(ddistance(p.world_tail("arm_R.001"), dmirror(tail_l1)), eps);
+    EXPECT_LT(dquat_angle_deg(p.world_q("arm_R"), dmirror_rotation(p.world_q("arm_L"))), 1.0e-3) << "world rotation S * R * S";
+    EXPECT_LT(ddistance(p.property_vec("arm_R.001", "Rig.tail"), dmirror(rig_tail_l1)), eps) << "Rig.tail (x, y, z) -> (-x, y, z)";
+    EXPECT_EQ(p.property("arm_R.001", "Rig.connected").value("value", ""), "true");
+    EXPECT_LT(ddistance(p.property_vec("arm_R", "Rig.rest_translation"), Dvec{-0.3, 1.1, 0.2}), eps) << "the rest is mirrored";
+    EXPECT_EQ(p.property("arm_R.001", "Ik.lock_x").value("value", ""),  "true");
+    EXPECT_EQ(p.property("arm_R.001", "Ik.limit_y").value("value", ""), "true");
+    const Dvec limit_min_r = p.property_vec("arm_R.001", "Ik.limit_min");
+    const Dvec limit_max_r = p.property_vec("arm_R.001", "Ik.limit_max");
+    EXPECT_LT(ddistance(limit_min_r, Dvec{limit_min_l[0], -limit_max_l[1], -limit_max_l[2]}), 1.0e-3) << "Y and Z ranges negated and swapped";
+    EXPECT_LT(ddistance(limit_max_r, Dvec{limit_max_l[0], -limit_min_l[1], -limit_min_l[2]}), 1.0e-3) << "the X range is kept";
+    const double pole_l = std::stod(p.property("arm_L.001", "Ik.pole_angle").value("value", "0"));
+    const double pole_r = std::stod(p.property("arm_R.001", "Ik.pole_angle").value("value", "0"));
+    EXPECT_NEAR(pole_r, -pole_l, 1.0e-4) << "the pole angle is negated";
+    EXPECT_TRUE(p.details("arm_R").value("selected", false)) << "the new bones become the selection";
+
+    p.undo();
+    EXPECT_FALSE(p.exists("arm_R"))     << "undo removes the mirror bones";
+    EXPECT_FALSE(p.exists("arm_R.001"));
+    EXPECT_LT(ddistance(p.world_t("arm_L.001"), head_l1), eps) << "the source side is untouched";
+    p.redo();
+    ASSERT_TRUE(p.exists("arm_R.001"));
+    EXPECT_LT(ddistance(p.world_t("arm_R.001"), dmirror(head_l1)), eps);
+
+    // Both sides now exist: nothing to mirror, nothing queued.
+    const std::size_t again_depth = p.undo_depth();
+    Mcp_client::Tool_result again = p.call("symmetrize_bones", json{{"bones", {"arm_L"}}});
+    ASSERT_FALSE(again.is_error) << again.text;
+    EXPECT_TRUE(again.payload.at("created").empty());
+    EXPECT_EQ(p.undo_depth(), again_depth);
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// R16 on an authored chain: Recalculate Roll aims a bone's local X at world
+// +Z (within 1e-4 degrees in the plane perpendicular to the bone) without
+// moving its head-to-tail axis or its children; Align to Active gives a bone
+// the active bone's direction and roll, head kept. Each one undo step whose
+// undo restores the local transforms exactly.
+TEST_F(Mcp_test, recalculate_roll_and_align_to_active_keep_axes_and_children)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    const std::string scene = create_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+    const Rig_probe p{client, scene};
+    constexpr double eps = 1.0e-5;
+
+    ASSERT_FALSE(p.call("create_bone", json{{"name", "chain"}}).is_error);
+    p.set_local("chain", Dvec{0.0, 0.0, 0.0}, normalized_quat(Dquat{0.2, 0.3, 0.1, 0.93}));
+    for (const char* from : {"chain", "chain.001"}) {
+        ASSERT_FALSE(p.call("extrude_bones", json{{"bones", {from}}}).is_error);
+    }
+    // A child that is not connected, off the tail and turned.
+    ASSERT_FALSE(p.call("create_bone", json{{"parent", "chain.001"}, {"name", "side"}}).is_error);
+    p.set_local("side", Dvec{0.2, 0.5, 0.1}, normalized_quat(Dquat{-0.3, 0.1, 0.4, 0.86}));
+    ASSERT_TRUE(p.exists("chain.002"));
+    ASSERT_TRUE(p.exists("side"));
+
+    const Dvec  axis_before     = dnormalize(drotate(p.world_q("chain.001"), p.property_vec("chain.001", "Rig.tail")));
+    const Dvec  tail_before     = p.world_tail("chain.001");
+    const Dquat local_before    = p.local_q("chain.001");
+    const Dvec  child_t_before  = p.world_t("chain.002");
+    const Dquat child_q_before  = p.world_q("chain.002");
+    const Dvec  side_t_before   = p.world_t("side");
+    const Dquat side_q_before   = p.world_q("side");
+
+    // Recalculate Roll: chain.001's local X toward world +Z.
+    std::size_t depth = p.undo_depth();
+    Mcp_client::Tool_result rolled = p.call("recalculate_bone_roll", json{{"bones", {"chain.001"}}, {"axis", "x"}, {"reference", "z"}});
+    ASSERT_FALSE(rolled.is_error) << rolled.text;
+    EXPECT_EQ(p.undo_depth(), depth + 1) << "recalculate_bone_roll is one undo step";
+    const Dquat q          = p.world_q("chain.001");
+    const Dvec  axis_after = dnormalize(drotate(q, p.property_vec("chain.001", "Rig.tail")));
+    const Dvec  x_after    = drotate(q, Dvec{1.0, 0.0, 0.0});
+    const Dvec  z_in_plane = Dvec{0.0 - (axis_after[2] * axis_after[0]), 0.0 - (axis_after[2] * axis_after[1]), 1.0 - (axis_after[2] * axis_after[2])};
+    EXPECT_LT(dangle_deg(x_after, z_in_plane), 1.0e-4) << "local X points to world +Z within the plane perpendicular to the bone";
+    EXPECT_LT(dangle_deg(axis_after, axis_before), 1.0e-4) << "the head-to-tail axis is unchanged";
+    EXPECT_LT(ddistance(p.world_tail("chain.001"), tail_before), eps) << "the tail point stays put";
+    EXPECT_LT(ddistance(p.world_t("chain.002"), child_t_before), eps) << "the connected child keeps its world transform";
+    EXPECT_LT(dquat_angle_deg(p.world_q("chain.002"), child_q_before), 1.0e-3);
+    EXPECT_LT(ddistance(p.world_t("side"), side_t_before), eps) << "the other child keeps its world transform";
+    EXPECT_LT(dquat_angle_deg(p.world_q("side"), side_q_before), 1.0e-3);
+    EXPECT_LT(dquat_angle_deg(parse_dquat(p.property("chain.001", "Rig.rest_rotation").value("value", "")), p.local_q("chain.001")), 1.0e-3)
+        << "the rest turns with the bone (it was at rest)";
+    p.undo();
+    EXPECT_LT(dquat_angle_deg(p.local_q("chain.001"), local_before), 1.0e-6) << "undo restores the local rotation";
+    EXPECT_LT(ddistance(p.world_t("side"), side_t_before), eps);
+
+    // Align to Active: 'side' takes chain.002's direction and roll (both bone
+    // axes are local +Y), its head stays.
+    depth = p.undo_depth();
+    Mcp_client::Tool_result aligned = p.call("align_bones", json{{"bones", {"side"}}, {"active", "chain.002"}});
+    ASSERT_FALSE(aligned.is_error) << aligned.text;
+    EXPECT_EQ(p.undo_depth(), depth + 1) << "align_bones is one undo step";
+    EXPECT_LT(dquat_angle_deg(p.world_q("side"), p.world_q("chain.002")), 1.0e-3) << "same world frame as the active bone";
+    EXPECT_LT(ddistance(p.world_t("side"), side_t_before), eps) << "the head stays";
+    EXPECT_EQ(p.property("side", "Rig.tail").value("source", ""), "local") << "the tail is recorded";
+    p.undo();
+    EXPECT_LT(dquat_angle_deg(p.world_q("side"), side_q_before), 1.0e-4) << "undo restores the rotation";
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 4);

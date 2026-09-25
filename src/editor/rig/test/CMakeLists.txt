@@ -17,16 +17,21 @@ add_executable(${_target}
     # bone_hierarchy.cpp needs erhe::scene (nodes and the bone flag);
     # bone_pose.cpp also the rest transforms (rig_properties.cpp, whose
     # Rig.tail default is bone_tail.cpp) and the channel-lock rule
-    # (channel_locks.cpp).
+    # (channel_locks.cpp); bone_mirror.cpp and bone_roll.cpp are pure glm
+    # math over erhe::scene::Trs_transform.
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_hierarchy.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bone_mirror.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_naming.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_pose.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bone_roll.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bone_tail.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/rig_properties.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../transform/channel_locks.cpp
     test_bone_hierarchy.cpp
+    test_bone_mirror.cpp
     test_bone_naming.cpp
     test_bone_pose.cpp
+    test_bone_roll.cpp
     test_bone_tail.cpp
 )
 

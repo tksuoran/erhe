@@ -1713,6 +1713,115 @@
     "name": "delete_bones"
   },
   {
+    "description": "Symmetrize (doc/plans/rigging/skeleton_editing.md R13): for each named bone whose name has a side (arm.L, arm_joint_L_1, handLeft, ...) and that has no mirror counterpart, creates the mirror bone across the X = 0 plane of the skeleton frame (the frame of the skeleton root's parent node, in which the root's own transform sits), as ONE undoable operation executed on the next editor frame. Bones are mirrored parents first, so naming a whole side mirrors it whole. The mirror bone is named flip_side_name(name) and parented to the mirror bone created for its parent, else to its parent's counterpart, else to its parent; its local transform is the mirror of the bone's current world transform, its Rig.tail (x, y, z) -> (-x, y, z), its Rig.rest_* the mirrored rest, Rig.connected copied, and the bone's local Ik.* values copied mirrored (limit_min / limit_max: X range kept, Y and Z ranges negated and swapped; rest_rotation mirrored; pole_angle negated; pole_target mapped to the pole's mirror). Bones without a side or with a counterpart are skipped. The new bones become the selection. Refused, with an error naming the skin, when a named bone, or an existing bone a mirror would be created under, is a joint a skin lists (R9). Returns 'created' [{name, id, tail}] (empty and queued false when nothing needed mirroring).",
+    "inputSchema": {
+      "properties": {
+        "bones": {
+          "description": "The bones to mirror: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones"
+      ],
+      "type": "object"
+    },
+    "name": "symmetrize_bones"
+  },
+  {
+    "description": "Recalculate Roll (doc/plans/rigging/skeleton_editing.md R16): turns each named bone about its head-to-tail axis (Rig.tail direction) so its local 'axis' points as close as possible to the world direction 'reference' (the axis and the reference projected onto the plane perpendicular to the bone axis coincide), as ONE undoable operation executed on the next editor frame. The head and the tail point stay put; children keep their world transforms (a connected child bone its head on the tail); the rest transform (Rig.rest_translation / rest_rotation) turns with the bone, so the pose relative to rest is unchanged, and a local Ik.rest_rotation turns with it. Bones whose axis or reference is parallel to the bone axis are skipped. Refused, with an error naming the skin, when any named bone is a joint a skin lists (R9). Returns 'changed' [{name, id}].",
+    "inputSchema": {
+      "properties": {
+        "axis": {
+          "description": "The bone-local axis to aim: 'x' or 'z'",
+          "enum": [
+            "x",
+            "z"
+          ],
+          "type": "string"
+        },
+        "bones": {
+          "description": "The bones to roll: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "reference": {
+          "description": "The world direction to aim at: 'x', 'y', 'z', '-x', '-y', '-z' or [x, y, z] (e.g. a view direction)",
+          "type": [
+            "string",
+            "array"
+          ]
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones",
+        "axis",
+        "reference"
+      ],
+      "type": "object"
+    },
+    "name": "recalculate_bone_roll"
+  },
+  {
+    "description": "Align to Active (doc/plans/rigging/skeleton_editing.md R16): gives each named bone (the 'active' bone itself excluded) the active bone's head-to-tail direction and roll, as ONE undoable operation executed on the next editor frame: the head stays, the bone's world rotation becomes the active bone's (times the shortest rotation between the two bones' local tail directions when they differ), so its tail keeps its length and points along the active bone's tail. A named bone's Rig.tail without a local value is recorded as one. Children keep their world transforms (a connected child bone its head on the moved tail and its world rotation); the rest transform turns with the bone, and a local Ik.rest_rotation with it. Refused, with an error naming the skin, when any named bone is a joint a skin lists (R9). Returns 'changed' [{name, id}].",
+    "inputSchema": {
+      "properties": {
+        "active": {
+          "description": "The bone to align to: bone node name or node id",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "bones": {
+          "description": "The bones to align: bone node names (the first bone node of that name) or node ids",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "bones",
+        "active"
+      ],
+      "type": "object"
+    },
+    "name": "align_bones"
+  },
+  {
     "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_joint captures its joint frames from the two frame nodes' world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {
