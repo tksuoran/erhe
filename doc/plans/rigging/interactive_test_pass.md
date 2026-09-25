@@ -8,8 +8,50 @@ Everything listed here is already verified headlessly over MCP or by unit
 tests; this pass covers what only a live mouse drag and the real ImGui
 widgets reach.
 
-Progress: sections 0-2 pass. Section 3 is re-run on the test rig below
-(twist-axis locks are enforced now), then testing continues at section 4.
+Progress: sections 0-2 pass by hand. Sections 0-7 are automated (below)
+and pass; what is left for a person is the list the script prints as
+MANUAL - the look of the drawn lines, the Pole Target picker widget and the
+feel verdicts of section 8.
+
+## Automated run
+
+`scripts/ik_interactive_pass_verify.py` runs sections 0-7 against the
+headless editor and prints one PASS / FAIL line per check (58 checks, about
+2.5 minutes), then the MANUAL items:
+
+    py -3 scripts/ik_interactive_pass_verify.py --launch
+    py -3 scripts/ik_interactive_pass_verify.py --port N --section 3 --section 4
+
+`--launch` starts `build_vs2026_vulkan_headless/bin/Debug/editor.exe` from
+the repo root, reads its MCP port from `logs/log.txt` and asks it to exit
+at the end; without it the script drives an editor already running on
+`--port` (default `ERHE_MCP_PORT` or 3743). It sets up its own scene from
+the asset of Setup below (Add Bone Tip Nodes through the Hierarchy context
+menu), aims the scene camera, and restores the rig before each check.
+
+- **The gestures a check is about are real input.** Checkboxes, the Set
+  Rest button, the Limit Min slider and the Effector Orientation combo are
+  clicked in the Properties / Transform windows; Ctrl+Z / Ctrl+Y are key
+  chords over the viewport; the plain drag of 1.1, the channel-lock masking
+  of 4.1 and one long ring drag of 4.3 are mouse drags on the gizmo handles
+  (`doc/agents/mcp_ui_driving.md`). Every other drag goes through the
+  Transform tool's drag over MCP (`drag_selection`, held and retargeted with
+  `action: "move"` per step): the same drag as a handle press - the Move
+  tool active, so the bone chain solves IK - with exact world deltas, the
+  rig read after every step.
+- **Measures.** A bone angle is the solver's own: the rest-relative
+  rotation split into swing and twist about the bone's Y, a swing angle
+  2 asin of its quaternion component, so a 45 degree limit reads 45. A
+  locked axis may move at most 0.5 degrees; "smooth" means the step onto a
+  limit is at most three times the drag's median step; "steady" means the
+  samples at the limit stay within 1 degree; "no shaking" means the
+  per-step motion reverses direction at most once.
+- **Screenshots** of the visualization checks are kept in
+  `logs/ik_interactive_pass/`; they need Pillow (`py -3 -m pip install
+  pillow`), without it those checks become MANUAL lines.
+- **Session state.** Move tool parameters (Bone IK, Effector Orientation)
+  live as long as the editor runs; the script sets them instead of assuming
+  the startup values.
 
 ## Setup
 
@@ -72,7 +114,7 @@ the fixed root, a cyan cross at the effector, visible through the mesh, gone
 at release. Colors and widths are the `ik_*` fields of the debug
 visualization style settings.
 
-## 3. Per-bone IK settings - NEXT
+## 3. Per-bone IK settings - PASS (automated)
 
 Start each step from the straight rest pose (Ctrl+Z back to it) with no IK
 values set, unless the step says otherwise. "Drag" means: select
@@ -117,7 +159,7 @@ values set, unless the step says otherwise. "Drag" means: select
    `bone_1` now stops at 30 - 10 = 20 and 30 + 45 = 75 degrees, the limits
    being measured from the rest pose. One Ctrl+Z undoes the Set rest press.
 
-## 4. Channel locks
+## 4. Channel locks - PASS (automated)
 
 Channel locks are the "Channel Locks" group of Properties (Translation /
 Rotation / Scale X Y Z), offered on every node. They stop the Transform
@@ -133,8 +175,11 @@ only IK reads.
      in the Transform window is unchanged.
    - Rotate tool, drag the Y ring: nothing. Drag the X ring: Rotation X
      changes and Rotation Y stays at its value.
-   - Transform window: the Translation X and Rotation Y fields are greyed
-     out and cannot be typed into; the others still work.
+   - Transform window in Local mode: the Translation X field is greyed
+     out and cannot be typed into; the other translation fields still work.
+     The rotation fields stay editable (the Euler / quaternion / axis-angle
+     views mix axes), and a rotation typed there keeps Rotation Y at its
+     value.
    - Scale is untouched by either lock.
 2. **Rotation channel lock as an IK lock.** Clear the IK group's own locks
    on all bones. On `bone_1` tick Channel Locks > Rotation Z, then IK-drag
@@ -153,7 +198,7 @@ only IK reads.
    drag made under a lock is one step.
 5. Untick every channel lock before section 5.
 
-## 5. Pole target
+## 5. Pole target - PASS (automated, picker widget MANUAL)
 
 Here the root is `bone_0`, the elbow is `bone_1` and the hand is
 `bone_2 tip`. Bend the chain a little first - a straight chain has no bend
@@ -176,13 +221,13 @@ for a pole to aim.
 7. With a limit on the elbow as well: the limit wins over the pole and the
    arm does not shake while they disagree.
 
-## 6. Effector orientation
+## 6. Effector orientation - PASS (automated)
 
 1. Effector Orientation "Follow Last Segment", drag the hand a long way: the
    tip turns with `bone_2`.
 2. Back to "Keep World": the hand holds its world orientation again.
 
-## 7. Persistence
+## 7. Persistence - PASS (automated)
 
 1. Save the scene with a pole, a limit and a channel lock set; close and
    re-open: all three intact, the pole names the same node.
@@ -205,8 +250,24 @@ for a pole to aim.
 ## Findings
 
 - **F1.** The Transform window shows no tool parameter group until a gizmo
-  handle has been used once. Queued in `prompt_queue.txt`, to fix after
-  this pass.
+  handle has been dragged once. Queued in `prompt_queue.txt`, to fix after
+  this pass; the script primes it with one drag, undone.
+- **F2.** Fixed: the default Rest Rotation of a bone (its bind pose) followed
+  the current pose, so limits without an explicit rest were measured from
+  the pose (a bone at 20 degrees stopped at 20 + 45). The bind pose is now
+  read from the inverse bind matrices alone.
+- **F3.** Fixed: editing a parent bone (Properties, MCP, undo) while its
+  child is selected left the child's drag baseline and the gizmo at the
+  child's old position; the next drag started from there.
+- **F4.** Fixed: closing a scene could crash the next hover through the ID
+  renderer's id-range table, which still named the closed scene's meshes.
+- **F5.** Stiffness is a normal IK row now (it was developer-only); the
+  solver still ignores its value.
+- **F6.** Open, intermittent: in about one full automated run of five, the
+  Set Rest click of check 3.9 records no operation, and a second click right
+  after does not either; three diagnostic runs of sections 1-3 did not
+  reproduce it. Not yet known whether the button or the injected click is at
+  fault. The script reports it as a 3.9 FAIL.
 
 ## Reporting a problem
 
