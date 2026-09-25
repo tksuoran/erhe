@@ -70,6 +70,12 @@ hands ImGui `"##something"` and would be recorded unnamed, so erhe names it:
   does this with the name the row shows: one widget takes the row's name,
   several take `<name>.x`, `<name>.y`, `<name>.z`, `<name>.w` and
   `<name>.<position>` past the fourth, so `Translation.x` is one drag field.
+- `erhe::imgui::set_item_debug_role(role)` gives the item submitted last a
+  role within its widget; the run naming then names it `<name>.<role>`, and
+  it takes no position. A reference row (an object property such as Pole
+  Target) is `<name>` for its value button, `<name>.pick` for the picker
+  arrow, `<name>.select` and `<name>.clear` for its buttons; the list the
+  picker opens is a popup window whose entries carry the item names.
 
 Both cost one branch in a frame nobody asked to record, and both build their
 text only while `erhe::imgui::is_item_recording()` holds. When a widget turns

@@ -167,6 +167,20 @@ void Imgui_item_recorder::set_item_label(const ImGuiID id, const std::string_vie
     }
 }
 
+void Imgui_item_recorder::set_item_role(const ImGuiID id, const std::string_view role)
+{
+    for (std::size_t i = m_records.size(); i > 0; --i) {
+        Item_record& record = m_records[i - 1];
+        if (record.id != id) {
+            continue;
+        }
+        record.role_offset = static_cast<uint32_t>(m_labels.size());
+        m_labels.insert(m_labels.end(), role.begin(), role.end());
+        m_labels.push_back('\0');
+        return;
+    }
+}
+
 auto Imgui_item_recorder::get_record_count() const -> std::size_t
 {
     return m_records.size();
@@ -176,14 +190,13 @@ void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const I
 {
     static constexpr std::string_view c_component_suffixes[4] = {".x", ".y", ".z", ".w"};
 
-    std::size_t named_count = 0;
+    // Items with a role are named by it; the rest share the positional suffixes.
+    std::size_t positional_count = 0;
     for (std::size_t i = first_index; i < m_records.size(); ++i) {
-        if ((m_records[i].id != 0) && (m_records[i].window_id == window_id)) {
-            ++named_count;
+        const Item_record& record = m_records[i];
+        if ((record.id != 0) && (record.window_id == window_id) && (record.role_offset == Item_record::c_no_label)) {
+            ++positional_count;
         }
-    }
-    if (named_count == 0) {
-        return;
     }
 
     std::size_t component = 0;
@@ -192,9 +205,22 @@ void Imgui_item_recorder::set_labels_from(const std::size_t first_index, const I
         if ((record.id == 0) || (record.window_id != window_id)) {
             continue;
         }
+        // The role text lives in the arena this loop appends to, so it is
+        // read by index: an append may reallocate the arena.
+        const std::size_t role_length = (record.role_offset != Item_record::c_no_label)
+            ? std::strlen(m_labels.data() + record.role_offset)
+            : 0;
         record.label_offset = static_cast<uint32_t>(m_labels.size());
         m_labels.insert(m_labels.end(), label.begin(), label.end());
-        if (named_count > 1) {
+        if (record.role_offset != Item_record::c_no_label) {
+            m_labels.push_back('.');
+            for (std::size_t k = 0; k < role_length; ++k) {
+                m_labels.push_back(m_labels[record.role_offset + k]);
+            }
+            m_labels.push_back('\0');
+            continue;
+        }
+        if (positional_count > 1) {
             if (component < 4) {
                 const std::string_view suffix = c_component_suffixes[component];
                 m_labels.insert(m_labels.end(), suffix.begin(), suffix.end());
@@ -231,6 +257,15 @@ void set_item_debug_label(const std::string_view label)
         return;
     }
     recorder->set_item_label(ImGui::GetCurrentContext()->LastItemData.ID, label);
+}
+
+void set_item_debug_role(const std::string_view role)
+{
+    Imgui_item_recorder* const recorder = get_recording_recorder();
+    if (recorder == nullptr) {
+        return;
+    }
+    recorder->set_item_role(ImGui::GetCurrentContext()->LastItemData.ID, role);
 }
 
 auto is_item_recording() -> bool

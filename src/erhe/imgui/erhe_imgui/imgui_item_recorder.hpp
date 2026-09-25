@@ -48,6 +48,7 @@ public:
     int      status_flags   {0};
     int      item_flags     {0};
     uint32_t label_offset   {c_no_label}; // into the label arena
+    uint32_t role_offset    {c_no_label}; // into the label arena; see set_item_debug_role()
     bool     has_item_data  {false};      // ItemAdd carried an ImGuiLastItemData
     bool     has_status     {false};      // ItemInfo filled status_flags
 };
@@ -91,12 +92,17 @@ public:
     // set_item_debug_label() below.
     void set_item_label(ImGuiID id, std::string_view label);
 
+    // Gives the last item carrying this id a role within the widget that
+    // submitted it; see set_item_debug_role() below.
+    void set_item_role(ImGuiID id, std::string_view role);
+
     [[nodiscard]] auto get_record_count() const -> std::size_t;
 
-    // Names the items recorded at [first_index, get_record_count()): a single
-    // named item takes 'label' itself, several take '<label>.x', '<label>.y',
-    // '<label>.z', '<label>.w' and '<label>.<position>' past the fourth, so
-    // one component of a vector row is addressable on its own. Items Dear
+    // Names the items recorded at [first_index, get_record_count()): an item
+    // with a role takes '<label>.<role>'; of the others a single one takes
+    // 'label' itself, several take '<label>.x', '<label>.y', '<label>.z',
+    // '<label>.w' and '<label>.<position>' past the fourth, so one component
+    // of a vector row is addressable on its own. Items Dear
     // ImGui submits with id 0 - a group's bounding box, a text run - are left
     // unnamed because nothing can click them. Only items of window_id are
     // named: a popup the widget opened (a combo's list, a tooltip) records
@@ -121,6 +127,13 @@ private:
 // glyph. Without this the item is recorded with no label and cannot be
 // addressed by name. Costs one branch when no frame is being recorded.
 void set_item_debug_label(std::string_view label);
+
+// Gives the item Dear ImGui submitted last a role within its widget - the
+// picker arrow or the clear button of a reference field - so a caller that
+// names the widget's items with set_recorded_item_labels() names this one
+// '<label>.<role>' instead of by its position. Costs one branch when no
+// frame is being recorded.
+void set_item_debug_role(std::string_view role);
 
 // True while the current ImGui context is recording its items. Code that
 // names items builds its label text only while this holds, so a frame nobody

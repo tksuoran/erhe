@@ -136,7 +136,10 @@ what Dear ImGui submitted in one frame, which is what the editor's
   item submitted last; `set_recorded_item_labels(first_index, label)` names a
   run of items bracketed with `get_recorded_item_count()`, giving a single
   item the label and several the `.x` / `.y` / `.z` / `.w` / `.<position>`
-  component suffixes. It names only the items of the window current when it
+  component suffixes. An item given a role with `set_item_debug_role()` is
+  named `<label>.<role>` instead and takes no position (the reference field
+  names its picker arrow `pick`, its select and clear buttons `select` and
+  `clear`, so the value button alone takes the row's name). It names only the items of the window current when it
   is called (the row's window), so a popup the widget opened - a combo's
   list - keeps its entries' own labels. `is_item_recording()` guards building the text. Item
   tree rows and property rows use these.

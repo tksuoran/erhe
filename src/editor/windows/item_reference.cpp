@@ -6,6 +6,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_item_recorder.hpp"
 
 #include <imgui/imgui.h>
 
@@ -102,6 +103,7 @@ auto item_reference_imgui(
         if (ImGui::ArrowButton("##pick", ImGuiDir_Down)) {
             ImGui::OpenPopup("##pick_popup");
         }
+        erhe::imgui::set_item_debug_role("pick");
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Pick from list");
         }
@@ -133,6 +135,7 @@ auto item_reference_imgui(
         if (ImGui::Button("+", ImVec2{button_size, button_size})) {
             context.selection->add_to_selection(io_value);
         }
+        erhe::imgui::set_item_debug_role("select");
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Add to selection");
         }
@@ -145,6 +148,7 @@ auto item_reference_imgui(
             io_value.reset();
             changed = true;
         }
+        erhe::imgui::set_item_debug_role("clear");
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Clear reference");
         }
