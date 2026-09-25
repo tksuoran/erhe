@@ -466,10 +466,10 @@ private:
     // runs lazily on the first adjust_translation() of a drag (attempted
     // gates it to once per gesture); on success the chain's ancestor joints
     // are appended to shared.entries so record_transform_operation() covers
-    // them. Both reset in end_drag().
+    // them. Both reset in end_ik_drag().
     Ik_drag m_ik_drag;
     bool    m_ik_drag_attempted{false};
-    // True when m_ik_drag appended ancestor entries: end_drag() then rebuilds
+    // True when m_ik_drag appended ancestor entries: end_ik_drag() then rebuilds
     // shared.entries from the selection so later anchor edits do not iterate
     // the chain joints as if they were selected.
     bool    m_ik_entries_appended{false};
@@ -477,6 +477,9 @@ private:
     // IK branch of adjust_translation(): returns true when an IK chain drag
     // consumed the translation (FK translation must not run).
     auto try_translate_ik(glm::vec3 translation) -> bool;
+    // Ends the IK part of a drag (pointer or scripted), after its operation
+    // was recorded.
+    void end_ik_drag();
 
     // Chain visualization of a running IK drag, drawn exactly while
     // m_ik_drag.is_active() (doc/plans/rigging/ik_drag_options.md section 2).

@@ -578,6 +578,9 @@ private:
         bool                  release        {true};
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
+    // The deltas of the held drag_selection drag (release=false), which
+    // action 'move' retargets and action 'release' ends.
+    std::optional<Selection_drag_steps>              m_held_selection_drag;
 
     // physics_drag: one scripted Physics tool drag stepping one frame per
     // pass of its deferred request (main thread only).

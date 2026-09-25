@@ -888,7 +888,8 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
 auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
 {
     // IK applies only to an interactive translate drag (m_active_tool is set
-    // for the duration of a subtool drag; numeric edits never set it), with
+    // for the duration of a subtool drag, pointer or scripted; numeric edits
+    // never set it), with
     // the setting on and exactly one selected node - a bone with a valid
     // ancestor chain. Everything else falls through to plain FK translation.
     if ((m_active_tool == nullptr) || !shared.settings.translate_ik_enable) {
@@ -1506,18 +1507,23 @@ void Transform_tool::end_drag()
     m_drag_scene_view = nullptr;
     shared.initial_drag_position_distance_to_camera = 0.0;
 
-    // record_transform_operation() already ran (via Subtool::end above) and
-    // captured the IK chain entries. Rebuild entries from the selection so
-    // later edits (numeric fields, next drag) do not treat the appended
-    // chain joints as selected nodes.
+    end_ik_drag();
+
+    log_trs_tool->trace("drag ended");
+}
+
+void Transform_tool::end_ik_drag()
+{
+    // record_transform_operation() already ran and captured the IK chain
+    // entries. Rebuild entries from the selection so later edits (numeric
+    // fields, next drag) do not treat the appended chain joints as selected
+    // nodes.
     m_ik_drag.reset();
     m_ik_drag_attempted = false;
     if (m_ik_entries_appended) {
         m_ik_entries_appended = false;
         update_target_nodes(nullptr);
     }
-
-    log_trs_tool->trace("drag ended");
 }
 
 auto Transform_tool::get_active_handle() const -> Handle
@@ -2611,6 +2617,15 @@ auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind) -> bool
         return false;
     }
     m_scripted_drag_active = true;
+    // The subtool a gizmo press on a handle of this kind makes active, so the
+    // drag is the interactive one in every respect the adjust_*() paths check
+    // (a translate drag of a bone solves IK, try_translate_ik()). Its begin()
+    // is not called: that resolves pointer rays, which a scripted drag has
+    // none of.
+    m_active_tool =
+        (kind == Transform_drag_kind::scale)  ? static_cast<Subtool*>(m_context.scale_tool)  :
+        (kind == Transform_drag_kind::rotate) ? static_cast<Subtool*>(m_context.rotate_tool) :
+                                                static_cast<Subtool*>(m_context.move_tool);
     m_physics_drag.begin(m_context, shared.entries, kind);
     return true;
 }
@@ -2623,6 +2638,8 @@ void Transform_tool::end_scripted_drag()
     record_transform_operation();
     m_physics_drag.end();
     m_scripted_drag_active = false;
+    m_active_tool          = nullptr;
+    end_ik_drag();
 }
 
 auto Transform_tool::is_scripted_drag_active() const -> bool

@@ -1374,6 +1374,28 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         return nodes;
     };
 
+    // Applies `steps` scaled by `fraction` (0..1) against the drag-start state.
+    auto apply_step = [transform_tool, &shared](const Selection_drag_steps& steps, const float fraction) {
+        switch (steps.kind) {
+            case Transform_drag_kind::translate: {
+                transform_tool->adjust_translation(steps.translation * fraction);
+                break;
+            }
+            case Transform_drag_kind::rotate: {
+                const glm::quat rotation    = glm::angleAxis(steps.rotation_angle * fraction, steps.rotation_axis);
+                const glm::mat4 translate   = erhe::math::create_translation<float>(-steps.center);
+                const glm::mat4 untranslate = erhe::math::create_translation<float>( steps.center);
+                transform_tool->adjust(untranslate * glm::mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix());
+                transform_tool->update_transforms();
+                break;
+            }
+            case Transform_drag_kind::scale: {
+                transform_tool->adjust_scale(steps.center, glm::mix(glm::vec3{1.0f}, steps.scale, fraction));
+                break;
+            }
+        }
+    };
+
     // Re-run of this request's deferral: apply the next frame's step.
     const bool continuation =
         m_selection_drag_steps.has_value() &&
@@ -1390,12 +1412,20 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
             }
             json nodes = nodes_json();
             transform_tool->end_scripted_drag();
+            m_held_selection_drag.reset();
             return make_json_content({{"released", true}, {"nodes", nodes}}).dump();
         }
-        if (action != "drag") {
-            return make_error_content("Invalid action '" + action + "' (expected 'drag' or 'release')");
+        if ((action != "drag") && (action != "move")) {
+            return make_error_content("Invalid action '" + action + "' (expected 'drag', 'move' or 'release')");
         }
-        if (m_selection_drag_steps.has_value() || transform_tool->is_scripted_drag_active()) {
+        if (action == "move") {
+            if (!transform_tool->is_scripted_drag_active() || !m_held_selection_drag.has_value()) {
+                return make_error_content("No held drag_selection drag to move (start one with release=false)");
+            }
+            if (m_selection_drag_steps.has_value()) {
+                return make_error_content("A drag_selection drag is still stepping; move after it returns");
+            }
+        } else if (m_selection_drag_steps.has_value() || transform_tool->is_scripted_drag_active()) {
             return make_error_content("A drag_selection drag is already in progress (held drags end with action 'release')");
         }
 
@@ -1439,6 +1469,24 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
             has_translation ? Transform_drag_kind::translate :
             has_rotation    ? Transform_drag_kind::rotate    :
                               Transform_drag_kind::scale;
+
+        if (action == "move") {
+            // Retarget the held drag, applied now: the values are the full
+            // delta from the drag start, as for 'drag'.
+            Selection_drag_steps& held = m_held_selection_drag.value();
+            if (steps.kind != held.kind) {
+                return make_error_content("A 'move' gives the same kind of delta (translation / rotation / scale) as the held drag");
+            }
+            held.translation    = steps.translation;
+            held.rotation_axis  = steps.rotation_axis;
+            held.rotation_angle = steps.rotation_angle;
+            held.scale          = steps.scale;
+            if (has_center) {
+                held.center = steps.center;
+            }
+            apply_step(held, 1.0f);
+            return make_json_content({{"moved", true}, {"nodes", nodes_json()}}).dump();
+        }
         steps.frame_count = args.value("frames", 30);
         if (steps.frame_count < 1) {
             return make_error_content("frames must be at least 1");
@@ -1463,25 +1511,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
 
     Selection_drag_steps& steps = m_selection_drag_steps.value();
     ++steps.frame;
-    const float fraction = static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count);
-    switch (steps.kind) {
-        case Transform_drag_kind::translate: {
-            transform_tool->adjust_translation(steps.translation * fraction);
-            break;
-        }
-        case Transform_drag_kind::rotate: {
-            const glm::quat rotation    = glm::angleAxis(steps.rotation_angle * fraction, steps.rotation_axis);
-            const glm::mat4 translate   = erhe::math::create_translation<float>(-steps.center);
-            const glm::mat4 untranslate = erhe::math::create_translation<float>( steps.center);
-            transform_tool->adjust(untranslate * glm::mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix());
-            transform_tool->update_transforms();
-            break;
-        }
-        case Transform_drag_kind::scale: {
-            transform_tool->adjust_scale(steps.center, glm::mix(glm::vec3{1.0f}, steps.scale, fraction));
-            break;
-        }
-    }
+    apply_step(steps, static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count));
 
     if (steps.frame < steps.frame_count) {
         m_defer_current_request = true;
@@ -1493,6 +1523,8 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
     json nodes = nodes_json();
     if (finished.release) {
         transform_tool->end_scripted_drag();
+    } else {
+        m_held_selection_drag = finished;
     }
     return make_json_content({
         {"frames",   finished.frame_count},
