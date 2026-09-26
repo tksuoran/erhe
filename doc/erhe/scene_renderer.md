@@ -18,6 +18,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 - `Glyph_interface` / `Glyph_buffer` -- Static SSBO holding quadratic bezier glyph curve data (from `erhe::ui::extract_glyph_outlines()`) for GPU curve-based text rendering, e.g. grid axis labels in the editor's grid shader. Fixed slot convention: 0..9 = digits '0'..'9', 10 = '-', 11 = '.'. `ERHE_GRID_LABELS` is always defined for shaders (SSBOs are a hard device requirement). Bound unconditionally by `Forward_renderer` (binding point 8) so the shared bind group stays complete.
 - `Texel_renderer` -- Simplified renderer for texel-space operations.
 - `Light_projections` -- Computes and stores shadow projection transforms for all lights in a frame.
+- `Content_wide_line_renderer` -- Draws mesh edge lines as wide lines: a compute pre-pass expands each edge into screen-space triangles (`compute_before_content_line.comp`) that the graphics stages draw.
 
 ## Public API
 - Create `Program_interface` with a vertex format and config.
@@ -40,6 +41,23 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 - All GPU buffers use the ring buffer pattern for lock-free multi-frame usage, except `Cube_instance_buffer` and `Glyph_buffer` which are static (uploaded once at init).
 - `Primitive_buffer` supports ID-based GPU picking by assigning unique ID offsets to each primitive.
 - `Primitive_interface_settings` picks one of three constant colors per primitive: `constant_color_active` for a selected entry that also carries `Item_flags::active_item` (the selection outline pass sets it, see `doc/editor/active_item.md` D5), `constant_color1` for an entry that is hovered without being selected, and `constant_color0` otherwise. `constant_color_active` is optional; when it is unset the writers substitute `constant_color0`, so a pass that does not distinguish the active item needs no change.
+
+### Content edge line widths
+
+The line width passed to `Content_wide_line_renderer::add_mesh()` is a full
+line width:
+- **Negative** `w`: a constant screen-space line `-w` logical pixels wide,
+  multiplied by `Camera_view_input::pixel_scale` (physical pixels per logical
+  pixel of the render target: the window display scale for a desktop
+  viewport, 1.0 for a headset eye) to get framebuffer pixels. It does not
+  depend on the viewport size, the projection or the field of view, and
+  matches `erhe::renderer::Primitive_renderer::set_thickness()` for the same
+  value (`doc/erhe/renderer.md` "Line widths").
+- **Positive** `w`: a distance-scaled width.
+
+The `Content_line_width_gpu_test` cases of `erhe_scene_renderer_gpu_tests`
+feed one edge through the renderer and check the exact pixel width across
+viewport sizes, fields of view, orthographic projection and pixel scales.
 
 ### When `Material_set::update()` writes
 

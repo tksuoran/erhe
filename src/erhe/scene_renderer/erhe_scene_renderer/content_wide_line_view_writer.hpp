@@ -29,12 +29,14 @@ public:
     glm::vec4 viewport;
     glm::vec4 fov;
     glm::vec4 view_position_in_world;
+    float     pixel_scale;
 };
 
 [[nodiscard]] inline auto build_per_view_camera(
     const erhe::scene::Projection&            projection,
     const erhe::scene::Node&                  node,
     const erhe::math::Viewport&               viewport,
+    const float                               pixel_scale,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
     const erhe::math::Coordinate_conventions& conventions
@@ -54,7 +56,8 @@ public:
             static_cast<float>(viewport.height)
         },
         .fov                    = glm::vec4{fov.left, fov.right, fov.up, fov.down},
-        .view_position_in_world = view_position_in_world
+        .view_position_in_world = view_position_in_world,
+        .pixel_scale            = pixel_scale
     };
 }
 
@@ -102,6 +105,7 @@ inline void write_view_block(
         write(view_data, base + offsets.viewport,               as_span(frame_params.per_view_cameras[v].viewport              ));
         write(view_data, base + offsets.fov,                    as_span(frame_params.per_view_cameras[v].fov                   ));
         write(view_data, base + offsets.view_position_in_world, as_span(frame_params.per_view_cameras[v].view_position_in_world));
+        write(view_data, base + offsets.pixel_scale,            as_span(frame_params.per_view_cameras[v].pixel_scale           ));
     }
 
     const glm::vec4 line_color_with_width{color.x, color.y, color.z, line_width};

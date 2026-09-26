@@ -153,6 +153,10 @@ public:
     const erhe::scene::Projection* projection {nullptr};
     const erhe::scene::Node*       node       {nullptr};
     erhe::math::Viewport           viewport   {};
+    // Physical pixels per logical pixel of the render target (the window
+    // display scale for a desktop viewport, 1.0 for a headset eye). Scales
+    // the content wide-line renderer's negative (screen-space) line widths.
+    float                          pixel_scale{1.0f};
 };
 
 class Camera_buffer : public erhe::graphics::Ring_buffer_client

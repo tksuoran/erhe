@@ -5,11 +5,15 @@
 
 layout(local_size_x = 32) in;
 
-float get_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport)
+// Full line width in framebuffer pixels. The ribbon offsets go through
+// ndc_from_screen_direction(), which maps it to half of it on each side.
+float get_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport, float pixel_scale)
 {
-    // Negative thickness = fixed screen-space pixel width (no distance scaling)
+    // Negative thickness: a constant screen-space line -thickness logical
+    // pixels wide, scaled to framebuffer pixels by the view's pixel scale
+    // (display DPI). Independent of the viewport size and the projection.
     if (thickness < 0.0) {
-        return -thickness;
+        return -thickness * pixel_scale;
     }
     // Positive thickness = distance-scaled width
     // Match wide_lines.vert: min(4.0 * size, 20.0) and max(..., 1.0)
@@ -245,6 +249,7 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     vec4  color          = vec4(view.line_color.xyz, 1.0);
     vec4  fov            = view.cameras[view_index].fov;
     vec4  viewport       = view.cameras[view_index].viewport;
+    float pixel_scale    = view.cameras[view_index].pixel_scale;
     vec2  vp_size        = viewport.zw;
 
     //  a - ^ - - - - - -^- - b
@@ -271,8 +276,8 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
             return;
         }
 
-        float width0 = get_line_width(v0_clipped, line_thickness, fov, viewport);
-        float width1 = get_line_width(v1_clipped, line_thickness, fov, viewport);
+        float width0 = get_line_width(v0_clipped, line_thickness, fov, viewport, pixel_scale);
+        float width1 = get_line_width(v1_clipped, line_thickness, fov, viewport, pixel_scale);
 
         vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w;
         vec3 v1_in_ndc       = v1_clipped.xyz / v1_clipped.w;
@@ -505,8 +510,8 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         return;
     }
 
-    float width0 = get_line_width(v0_clipped, line_thickness, fov, viewport);
-    float width1 = get_line_width(v1_clipped, line_thickness, fov, viewport);
+    float width0 = get_line_width(v0_clipped, line_thickness, fov, viewport, pixel_scale);
+    float width1 = get_line_width(v1_clipped, line_thickness, fov, viewport, pixel_scale);
 
     vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w;
     vec3 v1_in_ndc       = v1_clipped.xyz / v1_clipped.w;

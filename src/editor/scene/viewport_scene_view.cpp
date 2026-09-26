@@ -192,9 +192,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     erhe::scene_renderer::Camera_view_input single_view_input{};
     if (camera) {
         single_view_input = erhe::scene_renderer::Camera_view_input{
-            .projection = camera->projection(),
-            .node       = camera.get(),
-            .viewport   = m_projection_viewport
+            .projection  = camera->projection(),
+            .node        = camera.get(),
+            .viewport    = m_projection_viewport,
+            .pixel_scale = m_context.context_window->get_scale_factor()
         };
     }
     Render_context context{

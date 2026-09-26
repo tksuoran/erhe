@@ -24,6 +24,7 @@ public:
     std::size_t viewport              {0};
     std::size_t fov                   {0};
     std::size_t view_position_in_world{0};
+    std::size_t pixel_scale           {0};
     std::size_t camera_stride         {0};
 
     // Outer view block fields, after cameras[].

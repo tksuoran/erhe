@@ -67,6 +67,12 @@ Content_wide_line_interface::Content_wide_line_interface(
     offsets.viewport               = view_camera_struct.add_vec4("viewport"              )->get_offset_in_parent();
     offsets.fov                    = view_camera_struct.add_vec4("fov"                   )->get_offset_in_parent();
     offsets.view_position_in_world = view_camera_struct.add_vec4("view_position_in_world")->get_offset_in_parent();
+    // Camera_view_input::pixel_scale; the three pad words keep the struct a
+    // whole number of 16-byte slots so the cameras[] array stride matches std140.
+    offsets.pixel_scale            = view_camera_struct.add_float("pixel_scale"          )->get_offset_in_parent();
+    view_camera_struct.add_float("_padding0");
+    view_camera_struct.add_float("_padding1");
+    view_camera_struct.add_float("_padding2");
     offsets.camera_stride          = view_camera_struct.get_size_bytes();
 
     // View UBO layout:

@@ -81,7 +81,7 @@ void Content_wide_line_renderer::set_view_params(
         ERHE_VERIFY(view.projection != nullptr);
         ERHE_VERIFY(view.node       != nullptr);
         m_per_view_cameras.push_back(build_per_view_camera(
-            *view.projection, *view.node, view.viewport, reverse_depth, depth_range, conventions
+            *view.projection, *view.node, view.viewport, view.pixel_scale, reverse_depth, depth_range, conventions
         ));
     }
     while (m_per_view_cameras.size() < static_cast<std::size_t>(m_interface.view_count)) {

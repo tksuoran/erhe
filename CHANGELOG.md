@@ -17,6 +17,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   host calls it right before `ImGui::NewFrame()`.
 - `erhe::renderer`: `View::pixel_scale`, physical pixels per logical pixel of
   the view's render target (default 1.0).
+- `erhe::scene_renderer`: `Camera_view_input::pixel_scale` (default 1.0);
+  `Content_wide_line_renderer` multiplies a negative (screen-space) line width
+  by it.
 
 ### Changed
 
