@@ -36,11 +36,16 @@ using editor::Roll_axis;
     return true;
 }
 
-// The angle in degrees between two directions.
+// The angle in degrees between two directions. atan2 of the sine and cosine
+// resolves small angles: acos of a float dot product cannot, since one ulp
+// below 1 is already acos(1 - 6e-8) = 0.0198 degrees - far above the
+// tolerances below, and whether a compiler's rounding lands on 1 or one ulp
+// below it differs between MSVC and gcc / clang.
 [[nodiscard]] auto angle_deg(const glm::vec3& a, const glm::vec3& b) -> float
 {
-    const float cosine = glm::clamp(glm::dot(glm::normalize(a), glm::normalize(b)), -1.0f, 1.0f);
-    return glm::degrees(std::acos(cosine));
+    const glm::vec3 a_unit = glm::normalize(a);
+    const glm::vec3 b_unit = glm::normalize(b);
+    return glm::degrees(std::atan2(glm::length(glm::cross(a_unit, b_unit)), glm::dot(a_unit, b_unit)));
 }
 
 [[nodiscard]] auto project(const glm::vec3& v, const glm::vec3& axis) -> glm::vec3
