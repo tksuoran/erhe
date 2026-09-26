@@ -204,6 +204,7 @@ auto Debug_renderer_bucket::update_view_buffer(
         write(view_gpu_data, base + program_interface.view_camera_viewport_offset,               as_span(views[i].viewport              ));
         write(view_gpu_data, base + program_interface.view_camera_fov_offset,                    as_span(views[i].fov_sides             ));
         write(view_gpu_data, base + program_interface.view_camera_view_position_in_world_offset, as_span(views[i].view_position_in_world));
+        write(view_gpu_data, base + program_interface.view_camera_pixel_scale_offset,            as_span(views[i].pixel_scale           ));
     }
 
     const uint32_t view_count_uint      = static_cast<uint32_t>(views.size());

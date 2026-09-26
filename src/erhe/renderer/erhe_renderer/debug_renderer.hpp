@@ -126,6 +126,7 @@ public:
     std::size_t                                      view_camera_viewport_offset              {0};
     std::size_t                                      view_camera_fov_offset                   {0};
     std::size_t                                      view_camera_view_position_in_world_offset{0};
+    std::size_t                                      view_camera_pixel_scale_offset           {0};
     std::size_t                                      view_camera_stride                       {0};
 
     // Offsets in view_block, after the cameras[] array.
@@ -186,13 +187,14 @@ public:
         std::span<const View> views
     );
 
-    // Helper: derive a single View from a Camera, viewport, and depth
-    // conventions. Callers that drive Debug_renderer with a Camera (no
-    // explicit per-eye View setup) use this to build the 1-element span
-    // for begin_frame().
+    // Helper: derive a single View from a Camera, viewport, pixel scale
+    // (View::pixel_scale) and depth conventions. Callers that drive
+    // Debug_renderer with a Camera (no explicit per-eye View setup) use this
+    // to build the 1-element span for begin_frame().
     [[nodiscard]] static auto view_from_camera(
         const erhe::scene::Camera&                camera,
         erhe::math::Viewport                      viewport,
+        float                                     pixel_scale,
         const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     ) -> View;
     void compute    (erhe::graphics::Compute_command_encoder& command_encoder);

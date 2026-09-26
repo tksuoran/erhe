@@ -60,6 +60,7 @@
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_window/window.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -246,8 +247,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     }
 
     if (do_render) {
+        // Screen-space line widths are in logical pixels; the window display
+        // scale turns them into framebuffer pixels.
         const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
-            *context.camera, context.viewport, get_conventions()
+            *context.camera, context.viewport, m_context.context_window->get_scale_factor(), get_conventions()
         );
         m_context.debug_renderer->begin_frame(
             context.viewport,

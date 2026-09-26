@@ -10,7 +10,7 @@ instead (`doc/agents/editor_runs.md`).
 
 Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
 (circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
-physics, primitive, raytrace, usd), plus `mcp_server_tests` for the editor's
+physics, primitive, raytrace, renderer, usd), plus `mcp_server_tests` for the editor's
 MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
 and `erhe_physics_tests` needs a backend that simulates
 (`-DERHE_PHYSICS_LIBRARY=jolt`, the default, or `box3d`); a `box3d` tree adds
@@ -89,7 +89,8 @@ dedicated editor started with a configure-time test token
 ## Labels
 
 Two ctest labels partition the tests by what they need: `gpu` (they bring up a
-graphics `Device`: `erhe_graphics_gpu_tests`, `erhe_scene_renderer_gpu_tests`)
+graphics `Device`: `erhe_graphics_gpu_tests`, `erhe_renderer_gpu_tests`,
+`erhe_scene_renderer_gpu_tests`)
 and `editor` (they drive a running editor: `mcp_server_tests` and its
 fixtures). A machine without a GPU runs `ctest --label-exclude "gpu|editor"`;
 a new test that needs either must carry the label

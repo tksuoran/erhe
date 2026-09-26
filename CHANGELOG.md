@@ -15,11 +15,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   configuration files.
 - `erhe::imgui`: `Imgui_host::load_pending_imgui_ini()` (protected); a derived
   host calls it right before `ImGui::NewFrame()`.
+- `erhe::renderer`: `View::pixel_scale`, physical pixels per logical pixel of
+  the view's render target (default 1.0).
 
 ### Changed
 
+- `erhe::renderer`: `Debug_renderer::view_from_camera()` takes a
+  `pixel_scale` parameter after `viewport` (stored in `View::pixel_scale`).
 - `erhe::codegen`: `save_config()` writes nothing and returns false while the
   config persistence policy is `read_only`.
 - `erhe::imgui`: under a `read_only` config persistence policy an
   `Imgui_host` reads its layout ini before its first frame and never writes
   it (`io.IniFilename` stays null).
+
+### Fixed
+
+- `erhe::renderer`: a negative `Primitive_renderer::set_thickness()` (constant
+  screen-space width) scaled with the viewport width and the camera field of
+  view; it is now `-thickness` logical pixels times `View::pixel_scale`.

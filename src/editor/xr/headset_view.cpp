@@ -1435,9 +1435,12 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                 .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
             };
+            // A headset eye has no display scale: one logical pixel is one
+            // framebuffer pixel.
             const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
                 *render_context.camera,
                 render_context.viewport,
+                1.0f,
                 m_context.graphics_device->get_info().coordinate_conventions
             );
             m_context.debug_renderer->begin_frame(

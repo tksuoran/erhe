@@ -29,6 +29,8 @@ struct DebugViewCamera {
                             // the multiview swapchain
     vec4 fov;               // (left, right, up, down) tan-half-angles
     vec4 view_position_in_world;
+    float pixel_scale;      // View::pixel_scale (physical pixels per
+                            // logical pixel); three pad floats follow
 };
 
 layout(std140, binding = 3) uniform view_block {
@@ -200,7 +202,8 @@ The multiview caller builds one `View` per eye from the existing
 `projection->clip_from_node_transform(...) * node->node_from_world()`,
 copying the shared viewport, reading `fov` from
 `projection->get_fov_sides`, and taking
-`view_position_in_world` from `world_from_node[3]`.
+`view_position_in_world` from `world_from_node[3]`; `pixel_scale` stays
+1.0 for a headset eye.
 
 Tool / Renderable submission (`tools->render_viewport_tools`,
 `app_rendering->render_viewport_renderables`) runs once per frame

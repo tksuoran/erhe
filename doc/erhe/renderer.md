@@ -14,7 +14,7 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - `Texture_renderer` -- Simple fullscreen texture blit.
 - `Draw_indirect_buffer` -- Builds GPU draw-indirect command buffers from a span of meshes filtered by `Item_filter`.
 - `Jolt_debug_renderer` -- Adapter implementing Jolt's `JPH::DebugRenderer` interface, forwarding draw calls to `Debug_renderer`.
-- `View` -- Camera view data (clip_from_world matrix, viewport rect, FOV sides).
+- `View` -- Camera view data (clip_from_world matrix, viewport rect, FOV sides, pixel scale).
 
 ## Public API
 - `Debug_renderer::get(config)` returns a `Primitive_renderer` for a given config.
@@ -39,3 +39,21 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
   2. **Direct** (triangles, points, thin lines): vertices drawn straight from the vertex buffer with the primitive's own topology.
 - Buckets use `etl::vector` (fixed capacity) so that element addresses remain stable.
 - `Primitive_renderer` is move-only; obtain one per frame per config.
+
+## Line widths
+`Primitive_renderer::set_thickness(t)` sets the width of the wide lines that
+follow (the compute path; thin lines are one pixel):
+- **Negative** `t`: a constant screen-space width of `-t` logical pixels. It is
+  multiplied by `View::pixel_scale` (physical pixels per logical pixel of the
+  render target: the window display scale for a desktop viewport, 1.0 for a
+  headset eye) to get framebuffer pixels, and does not depend on the viewport
+  size, the projection or the field of view. `set_thickness(-4)` with pixel
+  scale 1.5 draws a line 6 framebuffer pixels wide.
+- **Positive** `t`: a distance-scaled width, a size in the world; its pixel
+  width grows with the viewport like other projected geometry.
+
+`Debug_renderer::view_from_camera()` takes the pixel scale; the editor passes
+the window's `Context_window::get_scale_factor()`. `erhe_renderer_gpu_tests`
+(`src/erhe/renderer/test/`) draws lines through `Debug_renderer` into
+offscreen targets and checks the exact pixel width across viewport sizes,
+fields of view, orthographic projection and pixel scales.

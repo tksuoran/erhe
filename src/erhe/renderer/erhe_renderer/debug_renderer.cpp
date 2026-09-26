@@ -104,6 +104,12 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
     view_camera_viewport_offset               = view_camera_struct->add_vec4("viewport"              )->get_offset_in_parent();
     view_camera_fov_offset                    = view_camera_struct->add_vec4("fov"                   )->get_offset_in_parent();
     view_camera_view_position_in_world_offset = view_camera_struct->add_vec4("view_position_in_world")->get_offset_in_parent();
+    // View::pixel_scale; the three pad words keep the struct a whole number of
+    // 16-byte slots so the cameras[] array stride matches std140.
+    view_camera_pixel_scale_offset            = view_camera_struct->add_float("pixel_scale"          )->get_offset_in_parent();
+    view_camera_struct->add_float("_padding0");
+    view_camera_struct->add_float("_padding1");
+    view_camera_struct->add_float("_padding2");
     view_camera_stride                        = view_camera_struct->get_size_bytes();
 
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
@@ -414,6 +420,7 @@ static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render
 auto Debug_renderer::view_from_camera(
     const erhe::scene::Camera&                camera,
     const erhe::math::Viewport                viewport,
+    const float                               pixel_scale,
     const erhe::math::Coordinate_conventions& conventions
 ) -> View
 {
@@ -440,7 +447,8 @@ auto Debug_renderer::view_from_camera(
             fov_sides.up,
             fov_sides.down
         },
-        .view_position_in_world = view_position_in_world
+        .view_position_in_world = view_position_in_world,
+        .pixel_scale            = pixel_scale
     };
 }
 

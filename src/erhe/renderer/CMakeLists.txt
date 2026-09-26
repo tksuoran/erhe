@@ -66,3 +66,7 @@ source_group("codegen generated" FILES ${_renderer_gen}/visualization_mode.hpp)
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()
