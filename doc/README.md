@@ -345,6 +345,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/graphics_tests.md](plans/graphics_tests.md) (proposed): Graphics tests: outstanding work
 - [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
+- [plans/joint_constraint_visualization.md](plans/joint_constraint_visualization.md) (proposed): Joint constraint debug visualization (physics joints, IK limits)
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
