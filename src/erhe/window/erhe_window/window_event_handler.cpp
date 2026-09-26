@@ -146,6 +146,29 @@ auto c_str(const Mouse_button button) -> const char*
     };
 }
 
+auto keycode_from_string(const std::string_view name) -> Keycode
+{
+    if (name.empty() || (name == "?")) {
+        return Key_unknown;
+    }
+    for (Keycode code = 0; code <= Key_last; ++code) {
+        if (name == c_str(code)) {
+            return code;
+        }
+    }
+    return Key_unknown;
+}
+
+auto mouse_button_from_string(const std::string_view name) -> Mouse_button
+{
+    for (Mouse_button button = 0; button < Mouse_button_count; ++button) {
+        if (name == c_str(button)) {
+            return button;
+        }
+    }
+    return Mouse_button_none;
+}
+
 Input_event_handler::~Input_event_handler() noexcept
 {
 }

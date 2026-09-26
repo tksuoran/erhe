@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::commands`: `Binding_desc` (`erhe_commands/binding_desc.hpp`), a value
+  description of one binding with a compact text form (`to_string()`,
+  `parse()`) and a display label (`to_display_string()`), plus
+  `Binding_kind`, `Input_kind` and `get_input_kind()`.
+- `erhe::window`: `keycode_from_string()` and `mouse_button_from_string()`,
+  the inverses of `c_str(Keycode)` / `c_str(Mouse_button)`.
+
 - `erhe::codegen`: `Config_persistence` (`read_write`, `read_only`) with
   `set_config_persistence()` / `get_config_persistence()`
   (`erhe_codegen/config_persistence.hpp`), a process-wide policy for

@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::commands ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_commands/binding_desc.cpp
+    erhe_commands/binding_desc.hpp
     erhe_commands/command.cpp
     erhe_commands/command.hpp
     erhe_commands/command_binding.cpp
@@ -61,3 +63,7 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

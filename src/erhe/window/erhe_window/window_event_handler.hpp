@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace erhe::xr {
     class Xr_action;
@@ -141,6 +142,9 @@ constexpr Keycode Key_last          = Key_menu;
 
 extern auto c_str(Keycode code) -> const char*;
 
+// Inverse of c_str(Keycode): Key_unknown when the name matches no key.
+[[nodiscard]] extern auto keycode_from_string(std::string_view name) -> Keycode;
+
 using Key_modifier_mask = uint32_t;
 constexpr Key_modifier_mask Key_modifier_bit_ctrl  = 0x0001u;
 constexpr Key_modifier_mask Key_modifier_bit_shift = 0x0002u;
@@ -158,6 +162,10 @@ constexpr Mouse_button Mouse_button_count  = 6;
 constexpr Mouse_button Mouse_button_none   = 0xffffffff;
 
 extern auto c_str(Mouse_button button) -> const char*;
+
+// Inverse of c_str(Mouse_button): Mouse_button_none when the name matches no
+// button.
+[[nodiscard]] extern auto mouse_button_from_string(std::string_view name) -> Mouse_button;
 #pragma endregion Keycode
 
 enum class Input_event_type : unsigned int {
