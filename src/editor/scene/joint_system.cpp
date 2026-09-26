@@ -193,6 +193,20 @@ void Joint_system::retry_pending_constraints()
     }
 }
 
+void Joint_system::handle_node_registered(const erhe::scene::Node& node)
+{
+    for (const std::unique_ptr<Joint_entry>& entry : m_entries) {
+        if (entry->constraint) {
+            continue;
+        }
+        const Joint& joint = *entry->joint;
+        if ((joint.get_body_0().get() != &node) && (joint.get_body_1().get() != &node)) {
+            continue;
+        }
+        static_cast<void>(try_create_constraint(*entry.get()));
+    }
+}
+
 void Joint_system::handle_rigid_body_removed(erhe::physics::IRigid_body* const rigid_body)
 {
     for (const std::unique_ptr<Joint_entry>& entry : m_entries) {

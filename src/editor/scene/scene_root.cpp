@@ -1450,6 +1450,11 @@ void Scene_root::register_node(const std::shared_ptr<erhe::scene::Node>& node)
     if (m_scene) {
         m_scene->register_node(node);
     }
+    // After the host update: a pending joint naming this node as a frame
+    // node tests the node's host.
+    if (node && m_joint_system) {
+        m_joint_system->handle_node_registered(*node);
+    }
 }
 
 void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)

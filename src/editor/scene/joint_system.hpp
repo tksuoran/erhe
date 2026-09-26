@@ -13,6 +13,8 @@ namespace erhe::physics {
     class IWorld;
 }
 
+namespace erhe::scene { class Xformable; using Node = Xformable; }
+
 namespace editor {
 
 class Joint;
@@ -103,6 +105,11 @@ public:
     // Called by Node_physics_system after a rigid body was created: a pending
     // joint may have been waiting for exactly that body.
     void retry_pending_constraints();
+    // Called by Scene_root when a node enters the scene: a pending joint
+    // naming it as a frame node may have been waiting for exactly that node
+    // (a scene load hosts a body before the frame node below it, so the
+    // body's retry comes too early).
+    void handle_node_registered(const erhe::scene::Node& node);
     // Called by Node_physics_system before a rigid body leaves the world:
     // tears down every constraint referencing it, returning those joints to
     // the pending state.
