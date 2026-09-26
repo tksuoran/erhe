@@ -39,3 +39,6 @@ verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-
 ✓checker+moves+notes-migration+headers+index{5-commits}
 ✓content-sweep{9-group-commits;~190-docs;18-docs-folded/deleted;~45-plans-created}
 ?changelog=prompt_queue.txt-item-1{erhe::*-API-only}
+!ai-runs-config-read-only::ERHE_AI_DRIVER=1->main()-sets-erhe::codegen::Config_persistence::read_only{save_config-no-op+Imgui_host-ini-read-never-written}->config/-untouched-by-agent-runs+MCP-tests{d6a053272;doc/agents/editor_runs.md}
+!trap::user-ini-desktop_window_imgui_host_imgui.ini-holds-AI-written-Viewport_window-3..9{2026-09-25;slot-7-floating}->agent-runs-reaching-those-slots-restore-them;user-owned-file-not-touched
+!changelog::CHANGELOG.md-root{erhe::*-public-API-only;rule-doc/README.md-Changelog}
