@@ -24,6 +24,31 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Item_tree_window`** -- Generic tree view window used for both scene hierarchy browsing and content library browsing. Supports drag-and-drop, context menus, and custom item callbacks. A node row carries right-aligned feature icons, one per attached value group the node carries: rigid body, brush placement, layout, draw mode and geometry-graph mesh. `Icon_set::get_feature_icons()` is the table; each entry asks the group's own `carries_<x>()`, which reads that group's key property, so the row shows exactly the groups the Properties window lists as groups (`doc/erhe/property_system.md` section 4.23).
 
+## Viewport input and hover
+
+A `Viewport_window` keeps two per-frame states for its child window (the one
+showing the 3D view), both computed in `Viewport_window::imgui_viewport()`:
+
+- **Input requested** (`want_mouse_events()` / `want_keyboard_events()`, which
+  pass mouse and keyboard events to `erhe::commands`, see
+  `doc/erhe/imgui.md` "Input routing"): the viewport holds the mouse-drag
+  pointer capture (`Scene_views::owns_pointer_capture()`, a viewport drag
+  continuing over other windows), or the pointer is over the child window and
+  `erhe::imgui::is_input_owned_elsewhere()` is false for it. An ImGui
+  interaction started anywhere else - a Properties drag field dragged over the
+  view, a text field still being edited - keeps the mouse and the keys until
+  it ends; the viewport takes them from the next frame on.
+- **Hovered** (`is_viewport_hovered()`, `Viewport_scene_view::set_is_scene_view_hovered()`,
+  the hover stack of `Scene_views::update_pointer()`: picking, hover tools, the
+  pointer capture target): input requested, or an ImGui drag and drop over the
+  child window. A drag and drop owns the input (its release is the drop, which
+  `drag_and_drop_target()` delivers), but the brush and glTF drop previews and
+  the brush placement need the hovered surface under the pointer.
+
+An open popup blocks both: the click that closes it stays in ImGui.
+`scripts/viewport_input_focus_verify.py` drives these cases through the MCP
+input gestures.
+
 ## Scene Hierarchy drag and drop
 
 The scene hierarchy is USD-like: every `erhe::Typed` item - `Scope`, the `Xformable`s (`Xform`, `Mesh`, `Camera`, `Light`), and every content-library resource (`Material`, `Brush`, `Style`, textures, graph assets, physics resources, ...) - is a prim, and any prim may be the child of any other prim (`doc/erhe/usd_compatibility_design.md` C5). A content library kind scope (`Materials`, `Brushes`, ...) is where a new resource is placed by default and is an ordinary, movable `Scope`. The Scene header row is not a prim. Drops follow "move wins, modifier acts" (`Item_tree::drag_and_drop_target`):

@@ -88,7 +88,13 @@ private:
     bool                                               m_was_focused{false};
     bool                                               m_brush_drag_and_drop_active{false};
     bool                                               m_viewport_child_window_focused{false};
+    // Pointer over the viewport image for the scene view hover (picking, hover
+    // tools, drop previews): input requested, or an ImGui drag and drop over it.
     bool                                               m_viewport_child_window_hovered{false};
+    // The viewport takes mouse and keyboard input (want_mouse_events() /
+    // want_keyboard_events()): it holds the pointer capture, or the pointer is
+    // over it and no ImGui interaction owned by another window is in progress.
+    bool                                               m_viewport_input_requested{false};
 
     bool                                               m_request_cursor_relative_hold{false};
 

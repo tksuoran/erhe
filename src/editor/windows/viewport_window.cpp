@@ -27,6 +27,7 @@
 #include "windows/active_scene_highlight.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/device.hpp"
@@ -589,15 +590,22 @@ void Viewport_window::imgui_viewport()
         m_last_viewport_height = height;
 #endif
 
-        const bool imgui_hovered = ImGui::IsWindowHovered(
-            ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup
-        );
-        // Keep reporting as hovered while this viewport holds the mouse-drag pointer capture,
+        // Active items are checked below, against this child window, rather
+        // than by IsWindowHovered(): the check must tell an interaction that
+        // started here (it keeps the input) from one that started elsewhere.
+        // An open popup blocks hover: the click that closes it stays in ImGui.
+        const bool imgui_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        const bool input_owned_elsewhere = erhe::imgui::is_input_owned_elsewhere(ImGui::GetCurrentWindow());
+        // Keep requesting input while this viewport holds the mouse-drag pointer capture,
         // so a drag that started here keeps tracking the cursor after it leaves the rect.
         const bool owns_pointer_capture =
             (m_app_context.scene_views != nullptr) &&
             m_app_context.scene_views->owns_pointer_capture(viewport_scene_view.get());
-        m_viewport_child_window_hovered = imgui_hovered || owns_pointer_capture;
+        m_viewport_input_requested = owns_pointer_capture || (imgui_hovered && !input_owned_elsewhere);
+        // An ImGui drag and drop over the viewport owns the input (the release
+        // is the drop), but the drop preview follows the hover position.
+        const bool drag_and_drop_over = imgui_hovered && (ImGui::GetDragDropPayload() != nullptr);
+        m_viewport_child_window_hovered = m_viewport_input_requested || drag_and_drop_over;
         m_viewport_child_window_focused = ImGui::IsWindowFocused();
 
         viewport_scene_view->set_is_scene_view_hovered(m_viewport_child_window_hovered);
@@ -614,6 +622,8 @@ void Viewport_window::imgui_viewport()
             }
         );
         m_viewport_child_window_focused = ImGui::IsWindowFocused();
+        m_viewport_input_requested      = false;
+        m_viewport_child_window_hovered = false;
 
         // log_frame->warn("{} no rendergraph output node", get_title());
         viewport_scene_view->set_is_scene_view_hovered(false);
@@ -622,12 +632,12 @@ void Viewport_window::imgui_viewport()
 
 auto Viewport_window::want_mouse_events() const -> bool
 {
-    return m_viewport_child_window_hovered;
+    return m_viewport_input_requested;
 }
 
 auto Viewport_window::want_keyboard_events() const -> bool
 {
-    return m_viewport_child_window_hovered;
+    return m_viewport_input_requested;
 }
 
 auto Viewport_window::want_cursor_relative_hold() const -> bool
