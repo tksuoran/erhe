@@ -283,7 +283,8 @@ JSON-only, no buffer decode) and branches on
      threads, synchronized via the scene's `Item_host` mutex).
 - The handler then wires UI for the returned scene root: a browser window,
   a viewport (an existing empty viewport is repurposed when present, else a
-  new one is created), and `Scene_created_message` homes the global tools
+  new one is created; either way the viewport's dock tab is selected, so the
+  scene is in front), and `Scene_created_message` homes the global tools
   (Hud / Hotbar / Headset_view) when no scene owned them yet.
 
 Legacy pre-extension files: node `extras.erhe_flags` and the material extras

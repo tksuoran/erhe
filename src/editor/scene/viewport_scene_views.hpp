@@ -119,8 +119,11 @@ public:
     // Issue #265 follow-up: opening a viewport for a scene first repurposes an
     // existing viewport window that shows no scene (e.g. the always-present
     // empty first viewport), binding the scene and camera to its live scene
-    // view instead of creating a new window. Returns the repurposed window,
-    // or null when every existing viewport already shows a scene. A null
+    // view instead of creating a new window. The repurposed window is brought
+    // to the front (its dock tab selected): an empty viewport is often a
+    // background tab behind another viewport, and a scene bound there would
+    // not be seen. Returns the repurposed window, or null when every existing
+    // viewport already shows a scene. A null
     // camera picks one the same way open_new_viewport_scene_view does (a
     // selected camera in the scene, else the scene's first selectable one).
     auto try_repurpose_empty_viewport_window(

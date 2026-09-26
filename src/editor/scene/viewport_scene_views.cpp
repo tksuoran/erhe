@@ -564,7 +564,9 @@ auto Scene_views::try_repurpose_empty_viewport_window(
         // next frame (update_title_from_scene).
         viewport_scene_view->set_scene_root(scene_root);
         viewport_scene_view->set_camera(camera ? camera : choose_camera_for_scene(scene_root));
-        viewport_window->show_window();
+        // show_window() alone leaves a docked window behind the selected tab
+        // of its dock node; focusing selects its tab and shows it.
+        viewport_window->request_window_focus();
         return viewport_window;
     }
     return {};
@@ -704,13 +706,12 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
     // that shows no scene over creating a new window.
     //
     // The viewport window for the opened scene is brought to the front
-    // (dock tab selected): the scene may have become the active scene while
+    // (dock tab selected; try_repurpose_empty_viewport_window does this for
+    // a repurposed window): the scene may have become the active scene while
     // this window did not exist yet (import runs before the viewport is
     // created), in which case the Active_scene_changed_message handler found
     // no window to focus.
-    const std::shared_ptr<Viewport_window> repurposed_window = try_repurpose_empty_viewport_window(scene_root);
-    if (repurposed_window) {
-        repurposed_window->request_window_focus();
+    if (try_repurpose_empty_viewport_window(scene_root)) {
         return;
     }
 

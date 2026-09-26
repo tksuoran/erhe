@@ -592,6 +592,9 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         // Dock (tab) the new scene's viewport with the existing viewport instead of
         // leaving it floating at ImGui's default cascade position (#258).
         apply_editor_window_placement(*m_context.imgui_windows, *viewport_window);
+        // Bring it to the front, as Scene_views::open_new_viewport_scene_view_node
+        // does (a repurposed window is brought forward by the repurpose itself).
+        viewport_window->request_window_focus();
     }
 
     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to this
