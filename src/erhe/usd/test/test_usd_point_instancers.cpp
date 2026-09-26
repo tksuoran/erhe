@@ -1,3 +1,5 @@
+#include "test_temporary_directory.hpp"
+
 #include "erhe_item/item.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_property/dependency_object.hpp"
@@ -28,7 +30,7 @@ namespace {
 
 [[nodiscard]] auto instancer_temporary_directory() -> std::filesystem::path
 {
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_point_instancer_tests";
+    const std::filesystem::path directory = erhe_usd_test::process_temporary_directory() / "erhe_usd_point_instancer_tests";
     std::error_code             error_code{};
     std::filesystem::create_directories(directory, error_code);
     return directory;

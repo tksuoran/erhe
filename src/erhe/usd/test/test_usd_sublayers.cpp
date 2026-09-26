@@ -1,3 +1,5 @@
+#include "test_temporary_directory.hpp"
+
 #include "erhe_item/item.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -25,7 +27,7 @@ namespace {
 
 [[nodiscard]] auto temporary_path(const char* file_name) -> std::filesystem::path
 {
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_sublayer_tests";
+    const std::filesystem::path directory = erhe_usd_test::process_temporary_directory() / "erhe_usd_sublayer_tests";
     std::error_code             error_code{};
     std::filesystem::create_directories(directory, error_code);
     return directory / file_name;

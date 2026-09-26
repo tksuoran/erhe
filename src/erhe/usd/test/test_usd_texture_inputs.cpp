@@ -4,6 +4,8 @@
 // and the normal slot carries the inputs:scale / inputs:bias decode
 // (doc/erhe/usd_compatibility.md, Materials).
 
+#include "test_temporary_directory.hpp"
+
 #include "erhe_graphics/enums.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
@@ -152,7 +154,7 @@ TEST_F(Texture_inputs_import, the_writer_writes_the_wrap_modes_and_the_normal_de
     // The wrap modes and the normal decode are the UsdUVTexture's own
     // inputs, written for every bound texture: USD's fallbacks are not
     // erhe's, so a value left unwritten would not read back.
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_texture_input_tests";
+    const std::filesystem::path directory = erhe_usd_test::process_temporary_directory() / "erhe_usd_texture_input_tests";
     std::error_code             error_code{};
     std::filesystem::create_directories(directory, error_code);
     const std::filesystem::path path = directory / "texture_inputs.usda";

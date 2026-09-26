@@ -6,6 +6,8 @@
 // metadatum, the prim's, and the first block; and its blocks contribute only
 // while the enclosing variant is the selected one.
 
+#include "test_temporary_directory.hpp"
+
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
@@ -34,7 +36,7 @@ namespace {
 
 [[nodiscard]] auto temporary_path(const char* file_name) -> std::filesystem::path
 {
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_nested_variant_tests";
+    const std::filesystem::path directory = erhe_usd_test::process_temporary_directory() / "erhe_usd_nested_variant_tests";
     std::error_code             error_code{};
     std::filesystem::create_directories(directory, error_code);
     return directory / file_name;

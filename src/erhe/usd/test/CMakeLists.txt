@@ -11,6 +11,8 @@ CPMAddPackage(
 set(_target "erhe_usd_tests")
 add_executable(${_target}
     main.cpp
+    test_temporary_directory.cpp
+    test_temporary_directory.hpp
     test_usd_active.cpp
     test_usd_arc_supplied_xform_ops.cpp
     test_usd_attribute_samples.cpp

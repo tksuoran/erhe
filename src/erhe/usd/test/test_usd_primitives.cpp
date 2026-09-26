@@ -2,6 +2,8 @@
 // `Cube`, `Sphere`, `Cone`, `Cylinder`, `Capsule` or `Cylinder_1` prim is the
 // mesh its schema attributes describe, and it saves back as the `Mesh` it is.
 
+#include "test_temporary_directory.hpp"
+
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
@@ -37,7 +39,7 @@ namespace {
 
 [[nodiscard]] auto temporary_path(const char* file_name) -> std::filesystem::path
 {
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_primitive_tests";
+    const std::filesystem::path directory = erhe_usd_test::process_temporary_directory() / "erhe_usd_primitive_tests";
     std::error_code             error_code{};
     std::filesystem::create_directories(directory, error_code);
     return directory / file_name;

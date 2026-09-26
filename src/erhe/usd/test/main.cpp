@@ -1,3 +1,5 @@
+#include "test_temporary_directory.hpp"
+
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
@@ -15,6 +17,20 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <gtest/gtest.h>
+
+namespace {
+
+// Removes the files the cases wrote once the process has run its cases.
+class Temporary_directory_environment : public testing::Environment
+{
+public:
+    void TearDown() override
+    {
+        erhe_usd_test::remove_process_temporary_directory();
+    }
+};
+
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -38,5 +54,6 @@ int main(int argc, char** argv)
     erhe::geometry::register_geogram_attribute_types();
 
     testing::InitGoogleTest(&argc, argv);
+    testing::AddGlobalTestEnvironment(new Temporary_directory_environment{});
     return RUN_ALL_TESTS();
 }

@@ -22,6 +22,12 @@ executable, gated behind `-DERHE_BUILD_TESTS=ON` (default OFF).
   `erhe::file::log_file` by hand, then the library's `initialize_logging()`. The
   `log_*` globals are null `shared_ptr`s until then, so the first log call from
   a library under test is an access violation, not a silent no-op.
+- `gtest_discover_tests` makes every case its own ctest process, and `ctest -j`
+  runs them concurrently, so a case that writes files never uses a fixed path
+  shared with other cases: `erhe_usd_tests` writes under
+  `erhe_usd_test::process_temporary_directory()`
+  (`src/erhe/usd/test/test_temporary_directory.hpp`), a directory each process
+  claims for itself and removes at exit.
 - When adding pure-logic code to an `erhe::*` library that already has a
   `test/` directory (geometry operations, math, item/graph logic, dataformat),
   add or extend a test for it. Editor-level behavior is instead verified live
