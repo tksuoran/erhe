@@ -243,6 +243,25 @@ creations up beyond single showcase scenes.
 
 ## The creations
 
+### 23 - Joint Constraint Test
+
+![Joint Constraint Test](../images/creations/23_joint_constraint_test.png)
+
+A test asset rather than a showcase: thirteen physics joint stations (hinges,
+ball joints, a swing pyramid, sliders, a weld, a free joint, an off-zero fixed
+axis, a double pendulum and an inactive joint), each a static post with a box
+hanging from it, in front of eight three-bone IK chains whose middle bones
+carry one kind of Ik.* limit each. It exists for the joint constraint
+visualization: the screenshot is the viewport with Joint Constraints set to
+All. The script's `STATIONS` / `IK_CASES` tables define every case, and
+`scripts/joint_constraint_assets_verify.py` imports them to check the saved
+file. It is saved with `save_scene` (not exported) because the Ik.* values
+and the joint prims' own state ride erhe's extensions. Building it found and
+fixed two persistence gaps: reloaded joints stayed pending forever (the retry
+came before the frame node was hosted) and a Joint prim's name and `active`
+state were lost (now `ERHE_physics_joint`). User checklist:
+`doc/editor/joint_constraint_test_asset.md`.
+
 ### 22 - Skin Test (three boxes)
 
 ![Skin Test (three boxes)](../images/creations/22_skin_test_boxes.png)

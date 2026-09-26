@@ -240,6 +240,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
+- [editor/joint_constraint_test_asset.md](editor/joint_constraint_test_asset.md) (stable): Joint constraint test scene: stations, what to look for, verification script
 - [editor/physics.md](editor/physics.md) (stable): Physics-related tools, UI, and collision shape generation for the editor
 - [editor/post_processing.md](editor/post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
