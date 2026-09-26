@@ -17,8 +17,8 @@ them, so the two cannot drift. It loads the asset with load_scene and runs:
      limited bone; `hovered_mesh` / `hovered_bone` with nothing hovered draw
      nothing.
   3. IK drags: the middle bone's IK Lock makes it the root of a drag of the
-     tip, and dragging the tip in two directions leaves that limited bone
-     within its limits (the fully locked one does not
+     chain's tip node, and dragging the tip in two directions leaves that
+     limited bone within its limits (the fully locked one does not
      turn at all); every drag is undone.
   4. Physics stress, simulation running on the manual clock: an --impulse on
      each stress station's box must not push its joint past its limits by
@@ -196,17 +196,18 @@ def check_ik_drags(client, scene):
         if not case["within"]:
             continue  # a drag starting outside the limits may stay outside (no-teleport rule)
         middle = asset.ik_bone_name(case, 1)
-        tip    = asset.ik_bone_name(case, 2)
+        last   = asset.ik_bone_name(case, 2)
+        tip    = asset.ik_tip_name(case)
         x      = asset.chain_x(index)
         rest   = client.call("get_node_details", {"scene_name": scene, "node_name": middle})["local_transform"]["rotation_xyzw"]
         worst_turn = 0.0
-        # Inside the chain's 0.8 m reach, so the solve has to bend the chain
-        # instead of laying it straight toward the target.
+        # Dragging the tip node: inside the 0.8 m reach from the middle bone,
+        # so the solve has to bend the chain instead of laying it straight.
         for target in ([x + 0.35, 0.5, asset.CHAIN_Z + 0.15], [x - 0.25, 0.55, asset.CHAIN_Z - 0.3]):
             result = client.call("ik_drag", {"scene_name": scene, "node_name": tip, "target": target})
             advance(client, 4)
             chain = [joint["name"] for joint in result.get("joints", [])]
-            check_true(f"3 {middle}: IK Lock makes it the chain root", chain == [middle, tip], str(chain))
+            check_true(f"3 {middle}: IK Lock makes it the chain root, the tip node the end", chain == [middle, last, tip], str(chain))
             bone = by_name(state(client, scene)["ik_bones"]).get(middle, {})
             turned = client.call("get_node_details", {"scene_name": scene, "node_name": middle})["local_transform"]["rotation_xyzw"]
             worst_turn = max(worst_turn, quat_angle(rest, turned))

@@ -201,6 +201,10 @@ def ik_bone_name(case, index):
     return f"{case['key']} bone_{index}"
 
 
+def ik_tip_name(case):
+    return f"{ik_bone_name(case, 2)} tip"
+
+
 def ik_mesh_name(case):
     return f"{case['key']} {case['label']}"
 
@@ -281,6 +285,12 @@ def build_chain(c, index, case, material, root):
     c.skin(ik_mesh_name(case), list(zip(boxes, bones)), parent_node_id=group, material=material)
     c.settle()
 
+    # A bone tip node at the end of the last bone, as Hierarchy > Add Bone Tip
+    # Nodes makes it: a plain node named "<bone> tip" at the leaf bone's
+    # Rig.tail - here the top of its box. Dragged with IK it is the end of the
+    # chain, so the last bone aims at it and turns too.
+    c.anchor(ik_tip_name(case), bones[2], [x, 3.0 * BONE_LENGTH, CHAIN_Z])
+
     middle = bones[1]
     # IK Lock on the limited bone: an IK drag of bone_2 then stops the chain
     # there, so the drag turns this bone alone and runs it straight into its
@@ -352,8 +362,10 @@ def main():
             "ik":    c.ensure_material("constraint test bone",  base_color=[0.30, 0.55, 0.85], roughness=0.4, metallic=0.0),
             "floor": c.ensure_material("constraint test floor", base_color=[0.55, 0.55, 0.52], roughness=0.9, metallic=0.0),
         }
+        # Top face 1 cm below the grid plane (y = 0), so the two do not
+        # z-fight.
         floor_size = [16.0, 0.1, 6.0]
-        floor = box_node(c, "Floor", [0.0, -0.05, 0.5], floor_size, materials["floor"], None)
+        floor = box_node(c, "Floor", [0.0, -0.06, 0.5], floor_size, materials["floor"], None)
         c.body(floor, shape="box", half_extents=half(floor_size), motion_mode="static")
 
         physics_root = c.group("Physics joints", [0.0, 0.0, 0.0])

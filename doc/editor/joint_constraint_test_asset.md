@@ -53,8 +53,10 @@ so a hinge's sector hangs through its box on both backends.
 
 Each is a three-bone chain (`<key> bone_0` .. `bone_2`) skinned to a column
 of three blue boxes; the Ik.* values sit on the middle bone `<key> bone_1`,
-which also carries IK Lock, so an IK drag of `bone_2` stops the chain there
-and turns the limited bone alone.
+which also carries IK Lock, so an IK drag stops the chain there. Each chain
+ends in a bone tip node `<key> bone_2 tip` (as Hierarchy > Add Bone Tip Nodes
+makes it): dragging the tip turns `bone_1` and `bone_2`, dragging `bone_2`
+turns `bone_1` alone.
 Green is the swing boundary at bone length, yellow the twist range, white
 the current bone direction and twist (red when outside the limits).
 
@@ -82,9 +84,9 @@ the current bone direction and twist (red when outside the limits).
   (no live constraint) fall; P11 stays where it was built - both backends
   hold the fixed axis at zero, not at the authored 0.1, which is what its
   magenta marks.
-- **IK.** With the Move tool and Bone IK on, drag a `bone_2`: only the
-  middle bone turns (IK Lock makes it the chain root), it stops at its
-  green / yellow boundary, I06 does not bend, and during the drag the
+- **IK.** With the Move tool and Bone IK on, drag a `bone_2 tip` (or a
+  `bone_2`): the chain stops at the middle bone (IK Lock makes it the chain
+  root), which stops at its green / yellow boundary, I06 does not bend, and during the drag the
   visual uses the drag's own constraint.
 - **Save / reload.** Save the scene elsewhere and load it again: P13 is
   still inactive and every joint keeps its name.
