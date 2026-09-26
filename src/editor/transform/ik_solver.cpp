@@ -786,4 +786,243 @@ void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& b
     }
 }
 
+auto constrain_ik_local_rotation(
+    const Ik_joint_constraint& constraint,
+    const quat&                start_local,
+    const quat&                candidate_local
+) -> quat
+{
+    return constrain_local_rotation(constraint, start_local, candidate_local);
+}
+
+auto decompose_ik_rotation(const Ik_joint_constraint& constraint, const quat& local) -> Ik_rotation_components
+{
+    Ik_rotation_components components{};
+    if (constraint.twist_axis < 0) {
+        return components;
+    }
+    const quat rel = normalize(inverse(constraint.rest_rotation) * local);
+    quat twist{1.0f, 0.0f, 0.0f, 0.0f};
+    swing_twist_decompose(rel, constraint.twist_axis, components.swing, twist);
+    const float t = canonical_twist_component(twist, constraint.twist_axis);
+    const float w = std::abs(twist.w);
+    components.twist_angle = 2.0f * std::atan2(t, w);
+    return components;
+}
+
+namespace {
+
+// Authored (unextended) sin(half-angle) interval of one local axis.
+class Authored_interval
+{
+public:
+    float lo;
+    float hi;
+};
+
+[[nodiscard]] auto authored_interval(const Ik_joint_constraint& constraint, const int axis) -> Authored_interval
+{
+    if (!constraint.limit[axis]) {
+        return Authored_interval{.lo = -1.0f, .hi = 1.0f};
+    }
+    return Authored_interval{
+        .lo = std::sin(0.5f * constraint.limit_min[axis]),
+        .hi = std::sin(0.5f * constraint.limit_max[axis])
+    };
+}
+
+// Swing rotation of the swing-space point (s0, s1) on the two swing axes, in
+// the canonical w >= 0 hemisphere.
+[[nodiscard]] auto make_swing(const int twist_axis, const float s0, const float s1) -> quat
+{
+    const int swing_axes[2] = {
+        (twist_axis == 0) ? 1 : 0,
+        (twist_axis == 2) ? 1 : 2
+    };
+    vec3 vector{0.0f};
+    vector[swing_axes[0]] = s0;
+    vector[swing_axes[1]] = s1;
+    const float w = std::sqrt(std::max(0.0f, 1.0f - (s0 * s0) - (s1 * s1)));
+    return normalize(quat{w, vector.x, vector.y, vector.z});
+}
+
+// One polyline from (a0, a1) to (b0, b1), straight in swing space,
+// samples + 1 points.
+void add_swing_segment(
+    const int          twist_axis,
+    const float        a0,
+    const float        a1,
+    const float        b0,
+    const float        b1,
+    const int          samples,
+    Ik_swing_boundary& boundary
+)
+{
+    for (int i = 0; i <= samples; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(samples);
+        boundary.swings.push_back(make_swing(twist_axis, a0 + ((b0 - a0) * t), a1 + ((b1 - a1) * t)));
+    }
+    boundary.polyline_ends.push_back(boundary.swings.size());
+}
+
+} // anonymous namespace
+
+void sample_ik_swing_boundary(
+    const Ik_joint_constraint& constraint,
+    const quat&                pinned_local,
+    const int                  samples_per_curve,
+    Ik_swing_boundary&         boundary
+)
+{
+    boundary.clear();
+    if (!constraint.enabled || (constraint.twist_axis < 0) || (samples_per_curve < 1)) {
+        return;
+    }
+    const int twist_axis = constraint.twist_axis;
+    const int swing_axes[2] = {
+        (twist_axis == 0) ? 1 : 0,
+        (twist_axis == 2) ? 1 : 2
+    };
+    const bool locked [2] = {constraint.lock [swing_axes[0]], constraint.lock [swing_axes[1]]};
+    const bool limited[2] = {constraint.limit[swing_axes[0]], constraint.limit[swing_axes[1]]};
+    const Authored_interval interval[2] = {
+        authored_interval(constraint, swing_axes[0]),
+        authored_interval(constraint, swing_axes[1])
+    };
+    const int samples = samples_per_curve;
+
+    if (locked[0] && locked[1]) {
+        return; // the swing is pinned: no region to draw
+    }
+
+    if (locked[0] || locked[1]) {
+        // The pinned component comes from pinned_local; the free one runs
+        // over the interval constrain_local_rotation() clamps it to: its
+        // authored limit, narrowed to the ellipse cross-section when both
+        // axes carry limits, else the chord of the unit disc.
+        const quat rel = normalize(inverse(constraint.rest_rotation) * pinned_local);
+        quat swing{1.0f, 0.0f, 0.0f, 0.0f};
+        quat twist{1.0f, 0.0f, 0.0f, 0.0f};
+        swing_twist_decompose(rel, twist_axis, swing, twist);
+        const int   pinned_k = locked[0] ? 0 : 1;
+        const int   free_k   = locked[0] ? 1 : 0;
+        const float pinned   = swing_component(swing, swing_axes[pinned_k]);
+        const float chord    = std::sqrt(std::max(0.0f, 1.0f - (pinned * pinned)));
+        float free_lo = -chord;
+        float free_hi =  chord;
+        if (limited[free_k]) {
+            free_lo = std::max(free_lo, interval[free_k].lo);
+            free_hi = std::min(free_hi, interval[free_k].hi);
+            if (limited[pinned_k]) {
+                const float a      = (pinned >= 0.0f) ? interval[pinned_k].hi : -interval[pinned_k].lo;
+                const float ratio2 = (a > c_epsilon) ? std::min(1.0f, (pinned / a) * (pinned / a)) : 1.0f;
+                const float cross  = std::sqrt(std::max(0.0f, 1.0f - ratio2));
+                free_hi = std::min(free_hi, std::max(interval[free_k].hi, 0.0f) * cross);
+                free_lo = std::max(free_lo, std::min(interval[free_k].lo, 0.0f) * cross);
+            }
+        }
+        if (free_hi < free_lo) {
+            return;
+        }
+        float a[2];
+        float b[2];
+        a[pinned_k] = pinned;
+        b[pinned_k] = pinned;
+        a[free_k]   = free_lo;
+        b[free_k]   = free_hi;
+        add_swing_segment(twist_axis, a[0], a[1], b[0], b[1], samples, boundary);
+        return;
+    }
+
+    if (limited[0] && limited[1]) {
+        // Per-quadrant ellipse, radius hi or -lo per sign of each component:
+        // one closed loop of four quarter arcs.
+        const float two_pi = glm::two_pi<float>();
+        const int   count  = 4 * samples;
+        for (int i = 0; i <= count; ++i) {
+            const float phi = two_pi * static_cast<float>(i) / static_cast<float>(count);
+            const float u   = std::cos(phi);
+            const float v   = std::sin(phi);
+            const float s0  = u * ((u >= 0.0f) ? interval[0].hi : -interval[0].lo);
+            const float s1  = v * ((v >= 0.0f) ? interval[1].hi : -interval[1].lo);
+            boundary.swings.push_back(make_swing(twist_axis, s0, s1));
+        }
+        boundary.polyline_ends.push_back(boundary.swings.size());
+        return;
+    }
+
+    for (int k = 0; k < 2; ++k) {
+        if (!limited[k]) {
+            continue;
+        }
+        // One limited swing axis, the other free: the region is the band
+        // between its two bounds; each bound runs over the free component
+        // chord of the unit disc.
+        const int other = 1 - k;
+        const float bounds[2] = {interval[k].lo, interval[k].hi};
+        for (const float bound : bounds) {
+            const float chord = std::sqrt(std::max(0.0f, 1.0f - (bound * bound)));
+            float a[2];
+            float b[2];
+            a[k]     = bound;
+            b[k]     = bound;
+            a[other] = -chord;
+            b[other] =  chord;
+            add_swing_segment(twist_axis, a[0], a[1], b[0], b[1], samples, boundary);
+        }
+    }
+}
+
+auto is_ik_rotation_within_limits(const Ik_joint_constraint& constraint, const quat& local, const float tolerance) -> bool
+{
+    if (!constraint.enabled || (constraint.twist_axis < 0)) {
+        return true;
+    }
+    const int twist_axis = constraint.twist_axis;
+    const int swing_axes[2] = {
+        (twist_axis == 0) ? 1 : 0,
+        (twist_axis == 2) ? 1 : 2
+    };
+    const quat rel = normalize(inverse(constraint.rest_rotation) * local);
+    quat swing{1.0f, 0.0f, 0.0f, 0.0f};
+    quat twist{1.0f, 0.0f, 0.0f, 0.0f};
+    swing_twist_decompose(rel, twist_axis, swing, twist);
+
+    if (constraint.limit[twist_axis] && !constraint.lock[twist_axis]) {
+        const Authored_interval interval = authored_interval(constraint, twist_axis);
+        const float t = canonical_twist_component(twist, twist_axis);
+        if ((t < (interval.lo - tolerance)) || (t > (interval.hi + tolerance))) {
+            return false;
+        }
+    }
+
+    const bool limited[2] = {
+        constraint.limit[swing_axes[0]] && !constraint.lock[swing_axes[0]],
+        constraint.limit[swing_axes[1]] && !constraint.lock[swing_axes[1]]
+    };
+    const float s[2] = {swing_component(swing, swing_axes[0]), swing_component(swing, swing_axes[1])};
+    const Authored_interval interval[2] = {
+        authored_interval(constraint, swing_axes[0]),
+        authored_interval(constraint, swing_axes[1])
+    };
+    if (limited[0] && limited[1]) {
+        const float a = (s[0] >= 0.0f) ? interval[0].hi : -interval[0].lo;
+        const float b = (s[1] >= 0.0f) ? interval[1].hi : -interval[1].lo;
+        if ((a < c_epsilon) || (b < c_epsilon)) {
+            return
+                (s[0] >= (interval[0].lo - tolerance)) && (s[0] <= (interval[0].hi + tolerance)) &&
+                (s[1] >= (interval[1].lo - tolerance)) && (s[1] <= (interval[1].hi + tolerance));
+        }
+        const float u = s[0] / (a + tolerance);
+        const float v = s[1] / (b + tolerance);
+        return ((u * u) + (v * v)) <= 1.0f;
+    }
+    for (int k = 0; k < 2; ++k) {
+        if (limited[k] && ((s[k] < (interval[k].lo - tolerance)) || (s[k] > (interval[k].hi + tolerance)))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace editor

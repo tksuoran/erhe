@@ -171,6 +171,14 @@ verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clea
 >plan::R2-AS-LANDED-noted{next:R3-tool-state}
 >prompt_queue::both-items-done→file-deleted
 
+[2026-09-26::joint-constraint-visualization]
+>added::erhe::physics::get_enforced_joint_limits+measure_joint_coordinates{joint_limits.hpp;per-backend-enforced-shape:Jolt-twistX+pyramid|Box3D-classified-revolute/cone;is_exact}
+>added::Debug_visualizations-joint-constraints{filter:off|all|hovered_mesh|hovered_bone+kinds-physics/ik;x-ray;pending/approximated/violation-colors;doc/editor/tools.md}
+>added::IK-limit-visual{sample_ik_swing_boundary=solver-clamp-space;transform/ik_constraint.hpp-shared-with-Ik_drag}
+>added::MCP-set_joint_constraint_visualization+get_joint_constraint_state{drawn-ids-per-viewport}
+✓verify::scripts/joint_visualization_verify.py-16/16{jolt+box3d-headless};physics-tests-97-box3d;editor_ik_solver_tests-54
+?open::Tracy-steady-state-allocation-check-not-run
+
 ## 2026-09-04 archive of activeContext (superseded by property-system focus)
 §MBEL:5.0
 

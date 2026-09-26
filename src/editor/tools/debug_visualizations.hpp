@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderable.hpp"
+#include "tools/joint_constraint_visualization.hpp"
 #include "windows/property_editor.hpp"
 
 #include "config/generated/debug_visualizations_settings.hpp"
@@ -82,6 +83,14 @@ public:
     // visualization mode of the view being rendered through this (via
     // Scene_view::get_debug_visualizations_settings).
     [[nodiscard]] auto get_settings() const -> const Debug_visualizations_settings& { return m_settings; }
+
+    // Writable per-view toggles, for the MCP tools that set them explicitly
+    // (set_joint_constraint_visualization).
+    [[nodiscard]] auto edit_settings() -> Debug_visualizations_settings& { return m_settings; }
+
+    // The joint constraint visualization of this view
+    // (doc/editor/tools.md "Debug_visualizations"); reports what it drew.
+    [[nodiscard]] auto get_joint_constraint_visualization() const -> const Joint_constraint_visualization& { return m_joint_constraint_visualization; }
 
     // Whether the given Skins visualization mode shows at least one skin of
     // the scene: off = none, all = any, selected / hovered = a skin whose
@@ -182,6 +191,8 @@ private:
     bool        m_dbg_last_corners_valid   {false};
 
     Property_editor m_property_editor;
+
+    Joint_constraint_visualization m_joint_constraint_visualization;
 };
 
 }

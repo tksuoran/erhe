@@ -57,6 +57,24 @@ a specific engine.
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
   (`erhe::Typed`, `doc/erhe/item.md` "Prim classes"), each with its erhe class name as
   its fixed `typeName` token
+- `get_enforced_joint_limits()` (`joint_limits.hpp`) -- the six-DOF limits the backend the
+  library is built with actually enforces, as a `Joint_limit_shape`: per-axis translation
+  ranges, the twist axis and range, and the swing model - `pyramid` (a range per swing axis,
+  the swing half-angle `atan2(q_k, q_w)` clamped) or `cone` (a symmetric half-angle about the
+  twist axis). Jolt: twist about X, pyramid swing about Y / Z, rotation ranges clamped to
+  [-pi, pi], a range inside +-0.5 degrees locked at zero, one wider than +-179.5 degrees free,
+  a fixed translation fixed at zero. Box3D: the classified joint (weld; revolute twisting
+  about its axis; prismatic; spherical twisting about Z with a cone of the widest limited swing
+  half range; filter). `none`: the authored limits. `is_exact` is false where the enforced
+  shape differs from the authored limits (the Box3D classification is not exact, a fixed axis
+  authored at a non-zero value). Implemented next to each backend's six-DOF factory, so a joint
+  not built yet and a live one read the same shape.
+  `measure_joint_coordinates(frame_a, frame_b, shape)` decomposes the relative pose of two world
+  anchor frames the same way (translation in frame A, twist about the twist axis, the pyramid
+  swing angles and the cone angle of `q = inverse(q_a) * q_b = q_swing * q_twist`);
+  `check_joint_range()` tests the coordinates against the shape with a tolerance;
+  `pyramid_swing_direction()` is the twist axis turned by a pair of pyramid swing angles. The
+  editor's joint constraint visualization draws with them (`doc/editor/tools.md`).
 - `Joint_reach` -- pure projection of a target position onto the positions a point of a jointed
   body can reach while one six-DOF joint to a fixed anchor frame holds (`Joint_side` names the
   moving body's side; shapes point / circle / sphere / box, or unprojected for combinations it does

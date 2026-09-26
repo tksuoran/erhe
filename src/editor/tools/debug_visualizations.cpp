@@ -2220,6 +2220,8 @@ void Debug_visualizations::render(const Render_context& context)
 
     physics_nodes_visualization(context);
 
+    m_joint_constraint_visualization.render(context, m_settings, context.app_context.editor_settings->debug_visualizations_style);
+
     raytrace_nodes_visualization(context);
 
     lightmap_tiles_visualization(context);
@@ -2438,6 +2440,32 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry("Corner Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_length,  0.0f, 1.0f); });
     p.pop_group();
 
+    // Joint constraint visualization (doc/editor/tools.md "Debug_visualizations").
+    p.push_group("Joint Constraints", ImGuiTreeNodeFlags_None);
+    p.add_entry("Joint Size", [&style](){
+        ImGui::DragFloat("##", &style.joint_size, 0.005f, 0.0f, 10.0f, "%.3f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("World-space size; 0 derives it per joint from the body size or the bone length");
+        }
+    });
+    p.add_entry("Line Widths", [&style](){
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.joint_line_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##t", &style.joint_thin_line_width, 0.1f, -100.0f, 100.0f, "%.1f");
+    });
+    p.add_entry("Limit",        [style_row, &style](){ style_row(&style.joint_limit_color,        nullptr); });
+    p.add_entry("Free",         [style_row, &style](){ style_row(&style.joint_free_color,         nullptr); });
+    p.add_entry("Value",        [style_row, &style](){ style_row(&style.joint_value_color,        nullptr); });
+    p.add_entry("Violation",    [style_row, &style](){ style_row(&style.joint_violation_color,    nullptr); });
+    p.add_entry("Pending",      [style_row, &style](){ style_row(&style.joint_pending_color,      nullptr); });
+    p.add_entry("Approximated", [style_row, &style](){ style_row(&style.joint_approximated_color, nullptr); });
+    p.add_entry("Body Link",    [style_row, &style](){ style_row(&style.joint_body_link_color,    nullptr); });
+    p.add_entry("IK Swing",     [style_row, &style](){ style_row(&style.ik_limit_swing_color,     nullptr); });
+    p.add_entry("IK Twist",     [style_row, &style](){ style_row(&style.ik_limit_twist_color,     nullptr); });
+    p.pop_group();
+
     p.pop_group();
 }
 
@@ -2462,6 +2490,29 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     p.add_entry("Node Axises", [this](){ make_combo("##", m_settings.node_axises); });
     p.add_entry("Physics",     [this](){ make_combo("##", m_settings.physics  ); });
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
+    // Joint constraints (doc/editor/tools.md "Debug_visualizations"):
+    // which ones are drawn, and which kinds.
+    p.add_entry("Joint Constraints", [this](){
+        static constexpr const char* c_joint_constraint_filter_strings[] = {
+            "Off",
+            "All",
+            "Hovered Mesh",
+            "Hovered Bone"
+        };
+        erhe::imgui::make_combo("##", m_settings.joint_constraints, c_joint_constraint_filter_strings, IM_ARRAYSIZE(c_joint_constraint_filter_strings));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "All: every physics joint and IK-limited bone.\n"
+                "Hovered Mesh: the constraints that move the hovered mesh.\n"
+                "Hovered Bone: the constraints of the hovered bone\n"
+                "(bones are hovered in the viewport in bone selection mode, or in the item tree)."
+            );
+        }
+    });
+    if (m_settings.joint_constraints != Joint_constraint_filter::off) {
+        p.add_entry("Physics Joints", [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_physics); });
+        p.add_entry("IK Limits",      [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_ik); });
+    }
 
     p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_settings.world_axes); });
     p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_debug); }); // shadow texel visualization

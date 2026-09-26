@@ -674,6 +674,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "edit_collision_filter",          &Mcp_server::action_edit_collision_filter         },
         { "create_physics_joint_settings",  &Mcp_server::action_create_physics_joint_settings },
         { "edit_physics_joint_settings",    &Mcp_server::action_edit_physics_joint_settings   },
+        { "set_joint_constraint_visualization", &Mcp_server::action_set_joint_constraint_visualization },
+        { "get_joint_constraint_state",     &Mcp_server::query_joint_constraint_state         },
         { "set_mesh_component_mode",        &Mcp_server::action_set_mesh_component_mode       },
         { "select_mesh_components",         &Mcp_server::action_select_mesh_components        },
         { "grow_mesh_selection",            &Mcp_server::action_grow_mesh_selection           },

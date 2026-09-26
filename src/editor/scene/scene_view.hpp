@@ -216,6 +216,10 @@ public:
     // Render_context::scene_view.
     [[nodiscard]] auto get_debug_visualizations_settings() const -> const Debug_visualizations_settings&;
 
+    // This view's Debug Visualizations, for the MCP tools that set its
+    // toggles and read what it drew.
+    [[nodiscard]] auto get_debug_visualizations() -> Debug_visualizations& { return m_debug_visualizations; }
+
     [[nodiscard]] auto get_config                               () -> Viewport_config&;
     [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;

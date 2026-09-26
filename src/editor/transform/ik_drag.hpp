@@ -120,6 +120,16 @@ public:
     [[nodiscard]] auto get_initial_position (std::size_t index) const -> glm::vec3 { return m_initial_positions[index]; }
     [[nodiscard]] auto get_parent_from_joint_before(std::size_t index) const -> const erhe::scene::Trs_transform& { return m_parent_from_joint_before[index]; }
 
+    // The resolved constraint and drag-start local rotation of node when it
+    // is a non-tip joint of this chain (the tip has no constraint). Read by
+    // the IK limit visualization so what it draws during a drag is what the
+    // solver enforces.
+    [[nodiscard]] auto find_joint_constraint(
+        const erhe::scene::Node& node,
+        Ik_joint_constraint&     constraint,
+        glm::quat&               local_rotation_before
+    ) const -> bool;
+
     // Puts the drag-start local transform back on joints [first_index, end).
     void restore_drag_start_pose(std::size_t first_index);
 
@@ -227,6 +237,13 @@ public:
     // chain. Its first joint is the upper chain's last.
     [[nodiscard]] auto get_lower_joints() const -> const std::vector<std::shared_ptr<erhe::scene::Node>>& { return m_lower.get_joints(); }
     [[nodiscard]] auto has_lower_chain () const -> bool { return m_lower.is_active(); }
+    // Ik_drag_chain::find_joint_constraint() over the upper and the lower
+    // chain; false when node is no constrained joint of the running drag.
+    [[nodiscard]] auto find_joint_constraint(
+        const erhe::scene::Node& node,
+        Ik_joint_constraint&     constraint,
+        glm::quat&               local_rotation_before
+    ) const -> bool;
 
     // The pole governing the upper chain, discovered once by begin()
     // (doc/plans/rigging/pole_target.md R5-R10). get_pole_node() is null and

@@ -252,6 +252,10 @@ public:
     // The Transform window's Rotation group (MCP get_transform_rotation).
     [[nodiscard]] auto get_rotation_inspector() const -> const Rotation_inspector&;
 
+    // The IK drag state; the IK limit visualization reads the running drag's
+    // resolved constraints from it.
+    [[nodiscard]] auto get_ik_drag() const -> const Ik_drag& { return m_ik_drag; }
+
     // Rotate ring k (handle e_handle_rotate_x/y/z for k = 0/1/2) rotates
     // about frames[k][0] and lies in the plane of frames[k][1], frames[k][2]
     // (world space, orthonormal). Normally ring k is gizmo basis axis k. With

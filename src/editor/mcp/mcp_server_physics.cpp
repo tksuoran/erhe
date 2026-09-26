@@ -10,11 +10,20 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/ik_properties.hpp"
 #include "scene/joint.hpp"
+#include "scene/joint_system.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "tools/debug_visualizations.hpp"
+#include "tools/joint_constraint_visualization.hpp"
+#include "transform/ik_drag.hpp"
+#include "transform/transform_tool.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/collision_filter.hpp"
@@ -24,12 +33,14 @@
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -840,5 +851,182 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
     return make_json_content(result).dump();
 }
 
+
+// Joint constraint visualization (doc/editor/tools.md "Debug_visualizations").
+
+namespace {
+
+[[nodiscard]] auto limit_to_json(const erhe::physics::Constraint_axis_limit& limit) -> json
+{
+    if (!limit.limited) {
+        return json{{"limited", false}};
+    }
+    return json{{"limited", true}, {"min", limit.min}, {"max", limit.max}};
+}
+
+[[nodiscard]] auto vec3_to_json(const glm::vec3 v) -> json
+{
+    return json::array({v.x, v.y, v.z});
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_set_joint_constraint_visualization(const json& args) -> std::string
+{
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("No scene views available");
+    }
+    std::optional<Joint_constraint_filter> filter{};
+    if (args.contains("filter")) {
+        const std::string filter_string = args.value("filter", std::string{});
+        Joint_constraint_filter value{Joint_constraint_filter::off};
+        if (!from_string(filter_string, value)) {
+            return make_error_content("Unknown filter '" + filter_string + "' (off, all, hovered_mesh, hovered_bone)");
+        }
+        filter = value;
+    }
+    const std::string viewport_title = args.value("viewport", std::string{});
+    json viewports = json::array();
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+        if (!scene_view) {
+            continue;
+        }
+        if (!viewport_title.empty() && (viewport_window->get_title() != viewport_title)) {
+            continue;
+        }
+        Debug_visualizations_settings& settings = scene_view->get_debug_visualizations().edit_settings();
+        if (filter.has_value()) {
+            settings.joint_constraints = filter.value();
+        }
+        if (args.contains("physics")) {
+            settings.joint_constraints_physics = args.value("physics", true);
+        }
+        if (args.contains("ik")) {
+            settings.joint_constraints_ik = args.value("ik", true);
+        }
+        viewports.push_back({
+            {"viewport", viewport_window->get_title()},
+            {"filter",   std::string{to_string(settings.joint_constraints)}},
+            {"physics",  settings.joint_constraints_physics},
+            {"ik",       settings.joint_constraints_ik}
+        });
+    }
+    if (viewports.empty()) {
+        return make_error_content(
+            viewport_title.empty()
+                ? std::string{"No viewport scene views available"}
+                : ("No viewport window titled '" + viewport_title + "' (see get_viewports)")
+        );
+    }
+    return make_json_content({{"viewports", viewports}}).dump();
+}
+
+auto Mcp_server::query_joint_constraint_state(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+
+    json physics_joints = json::array();
+    Physics_joint_state state{};
+    for (const std::unique_ptr<Joint_entry>& entry : sr->get_joint_system().get_entries()) {
+        if (!get_physics_joint_state(*entry, state)) {
+            continue;
+        }
+        const erhe::physics::Joint_limit_shape&  shape       = state.shape;
+        const erhe::physics::Joint_coordinates&  coordinates = state.coordinates;
+        const erhe::physics::Joint_range_check&  check       = state.range_check;
+        physics_joints.push_back({
+            {"name",        state.joint->get_name()},
+            {"id",          state.joint->get_id()},
+            {"live",        state.live},
+            {"exact",       shape.is_exact},
+            {"frame_a_origin", vec3_to_json(state.frame_a.origin)},
+            {"frame_b_origin", vec3_to_json(state.frame_b.origin)},
+            {"limits", {
+                {"translation", json::array({limit_to_json(shape.translation[0]), limit_to_json(shape.translation[1]), limit_to_json(shape.translation[2])})},
+                {"twist_axis",  shape.twist_axis},
+                {"twist",       limit_to_json(shape.twist)},
+                {"swing_model", (shape.swing_model == erhe::physics::Swing_limit_model::pyramid) ? "pyramid" : "cone"},
+                {"swing",       json::array({limit_to_json(shape.swing[0]), limit_to_json(shape.swing[1])})},
+                {"cone",        limit_to_json(shape.cone)}
+            }},
+            {"coordinates", {
+                {"translation", vec3_to_json(coordinates.translation)},
+                {"twist",       coordinates.twist},
+                {"swing",       json::array({coordinates.swing[0], coordinates.swing[1]})},
+                {"cone",        coordinates.cone}
+            }},
+            {"in_range", {
+                {"translation", json::array({check.translation_ok[0], check.translation_ok[1], check.translation_ok[2]})},
+                {"twist",       check.twist_ok},
+                {"swing",       check.swing_ok},
+                {"all",         check.all_ok()}
+            }}
+        });
+    }
+
+    const Transform_tool* const transform_tool = m_context.transform_tool;
+    const Ik_drag* const        ik_drag        = (transform_tool != nullptr) ? &transform_tool->get_ik_drag() : nullptr;
+    json ik_bones = json::array();
+    erhe::scene::Scene* const scene = sr->get_hosted_scene();
+    if (scene != nullptr) {
+        Ik_limit_state ik_state{};
+        scene->for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            if (!node) {
+                return true;
+            }
+            const bool candidate = erhe::scene::is_bone(static_cast<const erhe::Item_base*>(node.get())) || has_local_ik_value(*node);
+            if (!candidate || !get_ik_limit_state(*node, ik_drag, ik_state)) {
+                return true;
+            }
+            const Ik_joint_constraint& constraint = ik_state.constraint;
+            ik_bones.push_back({
+                {"name",          node->get_name()},
+                {"id",            node->get_id()},
+                {"from_drag",     ik_state.from_drag},
+                {"twist_axis",    constraint.twist_axis},
+                {"lock",          json::array({constraint.lock[0], constraint.lock[1], constraint.lock[2]})},
+                {"limit",         json::array({constraint.limit[0], constraint.limit[1], constraint.limit[2]})},
+                {"limit_min",     vec3_to_json(constraint.limit_min)},
+                {"limit_max",     vec3_to_json(constraint.limit_max)},
+                {"twist_angle",   ik_state.current.twist_angle},
+                {"swing",         json::array({ik_state.current.swing.x, ik_state.current.swing.y, ik_state.current.swing.z, ik_state.current.swing.w})},
+                {"within_limits", ik_state.within_limits}
+            });
+            return true;
+        });
+    }
+
+    json viewports = json::array();
+    if (m_context.scene_views != nullptr) {
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+            const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+            if (!scene_view || (scene_view->get_scene_root().get() != sr)) {
+                continue;
+            }
+            Debug_visualizations&                 debug_visualizations = scene_view->get_debug_visualizations();
+            const Debug_visualizations_settings&  settings             = debug_visualizations.get_settings();
+            const Joint_constraint_visualization& visualization        = debug_visualizations.get_joint_constraint_visualization();
+            viewports.push_back({
+                {"viewport",             viewport_window->get_title()},
+                {"filter",               std::string{to_string(settings.joint_constraints)}},
+                {"physics",              settings.joint_constraints_physics},
+                {"ik",                   settings.joint_constraints_ik},
+                {"drawn_physics_joints", visualization.get_drawn_physics_joints()},
+                {"drawn_ik_bones",       visualization.get_drawn_ik_bones()}
+            });
+        }
+    }
+
+    return make_json_content({
+        {"physics_joints", physics_joints},
+        {"ik_bones",       ik_bones},
+        {"viewports",      viewports}
+    }).dump();
+}
 
 } // namespace editor

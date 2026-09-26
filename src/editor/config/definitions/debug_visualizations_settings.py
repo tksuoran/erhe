@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=1,
+    version=2,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -60,6 +60,12 @@ struct("Debug_visualizations_settings",
 
         field("mesh_primitive_boxes",              Bool,  added_in=1, default="false", short_desc="Primitive Boxes", long_desc="Per-primitive bounding boxes of every mesh, drawn under the mesh node's world transform. For a skinned mesh the box is posed from the primitive's per-joint rest bounds (skinning ignores the node transform), falling back to the rest-pose box when no joint bounds exist"),
         field("bone_boxes",                        Bool,  added_in=1, default="false", short_desc="Bone Boxes",      long_desc="Per-joint rest-pose bounding boxes of every skinned mesh, posed by the joints' current world transforms (the boxes GPU skinning is bounded by)"),
+
+        # Joint constraint visualization (doc/editor/tools.md "Debug_visualizations"
+        # D4): which constraints are drawn, and which kinds.
+        field("joint_constraints",                 EnumRef("Joint_constraint_filter"), added_in=2, default="Joint_constraint_filter::off", short_desc="Joint Constraints", long_desc="Which joint constraints are drawn: all, those moving the hovered mesh, or those of the hovered bone"),
+        field("joint_constraints_physics",         Bool,  added_in=2, default="true",   short_desc="Physics Joints", long_desc="Draw physics joints (Joint prims): frames, ranges and current values"),
+        field("joint_constraints_ik",              Bool,  added_in=2, default="true",   short_desc="IK Limits",      long_desc="Draw IK bone limits: twist range and swing region"),
 
         field("max_labels",                        Int,   added_in=1, default="400",    short_desc="Max Labels"),
         field("vertex_positions",                  Bool,  added_in=1, default="false",  short_desc="Vertex Positions"),

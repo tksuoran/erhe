@@ -338,6 +338,8 @@ private:
     auto action_edit_collision_filter  (const nlohmann::json& args) -> std::string;
     auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
+    auto action_set_joint_constraint_visualization(const nlohmann::json& args) -> std::string;
+    auto query_joint_constraint_state             (const nlohmann::json& args) -> std::string;
     auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;
     auto action_request_renderdoc_capture    (const nlohmann::json& args) -> std::string;
     auto action_push_shader_debug             (const nlohmann::json& args) -> std::string;

@@ -1,4 +1,5 @@
 #include "transform/ik_drag.hpp"
+#include "transform/ik_constraint.hpp"
 
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
@@ -22,7 +23,6 @@ using namespace glm;
 
 namespace {
 
-constexpr float c_epsilon         = 1.0e-6f;
 constexpr float c_solve_tolerance = 1.0e-4f;
 constexpr int   c_max_iterations  = 16;
 
@@ -31,89 +31,36 @@ constexpr int   c_max_iterations  = 16;
     return erhe::utility::test_bit_set(node.get_flag_bits(), erhe::Item_flags::ik_lock);
 }
 
-// Twist axis (doc/plans/rigging/ik_settings.md section 4): the local coordinate
-// axis closest to the joint's child direction in the joint's own frame
-// (pose-invariant - the child's local translation does not change with the
-// joint's rotation), ties broken in X, Y, Z priority order. -1 when the
-// child offset is (near) zero length - such a joint is unconstrained,
-// consistent with the zero-length-segment skip rule.
-[[nodiscard]] auto derive_twist_axis(const vec3 child_offset_local) -> int
-{
-    if (length(child_offset_local) < c_epsilon) {
-        return -1;
-    }
-    int   axis = 0;
-    float best = std::abs(child_offset_local.x);
-    if (std::abs(child_offset_local.y) > best) {
-        axis = 1;
-        best = std::abs(child_offset_local.y);
-    }
-    if (std::abs(child_offset_local.z) > best) {
-        axis = 2;
-    }
-    return axis;
-}
-
-// Per-joint constraint from the node's Ik.* values OR-ed with its
-// lock_rotation_* channel-lock flags, plus its Ik.stiffness. A joint whose
-// locks and limits are all off is unconstrained (it may still be stiff); a joint constrained by channel locks alone takes
-// the drag-start local rotation as its rest orientation (the rest-frame rule
-// of doc/plans/rigging/ik_settings.md section 3).
-[[nodiscard]] auto resolve_constraint(
-    const erhe::scene::Node& joint,
-    const quat&              local_rotation_before,
-    const int                twist_axis
-) -> Ik_joint_constraint
-{
-    const Ik_settings_data data = read_ik_settings(joint);
-
-    Ik_joint_constraint constraint;
-    constraint.twist_axis = twist_axis;
-
-    const uint64_t flags = joint.get_flag_bits();
-    constraint.lock[0] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_x);
-    constraint.lock[1] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_y);
-    constraint.lock[2] = erhe::utility::test_bit_set(flags, erhe::Item_flags::lock_rotation_z);
-    bool any_ik_constraint = false;
-    for (int axis = 0; axis < 3; ++axis) {
-        constraint.lock [axis] = constraint.lock[axis] || data.lock[axis];
-        constraint.limit[axis] = data.limit[axis];
-        any_ik_constraint = any_ik_constraint || data.lock[axis] || data.limit[axis];
-    }
-    constraint.limit_min = data.limit_min;
-    constraint.limit_max = data.limit_max;
-
-    // The limits frame. A joint with any Ik lock or limit on takes the
-    // effective Ik.rest_rotation - a local value, a style, or the per-object
-    // default, which is the bind pose and otherwise identity: a fixed
-    // zero, so the limits do not drift with the pose. The drag-start local
-    // rotation is the rest only for a joint constrained by channel-lock flags
-    // alone, which is the section 2 frame note's case.
-    constraint.rest_rotation = any_ik_constraint ? data.rest_rotation : local_rotation_before;
-
-    // Any lock or limit routes the chain into the constrained solver, the
-    // twist axis included: world-space shortest arcs composed onto a bent
-    // parent chain do turn a joint about its own twist axis.
-    bool any_constraint = false;
-    for (int axis = 0; axis < 3; ++axis) {
-        if (constraint.lock[axis] || constraint.limit[axis]) {
-            any_constraint = true;
-        }
-    }
-    constraint.enabled = (twist_axis >= 0) && any_constraint;
-
-    // Stiffness scales the joint's per-iteration change in the constrained
-    // solve and, when nonzero, routes the chain there as a lock or limit
-    // does (ik_settings.md section 4). A joint without a twist axis has a
-    // zero-length child offset, which the solve never turns: its stiffness
-    // has nothing to act on.
-    constraint.stiffness = (twist_axis >= 0) ? data.stiffness : vec3{0.0f};
-    return constraint;
-}
-
 } // anonymous namespace
 
 // Ik_drag_chain
+
+auto Ik_drag_chain::find_joint_constraint(
+    const erhe::scene::Node& node,
+    Ik_joint_constraint&     constraint,
+    glm::quat&               local_rotation_before
+) const -> bool
+{
+    for (std::size_t i = 0; (i + 1) < m_joints.size(); ++i) {
+        if (m_joints[i].get() == &node) {
+            constraint            = m_constraints[i];
+            local_rotation_before = m_local_rotations_before[i];
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Ik_drag::find_joint_constraint(
+    const erhe::scene::Node& node,
+    Ik_joint_constraint&     constraint,
+    glm::quat&               local_rotation_before
+) const -> bool
+{
+    return
+        m_upper.find_joint_constraint(node, constraint, local_rotation_before) ||
+        m_lower.find_joint_constraint(node, constraint, local_rotation_before);
+}
 
 void Ik_drag_chain::capture(std::vector<std::shared_ptr<erhe::scene::Node>>&& joints)
 {
@@ -139,7 +86,7 @@ void Ik_drag_chain::capture(std::vector<std::shared_ptr<erhe::scene::Node>>&& jo
             ik_safe_direction(child_offset_local, vec3{0.0f, 1.0f, 0.0f})
         );
         m_constraints.push_back(
-            resolve_constraint(*m_joints[i], m_local_rotations_before[i], derive_twist_axis(child_offset_local))
+            resolve_ik_constraint(*m_joints[i], m_local_rotations_before[i], derive_ik_twist_axis(child_offset_local))
         );
     }
     m_constraints.push_back(Ik_joint_constraint{}); // tip entry, unused

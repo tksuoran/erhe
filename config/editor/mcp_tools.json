@@ -5057,6 +5057,47 @@
     "name": "edit_physics_joint_settings"
   },
   {
+    "description": "Set a viewport's joint constraint debug visualization (doc/editor/tools.md, Debug_visualizations): which constraints are drawn (filter) and which kinds (physics joints, IK limits). Omitted arguments keep their value. Applies to every viewport, or to the one titled 'viewport'.",
+    "inputSchema": {
+      "properties": {
+        "viewport": {
+          "description": "Viewport window title (see get_viewports); all viewports when absent",
+          "type": "string"
+        },
+        "filter": {
+          "description": "off, all, hovered_mesh (constraints moving the hovered mesh) or hovered_bone (constraints of the hovered bone)",
+          "type": "string"
+        },
+        "physics": {
+          "description": "Draw physics joints",
+          "type": "boolean"
+        },
+        "ik": {
+          "description": "Draw IK bone limits",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_joint_constraint_visualization"
+  },
+  {
+    "description": "Report the joint constraints of a scene as the joint constraint visualization measures them: every physics joint (live or pending, the limits the physics backend enforces, the current joint coordinates and which lie outside their range) and every IK-constrained bone (twist axis, current twist angle and swing, within limits), plus per viewport the filter and the ids of the joints and bones it drew last frame.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_joint_constraint_state"
+  },
+  {
     "description": "Set the selection granularity (object / vertex / edge / face / bone). vertex/edge/face are required before select_mesh_components and Align / Add Joint. bone makes skeleton bones pickable in the viewport: a click selects the joint Node the bone stands for, through the ordinary selection.",
     "inputSchema": {
       "properties": {

@@ -641,6 +641,10 @@ erhe_target_sources_grouped(
     tools/clipboard.hpp
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
+    tools/joint_constraint_visualization.cpp
+    tools/joint_constraint_visualization.hpp
+    tools/joint_visualization.cpp
+    tools/joint_visualization.hpp
     tools/fly_camera_tool.cpp
     tools/fly_camera_tool.hpp
     tools/hotbar.cpp
@@ -681,6 +685,8 @@ erhe_target_sources_grouped(
     transform/handle_visualizations.hpp
     transform/mesh_component_extrude.cpp
     transform/mesh_component_extrude.hpp
+    transform/ik_constraint.cpp
+    transform/ik_constraint.hpp
     transform/ik_drag.cpp
     transform/ik_drag.hpp
     transform/ik_solver.cpp
@@ -974,6 +980,8 @@ set(_config_sources
     ${_config_out}/fly_camera_config.cpp
     ${_config_out}/geometry_edit_mode.hpp
     ${_config_out}/geometry_edit_mode.cpp
+    ${_config_out}/joint_constraint_filter.hpp
+    ${_config_out}/joint_constraint_filter.cpp
     ${_config_out}/mesh_transform_mode.hpp
     ${_config_out}/mesh_transform_mode.cpp
     ${_config_out}/editor_settings_config.hpp

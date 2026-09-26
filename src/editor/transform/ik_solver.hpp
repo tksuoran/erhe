@@ -279,4 +279,65 @@ public:
 // corresponding lines out; nothing else is drawn and no scene is touched.
 void build_ik_drag_lines(const Ik_drag_line_input& input, Ik_drag_line_buffer& buffer);
 
+// The swing region an IK joint constraint admits, for the IK limit
+// visualization (doc/editor/tools.md "Debug_visualizations"). Sampled from
+// the same clamp space constrain_local_rotation() uses (the swing quaternion
+// components along the two swing axes, per-quadrant ellipse / interval / lock
+// rules of doc/plans/rigging/ik_settings.md section 4), so the drawn boundary
+// is the enforced one. The region is the AUTHORED one: the no-teleport
+// extension of a drag is not applied, and a locked swing axis is pinned at
+// the pinned_local rotation's component (the drag-start rotation during a
+// drag, the current one otherwise).
+//
+// swings holds swing rotations relative to the constraint's rest rotation;
+// the joint's twist axis (unit, along twist_axis) turned by one of them is a
+// direction on the boundary. polyline_ends holds the exclusive end index into
+// swings of each polyline. Caller-owned and cleared first, so a steady-state
+// frame allocates nothing once the high-water mark is reached.
+class Ik_swing_boundary
+{
+public:
+    std::vector<glm::quat>   swings;
+    std::vector<std::size_t> polyline_ends;
+
+    void clear() // keeps capacity
+    {
+        swings.clear();
+        polyline_ends.clear();
+    }
+};
+
+void sample_ik_swing_boundary(
+    const Ik_joint_constraint& constraint,
+    const glm::quat&           pinned_local,
+    int                        samples_per_curve,
+    Ik_swing_boundary&         boundary
+);
+
+// The components of a local rotation in the terms of the constraint: the
+// swing (relative to rest_rotation, canonical w >= 0), and the twist angle
+// about twist_axis in radians. Requires constraint.twist_axis >= 0.
+class Ik_rotation_components
+{
+public:
+    glm::quat swing{1.0f, 0.0f, 0.0f, 0.0f};
+    float     twist_angle{0.0f};
+};
+
+[[nodiscard]] auto decompose_ik_rotation(const Ik_joint_constraint& constraint, const glm::quat& local) -> Ik_rotation_components;
+
+// True when local lies inside the authored limits of the constraint, allowing
+// tolerance in the clamp space (sin of half-angles). Locks are not tested:
+// a lock pins the drag-start value, which has no authored value to compare to.
+[[nodiscard]] auto is_ik_rotation_within_limits(const Ik_joint_constraint& constraint, const glm::quat& local, float tolerance) -> bool;
+
+// Test access to the clamp itself (constrain_local_rotation() in
+// ik_solver.cpp): the rotation the constrained solve would write for
+// candidate_local, starting from start_local.
+[[nodiscard]] auto constrain_ik_local_rotation(
+    const Ik_joint_constraint& constraint,
+    const glm::quat&           start_local,
+    const glm::quat&           candidate_local
+) -> glm::quat;
+
 } // namespace editor
