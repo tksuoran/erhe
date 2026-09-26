@@ -85,6 +85,7 @@ class Icon_set;
 class Id_renderer;
 class Imgui_window_scene_views;
 class Inventory_window;
+class Input_bindings_store;
 class Input_state;
 class Jolt_debug_renderer;
 class Lattice_tool;
@@ -282,6 +283,7 @@ public:
     Hud*                               hud                  {nullptr};
     Icon_set*                          icon_set             {nullptr};
     Id_renderer*                       id_renderer          {nullptr};
+    Input_bindings_store*              input_bindings_store {nullptr};
     Input_state*                       input_state          {nullptr};
     Inventory_window*                  inventory_window     {nullptr};
     Lattice_tool*                      lattice_tool         {nullptr};

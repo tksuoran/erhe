@@ -402,6 +402,11 @@ private:
     auto action_key_press                     (const nlohmann::json& args) -> std::string;
     auto action_type_text                     (const nlohmann::json& args) -> std::string;
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
+
+    // Input binding overrides (src/editor/mcp/mcp_server_input_bindings.cpp).
+    auto query_input_bindings                 (const nlohmann::json& args) -> std::string;
+    auto action_set_command_bindings          (const nlohmann::json& args) -> std::string;
+    auto action_reset_command_bindings        (const nlohmann::json& args) -> std::string;
     auto query_transform_handles              (const nlohmann::json& args) -> std::string;
     auto query_transform_rotation             (const nlohmann::json& args) -> std::string;
 

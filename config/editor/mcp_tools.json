@@ -7684,6 +7684,60 @@
     "name": "get_input_state"
   },
   {
+    "description": "List every user-bindable editor command with its input kind (button, drag, wheel, motion, axis), its default bindings, its effective bindings, whether the user has overridden them, and the other commands its bindings overlap with. Bindings use the erhe::commands::Binding_desc text form, e.g. 'key:ctrl+x', 'key:any+w:any', 'mouse_drag:alt+right', 'mouse_wheel:any'.",
+    "inputSchema": {
+      "properties": {
+        "filter": {
+          "description": "Only commands whose name contains this substring",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_input_bindings"
+  },
+  {
+    "description": "Replace all bindings of one command with the given list (an empty list unbinds it), exactly as the Input Bindings window does, and save config/editor/input_bindings.json (not in an AI-driven run). Every binding must match the command's input kind. The change takes effect at the start of the next editor frame.",
+    "inputSchema": {
+      "properties": {
+        "command": {
+          "description": "Command name from list_input_bindings",
+          "type": "string"
+        },
+        "bindings": {
+          "description": "Binding strings: <kind>[:<chord>][:<trigger>]; kind key, mouse_button, mouse_drag, mouse_wheel, mouse_motion, controller_axis, controller_button; chord [ctrl+][shift+][alt+][super+]<input> or any+<input> to ignore modifiers; trigger released or any (default pressed)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "bindings"
+      ],
+      "type": "object"
+    },
+    "name": "set_command_bindings"
+  },
+  {
+    "description": "Reset one command (or all commands) to the default bindings its code declares and save config/editor/input_bindings.json (not in an AI-driven run).",
+    "inputSchema": {
+      "properties": {
+        "command": {
+          "description": "Command name from list_input_bindings",
+          "type": "string"
+        },
+        "all": {
+          "description": "Reset every command",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "reset_command_bindings"
+  },
+  {
     "description": "Click a mouse button at a point in the editor window: the pointer moves there, settles for a few frames (the hover a click acts on is computed once per frame), then the button is pressed and released without moving - a move between press and release would make it a drag. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
     "inputSchema": {
       "properties": {

@@ -210,6 +210,8 @@ erhe_target_sources_grouped(
     GenerateIconFontCppHeaders.py
     init_status_display.cpp
     init_status_display.hpp
+    input_bindings_store.cpp
+    input_bindings_store.hpp
     geometry_graph/geometry_graph.cpp
     geometry_graph/geometry_graph.hpp
     geometry_graph/geometry_graph_mesh.cpp
@@ -337,6 +339,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_assets.cpp
     mcp/mcp_server_file_io.cpp
     mcp/mcp_server_graphs.cpp
+    mcp/mcp_server_input_bindings.cpp
     mcp/mcp_server_material.cpp
     mcp/mcp_server_properties.cpp
     mcp/mcp_server_mesh_components.cpp
@@ -990,6 +993,12 @@ set(_config_sources
     ${_config_out}/user_state_config.hpp
     ${_config_out}/user_state_config_serialization.hpp
     ${_config_out}/user_state_config.cpp
+    ${_config_out}/input_binding_override.hpp
+    ${_config_out}/input_binding_override_serialization.hpp
+    ${_config_out}/input_binding_override.cpp
+    ${_config_out}/input_bindings_config.hpp
+    ${_config_out}/input_bindings_config_serialization.hpp
+    ${_config_out}/input_bindings_config.cpp
     ${_config_out}/property_group_state.hpp
     ${_config_out}/property_group_state_serialization.hpp
     ${_config_out}/property_group_state.cpp

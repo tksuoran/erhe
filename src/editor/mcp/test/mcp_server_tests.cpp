@@ -4606,6 +4606,95 @@ TEST_F(Mcp_test, key_press_runs_the_bound_undo_command)
     advance_frames(client, 2);
 }
 
+// A user binding override replaces the default bindings of a command: after
+// rebinding Undo to Ctrl+U, Ctrl+U undoes and Ctrl+Z no longer does. The
+// reset restores Ctrl+Z.
+TEST_F(Mcp_test, set_command_bindings_replaces_the_default_chord)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result listed = client.call_tool("list_input_bindings", json{{"filter", "undo"}});
+    ASSERT_FALSE(listed.is_error) << listed.text;
+    json undo_entry;
+    for (const json& entry : listed.payload["commands"]) {
+        if (entry.value("command", std::string{}) == "undo") {
+            undo_entry = entry;
+        }
+    }
+    ASSERT_FALSE(undo_entry.is_null()) << listed.payload.dump();
+    EXPECT_EQ(undo_entry.value("input_kind", std::string{}), "button");
+    EXPECT_FALSE(undo_entry.value("modified", true));
+    ASSERT_EQ(undo_entry["defaults"], json::array({"key:ctrl+z"})) << undo_entry.dump();
+
+    Mcp_client::Tool_result wrong_kind = client.call_tool("set_command_bindings", json{
+        {"command",  "undo"},
+        {"bindings", json::array({"mouse_drag:left"})}
+    });
+    EXPECT_TRUE(wrong_kind.is_error) << "a drag binding was accepted for a button command";
+
+    // Restores the default binding even when an assertion ends the case
+    // early, so the other cases keep Ctrl+Z.
+    class Reset_undo_bindings
+    {
+    public:
+        explicit Reset_undo_bindings(Mcp_client& client) : m_client{client} {}
+        ~Reset_undo_bindings() { m_client.call_tool("reset_command_bindings", json{{"command", "undo"}}); }
+    private:
+        Mcp_client& m_client;
+    };
+    const Reset_undo_bindings reset_guard{client};
+
+    Mcp_client::Tool_result rebound = client.call_tool("set_command_bindings", json{
+        {"command",  "undo"},
+        {"bindings", json::array({"key:ctrl+u"})}
+    });
+    ASSERT_FALSE(rebound.is_error) << rebound.text;
+    advance_frames(client, 2);
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport to aim the pointer at";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "binding override test box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000)) << "create_shape did not settle";
+    Mcp_client::Tool_result moved = client.call_tool("inject_input_events", json{
+        {"events", json::array({pointer_into_viewport(viewport, 0)})}
+    });
+    ASSERT_FALSE(moved.is_error) << moved.text;
+    advance_frames(client, 2);
+
+    std::size_t undo_before = 0;
+    std::size_t redo_before = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_before, redo_before));
+    ASSERT_GT(undo_before, 0u) << "nothing on the undo stack to undo";
+
+    client.call_tool("key_press", json{{"key", "z"}, {"modifiers", json::array({"ctrl"})}});
+    advance_frames(client, 3);
+    std::size_t undo_after_z = 0;
+    std::size_t redo_after_z = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_after_z, redo_after_z));
+    EXPECT_EQ(undo_after_z, undo_before) << "Ctrl+Z still undoes after the rebind";
+
+    client.call_tool("key_press", json{{"key", "u"}, {"modifiers", json::array({"ctrl"})}});
+    advance_frames(client, 3);
+    std::size_t undo_after_u = 0;
+    std::size_t redo_after_u = 0;
+    ASSERT_TRUE(undo_stack_sizes(client, undo_after_u, redo_after_u));
+    EXPECT_EQ(undo_after_u, undo_before - 1u) << "Ctrl+U did not undo";
+
+    Mcp_client::Tool_result reset = client.call_tool("reset_command_bindings", json{{"command", "undo"}});
+    ASSERT_FALSE(reset.is_error) << reset.text;
+    EXPECT_EQ(reset.payload["bindings"], json::array({"key:ctrl+z"})) << reset.payload.dump();
+
+    client.call_tool("redo", json::object());
+    advance_frames(client, 2);
+}
+
 // type_text splits into text events that fit one Text_event, on UTF-8
 // boundaries, and the gesture runs to completion.
 TEST_F(Mcp_test, type_text_splits_into_text_events)

@@ -640,6 +640,9 @@ use.
 | `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus |
 | `inject_input_events` | `events` | Raw `erhe::window::Input_event` values with per-event `frame` offsets |
 | `get_input_state` | - | Injected pointer position, held buttons, modifiers, the stepping gesture |
+| `list_input_bindings` | `filter` | Per user-bindable command: input kind, default and effective bindings, `modified`, conflicts (`doc/editor/input_bindings.md`) |
+| `set_command_bindings` | `command`, `bindings` | Replaces the command's bindings (`Binding_desc` text form, e.g. `key:ctrl+x`) |
+| `reset_command_bindings` | `command` or `all` | Back to the default bindings |
 | `get_transform_handles` | `viewport` | Per gizmo handle, a window point that picks it, its `handle_value`, the gizmo anchor and radius |
 
 ```bash

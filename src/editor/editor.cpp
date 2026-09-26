@@ -31,6 +31,7 @@
 #include "editor_default_layout.hpp"
 #include "editor_log.hpp"
 #include "editor_settings_store.hpp"
+#include "input_bindings_store.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
@@ -1427,6 +1428,7 @@ public:
 
         try {
             m_commands          = std::make_unique<erhe::commands::Commands      >();
+            m_input_bindings_store = std::make_unique<Input_bindings_store       >(*m_commands.get());
             m_app_message_bus   = std::make_unique<App_message_bus               >();
             m_app_settings.read(m_editor_settings.headset.openxr);
             m_input_state       = std::make_unique<Input_state                   >();
@@ -2503,6 +2505,10 @@ public:
 
         fill_app_context();
 
+        // Every part has registered its commands and declared its default
+        // bindings; apply the user's overrides on top.
+        m_input_bindings_store->load();
+
         // Register Scene_builder's template palette brushes with the asset
         // manager as builtin-scope assets ({builtin, brush, <name>}). The
         // palette names are a persistence contract from here on (see the
@@ -2969,6 +2975,7 @@ public:
         m_app_context.hud                      = m_hud                   .get();
         m_app_context.icon_set                 = m_icon_set              .get();
         m_app_context.id_renderer              = m_id_renderer           .get();
+        m_app_context.input_bindings_store     = m_input_bindings_store  .get();
         m_app_context.input_state              = m_input_state           .get();
         m_app_context.inventory_window         = m_inventory_window      .get();
         m_app_context.lattice_tool             = m_lattice_tool          .get();
@@ -4089,6 +4096,7 @@ public:
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;
+    std::unique_ptr<Input_bindings_store          > m_input_bindings_store;
     std::unique_ptr<App_message_bus               > m_app_message_bus;
     std::unique_ptr<Input_state                   > m_input_state;
     std::unique_ptr<Time                          > m_time;

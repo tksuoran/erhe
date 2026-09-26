@@ -234,6 +234,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/graph_texture.md](editor/graph_texture.md) (mostly stable): Texture node graph as a first-class Graph_texture asset
 - [editor/graphics.md](editor/graphics.md) (stable): Editor-level graphics utilities: icon management, thumbnail generation, and gradient textures
 - [editor/import_undo_reference_clearing.md](editor/import_undo_reference_clearing.md) (mostly stable): Clearing stale editor references after an undo removes imported content
+- [editor/input_bindings.md](editor/input_bindings.md) (mostly stable): User-editable input bindings: persistence in input_bindings.json, MCP tools
 - [editor/lattice_deform_geometry_node.md](editor/lattice_deform_geometry_node.md) (mostly stable): Lattice free-form deformation geometry-graph node
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
