@@ -102,10 +102,57 @@ void add_translation_axes(const Physics_joint_line_input& input, const Physics_j
     }
 }
 
-// Points on the sphere of radius `radius` about frame A's origin.
-[[nodiscard]] auto frame_a_point(const Physics_joint_line_input& input, const vec3 direction_in_a, const float radius) -> vec3
+// The rotation limits are drawn as where the constrained body's ARM can go:
+// the vector from the joint pivot to body A's center, held in frame A. At
+// the relative rotation q = inverse(frame A) * frame B, frame A is
+// frame B * inverse(q), so a limit rotation q puts the arm at
+// frame_b * inverse(q) * arm. The limits are thereby drawn fixed to frame B
+// (the anchor side), centered on the body however the joint frames are
+// oriented, and the current arm is the spoke to the body's center.
+
+[[nodiscard]] auto rotation_of(const glm::mat3& basis) -> quat
 {
-    return input.frame_a.origin + (input.frame_a.basis * direction_in_a) * radius;
+    return glm::normalize(glm::quat_cast(basis));
+}
+
+// The arm the swing limits sweep, in frame A: the body arm, or - when the
+// body center sits on the pivot and there is no arm - the twist axis at the
+// visual size, which is the frame axis the swing limits move.
+[[nodiscard]] auto swing_arm(const Physics_joint_line_input& input) -> vec3
+{
+    if (input.arm_in_a.has_value() && (glm::length(input.arm_in_a.value()) > (0.05f * input.size))) {
+        return input.arm_in_a.value();
+    }
+    return unit_axis(input.shape.twist_axis) * input.size;
+}
+
+// The vector the twist limit sweeps, in frame A: the part of the body arm
+// across the twist axis, or a frame axis across it when the arm runs along
+// the twist axis (a twist does not move such an arm).
+[[nodiscard]] auto twist_arm(const Physics_joint_line_input& input) -> vec3
+{
+    const vec3 e_t = unit_axis(input.shape.twist_axis);
+    if (input.arm_in_a.has_value()) {
+        const vec3 arm    = input.arm_in_a.value();
+        const vec3 across = arm - (e_t * glm::dot(arm, e_t));
+        if (glm::length(across) > (0.05f * input.size)) {
+            return across;
+        }
+    }
+    const std::array<int, 2> swing_axes = erhe::physics::get_swing_axes(input.shape.twist_axis);
+    return unit_axis(swing_axes[0]) * (0.6f * input.size);
+}
+
+// Where arm (in frame A) lands when the joint is at relative rotation q.
+[[nodiscard]] auto arm_point(const Physics_joint_line_input& input, const quat& q, const vec3 arm) -> vec3
+{
+    return input.frame_b.origin + (rotation_of(input.frame_b.basis) * (glm::inverse(q) * arm));
+}
+
+// Where arm is now: carried by frame A.
+[[nodiscard]] auto current_arm_point(const Physics_joint_line_input& input, const vec3 arm) -> vec3
+{
+    return input.frame_a.origin + (rotation_of(input.frame_a.basis) * arm);
 }
 
 void add_pyramid_swing(const Physics_joint_line_input& input, const Physics_joint_colors& colors, Joint_line_buffer& buffer)
@@ -115,26 +162,30 @@ void add_pyramid_swing(const Physics_joint_line_input& input, const Physics_join
     const bool free_0 = !shape.swing[0].limited;
     const bool free_1 = !shape.swing[1].limited;
     if (free_0 && free_1) {
-        return; // the twist axis may point anywhere
+        return; // the arm may point anywhere the twist leaves it
     }
     if (is_fixed(shape.swing[0]) && is_fixed(shape.swing[1])) {
-        return; // no swing: the current-swing spoke alone shows the axis
+        return; // no swing: the current-arm spoke alone shows the arm
     }
     const std::array<float, 2> range_0 = angle_range(shape.swing[0]);
     const std::array<float, 2> range_1 = angle_range(shape.swing[1]);
-    const int   segments = std::max(1, style.arc_segments);
-    const float radius   = input.size;
+    const int  segments = std::max(1, style.arc_segments);
+    const vec3 arm      = swing_arm(input);
+    const auto point_at = [&](const float a0, const float a1) -> vec3 {
+        return arm_point(input, erhe::physics::pyramid_swing_rotation(shape.twist_axis, a0, a1), arm);
+    };
 
-    // An edge of the angle rectangle: one swing angle held at `held`, the
-    // other swept over its range.
+    // An edge of the swing angle rectangle: one swing angle held at `held`,
+    // the other swept over its range.
     const auto add_edge = [&](const int held_k, const float held, const std::array<float, 2>& swept) {
+        if (swept[1] <= swept[0]) {
+            return; // sweeping a fixed axis: the edge is a single point
+        }
         vec3 previous{0.0f};
         for (int i = 0; i <= segments; ++i) {
             const float t     = static_cast<float>(i) / static_cast<float>(segments);
             const float sweep = swept[0] + ((swept[1] - swept[0]) * t);
-            const float a0    = (held_k == 0) ? held : sweep;
-            const float a1    = (held_k == 0) ? sweep : held;
-            const vec3  p     = frame_a_point(input, erhe::physics::pyramid_swing_direction(shape.twist_axis, a0, a1), radius);
+            const vec3  p     = (held_k == 0) ? point_at(held, sweep) : point_at(sweep, held);
             if (i > 0) {
                 add_line(buffer, previous, p, colors.limit, style.line_width);
             }
@@ -157,7 +208,7 @@ void add_pyramid_swing(const Physics_joint_line_input& input, const Physics_join
     if (!free_0 && !free_1) {
         for (const float a0 : range_0) {
             for (const float a1 : range_1) {
-                add_line(buffer, input.frame_a.origin, frame_a_point(input, erhe::physics::pyramid_swing_direction(shape.twist_axis, a0, a1), radius), colors.limit, style.thin_line_width);
+                add_line(buffer, input.frame_b.origin, point_at(a0, a1), colors.limit, style.thin_line_width);
             }
         }
     }
@@ -171,22 +222,21 @@ void add_cone_swing(const Physics_joint_line_input& input, const Physics_joint_c
     }
     const Joint_line_style&  style      = input.style;
     const std::array<int, 2> swing_axes = erhe::physics::get_swing_axes(shape.twist_axis);
-    const vec3  e_t = unit_axis(shape.twist_axis);
-    const vec3  e_a = unit_axis(swing_axes[0]);
-    const vec3  e_b = unit_axis(swing_axes[1]);
-    const float c   = std::cos(shape.cone.max);
-    const float s   = std::sin(shape.cone.max);
+    const vec3  e_a      = unit_axis(swing_axes[0]);
+    const vec3  e_b      = unit_axis(swing_axes[1]);
+    const vec3  arm      = swing_arm(input);
     const int   segments = std::max(4, 4 * (style.arc_segments / 4));
     vec3 previous{0.0f};
     for (int i = 0; i <= segments; ++i) {
-        const float phi       = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
-        const vec3  direction = (e_t * c) + (((e_a * std::cos(phi)) + (e_b * std::sin(phi))) * s);
-        const vec3  p         = frame_a_point(input, direction, input.size);
+        // A swing of the cone's half-angle about an axis across the twist axis.
+        const float phi   = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segments);
+        const quat  swing = glm::angleAxis(shape.cone.max, (e_a * std::cos(phi)) + (e_b * std::sin(phi)));
+        const vec3  p     = arm_point(input, swing, arm);
         if (i > 0) {
             add_line(buffer, previous, p, colors.limit, style.line_width);
         }
         if ((i % (segments / 4)) == 0) {
-            add_line(buffer, input.frame_a.origin, p, colors.limit, style.thin_line_width);
+            add_line(buffer, input.frame_b.origin, p, colors.limit, style.thin_line_width);
         }
         previous = p;
     }
@@ -196,21 +246,15 @@ void add_twist(const Physics_joint_line_input& input, const Physics_joint_colors
 {
     const erhe::physics::Joint_limit_shape& shape = input.shape;
     const Joint_line_style&                 style = input.style;
-    const std::array<int, 2> swing_axes = erhe::physics::get_swing_axes(shape.twist_axis);
-    const vec3  e_t    = unit_axis(shape.twist_axis);
-    const vec3  e_ref  = unit_axis(swing_axes[0]);
-    const float radius = 0.6f * input.size;
-    const vec3  origin = input.frame_b.origin;
-    // frame B = frame A * swing * twist, so frame B turned back by the twist
-    // is frame A * swing: the frame the twist angle is measured in.
-    const quat  q_b    = glm::normalize(glm::quat_cast(input.frame_b.basis));
-    const quat  q_zero = q_b * glm::angleAxis(-input.coordinates.twist, e_t);
-    const auto  point_at = [&](const float angle) -> vec3 {
-        return origin + (q_zero * (glm::angleAxis(angle, e_t) * e_ref)) * radius;
-    };
     if (is_fixed(shape.twist)) {
         return;
     }
+    const vec3 e_t      = unit_axis(shape.twist_axis);
+    const vec3 arm      = twist_arm(input);
+    const vec3 origin   = input.frame_b.origin;
+    const auto point_at = [&](const float angle) -> vec3 {
+        return arm_point(input, glm::angleAxis(angle, e_t), arm);
+    };
     const std::array<float, 2> range = angle_range(shape.twist);
     const int   segments = std::max(1, style.arc_segments);
     const vec4& color    = shape.twist.limited ? colors.limit : colors.free;
@@ -228,7 +272,7 @@ void add_twist(const Physics_joint_line_input& input, const Physics_joint_colors
         add_line(buffer, origin, point_at(range[0]), colors.limit, style.thin_line_width);
         add_line(buffer, origin, point_at(range[1]), colors.limit, style.thin_line_width);
     }
-    add_line(buffer, origin, point_at(input.coordinates.twist), value_color(input, input.range_check.twist_ok), style.line_width);
+    add_line(buffer, origin, current_arm_point(input, arm), value_color(input, input.range_check.twist_ok), style.line_width);
 }
 
 } // anonymous namespace
@@ -268,15 +312,15 @@ void build_physics_joint_lines(const Physics_joint_line_input& input, Joint_line
     } else {
         add_cone_swing(input, colors, buffer);
     }
-    // Current swing: frame B's twist axis.
+    // Current swing: where the arm is now.
     const bool swing_movable =
         (input.shape.swing_model == erhe::physics::Swing_limit_model::cone) ||
         !is_fixed(input.shape.swing[0]) || !is_fixed(input.shape.swing[1]);
     if (swing_movable) {
         add_line(
             buffer,
-            input.frame_a.origin,
-            input.frame_a.origin + (input.frame_b.basis[input.shape.twist_axis] * input.size),
+            input.frame_b.origin,
+            current_arm_point(input, swing_arm(input)),
             value_color(input, input.range_check.swing_ok),
             style.line_width
         );

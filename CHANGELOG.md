@@ -23,7 +23,7 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::physics`: `get_enforced_joint_limits()`, `Joint_limit_shape`,
   `Swing_limit_model`, `Joint_coordinates`, `measure_joint_coordinates()`,
   `Joint_range_check`, `check_joint_range()`, `is_within()`,
-  `get_swing_axes()` and `pyramid_swing_direction()`
+  `get_swing_axes()`, `pyramid_swing_rotation()` and `pyramid_swing_direction()`
   (`erhe_physics/joint_limits.hpp`): the six-DOF limits the built backend
   enforces, and the current joint coordinates measured in its convention.
 - `erhe::renderer`: `View::pixel_scale`, physical pixels per logical pixel of

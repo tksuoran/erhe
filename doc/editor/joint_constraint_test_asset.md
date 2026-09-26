@@ -23,15 +23,17 @@ below it; the joint joins a `Hinge` anchor under the box to a `Pivot` anchor
 under the post. Orange lines are enforced limits, grey thin lines free axes,
 white spokes the current values (red when out of range), magenta limits the
 backend enforces differently from how they were authored, and a grey
-dimmed station has no live constraint.
+dimmed station has no live constraint. The rotation limits are drawn as
+where the box can go (the arm from the pivot to the box), fixed to the post,
+so a hinge's sector hangs through its box on both backends.
 
 | Key | Station | Settings | Look for |
 |---|---|---|---|
-| P01 | Hinge limited | rotation Z +-0.785, rest fixed | a 90 degree arc (Jolt: the swing of frame B's X axis; Box3D: a twist arc about Z) |
-| P02 | Hinge free | rotation Z free, rest fixed | a full thin circle |
-| P03 | Hinge asymmetric | rotation Z -0.3 .. 1.2 | an arc offset to one side |
-| P04 | Ball limited | all rotations +-0.5 | Jolt: pyramid swing + twist arc; Box3D: cone + twist, magenta |
-| P05 | Swing pyramid asymmetric | X fixed, Y -0.2 .. 0.8, Z -0.6 .. 0.3 | Jolt: an off-center pyramid; Box3D: magenta cone |
+| P01 | Hinge limited | rotation Z +-0.785, rest fixed | a 90 degree sector hanging below the post, through the box |
+| P02 | Hinge free | rotation Z free, rest fixed | a full thin circle through the box |
+| P03 | Hinge asymmetric | rotation Z -0.3 .. 1.2 | a sector through the box reaching further to one side |
+| P04 | Ball limited | all rotations +-0.5 | arcs through the box in the two planes the arm swings in; Box3D magenta (a cone about Z) |
+| P05 | Swing pyramid asymmetric | X fixed, Y -0.2 .. 0.8, Z -0.6 .. 0.3 | Jolt: an off-center sector through the box; Box3D: magenta, the cone about Z traced by the hanging arm (a fan with two small lobes at the box) |
 | P06 | Ball free | rotations free | frames only, no limit geometry |
 | P07 | Slider Y limited | Y -0.3 .. 0.1, rest fixed | a vertical segment with end ticks |
 | P08 | Slider X free | X free, rest fixed | a thin horizontal line |

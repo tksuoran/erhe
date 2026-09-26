@@ -4,6 +4,7 @@
 #include "erhe_physics/transform.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <array>
 
@@ -96,6 +97,12 @@ public:
     float                    linear_tolerance,
     float                    angular_tolerance
 ) -> Joint_range_check;
+
+// The swing rotation of the pyramid swing angles (angle_0, angle_1) about
+// swing_axes(twist_axis): the swing Jolt rebuilds from clamped half-angles,
+// q = (sin(a0/2) cos(a1/2), cos(a0/2) sin(a1/2), cos(a0/2) cos(a1/2)) placed
+// on the swing axes, normalized. A relative rotation q_swing * q_twist.
+[[nodiscard]] auto pyramid_swing_rotation(int twist_axis, float angle_0, float angle_1) -> glm::quat;
 
 // Direction of F_b's twist axis, in F_a, for the pyramid swing angles
 // (angle_0, angle_1) about swing_axes(twist_axis): the swing Jolt rebuilds

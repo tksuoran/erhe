@@ -119,7 +119,7 @@ auto check_joint_range(
     return check;
 }
 
-auto pyramid_swing_direction(const int twist_axis, const float angle_0, const float angle_1) -> glm::vec3
+auto pyramid_swing_rotation(const int twist_axis, const float angle_0, const float angle_1) -> glm::quat
 {
     // A half-angle pair of (pi / 2, pi / 2) has no swing quaternion; stay
     // just inside it.
@@ -134,10 +134,14 @@ auto pyramid_swing_direction(const int twist_axis, const float angle_0, const fl
     glm::vec3 vector{0.0f};
     vector[swing_axes[0]] = s0 * c1;
     vector[swing_axes[1]] = c0 * s1;
-    const glm::quat swing = glm::normalize(glm::quat{c0 * c1, vector.x, vector.y, vector.z});
+    return glm::normalize(glm::quat{c0 * c1, vector.x, vector.y, vector.z});
+}
+
+auto pyramid_swing_direction(const int twist_axis, const float angle_0, const float angle_1) -> glm::vec3
+{
     glm::vec3 axis{0.0f};
     axis[twist_axis] = 1.0f;
-    return swing * axis;
+    return pyramid_swing_rotation(twist_axis, angle_0, angle_1) * axis;
 }
 
 } // namespace erhe::physics

@@ -57,12 +57,22 @@ def advance(client, frames=3):
 
 
 def load_asset(client):
-    before = {scene["name"] for scene in client.call("list_scenes")["scenes"]}
+    # Scenes are addressed by name, so an already open copy of the asset is
+    # closed first; the fresh one is then the only scene of that name.
+    stem = os.path.splitext(os.path.basename(ASSET_PATH))[0]
+    for scene in client.call("list_scenes")["scenes"]:
+        if scene["name"] == stem:
+            client.call("close_scene", {"scene_name": scene["name"]})
+    deadline = time.monotonic() + 30.0
+    while any(scene["name"] == stem for scene in client.call("list_scenes")["scenes"]) and (time.monotonic() < deadline):
+        advance(client, 2)
+    # By id: the asset may already be open, and the new copy has its name.
+    before = {scene["id"] for scene in client.call("list_scenes")["scenes"]}
     client.call("load_scene", {"path": ASSET_PATH})
     deadline = time.monotonic() + 180.0
     while time.monotonic() < deadline:
         advance(client, 2)
-        fresh = [scene["name"] for scene in client.call("list_scenes")["scenes"] if scene["name"] not in before]
+        fresh = [scene["name"] for scene in client.call("list_scenes")["scenes"] if scene["id"] not in before]
         if fresh:
             client.call("set_active_scene", {"scene_name": fresh[0]})
             advance(client, 6)

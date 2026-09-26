@@ -67,6 +67,11 @@ public:
     erhe::physics::Transform           frame_b{};         // anchor frame on body B, or the world anchor
     std::optional<glm::vec3>           body_a_origin{};   // unset: no body link drawn
     std::optional<glm::vec3>           body_b_origin{};
+    // The constrained body's arm: body A's center relative to the joint
+    // pivot, in frame A. The rotation limits are drawn as where this arm can
+    // go, fixed to frame B; unset (or too short) draws them with the frame
+    // axis the limit moves instead.
+    std::optional<glm::vec3>           arm_in_a{};
     erhe::physics::Joint_limit_shape   shape{};           // the limits the backend enforces
     erhe::physics::Joint_coordinates   coordinates{};     // measure_joint_coordinates(frame_a, frame_b, shape)
     erhe::physics::Joint_range_check   range_check{};
@@ -77,11 +82,12 @@ public:
 
 // Appends one physics joint: axis triads at both frames (B's shorter), body
 // links, translation axes along frame A (free: thin line, limited: segment
-// with end ticks, fixed: nothing) with a cross at frame B's origin, the swing
-// region the twist axis of frame B may point into (pyramid: the edges of the
-// angle rectangle; cone: a circle) with spokes to its corners, the twist
-// range arc about frame B's twist axis, and the current swing and twist as
-// spokes in the value or violation color.
+// with end ticks, fixed: nothing) with a cross at frame B's origin, and the
+// rotation limits as where the body's arm (arm_in_a) can go, fixed to
+// frame B: the swing boundary (pyramid: the edges of the swing angle
+// rectangle with spokes to its corners; cone: a circle with four spokes), the
+// twist range arc, and the current arm as spokes in the value or violation
+// color.
 void build_physics_joint_lines(const Physics_joint_line_input& input, Joint_line_buffer& buffer);
 
 // Everything one IK-constrained bone's visual needs

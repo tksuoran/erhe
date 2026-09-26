@@ -255,11 +255,21 @@ void Joint_constraint_visualization::physics_joints(
         if (!shown) {
             continue;
         }
+        // The arm the rotation limits are drawn with: body A's center (for a
+        // pending joint the mesh the first frame node sits in) from the
+        // pivot, in frame A.
+        const erhe::scene::Node* const arm_body = (state.body_node_a != nullptr)
+            ? state.body_node_a
+            : static_cast<const erhe::scene::Node*>(nearest_mesh(state.frame_node_0));
+        const std::optional<glm::vec3> arm_in_a = (arm_body != nullptr)
+            ? std::optional<glm::vec3>{glm::transpose(state.frame_a.basis) * (glm::vec3{arm_body->position_in_world()} - state.frame_a.origin)}
+            : std::optional<glm::vec3>{};
         Physics_joint_line_input input{
             .frame_a       = state.frame_a,
             .frame_b       = state.frame_b,
             .body_a_origin = (state.body_node_a != nullptr) ? std::optional<glm::vec3>{glm::vec3{state.body_node_a->position_in_world()}} : std::optional<glm::vec3>{},
             .body_b_origin = (state.body_node_b != nullptr) ? std::optional<glm::vec3>{glm::vec3{state.body_node_b->position_in_world()}} : std::optional<glm::vec3>{},
+            .arm_in_a      = arm_in_a,
             .shape         = state.shape,
             .coordinates   = state.coordinates,
             .range_check   = state.range_check,

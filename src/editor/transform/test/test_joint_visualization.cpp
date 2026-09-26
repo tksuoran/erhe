@@ -5,7 +5,9 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace {
 
@@ -122,6 +124,57 @@ TEST(Joint_visualization, limited_translation_is_a_segment_with_ticks)
     EXPECT_TRUE(found_segment);
     // The current translation cross (three lines) in the value color.
     EXPECT_EQ(3u, count_color(buffer, input.style.value_color));
+}
+
+// The two backends state a hinge about Z differently - Jolt as a pyramid
+// swing of the X twist axis about Z, Box3D as a twist about Z - but both
+// constrain the same motion, so with the body's arm given both draw the same
+// arc: centered on the arm, through the body, in the plane across Z.
+[[nodiscard]] auto limit_points(const editor::Physics_joint_line_input& input) -> std::vector<glm::vec3>
+{
+    Joint_line_buffer buffer;
+    editor::build_physics_joint_lines(input, buffer);
+    std::vector<glm::vec3> points;
+    for (const Joint_line& line : buffer.lines) {
+        if ((line.color == input.style.limit_color) && (line.width == input.style.line_width)) {
+            points.push_back(line.p0);
+            points.push_back(line.p1);
+        }
+    }
+    return points;
+}
+
+TEST(Joint_visualization, hinge_arc_follows_the_arm_on_both_conventions)
+{
+    const glm::vec3 arm{0.0f, -0.55f, 0.0f};
+
+    editor::Physics_joint_line_input jolt = make_hinge_input();
+    jolt.shape.twist    = ranged_axis(0.0f, 0.0f);
+    jolt.shape.swing    = {ranged_axis(0.0f, 0.0f), ranged_axis(-0.785f, 0.785f)};
+    jolt.arm_in_a       = arm;
+
+    editor::Physics_joint_line_input box3d = make_hinge_input();
+    box3d.shape.twist_axis = 2;
+    box3d.shape.twist      = ranged_axis(-0.785f, 0.785f);
+    box3d.shape.swing      = {ranged_axis(0.0f, 0.0f), ranged_axis(0.0f, 0.0f)};
+    box3d.arm_in_a         = arm;
+
+    for (const editor::Physics_joint_line_input* input : {&jolt, &box3d}) {
+        const std::vector<glm::vec3> points = limit_points(*input);
+        ASSERT_EQ(16u, points.size()); // 8 segments, both ends
+        float min_x = 1.0f;
+        float max_x = -1.0f;
+        for (const glm::vec3& p : points) {
+            EXPECT_NEAR(0.0f,  p.z,             c_tolerance);
+            EXPECT_NEAR(0.55f, glm::length(p),  c_tolerance);
+            EXPECT_LT(p.y, 0.0f); // below the pivot, around the hanging arm
+            min_x = std::min(min_x, p.x);
+            max_x = std::max(max_x, p.x);
+        }
+        // Symmetric about the arm: +-0.785 rad reaches +-0.55 sin(0.785).
+        EXPECT_NEAR(-0.55f * std::sin(0.785f), min_x, 1.0e-3f);
+        EXPECT_NEAR( 0.55f * std::sin(0.785f), max_x, 1.0e-3f);
+    }
 }
 
 TEST(Joint_visualization, ik_limits_draw_boundary_current_and_twist)
