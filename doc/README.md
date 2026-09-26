@@ -346,7 +346,6 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/graph_editor.md](plans/graph_editor.md) (proposed): Graph editor: remaining shared-layer work
 - [plans/graphics_tests.md](plans/graphics_tests.md) (proposed): Graphics tests: outstanding work
 - [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
-- [plans/input_bindings.md](plans/input_bindings.md) (proposed): User-editable, persistent input bindings
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)

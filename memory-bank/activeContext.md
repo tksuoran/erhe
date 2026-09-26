@@ -17,6 +17,7 @@ editor::Editor object lifetimes: part construction, scene-close + undo-removal r
 geometry::Geometry / geogram threading, geometry graph payload and pin rules
 build::CMake conventions and dependency gotchas (all platforms)
 windows::Windows-only build/clangd/VS-MCP/minidump facts
+input_bindings::User-editable persistent input bindings: Commands overrides, Input Bindings window, input_bindings.json, MCP tools (DONE 2026-09-26)
 
 [STATE]
 @branch::main{user-pushes-themselves}

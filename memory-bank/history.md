@@ -186,6 +186,12 @@ verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clea
 >fixed::0e53f6603-Box3D-pin-5643cd81{prismatic/weld-bodyB-awake-assert;sweep-16/16;physics-tests-97}
 ?open::Jolt-ball-joint-swing+twist-corner-separation{~15mm@2.6m/s;solver-iterations-tuning-is-user-decision}
 
+[2026-09-26::input-bindings]
+>added::erhe::commands-user-editable-bindings{defaults-recorded+per-command-overrides+lazy-rebuild+Binding_desc-text-form+conflicts+menu-shortcut-labels;unique-command-names-enforced;Button_trigger-on-key/mouse-button;fly-camera-12-press/release-commands->6-Any}
+>added::editor-Input_bindings_store{config/editor/input_bindings.json,gitignored,AI-run-skips}+Input_bindings_window+MCP-list_input_bindings/set_command_bindings/reset_command_bindings;doc/editor/input_bindings.md+doc/erhe/commands.md
+✓verify::erhe_commands_tests-14+Mcp_test.set_command_bindings+headless-UI-driving{capture,Delete-in-modal-safe,remove,reset}+non-AI-save/load-roundtrip{config/editor-restored}
+?open::user-interactive-check{windowed-capture-modal}
+
 ## 2026-09-04 archive of activeContext (superseded by property-system focus)
 §MBEL:5.0
 
