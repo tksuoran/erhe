@@ -31,6 +31,19 @@ references/settling_rock_piles.md.
   `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
   recreation that applies it.
 
+- A SAVED joint needs a body on both sides: glTF cannot store a
+  world-anchored joint (the exporter skips it with a warning), so hang
+  test pendulums from a static post body (creation 23).
+- `create_physics_joint_settings` axis lists are booleans; 0 / 1 integers
+  make the handler throw a JSON type error.
+- The physics export log's "N shapes" counts implicit shapes only; a convex
+  hull collider rides the mesh and round-trips fine with 0 shapes reported.
+- Jolt at its default solver iterations (10 velocity / 2 position): a ball
+  joint with swing AND twist limited separates at the pivot where both
+  limits engage together - ~15 mm at 2.6 m/s, ~28 mm at 3.7 m/s on a 1 kg
+  box on a 0.55 m arm (hinges hold within ~2 mm); stress impulses in
+  scripted checks stay near 1.3 m/s.
+
 ## Load-bearing motor rigs (creation 14 carries reference code)
 
 Rest-pose motor drives are strong enough to act as MUSCLES, not just

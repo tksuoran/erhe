@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` ... `creation_22_skin_test_boxes` (henge,
+`creation_1_conway_cathedral` ... `creation_23_joint_constraint_test` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
@@ -43,7 +43,10 @@ newtons cradle = five hinged dynamic spheres on a lossless physics
 material; the ball gap that makes momentum transfer work depends on the
 physics backend - see physics_rigs.md "Collision chains",
 skin test boxes = three boxes as one rigid-skinned mesh on a three-bone
-chain, built with the `create_skin` MCP tool and exported as a test asset).
+chain, built with the `create_skin` MCP tool and exported as a test asset,
+joint constraint test = one physics joint station / IK-limited chain per
+constraint kind, a test asset whose STATIONS / IK_CASES tables an automated
+verify script imports - see physics_rigs.md "Test assets").
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -437,6 +440,18 @@ file is read before any creation work:
   placement set since 2026-08-09 (rotation_xyzw, parent_node_id, name,
   scale number-or-array, mass, motion_mode incl. "none", brush_name) -
   identical to create_shape's instance parameters.
+
+## Test assets (creations 22-23)
+
+- An asset other scenes IMPORT is `c.export()`ed; an asset opened as a
+  scene that must keep erhe-only state (Ik.* values, joint prims' names and
+  `active`, library items) is `c.save()`d and opened with load_scene.
+- A new scene's library ships ~100 default brushes (~5.6 MB of geometry in
+  the file): when the asset's parts use `reuse=False` (no brushes of its
+  own), `delete_nodes names=["Brushes"]` before the save.
+- Keep the case tables at module level so a verify script imports them
+  (`scripts/joint_constraint_assets_verify.py` is the pattern) instead of
+  restating the cases.
 
 ## Open bugs (workarounds in place; fix only if asked)
 
