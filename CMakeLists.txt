@@ -1216,7 +1216,7 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
 elseif (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
     CPMAddPackage(
         NAME              box3d
-        GIT_TAG           c37cfe4cd78f555fcea4a10c7aed2ecf883a3271
+        GIT_TAG           5643cd81ff07fd0497e3bfcdf04f6425cc8a2e7f
         GITHUB_REPOSITORY erincatto/box3d
         DOWNLOAD_ONLY     YES
     )
