@@ -18,8 +18,14 @@ public:
     [[nodiscard]] auto get_menu_path() const -> const std::string&;
     [[nodiscard]] auto get_enabled() const -> bool;
 
+    // Display label of the command's first button binding (e.g. "Ctrl+X"),
+    // empty when it has none. Maintained by Commands when bindings change.
+    [[nodiscard]] auto get_shortcut_label() const -> const std::string&;
+    void set_shortcut_label(std::string_view label);
+
 private:
     std::string           m_menu_path;
+    std::string           m_shortcut_label;
     std::function<bool()> m_enabled_callback;
 };
 

@@ -87,6 +87,11 @@ public:
 
     [[nodiscard]] auto get_input_kind() const -> Input_kind;
 
+    // True when some input event would fire both bindings: same kind and
+    // code, modifier masks that can both match (equal, or either one empty)
+    // and overlapping triggers.
+    [[nodiscard]] auto overlaps(const Binding_desc& other) const -> bool;
+
     // Returns an empty optional when text is not a valid binding.
     [[nodiscard]] static auto parse(std::string_view text) -> std::optional<Binding_desc>;
 };

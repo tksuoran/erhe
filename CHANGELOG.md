@@ -13,6 +13,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   description of one binding with a compact text form (`to_string()`,
   `parse()`) and a display label (`to_display_string()`), plus
   `Binding_kind`, `Input_kind` and `get_input_kind()`.
+- `erhe::commands`: user-editable bindings on `Commands`:
+  `get_input_kind()`, `has_binding_override()`, `get_default_bindings()`,
+  `get_effective_bindings()`, `set_binding_override()`,
+  `clear_binding_override()`, `clear_all_binding_overrides()`,
+  `get_binding_overrides()`, `apply_binding_overrides()` and
+  `get_binding_conflicts()`, with the `Binding_override` and
+  `Binding_conflict` types; `Binding_desc::overlaps()`;
+  `Menu_binding::get_shortcut_label()` / `set_shortcut_label()`.
 - `erhe::window`: `keycode_from_string()` and `mouse_button_from_string()`,
   the inverses of `c_str(Keycode)` / `c_str(Mouse_button)`.
 
@@ -69,6 +77,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   added next to `Button_trigger`.
 - `erhe::commands`: `Commands::register_command()` requires a unique,
   non-empty command name and aborts on a duplicate.
+- `erhe::commands`: the key, mouse and controller `bind_command_to_*()` calls
+  declare default bindings; the dispatch tables (`get_key_bindings()`,
+  `get_mouse_bindings()`, ...) are rebuilt from defaults and overrides at the
+  start of the next `tick()` or by `sort_bindings()`, so they are empty until
+  then. Binding one command to inputs of two kinds (e.g. a key and a mouse
+  drag) aborts.
 
 ### Fixed
 

@@ -16,6 +16,10 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_xr/xr_action.hpp"
 
+#include <fmt/format.h>
+
+#include <algorithm>
+
 namespace erhe::commands {
 
 Commands::~Commands() noexcept
@@ -107,6 +111,7 @@ void Commands::bind_command_to_menu(Command* command, std::string_view menu_path
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_menu_bindings.emplace_back(command, menu_path, enabled_callback);
+    m_bindings_dirty = true; // shortcut label
 }
 
 void Commands::bind_command_to_key(
@@ -116,8 +121,10 @@ void Commands::bind_command_to_key(
     const std::optional<uint32_t> modifier_mask
 )
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_key_bindings.emplace_back(command, code, trigger, modifier_mask);
+    record_default_binding(
+        command,
+        Binding_desc{.kind = Binding_kind::key, .code = code, .modifier_mask = modifier_mask, .trigger = trigger}
+    );
 }
 
 void Commands::bind_command_to_mouse_button(
@@ -127,26 +134,20 @@ void Commands::bind_command_to_mouse_button(
     const std::optional<uint32_t>    modifier_mask
 )
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_mouse_bindings.push_back(
-        std::make_unique<Mouse_button_binding>(command, button, trigger, modifier_mask)
+    record_default_binding(
+        command,
+        Binding_desc{.kind = Binding_kind::mouse_button, .code = static_cast<int>(button), .modifier_mask = modifier_mask, .trigger = trigger}
     );
 }
 
 void Commands::bind_command_to_mouse_wheel(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_mouse_wheel_bindings.push_back(
-        std::make_unique<Mouse_wheel_binding>(command, modifier_mask)
-    );
+    record_default_binding(command, Binding_desc{.kind = Binding_kind::mouse_wheel, .modifier_mask = modifier_mask});
 }
 
 void Commands::bind_command_to_mouse_motion(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_mouse_bindings.push_back(
-        std::make_unique<Mouse_motion_binding>(command, modifier_mask)
-    );
+    record_default_binding(command, Binding_desc{.kind = Binding_kind::mouse_motion, .modifier_mask = modifier_mask});
 }
 
 void Commands::bind_command_to_mouse_drag(
@@ -156,16 +157,20 @@ void Commands::bind_command_to_mouse_drag(
     const std::optional<uint32_t>    modifier_mask
 )
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_mouse_bindings.push_back(
-        std::make_unique<Mouse_drag_binding>(command, button, call_on_button_down_without_motion, modifier_mask)
+    record_default_binding(
+        command,
+        Binding_desc{
+            .kind                                    = Binding_kind::mouse_drag,
+            .code                                    = static_cast<int>(button),
+            .modifier_mask                           = modifier_mask,
+            .drag_call_on_button_down_without_motion = call_on_button_down_without_motion
+        }
     );
 }
 
 void Commands::bind_command_to_controller_axis(Command* command, const int axis, std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_controller_axis_bindings.emplace_back(command, axis, modifier_mask);
+    record_default_binding(command, Binding_desc{.kind = Binding_kind::controller_axis, .code = axis, .modifier_mask = modifier_mask});
 }
 
 void Commands::bind_command_to_controller_button(
@@ -175,8 +180,379 @@ void Commands::bind_command_to_controller_button(
     const std::optional<uint32_t>    modifier_mask
 )
 {
+    record_default_binding(
+        command,
+        Binding_desc{.kind = Binding_kind::controller_button, .code = static_cast<int>(button), .modifier_mask = modifier_mask, .trigger = button_trigger}
+    );
+}
+
+void Commands::record_default_binding(Command* const command, const Binding_desc& desc)
+{
+    ERHE_VERIFY(command != nullptr);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_controller_button_bindings.emplace_back(command, button, button_trigger, modifier_mask);
+
+    // A command consumes one kind of input; its editable bindings (default
+    // and user) are all of that kind (doc/erhe/commands.md).
+    for (const Binding_entry& existing : m_default_bindings) {
+        if ((existing.command == command) && (existing.desc.get_input_kind() != desc.get_input_kind())) {
+            ERHE_FATAL(
+                "Command '%s' bound to both %s and %s input",
+                command->get_name(), c_str(existing.desc.get_input_kind()), c_str(desc.get_input_kind())
+            );
+        }
+    }
+    m_default_bindings.push_back(Binding_entry{.command = command, .desc = desc});
+    m_bindings_dirty = true;
+}
+
+void Commands::mark_bindings_changed(Command* const command)
+{
+    if (std::find(m_changed_commands.begin(), m_changed_commands.end(), command) == m_changed_commands.end()) {
+        m_changed_commands.push_back(command);
+    }
+    m_bindings_dirty = true;
+}
+
+auto Commands::find_override(const Command* const command) const -> const Command_override*
+{
+    for (const Command_override& entry : m_overrides) {
+        if (entry.command == command) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+auto Commands::get_input_kind_nolock(const Command& command) const -> Input_kind
+{
+    for (const Binding_entry& entry : m_default_bindings) {
+        if (entry.command == &command) {
+            return entry.desc.get_input_kind();
+        }
+    }
+    // A command offered only in a menu is a button command: any key or
+    // button can call it.
+    for (const Menu_binding& menu_binding : m_menu_bindings) {
+        if (menu_binding.get_command() == &command) {
+            return Input_kind::button;
+        }
+    }
+    return Input_kind::internal;
+}
+
+auto Commands::get_input_kind(const Command& command) const -> Input_kind
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    return get_input_kind_nolock(command);
+}
+
+auto Commands::has_binding_override(const Command& command) const -> bool
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    return find_override(&command) != nullptr;
+}
+
+void Commands::get_default_bindings(const Command& command, std::vector<Binding_desc>& out) const
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    out.clear();
+    for (const Binding_entry& entry : m_default_bindings) {
+        if (entry.command == &command) {
+            out.push_back(entry.desc);
+        }
+    }
+}
+
+void Commands::get_effective_bindings_nolock(const Command& command, std::vector<Binding_desc>& out) const
+{
+    out.clear();
+    const Command_override* const override_entry = find_override(&command);
+    if (override_entry != nullptr) {
+        out.insert(out.end(), override_entry->bindings.begin(), override_entry->bindings.end());
+        return;
+    }
+    for (const Binding_entry& entry : m_default_bindings) {
+        if (entry.command == &command) {
+            out.push_back(entry.desc);
+        }
+    }
+}
+
+void Commands::get_effective_bindings(const Command& command, std::vector<Binding_desc>& out) const
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    get_effective_bindings_nolock(command, out);
+}
+
+auto Commands::set_binding_override_nolock(Command& command, const std::span<const Binding_desc> bindings, std::string* const error) -> bool
+{
+    const Input_kind input_kind = get_input_kind_nolock(command);
+    if (input_kind == Input_kind::internal) {
+        if (error != nullptr) {
+            *error = fmt::format("command '{}' is not user-bindable", command.get_name());
+        }
+        return false;
+    }
+
+    // Command-owned drag semantics come from the command's default drag
+    // binding (Binding_desc::drag_call_on_button_down_without_motion).
+    bool drag_call_on_button_down_without_motion = false;
+    for (const Binding_entry& entry : m_default_bindings) {
+        if ((entry.command == &command) && (entry.desc.kind == Binding_kind::mouse_drag)) {
+            drag_call_on_button_down_without_motion = entry.desc.drag_call_on_button_down_without_motion;
+            break;
+        }
+    }
+
+    Command_override new_override{.command = &command, .bindings = {}};
+    for (const Binding_desc& desc : bindings) {
+        if (desc.get_input_kind() != input_kind) {
+            if (error != nullptr) {
+                *error = fmt::format(
+                    "binding '{}' is {} input, command '{}' takes {} input",
+                    desc.to_string(), c_str(desc.get_input_kind()), command.get_name(), c_str(input_kind)
+                );
+            }
+            return false;
+        }
+        if ((desc.kind == Binding_kind::mouse_button) && (desc.trigger == Button_trigger::Any)) {
+            if (error != nullptr) {
+                *error = fmt::format("binding '{}': a mouse button click cannot trigger on any", desc.to_string());
+            }
+            return false;
+        }
+        Binding_desc stored = desc;
+        stored.drag_call_on_button_down_without_motion = drag_call_on_button_down_without_motion;
+        new_override.bindings.push_back(stored);
+    }
+
+    for (Command_override& entry : m_overrides) {
+        if (entry.command == &command) {
+            entry.bindings = std::move(new_override.bindings);
+            mark_bindings_changed(&command);
+            return true;
+        }
+    }
+    m_overrides.push_back(std::move(new_override));
+    mark_bindings_changed(&command);
+    return true;
+}
+
+auto Commands::set_binding_override(Command& command, const std::span<const Binding_desc> bindings, std::string* const error) -> bool
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    return set_binding_override_nolock(command, bindings, error);
+}
+
+void Commands::clear_binding_override(Command& command)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    const auto i = std::find_if(
+        m_overrides.begin(),
+        m_overrides.end(),
+        [&command](const Command_override& entry) { return entry.command == &command; }
+    );
+    if (i == m_overrides.end()) {
+        return;
+    }
+    m_overrides.erase(i);
+    mark_bindings_changed(&command);
+}
+
+void Commands::clear_all_binding_overrides()
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    for (const Command_override& entry : m_overrides) {
+        mark_bindings_changed(entry.command);
+    }
+    m_overrides.clear();
+    m_unresolved_overrides.clear();
+}
+
+void Commands::get_binding_overrides(std::vector<Binding_override>& out) const
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    out.clear();
+    for (const Command_override& entry : m_overrides) {
+        out.push_back(Binding_override{.command_name = entry.command->get_name(), .bindings = entry.bindings});
+    }
+    out.insert(out.end(), m_unresolved_overrides.begin(), m_unresolved_overrides.end());
+}
+
+void Commands::apply_binding_overrides(const std::span<const Binding_override> overrides)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    for (const Command_override& entry : m_overrides) {
+        mark_bindings_changed(entry.command);
+    }
+    m_overrides.clear();
+    m_unresolved_overrides.clear();
+
+    for (const Binding_override& entry : overrides) {
+        Command* command = nullptr;
+        for (Command* const candidate : m_commands) {
+            if (entry.command_name == candidate->get_name()) {
+                command = candidate;
+                break;
+            }
+        }
+        if (command == nullptr) {
+            log_input->info("Binding override for unknown command '{}' kept as is", entry.command_name);
+            m_unresolved_overrides.push_back(entry);
+            continue;
+        }
+        std::string error;
+        if (!set_binding_override_nolock(*command, entry.bindings, &error)) {
+            log_input->warn("Binding override for '{}' dropped: {}", entry.command_name, error);
+        }
+    }
+}
+
+auto Commands::get_binding_conflicts() const -> const std::vector<Binding_conflict>&
+{
+    return m_binding_conflicts;
+}
+
+void Commands::add_dispatch_binding(Command* const command, const Binding_desc& desc)
+{
+    switch (desc.kind) {
+        case Binding_kind::key: {
+            m_key_bindings.emplace_back(command, desc.code, desc.trigger, desc.modifier_mask);
+            break;
+        }
+        case Binding_kind::mouse_button: {
+            m_mouse_bindings.push_back(
+                std::make_unique<Mouse_button_binding>(
+                    command, static_cast<erhe::window::Mouse_button>(desc.code), desc.trigger, desc.modifier_mask
+                )
+            );
+            break;
+        }
+        case Binding_kind::mouse_drag: {
+            m_mouse_bindings.push_back(
+                std::make_unique<Mouse_drag_binding>(
+                    command, static_cast<erhe::window::Mouse_button>(desc.code), desc.drag_call_on_button_down_without_motion, desc.modifier_mask
+                )
+            );
+            break;
+        }
+        case Binding_kind::mouse_motion: {
+            m_mouse_bindings.push_back(std::make_unique<Mouse_motion_binding>(command, desc.modifier_mask));
+            break;
+        }
+        case Binding_kind::mouse_wheel: {
+            m_mouse_wheel_bindings.push_back(std::make_unique<Mouse_wheel_binding>(command, desc.modifier_mask));
+            break;
+        }
+        case Binding_kind::controller_axis: {
+            m_controller_axis_bindings.emplace_back(command, desc.code, desc.modifier_mask);
+            break;
+        }
+        case Binding_kind::controller_button: {
+            m_controller_button_bindings.emplace_back(command, desc.code, desc.trigger, desc.modifier_mask);
+            break;
+        }
+        default: {
+            ERHE_FATAL("bad Binding_kind");
+        }
+    }
+}
+
+// Cold path: runs once after bindings were declared or edited, never in the
+// steady state.
+void Commands::rebuild_bindings_if_dirty()
+{
+    if (!m_bindings_dirty) {
+        return;
+    }
+    m_bindings_dirty = false;
+
+    // A command whose bindings changed must not stay mid-gesture on a binding
+    // that no longer exists.
+    for (Command* const command : m_changed_commands) {
+        if (m_active_mouse_command == command) {
+            m_active_mouse_command = nullptr;
+        }
+        const State state = command->get_command_state();
+        if ((state == State::Ready) || (state == State::Active)) {
+            command->set_inactive();
+        }
+    }
+    m_changed_commands.clear();
+
+    m_effective_bindings        .clear();
+    m_key_bindings              .clear();
+    m_mouse_bindings            .clear();
+    m_mouse_wheel_bindings      .clear();
+    m_controller_axis_bindings  .clear();
+    m_controller_button_bindings.clear();
+
+    // Declaration order is kept: key bindings dispatch in that order. An
+    // overridden command's bindings take the place of its first default.
+    std::vector<const Command*> emitted_overrides;
+    for (const Binding_entry& entry : m_default_bindings) {
+        const Command_override* const override_entry = find_override(entry.command);
+        if (override_entry == nullptr) {
+            add_dispatch_binding(entry.command, entry.desc);
+            m_effective_bindings.push_back(entry);
+            continue;
+        }
+        if (std::find(emitted_overrides.begin(), emitted_overrides.end(), entry.command) != emitted_overrides.end()) {
+            continue;
+        }
+        emitted_overrides.push_back(entry.command);
+        for (const Binding_desc& desc : override_entry->bindings) {
+            add_dispatch_binding(entry.command, desc);
+            m_effective_bindings.push_back(Binding_entry{.command = entry.command, .desc = desc});
+        }
+    }
+    // Overrides of commands without default bindings (menu-only commands).
+    for (const Command_override& override_entry : m_overrides) {
+        if (std::find(emitted_overrides.begin(), emitted_overrides.end(), override_entry.command) != emitted_overrides.end()) {
+            continue;
+        }
+        for (const Binding_desc& desc : override_entry.bindings) {
+            add_dispatch_binding(override_entry.command, desc);
+            m_effective_bindings.push_back(Binding_entry{.command = override_entry.command, .desc = desc});
+        }
+    }
+
+    update_binding_conflicts();
+    update_menu_shortcut_labels();
+
+    sort_mouse_bindings();
+    sort_mouse_wheel_bindings();
+    sort_controller_bindings();
+}
+
+void Commands::update_binding_conflicts()
+{
+    m_binding_conflicts.clear();
+    for (std::size_t i = 0, end = m_effective_bindings.size(); i < end; ++i) {
+        const Binding_entry& lhs = m_effective_bindings[i];
+        for (std::size_t j = i + 1; j < end; ++j) {
+            const Binding_entry& rhs = m_effective_bindings[j];
+            if ((lhs.command != rhs.command) && lhs.desc.overlaps(rhs.desc)) {
+                m_binding_conflicts.push_back(Binding_conflict{.command = lhs.command, .other_command = rhs.command, .binding = lhs.desc});
+                m_binding_conflicts.push_back(Binding_conflict{.command = rhs.command, .other_command = lhs.command, .binding = rhs.desc});
+            }
+        }
+    }
+}
+
+void Commands::update_menu_shortcut_labels()
+{
+    for (Menu_binding& menu_binding : m_menu_bindings) {
+        const Command* const command = menu_binding.get_command();
+        std::string label;
+        for (const Binding_entry& entry : m_effective_bindings) {
+            if ((entry.command == command) && (entry.desc.get_input_kind() == Input_kind::button)) {
+                label = entry.desc.to_display_string();
+                break;
+            }
+        }
+        menu_binding.set_shortcut_label(label);
+    }
 }
 
 void Commands::bind_command_to_xr_boolean_action(
@@ -207,86 +583,6 @@ void Commands::bind_command_to_update(Command* const command)
     m_update_bindings.emplace_back(command);
 }
 
-//void Commands::remove_command_binding(
-//    const erhe::Unique_id<Command_binding>::id_type binding_id
-//)
-//{
-//    std::lock_guard<std::mutex> lock{m_command_mutex};
-//
-//    m_key_bindings.erase(
-//        std::remove_if(
-//            m_key_bindings.begin(),
-//            m_key_bindings.end(),
-//            [binding_id](const Key_binding& binding) {
-//                return binding.get_id() == binding_id;
-//            }
-//        ),
-//        m_key_bindings.end()
-//    );
-//    m_mouse_bindings.erase(
-//        std::remove_if(
-//            m_mouse_bindings.begin(),
-//            m_mouse_bindings.end(),
-//            [binding_id](const std::unique_ptr<Mouse_binding>& binding) {
-//                return binding.get()->get_id() == binding_id;
-//            }
-//        ),
-//        m_mouse_bindings.end()
-//    );
-//    m_mouse_wheel_bindings.erase(
-//        std::remove_if(
-//            m_mouse_wheel_bindings.begin(),
-//            m_mouse_wheel_bindings.end(),
-//            [binding_id](const std::unique_ptr<Mouse_wheel_binding>& binding) {
-//                return binding.get()->get_id() == binding_id;
-//            }
-//        ),
-//        m_mouse_wheel_bindings.end()
-//    );
-//#if defined(ERHE_XR_LIBRARY_OPENXR)
-//    m_xr_boolean_bindings.erase(
-//        std::remove_if(
-//            m_xr_boolean_bindings.begin(),
-//            m_xr_boolean_bindings.end(),
-//            [binding_id](const Xr_boolean_binding& binding) {
-//                return binding.get_id() == binding_id;
-//            }
-//        ),
-//        m_xr_boolean_bindings.end()
-//    );
-//    m_xr_float_bindings.erase(
-//        std::remove_if(
-//            m_xr_float_bindings.begin(),
-//            m_xr_float_bindings.end(),
-//            [binding_id](const Xr_float_binding& binding) {
-//                return binding.get_id() == binding_id;
-//            }
-//        ),
-//        m_xr_float_bindings.end()
-//    );
-//    m_xr_vector2f_bindings.erase(
-//        std::remove_if(
-//            m_xr_vector2f_bindings.begin(),
-//            m_xr_vector2f_bindings.end(),
-//            [binding_id](const Xr_vector2f_binding& binding) {
-//                return binding.get_id() == binding_id;
-//            }
-//        ),
-//        m_xr_vector2f_bindings.end()
-//    );
-//#endif
-//    m_update_bindings.erase(
-//        std::remove_if(
-//            m_update_bindings.begin(),
-//            m_update_bindings.end(),
-//            [binding_id](const Update_binding& binding) {
-//                return binding.get_id() == binding_id;
-//            }
-//        ),
-//        m_update_bindings.end()
-//    );
-//}
-
 void Commands::command_inactivated(Command* const command)
 {
     // std::lock_guard<std::mutex> lock{m_command_mutex};
@@ -303,6 +599,8 @@ void Commands::tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>
     // log_input_frame->info("Commands::tick()");
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+
+    rebuild_bindings_if_dirty();
 
     //if (input_events.empty()) {
     //    SPDLOG_LOGGER_TRACE(log_input_frame, "Commands - no input events");
@@ -897,6 +1195,8 @@ auto Commands::on_xr_vector2f_event(const erhe::window::Input_event& input_event
 
 void Commands::sort_bindings()
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    rebuild_bindings_if_dirty();
     sort_mouse_bindings();
     sort_controller_bindings();
     sort_xr_bindings();

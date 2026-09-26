@@ -199,6 +199,29 @@ auto Binding_desc::operator==(const Binding_desc& other) const -> bool
         (trigger       == other.trigger      );
 }
 
+auto Binding_desc::overlaps(const Binding_desc& other) const -> bool
+{
+    if (kind != other.kind) {
+        return false;
+    }
+    if (has_input_code(kind) && (code != other.code)) {
+        return false;
+    }
+    if (modifier_mask.has_value() && other.modifier_mask.has_value() && (modifier_mask.value() != other.modifier_mask.value())) {
+        return false;
+    }
+    if (has_trigger(kind)) {
+        const bool trigger_overlap =
+            (trigger == Button_trigger::Any) ||
+            (other.trigger == Button_trigger::Any) ||
+            (trigger == other.trigger);
+        if (!trigger_overlap) {
+            return false;
+        }
+    }
+    return true;
+}
+
 auto Binding_desc::get_input_kind() const -> Input_kind
 {
     return erhe::commands::get_input_kind(kind);

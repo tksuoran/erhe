@@ -121,7 +121,8 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                 for (size_t i = 0, end = menu_path_entries.size(); i < end; ++i) {
                     const std::string& label = menu_path_entries[i];
                     if (i == end - 1) {
-                        activate = ImGui::MenuItem(label.c_str());
+                        const std::string& shortcut = menu_binding.get_shortcut_label();
+                        activate = ImGui::MenuItem(label.c_str(), shortcut.empty() ? nullptr : shortcut.c_str());
                     } else {
                         if (!ImGui::BeginMenu(label.c_str())) {
                             break;

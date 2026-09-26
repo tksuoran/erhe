@@ -17,6 +17,16 @@ auto Menu_binding::get_menu_path() const -> const std::string&
     return m_menu_path;
 }
 
+auto Menu_binding::get_shortcut_label() const -> const std::string&
+{
+    return m_shortcut_label;
+}
+
+void Menu_binding::set_shortcut_label(const std::string_view label)
+{
+    m_shortcut_label = label;
+}
+
 auto Menu_binding::get_enabled() const -> bool
 {
     if (m_enabled_callback) {

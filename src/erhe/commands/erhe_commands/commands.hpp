@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_commands/binding_desc.hpp"
 #include "erhe_commands/controller_axis_binding.hpp"
 #include "erhe_commands/controller_button_binding.hpp"
 #include "erhe_commands/key_binding.hpp"
@@ -18,7 +19,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace erhe::xr {
     class Xr_instance;
@@ -44,6 +48,33 @@ class Mouse_motion_binding;
 class Mouse_wheel_binding;
 class Update_binding;
 
+// A user's replacement for the default bindings of one command, keyed by the
+// command name (persistence form).
+class Binding_override
+{
+public:
+    std::string               command_name;
+    std::vector<Binding_desc> bindings;
+};
+
+// Two commands with bindings that some input event would fire both
+// (Binding_desc::overlaps()). Host priority decides which one consumes the
+// event; the pair is reported so the UI can show it.
+class Binding_conflict
+{
+public:
+    Command*     command;
+    Command*     other_command;
+    Binding_desc binding;
+};
+
+// Bindings of the key, mouse (button, drag, motion, wheel) and controller
+// (axis, button) kinds are user-editable. The bind_command_to_*() calls
+// declare a command's default bindings; set_binding_override() replaces all
+// bindings of one command. The dispatch tables are derived state, rebuilt
+// from "override if present, else defaults" at the start of the next tick()
+// (or by sort_bindings()) after any change - never per frame. Menu, update and
+// XR bindings are not editable and are unaffected.
 class Commands : public erhe::window::Input_event_handler
 {
 public:
@@ -110,6 +141,30 @@ public:
 
     void bind_command_to_update(Command* command);
 
+    // User-editable bindings. Commands are passed by reference and must be
+    // registered. All of these are cold-path (UI edits, load / save).
+    [[nodiscard]] auto get_input_kind        (const Command& command) const -> Input_kind;
+    [[nodiscard]] auto has_binding_override  (const Command& command) const -> bool;
+    void               get_default_bindings  (const Command& command, std::vector<Binding_desc>& out) const;
+    void               get_effective_bindings(const Command& command, std::vector<Binding_desc>& out) const;
+
+    // Replaces all editable bindings of the command; an empty span unbinds
+    // it. Returns false (and changes nothing) when a binding does not match
+    // the command's input kind or is otherwise invalid; error receives why.
+    auto set_binding_override       (Command& command, std::span<const Binding_desc> bindings, std::string* error = nullptr) -> bool;
+    void clear_binding_override     (Command& command);
+    void clear_all_binding_overrides();
+
+    // Persistence: every override, including entries naming commands this
+    // build does not register (kept as they were loaded so they round-trip).
+    void get_binding_overrides  (std::vector<Binding_override>& out) const;
+    // Replaces all overrides. Entries for unknown commands are kept for
+    // get_binding_overrides(); invalid entries are logged and dropped.
+    void apply_binding_overrides(std::span<const Binding_override> overrides);
+
+    // Conflicting pairs among the effective bindings, as of the last rebuild.
+    [[nodiscard]] auto get_binding_conflicts() const -> const std::vector<Binding_conflict>&;
+
     [[nodiscard]] auto accept_mouse_command(const Command* command) const -> bool
     {
         return
@@ -145,6 +200,30 @@ private:
     auto on_xr_float_event   (const erhe::window::Input_event&) -> bool override;
     auto on_xr_vector2f_event(const erhe::window::Input_event&) -> bool override;
 
+    class Binding_entry
+    {
+    public:
+        Command*     command;
+        Binding_desc desc;
+    };
+    class Command_override
+    {
+    public:
+        Command*                  command;
+        std::vector<Binding_desc> bindings;
+    };
+
+    void record_default_binding     (Command* command, const Binding_desc& desc);
+    void rebuild_bindings_if_dirty  ();
+    void add_dispatch_binding       (Command* command, const Binding_desc& desc);
+    void update_binding_conflicts   ();
+    void update_menu_shortcut_labels();
+    void mark_bindings_changed      (Command* command);
+    [[nodiscard]] auto find_override       (const Command* command) const -> const Command_override*;
+    [[nodiscard]] auto get_input_kind_nolock(const Command& command) const -> Input_kind;
+    auto set_binding_override_nolock(Command& command, std::span<const Binding_desc> bindings, std::string* error) -> bool;
+    void get_effective_bindings_nolock(const Command& command, std::vector<Binding_desc>& out) const;
+
     void sort_mouse_bindings        ();
     void sort_mouse_wheel_bindings  ();
     void sort_controller_bindings   ();
@@ -152,7 +231,7 @@ private:
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
 
-    ERHE_PROFILE_MUTEX(std::mutex, m_command_mutex);
+    mutable ERHE_PROFILE_MUTEX(std::mutex, m_command_mutex);
     Command*   m_active_mouse_command     {nullptr}; // does not tell if command(s) is/are ready
     uint32_t   m_last_mouse_button_bits   {0u};
     glm::vec2  m_last_mouse_position      {0.0f, 0.0f};
@@ -170,6 +249,16 @@ private:
     std::vector<Xr_float_binding>                     m_xr_float_bindings;
     std::vector<Xr_vector2f_binding>                  m_xr_vector2f_bindings;
     std::vector<Update_binding>                       m_update_bindings;
+
+    // Editable bindings: the declared defaults in declaration order, the
+    // user's overrides, and the dispatch tables above derived from them.
+    std::vector<Binding_entry>                        m_default_bindings;
+    std::vector<Binding_entry>                        m_effective_bindings;
+    std::vector<Command_override>                     m_overrides;
+    std::vector<Binding_override>                     m_unresolved_overrides;
+    std::vector<Binding_conflict>                     m_binding_conflicts;
+    std::vector<Command*>                             m_changed_commands;
+    bool                                              m_bindings_dirty{false};
 };
 
 } // namespace erhe::commands
