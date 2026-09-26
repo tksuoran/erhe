@@ -32,6 +32,8 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <fmt/format.h>
+
+#include <algorithm>
 #include <nlohmann/json.hpp>
 
 #include <cmath>
@@ -234,6 +236,46 @@ auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gl
     read_records("physics_joints",    names.physics_joints);
     read_names("collision_filter_names", names.collision_filters);
     return names;
+}
+
+auto parse_gltf_physics_joints(const erhe::gltf::Gltf_data& gltf_data) -> std::unordered_map<const erhe::scene::Node*, Physics_import_joint>
+{
+    std::unordered_map<const erhe::scene::Node*, Physics_import_joint> joints;
+    for (std::size_t i = 0, end = std::min(gltf_data.node_extensions.size(), gltf_data.nodes.size()); i < end; ++i) {
+        if (!gltf_data.nodes[i]) {
+            continue;
+        }
+        const std::string* const extension_json = find_extension(gltf_data.node_extensions[i], "ERHE_physics_joint");
+        if (extension_json == nullptr) {
+            continue;
+        }
+        const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_physics_joint", gltf_data.nodes[i]->get_name());
+        if (!payload.is_object()) {
+            continue;
+        }
+        Physics_import_joint joint{};
+        joint.name = payload.value("name", std::string{});
+        const auto flags_it = payload.find("flags");
+        if ((flags_it != payload.end()) && flags_it->is_array()) {
+            uint64_t flag_bits = 0;
+            for (const nlohmann::json& flag_name : *flags_it) {
+                if (flag_name.is_string()) {
+                    flag_bits |= erhe::gltf::persistent_item_flag_from_name(flag_name.get<std::string>());
+                }
+            }
+            joint.flag_bits = flag_bits;
+        }
+        const auto properties_it = payload.find("properties");
+        if ((properties_it != payload.end()) && properties_it->is_object()) {
+            for (const auto& [property_name, value] : properties_it->items()) {
+                if (value.is_string()) {
+                    joint.properties.emplace_back(property_name, value.get<std::string>());
+                }
+            }
+        }
+        joints.emplace(gltf_data.nodes[i].get(), std::move(joint));
+    }
+    return joints;
 }
 
 namespace {

@@ -24,6 +24,7 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "scene/joint.hpp"
 #include "erhe_scene/physics_description.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -631,6 +632,37 @@ void add_gltf_editor_state(
         }
         append_members(arguments.extension_payloads.scene, fmt::format("\"ERHE_scene\":{}", scene_json.dump()));
         arguments.extensions_used.push_back("ERHE_scene");
+    }
+
+    // ERHE_physics_joint (doc/gltf_extensions/ERHE_physics_joint.md): the
+    // Joint prim's own state on the node its KHR_physics_rigid_bodies joint
+    // rides - the KHR joint entry has no name and no prim state. The values
+    // the KHR entry carries (the frame nodes, the settings, enable_collision)
+    // are left out of the property map: the KHR entry states them.
+    bool any_joint_payload = false;
+    for (const auto& [joint_node, joint] : physics_items.node_joints) {
+        if ((joint_node == nullptr) || !joint) {
+            continue;
+        }
+        nlohmann::json properties = json_properties(*joint);
+        for (const erhe::property::Dependency_property* const carried : {
+            Joint::body_0_property.get_ptr(),
+            Joint::body_1_property.get_ptr(),
+            Joint::joint_settings_property.get_ptr(),
+            Joint::enable_collision_property.get_ptr()
+        }) {
+            properties.erase(std::string{carried->get_name()});
+        }
+        const nlohmann::json payload{
+            {"name",       joint->get_name()},
+            {"flags",      json_flags(*joint)},
+            {"properties", std::move(properties)}
+        };
+        append_members(arguments.extension_payloads.nodes[joint_node], fmt::format("\"ERHE_physics_joint\":{}", payload.dump()));
+        any_joint_payload = true;
+    }
+    if (any_joint_payload) {
+        arguments.extensions_used.push_back("ERHE_physics_joint");
     }
 
     // ERHE_brushes: brush geometry exports as extra unreferenced glTF

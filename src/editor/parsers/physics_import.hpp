@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -57,6 +58,18 @@ public:
     Physics_property_set                             property_set{Physics_property_set::listed_values};
 };
 
+// The state of one Joint prim the neutral record has no field for, by the
+// node its joint entry rides (glTF ERHE_physics_joint): the prim's name, its
+// persistent Item flags (unset: the defaults a created joint gets) and its
+// local property values.
+class Physics_import_joint
+{
+public:
+    std::string                                      name;
+    std::optional<uint64_t>                          flag_bits;
+    std::vector<std::pair<std::string, std::string>> properties;
+};
+
 // What one file's physics import works from: the format-neutral description
 // every reader fills, the file it came from (the content library's source
 // reference names it), and the per-record state that is the reading format's
@@ -71,6 +84,7 @@ public:
     std::vector<Physics_import_item>        collision_filters;
     std::vector<Physics_import_item>        joint_settings;
     std::unordered_map<const erhe::scene::Node*, Physics_import_body> bodies;
+    std::unordered_map<const erhe::scene::Node*, Physics_import_joint> joints;
 };
 
 // Maps a format-neutral physics description onto editor physics: shared

@@ -633,6 +633,7 @@ auto build_physics_description(
                 joint.enable_collision = node_joint->get_enable_collision();
                 description.joint = std::move(joint);
                 has_content = true;
+                builder.items.node_joints.emplace_back(node.get(), node_joint);
             }
         }
 

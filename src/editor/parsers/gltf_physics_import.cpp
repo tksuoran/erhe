@@ -55,6 +55,11 @@ void import_gltf_physics(
     // A body's own values are the node's (P8): they ride ERHE_node
     // `properties` and the glTF reader has already applied them, so the
     // import has nothing to state per body beyond the KHR record.
+
+    // A Joint prim's own state rides the node its KHR joint entry is on
+    // (ERHE_physics_joint).
+    arguments.joints = parse_gltf_physics_joints(gltf_data);
+
     import_physics(context, arguments, scene_root, operations);
 }
 

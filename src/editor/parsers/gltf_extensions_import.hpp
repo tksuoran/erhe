@@ -1,5 +1,7 @@
 #pragma once
 
+#include "parsers/physics_import.hpp"
+
 #include <glm/glm.hpp>
 
 #include <filesystem>
@@ -7,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe        { class Item_base; }
@@ -86,6 +89,10 @@ public:
 };
 
 [[nodiscard]] auto parse_gltf_physics_item_names(const erhe::gltf::Gltf_data& gltf_data) -> Gltf_physics_item_names;
+
+// ERHE_physics_joint (doc/gltf_extensions/ERHE_physics_joint.md): the Joint
+// prim state each node's KHR_physics_rigid_bodies joint carries, by node.
+[[nodiscard]] auto parse_gltf_physics_joints(const erhe::gltf::Gltf_data& gltf_data) -> std::unordered_map<const erhe::scene::Node*, Physics_import_joint>;
 
 // Applies the editor-domain payloads that make sense on import into an
 // existing scene:

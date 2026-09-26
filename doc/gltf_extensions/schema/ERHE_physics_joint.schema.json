@@ -1,0 +1,11 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_physics_joint.schema.json",
+    "title": "ERHE_physics_joint glTF node extension",
+    "type": "object",
+    "properties": {
+        "name":       {"type": "string"},
+        "flags":      {"type": "array", "items": {"type": "string"}},
+        "properties": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Local values of the Joint prim's registered properties (name -> text), except those the KHR joint entry states"}
+    }
+}

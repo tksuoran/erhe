@@ -973,9 +973,13 @@ void import_physics(
                 joint.joint_index
             );
         }
-        const std::string joint_name = joint.name.empty()
-            ? fmt::format("{} joint", description.node->get_name())
-            : joint.name;
+        const std::unordered_map<const erhe::scene::Node*, Physics_import_joint>::const_iterator import_joint_it =
+            arguments.joints.find(description.node.get());
+        const Physics_import_joint* const import_joint = (import_joint_it != arguments.joints.end()) ? &import_joint_it->second : nullptr;
+        const std::string joint_name =
+            ((import_joint != nullptr) && !import_joint->name.empty()) ? import_joint->name
+            : !joint.name.empty()                                      ? joint.name
+            :                                                            fmt::format("{} joint", description.node->get_name());
         auto joint_prim = std::make_shared<Joint>(
             joint_name,
             description.node,
@@ -984,6 +988,17 @@ void import_physics(
             joint.enable_collision
         );
         joint_prim->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        if (import_joint != nullptr) {
+            // The prim's own state (ERHE_physics_joint): its listed flags and
+            // local values, applied before the prim enters the scene, so an
+            // inactive joint never builds a constraint.
+            if (import_joint->flag_bits.has_value()) {
+                erhe::gltf::apply_persistent_item_flags(*joint_prim, import_joint->flag_bits.value());
+            }
+            for (const std::pair<std::string, std::string>& property : import_joint->properties) {
+                apply_record_property(*joint_prim, property.first, property.second);
+            }
+        }
         joint_prim->set_parent(description.node);
         ++joint_count;
     }

@@ -3,6 +3,7 @@
 #include "erhe_scene/physics_description.hpp"
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace erhe::physics {
@@ -10,11 +11,12 @@ namespace erhe::physics {
     class Physics_joint_settings;
     class Physics_material;
 }
-namespace erhe::scene { class Scene; }
+namespace erhe::scene { class Scene; class Xformable; using Node = Xformable; }
 
 namespace editor {
 
 class Content_library;
+class Joint;
 
 // The content-library item behind each entry of a built description's
 // top-level arrays, in the same order: what a writer needs to name the item a
@@ -26,6 +28,10 @@ public:
     std::vector<std::shared_ptr<erhe::physics::Physics_material>>       materials;
     std::vector<std::shared_ptr<erhe::physics::Collision_filter>>       collision_filters;
     std::vector<std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_settings;
+    // The Joint prim each node joint entry is written from, by the node the
+    // entry rides (its first frame node): what the glTF ERHE_physics_joint
+    // payload of that node describes.
+    std::vector<std::pair<const erhe::scene::Node*, std::shared_ptr<Joint>>> node_joints;
 };
 
 // Builds the format-neutral description of a scene's Node_physics values and

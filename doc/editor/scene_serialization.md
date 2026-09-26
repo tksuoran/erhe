@@ -134,6 +134,10 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    no limits / drives; reload materializes a `Physics_joint_settings` item
    from it. World-attached joints (no connected node) are skipped with a
    warning - the Khronos extension cannot express them.
+   The Joint prim's own state (name, flags, local values such as `active`)
+   rides the joint's node as `ERHE_physics_joint`
+   ([spec](../gltf_extensions/ERHE_physics_joint.md)); the importer applies
+   it to the Joint prim it creates, before the prim enters the scene.
 3. **Prefab external assets** - `collect_prefab_external_assets()`
    (`prefabs/prefab_library.cpp`) walks the tree for prims carrying a
    composition arc and maps those nodes to glTF 2.1 `externalAssets` references

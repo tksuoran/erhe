@@ -31,6 +31,7 @@ importing it as an asset).
 | [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
 | [`ERHE_camera`](ERHE_camera.md) | camera | full erhe projection, exposure, shadow range, Item flags |
 | [`ERHE_light`](ERHE_light.md) | node (light-carrying) | cast_shadow, infinite_range, Item flags |
+| [`ERHE_physics_joint`](ERHE_physics_joint.md) | node (KHR joint-carrying) | Joint prim name, Item flags, local values (active) |
 | [`ERHE_material`](ERHE_material.md) | material | roughness_y, bxdf_model, blending_mode, brushed-metal fields |
 | [`ERHE_scene`](ERHE_scene.md) | scene | per-scene settings, ambient light, enable_physics |
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |

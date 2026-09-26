@@ -72,6 +72,7 @@ ALL_ERHE_EXTENSIONS = [
     "ERHE_material",
     "ERHE_node",
     "ERHE_node_graphs",
+    "ERHE_physics_joint",
     "ERHE_scene",
 ]
 
