@@ -2,6 +2,7 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -228,7 +229,13 @@ void Imgui_window::end()
     const bool new_is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
     SPDLOG_LOGGER_TRACE(log_frame, "{}.end() is_hovered {} -> {}", m_title, m_is_hovered, new_is_hovered);
     m_is_hovered = new_is_hovered;
+    m_input_owned_elsewhere = erhe::imgui::is_input_owned_elsewhere(ImGui::GetCurrentWindow());
     ImGui::End();
+}
+
+auto Imgui_window::is_input_owned_elsewhere() const -> bool
+{
+    return m_input_owned_elsewhere;
 }
 
 auto Imgui_window::flags() -> ImGuiWindowFlags

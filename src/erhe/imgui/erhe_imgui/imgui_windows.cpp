@@ -280,12 +280,16 @@ void Imgui_windows::draw_imgui_windows()
                         imgui_window->imgui();
                         hidden = false;
                     }
-                    window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
-                    window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
                     if (imgui_window->want_cursor_relative_hold()) {
                         imgui_host->request_cursor_relative_hold();
                     }
                     imgui_window->end();
+                    // An ImGui interaction another window owns keeps the input
+                    // until it ends, even while this window wants it.
+                    if (!imgui_window->is_input_owned_elsewhere()) {
+                        window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
+                        window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
+                    }
                     ImGui::PopID();
                 }
                 if (hidden) {

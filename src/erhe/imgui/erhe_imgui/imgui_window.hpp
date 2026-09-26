@@ -87,6 +87,11 @@ public:
     [[nodiscard]] virtual auto want_mouse_events        () const -> bool;
     [[nodiscard]] virtual auto want_cursor_relative_hold() const -> bool;
 
+    // is_input_owned_elsewhere() for this window as of its last end().
+    // Imgui_windows honors want_mouse_events() / want_keyboard_events() only
+    // while this is false.
+    [[nodiscard]] auto is_input_owned_elsewhere() const -> bool;
+
 protected:
     Imgui_renderer& m_imgui_renderer;
     Imgui_windows&  m_imgui_windows;
@@ -104,6 +109,7 @@ private:
 
     bool            m_is_hovered  {false};
     bool            m_is_visible  {true};
+    bool            m_input_owned_elsewhere{false};
 
     // One-shot focus request (see request_window_focus()).
     bool            m_focus_requested{false};

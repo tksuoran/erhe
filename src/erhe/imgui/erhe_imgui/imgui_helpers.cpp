@@ -397,6 +397,34 @@ auto any_item_edited_this_frame() -> bool
     return g->ActiveIdHasBeenEditedThisFrame;
 }
 
+auto is_input_owned_elsewhere(ImGuiWindow* const window) -> bool
+{
+    ImGuiContext* const g = ImGui::GetCurrentContext();
+    ERHE_VERIFY(g != nullptr);
+    ERHE_VERIFY(window != nullptr);
+
+    // An active item keeps the mouse and the keyboard (a text field stays
+    // active after its click) until it is deactivated. Popup and dock
+    // hierarchies are not crossed: a popup or a dock node tab bar is not part
+    // of the window that opened or hosts it.
+    if (g->ActiveId != 0) {
+        if ((g->ActiveIdWindow == nullptr) || !ImGui::IsWindowChildOf(g->ActiveIdWindow, window, false, false)) {
+            return true;
+        }
+    }
+
+    // A held button belongs to where it was pressed, also when the press
+    // activated no item.
+    const ImGuiIO& io = g->IO;
+    const ImRect window_rect = window->Rect();
+    for (int button = 0; button < ImGuiMouseButton_COUNT; ++button) {
+        if (io.MouseDown[button] && !window_rect.Contains(io.MouseClickedPos[button])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 auto begin_drag_drop_source(ImGuiDragDropFlags flags) -> bool
 {
     ImGuiContext* const g = ImGui::GetCurrentContext();

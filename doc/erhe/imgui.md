@@ -96,6 +96,45 @@ is generic docking code, independent of erhe.
   the inner segments staying collinear. `capture_screenshot` shows the same
   thing as pixels.
 
+## Input routing
+
+Every input event goes to the `Imgui_host` first, then to the application
+(`erhe::commands` in the editor) unless the host marks it handled. The host
+marks a mouse event handled when `io.WantCaptureMouse` holds, and a key, text
+or char event when `io.WantCaptureKeyboard` holds - except while one of its
+windows requests that input: a window whose `want_mouse_events()` /
+`want_keyboard_events()` returns true makes the host pass the events through
+to the application too (`Imgui_host::want_capture_mouse()` /
+`want_capture_keyboard()`). The editor's viewport windows request input this
+way, so that the 3D view gets the pointer and the keys while the pointer is
+over it.
+
+- **An interaction keeps the input until it ends.**
+  `is_input_owned_elsewhere(window)` (`imgui_helpers.hpp`) is true while Dear
+  ImGui is in the middle of an interaction that `window` does not own: an
+  active item submitted outside `window` and its child windows (a drag field
+  being dragged, a text field being edited - it stays active after its click
+  until Enter, Escape or a click elsewhere - a window being moved), or a mouse
+  button held since a press outside `window`'s rectangle. Popup and dock
+  hierarchies are not crossed.
+  `Imgui_windows::draw_imgui_windows()` honors a window's
+  `want_mouse_events()` / `want_keyboard_events()` only while
+  `Imgui_window::is_input_owned_elsewhere()` (the predicate as of the window's
+  last `end()`) is false. So typing into a text field of one window with the
+  pointer over a viewport edits the text and does not reach the viewport's
+  key bindings; a drag that started in another window and moves over a
+  viewport stays that window's drag, its release included.
+- **The request lags one frame.** Requests are collected while the windows are
+  drawn and apply to the events the next frame delivers. The event that ends
+  an interaction (the button release, Enter) is therefore still routed by the
+  request made while it was in progress, and stays with ImGui; the window gets
+  the input from the following frame on.
+- A window with finer-grained needs calls `is_input_owned_elsewhere()` itself
+  with the window that holds its interactive area. The editor's
+  `Viewport_window` does so for its child window, and lets an ImGui drag and
+  drop over the viewport drive its hover (for the drop preview) without
+  requesting input (`doc/editor/windows.md`).
+
 ## Item recorder
 
 `Imgui_item_recorder` (`erhe_imgui/imgui_item_recorder.{hpp,cpp}`) records

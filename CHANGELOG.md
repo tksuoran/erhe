@@ -15,6 +15,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   configuration files.
 - `erhe::imgui`: `Imgui_host::load_pending_imgui_ini()` (protected); a derived
   host calls it right before `ImGui::NewFrame()`.
+- `erhe::imgui`: `is_input_owned_elsewhere(ImGuiWindow*)`
+  (`erhe_imgui/imgui_helpers.hpp`) and
+  `Imgui_window::is_input_owned_elsewhere()`: whether Dear ImGui is in the
+  middle of an interaction (an active item, a held mouse button) that the
+  window does not own.
 - `erhe::renderer`: `View::pixel_scale`, physical pixels per logical pixel of
   the view's render target (default 1.0).
 - `erhe::scene_renderer`: `Camera_view_input::pixel_scale` (default 1.0);

@@ -8,8 +8,17 @@
 #include <optional>
 
 struct ImGuiIO;
+struct ImGuiWindow;
 
 namespace erhe::imgui {
+
+// True while Dear ImGui is in the middle of an interaction that window does
+// not own: an active item (a drag field being dragged, a text field being
+// edited, a window being moved) submitted outside window and its child
+// windows, or a mouse button held since a press outside window's rectangle.
+// Such an interaction keeps the mouse and the keyboard until it ends, even
+// while the pointer is over window. Call with the current ImGui context set.
+[[nodiscard]] auto is_input_owned_elsewhere(ImGuiWindow* window) -> bool;
 
 enum class Item_mode : unsigned int {
     normal = 0, // normal button
