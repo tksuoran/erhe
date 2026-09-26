@@ -179,6 +179,13 @@ verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clea
 ✓verify::scripts/joint_visualization_verify.py-16/16{jolt+box3d-headless};physics-tests-97-box3d;editor_ik_solver_tests-54
 ?open::Tracy-steady-state-allocation-check-not-run
 
+[2026-09-26::joint-constraint-test-asset]
+>added::res/editor/assets/joint_constraints/joint_constraints.glb{13-physics-stations+8-IK-chains;creation_23+joint_constraint_assets_verify.py-120/120-jolt+box3d;doc/editor/joint_constraint_test_asset.md}
+>fixed::bfd4b2e3c-reloaded-joints-stayed-pending{Scene_root::register_node->Joint_system::handle_node_registered}
+>fixed::a8d9fea59-ERHE_physics_joint{Joint-prim-name+flags+active-survive-glTF-save}
+>fixed::0e53f6603-Box3D-pin-5643cd81{prismatic/weld-bodyB-awake-assert;sweep-16/16;physics-tests-97}
+?open::Jolt-ball-joint-swing+twist-corner-separation{~15mm@2.6m/s;solver-iterations-tuning-is-user-decision}
+
 ## 2026-09-04 archive of activeContext (superseded by property-system focus)
 §MBEL:5.0
 
