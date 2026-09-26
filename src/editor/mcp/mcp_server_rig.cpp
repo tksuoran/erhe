@@ -161,7 +161,12 @@ constexpr std::array<Mode_name, 5> c_mode_names{{
             if (!read_numbers(entry.at("rotation_xyzw"), 4, v)) {
                 return "pose entry '" + bone.name + "': rotation_xyzw must be [x, y, z, w]";
             }
-            bone.rotation = glm::normalize(glm::quat{v[3], v[0], v[1], v[2]});
+            std::string rotation_error{};
+            const std::optional<glm::quat> rotation = make_unit_quaternion(v, "rotation_xyzw", rotation_error);
+            if (!rotation.has_value()) {
+                return "pose entry '" + bone.name + "': " + rotation_error;
+            }
+            bone.rotation = rotation.value();
         }
         if (entry.contains("scale")) {
             if (!read_numbers(entry.at("scale"), 3, v)) {

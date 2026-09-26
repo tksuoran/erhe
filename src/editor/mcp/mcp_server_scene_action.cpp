@@ -1269,7 +1269,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     std::optional<glm::vec3> skew;
     float v[4];
     if (read_floats("translation",   v, 3)) { translation = glm::vec3{v[0], v[1], v[2]};       }
-    if (read_floats("rotation_xyzw", v, 4)) { rotation    = glm::quat{v[3], v[0], v[1], v[2]}; }
+    if (read_floats("rotation_xyzw", v, 4)) { rotation    = make_unit_quaternion(v, "rotation_xyzw", parse_error); }
     if (read_floats("scale",         v, 3)) { scale       = glm::vec3{v[0], v[1], v[2]};       }
     if (read_floats("skew",          v, 3)) { skew        = glm::vec3{v[0], v[1], v[2]};       }
     if (!parse_error.empty()) {
@@ -1736,7 +1736,7 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     std::optional<glm::vec3> scale;
     float v[4];
     if (read_floats("translation",   v, 3)) { translation = glm::vec3{v[0], v[1], v[2]};       }
-    if (read_floats("rotation_xyzw", v, 4)) { rotation    = glm::quat{v[3], v[0], v[1], v[2]}; }
+    if (read_floats("rotation_xyzw", v, 4)) { rotation    = make_unit_quaternion(v, "rotation_xyzw", parse_error); }
     if (read_floats("scale",         v, 3)) { scale       = glm::vec3{v[0], v[1], v[2]};       }
     if (!parse_error.empty()) {
         json r = make_text_content(parse_error);
@@ -2097,8 +2097,19 @@ auto Mcp_server::place_brush_instance(
     std::optional<glm::quat> rotation;
     {
         const json value = args.value("rotation_xyzw", json());
-        if (value.is_array() && (value.size() == 4)) {
-            rotation = glm::quat{value[3].get<float>(), value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        if (!value.is_null()) {
+            const bool is_four_numbers =
+                value.is_array() && (value.size() == 4) &&
+                std::all_of(value.begin(), value.end(), [](const json& element) { return element.is_number(); });
+            if (!is_four_numbers) {
+                return make_error_content("rotation_xyzw must be an array of 4 numbers");
+            }
+            const float xyzw[4]{value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>()};
+            std::string rotation_error{};
+            rotation = make_unit_quaternion(xyzw, "rotation_xyzw", rotation_error);
+            if (!rotation.has_value()) {
+                return make_error_content(rotation_error);
+            }
         }
     }
 

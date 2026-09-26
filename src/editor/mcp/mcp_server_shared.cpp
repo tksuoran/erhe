@@ -22,6 +22,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -122,6 +123,20 @@ auto get_vec3(const json& args, const char* key, const glm::vec3 fallback) -> gl
         return glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
     }
     return fallback;
+}
+
+auto make_unit_quaternion(const float xyzw[4], const std::string_view key, std::string& out_error) -> std::optional<glm::quat>
+{
+    const glm::quat q{xyzw[3], xyzw[0], xyzw[1], xyzw[2]};
+    const float     length = glm::length(q);
+    if (!std::isfinite(length) || (std::abs(length - 1.0f) > c_unit_quaternion_tolerance)) {
+        out_error = fmt::format(
+            "{} must be a unit quaternion [x, y, z, w]; got length {} (tolerance {})",
+            key, length, c_unit_quaternion_tolerance
+        );
+        return std::nullopt;
+    }
+    return q / length;
 }
 
 auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Node>

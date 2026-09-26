@@ -5241,3 +5241,59 @@ TEST_F(Mcp_test, property_row_is_addressable_by_its_label)
     }
     advance_frames(client, 3);
 }
+
+// doc/agents/mcp_api_guidelines.md "Arguments are validated, never
+// reinterpreted": a rotation_xyzw that is not a unit quaternion is refused
+// (the node keeps its rotation, nothing is recorded for undo), while one that
+// is only off by decimal rounding is accepted and normalized.
+TEST_F(Mcp_test, set_node_transform_refuses_a_non_unit_rotation_and_normalizes_rounding)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = create_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene";
+    Mcp_client::Tool_result created = client.call_tool("create_node", json{{"scene_name", scene}, {"name", "rotated"}});
+    ASSERT_FALSE(created.is_error) << created.text;
+    advance_frames(client, 2);
+
+    auto local_rotation = [&client, &scene]() -> json {
+        Mcp_client::Tool_result result = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "rotated"}});
+        EXPECT_FALSE(result.is_error) << result.text;
+        return result.payload.at("local_transform").at("rotation_xyzw");
+    };
+    auto undo_depth = [&client]() -> std::size_t {
+        return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
+    };
+    auto set_rotation = [&client, &scene](const json& xyzw) -> Mcp_client::Tool_result {
+        Mcp_client::Tool_result result = client.call_tool(
+            "set_node_transform",
+            json{{"scene_name", scene}, {"node_name", "rotated"}, {"space", "local"}, {"rotation_xyzw", xyzw}}
+        );
+        advance_frames(client, 2);
+        return result;
+    };
+
+    const json        rotation_before = local_rotation();
+    const std::size_t depth_before    = undo_depth();
+    for (const json& bad : {json{0.0f, 0.0f, 0.0f, 2.0f}, json{0.0f, 0.0f, 0.0f, 0.0f}, json{0.0f, 0.0f, 0.5f, 0.5f}}) {
+        Mcp_client::Tool_result refused = set_rotation(bad);
+        EXPECT_TRUE(refused.is_error) << "accepted non-unit rotation_xyzw " << bad.dump();
+        EXPECT_NE(refused.text.find("unit quaternion"), std::string::npos) << refused.text;
+    }
+    EXPECT_EQ(local_rotation(), rotation_before) << "a refused rotation changed the node";
+    EXPECT_EQ(undo_depth(), depth_before) << "a refused rotation was recorded for undo";
+
+    // 90 degrees about Z, written with the 4-digit rounding of a hand-typed value.
+    Mcp_client::Tool_result rounded = set_rotation(json{0.0f, 0.0f, 0.7071f, 0.7071f});
+    ASSERT_FALSE(rounded.is_error) << rounded.text;
+    const json  q      = local_rotation();
+    const float length = std::sqrt(
+        (q[0].get<float>() * q[0].get<float>()) + (q[1].get<float>() * q[1].get<float>()) +
+        (q[2].get<float>() * q[2].get<float>()) + (q[3].get<float>() * q[3].get<float>())
+    );
+    EXPECT_NEAR(length, 1.0f, 1.0e-6f) << "the rounded rotation was not normalized: " << q.dump();
+    EXPECT_NEAR(q[2].get<float>(), 0.70710678f, 1.0e-5f) << q.dump();
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 3);
+}

@@ -704,7 +704,7 @@
           "type": "boolean"
         },
         "rotation_xyzw": {
-          "description": "Rotation quaternion [x, y, z, w]",
+          "description": "Rotation quaternion [x, y, z, w] - must be a unit quaternion: a length off 1 by more than 1e-3 is refused, smaller rounding is normalized",
           "items": {
             "type": "number"
           },
@@ -923,7 +923,7 @@
           "type": "array"
         },
         "rotation_xyzw": {
-          "description": "World rotation quaternion [x, y, z, w] - avoids the select + transform_selection round trips",
+          "description": "World rotation quaternion [x, y, z, w] - avoids the select + transform_selection round trips - must be a unit quaternion: a length off 1 by more than 1e-3 is refused, smaller rounding is normalized",
           "items": {
             "type": "number"
           },
@@ -1125,7 +1125,7 @@
           "type": "number"
         },
         "rotation_xyzw": {
-          "description": "World rotation quaternion [x, y, z, w] for the instance - avoids the select + transform_selection round trips",
+          "description": "World rotation quaternion [x, y, z, w] for the instance - avoids the select + transform_selection round trips - must be a unit quaternion: a length off 1 by more than 1e-3 is refused, smaller rounding is normalized",
           "items": {
             "type": "number"
           },
@@ -1244,7 +1244,7 @@
           "type": "string"
         },
         "rotation_xyzw": {
-          "description": "Rotation quaternion [x, y, z, w]",
+          "description": "Rotation quaternion [x, y, z, w] - must be a unit quaternion: a length off 1 by more than 1e-3 is refused, smaller rounding is normalized",
           "items": {
             "type": "number"
           },
@@ -1532,7 +1532,7 @@
                 "type": "string"
               },
               "rotation_xyzw": {
-                "description": "Local rotation quaternion [x, y, z, w]",
+                "description": "Local rotation quaternion [x, y, z, w] - must be a unit quaternion: a length off 1 by more than 1e-3 is refused, smaller rounding is normalized",
                 "items": {
                   "type": "number"
                 },

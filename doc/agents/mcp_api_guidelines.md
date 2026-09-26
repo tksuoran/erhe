@@ -69,3 +69,18 @@ A new UI-driving tool follows the same rule as the rest: its behavior is
 determined by its own arguments and by the scene and window state it is
 defined to act on, and it reports what it resolved (`target`, the injected
 event counts) so a transcript records what actually ran.
+
+## Arguments are validated, never reinterpreted
+
+A tool refuses an argument that is outside its domain and names the argument
+and the offending value in the error; it does not silently turn it into
+something valid. A value that is only off by the rounding of its decimal
+serialization is accepted and cleaned up.
+
+Rotations given as `rotation_xyzw` are the standing case: every tool that
+takes one (`set_node_transform`, `transform_selection`, `create_shape`,
+`place_brush`, `place_brushes`, `paste_pose`) passes it through `make_unit_quaternion()`
+(`src/editor/mcp/mcp_server_shared.hpp`). A quaternion whose length is within
+`1e-3` of 1 is normalized; a zero, non-finite or scaled quaternion is refused,
+because applying it would bake a scale into the rotation or produce NaNs that
+the caller never asked for.

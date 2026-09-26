@@ -18,6 +18,7 @@
 #include "erhe_scene/light.hpp"                  // Light_type
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
@@ -67,6 +68,14 @@ auto make_json_content(const json& data) -> json;
 auto make_error_content(const std::string& message) -> std::string;
 
 auto get_vec3(const json& args, const char* key, const glm::vec3 fallback) -> glm::vec3;
+
+// A rotation argument given as [x, y, z, w] must be a unit quaternion
+// (doc/agents/mcp_api_guidelines.md): a length within c_unit_quaternion_tolerance
+// of 1 is normalized (decimal rounding of a unit quaternion), anything else -
+// non-finite, zero, or a scaled quaternion - is refused with out_error naming
+// key and the length, and the result is empty.
+constexpr float c_unit_quaternion_tolerance = 1.0e-3f;
+[[nodiscard]] auto make_unit_quaternion(const float xyzw[4], std::string_view key, std::string& out_error) -> std::optional<glm::quat>;
 
 // Finds a node by the integer args[id_key], or by the string args[name_key].
 auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Node>;
