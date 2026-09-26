@@ -23,6 +23,7 @@
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_set_operation.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
@@ -42,6 +43,7 @@
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_property/property_value.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -53,6 +55,7 @@
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 #include <fmt/format.h>
 
@@ -1433,9 +1436,13 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
                 cb(item, m_operations, close);
             }
-            if (hierarchy) {
-                ImGui::Separator();
-            }
+            ImGui::Separator();
+        }
+
+        // Like the clipboard entries, Rename on a selected row acts on the
+        // selection: with several items selected, the one added last.
+        if (ImGui::MenuItem("Rename", "F2")) {
+            begin_rename(item->is_selected() ? get_rename_target() : item);
         }
 
         if (hierarchy) {
@@ -1567,6 +1574,127 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         m_popup_id = 0;
     }
     ImGui::PopStyleVar(1);
+}
+
+auto Item_tree::find_row_index(const erhe::Item_base* const item) const -> std::optional<std::size_t>
+{
+    if (item == nullptr) {
+        return {};
+    }
+    for (std::size_t i = 0, end = m_flat_rows.size(); i < end; ++i) {
+        if (m_flat_rows[i].item.get() == item) {
+            return i;
+        }
+    }
+    return {};
+}
+
+auto Item_tree::get_rename_target() const -> std::shared_ptr<erhe::Item_base>
+{
+    // The selection keeps items in the order they were added, so the last
+    // one shown in this tree is the item added to the selection last.
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selected_items();
+    for (auto i = selection.rbegin(), end = selection.rend(); i != end; ++i) {
+        if (find_row_index(i->get()).has_value()) {
+            return *i;
+        }
+    }
+    return {};
+}
+
+void Item_tree::begin_rename(const std::shared_ptr<erhe::Item_base>& item)
+{
+    if (!item || !find_row_index(item.get()).has_value()) {
+        return;
+    }
+    m_rename_item   = item;
+    m_rename_buffer = item->get_name();
+    m_rename_error.clear();
+    // Focus is requested for a few frames: a rename started from the context
+    // menu is submitted while the popup still holds focus.
+    m_rename_focus_frames = 3;
+    m_rename_was_active   = false;
+}
+
+void Item_tree::end_rename()
+{
+    m_rename_item.reset();
+    m_rename_buffer.clear();
+    m_rename_error.clear();
+    m_rename_focus_frames = 0;
+    m_rename_was_active   = false;
+}
+
+auto Item_tree::try_commit_rename() -> bool
+{
+    const std::shared_ptr<erhe::Item_base> item = m_rename_item.lock();
+    if (!item || (m_rename_buffer == item->get_name())) {
+        return true;
+    }
+    if (m_rename_buffer.empty()) {
+        m_rename_error = "Name must not be empty";
+        return false;
+    }
+    // The name property's validator refuses a name a sibling already holds
+    // (doc/erhe/usd_compatibility_design.md M2); the operation makes the
+    // rename undoable like the Properties window row.
+    const erhe::property::Property_value after{m_rename_buffer};
+    if (!item->validate_value(erhe::Item_base::name_property.get(), after, m_rename_error)) {
+        return false;
+    }
+    log_tree->info("Rename '{}' -> '{}'", item->get_name(), m_rename_buffer);
+    m_context.operation_stack->queue(
+        std::make_shared<Property_set_operation>(
+            item,
+            erhe::Item_base::name_property.get(),
+            std::optional<erhe::property::Property_value>{erhe::property::Property_value{item->get_name()}},
+            std::optional<erhe::property::Property_value>{after}
+        )
+    );
+    return true;
+}
+
+void Item_tree::imgui_rename_field(const ImVec2& position, const float width)
+{
+    ImGui::SetCursorScreenPos(position);
+    if (m_rename_focus_frames > 0) {
+        if (!ImGui::IsRectVisible(ImVec2{position.x, position.y + ImGui::GetFrameHeight()})) {
+            ImGui::SetScrollHereY(0.5f);
+        }
+        ImGui::SetKeyboardFocusHere();
+        --m_rename_focus_frames;
+    }
+    ImGui::SetNextItemWidth(width);
+    const bool enter_pressed = ImGui::InputText(
+        "##item_tree_rename",
+        &m_rename_buffer,
+        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+    );
+    if (ImGui::IsItemActive()) {
+        m_rename_was_active   = true;
+        m_rename_focus_frames = 0;
+    }
+    if (!m_rename_error.empty()) {
+        ImGui::SetTooltip("%s", m_rename_error.c_str());
+    }
+
+    if (enter_pressed) {
+        // Enter deactivates the field; a refused name keeps it open.
+        if (try_commit_rename()) {
+            end_rename();
+        } else {
+            m_rename_focus_frames = 3;
+            m_rename_was_active   = false;
+        }
+    } else if (ImGui::IsItemDeactivated()) {
+        // Escape cancels; clicking elsewhere commits, dropping a refused name.
+        if (!ImGui::IsKeyPressed(ImGuiKey_Escape) && !try_commit_rename()) {
+            log_tree->warn("Rename to '{}' refused: {}", m_rename_buffer, m_rename_error);
+        }
+        end_rename();
+    } else if (!m_rename_was_active && (m_rename_focus_frames == 0)) {
+        end_rename(); // focus never arrived
+    }
 }
 
 void Item_tree::root_popup_menu()
@@ -1844,22 +1972,34 @@ void Item_tree::imgui_row(const Flat_row& row)
             icons_start_x = std::max(icons_start_x, label_end_x + style.ItemInnerSpacing.x);
         }
 
-        // Label, clipped so it does not run under the right-aligned icons
+        // Label, clipped so it does not run under the right-aligned icons.
+        // A row being renamed shows the edit field in place of the label.
         const ImVec4 label_clip{row_pos.x, row_pos.y, icons_start_x - style.ItemInnerSpacing.x, row_pos.y + ImGui::GetFrameHeight()};
-        draw_list->AddText(
-            ImGui::GetFont(),
-            ImGui::GetFontSize(),
-            ImVec2{row_pos.x + row.label_x_offset, row_pos.y + m_label_y_offset},
-            label_color,
-            row.label_text.data(),
-            row.label_text.data() + row.label_text.size(),
-            0.0f,
-            ((row.right_icon_count > 0) || (feature_icon_count > 0)) ? &label_clip : nullptr
-        );
+        // Owner comparison: no weak_ptr lock per row.
+        const bool renaming = !m_rename_item.owner_before(row.item) && !row.item.owner_before(m_rename_item);
+        if (renaming) {
+            // Frame padding outside the label position keeps the text in place
+            const float field_x = row_pos.x + row.label_x_offset - style.FramePadding.x;
+            imgui_rename_field(
+                ImVec2{field_x, row_pos.y},
+                std::max(label_clip.z - field_x, 8.0f * ImGui::GetFontSize())
+            );
+        } else {
+            draw_list->AddText(
+                ImGui::GetFont(),
+                ImGui::GetFontSize(),
+                ImVec2{row_pos.x + row.label_x_offset, row_pos.y + m_label_y_offset},
+                label_color,
+                row.label_text.data(),
+                row.label_text.data() + row.label_text.size(),
+                0.0f,
+                ((row.right_icon_count > 0) || (feature_icon_count > 0)) ? &label_clip : nullptr
+            );
+        }
 
         // R5.8 reference badge suffix: dim defining-container name after the
         // label, sharing the label's clip so it never runs under the icons.
-        if (!row.reference_suffix.empty()) {
+        if (!row.reference_suffix.empty() && !renaming) {
             draw_list->AddText(
                 ImGui::GetFont(),
                 ImGui::GetFontSize(),
@@ -2119,6 +2259,12 @@ void Item_tree::imgui_tree(float ui_scale)
         select_all();
     }
 
+    // F2 renames the item added to the selection last (see Ctrl+A above for
+    // the routing); a rename field being edited takes the key itself.
+    if (ImGui::Shortcut(ImGuiKey_F2)) {
+        begin_rename(get_rename_target());
+    }
+
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
@@ -2233,6 +2379,17 @@ void Item_tree::imgui_tree(float ui_scale)
         ERHE_PROFILE_SCOPE("rows");
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(m_flat_rows.size()), -1.0f);
+        // The row being renamed is always submitted: its edit field must keep
+        // existing (and keep keyboard focus) while scrolled out of view. A
+        // row that left the tree (deleted, filtered, parent folded) ends it.
+        if (!m_rename_item.expired()) {
+            const std::optional<std::size_t> rename_row = find_row_index(m_rename_item.lock().get());
+            if (rename_row.has_value()) {
+                clipper.IncludeItemByIndex(static_cast<int>(rename_row.value()));
+            } else {
+                end_rename();
+            }
+        }
         while (clipper.Step()) {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
                 const Flat_row& row = m_flat_rows[i];

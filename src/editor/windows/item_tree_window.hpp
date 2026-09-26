@@ -129,6 +129,15 @@ private:
     void root_popup_menu              ();
     void item_popup_menu              (const std::shared_ptr<erhe::Item_base>& item);
 
+    // Inline rename (F2 / context menu Rename). With several items selected
+    // the one added to the selection last is renamed; only a row visible in
+    // this tree can be renamed, since the edit field replaces its label.
+    [[nodiscard]] auto get_rename_target() const -> std::shared_ptr<erhe::Item_base>;
+    [[nodiscard]] auto find_row_index   (const erhe::Item_base* item) const -> std::optional<std::size_t>;
+    void begin_rename    (const std::shared_ptr<erhe::Item_base>& item);
+    void end_rename      ();
+    auto try_commit_rename() -> bool;
+
     // A resolved icon glyph ready to draw: no type queries or measurement at render time
     class Row_icon
     {
@@ -174,6 +183,7 @@ private:
     };
 
     void imgui_row                    (const Flat_row& row);
+    void imgui_rename_field           (const ImVec2& position, float width);
     void item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item); // drag payload preview
     void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item, bool hovered_in_folded_subtree);
     void flatten_visible_rows         (const std::shared_ptr<erhe::Item_base>& item, float indent);
@@ -260,6 +270,13 @@ private:
     float                              m_cached_font_size{0.0f};
     float                              m_cached_icon_font_size{0.0f};
     bool                               m_range_selection_edited{false};
+
+    // Inline rename state. Weak: a pending rename never keeps an item alive.
+    std::weak_ptr<erhe::Item_base>     m_rename_item;
+    std::string                        m_rename_buffer;
+    std::string                        m_rename_error;
+    int                                m_rename_focus_frames {0};     // frames left to request keyboard focus for the field
+    bool                               m_rename_was_active   {false}; // field has held keyboard focus at least once
 
     // Row layout constants derived from font and style at rebuild time
     float                              m_icon_x_offset {0.0f}; // primary icon, from row content start
