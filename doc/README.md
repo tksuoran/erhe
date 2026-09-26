@@ -105,6 +105,21 @@ Every document states its standing in its first ten lines:
 - A current document's "Future work" section is a list of links into
   `doc/plans/`, one line per link. The work itself is described in the plan.
 
+## Changelog
+
+`CHANGELOG.md` at the repository root records the public API changes of the
+erhe libraries (`src/erhe/`, CMake targets `erhe_<name>`); the editor and the
+other executables have no entries. It follows Keep a Changelog: entries go
+under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
+`Removed` or `Fixed`, one bullet per change, starting with the library
+(`` `erhe::scene`: ``) and naming the affected types and functions.
+
+- A commit that changes a library's public API (a type, function, enum value,
+  or the documented behavior of one in a header under `src/erhe/<name>/`)
+  adds its bullet to `CHANGELOG.md` in the same commit.
+- A release renames `[Unreleased]` to the version and date and opens a new
+  empty `[Unreleased]` above it.
+
 ## Index
 
 

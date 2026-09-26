@@ -39,6 +39,8 @@ When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff wr
 
 `doc/README.md` states the documentation layout, the header-line convention and the writing rules (documents describe the present, specify positively, state each fact once), and indexes every document; read it before adding, rewriting or moving a document. `py -3 scripts/check_doc_links.py` verifies that every `doc/...md` reference in the repository resolves and that every document carries its header line; run it after any documentation change and keep it clean. Moving a document is a `git mv` plus a rewrite of every reference to it (sources, scripts, workflows, this file, the memory bank), in the same commit.
 
+A commit that changes the public API of an `erhe::*` library adds its line to `CHANGELOG.md` in the same commit (`doc/README.md` "Changelog").
+
 ## Building
 
 Configure and build through the `scripts/` wrappers on every platform; they encode the project's configure flow (CPM caching, MSVC environment init, the options they pass). The per-platform build trees and the day-to-day loop are in the platform's topic document; `doc/building.md` lists every wrapper and CMake option. Building and launching the editor to verify a change is self-serve.
