@@ -1,4 +1,4 @@
-#include "erhe_physics/box3d/box3d_six_dof_classifier.hpp"
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
 
 #include <gtest/gtest.h>
 

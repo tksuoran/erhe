@@ -57,8 +57,6 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
         erhe_physics/box3d/box3d_wrapper_shapes.hpp
         erhe_physics/box3d/box3d_hull_builder.cpp
         erhe_physics/box3d/box3d_hull_builder.hpp
-        erhe_physics/box3d/box3d_six_dof_classifier.cpp
-        erhe_physics/box3d/box3d_six_dof_classifier.hpp
         erhe_physics/box3d/glm_conversions.hpp
     )
     set(impl_link_libraries box3d::box3d)
@@ -90,6 +88,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
 endif ()
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_physics/box3d_six_dof_classifier.cpp
+    erhe_physics/box3d_six_dof_classifier.hpp
     erhe_physics/collision_filter.cpp
     erhe_physics/collision_filter.hpp
     erhe_physics/icollision_shape.hpp

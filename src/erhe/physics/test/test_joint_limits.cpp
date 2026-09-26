@@ -1,3 +1,4 @@
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
 #include "erhe_physics/joint_limits.hpp"
 
 #include <gtest/gtest.h>
@@ -7,6 +8,8 @@
 
 #include <array>
 #include <cmath>
+#include <optional>
+#include <string>
 
 namespace {
 
@@ -144,6 +147,40 @@ TEST(Joint_limits, pyramid_direction_of_zero_swing_is_the_twist_axis)
         EXPECT_NEAR(expected.y, direction.y, c_tolerance);
         EXPECT_NEAR(expected.z, direction.z, c_tolerance);
     }
+}
+
+TEST(Joint_limits, contract_is_the_authored_limits_in_d6_form)
+{
+    std::array<Constraint_axis_limit, 6> limits{};
+    limits[1] = ranged_axis(0.25f, 0.25f);
+    limits[3] = ranged_axis(-0.4f, 0.3f);
+    limits[4] = ranged_axis(-0.2f, 0.8f);
+    const Joint_limit_shape shape = erhe::physics::get_contract_joint_limits(limits);
+    EXPECT_EQ(0, shape.twist_axis);
+    EXPECT_EQ(Swing_limit_model::pyramid, shape.swing_model);
+    EXPECT_FLOAT_EQ(0.25f, shape.translation[1].min); // fixed at the authored value
+    EXPECT_FLOAT_EQ(-0.4f, shape.twist.min);
+    EXPECT_FLOAT_EQ( 0.8f, shape.swing[0].max);
+    EXPECT_FALSE(shape.swing[1].limited);
+    EXPECT_TRUE(shape.is_exact);
+}
+
+TEST(Joint_limits, box3d_compatibility)
+{
+    const Constraint_axis_limit fixed = ranged_axis(0.0f, 0.0f);
+    // A hinge is a Box3D revolute joint.
+    const std::array<Constraint_axis_limit, 6> hinge{fixed, fixed, fixed, fixed, fixed, ranged_axis(-0.7f, 0.7f)};
+    EXPECT_FALSE(erhe::physics::describe_box3d_incompatibility(hinge).has_value());
+    // A limited ball joint becomes one cone plus a twist.
+    const std::array<Constraint_axis_limit, 6> ball{fixed, fixed, fixed, ranged_axis(-0.5f, 0.5f), ranged_axis(-0.5f, 0.5f), ranged_axis(-0.5f, 0.5f)};
+    const std::optional<std::string> ball_note = erhe::physics::describe_box3d_incompatibility(ball);
+    ASSERT_TRUE(ball_note.has_value());
+    EXPECT_NE(std::string::npos, ball_note.value().find("cone"));
+    // An axis fixed off zero is welded at zero.
+    const std::array<Constraint_axis_limit, 6> off_zero{fixed, ranged_axis(0.1f, 0.1f), fixed, fixed, fixed, fixed};
+    const std::optional<std::string> off_zero_note = erhe::physics::describe_box3d_incompatibility(off_zero);
+    ASSERT_TRUE(off_zero_note.has_value());
+    EXPECT_NE(std::string::npos, off_zero_note.value().find("translation Y"));
 }
 
 } // anonymous namespace

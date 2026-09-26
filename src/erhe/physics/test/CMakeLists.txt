@@ -17,6 +17,7 @@ add_executable(${_target}
     test_joint_reach.cpp
     test_joint_settings_properties.cpp
     test_overlap_query.cpp
+    test_six_dof_classifier.cpp
 )
 
 # The limits each backend enforces (erhe::physics::get_enforced_joint_limits).
@@ -34,7 +35,6 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
             test_enforced_joint_limits_box3d.cpp
             test_hull_builder.cpp
             test_shape_descriptor.cpp
-            test_six_dof_classifier.cpp
             test_world_events.cpp
     )
 endif ()

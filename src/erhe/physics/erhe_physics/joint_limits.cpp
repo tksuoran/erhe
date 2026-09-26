@@ -46,6 +46,18 @@ void swing_twist_decompose(const glm::quat& q, const int twist_axis, glm::quat& 
 
 } // anonymous namespace
 
+auto get_contract_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape
+{
+    Joint_limit_shape shape{};
+    shape.translation = {limits[0], limits[1], limits[2]};
+    shape.twist_axis  = 0;
+    shape.twist       = limits[3];
+    shape.swing_model = Swing_limit_model::pyramid;
+    shape.swing       = {limits[4], limits[5]};
+    shape.is_exact    = true;
+    return shape;
+}
+
 auto get_swing_axes(const int twist_axis) -> std::array<int, 2>
 {
     return std::array<int, 2>{

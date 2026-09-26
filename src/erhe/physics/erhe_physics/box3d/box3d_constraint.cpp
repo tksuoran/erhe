@@ -1,6 +1,6 @@
 #include "erhe_physics/box3d/box3d_constraint.hpp"
 #include "erhe_physics/box3d/box3d_rigid_body.hpp"
-#include "erhe_physics/box3d/box3d_six_dof_classifier.hpp"
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
 #include "erhe_physics/box3d/box3d_world.hpp"
 #include "erhe_physics/box3d/glm_conversions.hpp"
 #include "erhe_physics/joint_limits.hpp"

@@ -42,6 +42,23 @@ public:
     bool                                 is_exact   {true};     // false: the enforced shape differs from the authored limits
 };
 
+// THE JOINT CONTRACT. erhe states a joint as six per-axis limits
+// (Six_dof_constraint_settings::limits: 0..2 translation, 3..5 rotation) in
+// the D6 joint convention (as PhysX D6 and UsdPhysics rotX / rotY / rotZ):
+//   - translation k: the offset of frame B from frame A along frame A's axis
+//     k, confined to [min, max]; a fixed axis (min == max) holds that value;
+//   - rotation X: the twist, the angle of the relative rotation about frame
+//     A's X axis;
+//   - rotation Y, Z: the swing, each swing angle limited on its own (the
+//     pyramid form: half-angle atan2(q_k, q_w) of the swing quaternion);
+//   - a free axis is not limited.
+// That is what the settings mean whatever backend simulates them.
+// get_contract_joint_limits() states it as a Joint_limit_shape, so the
+// contract can be measured and drawn without any backend;
+// get_enforced_joint_limits() below is what the built backend actually
+// simulates, which may differ (is_exact false).
+[[nodiscard]] auto get_contract_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape;
+
 // The limits the physics backend this library is built with enforces for the
 // authored six-DOF limits (0..2 translation XYZ, 3..5 rotation XYZ - the
 // layout of Six_dof_constraint_settings::limits). Implemented by each backend
@@ -53,7 +70,7 @@ public:
 //   Box3D: the six-DOF classification picks a weld, revolute (twist about
 //          the hinge axis), prismatic, spherical (twist about Z, cone of the
 //          widest swing half range) or filter joint.
-//   none : the authored limits, pyramid about X.
+//   none : the contract (get_contract_joint_limits).
 [[nodiscard]] auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape;
 
 // The two swing axes of a twist axis, the remaining coordinate axes in

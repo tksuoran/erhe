@@ -38,9 +38,11 @@ enum class Joint_reach_shape : unsigned int {
 // with and erhe::physics backends solve): with anchor frames F_a (on body A)
 // and F_b (on body B) in world space, the joint coordinates are the offset
 // t = F_a.basis^T * (F_b.origin - F_a.origin) and the rotation R with
-// F_b.basis = F_a.basis * R; limits 0..2 constrain t, limits 3..5 the
-// rotation vector of R. An axis is fixed when limited with max - min below
-// c_fixed_axis_epsilon.
+// F_b.basis = F_a.basis * R; limits 0..2 constrain t, limits 3..5 R in the
+// D6 convention of the joint contract (joint_limits.hpp: twist about X,
+// swing about Y and Z). The reach handles one movable rotation axis at a
+// time, where every convention agrees on the angle. An axis is fixed when
+// limited with max - min below c_fixed_axis_epsilon.
 //
 // With every translation axis fixed (t constant) the point's position in the
 // fixed anchor frame is:

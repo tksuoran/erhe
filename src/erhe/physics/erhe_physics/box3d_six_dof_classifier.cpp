@@ -1,8 +1,9 @@
-#include "erhe_physics/box3d/box3d_six_dof_classifier.hpp"
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
 
 #include <glm/gtc/constants.hpp>
 
 #include <cmath>
+#include <string>
 
 namespace erhe::physics {
 
@@ -197,6 +198,36 @@ auto stiffness_to_hertz(const float stiffness, const float mass) -> float
         return 0.0f;
     }
     return std::sqrt(stiffness / mass) / glm::two_pi<float>();
+}
+
+auto describe_box3d_incompatibility(const std::array<Constraint_axis_limit, 6>& limits) -> std::optional<std::string>
+{
+    static constexpr const char* c_axis_names[6] = {
+        "translation X", "translation Y", "translation Z", "rotation X", "rotation Y", "rotation Z"
+    };
+    const Six_dof_classification classification = classify_six_dof(limits);
+    std::string message;
+    if (!classification.is_exact) {
+        const std::string pattern = describe_axis_states(classification.axis_states);
+        if (classification.kind == Six_dof_joint_kind::spherical) {
+            message = "Box3D has no joint for the axis pattern " + pattern + " (translation fixed / limited / free, then rotation): it simulates a ball joint, one cone of the widest limited swing range (rotation X or Y) about the frame Z axis plus the rotation Z range as a twist.";
+        } else {
+            message = "Box3D has no joint for the axis pattern " + pattern + ": it simulates the closest " + std::string{c_str(classification.kind)} + " joint.";
+        }
+    }
+    for (std::size_t axis = 0; axis < 6; ++axis) {
+        const Constraint_axis_limit& limit = limits[axis];
+        if ((classify_axis(limit) == Axis_state::fixed) && ((limit.min != 0.0f) || (limit.max != 0.0f))) {
+            if (!message.empty()) {
+                message += " ";
+            }
+            message += std::string{"Box3D fixes "} + c_axis_names[axis] + " at 0, not at the authored value.";
+        }
+    }
+    if (message.empty()) {
+        return std::nullopt;
+    }
+    return message;
 }
 
 } // namespace erhe::physics

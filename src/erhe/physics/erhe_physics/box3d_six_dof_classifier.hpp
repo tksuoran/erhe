@@ -6,10 +6,15 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <optional>
 #include <string>
 
 namespace erhe::physics {
 
+// Compiled into every build (not only the Box3D backend), so an editor built
+// with any backend can tell whether a joint's settings are portable to
+// Box3D (describe_box3d_incompatibility below).
+//
 // Box3D has no generic six degree of freedom joint. The erhe six-DOF settings
 // (filled from KHR_physics_rigid_bodies joint descriptions) are therefore
 // classified into the closest Box3D joint type. Patterns that are not exactly
@@ -69,5 +74,14 @@ public:
 
 // 1 / (1/mass_a + 1/mass_b), treating a non-positive mass as infinite (static).
 [[nodiscard]] auto reduced_mass(float mass_a, float mass_b) -> float;
+
+// Why Box3D would simulate these six-DOF limits differently from the erhe
+// joint contract (joint_limits.hpp), or nullopt when it simulates them
+// exactly: the axis pattern has no exact Box3D joint (it becomes the closest
+// weld / revolute / prismatic / spherical / filter joint, a limited ball
+// joint becoming one cone plus a twist about Z), or an axis is fixed at a
+// non-zero value (Box3D welds it at zero). For the user interface; builds a
+// message.
+[[nodiscard]] auto describe_box3d_incompatibility(const std::array<Constraint_axis_limit, 6>& limits) -> std::optional<std::string>;
 
 } // namespace erhe::physics

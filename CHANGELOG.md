@@ -20,6 +20,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Imgui_window::is_input_owned_elsewhere()`: whether Dear ImGui is in the
   middle of an interaction (an active item, a held mouse button) that the
   window does not own.
+- `erhe::physics`: `get_contract_joint_limits()` - the joint contract (the
+  six per-axis limits in the D6 convention: twist about X, independent swing
+  about Y and Z) as a `Joint_limit_shape`, independent of the backend; and
+  `describe_box3d_incompatibility()` (`erhe_physics/box3d_six_dof_classifier.hpp`),
+  why Box3D would not simulate given limits exactly.
 - `erhe::physics`: `get_enforced_joint_limits()`, `Joint_limit_shape`,
   `Swing_limit_model`, `Joint_coordinates`, `measure_joint_coordinates()`,
   `Joint_range_check`, `check_joint_range()`, `is_within()`,
@@ -33,6 +38,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   by it.
 
 ### Changed
+
+- `erhe::physics`: the Box3D six-DOF classifier header moved from
+  `erhe_physics/box3d/box3d_six_dof_classifier.hpp` to
+  `erhe_physics/box3d_six_dof_classifier.hpp` and is compiled into every build,
+  not only the Box3D backend.
 
 - `erhe::renderer`: `Debug_renderer::view_from_camera()` takes a
   `pixel_scale` parameter after `viewport` (stored in `View::pixel_scale`).

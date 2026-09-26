@@ -57,6 +57,19 @@ a specific engine.
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
   (`erhe::Typed`, `doc/erhe/item.md` "Prim classes"), each with its erhe class name as
   its fixed `typeName` token
+- **The joint contract** (`joint_limits.hpp`): a joint is six per-axis limits
+  (`Six_dof_constraint_settings::limits`, 0..2 translation, 3..5 rotation) in the D6 joint
+  convention (PhysX D6, UsdPhysics rotX / rotY / rotZ): translation k is the offset of frame
+  B from frame A along frame A's axis k, a fixed axis holding its authored value; rotation X
+  is the twist about frame A's X axis; rotation Y and Z are the swing, each swing angle
+  limited on its own (the pyramid form, half-angle `atan2(q_k, q_w)`); a free axis is not
+  limited. This is what the settings mean on every backend. `get_contract_joint_limits()`
+  states it as a `Joint_limit_shape`, so the contract is measured and drawn without a
+  backend. A backend simulates the contract exactly or approximates it:
+  `get_enforced_joint_limits()` below reports how, and
+  `describe_box3d_incompatibility()` (`box3d_six_dof_classifier.hpp`, compiled into every
+  build) says why Box3D would not simulate given limits exactly - the editor's Properties
+  window shows it on joint settings and joints whatever backend it is built with.
 - `get_enforced_joint_limits()` (`joint_limits.hpp`) -- the six-DOF limits the backend the
   library is built with actually enforces, as a `Joint_limit_shape`: per-axis translation
   ranges, the twist axis and range, and the swing model - `pyramid` (a range per swing axis,
@@ -204,4 +217,5 @@ Backend-specific design notes:
   the getters return geometry already in the body frame.
 - KHR_physics_rigid_bodies six-DOF constraints are mapped onto Box3D's concrete joint types by
   `box3d_six_dof_classifier.{hpp,cpp}` (weld / revolute / prismatic / spherical / filter),
-  which is pure logic and unit tested.
+  which is pure logic and unit tested; it sits outside `box3d/` and is compiled into every
+  build, so any build can report Box3D compatibility.
