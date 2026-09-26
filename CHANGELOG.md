@@ -20,7 +20,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_binding_overrides()`, `apply_binding_overrides()` and
   `get_binding_conflicts()`, with the `Binding_override` and
   `Binding_conflict` types; `Binding_desc::overlaps()`;
-  `Menu_binding::get_shortcut_label()` / `set_shortcut_label()`.
+  `Menu_binding::get_shortcut_label()` / `set_shortcut_label()`;
+  `Commands::add_bindings_changed_callback()`, called after every dispatch
+  table rebuild.
+- `erhe::imgui`: `to_erhe_keycode(ImGuiKey)` and `to_erhe_mouse_button(int)`
+  (`erhe_imgui/imgui_host.hpp`), the inverse of the input mapping
+  `Imgui_host` feeds ImGui with.
 - `erhe::window`: `keycode_from_string()` and `mouse_button_from_string()`,
   the inverses of `c_str(Keycode)` / `c_str(Mouse_button)`.
 

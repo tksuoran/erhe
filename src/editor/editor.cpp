@@ -53,6 +53,7 @@
 #include "content_library/brdf_slice.hpp"
 #include "developer/clipboard_window.hpp"
 #include "developer/commands_window.hpp"
+#include "windows/input_bindings_window.hpp"
 #include "developer/composer_window.hpp"
 #include "developer/depth_visualization_window.hpp"
 #include "developer/icon_browser.hpp"
@@ -2095,6 +2096,7 @@ public:
                 m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_input_bindings_window  = std::make_unique<Input_bindings_window           >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_geometry_graph_window  = std::make_unique<Geometry_graph_window           >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_geometry_graph_palette_window = std::make_unique<Graph_editor_palette_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_geometry_graph_window.get(), "Geometry Graph Palette", "geometry_graph_palette");
                 m_texture_graph_window   = std::make_unique<Texture_graph_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -2976,6 +2978,7 @@ public:
         m_app_context.icon_set                 = m_icon_set              .get();
         m_app_context.id_renderer              = m_id_renderer           .get();
         m_app_context.input_bindings_store     = m_input_bindings_store  .get();
+        m_app_context.input_bindings_window    = m_input_bindings_window .get();
         m_app_context.input_state              = m_input_state           .get();
         m_app_context.inventory_window         = m_inventory_window      .get();
         m_app_context.lattice_tool             = m_lattice_tool          .get();
@@ -4176,6 +4179,7 @@ public:
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
+    std::unique_ptr<Input_bindings_window           >        m_input_bindings_window;
     std::unique_ptr<Geometry_graph_window           >        m_geometry_graph_window;
     std::unique_ptr<Graph_editor_palette_window     >        m_geometry_graph_palette_window;
     std::unique_ptr<Texture_graph_window            >        m_texture_graph_window;

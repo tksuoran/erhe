@@ -8,6 +8,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "windows/config_ui.hpp"
+#include "windows/input_bindings_window.hpp"
 #include "windows/inventory_window.hpp"
 
 #include "config/generated/camera_controls_config_serialization.hpp"
@@ -193,6 +194,12 @@ void Settings_window::imgui()
 
     add_entry("Hotbar Icon Size", [this](){
         ImGui::DragInt("##", &m_context.app_settings->icon_settings.hotbar_icon_size, 0.1f, 6, 512);
+    });
+
+    add_entry("Input Bindings", [this](){
+        if (ImGui::Button("Edit Input Bindings...")) {
+            m_context.input_bindings_window->show_window();
+        }
     });
 
     pop_group();

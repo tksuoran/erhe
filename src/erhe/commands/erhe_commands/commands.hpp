@@ -16,6 +16,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -165,6 +166,12 @@ public:
     // Conflicting pairs among the effective bindings, as of the last rebuild.
     [[nodiscard]] auto get_binding_conflicts() const -> const std::vector<Binding_conflict>&;
 
+    // Called at the end of every dispatch table rebuild (from tick() or
+    // sort_bindings(), with the command mutex held: the callback must not
+    // call back into Commands). The callback must stay valid for the
+    // lifetime of Commands.
+    void add_bindings_changed_callback(std::function<void()> callback);
+
     [[nodiscard]] auto accept_mouse_command(const Command* command) const -> bool
     {
         return
@@ -258,6 +265,7 @@ private:
     std::vector<Binding_override>                     m_unresolved_overrides;
     std::vector<Binding_conflict>                     m_binding_conflicts;
     std::vector<Command*>                             m_changed_commands;
+    std::vector<std::function<void()>>                m_bindings_changed_callbacks;
     bool                                              m_bindings_dirty{false};
 };
 

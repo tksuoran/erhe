@@ -146,6 +146,29 @@ void update_key_modifiers(ImGuiIO& io, const uint32_t modifier_mask)
 
 }
 
+auto to_erhe_keycode(const ImGuiKey key) -> erhe::window::Keycode
+{
+    if (key == ImGuiKey_None) {
+        return erhe::window::Key_unknown;
+    }
+    for (erhe::window::Keycode code = 0; code <= erhe::window::Key_last; ++code) {
+        if (from_erhe(code) == key) {
+            return code;
+        }
+    }
+    return erhe::window::Key_unknown;
+}
+
+auto to_erhe_mouse_button(const int imgui_mouse_button) -> erhe::window::Mouse_button
+{
+    for (erhe::window::Mouse_button button = 0; button < erhe::window::Mouse_button_count; ++button) {
+        if (from_erhe(button) == imgui_mouse_button) {
+            return button;
+        }
+    }
+    return erhe::window::Mouse_button_none;
+}
+
 Imgui_host::Imgui_host(
     erhe::rendergraph::Rendergraph& rendergraph,
     Imgui_renderer&                 imgui_renderer,

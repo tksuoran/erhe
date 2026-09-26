@@ -22,6 +22,7 @@
         "headset": true,
         "hover_tool": false,
         "icon_browser": false,
+        "input_bindings": false,
         "inventory": true,
         "layers": false,
         "lightmap": false,

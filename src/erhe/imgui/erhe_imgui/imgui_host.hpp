@@ -27,6 +27,13 @@ class Imgui_renderer;
 class View;
 class Window;
 
+// Inverse of the erhe -> ImGui input mapping Imgui_host feeds ImGui with:
+// the erhe::window::Keycode for an ImGuiKey (Key_unknown when erhe has
+// none), and the erhe::window::Mouse_button for an ImGui mouse button index
+// (Mouse_button_none when erhe has none).
+[[nodiscard]] auto to_erhe_keycode     (ImGuiKey key) -> erhe::window::Keycode;
+[[nodiscard]] auto to_erhe_mouse_button(int imgui_mouse_button) -> erhe::window::Mouse_button;
+
 // Base class for derived Imgui_host classes - where ImGui windows can be hosted.
 //
 // - Current Imgui_host classes are Window_imgui_host and Rendertarget_imgui_host.

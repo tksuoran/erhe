@@ -413,6 +413,12 @@ auto Commands::get_binding_conflicts() const -> const std::vector<Binding_confli
     return m_binding_conflicts;
 }
 
+void Commands::add_bindings_changed_callback(std::function<void()> callback)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    m_bindings_changed_callbacks.push_back(std::move(callback));
+}
+
 void Commands::add_dispatch_binding(Command* const command, const Binding_desc& desc)
 {
     switch (desc.kind) {
@@ -523,6 +529,10 @@ void Commands::rebuild_bindings_if_dirty()
     sort_mouse_bindings();
     sort_mouse_wheel_bindings();
     sort_controller_bindings();
+
+    for (const std::function<void()>& callback : m_bindings_changed_callbacks) {
+        callback();
+    }
 }
 
 void Commands::update_binding_conflicts()

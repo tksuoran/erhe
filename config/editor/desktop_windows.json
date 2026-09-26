@@ -24,6 +24,7 @@
         "headset": false,
         "hover_tool": false,
         "icon_browser": false,
+        "input_bindings": false,
         "inventory": false,
         "layers": false,
         "lightmap": false,

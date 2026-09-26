@@ -732,6 +732,8 @@ erhe_target_sources_grouped(
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp
+    windows/input_bindings_window.cpp
+    windows/input_bindings_window.hpp
     windows/inventory_window.cpp
     windows/inventory_window.hpp
     windows/item_reference.cpp
