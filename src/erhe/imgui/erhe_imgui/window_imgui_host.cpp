@@ -169,6 +169,7 @@ void Window_imgui_host::begin_imgui_frame()
     const auto cursor = static_cast<erhe::window::Mouse_cursor>(ImGui::GetMouseCursor());
     m_context_window.set_cursor(cursor);
 
+    load_pending_imgui_ini();
     begin_item_recording();
 
     SPDLOG_LOGGER_TRACE(log_frame, "ImGui::NewFrame()");

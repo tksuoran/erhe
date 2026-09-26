@@ -91,8 +91,9 @@ public:
     void save_imgui_ini(const std::string& path);
     void load_imgui_ini(const std::string& path);
 
-    // Path of the persisted layout ini (io.IniFilename); empty when this host
-    // does not persist its layout.
+    // Path of the persisted layout ini; empty when this host does not persist
+    // its layout. Under a read_only erhe::codegen::Config_persistence policy
+    // the ini is read but never written.
     [[nodiscard]] auto get_imgui_ini_path() const -> const std::string&;
 
     // Replace the automatic layout ini path (derived from the debug label) with
@@ -120,8 +121,14 @@ protected:
     void begin_item_recording();
     void end_item_recording  ();
 
+    // Called by the derived host (with this host's ImGui context current)
+    // right before ImGui::NewFrame(): reads the layout ini of a read_only
+    // host once, which ImGui does not do itself while io.IniFilename is null.
+    void load_pending_imgui_ini();
+
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;
+    bool            m_imgui_ini_load_pending      {false};
     bool            m_has_cursor                  {false};
     bool            m_request_keyboard            {false}; // hovered window requests keyboard events
     bool            m_request_mouse               {false}; // hovered winodw requests mouse events
@@ -133,6 +140,9 @@ protected:
     Imgui_item_recorder m_item_recorder;
     bool                m_item_recording_requested{false};
     bool                m_item_recording_active   {false};
+
+private:
+    void apply_imgui_ini_path();
 };
 
 } // namespace erhe::imgui

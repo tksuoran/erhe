@@ -98,10 +98,10 @@ Stop-Process -Id <pid> -Force
 git status --short    # confirm the run dirtied no tracked file
 ```
 
-The ImGui ini (`config/editor/desktop_window_imgui_host_imgui.ini`) is gitignored
-and rewritten on every exit; leave it alone. A run that drives window visibility
-or layout can rewrite the tracked `config/editor/desktop_windows.json` --
-`git checkout --` it when `git status` shows it and the change was yours.
+An `ERHE_AI_DRIVER=1` run writes no config file (doc/agents/editor_runs.md):
+the tracked `config/editor/*.json` files and the gitignored ImGui ini
+(`config/editor/desktop_window_imgui_host_imgui.ini`) are read but never
+written, so `git status` stays clean. Leave the ini alone.
 
 ## Gotchas
 

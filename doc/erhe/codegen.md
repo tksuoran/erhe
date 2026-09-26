@@ -210,6 +210,7 @@ All definition files must be listed explicitly in `DEFINITIONS` (no globbing). T
 - **Deserialization**: simdjson on-demand API. Version field is read first, then fields are deserialized with version guards. Missing fields use struct defaults.
 - **Migration**: `erhe::codegen::register_migration<T>(callback)` registers a callback invoked when deserializing an older version. The callback receives the struct, old version, and new version.
 - **Reflection**: Static const arrays in the `.cpp` file, accessed via `get_fields()` / `get_struct_info()`. Zero heap allocation.
+- **Config files**: `load_config<T>(path)` / `save_config(config, path)` (`config_io.hpp`) read and write a struct as a JSON file. `set_config_persistence(Config_persistence::read_only)` (`config_persistence.hpp`) makes the process write no config file: `save_config()` then writes nothing and returns false, while `load_config()` is unaffected. Other libraries' config writers honor the same policy (`erhe::imgui::Imgui_host` layout `.ini` files). The application sets it once at startup, before any thread loads or saves configuration; the editor sets `read_only` for AI-driven runs.
 
 ## Command Line Usage
 

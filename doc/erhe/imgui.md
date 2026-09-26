@@ -37,6 +37,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - Each `Imgui_host` has its own `ImGuiContext`, enabling multiple independent ImGui viewports (e.g., main window + VR render targets).
 - The renderer uses indirect draw calls with a ring buffer strategy for vertex/index/draw-parameter data.
 - Font atlas is shared across all hosts.
+- A host with a layout ini path (`get_imgui_ini_path()`, `set_imgui_ini_path()`) persists its window positions, sizes and docking there. Under `erhe::codegen::Config_persistence::read_only` the ini is read before the host's first frame and never written (`io.IniFilename` stays null; the host loads it itself right before its first `ImGui::NewFrame()`).
 - The `windows/` subdirectory has reusable utility windows (performance, log, pipeline inspector, graph plotter, framebuffer viewer).
 - `draw_spinner(center, radius, thickness, color)` is the indeterminate
   progress spinner: an arc added to the current window's draw list whose start

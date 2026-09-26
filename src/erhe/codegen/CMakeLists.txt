@@ -5,6 +5,8 @@ add_library(erhe::codegen ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_codegen/config_io.hpp
+    erhe_codegen/config_persistence.hpp
+    erhe_codegen/config_persistence.cpp
     erhe_codegen/field_info.hpp
     erhe_codegen/migration.hpp
     erhe_codegen/migration.cpp

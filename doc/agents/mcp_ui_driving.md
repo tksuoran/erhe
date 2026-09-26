@@ -133,10 +133,6 @@ these rather than clicking at a guessed offset. See
 - **A clipped item cannot be clicked.** `visible_only` keeps the items Dear
   ImGui did not clip; `imgui_scroll` the window until the target reports
   `visible`.
-- **Opening the four view by label changes the tracked window set.** The four
-  view's viewport windows are written to `config/editor/desktop_windows.json`
-  when the editor exits, so restore that file with `git checkout` after a run
-  that opened one.
 - **Choose a rotate ring by `ring_axis`, not by name.** In Euler gimbal mode
   (the Transform window shows Rotation as Euler Angles with Orthogonal Gizmo
   off) the three ring handles are the rings of the Euler order: the handle

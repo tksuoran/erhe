@@ -12,6 +12,9 @@ namespace editor {
 // - the user state file (inventory / hotbar slots, per scene view selections)
 //   is neither read nor written, so an agent run starts from the defaults and
 //   leaves the user's own state untouched (Editor_settings_store)
+// - no configuration file is written at all: main() sets
+//   erhe::codegen::Config_persistence::read_only, which save_config() and the
+//   ImGui layout .ini files honor, so an agent run leaves config/ untouched
 [[nodiscard]] auto is_ai_driver() -> bool;
 
 }

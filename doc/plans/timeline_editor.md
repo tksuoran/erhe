@@ -492,8 +492,7 @@ node from scratch, plays it, saves/reloads, re-verifies.
   with the imgui-ini window-sizing pre-launch trick.
 - **Interactive sanity** (user, windowed build): dragging keys/handles feels
   right, box select, snapping -- gesture ergonomics cannot be MCP-verified.
-- Restore `config/editor/desktop_window_imgui_host_imgui.ini` after every
-  editor run; temporary trace logging (e.g. a new `editor.animation` log
+- Temporary trace logging (e.g. a new `editor.animation` log
   category) reverted before commits.
 
 ## Blender reference material

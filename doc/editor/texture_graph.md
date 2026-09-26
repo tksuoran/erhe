@@ -424,8 +424,6 @@ precedent; it is unrelated to this feature despite the name.
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
   confirmation that a newly added descriptor's GLSL substitutes and assembles.
-- **Editor runs**: restore
-  `config/editor/desktop_window_imgui_host_imgui.ini` afterwards.
 
 ---
 

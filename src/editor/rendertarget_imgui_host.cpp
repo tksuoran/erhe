@@ -468,6 +468,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
     io.DeltaTime = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
+    load_pending_imgui_ini();
     begin_item_recording();
 
     ImGui::NewFrame();

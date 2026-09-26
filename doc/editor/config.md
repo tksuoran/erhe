@@ -34,6 +34,9 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
 
 ## Notes
 
+- An AI-driven run (`ERHE_AI_DRIVER=1`) writes no config file at all
+  (`erhe::codegen::Config_persistence::read_only`, see
+  `doc/agents/editor_runs.md`).
 - `editor_settings.json` and `user_state.json` are written by the running editor, and
   settings only materialize into them after the editor has run **with a scene open**. To exercise a stored setting
   headlessly: run once with a scene open, kill the editor, edit the JSON, run again. The

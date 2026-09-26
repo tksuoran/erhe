@@ -50,5 +50,4 @@ create an empty node, create each catalog key under it and assert through
 through `get_undo_redo_stack`. The cases worth keeping: clearing
 `Node_physics.motion_mode` on a node with live physics and undoing it returns
 the body to the world; a clean `capture_screenshot` after creating a light
-and a camera. Restore
-`config/editor/desktop_window_imgui_host_imgui.ini` after a run.
+and a camera.

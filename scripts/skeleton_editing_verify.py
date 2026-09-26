@@ -49,9 +49,8 @@ screenshot diff) and that Ctrl+Z undoes the drag and then the bind.
 
 --launch starts build_vs2026_vulkan_headless/bin/Debug/editor.exe (or
 --editor), reads its MCP port from logs/log.txt and asks it to exit at the
-end. The scenes the script opens are closed before that, so the editor's
-window-visibility file (config/editor/desktop_windows.json, rewritten at exit)
-is left as the script found it. One PASS/FAIL line per check, exit code 1 when
+end. The scenes the script opens are closed before that, so a reused editor is
+left with the scenes it had. One PASS/FAIL line per check, exit code 1 when
 any check fails.
 """
 
@@ -1123,8 +1122,7 @@ def main():
         structure_checks(e, opened)
         symmetry_checks(e, opened)
     finally:
-        # Closing the scenes closes their viewport windows, which the editor
-        # would otherwise record as open in desktop_windows.json at exit.
+        # Leave a reused editor with the scenes it had.
         for scene in reversed(opened):
             e.close_scene(scene)
         if process is not None:

@@ -54,11 +54,21 @@ into an AI chat):
   `logs/device_error.txt` (truncated at each run's first error).
 - Shader compile/link errors: `logs/shader_error.txt` (error, source,
   callstack).
+- No configuration file is written: `main()` sets
+  `erhe::codegen::Config_persistence::read_only`, so `save_config()` (editor
+  settings autosave, window visibility `windows.json`, the Settings window's
+  Save buttons, graphics presets, logging levels) and the ImGui layout `.ini`
+  files write nothing. Tracked config files (`config/editor/*.json`) are read
+  as usual, so an agent run starts from the committed configuration and
+  leaves the `config/` tree exactly as it found it; a test or script does not
+  need to restore window visibility or close its scenes before exit.
 - The per-user editor state file (`config/editor/user_state.json`: inventory /
   hotbar slots, per scene view scene, camera and visual style selections) is
   neither read nor written, so an agent run starts from that struct's defaults
-  and leaves the user's own state alone. `config/editor/editor_settings.json`
-  is read and autosaved as usual.
+  and leaves the user's own state alone. The per-user dock layout
+  `config/editor/desktop_window_imgui_host_imgui.ini` is read (so a seeded
+  layout, such as the creations' large headless viewports, applies) but never
+  written.
 - Fatal behavior is unchanged (errors still abort); the log line names the
   file to read.
 
@@ -162,14 +172,16 @@ permission covers only the capture(s) it was asked for.
 ## ImGui ini file and default layout
 
 `config/editor/desktop_window_imgui_host_imgui.ini` (window layout state) is
-gitignored and rewritten by every editor run on exit -- never add it (or other
+gitignored and rewritten on exit by every editor run that is not AI-driven
+(an `ERHE_AI_DRIVER=1` run only reads it) -- never add it (or other
 erhe_imgui window/ini state files) to the repo, and never delete the user's
 copy. When the ini is absent at startup, the default layout is built
 procedurally from `config/editor/default_layout.json`, an ordered list of dock
 placements (codegen structs; see `src/editor/editor_default_layout.cpp`). To
 iterate on the default layout, edit the JSON (no rebuild needed), delete the
-ini, and relaunch; a present ini always wins untouched. Restore any tracked
-config file (e.g. `config/editor/desktop_windows.json`) that a run rewrote.
+ini, and relaunch; a present ini always wins untouched. A run that is not
+AI-driven rewrites tracked config files such as
+`config/editor/desktop_windows.json`; an AI-driven run leaves them untouched.
 
 ## Interactive runs need the user
 

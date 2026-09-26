@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_codegen/config_persistence.hpp"
 #include "erhe_file/file.hpp"
 #include "migration.hpp"
 
@@ -49,10 +50,15 @@ auto load_config(std::string_view file_path, bool* out_upgraded = nullptr) -> T
     return config;
 }
 
-// Save a codegen-generated config struct to a JSON file.
+// Save a codegen-generated config struct to a JSON file. Writes nothing and
+// returns false when the config persistence policy is read_only
+// (config_persistence.hpp).
 template <typename T>
 auto save_config(const T& config, std::string_view file_path) -> bool
 {
+    if (get_config_persistence() == Config_persistence::read_only) {
+        return false;
+    }
     std::string json = serialize(config, 0);
     json += '\n';
     return erhe::file::write_file(file_path, json);

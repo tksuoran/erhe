@@ -32,7 +32,8 @@ static const char* const c_user_state_openxr_file_path      = "config/editor/ope
 // An AI-driven run (is_ai_driver(), ERHE_AI_DRIVER=1) neither reads nor writes
 // the user state file: it starts from the User_state_config defaults and
 // leaves the user's own inventory / scene view state as it was. The settings
-// file is read and autosaved as usual.
+// file is read as usual; like every config file of an AI-driven run it is never
+// written (erhe::codegen::Config_persistence::read_only, set in main()).
 //
 // Desktop and OpenXR sessions keep separate settings files (matching the
 // openxr_commands.json / openxr_ imgui-config convention): the shared

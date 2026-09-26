@@ -457,8 +457,7 @@ directory).
   material before/after a UV drag.
 - **Builds**: ninja MSVC Vulkan + headless VS build every step; OpenGL build
   at least once per phase touching rendering.
-- Restore `config/editor/desktop_window_imgui_host_imgui.ini` after every
-  editor run; follow the stale-editor hygiene (kill editors +
+- Follow the stale-editor hygiene (kill editors +
   `get_server_info` pid check) from `prompt_queue.txt`.
 
 ## Blender reference material
@@ -525,10 +524,6 @@ faces; pack margin; stretch display (angle vs area).
   scratch members cleared at point of use.
 - **Undo determinism**: store before/after UV values exactly (float bits);
   any diagnostic serialization uses hexfloat.
-- **imgui.ini churn**: every editor run dirties
-  `config/editor/desktop_window_imgui_host_imgui.ini`; restore before
-  committing. The new window's ini_label adds a section to that file --
-  expected, still never committed.
 
 ## Out of scope / future work
 

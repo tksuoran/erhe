@@ -1,5 +1,8 @@
+#include "ai_driver.hpp"
 #include "crash_handler.hpp"
 #include "editor.hpp"
+
+#include "erhe_codegen/config_persistence.hpp"
 
 #include <cxxopts.hpp>
 
@@ -21,6 +24,13 @@ auto main(int argc, char** argv) -> int
     // during a Geogram remesh) writes a minidump and exits instead of hanging on
     // a modal Abort / Retry / Ignore dialog.
     editor::install_crash_handler();
+
+    // An AI-driven run writes no configuration file (doc/agents/editor_runs.md):
+    // config files are read as usual but never written, so an agent run leaves
+    // the tracked config/ tree and the user's own settings untouched.
+    if (editor::is_ai_driver()) {
+        erhe::codegen::set_config_persistence(erhe::codegen::Config_persistence::read_only);
+    }
 
     // Command-line options.
     //   --commands overrides the startup script that sets up the scene (e.g.

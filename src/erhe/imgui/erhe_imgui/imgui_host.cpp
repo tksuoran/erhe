@@ -4,6 +4,7 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
+#include "erhe_codegen/config_persistence.hpp"
 
 #include <imgui/imgui_internal.h>
 
@@ -159,8 +160,7 @@ Imgui_host::Imgui_host(
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext(font_atlas);
 
-    ImGuiIO& io = m_imgui_context->IO;
-    io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
+    apply_imgui_ini_path();
 
     m_item_recorder.set_context(m_imgui_context);
 
@@ -237,8 +237,28 @@ void Imgui_host::set_imgui_ini_path(const std::string& path)
     // io.IniFilename points at m_imgui_ini_path's buffer; re-point it after
     // every assignment (and clear it when persistence is disabled).
     m_imgui_ini_path = path;
+    apply_imgui_ini_path();
+}
+
+void Imgui_host::apply_imgui_ini_path()
+{
+    // Under a read_only config persistence policy ImGui must never write the
+    // ini: io.IniFilename stays null (ImGui saves to it periodically and on
+    // context destruction) and load_pending_imgui_ini() reads the file once,
+    // before the first frame, as ImGui itself would have.
+    const bool read_only = (erhe::codegen::get_config_persistence() == erhe::codegen::Config_persistence::read_only);
     ImGuiIO& io = m_imgui_context->IO;
-    io.IniFilename = m_imgui_ini_path.empty() ? nullptr : m_imgui_ini_path.c_str();
+    io.IniFilename = (m_imgui_ini_path.empty() || read_only) ? nullptr : m_imgui_ini_path.c_str();
+    m_imgui_ini_load_pending = !m_imgui_ini_path.empty() && read_only;
+}
+
+void Imgui_host::load_pending_imgui_ini()
+{
+    if (!m_imgui_ini_load_pending) {
+        return;
+    }
+    m_imgui_ini_load_pending = false;
+    ImGui::LoadIniSettingsFromDisk(m_imgui_ini_path.c_str());
 }
 
 void Imgui_host::request_item_recording()
