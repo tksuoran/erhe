@@ -35,11 +35,11 @@ dimmed station has no live constraint.
 | P06 | Ball free | rotations free | frames only, no limit geometry |
 | P07 | Slider Y limited | Y -0.3 .. 0.1, rest fixed | a vertical segment with end ticks |
 | P08 | Slider X free | X free, rest fixed | a thin horizontal line |
-| P09 | Weld | everything fixed | frames only |
+| P09 | Weld | everything fixed | frames only; the box is welded to the static post and cannot be moved |
 | P10 | Free six-DOF | no settings | three thin free translation lines |
-| P11 | Fixed off zero | Y fixed at 0.1 | magenta on both backends (a fixed axis is enforced at 0) |
+| P11 | Fixed off zero | Y fixed at 0.1, rest fixed | magenta on both backends (a fixed axis is enforced at 0); a weld like P09, so the box cannot be moved |
 | P12 | Double pendulum | upper hinge Z +-0.8, lower Z +-1.0 | two stacked joints, the lower one between two dynamic boxes |
-| P13 | Inactive joint | as P01, joint `active` off | dimmed grey |
+| P13 | Inactive joint | as P01, joint `active` off | dimmed grey; no constraint, so the box falls (turn `active` on to get P01's hinge) |
 
 ## IK limits (front row, left to right)
 
