@@ -152,9 +152,15 @@ auto get_physics_joint_state(const Joint_entry& entry, Physics_joint_state& stat
         state.frame_a = world_transform_of(*node_0);
         state.frame_b = node_1 ? world_transform_of(*node_1) : state.frame_a;
     }
-    state.shape       = erhe::physics::get_enforced_joint_limits(limits);
-    state.coordinates = erhe::physics::measure_joint_coordinates(state.frame_a, state.frame_b, state.shape);
-    state.range_check = erhe::physics::check_joint_range(state.shape, state.coordinates, c_joint_linear_tolerance, c_joint_angular_tolerance);
+    const auto make_view = [&state](const erhe::physics::Joint_limit_shape& shape) -> Joint_limit_view {
+        Joint_limit_view view{};
+        view.shape       = shape;
+        view.coordinates = erhe::physics::measure_joint_coordinates(state.frame_a, state.frame_b, shape);
+        view.range_check = erhe::physics::check_joint_range(shape, view.coordinates, c_joint_linear_tolerance, c_joint_angular_tolerance);
+        return view;
+    };
+    state.contract = make_view(erhe::physics::get_contract_joint_limits(limits));
+    state.backend  = make_view(erhe::physics::get_enforced_joint_limits(limits));
     return true;
 }
 
@@ -215,8 +221,12 @@ void Joint_constraint_visualization::render(
     }
     const Joint_line_style line_style = make_line_style(style);
     m_lines.clear();
-    if (settings.joint_constraints_physics) {
-        physics_joints(context, *scene_root, filter, line_style, style.joint_size);
+    const Joint_limit_levels levels =
+        (settings.joint_constraints_contract && settings.joint_constraints_backend) ? Joint_limit_levels::both
+        : settings.joint_constraints_backend                                        ? Joint_limit_levels::backend
+        :                                                                             Joint_limit_levels::contract;
+    if (settings.joint_constraints_physics && (settings.joint_constraints_contract || settings.joint_constraints_backend)) {
+        physics_joints(context, *scene_root, filter, line_style, style.joint_size, levels, style.joint_backend_color);
     }
     if (settings.joint_constraints_ik) {
         ik_limits(context, *scene_root, filter, line_style, style.joint_size);
@@ -229,9 +239,13 @@ void Joint_constraint_visualization::physics_joints(
     Scene_root&                   scene_root,
     const Joint_constraint_filter filter,
     const Joint_line_style&       line_style,
-    const float                   joint_size
+    const float                   joint_size,
+    const Joint_limit_levels      levels,
+    const glm::vec4&              backend_color
 )
 {
+    const bool show_contract = (levels == Joint_limit_levels::contract) || (levels == Joint_limit_levels::both);
+    const bool show_backend  = (levels == Joint_limit_levels::backend)  || (levels == Joint_limit_levels::both);
     static_cast<void>(context);
     Physics_joint_state state{};
     for (const std::unique_ptr<Joint_entry>& entry : scene_root.get_joint_system().get_entries()) {
@@ -270,14 +284,28 @@ void Joint_constraint_visualization::physics_joints(
             .body_a_origin = (state.body_node_a != nullptr) ? std::optional<glm::vec3>{glm::vec3{state.body_node_a->position_in_world()}} : std::optional<glm::vec3>{},
             .body_b_origin = (state.body_node_b != nullptr) ? std::optional<glm::vec3>{glm::vec3{state.body_node_b->position_in_world()}} : std::optional<glm::vec3>{},
             .arm_in_a      = arm_in_a,
-            .shape         = state.shape,
-            .coordinates   = state.coordinates,
-            .range_check   = state.range_check,
             .live          = state.live,
             .size          = (joint_size > 0.0f) ? joint_size : derive_joint_size(state),
             .style         = line_style
         };
-        build_physics_joint_lines(input, m_lines);
+        // The contract level: the authored limits, drawn in the limit color
+        // on every backend.
+        if (show_contract) {
+            input.shape       = state.contract.shape;
+            input.coordinates = state.contract.coordinates;
+            input.range_check = state.contract.range_check;
+            build_physics_joint_lines(input, m_lines);
+            input.draw_frames = false;
+        }
+        // The backend level: what the built backend simulates, in the backend
+        // color, magenta where that differs from the contract.
+        if (show_backend) {
+            input.shape             = state.backend.shape;
+            input.coordinates       = state.backend.coordinates;
+            input.range_check       = state.backend.range_check;
+            input.style.limit_color = backend_color;
+            build_physics_joint_lines(input, m_lines);
+        }
         m_drawn_physics_joints.push_back(state.joint->get_id());
     }
 }

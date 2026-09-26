@@ -31,9 +31,21 @@ class Scene_root;
 // applies the view's Joint Constraints filter, and draws them with the pure
 // builders of tools/joint_visualization.hpp. Owned by Debug_visualizations.
 
-// A physics joint as drawn: its anchor frames in world space, the limits the
-// backend enforces and the current joint coordinates. Also what the MCP
-// get_joint_constraint_state tool reports.
+// The limits of a joint at one level, and the current joint coordinates
+// measured against them.
+class Joint_limit_view
+{
+public:
+    erhe::physics::Joint_limit_shape shape      {};
+    erhe::physics::Joint_coordinates coordinates{};
+    erhe::physics::Joint_range_check range_check{};
+};
+
+// A physics joint as drawn: its anchor frames in world space and its limits at
+// the two levels - the erhe::physics joint contract (the authored limits in
+// the D6 convention, the same for every backend) and what the built physics
+// backend enforces. Also what the MCP get_joint_constraint_state tool
+// reports.
 class Physics_joint_state
 {
 public:
@@ -45,9 +57,8 @@ public:
     const erhe::scene::Node*           frame_node_1 {nullptr};
     const erhe::scene::Node*           body_node_a  {nullptr}; // live only
     const erhe::scene::Node*           body_node_b  {nullptr}; // live only; null = world
-    erhe::physics::Joint_limit_shape   shape        {};
-    erhe::physics::Joint_coordinates   coordinates  {};
-    erhe::physics::Joint_range_check   range_check  {};
+    Joint_limit_view                   contract     {}; // erhe::physics::get_contract_joint_limits
+    Joint_limit_view                   backend      {}; // erhe::physics::get_enforced_joint_limits
 };
 
 // Joint coordinate tolerances of the in-range check: 1 mm, 1 degree.
@@ -80,6 +91,14 @@ public:
 // constraint.
 [[nodiscard]] auto get_ik_limit_state(const erhe::scene::Node& node, const Ik_drag* ik_drag, Ik_limit_state& state) -> bool;
 
+// Which levels of a physics joint's limits are drawn.
+enum class Joint_limit_levels : unsigned int
+{
+    contract = 0, // the erhe::physics joint contract
+    backend  = 1, // what the built physics backend simulates
+    both     = 2
+};
+
 class Joint_constraint_visualization
 {
 public:
@@ -97,7 +116,7 @@ public:
     [[nodiscard]] auto get_drawn_ik_bones      () const -> const std::vector<std::size_t>& { return m_drawn_ik_bones; }
 
 private:
-    void physics_joints(const Render_context& context, Scene_root& scene_root, Joint_constraint_filter filter, const Joint_line_style& line_style, float joint_size);
+    void physics_joints(const Render_context& context, Scene_root& scene_root, Joint_constraint_filter filter, const Joint_line_style& line_style, float joint_size, Joint_limit_levels levels, const glm::vec4& backend_color);
     void ik_limits     (const Render_context& context, Scene_root& scene_root, Joint_constraint_filter filter, const Joint_line_style& line_style, float joint_size);
     void add_ik_bone   (const erhe::scene::Node& node, const Ik_drag* ik_drag, const Joint_line_style& line_style, float joint_size);
     void flush         (const Render_context& context);

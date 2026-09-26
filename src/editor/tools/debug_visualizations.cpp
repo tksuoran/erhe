@@ -2461,6 +2461,7 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry("Violation",    [style_row, &style](){ style_row(&style.joint_violation_color,    nullptr); });
     p.add_entry("Pending",      [style_row, &style](){ style_row(&style.joint_pending_color,      nullptr); });
     p.add_entry("Approximated", [style_row, &style](){ style_row(&style.joint_approximated_color, nullptr); });
+    p.add_entry("Backend",      [style_row, &style](){ style_row(&style.joint_backend_color,      nullptr); });
     p.add_entry("Body Link",    [style_row, &style](){ style_row(&style.joint_body_link_color,    nullptr); });
     p.add_entry("IK Swing",     [style_row, &style](){ style_row(&style.ik_limit_swing_color,     nullptr); });
     p.add_entry("IK Twist",     [style_row, &style](){ style_row(&style.ik_limit_twist_color,     nullptr); });
@@ -2511,6 +2512,20 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     });
     if (m_settings.joint_constraints != Joint_constraint_filter::off) {
         p.add_entry("Physics Joints", [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_physics); });
+        if (m_settings.joint_constraints_physics) {
+            p.add_entry("Contract Level", [this](){
+                ImGui::Checkbox("##", &m_settings.joint_constraints_contract);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("The limits as the erhe::physics joint contract states them (D6: twist about X, swing about Y and Z),\nthe same on every physics backend.");
+                }
+            });
+            p.add_entry("Backend Level", [this](){
+                ImGui::Checkbox("##", &m_settings.joint_constraints_backend);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("The limits as the built physics backend simulates them, in the backend color;\nmagenta where the backend differs from the contract.");
+                }
+            });
+        }
         p.add_entry("IK Limits",      [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_ik); });
     }
 

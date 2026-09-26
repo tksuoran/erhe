@@ -26,6 +26,7 @@
 #include "windows/viewport_window.hpp"
 
 #include "erhe_math/math_util.hpp"
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
 #include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -869,6 +870,39 @@ namespace {
     return json::array({v.x, v.y, v.z});
 }
 
+// One level of a joint's limits: the shape, the current coordinates measured
+// against it, which lie in range, and whether the shape is the contract
+// (always true at the contract level).
+[[nodiscard]] auto limit_view_to_json(const Joint_limit_view& view) -> json
+{
+    const erhe::physics::Joint_limit_shape& shape       = view.shape;
+    const erhe::physics::Joint_coordinates& coordinates = view.coordinates;
+    const erhe::physics::Joint_range_check& check       = view.range_check;
+    return json{
+        {"exact", shape.is_exact},
+        {"limits", {
+            {"translation", json::array({limit_to_json(shape.translation[0]), limit_to_json(shape.translation[1]), limit_to_json(shape.translation[2])})},
+            {"twist_axis",  shape.twist_axis},
+            {"twist",       limit_to_json(shape.twist)},
+            {"swing_model", (shape.swing_model == erhe::physics::Swing_limit_model::pyramid) ? "pyramid" : "cone"},
+            {"swing",       json::array({limit_to_json(shape.swing[0]), limit_to_json(shape.swing[1])})},
+            {"cone",        limit_to_json(shape.cone)}
+        }},
+        {"coordinates", {
+            {"translation", vec3_to_json(coordinates.translation)},
+            {"twist",       coordinates.twist},
+            {"swing",       json::array({coordinates.swing[0], coordinates.swing[1]})},
+            {"cone",        coordinates.cone}
+        }},
+        {"in_range", {
+            {"translation", json::array({check.translation_ok[0], check.translation_ok[1], check.translation_ok[2]})},
+            {"twist",       check.twist_ok},
+            {"swing",       check.swing_ok},
+            {"all",         check.all_ok()}
+        }}
+    };
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_set_joint_constraint_visualization(const json& args) -> std::string
@@ -905,11 +939,19 @@ auto Mcp_server::action_set_joint_constraint_visualization(const json& args) -> 
         if (args.contains("ik")) {
             settings.joint_constraints_ik = args.value("ik", true);
         }
+        if (args.contains("contract")) {
+            settings.joint_constraints_contract = args.value("contract", true);
+        }
+        if (args.contains("backend")) {
+            settings.joint_constraints_backend = args.value("backend", false);
+        }
         viewports.push_back({
             {"viewport", viewport_window->get_title()},
             {"filter",   std::string{to_string(settings.joint_constraints)}},
             {"physics",  settings.joint_constraints_physics},
-            {"ik",       settings.joint_constraints_ik}
+            {"ik",       settings.joint_constraints_ik},
+            {"contract", settings.joint_constraints_contract},
+            {"backend",  settings.joint_constraints_backend}
         });
     }
     if (viewports.empty()) {
@@ -936,36 +978,21 @@ auto Mcp_server::query_joint_constraint_state(const json& args) -> std::string
         if (!get_physics_joint_state(*entry, state)) {
             continue;
         }
-        const erhe::physics::Joint_limit_shape&  shape       = state.shape;
-        const erhe::physics::Joint_coordinates&  coordinates = state.coordinates;
-        const erhe::physics::Joint_range_check&  check       = state.range_check;
+        const std::shared_ptr<erhe::physics::Physics_joint_settings> settings = state.joint->get_settings();
+        const std::array<erhe::physics::Constraint_axis_limit, 6> authored = settings
+            ? settings->get_axis_limits()
+            : std::array<erhe::physics::Constraint_axis_limit, 6>{};
+        const std::optional<std::string> box3d_note = erhe::physics::describe_box3d_incompatibility(authored);
         physics_joints.push_back({
-            {"name",        state.joint->get_name()},
-            {"id",          state.joint->get_id()},
-            {"live",        state.live},
-            {"exact",       shape.is_exact},
-            {"frame_a_origin", vec3_to_json(state.frame_a.origin)},
-            {"frame_b_origin", vec3_to_json(state.frame_b.origin)},
-            {"limits", {
-                {"translation", json::array({limit_to_json(shape.translation[0]), limit_to_json(shape.translation[1]), limit_to_json(shape.translation[2])})},
-                {"twist_axis",  shape.twist_axis},
-                {"twist",       limit_to_json(shape.twist)},
-                {"swing_model", (shape.swing_model == erhe::physics::Swing_limit_model::pyramid) ? "pyramid" : "cone"},
-                {"swing",       json::array({limit_to_json(shape.swing[0]), limit_to_json(shape.swing[1])})},
-                {"cone",        limit_to_json(shape.cone)}
-            }},
-            {"coordinates", {
-                {"translation", vec3_to_json(coordinates.translation)},
-                {"twist",       coordinates.twist},
-                {"swing",       json::array({coordinates.swing[0], coordinates.swing[1]})},
-                {"cone",        coordinates.cone}
-            }},
-            {"in_range", {
-                {"translation", json::array({check.translation_ok[0], check.translation_ok[1], check.translation_ok[2]})},
-                {"twist",       check.twist_ok},
-                {"swing",       check.swing_ok},
-                {"all",         check.all_ok()}
-            }}
+            {"name",             state.joint->get_name()},
+            {"id",               state.joint->get_id()},
+            {"live",             state.live},
+            {"frame_a_origin",   vec3_to_json(state.frame_a.origin)},
+            {"frame_b_origin",   vec3_to_json(state.frame_b.origin)},
+            {"contract",         limit_view_to_json(state.contract)},
+            {"backend",          limit_view_to_json(state.backend)},
+            {"box3d_compatible", !box3d_note.has_value()},
+            {"box3d_note",       box3d_note.value_or(std::string{})}
         });
     }
 
@@ -1016,6 +1043,8 @@ auto Mcp_server::query_joint_constraint_state(const json& args) -> std::string
                 {"filter",               std::string{to_string(settings.joint_constraints)}},
                 {"physics",              settings.joint_constraints_physics},
                 {"ik",                   settings.joint_constraints_ik},
+                {"contract",             settings.joint_constraints_contract},
+                {"backend",              settings.joint_constraints_backend},
                 {"drawn_physics_joints", visualization.get_drawn_physics_joints()},
                 {"drawn_ik_bones",       visualization.get_drawn_ik_bones()}
             });

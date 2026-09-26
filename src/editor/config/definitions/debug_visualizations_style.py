@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=3,
+    version=4,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -93,6 +93,7 @@ struct("Debug_visualizations_style",
         field("joint_violation_color",             Vec4,  added_in=3, default="1.0f, 0.1f, 0.1f, 1.0f",  short_desc="Joint Violation Color",    long_desc="Current joint coordinate markers outside their range"),
         field("joint_pending_color",               Vec4,  added_in=3, default="0.5f, 0.5f, 0.5f, 0.5f",  short_desc="Joint Pending Color",      long_desc="Every line of a physics joint that has no live constraint (inactive, no physics world, body not built yet)"),
         field("joint_approximated_color",          Vec4,  added_in=3, default="1.0f, 0.2f, 1.0f, 1.0f",  short_desc="Joint Approximated Color", long_desc="Limits of a physics joint the physics backend enforces differently from how they were authored"),
+        field("joint_backend_color",               Vec4,  added_in=4, default="0.35f, 0.55f, 1.0f, 1.0f", short_desc="Joint Backend Color", long_desc="Limits of a physics joint at the backend level, where the backend simulates the contract exactly"),
         field("joint_body_link_color",             Vec4,  added_in=3, default="0.4f, 0.8f, 1.0f, 0.8f",  short_desc="Joint Body Link Color",    long_desc="Line from each joint frame to the origin of the body it is attached to"),
         field("ik_limit_swing_color",              Vec4,  added_in=3, default="0.2f, 0.9f, 0.6f, 1.0f",  short_desc="IK Limit Swing Color",     long_desc="Swing region boundary of an IK-limited bone"),
         field("ik_limit_twist_color",              Vec4,  added_in=3, default="1.0f, 0.9f, 0.2f, 1.0f",  short_desc="IK Limit Twist Color",     long_desc="Twist range arc of an IK-limited bone"),

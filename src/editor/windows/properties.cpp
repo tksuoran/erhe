@@ -69,6 +69,8 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_physics/box3d_six_dof_classifier.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -898,9 +900,31 @@ void Properties::node_physics_properties(const erhe::scene::Node& node)
 }
 
 
+// The warning row of a joint settings item whose limits Box3D does not
+// simulate exactly (erhe::physics::describe_box3d_incompatibility), shown
+// whatever backend this editor is built with: the settings are the
+// erhe::physics joint contract, and this says whether they are portable.
+void Properties::joint_limits_portability(const erhe::physics::Physics_joint_settings& settings)
+{
+    const std::optional<std::string> note = erhe::physics::describe_box3d_incompatibility(settings.get_axis_limits());
+    if (!note.has_value()) {
+        return;
+    }
+    add_entry("Box3D", [text = note.value()](){
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 160, 32, 255));
+        ImGui::TextWrapped("Not fully Box3D compatible: %s", text.c_str());
+        ImGui::PopStyleColor();
+    });
+}
+
 void Properties::joint_properties(Joint& joint)
 {
     ERHE_PROFILE_FUNCTION();
+
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> settings = joint.get_settings();
+    if (settings) {
+        joint_limits_portability(*settings);
+    }
 
     // The two frame nodes, the joint settings and the collision flag are
     // generic property rows (doc/erhe/property_system.md section 4.17); the
@@ -967,6 +991,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     // The ungrouped diagnostic rows of an item; the grouped ones are the
     // shared property group hooks registered in the constructor.
     const auto& joint            = std::dynamic_pointer_cast<Joint                  >(item);
+    const auto& joint_settings   = std::dynamic_pointer_cast<erhe::physics::Physics_joint_settings>(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
 
@@ -975,6 +1000,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
         ImGui::BeginDisabled();
     }
     if (joint)            { joint_properties(*joint); }
+    if (joint_settings)   { joint_limits_portability(*joint_settings); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
     if (edit_disabled) {

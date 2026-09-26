@@ -74,7 +74,7 @@ def pose_bob(client, angle):
 def hinge_angle(joint):
     """The hinge's rotation coordinate: the backend puts it in the twist (Box3D
     revolute) or in a pyramid swing axis (Jolt)."""
-    coordinates = joint["coordinates"]
+    coordinates = joint["contract"]["coordinates"]
     return max([abs(coordinates["twist"])] + [abs(value) for value in coordinates["swing"]])
 
 
@@ -137,7 +137,7 @@ def main():
     joint = joints[0]
     joint_id = joint["id"]
     check_true("1 joint is live", joint["live"])
-    limits = joint["limits"]
+    limits = joint["contract"]["limits"]
     ranges = [limits["twist"]] + limits["swing"]
     hinge = [r for r in ranges if r.get("limited") and (r["max"] > r["min"])]
     check_true("1 exactly one ranged rotation axis, +-0.8 rad",
@@ -148,8 +148,8 @@ def main():
     pose_bob(client, 0.5)
     joint = joint_state(client)["physics_joints"][0]
     check_true("2 at 0.5 rad: coordinate 0.5, in range",
-               math.isclose(hinge_angle(joint), 0.5, abs_tol=ANGLE_TOL) and joint["in_range"]["all"],
-               f"angle {hinge_angle(joint):.4f}, in_range {joint['in_range']}")
+               math.isclose(hinge_angle(joint), 0.5, abs_tol=ANGLE_TOL) and joint["contract"]["in_range"]["all"],
+               f"angle {hinge_angle(joint):.4f}, in_range {joint['contract']['in_range']}")
     client.call("set_joint_constraint_visualization", {"filter": "all"})
     advance(client)
     client.call("capture_screenshot", {"path": "logs/joint_visualization_in_range.png"})
@@ -157,8 +157,8 @@ def main():
     pose_bob(client, 1.2)
     joint = joint_state(client)["physics_joints"][0]
     check_true("2 at 1.2 rad: coordinate 1.2, flagged out of range",
-               math.isclose(hinge_angle(joint), 1.2, abs_tol=ANGLE_TOL) and not joint["in_range"]["all"],
-               f"angle {hinge_angle(joint):.4f}, in_range {joint['in_range']}")
+               math.isclose(hinge_angle(joint), 1.2, abs_tol=ANGLE_TOL) and not joint["contract"]["in_range"]["all"],
+               f"angle {hinge_angle(joint):.4f}, in_range {joint['contract']['in_range']}")
     client.call("capture_screenshot", {"path": "logs/joint_visualization_violated.png"})
     pose_bob(client, 0.0)
 

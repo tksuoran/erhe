@@ -14,16 +14,22 @@ and `IK_CASES` tables are the definition of every case below.
 1. File > Load Scene, pick the file. The scene opens with the simulation
    paused (Physics window, "Physics enabled" off).
 2. In the viewport's Debug Visualizations popup set **Joint Constraints** to
-   **All**; leave **Physics Joints** and **IK Limits** checked.
+   **All**; leave **Physics Joints** and **IK Limits** checked. **Contract
+   Level** (on by default) draws what each joint's settings mean in
+   erhe::physics - identical on Jolt and Box3D; turn on **Backend Level** to
+   overlay what the running backend actually simulates.
 
 ## Physics joints (back row, left to right)
 
 Every station is a static grey post with an orange 1 kg box hanging 0.55 m
 below it; the joint joins a `Hinge` anchor under the box to a `Pivot` anchor
-under the post. Orange lines are enforced limits, grey thin lines free axes,
-white spokes the current values (red when out of range), magenta limits the
-backend enforces differently from how they were authored, and a grey
-dimmed station has no live constraint. The rotation limits are drawn as
+under the post. Orange lines are the contract limits, grey thin lines free
+axes, white spokes the current values (red when out of range), and a grey
+dimmed station has no live constraint. With Backend Level on, blue lines are
+the limits the backend simulates, magenta where it simulates something other
+than the contract; the Properties window of a joint whose settings Box3D
+cannot simulate exactly (P04, P05, P11) carries a "Not fully Box3D
+compatible" warning on either backend. The rotation limits are drawn as
 where the box can go (the arm from the pivot to the box), fixed to the post,
 so a hinge's sector hangs through its box on both backends.
 
@@ -32,14 +38,14 @@ so a hinge's sector hangs through its box on both backends.
 | P01 | Hinge limited | rotation Z +-0.785, rest fixed | a 90 degree sector hanging below the post, through the box |
 | P02 | Hinge free | rotation Z free, rest fixed | a full thin circle through the box |
 | P03 | Hinge asymmetric | rotation Z -0.3 .. 1.2 | a sector through the box reaching further to one side |
-| P04 | Ball limited | all rotations +-0.5 | arcs through the box in the two planes the arm swings in; Box3D magenta (a cone about Z) |
-| P05 | Swing pyramid asymmetric | X fixed, Y -0.2 .. 0.8, Z -0.6 .. 0.3 | Jolt: an off-center sector through the box; Box3D: magenta, the cone about Z traced by the hanging arm (a fan with two small lobes at the box) |
+| P04 | Ball limited | all rotations +-0.5 | contract: the swing sector (Z) and twist arc (X) through the box; Box3D backend level: magenta cone about Z |
+| P05 | Swing pyramid asymmetric | X fixed, Y -0.2 .. 0.8, Z -0.6 .. 0.3 | contract: an off-center sector through the box; Box3D backend level: magenta, the cone about Z traced by the hanging arm |
 | P06 | Ball free | rotations free | frames only, no limit geometry |
 | P07 | Slider Y limited | Y -0.3 .. 0.1, rest fixed | a vertical segment with end ticks |
 | P08 | Slider X free | X free, rest fixed | a thin horizontal line |
 | P09 | Weld | everything fixed | frames only; the box is welded to the static post and cannot be moved |
 | P10 | Free six-DOF | no settings | three thin free translation lines |
-| P11 | Fixed off zero | Y fixed at 0.1, rest fixed | magenta on both backends (a fixed axis is enforced at 0); a weld like P09, so the box cannot be moved |
+| P11 | Fixed off zero | Y fixed at 0.1, rest fixed | the contract's translation cross in red: the contract says 0.1, both backends hold 0 (backend level: magenta); a weld like P09, so the box cannot be moved |
 | P12 | Double pendulum | upper hinge Z +-0.8, lower Z +-1.0 | two stacked joints, the lower one between two dynamic boxes |
 | P13 | Inactive joint | as P01, joint `active` off | dimmed grey; no constraint, so the box falls (turn `active` on to get P01's hinge) |
 

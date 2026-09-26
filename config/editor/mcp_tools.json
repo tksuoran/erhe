@@ -5057,7 +5057,7 @@
     "name": "edit_physics_joint_settings"
   },
   {
-    "description": "Set a viewport's joint constraint debug visualization (doc/editor/tools.md, Debug_visualizations): which constraints are drawn (filter) and which kinds (physics joints, IK limits). Omitted arguments keep their value. Applies to every viewport, or to the one titled 'viewport'.",
+    "description": "Set a viewport's joint constraint debug visualization (doc/editor/tools.md, Debug_visualizations): which constraints are drawn (filter) and which kinds (physics joints, IK limits), and at which level physics joint limits are drawn (contract: the erhe::physics joint contract, the same on every backend; backend: what the built physics backend simulates). Omitted arguments keep their value. Applies to every viewport, or to the one titled 'viewport'.",
     "inputSchema": {
       "properties": {
         "viewport": {
@@ -5075,6 +5075,14 @@
         "ik": {
           "description": "Draw IK bone limits",
           "type": "boolean"
+        },
+        "contract": {
+          "description": "Draw physics joint limits at the erhe::physics contract level",
+          "type": "boolean"
+        },
+        "backend": {
+          "description": "Draw physics joint limits at the physics backend level",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -5082,7 +5090,7 @@
     "name": "set_joint_constraint_visualization"
   },
   {
-    "description": "Report the joint constraints of a scene as the joint constraint visualization measures them: every physics joint (live or pending, the limits the physics backend enforces, the current joint coordinates and which lie outside their range) and every IK-constrained bone (twist axis, current twist angle and swing, within limits), plus per viewport the filter and the ids of the joints and bones it drew last frame.",
+    "description": "Report the joint constraints of a scene as the joint constraint visualization measures them: every physics joint (live or pending; at the 'contract' level - the authored limits in the erhe::physics D6 convention - and at the 'backend' level - what the built physics backend simulates - each with its limits, the current joint coordinates and which lie in range; plus box3d_compatible / box3d_note, whether Box3D simulates the joint's settings exactly) and every IK-constrained bone (twist axis, current twist angle and swing, within limits), plus per viewport the filter, the levels and the ids of the joints and bones it drew last frame.",
     "inputSchema": {
       "properties": {
         "scene_name": {

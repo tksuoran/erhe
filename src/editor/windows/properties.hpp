@@ -30,6 +30,9 @@ namespace erhe::scene {
     class Scene;
     class Skin;
 }
+namespace erhe::physics {
+    class Physics_joint_settings;
+}
 namespace erhe::geometry {
     class Geometry;
 }
@@ -131,6 +134,7 @@ private:
     // "Rigid Body" group through Dependency_property_rows::add_group_rows.
     void node_physics_properties      (const erhe::scene::Node& node);
     void joint_properties             (Joint& joint);
+    void joint_limits_portability     (const erhe::physics::Physics_joint_settings& settings);
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);

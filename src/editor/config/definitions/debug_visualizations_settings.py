@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=2,
+    version=3,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -66,6 +66,8 @@ struct("Debug_visualizations_settings",
         field("joint_constraints",                 EnumRef("Joint_constraint_filter"), added_in=2, default="Joint_constraint_filter::off", short_desc="Joint Constraints", long_desc="Which joint constraints are drawn: all, those moving the hovered mesh, or those of the hovered bone"),
         field("joint_constraints_physics",         Bool,  added_in=2, default="true",   short_desc="Physics Joints", long_desc="Draw physics joints (Joint prims): frames, ranges and current values"),
         field("joint_constraints_ik",              Bool,  added_in=2, default="true",   short_desc="IK Limits",      long_desc="Draw IK bone limits: twist range and swing region"),
+        field("joint_constraints_contract",        Bool,  added_in=3, default="true",   short_desc="Contract Level", long_desc="Draw physics joint limits as the erhe::physics joint contract states them (the authored limits in the D6 convention), the same on every physics backend"),
+        field("joint_constraints_backend",         Bool,  added_in=3, default="false",  short_desc="Backend Level",  long_desc="Draw physics joint limits as the built physics backend simulates them, in the backend color; magenta where that differs from the contract"),
 
         field("max_labels",                        Int,   added_in=1, default="400",    short_desc="Max Labels"),
         field("vertex_positions",                  Bool,  added_in=1, default="false",  short_desc="Vertex Positions"),

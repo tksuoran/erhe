@@ -8,9 +8,10 @@ them, so the two cannot drift. It loads the asset with load_scene and runs:
 
   1. Reload fidelity + static state, simulation paused: every physics joint
      is reported, live except the inactive one (the ERHE_physics_joint
-     payload keeps it inactive), with the limits its settings state, the
-     enforced-shape exactness the backend is expected to report, and every
-     coordinate in range at rest; every IK bone reports its limits and the
+     payload keeps it inactive), with the backend-level exactness and the
+     Box3D compatibility expected of it, and every coordinate in range at
+     rest at both levels (P11 breaks its contract: both backends hold its
+     fixed axis at zero, not at the authored 0.1); every IK bone reports its limits and the
      saved pose is within them except the case posed outside.
   2. The Joint Constraints filter: `all` draws every joint and every
      limited bone; `hovered_mesh` / `hovered_bone` with nothing hovered draw
@@ -95,11 +96,11 @@ def limit_excess(limit, value):
     return max(0.0, limit["min"] - value, value - limit["max"])
 
 
-def joint_excess(joint):
-    """(angular, linear) amounts the coordinates lie outside the enforced
-    limits, in radians and meters."""
-    limits      = joint["limits"]
-    coordinates = joint["coordinates"]
+def joint_excess(view):
+    """(angular, linear) amounts the coordinates of one level of a joint
+    ("contract" or "backend") lie outside its limits, radians and meters."""
+    limits      = view["limits"]
+    coordinates = view["coordinates"]
     linear = max(limit_excess(limits["translation"][axis], coordinates["translation"][axis]) for axis in range(3))
     angular = limit_excess(limits["twist"], coordinates["twist"])
     if limits["swing_model"] == "pyramid":
@@ -126,7 +127,7 @@ def check_static(client, scene):
     hinge = joints.get(asset.joint_name(asset.STATIONS[0]))
     if hinge is None:
         raise RuntimeError("the hinge station is missing - is this the joint constraint test asset?")
-    backend = "box3d" if hinge["limits"]["twist_axis"] == 2 else "jolt"
+    backend = "box3d" if hinge["backend"]["limits"]["twist_axis"] == 2 else "jolt"
     print(f"physics backend (detected): {backend}")
 
     for name, station, lower in expected_joints():
@@ -137,10 +138,19 @@ def check_static(client, scene):
         expect_live = station.get("live", True)
         check_true(f"1 {name}: {'live' if expect_live else 'pending (inactive after reload)'}", joint["live"] == expect_live)
         expect_exact = station[f"exact_{backend}"]
-        check_true(f"1 {name}: exact == {expect_exact} on {backend}", joint["exact"] == expect_exact, f"exact {joint['exact']}")
-        if expect_live and not (station["key"] == "P11"):
-            angular, linear = joint_excess(joint)
-            check_true(f"1 {name}: in range at rest", (angular < 1.0e-3) and (linear < 1.0e-3), f"excess {angular:.4f} rad {linear:.4f} m")
+        check_true(f"1 {name}: backend exact == {expect_exact} on {backend}", joint["backend"]["exact"] == expect_exact, f"exact {joint['backend']['exact']}")
+        check_true(f"1 {name}: box3d_compatible == {station['exact_box3d']}", joint["box3d_compatible"] == station["exact_box3d"], joint["box3d_note"])
+        check_true(f"1 {name}: the contract level is exact", joint["contract"]["exact"] is True)
+        if expect_live:
+            angular, linear = joint_excess(joint["backend"])
+            check_true(f"1 {name}: backend level in range at rest", (angular < 1.0e-3) and (linear < 1.0e-3), f"excess {angular:.4f} rad {linear:.4f} m")
+            # P11's Y is authored fixed at 0.1 and both backends hold it at
+            # 0, so at rest it breaks its contract by 0.1 m.
+            angular, linear = joint_excess(joint["contract"])
+            if station["key"] == "P11":
+                check_true(f"1 {name}: contract level out of range by 0.1 m at rest", abs(linear - 0.1) < 1.0e-3, f"excess {linear:.4f} m")
+            else:
+                check_true(f"1 {name}: contract level in range at rest", (angular < 1.0e-3) and (linear < 1.0e-3), f"excess {angular:.4f} rad {linear:.4f} m")
 
     bones = by_name(snapshot["ik_bones"])
     for case in asset.IK_CASES:
@@ -228,7 +238,7 @@ def check_stress(client, scene, impulse, angular_tolerance, linear_tolerance):
             joint = by_name(client.call("get_joint_constraint_state", {"scene_name": scene})["physics_joints"]).get(name)
             if joint is None:
                 break
-            angular, linear = joint_excess(joint)
+            angular, linear = joint_excess(joint["backend"])
             worst_angular = max(worst_angular, angular)
             worst_linear  = max(worst_linear, linear)
         check_true(

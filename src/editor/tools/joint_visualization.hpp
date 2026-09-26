@@ -77,6 +77,7 @@ public:
     erhe::physics::Joint_range_check   range_check{};
     bool                               live{true};        // false: pending, everything in the pending color
     float                              size{0.25f};       // world-space size of the visual
+    bool                               draw_frames{true}; // false: the frame triads and body links another pass already drew
     Joint_line_style                   style{};
 };
 

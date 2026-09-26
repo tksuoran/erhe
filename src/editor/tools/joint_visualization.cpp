@@ -294,14 +294,14 @@ void build_physics_joint_lines(const Physics_joint_line_input& input, Joint_line
     }
 
     // Anchor frames.
-    for (int axis = 0; axis < 3; ++axis) {
+    for (int axis = 0; (axis < 3) && input.draw_frames; ++axis) {
         add_line(buffer, input.frame_a.origin, input.frame_a.origin + (input.frame_a.basis[axis] * (0.5f  * input.size)), colors.axes[static_cast<std::size_t>(axis)], style.line_width);
         add_line(buffer, input.frame_b.origin, input.frame_b.origin + (input.frame_b.basis[axis] * (0.35f * input.size)), colors.axes[static_cast<std::size_t>(axis)], style.thin_line_width);
     }
-    if (input.body_a_origin.has_value()) {
+    if (input.draw_frames && input.body_a_origin.has_value()) {
         add_line(buffer, input.frame_a.origin, input.body_a_origin.value(), colors.body_link, style.thin_line_width);
     }
-    if (input.body_b_origin.has_value()) {
+    if (input.draw_frames && input.body_b_origin.has_value()) {
         add_line(buffer, input.frame_b.origin, input.body_b_origin.value(), colors.body_link, style.thin_line_width);
     }
 
