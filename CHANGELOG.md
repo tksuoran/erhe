@@ -51,8 +51,24 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::imgui`: under a `read_only` config persistence policy an
   `Imgui_host` reads its layout ini before its first frame and never writes
   it (`io.IniFilename` stays null).
+- `erhe::commands`: `Commands::bind_command_to_key()` and
+  `bind_command_to_mouse_button()` take a `Button_trigger` in place of the
+  `bool pressed` / `bool trigger_on_pressed` argument; a key binding can
+  trigger on `Button_trigger::Any` and the command reads the pressed state
+  from `Input_arguments::variant::button_pressed` (key events now fill it and
+  the modifier mask). `Key_binding::get_pressed()` is replaced by
+  `get_trigger()`; `Key_binding::get_modifier_mask()` and
+  `Mouse_button_binding::get_trigger()` are added. `test_button_trigger()` is
+  added next to `Button_trigger`.
+- `erhe::commands`: `Commands::register_command()` requires a unique,
+  non-empty command name and aborts on a duplicate.
 
 ### Fixed
+
+- `erhe::commands`: `Command_binding::c_type_strings` misses no `Type` any
+  more (it lacked `Controller_axis` / `Controller_button`), and
+  `Controller_button_binding::get_type()` returns `Type::Controller_button`
+  instead of `Type::Xr_boolean`.
 
 - `erhe::renderer`: a negative `Primitive_renderer::set_thickness()` (constant
   screen-space width) scaled with the viewport width and the camera field of

@@ -94,7 +94,7 @@ Lattice_tool::Lattice_tool(
 
     m_select_command.set_host(this);
     commands.register_command            (&m_select_command);
-    commands.bind_command_to_mouse_button(&m_select_command, erhe::window::Mouse_button_left, false);
+    commands.bind_command_to_mouse_button(&m_select_command, erhe::window::Mouse_button_left, erhe::commands::Button_trigger::Button_released);
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {

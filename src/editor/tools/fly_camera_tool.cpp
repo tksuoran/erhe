@@ -322,10 +322,11 @@ auto Fly_camera_track_command::try_call() -> bool
 Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
     erhe::commands::Commands& commands,
     App_context&              context,
+    const std::string_view    name,
     Variable                  variable,
     float                     scale
 )
-    : Command   {commands, "Fly_camera_active_axis_float_command"}
+    : Command   {commands, name}
     , m_context {context}
     , m_variable{variable}
     , m_scale   {scale}
@@ -475,26 +476,25 @@ auto Fly_camera_frame_command::try_call() -> bool
 Fly_camera_move_command::Fly_camera_move_command(
     erhe::commands::Commands&            commands,
     App_context&                         context,
+    const std::string_view               name,
     const Variable                       variable,
-    const erhe::math::Input_axis_control control,
-    const bool                           active
+    const erhe::math::Input_axis_control control
 )
-    : Command   {commands, "Fly_camera.move"}
+    : Command   {commands, name}
     , m_context {context}
     , m_variable{variable}
     , m_control {control }
-    , m_active  {active  }
 {
 }
 
 auto Fly_camera_move_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    return m_context.fly_camera_tool->try_move(input.timestamp_ns, m_variable, m_control, m_active);
+    return m_context.fly_camera_tool->try_move(input.timestamp_ns, m_variable, m_control, input.variant.button_pressed);
 }
 #pragma endregion Fly_camera_move_command
 
-Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, bool store)
-    : Command  {commands, "Fly_camera_serialization_command"}
+Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, const std::string_view name, const bool store)
+    : Command  {commands, name}
     , m_context{context}
     , m_store  {store}
 {
@@ -701,26 +701,20 @@ Fly_camera_tool::Fly_camera_tool(
     , m_track_command                 {commands, app_context}
     , m_zoom_command                  {commands, app_context}
     , m_frame_command                 {commands, app_context}
-    , m_move_up_active_command        {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::more, true }
-    , m_move_up_inactive_command      {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::more, false}
-    , m_move_down_active_command      {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::less, true }
-    , m_move_down_inactive_command    {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::less, false}
-    , m_move_left_active_command      {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::less, true }
-    , m_move_left_inactive_command    {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::less, false}
-    , m_move_right_active_command     {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::more, true }
-    , m_move_right_inactive_command   {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::more, false}
-    , m_move_forward_active_command   {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::less, true }
-    , m_move_forward_inactive_command {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::less, false}
-    , m_move_backward_active_command  {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::more, true }
-    , m_move_backward_inactive_command{commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::more, false}
-    , m_active_translate_x_command    {commands, app_context, Variable::translate_x,  1.0 / 32.0f}
-    , m_active_translate_y_command    {commands, app_context, Variable::translate_y, -1.0 / 32.0f}
-    , m_active_translate_z_command    {commands, app_context, Variable::translate_z,  1.0 / 32.0f}
-    , m_active_rotate_x_command       {commands, app_context, Variable::rotate_x,     1.0 / 128.0f}
-    , m_active_rotate_y_command       {commands, app_context, Variable::rotate_y,    -1.0 / 128.0f}
-    , m_active_rotate_z_command       {commands, app_context, Variable::rotate_z,     1.0 / 128.0f}
-    , m_serialize_transform_command   {commands, app_context, true}
-    , m_deserialize_transform_command {commands, app_context, false}
+    , m_move_up_command               {commands, app_context, "Fly_camera.move_up",       Variable::translate_y, erhe::math::Input_axis_control::more}
+    , m_move_down_command             {commands, app_context, "Fly_camera.move_down",     Variable::translate_y, erhe::math::Input_axis_control::less}
+    , m_move_left_command             {commands, app_context, "Fly_camera.move_left",     Variable::translate_x, erhe::math::Input_axis_control::less}
+    , m_move_right_command            {commands, app_context, "Fly_camera.move_right",    Variable::translate_x, erhe::math::Input_axis_control::more}
+    , m_move_forward_command          {commands, app_context, "Fly_camera.move_forward",  Variable::translate_z, erhe::math::Input_axis_control::less}
+    , m_move_backward_command         {commands, app_context, "Fly_camera.move_backward", Variable::translate_z, erhe::math::Input_axis_control::more}
+    , m_active_translate_x_command    {commands, app_context, "Fly_camera.axis_translate_x", Variable::translate_x,  1.0 / 32.0f}
+    , m_active_translate_y_command    {commands, app_context, "Fly_camera.axis_translate_y", Variable::translate_y, -1.0 / 32.0f}
+    , m_active_translate_z_command    {commands, app_context, "Fly_camera.axis_translate_z", Variable::translate_z,  1.0 / 32.0f}
+    , m_active_rotate_x_command       {commands, app_context, "Fly_camera.axis_rotate_x",    Variable::rotate_x,     1.0 / 128.0f}
+    , m_active_rotate_y_command       {commands, app_context, "Fly_camera.axis_rotate_y",    Variable::rotate_y,    -1.0 / 128.0f}
+    , m_active_rotate_z_command       {commands, app_context, "Fly_camera.axis_rotate_z",    Variable::rotate_z,     1.0 / 128.0f}
+    , m_serialize_transform_command   {commands, app_context, "Fly_camera.store_transform",   true}
+    , m_deserialize_transform_command {commands, app_context, "Fly_camera.restore_transform", false}
 
     , m_tx_graph       {"Tx",      "time", "ms", "Tx",      ""}
     , m_ty_graph       {"Ty",      "time", "ms", "Ty",      ""}
@@ -771,18 +765,12 @@ Fly_camera_tool::Fly_camera_tool(
     set_base_priority(c_priority);
     set_description  ("Fly Camera");
 
-    commands.register_command(&m_move_up_active_command);
-    commands.register_command(&m_move_up_inactive_command);
-    commands.register_command(&m_move_down_active_command);
-    commands.register_command(&m_move_down_inactive_command);
-    commands.register_command(&m_move_left_active_command);
-    commands.register_command(&m_move_left_inactive_command);
-    commands.register_command(&m_move_right_active_command);
-    commands.register_command(&m_move_right_inactive_command);
-    commands.register_command(&m_move_forward_active_command);
-    commands.register_command(&m_move_forward_inactive_command);
-    commands.register_command(&m_move_backward_active_command);
-    commands.register_command(&m_move_backward_inactive_command);
+    commands.register_command(&m_move_up_command);
+    commands.register_command(&m_move_down_command);
+    commands.register_command(&m_move_left_command);
+    commands.register_command(&m_move_right_command);
+    commands.register_command(&m_move_forward_command);
+    commands.register_command(&m_move_backward_command);
     commands.register_command(&m_active_translate_x_command);
     commands.register_command(&m_active_translate_y_command);
     commands.register_command(&m_active_translate_z_command);
@@ -792,20 +780,15 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_serialize_transform_command);
     commands.register_command(&m_deserialize_transform_command);
 
-    commands.bind_command_to_key(&m_move_up_active_command,         erhe::window::Key_q,  true );
-    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::window::Key_q,  false);
-    commands.bind_command_to_key(&m_move_down_active_command,       erhe::window::Key_e,  true );
-    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::window::Key_e,  false);
-    commands.bind_command_to_key(&m_move_left_active_command,       erhe::window::Key_a,  true );
-    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::window::Key_a,  false);
-    commands.bind_command_to_key(&m_move_right_active_command,      erhe::window::Key_d,  true );
-    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::window::Key_d,  false);
-    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::window::Key_w,  true );
-    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::window::Key_w,  false);
-    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::window::Key_s,  true );
-    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::window::Key_s,  false);
-    commands.bind_command_to_key(&m_serialize_transform_command,    erhe::window::Key_page_up, true);
-    commands.bind_command_to_key(&m_deserialize_transform_command,  erhe::window::Key_page_down, true);
+    using Button_trigger = erhe::commands::Button_trigger;
+    commands.bind_command_to_key(&m_move_up_command,               erhe::window::Key_q, Button_trigger::Any);
+    commands.bind_command_to_key(&m_move_down_command,             erhe::window::Key_e, Button_trigger::Any);
+    commands.bind_command_to_key(&m_move_left_command,             erhe::window::Key_a, Button_trigger::Any);
+    commands.bind_command_to_key(&m_move_right_command,            erhe::window::Key_d, Button_trigger::Any);
+    commands.bind_command_to_key(&m_move_forward_command,          erhe::window::Key_w, Button_trigger::Any);
+    commands.bind_command_to_key(&m_move_backward_command,         erhe::window::Key_s, Button_trigger::Any);
+    commands.bind_command_to_key(&m_serialize_transform_command,   erhe::window::Key_page_up);
+    commands.bind_command_to_key(&m_deserialize_transform_command, erhe::window::Key_page_down);
 
     commands.register_command(&m_turn_command);
     // Turn (look around) is on RIGHT mouse drag so plain LEFT drag is free for the
@@ -826,7 +809,7 @@ Fly_camera_tool::Fly_camera_tool(
     commands.bind_command_to_mouse_wheel(&m_zoom_command);
 
     commands.register_command(&m_frame_command);
-    commands.bind_command_to_key(&m_frame_command, erhe::window::Key_f, true);
+    commands.bind_command_to_key(&m_frame_command, erhe::window::Key_f);
 
     m_rotate_scale_x = config.invert_x ? -1.0f / 512.0f : 1.0f / 512.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 512.0f : 1.0f / 512.f;
@@ -849,18 +832,12 @@ Fly_camera_tool::Fly_camera_tool(
     m_tumble_command                .set_host(this);
     m_zoom_command                  .set_host(this);
     m_frame_command                 .set_host(this);
-    m_move_up_active_command        .set_host(this);
-    m_move_up_inactive_command      .set_host(this);
-    m_move_down_active_command      .set_host(this);
-    m_move_down_inactive_command    .set_host(this);
-    m_move_left_active_command      .set_host(this);
-    m_move_left_inactive_command    .set_host(this);
-    m_move_right_active_command     .set_host(this);
-    m_move_right_inactive_command   .set_host(this);
-    m_move_forward_active_command   .set_host(this);
-    m_move_forward_inactive_command .set_host(this);
-    m_move_backward_active_command  .set_host(this);
-    m_move_backward_inactive_command.set_host(this);
+    m_move_up_command               .set_host(this);
+    m_move_down_command             .set_host(this);
+    m_move_left_command             .set_host(this);
+    m_move_right_command            .set_host(this);
+    m_move_forward_command          .set_host(this);
+    m_move_backward_command         .set_host(this);
 }
 
 void Fly_camera_tool::update_camera()

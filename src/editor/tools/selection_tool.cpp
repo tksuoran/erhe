@@ -346,12 +346,12 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     commands.register_command            (&m_cut_command);
     commands.register_command            (&m_copy_command);
     commands.register_command            (&m_duplicate_command);
-    commands.bind_command_to_mouse_button(&m_viewport_select_command, erhe::window::Mouse_button_left, false);
-    commands.bind_command_to_key         (&m_delete_command,          erhe::window::Key_delete,        true);
-    commands.bind_command_to_key         (&m_cut_command,             erhe::window::Key_x,             true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_insert,        true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_c,             true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key         (&m_duplicate_command,       erhe::window::Key_d,             true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_mouse_button(&m_viewport_select_command, erhe::window::Mouse_button_left, erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key         (&m_delete_command,          erhe::window::Key_delete);
+    commands.bind_command_to_key         (&m_cut_command,             erhe::window::Key_x,             erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_insert,        erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_c,             erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_duplicate_command,       erhe::window::Key_d,             erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
     commands.bind_command_to_menu(&m_delete_command,    "Edit.Delete");
     commands.bind_command_to_menu(&m_cut_command,       "Edit.Cut");

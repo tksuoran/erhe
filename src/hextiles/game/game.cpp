@@ -57,14 +57,14 @@ Game::Game(
     commands.register_command(&m_move_unit_nw_command);
     commands.register_command(&m_select_previous_unit_command);
     commands.register_command(&m_select_next_unit_command);
-    commands.bind_command_to_key(&m_move_unit_n_command ,         erhe::window::Key_home,      false);
-    commands.bind_command_to_key(&m_move_unit_ne_command,         erhe::window::Key_page_up,   false);
-    commands.bind_command_to_key(&m_move_unit_se_command,         erhe::window::Key_page_down, false);
-    commands.bind_command_to_key(&m_move_unit_s_command ,         erhe::window::Key_end,       false);
-    commands.bind_command_to_key(&m_move_unit_sw_command,         erhe::window::Key_delete,    false);
-    commands.bind_command_to_key(&m_move_unit_nw_command,         erhe::window::Key_insert,    false);
-    commands.bind_command_to_key(&m_select_previous_unit_command, erhe::window::Key_left,      false);
-    commands.bind_command_to_key(&m_select_next_unit_command    , erhe::window::Key_right,     false);
+    commands.bind_command_to_key(&m_move_unit_n_command,          erhe::window::Key_home,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_move_unit_ne_command,         erhe::window::Key_page_up,   erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_move_unit_se_command,         erhe::window::Key_page_down, erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_move_unit_s_command,          erhe::window::Key_end,       erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_move_unit_sw_command,         erhe::window::Key_delete,    erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_move_unit_nw_command,         erhe::window::Key_insert,    erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_select_previous_unit_command, erhe::window::Key_left,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_select_next_unit_command,     erhe::window::Key_right,     erhe::commands::Button_trigger::Button_released);
 
     hide_window();
 }

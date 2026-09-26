@@ -221,7 +221,7 @@ auto Hotbar_thumbstick_command::try_call_with_input(erhe::commands::Input_argume
 }
 
 Hotbar_rotate_tool_command::Hotbar_rotate_tool_command(erhe::commands::Commands& commands, App_context& context, int rotate_direction)
-    : Command{commands, "Hotbar.rotate"}
+    : Command{commands, (rotate_direction < 0) ? "Hotbar.previous_tool" : "Hotbar.next_tool"}
     , m_context{context}
     , m_rotate_direction{rotate_direction}
 {
@@ -234,7 +234,7 @@ auto Hotbar_rotate_tool_command::try_call() -> bool
 }
 
 Hotbar_activate_slot_command::Hotbar_activate_slot_command(erhe::commands::Commands& commands, App_context& context, std::size_t slot_index)
-    : Command    {commands, "Hotbar.activate_slot"}
+    : Command    {commands, fmt::format("Hotbar.activate_slot_{}", slot_index + 1)}
     , m_context  {context}
     , m_slot_index{slot_index}
 {
@@ -307,10 +307,10 @@ Hotbar::Hotbar(
     commands.register_command            (&m_toggle_visibility_command);
     commands.register_command            (&m_prev_tool_command);
     commands.register_command            (&m_next_tool_command);
-    commands.bind_command_to_key         (&m_toggle_visibility_command, erhe::window::Key_space, true);
+    commands.bind_command_to_key         (&m_toggle_visibility_command, erhe::window::Key_space);
     commands.bind_command_to_menu        (&m_toggle_visibility_command, "View.Hotbar", [&]() -> bool { return m_mesh_visible; });
-    commands.bind_command_to_mouse_button(&m_prev_tool_command, erhe::window::Mouse_button_x1, true);
-    commands.bind_command_to_mouse_button(&m_next_tool_command, erhe::window::Mouse_button_x2, true);
+    commands.bind_command_to_mouse_button(&m_prev_tool_command, erhe::window::Mouse_button_x1, erhe::commands::Button_trigger::Button_pressed);
+    commands.bind_command_to_mouse_button(&m_next_tool_command, erhe::window::Mouse_button_x2, erhe::commands::Button_trigger::Button_pressed);
     m_toggle_visibility_command.set_host(this);
     m_prev_tool_command        .set_host(this);
     m_next_tool_command        .set_host(this);
@@ -325,7 +325,7 @@ Hotbar::Hotbar(
             ? static_cast<erhe::window::Keycode>(erhe::window::Key_1 + slot_index)
             : erhe::window::Key_0;
         commands.register_command   (command.get());
-        commands.bind_command_to_key(command.get(), key, true);
+        commands.bind_command_to_key(command.get(), key);
         command->set_host(this);
     }
 

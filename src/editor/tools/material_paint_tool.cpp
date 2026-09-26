@@ -101,8 +101,8 @@ Material_paint_tool::Material_paint_tool(
 
     commands.register_command(&m_paint_command);
     commands.register_command(&m_pick_command);
-    commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left,  true);
-    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::window::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left,  erhe::commands::Button_trigger::Button_pressed);
+    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::window::Mouse_button_right, erhe::commands::Button_trigger::Button_pressed);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
     erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;

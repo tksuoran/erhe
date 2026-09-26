@@ -77,10 +77,11 @@ void Map_mouse_scroll_command::try_ready()
 Map_scroll_command::Map_scroll_command(
     erhe::commands::Commands& commands,
     Map_window&               map_window,
+    const std::string_view    name,
     const float               dx,
     const float               dy
 )
-    : Command     {commands, "Map.scroll"}
+    : Command     {commands, name}
     , m_map_window{map_window}
     , m_offset    {dx, dy}
 {
@@ -95,9 +96,10 @@ auto Map_scroll_command::try_call() -> bool
 Map_zoom_command::Map_zoom_command(
     erhe::commands::Commands& commands,
     Map_window&               map_window,
+    const std::string_view    name,
     const float               scale
 )
-    : Command     {commands, "Map.scroll"}
+    : Command     {commands, name}
     , m_map_window{map_window}
     , m_scale     {scale}
 {
@@ -139,12 +141,12 @@ Map_window::Map_window(
     , m_tile_renderer       {tile_renderer}
     , m_free_zoom_command   {commands, *this}
     , m_mouse_scroll_command{commands, *this}
-    , m_scroll_left_command {commands, *this, -4.0f,  0.0f }
-    , m_scroll_right_command{commands, *this,  4.0f,  0.0f }
-    , m_scroll_up_command   {commands, *this,  0.0f, -4.0f }
-    , m_scroll_down_command {commands, *this,  0.0f,  4.0f }
-    , m_zoom_in_command     {commands, *this, 0.5f}
-    , m_zoom_out_command    {commands, *this, 2.0f}
+    , m_scroll_left_command {commands, *this, "Map.scroll_left",  -4.0f,  0.0f }
+    , m_scroll_right_command{commands, *this, "Map.scroll_right",  4.0f,  0.0f }
+    , m_scroll_up_command   {commands, *this, "Map.scroll_up",     0.0f, -4.0f }
+    , m_scroll_down_command {commands, *this, "Map.scroll_down",   0.0f,  4.0f }
+    , m_zoom_in_command     {commands, *this, "Map.zoom_in",  0.5f}
+    , m_zoom_out_command    {commands, *this, "Map.zoom_out", 2.0f}
     , m_grid_cycle_command  {commands, *this}
 {
     commands.register_command(&m_free_zoom_command);
@@ -158,13 +160,13 @@ Map_window::Map_window(
     commands.register_command(&m_grid_cycle_command);
     commands.bind_command_to_mouse_wheel(&m_free_zoom_command);
     commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::window::Mouse_button_right, true);
-    commands.bind_command_to_key(&m_scroll_up_command,    erhe::window::Key_w, false);
-    commands.bind_command_to_key(&m_scroll_left_command,  erhe::window::Key_a, false);
-    commands.bind_command_to_key(&m_scroll_down_command,  erhe::window::Key_s, false);
-    commands.bind_command_to_key(&m_scroll_right_command, erhe::window::Key_d, false);
-    commands.bind_command_to_key(&m_zoom_in_command,      erhe::window::Key_period, false);
-    commands.bind_command_to_key(&m_zoom_out_command,     erhe::window::Key_comma,  false);
-    commands.bind_command_to_key(&m_grid_cycle_command,   erhe::window::Key_g,  false);
+    commands.bind_command_to_key(&m_scroll_up_command,    erhe::window::Key_w,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_scroll_left_command,  erhe::window::Key_a,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_scroll_down_command,  erhe::window::Key_s,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_scroll_right_command, erhe::window::Key_d,      erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_zoom_in_command,      erhe::window::Key_period, erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_zoom_out_command,     erhe::window::Key_comma,  erhe::commands::Button_trigger::Button_released);
+    commands.bind_command_to_key(&m_grid_cycle_command,   erhe::window::Key_g,      erhe::commands::Button_trigger::Button_released);
 
     hide_window();
 }

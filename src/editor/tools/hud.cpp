@@ -163,7 +163,7 @@ Hud::Hud(
     register_tool    (tools);
 
     commands.register_command   (&m_toggle_visibility_command);
-    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_e, true);
+    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_e);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();

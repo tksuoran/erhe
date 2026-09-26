@@ -58,6 +58,7 @@
 #include "erhe_scene/xform.hpp"
 #include "erhe_graphics/device.hpp"
 
+#include <fmt/format.h>
 #include <glm/gtx/matrix_operation.hpp>
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
@@ -110,7 +111,7 @@ auto step_down_perf_level(int level) -> int
 
 #pragma region Headset_camera_offset_move_command
 Headset_camera_offset_move_command::Headset_camera_offset_move_command(erhe::commands::Commands& commands, erhe::math::Input_axis& variable, char axis)
-    : Command   {commands, ""}
+    : Command   {commands, fmt::format("Headset.camera_offset_{}", axis)}
     , m_variable{variable}
     , m_axis    {axis}
 {

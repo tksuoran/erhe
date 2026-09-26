@@ -80,8 +80,8 @@ Operation_stack::Operation_stack(
 {
     commands.register_command(&m_undo_command);
     commands.register_command(&m_redo_command);
-    commands.bind_command_to_key(&m_undo_command, erhe::window::Key_z, true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key(&m_redo_command, erhe::window::Key_y, true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_undo_command, erhe::window::Key_z, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_redo_command, erhe::window::Key_y, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_menu(&m_undo_command, "Edit.Undo");
     commands.bind_command_to_menu(&m_redo_command, "Edit.Redo");
     commands.register_command     (&m_free_undone_loads_command);

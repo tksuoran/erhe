@@ -2,19 +2,23 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands_log.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::commands {
 
 Mouse_button_binding::Mouse_button_binding(
     Command* const                   command,
     const erhe::window::Mouse_button button,
-    const bool                       trigger_on_pressed,
+    const Button_trigger             trigger,
     const std::optional<uint32_t>    modifier_mask
 )
     : Mouse_binding       {command, modifier_mask}
     , m_button            {button }
-    , m_trigger_on_pressed{trigger_on_pressed}
+    , m_trigger_on_pressed{trigger == Button_trigger::Button_pressed}
 {
+    // A click is readied by the press, so it can fire on the press or on the
+    // release, never on both.
+    ERHE_VERIFY(trigger != Button_trigger::Any);
 }
 
 Mouse_button_binding::Mouse_button_binding() = default;
@@ -24,6 +28,11 @@ Mouse_button_binding::~Mouse_button_binding() noexcept = default;
 auto Mouse_button_binding::get_button() const -> erhe::window::Mouse_button
 {
     return m_button;
+}
+
+auto Mouse_button_binding::get_trigger() const -> Button_trigger
+{
+    return m_trigger_on_pressed ? Button_trigger::Button_pressed : Button_trigger::Button_released;
 }
 
 auto Mouse_button_binding::on_button(Input_arguments& input) -> bool

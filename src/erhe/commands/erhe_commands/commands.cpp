@@ -26,6 +26,13 @@ void Commands::register_command(Command* const command)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
 
+    const std::string_view name{command->get_name()};
+    ERHE_VERIFY(!name.empty());
+    for (const Command* const existing : m_commands) {
+        if (name == existing->get_name()) {
+            ERHE_FATAL("Command name '%s' is already registered", command->get_name());
+        }
+    }
     m_commands.push_back(command);
 }
 
@@ -105,24 +112,24 @@ void Commands::bind_command_to_menu(Command* command, std::string_view menu_path
 void Commands::bind_command_to_key(
     Command* const                command,
     const erhe::window::Keycode   code,
-    const bool                    pressed,
+    const Button_trigger          trigger,
     const std::optional<uint32_t> modifier_mask
 )
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
-    m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
+    m_key_bindings.emplace_back(command, code, trigger, modifier_mask);
 }
 
 void Commands::bind_command_to_mouse_button(
     Command* const                   command,
     const erhe::window::Mouse_button button,
-    const bool                       trigger_on_pressed,
+    const Button_trigger             trigger,
     const std::optional<uint32_t>    modifier_mask
 )
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_mouse_bindings.push_back(
-        std::make_unique<Mouse_button_binding>(command, button, trigger_on_pressed, modifier_mask)
+        std::make_unique<Mouse_button_binding>(command, button, trigger, modifier_mask)
     );
 }
 
@@ -554,8 +561,13 @@ auto Commands::on_key_event(const erhe::window::Input_event& input_event) -> boo
 {
     m_last_modifier_mask = input_event.u.key_event.modifier_mask;
 
-    Input_arguments context;
-    context.timestamp_ns = input_event.timestamp_ns;
+    Input_arguments context{
+        .modifier_mask = input_event.u.key_event.modifier_mask,
+        .timestamp_ns  = input_event.timestamp_ns,
+        .variant = {
+            .button_pressed = input_event.u.key_event.pressed
+        }
+    };
 
     for (auto& binding : m_key_bindings) {
         if (!binding.is_command_host_enabled()) {

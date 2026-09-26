@@ -153,7 +153,7 @@ Scene_views::Scene_views(
     Command_host::set_description("Scene_views");
 
     commands.register_command   (&m_open_new_viewport_scene_view_command);
-    commands.bind_command_to_key(&m_open_new_viewport_scene_view_command, erhe::window::Key_f1, true);
+    commands.bind_command_to_key(&m_open_new_viewport_scene_view_command, erhe::window::Key_f1);
     commands.register_command   (&m_open_four_view_command);
 
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(

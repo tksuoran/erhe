@@ -375,9 +375,9 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_add_curved_shapes_command);
     commands.register_command   (&m_add_chain_command);
     commands.register_command   (&m_add_toruses_command);
-    commands.bind_command_to_key(&m_create_new_xform_command,   erhe::window::Key_f3, true);
-    commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
-    commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5, true);
+    commands.bind_command_to_key(&m_create_new_xform_command,        erhe::window::Key_f3);
+    commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4);
+    commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5);
     commands.bind_command_to_menu(&m_create_new_scene_command,        "Create.Scene");
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
     commands.bind_command_to_menu(&m_create_new_xform_command,   "Create.Xform");

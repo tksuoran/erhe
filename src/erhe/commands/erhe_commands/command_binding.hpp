@@ -13,6 +13,10 @@ enum class Button_trigger : unsigned int
 
 auto c_str(const Button_trigger value) -> const char*;
 
+// True when a button event with the given pressed state fires a binding with
+// the given trigger.
+[[nodiscard]] auto test_button_trigger(Button_trigger trigger, bool pressed) -> bool;
+
 class Command_binding
 {
 public:
@@ -45,6 +49,8 @@ public:
         "Mouse_motion",
         "Mouse_wheel",
         "Menu",
+        "Controller_axis",
+        "Controller_button",
         "Xr_boolean",
         "Xr_float",
         "Xr_vector2f",

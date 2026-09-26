@@ -13,6 +13,16 @@ auto c_str(const Button_trigger value) -> const char*
     }
 }
 
+auto test_button_trigger(const Button_trigger trigger, const bool pressed) -> bool
+{
+    switch (trigger) {
+        case Button_trigger::Button_pressed:  return pressed;
+        case Button_trigger::Button_released: return !pressed;
+        case Button_trigger::Any:             return true;
+        default:                              return false;
+    }
+}
+
 Command_binding::Command_binding(Command* const command)
     : m_command{command}
 {

@@ -19,7 +19,7 @@ Controller_button_binding::~Controller_button_binding() noexcept = default;
 
 auto Controller_button_binding::get_type() const -> Type
 {
-    return Type::Xr_boolean;
+    return Type::Controller_button;
 }
 
 auto Controller_button_binding::get_button() const -> int
@@ -34,12 +34,7 @@ auto Controller_button_binding::get_modifier_mask() const -> const std::optional
 
 auto Controller_button_binding::test_trigger(Input_arguments& input) const -> bool
 {
-    switch (m_trigger) {
-        case Button_trigger::Button_pressed:  return  input.variant.button_pressed;
-        case Button_trigger::Button_released: return !input.variant.button_pressed;
-        case Button_trigger::Any:             return true;
-        default: return false;
-    }
+    return test_button_trigger(m_trigger, input.variant.button_pressed);
 }
 
 auto Controller_button_binding::on_value_changed(Input_arguments& input) -> bool

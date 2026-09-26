@@ -94,7 +94,7 @@ void Commands_window::imgui()
                 binding.get_command()->get_name(),
                 Command_binding::c_type_strings[static_cast<int>(binding.get_type())],
                 erhe::window::c_str(binding.get_keycode()),
-                binding.get_pressed() ? "pressed" : "released"
+                erhe::commands::c_str(binding.get_trigger())
             );
         }
         ImGui::TreePop();

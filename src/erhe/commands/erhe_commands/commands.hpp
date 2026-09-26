@@ -50,6 +50,10 @@ public:
     ~Commands() noexcept override;
 
     // Public API
+
+    // Command names are unique: they identify the command in persisted
+    // binding overrides. Registering a second command with the same name is
+    // a fatal error.
     void register_command(Command* command);
     void sort_bindings   ();
 
@@ -69,14 +73,14 @@ public:
     void bind_command_to_key(
         Command*                command,
         erhe::window::Keycode   code,
-        bool                    pressed       = true,
+        Button_trigger          trigger       = Button_trigger::Button_pressed,
         std::optional<uint32_t> modifier_mask = {}
     );
 
     void bind_command_to_mouse_button(
         Command*                   command,
         erhe::window::Mouse_button button,
-        bool                       trigger_on_pressed,
+        Button_trigger             trigger,
         std::optional<uint32_t>    modifier_mask = {}
     );
 

@@ -105,7 +105,7 @@ auto Brush_pick_command::try_call() -> bool
 }
 
 Brush_rotate_command::Brush_rotate_command(erhe::commands::Commands& commands, App_context& context, int direction)
-    : Command    {commands, "Brush_tool.rotate"}
+    : Command    {commands, (direction > 0) ? "Brush_tool.rotate_cw" : "Brush_tool.rotate_ccw"}
     , m_context  {context}
     , m_direction{direction}
 {
@@ -160,11 +160,11 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_rotate_ccw_command);
     commands.register_command(&m_toggle_brush_preview_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command,     erhe::window::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, erhe::commands::Button_trigger::Button_pressed);
     //commands.bind_command_to_mouse_button(&m_rotate_cw_command,  erhe::window::Mouse_button_x1,    true);
     //commands.bind_command_to_mouse_button(&m_rotate_ccw_command, erhe::window::Mouse_button_x2,    true);
-    commands.bind_command_to_key(&m_rotate_cw_command, erhe::window::Key_z);
-    commands.bind_command_to_key(&m_rotate_ccw_command, erhe::window::Key_x);
+    commands.bind_command_to_key(&m_rotate_cw_command,            erhe::window::Key_z);
+    commands.bind_command_to_key(&m_rotate_ccw_command,           erhe::window::Key_x);
     commands.bind_command_to_key(&m_toggle_brush_preview_command, erhe::window::Key_c);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

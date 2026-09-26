@@ -36,6 +36,7 @@ public:
     Map_scroll_command(
         erhe::commands::Commands& commands,
         Map_window&               map_window,
+        std::string_view          name,
         float                     dx,
         float                     dy
     );
@@ -71,7 +72,7 @@ private:
 class Map_zoom_command : public erhe::commands::Command
 {
 public:
-    Map_zoom_command(erhe::commands::Commands& commands, Map_window& map_window, float scal);
+    Map_zoom_command(erhe::commands::Commands& commands, Map_window& map_window, std::string_view name, float scale);
     auto try_call() -> bool override;
 
 private:

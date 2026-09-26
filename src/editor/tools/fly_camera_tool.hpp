@@ -108,15 +108,17 @@ private:
     App_context& m_context;
 };
 
+// Bound to both the press and the release of a key: the press starts the
+// movement, the release stops it.
 class Fly_camera_move_command : public erhe::commands::Command
 {
 public:
     Fly_camera_move_command(
         erhe::commands::Commands&      commands,
         App_context&                   context,
+        std::string_view               name,
         Variable                       variable,
-        erhe::math::Input_axis_control control,
-        bool                           active
+        erhe::math::Input_axis_control control
     );
 
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
@@ -125,7 +127,6 @@ private:
     App_context&                   m_context;
     Variable                       m_variable;
     erhe::math::Input_axis_control m_control;
-    bool                           m_active;
 };
 
 class Fly_camera_active_axis_float_command : public erhe::commands::Command
@@ -134,6 +135,7 @@ public:
     Fly_camera_active_axis_float_command(
         erhe::commands::Commands& commands,
         App_context&              context,
+        std::string_view          name,
         Variable                  variable,
         float                     scale
     );
@@ -149,7 +151,7 @@ private:
 class Fly_camera_serialization_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, bool store);
+    Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, std::string_view name, bool store);
 
     auto try_call() -> bool override;
 
@@ -258,18 +260,12 @@ private:
     Fly_camera_track_command              m_track_command;
     Fly_camera_zoom_command               m_zoom_command;
     Fly_camera_frame_command              m_frame_command;
-    Fly_camera_move_command               m_move_up_active_command;
-    Fly_camera_move_command               m_move_up_inactive_command;
-    Fly_camera_move_command               m_move_down_active_command;
-    Fly_camera_move_command               m_move_down_inactive_command;
-    Fly_camera_move_command               m_move_left_active_command;
-    Fly_camera_move_command               m_move_left_inactive_command;
-    Fly_camera_move_command               m_move_right_active_command;
-    Fly_camera_move_command               m_move_right_inactive_command;
-    Fly_camera_move_command               m_move_forward_active_command;
-    Fly_camera_move_command               m_move_forward_inactive_command;
-    Fly_camera_move_command               m_move_backward_active_command;
-    Fly_camera_move_command               m_move_backward_inactive_command;
+    Fly_camera_move_command               m_move_up_command;
+    Fly_camera_move_command               m_move_down_command;
+    Fly_camera_move_command               m_move_left_command;
+    Fly_camera_move_command               m_move_right_command;
+    Fly_camera_move_command               m_move_forward_command;
+    Fly_camera_move_command               m_move_backward_command;
     Fly_camera_active_axis_float_command  m_active_translate_x_command;
     Fly_camera_active_axis_float_command  m_active_translate_y_command;
     Fly_camera_active_axis_float_command  m_active_translate_z_command;

@@ -400,7 +400,7 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
 
     m_select_command.set_host(this);
     commands.register_command            (&m_select_command);
-    commands.bind_command_to_mouse_button(&m_select_command, erhe::window::Mouse_button_left, false);
+    commands.bind_command_to_mouse_button(&m_select_command, erhe::window::Mouse_button_left, erhe::commands::Button_trigger::Button_released);
 
     // Box-select drag (Box gesture sub-mode). call_on_button_down_without_motion
     // is false so a click without motion never activates the box; the single
@@ -431,11 +431,11 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     // in try_set_gesture_hotkey, so C still falls through to brush preview etc.
     m_box_hotkey_command.set_host(this);
     commands.register_command(&m_box_hotkey_command);
-    commands.bind_command_to_key(&m_box_hotkey_command, erhe::window::Key_b, true);
+    commands.bind_command_to_key(&m_box_hotkey_command, erhe::window::Key_b);
 
     m_paint_hotkey_command.set_host(this);
     commands.register_command(&m_paint_hotkey_command);
-    commands.bind_command_to_key(&m_paint_hotkey_command, erhe::window::Key_c, true);
+    commands.bind_command_to_key(&m_paint_hotkey_command, erhe::window::Key_c);
 
     // Blender Select More / Select Less. Bound to both the numpad +/- (Blender's
     // exact keys) and the main-row =/- (the '+' lives on '='), so it works on
@@ -443,13 +443,13 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     // shrink_selection so the key falls through in Object mode.
     m_grow_selection_command.set_host(this);
     commands.register_command(&m_grow_selection_command);
-    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_kp_add, true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_equal,  true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_kp_add, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_equal,  erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
     m_shrink_selection_command.set_host(this);
     commands.register_command(&m_shrink_selection_command);
-    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_kp_subtract, true, erhe::window::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_kp_subtract, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
