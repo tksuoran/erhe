@@ -15,8 +15,9 @@ them, so the two cannot drift. It loads the asset with load_scene and runs:
   2. The Joint Constraints filter: `all` draws every joint and every
      limited bone; `hovered_mesh` / `hovered_bone` with nothing hovered draw
      nothing.
-  3. IK drags: dragging each chain's tip far in two directions leaves the
-     limited middle bone within its limits (the fully locked one does not
+  3. IK drags: the middle bone's IK Lock makes it the root of a drag of the
+     tip, and dragging the tip in two directions leaves that limited bone
+     within its limits (the fully locked one does not
      turn at all); every drag is undone.
   4. Physics stress, simulation running on the manual clock: an --impulse on
      each stress station's box must not push its joint past its limits by
@@ -184,6 +185,8 @@ def check_ik_drags(client, scene):
         for target in ([x + 0.35, 0.5, asset.CHAIN_Z + 0.15], [x - 0.25, 0.55, asset.CHAIN_Z - 0.3]):
             result = client.call("ik_drag", {"scene_name": scene, "node_name": tip, "target": target})
             advance(client, 4)
+            chain = [joint["name"] for joint in result.get("joints", [])]
+            check_true(f"3 {middle}: IK Lock makes it the chain root", chain == [middle, tip], str(chain))
             bone = by_name(state(client, scene)["ik_bones"]).get(middle, {})
             turned = client.call("get_node_details", {"scene_name": scene, "node_name": middle})["local_transform"]["rotation_xyzw"]
             worst_turn = max(worst_turn, quat_angle(rest, turned))

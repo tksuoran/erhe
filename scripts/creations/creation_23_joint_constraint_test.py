@@ -159,7 +159,8 @@ def limit_triplet(x=None, y=None, z=None):
     return " ".join(f"{v:.7f}" for v in lo), " ".join(f"{v:.7f}" for v in hi)
 
 
-# The Ik.* values of each chain's middle bone ("<key> bone_1"). `pose_x`
+# The Ik.* values of each chain's middle bone ("<key> bone_1"), which also
+# carries IK Lock so a drag of bone_2 turns that bone alone. `pose_x`
 # rotates that bone about its local X (radians) in the saved file;
 # `within` is what is_ik_rotation_within_limits reports for the saved pose.
 IK_CASES = [
@@ -281,6 +282,10 @@ def build_chain(c, index, case, material, root):
     c.settle()
 
     middle = bones[1]
+    # IK Lock on the limited bone: an IK drag of bone_2 then stops the chain
+    # there, so the drag turns this bone alone and runs it straight into its
+    # limits instead of letting bone_0 take up the motion.
+    c.mutate("set_item_flags", {"scene_name": c.scene, "ids": [int(middle)], "flags": ["ik_lock"], "enabled": True})
 
     def set_prop(prop, value):
         c.mutate("set_item_property", {"item_id": int(middle), "property": prop, "value": value})

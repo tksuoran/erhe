@@ -44,7 +44,9 @@ dimmed station has no live constraint.
 ## IK limits (front row, left to right)
 
 Each is a three-bone chain (`<key> bone_0` .. `bone_2`) skinned to a column
-of three blue boxes; the Ik.* values sit on the middle bone `<key> bone_1`.
+of three blue boxes; the Ik.* values sit on the middle bone `<key> bone_1`,
+which also carries IK Lock, so an IK drag of `bone_2` stops the chain there
+and turns the limited bone alone.
 Green is the swing boundary at bone length, yellow the twist range, white
 the current bone direction and twist (red when outside the limits).
 
@@ -72,9 +74,10 @@ the current bone direction and twist (red when outside the limits).
   (no live constraint) fall; P11 stays where it was built - both backends
   hold the fixed axis at zero, not at the authored 0.1, which is what its
   magenta marks.
-- **IK.** With the Move tool and Bone IK on, drag a `bone_2`: the middle
-  bone stops at its green / yellow boundary, I06 does not bend, and during
-  the drag the visual uses the drag's own constraint.
+- **IK.** With the Move tool and Bone IK on, drag a `bone_2`: only the
+  middle bone turns (IK Lock makes it the chain root), it stops at its
+  green / yellow boundary, I06 does not bend, and during the drag the
+  visual uses the drag's own constraint.
 - **Save / reload.** Save the scene elsewhere and load it again: P13 is
   still inactive and every joint keeps its name.
 
