@@ -1,15 +1,91 @@
 #include "erhe_physics/jolt/jolt_constraint.hpp"
+#include "erhe_physics/joint_limits.hpp"
 #include "erhe_physics/physics_log.hpp"
 
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Constraints/MotorSettings.h>
 #include <Jolt/Physics/Constraints/SpringSettings.h>
 
+#include <glm/gtc/constants.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 
 namespace erhe::physics {
+
+namespace {
+
+[[nodiscard]] auto same_limit(const Constraint_axis_limit& lhs, const Constraint_axis_limit& rhs) -> bool
+{
+    if (lhs.limited != rhs.limited) {
+        return false;
+    }
+    return !lhs.limited || ((lhs.min == rhs.min) && (lhs.max == rhs.max));
+}
+
+// A translation axis as JPH::SixDOFConstraint enforces it: an inverted or
+// empty range (min >= max) is a fixed axis, fixed at zero.
+[[nodiscard]] auto enforced_translation(const Constraint_axis_limit& limit) -> Constraint_axis_limit
+{
+    if (!limit.limited) {
+        return Constraint_axis_limit{};
+    }
+    if (limit.min >= limit.max) {
+        return Constraint_axis_limit{.limited = true, .min = 0.0f, .max = 0.0f};
+    }
+    return Constraint_axis_limit{.limited = true, .min = limit.min, .max = limit.max};
+}
+
+// A rotation axis as JPH::SixDOFConstraint and SwingTwistConstraintPart
+// enforce it: the range is clamped to [-pi, pi], an inverted range becomes
+// [0, 0], a range inside +-0.5 degrees is locked at zero and a range wider
+// than +-179.5 degrees is free.
+[[nodiscard]] auto enforced_rotation(const Constraint_axis_limit& limit) -> Constraint_axis_limit
+{
+    if (!limit.limited) {
+        return Constraint_axis_limit{};
+    }
+    constexpr float pi            = glm::pi<float>();
+    constexpr float locked_angle  = 0.5f * pi / 180.0f;
+    constexpr float free_angle    = 179.5f * pi / 180.0f;
+    float min = std::clamp(limit.min, -pi, pi);
+    float max = std::clamp(limit.max, -pi, pi);
+    if (min > max) {
+        min = 0.0f;
+        max = 0.0f;
+    }
+    if ((min > -locked_angle) && (max < locked_angle)) {
+        return Constraint_axis_limit{.limited = true, .min = 0.0f, .max = 0.0f};
+    }
+    if ((min < -free_angle) && (max > free_angle)) {
+        return Constraint_axis_limit{};
+    }
+    return Constraint_axis_limit{.limited = true, .min = min, .max = max};
+}
+
+} // anonymous namespace
+
+auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape
+{
+    Joint_limit_shape shape{};
+    shape.twist_axis  = 0;
+    shape.swing_model = Swing_limit_model::pyramid;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        shape.translation[axis] = enforced_translation(limits[axis]);
+    }
+    shape.twist    = enforced_rotation(limits[3]);
+    shape.swing[0] = enforced_rotation(limits[4]);
+    shape.swing[1] = enforced_rotation(limits[5]);
+    shape.is_exact =
+        same_limit(shape.translation[0], limits[0]) &&
+        same_limit(shape.translation[1], limits[1]) &&
+        same_limit(shape.translation[2], limits[2]) &&
+        same_limit(shape.twist,          limits[3]) &&
+        same_limit(shape.swing[0],       limits[4]) &&
+        same_limit(shape.swing[1],       limits[5]);
+    return shape;
+}
 
 auto IConstraint::create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*
 {

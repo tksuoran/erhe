@@ -1,0 +1,149 @@
+#include "erhe_physics/joint_limits.hpp"
+
+#include <gtest/gtest.h>
+
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include <array>
+#include <cmath>
+
+namespace {
+
+using erhe::physics::Constraint_axis_limit;
+using erhe::physics::Joint_coordinates;
+using erhe::physics::Joint_limit_shape;
+using erhe::physics::Joint_range_check;
+using erhe::physics::Swing_limit_model;
+using erhe::physics::Transform;
+
+constexpr float c_tolerance = 1.0e-4f;
+
+[[nodiscard]] auto ranged_axis(const float min, const float max) -> Constraint_axis_limit
+{
+    return Constraint_axis_limit{.limited = true, .min = min, .max = max};
+}
+
+[[nodiscard]] auto rotation_transform(const glm::quat& rotation, const glm::vec3 origin = glm::vec3{0.0f}) -> Transform
+{
+    return Transform{glm::mat3_cast(rotation), origin};
+}
+
+[[nodiscard]] auto pyramid_shape() -> Joint_limit_shape
+{
+    Joint_limit_shape shape{};
+    shape.twist_axis  = 0;
+    shape.swing_model = Swing_limit_model::pyramid;
+    shape.twist       = ranged_axis(-0.5f, 0.5f);
+    shape.swing       = {ranged_axis(-0.3f, 0.6f), ranged_axis(-0.2f, 0.4f)};
+    return shape;
+}
+
+TEST(Joint_limits, swing_axes_are_the_other_two_in_order)
+{
+    EXPECT_EQ((std::array<int, 2>{1, 2}), erhe::physics::get_swing_axes(0));
+    EXPECT_EQ((std::array<int, 2>{0, 2}), erhe::physics::get_swing_axes(1));
+    EXPECT_EQ((std::array<int, 2>{0, 1}), erhe::physics::get_swing_axes(2));
+}
+
+TEST(Joint_limits, measures_translation_in_frame_a)
+{
+    const glm::quat rotation_a = glm::angleAxis(glm::half_pi<float>(), glm::vec3{0.0f, 0.0f, 1.0f});
+    const Transform frame_a    = rotation_transform(rotation_a, glm::vec3{1.0f, 2.0f, 3.0f});
+    // One unit along frame A's X, which is world +Y.
+    const Transform frame_b    = rotation_transform(rotation_a, glm::vec3{1.0f, 3.0f, 3.0f});
+    const Joint_coordinates coordinates = erhe::physics::measure_joint_coordinates(frame_a, frame_b, pyramid_shape());
+    EXPECT_NEAR(1.0f, coordinates.translation.x, c_tolerance);
+    EXPECT_NEAR(0.0f, coordinates.translation.y, c_tolerance);
+    EXPECT_NEAR(0.0f, coordinates.translation.z, c_tolerance);
+}
+
+TEST(Joint_limits, measures_twist_about_the_twist_axis)
+{
+    const glm::quat rotation_a = glm::angleAxis(0.7f, glm::normalize(glm::vec3{1.0f, 1.0f, 0.0f}));
+    const glm::quat twist      = glm::angleAxis(0.4f, glm::vec3{1.0f, 0.0f, 0.0f});
+    const Joint_coordinates coordinates = erhe::physics::measure_joint_coordinates(
+        rotation_transform(rotation_a),
+        rotation_transform(rotation_a * twist),
+        pyramid_shape()
+    );
+    EXPECT_NEAR(0.4f, coordinates.twist,    c_tolerance);
+    EXPECT_NEAR(0.0f, coordinates.swing[0], c_tolerance);
+    EXPECT_NEAR(0.0f, coordinates.swing[1], c_tolerance);
+    EXPECT_NEAR(0.0f, coordinates.cone,     c_tolerance);
+}
+
+TEST(Joint_limits, pyramid_direction_reproduces_the_measured_swing)
+{
+    // Jolt's pyramid swing: q = rot(Z, z) * rot(Y, y), whose x part the
+    // decomposition moves into the twist.
+    const glm::quat swing = glm::angleAxis(-0.3f, glm::vec3{0.0f, 0.0f, 1.0f}) * glm::angleAxis(0.5f, glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::quat twist = glm::angleAxis(0.2f, glm::vec3{1.0f, 0.0f, 0.0f});
+    const Joint_coordinates coordinates = erhe::physics::measure_joint_coordinates(
+        Transform{},
+        rotation_transform(swing * twist),
+        pyramid_shape()
+    );
+    const glm::vec3 direction = erhe::physics::pyramid_swing_direction(0, coordinates.swing[0], coordinates.swing[1]);
+    const glm::vec3 expected  = (swing * twist) * glm::vec3{1.0f, 0.0f, 0.0f};
+    EXPECT_NEAR(expected.x, direction.x, c_tolerance);
+    EXPECT_NEAR(expected.y, direction.y, c_tolerance);
+    EXPECT_NEAR(expected.z, direction.z, c_tolerance);
+}
+
+TEST(Joint_limits, pure_swing_about_one_axis_measures_its_angle)
+{
+    const glm::quat swing = glm::angleAxis(0.45f, glm::vec3{0.0f, 1.0f, 0.0f});
+    const Joint_coordinates coordinates = erhe::physics::measure_joint_coordinates(Transform{}, rotation_transform(swing), pyramid_shape());
+    EXPECT_NEAR(0.45f, coordinates.swing[0], c_tolerance);
+    EXPECT_NEAR(0.0f,  coordinates.swing[1], c_tolerance);
+    EXPECT_NEAR(0.45f, coordinates.cone,     c_tolerance);
+    EXPECT_NEAR(0.0f,  coordinates.twist,    c_tolerance);
+}
+
+TEST(Joint_limits, cone_angle_about_z_twist_axis)
+{
+    Joint_limit_shape shape{};
+    shape.twist_axis  = 2;
+    shape.swing_model = Swing_limit_model::cone;
+    shape.cone        = ranged_axis(0.0f, 0.5f);
+    const glm::quat swing = glm::angleAxis(0.6f, glm::normalize(glm::vec3{1.0f, 1.0f, 0.0f}));
+    const Joint_coordinates coordinates = erhe::physics::measure_joint_coordinates(Transform{}, rotation_transform(swing), shape);
+    EXPECT_NEAR(0.6f, coordinates.cone, c_tolerance);
+    const Joint_range_check check = erhe::physics::check_joint_range(shape, coordinates, 1.0e-3f, 1.0e-3f);
+    EXPECT_FALSE(check.swing_ok);
+    EXPECT_TRUE (check.twist_ok);
+}
+
+TEST(Joint_limits, range_check_flags_only_the_violated_coordinate)
+{
+    Joint_limit_shape shape = pyramid_shape();
+    shape.translation[1] = ranged_axis(-0.1f, 0.1f);
+    Joint_coordinates coordinates{};
+    coordinates.translation = glm::vec3{5.0f, 0.2f, 0.0f}; // X free, Y out of range
+    coordinates.twist       = 0.4f;
+    coordinates.swing       = {0.5f, 0.3f};
+    const Joint_range_check check = erhe::physics::check_joint_range(shape, coordinates, 1.0e-3f, 1.0e-3f);
+    EXPECT_TRUE (check.translation_ok[0]);
+    EXPECT_FALSE(check.translation_ok[1]);
+    EXPECT_TRUE (check.translation_ok[2]);
+    EXPECT_TRUE (check.twist_ok);
+    EXPECT_TRUE (check.swing_ok);
+    EXPECT_FALSE(check.all_ok());
+    coordinates.swing[1] = 0.45f;
+    EXPECT_FALSE(erhe::physics::check_joint_range(shape, coordinates, 1.0e-3f, 1.0e-3f).swing_ok);
+}
+
+TEST(Joint_limits, pyramid_direction_of_zero_swing_is_the_twist_axis)
+{
+    for (int axis = 0; axis < 3; ++axis) {
+        const glm::vec3 direction = erhe::physics::pyramid_swing_direction(axis, 0.0f, 0.0f);
+        glm::vec3 expected{0.0f};
+        expected[axis] = 1.0f;
+        EXPECT_NEAR(expected.x, direction.x, c_tolerance);
+        EXPECT_NEAR(expected.y, direction.y, c_tolerance);
+        EXPECT_NEAR(expected.z, direction.z, c_tolerance);
+    }
+}
+
+} // anonymous namespace

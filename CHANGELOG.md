@@ -20,6 +20,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Imgui_window::is_input_owned_elsewhere()`: whether Dear ImGui is in the
   middle of an interaction (an active item, a held mouse button) that the
   window does not own.
+- `erhe::physics`: `get_enforced_joint_limits()`, `Joint_limit_shape`,
+  `Swing_limit_model`, `Joint_coordinates`, `measure_joint_coordinates()`,
+  `Joint_range_check`, `check_joint_range()`, `is_within()`,
+  `get_swing_axes()` and `pyramid_swing_direction()`
+  (`erhe_physics/joint_limits.hpp`): the six-DOF limits the built backend
+  enforces, and the current joint coordinates measured in its convention.
 - `erhe::renderer`: `View::pixel_scale`, physical pixels per logical pixel of
   the view's render target (default 1.0).
 - `erhe::scene_renderer`: `Camera_view_input::pixel_scale` (default 1.0);

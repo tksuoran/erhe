@@ -13,10 +13,16 @@ add_executable(${_target}
     main.cpp
     test_body_activation.cpp
     test_collision_filter_properties.cpp
+    test_joint_limits.cpp
     test_joint_reach.cpp
     test_joint_settings_properties.cpp
     test_overlap_query.cpp
 )
+
+# The limits each backend enforces (erhe::physics::get_enforced_joint_limits).
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
+    target_sources(${_target} PRIVATE test_enforced_joint_limits_jolt.cpp)
+endif ()
 
 # Box3d_world internals (collision filter interning, hull point generation,
 # six-DOF joint classification, shape descriptors) and the activation and sensor
@@ -25,6 +31,7 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
     target_sources(${_target}
         PRIVATE
             test_collision_filter_table.cpp
+            test_enforced_joint_limits_box3d.cpp
             test_hull_builder.cpp
             test_shape_descriptor.cpp
             test_six_dof_classifier.cpp

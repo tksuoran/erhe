@@ -3,11 +3,13 @@
 #include "erhe_physics/box3d/box3d_six_dof_classifier.hpp"
 #include "erhe_physics/box3d/box3d_world.hpp"
 #include "erhe_physics/box3d/glm_conversions.hpp"
+#include "erhe_physics/joint_limits.hpp"
 #include "erhe_physics/physics_log.hpp"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace erhe::physics {
@@ -461,6 +463,112 @@ private:
 // -----------------------------------------------------------------------------
 // IConstraint factories
 // -----------------------------------------------------------------------------
+
+namespace {
+
+[[nodiscard]] auto fixed_at_zero() -> Constraint_axis_limit
+{
+    return Constraint_axis_limit{.limited = true, .min = 0.0f, .max = 0.0f};
+}
+
+// An axis the chosen Box3D joint carries: free, or limited with the joint's
+// own clamp.
+[[nodiscard]] auto carried_axis(const Constraint_axis_limit& limit, const bool is_rotation) -> Constraint_axis_limit
+{
+    switch (classify_axis(limit)) {
+        case Axis_state::free:  return Constraint_axis_limit{};
+        case Axis_state::fixed: return fixed_at_zero();
+        default: break;
+    }
+    return Constraint_axis_limit{
+        .limited = true,
+        .min     = is_rotation ? clamp_angle(limit.min) : limit.min,
+        .max     = is_rotation ? clamp_angle(limit.max) : limit.max
+    };
+}
+
+[[nodiscard]] auto same_limit(const Constraint_axis_limit& lhs, const Constraint_axis_limit& rhs) -> bool
+{
+    if (lhs.limited != rhs.limited) {
+        return false;
+    }
+    return !lhs.limited || ((lhs.min == rhs.min) && (lhs.max == rhs.max));
+}
+
+} // anonymous namespace
+
+// The shapes follow Box3d_six_dof_constraint's joint creation: the weld, the
+// revolute joint about the classified axis, the prismatic joint along it, the
+// spherical joint (twist about Z, one cone of the widest limited swing half
+// range about Z) and the filter joint (nothing constrained).
+auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape
+{
+    const Six_dof_classification classification = classify_six_dof(limits);
+
+    Joint_limit_shape shape{};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        shape.translation[axis] = fixed_at_zero();
+    }
+    shape.twist_axis  = 0;
+    shape.swing_model = Swing_limit_model::pyramid;
+    shape.twist       = fixed_at_zero();
+    shape.swing       = {fixed_at_zero(), fixed_at_zero()};
+
+    bool matches = true;
+    switch (classification.kind) {
+        case Six_dof_joint_kind::weld: {
+            break;
+        }
+        case Six_dof_joint_kind::revolute: {
+            shape.twist_axis = classification.axis;
+            shape.twist      = carried_axis(limits[static_cast<std::size_t>(3 + classification.axis)], true);
+            matches = same_limit(shape.twist, limits[static_cast<std::size_t>(3 + classification.axis)]);
+            break;
+        }
+        case Six_dof_joint_kind::prismatic: {
+            const std::size_t axis = static_cast<std::size_t>(classification.axis);
+            shape.translation[axis] = carried_axis(limits[axis], false);
+            break;
+        }
+        case Six_dof_joint_kind::spherical: {
+            shape.twist_axis  = 2;
+            shape.swing_model = Swing_limit_model::cone;
+            shape.twist       = carried_axis(limits[5], true);
+            float cone_angle = 0.0f;
+            bool  has_cone   = false;
+            for (std::size_t axis = 3; axis < 5; ++axis) {
+                if (classify_axis(limits[axis]) != Axis_state::limited) {
+                    continue;
+                }
+                const float half_range = 0.5f * (limits[axis].max - limits[axis].min);
+                cone_angle = std::max(cone_angle, half_range);
+                has_cone   = true;
+            }
+            shape.cone = has_cone
+                ? Constraint_axis_limit{.limited = true, .min = 0.0f, .max = std::min(cone_angle, max_joint_angle)}
+                : Constraint_axis_limit{};
+            matches = same_limit(shape.twist, limits[5]);
+            break;
+        }
+        case Six_dof_joint_kind::filter: {
+            shape.translation = {Constraint_axis_limit{}, Constraint_axis_limit{}, Constraint_axis_limit{}};
+            shape.twist       = Constraint_axis_limit{};
+            shape.swing       = {Constraint_axis_limit{}, Constraint_axis_limit{}};
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    // A fixed axis is welded at zero whatever value it was authored at.
+    for (std::size_t axis = 0; axis < 6; ++axis) {
+        if ((classify_axis(limits[axis]) == Axis_state::fixed) && ((limits[axis].min != 0.0f) || (limits[axis].max != 0.0f))) {
+            matches = false;
+        }
+    }
+    shape.is_exact = classification.is_exact && matches;
+    return shape;
+}
 
 auto IConstraint::create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*
 {
