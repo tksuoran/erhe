@@ -12,6 +12,7 @@ Usage:
     py -3 scripts/gi_verify.py [--station NAME|all] [--source ambient|ddgi|radiance_cascades]
                                [--compare A,B] [--runs N] [--enforce]
                                [--screenshot-reference DIR | --screenshot-compare DIR]
+                               [--screenshot-source render|window]
                                [--reuse] [--port N] [--editor PATH]
 
 Every metric is the WORST value over --runs full runs. Output: a table on
@@ -26,13 +27,18 @@ relative gates and the section 8 cost budget).
 
 Screenshots: --screenshot-reference DIR captures every station view into
 DIR/<source>/; --screenshot-compare DIR captures again and compares the
-viewport region against the reference pixel by pixel, reporting the number
-of differing pixels, the largest channel difference and the pixels above
+image against the reference pixel by pixel, reporting the number of
+differing pixels, the largest channel difference and the pixels above
 --screenshot-tolerance per view (default 0 for ambient; 1 for a traced
 field, whose per-update random rays measured as at most 1 level between two
-runs of one build). All capture goes through capture_view(); it captures
-the whole editor window, so the image depends on the editor's ImGui layout,
-and reference and compare runs need the same layout.
+runs of one build). All capture goes through capture_view(). The default
+--screenshot-source render uses the MCP tool render_scene_image: an
+offscreen render of the station camera (eye, target, fov) at
+SHOT_WIDTH x SHOT_HEIGHT that no ImGui window or viewport size can affect
+(doc/editor/rendergraph.md "Scene image capture"). --screenshot-source
+window captures the whole editor window with capture_screenshot and
+compares the viewport region only; that image depends on the editor's ImGui
+layout, so reference and compare runs need the same layout.
 
 Convergence: a check averages CHECK_SAMPLES samples; the field has converged
 when every group mean changed by < 0.5 % (or, where per-update noise is
@@ -99,6 +105,12 @@ SETTLE_WINDOW_RELAXATIONS = 10
 # every update, which measured as at most 1 level between two runs of the
 # same build (DDGI, cornell).
 SCREENSHOT_TOLERANCE = {"ambient": 0, "ddgi": 1, "radiance_cascades": 1}
+# render_scene_image size and the station camera's clip / shadow range
+# (creation_24_gi_test_rooms: build_station sets shadow range 30 and far 60,
+# place_view sets near 0.02).
+SHOT_WIDTH = 1280
+SHOT_HEIGHT = 720
+STATION_CAMERA = {"near": 0.02, "far": 60.0, "shadow_range": 30.0}
 # Noise: samples at this many distinct field updates.
 NOISE_SAMPLES = 30
 
@@ -532,12 +544,13 @@ COST_KEYS = ("gpu_ms_per_update_avg", "ms_per_million_rays", "full_refresh_ms", 
 # --- screenshots ---------------------------------------------------------------------------
 
 def compare_images(reference_path, current_path, viewport, tolerance):
+    """viewport: [x, y, w, h] region to compare, or None for the whole image."""
     from PIL import Image, ImageChops
     a = Image.open(reference_path).convert("RGB")
     b = Image.open(current_path).convert("RGB")
     if a.size != b.size:
         return {"error": f"size {a.size} != {b.size}"}
-    x, y, w, h = viewport
+    x, y, w, h = viewport if viewport is not None else (0, 0, a.size[0], a.size[1])
     box = (x, y, x + w, y + h)
     diff = ImageChops.difference(a.crop(box), b.crop(box))
     r, g, bl = diff.split()
@@ -550,17 +563,28 @@ def compare_images(reference_path, current_path, viewport, tolerance):
             "tolerance": tolerance, "pixels_over_tolerance": over, "match": over == 0}
 
 
-def capture_view(c, info, view, path):
-    """The ONE screenshot path: place the station camera for `view`, capture
-    the editor frame to `path` and return the viewport rectangle the
-    comparison crops to. Today this is capture_screenshot of the whole editor
-    window, so the image depends on the editor's ImGui layout (docked /
-    floating windows around or over the viewport); only the viewport region
-    is compared."""
+def capture_view(c, info, view, path, screenshot_source):
+    """The ONE screenshot path: capture the station view `view` to `path` and
+    return the region the comparison looks at ([x, y, w, h], or None for the
+    whole image).
+
+    render: render_scene_image renders the scene offscreen through the view's
+    camera (eye, target, fov) at SHOT_WIDTH x SHOT_HEIGHT; the image does not
+    depend on any ImGui window or viewport size, and the whole image is
+    compared.
+    window: place the station camera, capture_screenshot the whole editor
+    window, and compare only the viewport region; the image depends on the
+    editor's ImGui layout (docked / floating windows around or over the
+    viewport)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if screenshot_source == "render":
+        camera = dict(STATION_CAMERA, eye=view["eye"], target=view["target"], fov_y_degrees=view["fov_y_deg"])
+        c.call("render_scene_image", {"scene": c.scene, "camera": camera, "width": SHOT_WIDTH,
+                                      "height": SHOT_HEIGHT, "output": "png", "path": path})
+        return None
     rooms.place_view(c, view)
     c.settle()
     time.sleep(0.3)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     c.call("capture_screenshot", {"path": path})
     return rooms.viewport_rect(c)
 
@@ -569,7 +593,7 @@ def capture_views(c, info, source, shot_dir, args, results):
     for v in info["views"]:
         name = f"{info['station']}_{v['name']}.png"
         path = os.path.join(shot_dir, name)
-        viewport = capture_view(c, info, v, path)
+        viewport = capture_view(c, info, v, path, args.screenshot_source)
         entry = {"view": v["name"], "path": os.path.relpath(path, REPO_ROOT), "viewport": viewport}
         if args.screenshot_reference:
             target_dir = os.path.join(args.screenshot_reference, source)
@@ -711,6 +735,9 @@ def main():
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
     parser.add_argument("--screenshot-reference", default=None, metavar="DIR")
     parser.add_argument("--screenshot-compare", default=None, metavar="DIR")
+    parser.add_argument("--screenshot-source", default="render", choices=["render", "window"],
+                        help="render: render_scene_image offscreen (default); "
+                             "window: capture_screenshot of the editor window, viewport region")
     parser.add_argument("--screenshot-tolerance", type=int, default=None, metavar="LEVELS",
                         help="largest per-channel 8-bit difference a compared pixel may have "
                              "(default: 0 for ambient, 1 for a traced field)")
