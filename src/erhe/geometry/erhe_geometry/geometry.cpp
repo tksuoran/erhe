@@ -1303,6 +1303,21 @@ auto Geometry::get_edge_facets(GEO::index_t edge) const -> std::span<const GEO::
     return m_edge_to_facets.get(edge);
 }
 
+auto Geometry::has_connectivity() const -> bool
+{
+    return
+        (m_vertex_to_corners.size() == m_mesh.vertices.nb()) &&
+        (m_corner_to_facet.size()   == m_mesh.facet_corners.nb());
+}
+
+auto Geometry::has_edge_connectivity() const -> bool
+{
+    return
+        (m_mesh.edges.nb() > 0) &&
+        (m_edge_to_facets.size()  == m_mesh.edges.nb()) &&
+        (m_vertex_to_edges.size() == m_mesh.vertices.nb());
+}
+
 auto Geometry::get_edge(const GEO::index_t v0, const GEO::index_t v1) const -> GEO::index_t
 {
     ERHE_VERIFY(v0 != v1);

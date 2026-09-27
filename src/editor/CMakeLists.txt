@@ -732,6 +732,10 @@ erhe_target_sources_grouped(
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp
+    windows/geometry_spreadsheet_model.cpp
+    windows/geometry_spreadsheet_model.hpp
+    windows/geometry_spreadsheet_window.cpp
+    windows/geometry_spreadsheet_window.hpp
     windows/input_bindings_window.cpp
     windows/input_bindings_window.hpp
     windows/inventory_window.cpp

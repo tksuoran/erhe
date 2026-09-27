@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `Geometry::has_connectivity()` and
+  `Geometry::has_edge_connectivity()` (`erhe_geometry/geometry.hpp`): whether
+  the corner / edge connectivity tables are built for the current element
+  counts.
 - `erhe::geometry`: `Mesh_attributes::for_each_facet_attribute()`,
   `for_each_vertex_attribute()`, `for_each_corner_attribute()` and
   `for_each_edge_attribute()` (`erhe_geometry/geometry.hpp`): enumerate one

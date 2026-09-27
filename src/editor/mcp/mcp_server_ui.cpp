@@ -56,6 +56,7 @@
 #include "transform/handle_visualizations.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/transform_tool.hpp"
+#include "windows/geometry_spreadsheet_window.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe_imgui/imgui_host.hpp"
@@ -2338,6 +2339,90 @@ auto Mcp_server::query_transform_rotation(const nlohmann::json& args) -> std::st
         }},
         {"quaternion_xyzw",      {q.x, q.y, q.z, q.w}}
     }).dump();
+}
+
+auto Mcp_server::query_geometry_spreadsheet(const nlohmann::json& args) -> std::string
+{
+    Geometry_spreadsheet_window* window = m_context.geometry_spreadsheet_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry Spreadsheet window is not available");
+    }
+    // Resolve the target and bring the caches up to date now, so the answer
+    // reflects the current selection even before the window draws again.
+    window->update_model();
+    const Geometry_spreadsheet_model&        model  = window->get_model();
+    const std::shared_ptr<erhe::scene::Mesh> mesh   = window->get_target_mesh();
+    const Spreadsheet_domain                 domain = window->get_domain();
+
+    json result{
+        {"visible",     window->is_window_visible()},
+        {"target_mode", (window->get_target_mode() == Spreadsheet_target_mode::pinned) ? "pinned" : "follow_selection"},
+        {"domain",      c_str(domain)},
+        {"precision",   model.get_precision()}
+    };
+    if (!mesh) {
+        result["node"] = nullptr;
+        return make_json_content(result).dump();
+    }
+    result["node"]                 = mesh->get_name();
+    result["node_id"]              = mesh->get_id();
+    result["primitive_index"]      = window->get_primitive_index();
+    result["geometry_available"]   = static_cast<bool>(model.get_geometry());
+    if (!model.get_geometry()) {
+        return make_json_content(result).dump();
+    }
+    result["element_count"]   = model.get_element_count(domain);
+    result["row_count"]       = model.get_row_count(domain);
+    result["sort_column"]     = model.get_sort_column(domain);
+
+    const std::span<const Spreadsheet_column> columns = model.get_columns(domain);
+    json columns_json = json::array();
+    for (const Spreadsheet_column& column : columns) {
+        json column_json{
+            {"label",    column.get_label()},
+            {"editable", column.edit == Spreadsheet_edit::editable}
+        };
+        if (column.attribute_name != nullptr) {
+            column_json["attribute"] = column.attribute_name;
+            column_json["component"] = column.component;
+        }
+        columns_json.push_back(column_json);
+    }
+    result["columns"] = columns_json;
+
+    const Spreadsheet_drawn_rows& drawn = window->get_drawn_rows();
+    json drawn_json = json::array();
+    for (std::size_t i = 0; i < drawn.range_count; ++i) {
+        drawn_json.push_back(json::array({drawn.ranges[i].first, drawn.ranges[i].last}));
+    }
+    result["drawn_ranges"] = drawn_json;
+
+    // Rows to report: the requested range, else the rows drawn last frame.
+    const std::size_t row_count = model.get_row_count(domain);
+    std::size_t first = 0;
+    std::size_t last  = 0;
+    if (args.contains("first_row") || args.contains("row_count")) {
+        first = std::min(args.value("first_row", std::size_t{0}), row_count);
+        last  = std::min(first + args.value("row_count", std::size_t{32}), row_count);
+    } else if (drawn.range_count > 0) {
+        first = std::min(drawn.ranges[0].first, row_count);
+        last  = std::min(drawn.ranges[drawn.range_count - 1].last, row_count);
+    }
+    last = std::min(last, first + std::size_t{256});
+
+    std::array<char, 64> buffer{};
+    json rows_json = json::array();
+    for (std::size_t row = first; row < last; ++row) {
+        const GEO::index_t element = model.get_row_element(domain, row);
+        json cells   = json::array();
+        for (const Spreadsheet_column& column : columns) {
+            const Formatted_cell cell = model.format_cell(column, element, buffer);
+            cells.push_back(cell.present ? json(std::string{cell.text}) : json(nullptr));
+        }
+        rows_json.push_back({{"row", row}, {"element", element}, {"cells", cells}});
+    }
+    result["rows"] = rows_json;
+    return make_json_content(result).dump();
 }
 
 } // namespace editor

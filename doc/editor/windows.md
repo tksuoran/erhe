@@ -71,6 +71,10 @@ Every row's context menu, the Scene header row included, offers Rename, and F2 i
 
 Reference instance structure protection applies to every drop (`prefabs/instance_structure.hpp`, `doc/erhe/usd_compatibility_design.md` X2): a move of a protected prim or under a refusing parent is refused and logged at drop, and the brush, glTF, texture and material-copy drops are not offered where the parent refuses children.
 
+## Geometry Spreadsheet
+
+`Geometry_spreadsheet_window` shows one mesh primitive's geometry as a table per element domain; see `doc/editor/geometry_spreadsheet.md`.
+
 ## Public API / Integration Points
 
 - `Viewport_window::viewport_scene_view()` -- access the associated scene view
@@ -85,4 +89,4 @@ Reference instance structure protection applies to every drop (`prefabs/instance
 
 ## Future work
 
-- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - spreadsheet window for numeric geometry attribute inspection and editing.
+- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - Geometry Spreadsheet selection sync and editing.

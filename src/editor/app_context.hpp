@@ -97,6 +97,7 @@ class Mesh_component_selection_tool;
 class Move_tool;
 class Navigation_gizmo_tool;
 class Node_properties_window;
+class Geometry_spreadsheet_window;
 class Operation_stack;
 class Operations;
 class Paint_tool;
@@ -298,6 +299,7 @@ public:
     Move_tool*                         move_tool            {nullptr};
     Navigation_gizmo_tool*             navigation_gizmo_tool{nullptr};
     Node_properties_window*            node_properties_window{nullptr};
+    Geometry_spreadsheet_window*       geometry_spreadsheet_window{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
     Operations*                        operations           {nullptr};
     Properties*                        properties           {nullptr}; // the primary Properties window

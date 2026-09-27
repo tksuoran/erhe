@@ -63,6 +63,7 @@
 #include "developer/ray_trace_window.hpp"
 #include "developer/rendergraph_window.hpp"
 #include "developer/selection_window.hpp"
+#include "windows/geometry_spreadsheet_window.hpp"
 #include "developer/tool_properties_window.hpp"
 #include "experiments/gradient_editor.hpp"
 #include "experiments/network_window.hpp"
@@ -2115,6 +2116,7 @@ public:
                 m_ray_trace_window       = std::make_unique<Ray_trace_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_ddgi_window            = std::make_unique<Ddgi_window                     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
+                m_geometry_spreadsheet_window = std::make_unique<Geometry_spreadsheet_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_controller_inputs_window = std::make_unique<Controller_inputs_window     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -2994,6 +2996,7 @@ public:
         m_app_context.operation_stack          = m_operation_stack       .get();
         m_app_context.operations               = m_operations            .get();
         m_app_context.properties               = m_properties            .get();
+        m_app_context.geometry_spreadsheet_window = m_geometry_spreadsheet_window.get();
         m_app_context.paint_tool               = m_paint_tool            .get();
         m_app_context.weight_paint_tool        = m_weight_paint_tool     .get();
         m_app_context.physics_tool             = m_physics_tool          .get();
@@ -4199,6 +4202,7 @@ public:
     std::unique_ptr<Ray_trace_window                >        m_ray_trace_window;
     std::unique_ptr<Ddgi_window                     >        m_ddgi_window;
     std::unique_ptr<Properties                      >        m_properties;
+    std::unique_ptr<Geometry_spreadsheet_window     >        m_geometry_spreadsheet_window;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
     std::unique_ptr<Controller_inputs_window        >        m_controller_inputs_window;

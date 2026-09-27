@@ -932,6 +932,13 @@ public:
     [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> std::span<const GEO::index_t>;
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
 
+    // True when update_connectivity() has run for the current element counts,
+    // so get_vertex_corners() and get_corner_facet() may be called.
+    [[nodiscard]] auto has_connectivity     () const -> bool;
+    // True when the mesh has edges and build_edges() has run for them, so
+    // get_edge_facets() and get_vertex_edges() may be called.
+    [[nodiscard]] auto has_edge_connectivity() const -> bool;
+
     // Semi-sharp crease sharpness accessors (see doc/erhe/subdivision_crease_edges.md).
     // Both resolve the edge from the canonical vertex pair; get returns 0.0f
     // (smooth) for absent values or nonexistent edges, set is a no-op for a
