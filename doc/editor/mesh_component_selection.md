@@ -229,3 +229,6 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 - [plans/mesh_component_selection.md](../plans/mesh_component_selection.md) -
   editing the selection, multiple meshes, skinned meshes, and compute
   selection over the vertex and index buffers.
+- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) -
+  spreadsheet window for per-element attribute values, synced with the
+  component selection.
