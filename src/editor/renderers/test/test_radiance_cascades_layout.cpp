@@ -60,16 +60,23 @@ TEST(Radiance_cascades_layout, cascades_nest_and_stop_at_two_probes)
         EXPECT_EQ(upper.grid.counts, (lower.grid.counts + glm::ivec3{1}) / 2);
         EXPECT_EQ(upper.grid.spacing, 2.0f * lower.grid.spacing);
         EXPECT_EQ(upper.tile_texels, 2 * lower.tile_texels);
-        // Upper probe j sits at the centre of the lower block {2j, 2j + 1}.
-        const glm::ivec3 j{1, 0, 2};
-        const glm::vec3  centre = 0.5f * (
-            lower.grid.get_probe_position(2 * j) +
-            lower.grid.get_probe_position((2 * j) + glm::ivec3{1})
-        );
-        const glm::vec3 position = upper.grid.get_probe_position(j);
-        EXPECT_NEAR(position.x, centre.x, 1.0e-4f);
-        EXPECT_NEAR(position.y, centre.y, 1.0e-4f);
-        EXPECT_NEAR(position.z, centre.z, 1.0e-4f);
+        // The upper grid is centred on the lower grid: both cover the same
+        // volume, so the top cascades stay inside it.
+        const glm::vec3 lower_centre = lower.grid.origin + (0.5f * glm::vec3{lower.grid.counts - glm::ivec3{1}} * lower.grid.spacing);
+        const glm::vec3 upper_centre = upper.grid.origin + (0.5f * glm::vec3{upper.grid.counts - glm::ivec3{1}} * upper.grid.spacing);
+        EXPECT_NEAR(upper_centre.x, lower_centre.x, 1.0e-3f);
+        EXPECT_NEAR(upper_centre.y, lower_centre.y, 1.0e-3f);
+        EXPECT_NEAR(upper_centre.z, lower_centre.z, 1.0e-3f);
+        // Per axis, upper probe j sits at the centre of the lower pair
+        // {2j, 2j + 1} for an even lower count, on lower probe 2j for an odd one.
+        const glm::ivec3 j{1, 0, 1};
+        for (int axis = 0; axis < 3; ++axis) {
+            const int   n        = lower.grid.counts[axis];
+            const float expected = ((n % 2) == 0)
+                ? lower.grid.origin[axis] + ((static_cast<float>(2 * j[axis]) + 0.5f) * lower.grid.spacing[axis])
+                : lower.grid.origin[axis] + (static_cast<float>(2 * j[axis]) * lower.grid.spacing[axis]);
+            EXPECT_NEAR(upper.grid.get_probe_position(j)[axis], expected, 1.0e-3f) << "cascade " << i << " axis " << axis;
+        }
     }
     // Texels: probes x q_i^2 per cascade, summed.
     int64_t sum = 0;
@@ -199,56 +206,74 @@ TEST(Radiance_cascades_layout, octahedral_2x2_nesting)
 
 TEST(Radiance_cascades_layout, upper_probe_axis_weights)
 {
+    // Even lower count (20 -> 10):
     // k = 2m -> (m - 1, m) with (0.25, 0.75); k = 2m + 1 -> (m, m + 1) with (0.75, 0.25).
-    const editor::Upper_probe_axis even = editor::get_upper_probe_axis(4, 10);
+    const editor::Upper_probe_axis even = editor::get_upper_probe_axis(4, 20, 10);
     EXPECT_EQ(even.index[0], 1);
     EXPECT_EQ(even.index[1], 2);
     EXPECT_EQ(even.weight[0], 0.25f);
     EXPECT_EQ(even.weight[1], 0.75f);
-    const editor::Upper_probe_axis odd = editor::get_upper_probe_axis(5, 10);
+    const editor::Upper_probe_axis odd = editor::get_upper_probe_axis(5, 20, 10);
     EXPECT_EQ(odd.index[0], 2);
     EXPECT_EQ(odd.index[1], 3);
     EXPECT_EQ(odd.weight[0], 0.75f);
     EXPECT_EQ(odd.weight[1], 0.25f);
+    // Odd lower count (9 -> 5): k = 2m on m; k = 2m + 1 halfway between m and m + 1.
+    const editor::Upper_probe_axis on_probe = editor::get_upper_probe_axis(4, 9, 5);
+    EXPECT_EQ(on_probe.index[0], 2);
+    EXPECT_EQ(on_probe.weight[0], 1.0f);
+    EXPECT_EQ(on_probe.weight[1], 0.0f);
+    const editor::Upper_probe_axis between = editor::get_upper_probe_axis(5, 9, 5);
+    EXPECT_EQ(between.index[0], 2);
+    EXPECT_EQ(between.index[1], 3);
+    EXPECT_EQ(between.weight[0], 0.5f);
+    EXPECT_EQ(between.weight[1], 0.5f);
     // Edges clamp into the upper grid.
-    const editor::Upper_probe_axis first = editor::get_upper_probe_axis(0, 3);
+    const editor::Upper_probe_axis first = editor::get_upper_probe_axis(0, 6, 3);
     EXPECT_EQ(first.index[0], 0);
     EXPECT_EQ(first.index[1], 0);
-    const editor::Upper_probe_axis last = editor::get_upper_probe_axis(5, 3); // lower count 6
+    const editor::Upper_probe_axis last = editor::get_upper_probe_axis(5, 6, 3);
     EXPECT_EQ(last.index[0], 2);
     EXPECT_EQ(last.index[1], 2);
+    const editor::Upper_probe_axis last_odd = editor::get_upper_probe_axis(8, 9, 5);
+    EXPECT_EQ(last_odd.index[0], 4);
+    EXPECT_EQ(last_odd.index[1], 4);
 }
 
 TEST(Radiance_cascades_layout, trilinear_upper_probes_interpolate_the_lower_position)
 {
+    // Every cascade pair of the example (41 -> 21 -> 11 -> 6 -> 3 -> 2 on
+    // the longest axis: odd and even lower counts).
     const Radiance_cascades_layout layout = fit_example(Radiance_cascades_layout_settings{});
-    const Probe_grid& lower = layout.cascades[0].grid;
-    const Probe_grid& upper = layout.cascades[1].grid;
-    for (int z = 0; z < lower.counts.z; ++z) {
-        for (int y = 0; y < lower.counts.y; ++y) {
-            for (int x = 0; x < lower.counts.x; ++x) {
-                const glm::ivec3 coords{x, y, z};
-                const editor::Upper_probes probes = editor::get_upper_probes(coords, upper.counts);
-                float     weight_sum = 0.0f;
-                glm::vec3 position{0.0f};
-                for (std::size_t n = 0; n < 8; ++n) {
-                    EXPECT_TRUE(glm::all(glm::greaterThanEqual(probes.coords[n], glm::ivec3{0})));
-                    EXPECT_TRUE(glm::all(glm::lessThan        (probes.coords[n], upper.counts)));
-                    weight_sum += probes.weights[n];
-                    position   += probes.weights[n] * upper.get_probe_position(probes.coords[n]);
-                }
-                EXPECT_NEAR(weight_sum, 1.0f, 1.0e-6f);
-                // Away from the clamped edges the weights reproduce the
-                // lower probe position exactly: they are its trilinear
-                // weights in the upper grid.
-                const bool interior =
-                    (x > 0) && (y > 0) && (z > 0) &&
-                    (x < lower.counts.x - 1) && (y < lower.counts.y - 1) && (z < lower.counts.z - 1);
-                if (interior) {
-                    const glm::vec3 expected = lower.get_probe_position(coords);
-                    EXPECT_NEAR(position.x, expected.x, 1.0e-4f);
-                    EXPECT_NEAR(position.y, expected.y, 1.0e-4f);
-                    EXPECT_NEAR(position.z, expected.z, 1.0e-4f);
+    for (int cascade = 1; cascade < layout.cascade_count; ++cascade) {
+        const Probe_grid& lower = layout.cascades[static_cast<std::size_t>(cascade - 1)].grid;
+        const Probe_grid& upper = layout.cascades[static_cast<std::size_t>(cascade)].grid;
+        for (int z = 0; z < lower.counts.z; ++z) {
+            for (int y = 0; y < lower.counts.y; ++y) {
+                for (int x = 0; x < lower.counts.x; ++x) {
+                    const glm::ivec3 coords{x, y, z};
+                    const editor::Upper_probes probes = editor::get_upper_probes(coords, lower.counts, upper.counts);
+                    float     weight_sum = 0.0f;
+                    glm::vec3 position{0.0f};
+                    for (std::size_t n = 0; n < 8; ++n) {
+                        EXPECT_TRUE(glm::all(glm::greaterThanEqual(probes.coords[n], glm::ivec3{0})));
+                        EXPECT_TRUE(glm::all(glm::lessThan        (probes.coords[n], upper.counts)));
+                        weight_sum += probes.weights[n];
+                        position   += probes.weights[n] * upper.get_probe_position(probes.coords[n]);
+                    }
+                    EXPECT_NEAR(weight_sum, 1.0f, 1.0e-6f);
+                    // Away from the clamped edges the weights reproduce the
+                    // lower probe position exactly: they are its trilinear
+                    // weights in the upper grid.
+                    const bool interior =
+                        (x > 0) && (y > 0) && (z > 0) &&
+                        (x < lower.counts.x - 1) && (y < lower.counts.y - 1) && (z < lower.counts.z - 1);
+                    if (interior) {
+                        const glm::vec3 expected = lower.get_probe_position(coords);
+                        EXPECT_NEAR(position.x, expected.x, 1.0e-3f);
+                        EXPECT_NEAR(position.y, expected.y, 1.0e-3f);
+                        EXPECT_NEAR(position.z, expected.z, 1.0e-3f);
+                    }
                 }
             }
         }

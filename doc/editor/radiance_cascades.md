@@ -101,10 +101,17 @@ glm only) and unit tested by `editor_renderer_tests`
   `s0`, at least 2 per axis, probe planes on the box faces, `s0` grown until
   the count fits `max_probes_cascade0`. The spacing is per axis; `r0` uses the
   largest one, so `r0 >= sqrt(3) * s0` bounds the cell diagonal on every axis.
-- **Cascade i** (`get_upper_grid()`): probes at the centres of 2x2x2 blocks of
-  cascade `i - 1` - spacing doubled, origin moved by half a lower spacing,
-  counts `ceil(lower / 2)` per axis (an odd lower count gives the last upper
-  probe a block half outside the lower grid). Octahedral tile side
+- **Cascade i** (`get_upper_grid()`): spacing doubled, counts
+  `ceil(lower / 2)` per axis, centred on cascade `i - 1`, so every cascade
+  covers the same volume. Per axis, an even lower count puts the upper
+  probes at the centres of the lower pairs (origin moved by half a lower
+  spacing), an odd one on the even lower probes (origin unchanged, both
+  span the same extent). A grid anchored at the lower origin instead
+  drifts half a lower spacing toward `+x +y +z` per odd count: in the
+  `corridor` station (9 x 11 x 54 cascade 0 probes) the single cascade 4
+  probe per x / y sat at x 1.71, y 2.47, outside the 1.5 m wide corridor,
+  so no interval of 13 - 27 m ever saw the lit end wall and the floor
+  beyond 18 m read about 1e-9. Octahedral tile side
   `q_i = q0 * 2^i`. Interval `[r0 * (2^i - 1), r0 * (2^(i+1) - 1)]`
   (`get_radiance_interval()`), contiguous from cascade to cascade.
 - **Cascade count**: cascades are added until the top cascade has at most 2
@@ -119,9 +126,10 @@ glm only) and unit tested by `editor_renderer_tests`
 - **Merge math**: `get_child_texels()` - cascade `i` texel `(u, v)` covers
   cascade `i + 1` texels `(2u .. 2u+1, 2v .. 2v+1)`, the octahedral nesting of
   the merge; `get_upper_probes()` - the 8 cascade `i + 1` probes of a cascade
-  `i` probe with their trilinear weights, products of 0.25 / 0.75 per axis
-  (lower probe `k` sits at upper grid coordinate `k / 2 - 1 / 4`), indices
-  clamped at the upper grid's edges. `octahedral_encode()` /
+  `i` probe with their trilinear weights: per axis, with an even lower count
+  lower probe `k` sits at upper grid coordinate `k / 2 - 1 / 4` (weights
+  0.25 / 0.75), with an odd one at `k / 2` (weights 1 / 0 for even `k`,
+  0.5 / 0.5 for odd `k`); indices clamped at the upper grid's edges. `octahedral_encode()` /
   `octahedral_decode()` follow `res/shaders/erhe_ddgi.glsl`.
 
 Because the upper counts round up, small upper cascades do not halve the
@@ -237,14 +245,15 @@ count, not to the trace budget.
   radiance the DDGI probe rays return on a miss.
 - **Lower cascades**: `upper` is the merged atlas of cascade `i + 1`,
   interpolated to the probe - the 8 upper probes and trilinear weights of
-  `get_upper_probes()` (0.25 / 0.75 per axis, "Layout") - and averaged at
+  `get_upper_probes()` ("Layout") - and averaged at
   each upper probe over the 2x2 child texels of `get_child_texels()`, the
   directions nesting in this texel. **Border rule**: upper indices are
   clamped to the upper grid (clamp to edge). A lower probe beyond the
-  outermost upper probe of an axis - lower index 0, and the last lower
-  index when the lower count is even - puts that axis' 0.25 weight on the
+  outermost upper probe of an axis - the first and the last lower index
+  when the lower count is even - puts that axis' 0.25 weight on the
   same edge probe as its 0.75 weight, so it takes the edge probe's value
-  on that axis instead of extrapolating.
+  on that axis instead of extrapolating; with an odd lower count the edge
+  probes coincide with upper probes.
 - **Merge modes** (`merge_mode`, two variants of the shader,
   `ERHE_RC_MERGE_VISIBILITY` 0 / 1). `interpolate`: all 8 upper probes with
   their trilinear weights. `visibility_masked`: only usable upper probes
@@ -521,22 +530,21 @@ tick records it, so the copy costs nothing while the window is closed.
     | Station | median | p90 | max | mean bias |
     |---|---|---|---|---|
     | `cornell` | 0.13 (0.13) | 0.75 (0.67) | 2.1 (2.1) | -21 % (-17 %) |
-    | `emissive_only` | 0.00 (0.00) | 0.51 (0.86) | 20.9 (20.9) | -16 % (-16 %) |
-    | `courtyard` | 0.08 (0.09) | 0.38 (0.43) | 0.69 (0.69) | -11 % (-13 %) |
-    | `leak_pair` | 0.02 (0.04) | 0.43 (0.47) | 4.4 (5.0) | -12 % (-11 %) |
-    | `corridor` | 0.00 (0.00) | 0.87 (0.75) | 1.0 (5.0) | -31 % (-34 %) |
+    | `emissive_only` | 0.00 (0.00) | 0.51 (0.95) | 34.8 (20.9) | -12 % (-14 %) |
+    | `courtyard` | 0.07 (0.08) | 0.37 (0.38) | 0.69 (0.71) | -9 % (-12 %) |
+    | `leak_pair` | 0.01 (0.03) | 0.33 (0.38) | 2.8 (3.7) | -8 % (-10 %) |
+    | `corridor` | 0.00 (0.00) | 0.70 (0.69) | 1.0 (7.6) | -25 % (-31 %) |
 
     `leak_pair` room B (no light; 201 sampled texels): mean merged
-    luminance 0.0025 (0.0033), 2 % of room A's mean truth; worst texel
-    0.054 (0.062), looking at the shared wall from 1.25 - 2.75 m with every
-    cascade 1 upper probe visible. The dark bias follows the upper
+    luminance 0.0014 (0.0024), 1 - 2 % of room A's mean truth; worst texel
+    0.035 (0.046). The dark bias follows the upper
     stencils: over the sampled interior probes the mean weight of upper
     probes the lower probe cannot see is 0.0 - 0.15 for cascade 1 and
     0.3 - 1.0 for the coarser cascades, whose probes lie mostly in the
     walls or outside the rooms. With `interpolate` the intervals of those
     probes, starting back inside the room, carry part of the far field:
     `visibility_masked` drops them and the `cornell` bias grows from -17 %
-    to -21 %, while the bright `corridor` outliers of 5.0 are gone. The script
+    to -21 %, while the bright `corridor` outliers of 7.6 are gone. The script
     fails only on median > 0.25 or p90 > 1.5, about twice the worst
     station: a broken merge (wrong child texels or upper probes) reads as
     errors of order 1 on most texels.

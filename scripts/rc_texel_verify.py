@@ -36,7 +36,7 @@ readback (every texel carries its merged value too):
 - exact algebra: every merged texel of every cascade against the merge
   recomputed on the CPU from the READ-BACK raw texel and the read-back
   merged texels of the cascade above - the 8 upper probes of
-  get_upper_probes() (trilinear 0.25 / 0.75 weights, indices clamped to the
+  get_upper_probes() (trilinear weights of the centred upper grid, indices clamped to the
   upper grid), each the average of the 2x2 child texels, restricted to the
   upper probes the read-back probe states mark usable (segment
   unobstructed, upper probe not inside geometry) with the weights
@@ -501,9 +501,12 @@ def check_raw(name, rc, texels_by_address, boxes, lights, ambient):
 
 # --- merged checks -------------------------------------------------------------------
 
-def upper_probe_axis(lower_index, upper_count):
+def upper_probe_axis(lower_index, lower_count, upper_count):
     """get_upper_probe_axis() of radiance_cascades_layout.cpp."""
     last = max(0, upper_count - 1)
+    if lower_count % 2 != 0:
+        m = lower_index // 2
+        return [min(max(m, 0), last), min(max(m + 1, 0), last)], ([1.0, 0.0] if lower_index % 2 == 0 else [0.5, 0.5])
     if lower_index % 2 == 0:
         m = lower_index // 2
         return [min(max(m - 1, 0), last), min(max(m, 0), last)], [0.25, 0.75]
@@ -523,7 +526,8 @@ def expected_merge(index, texel, rc, texels_by_address, ambient):
         upper = list(ambient) + [1.0]
     else:
         upper_counts = rc["cascades"][index + 1]["grid_counts"]
-        axes = [upper_probe_axis(texel["probe"][a], upper_counts[a]) for a in range(3)]
+        lower_counts = rc["cascades"][index]["grid_counts"]
+        axes = [upper_probe_axis(texel["probe"][a], lower_counts[a], upper_counts[a]) for a in range(3)]
         u, v = texel["texel"]
         upper = [0.0, 0.0, 0.0, 0.0]
         weight_sum = 0.0

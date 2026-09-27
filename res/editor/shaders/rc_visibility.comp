@@ -30,11 +30,16 @@ const uint  c_classify_rays             = 64u;
 const float c_backface_ratio_threshold  = 0.25; // as ddgi_relocate.comp
 const uint  c_state_inside              = 256u;
 
-// One axis of the trilinear interpolation to the upper cascade: lower probe
-// k sits at upper grid coordinate k / 2 - 1 / 4 (get_upper_probe_axis()).
-ivec2 rc_upper_axis(int lower_index, int upper_count)
+// One axis of the trilinear interpolation to the upper cascade, centred on
+// this one (get_upper_probe_axis()): with an even lower count lower probe k
+// sits at upper grid coordinate k / 2 - 1 / 4, with an odd one at k / 2.
+ivec2 rc_upper_axis(int lower_index, int lower_count, int upper_count)
 {
     int last = max(0, upper_count - 1);
+    if ((lower_count % 2) != 0) {
+        int m = lower_index / 2;
+        return ivec2(clamp(m, 0, last), clamp(m + 1, 0, last));
+    }
     if ((lower_index % 2) == 0) {
         int m = lower_index / 2;
         return ivec2(clamp(m - 1, 0, last), clamp(m, 0, last));
@@ -90,9 +95,9 @@ void main()
     // Segments to the 8 upper probes
     if (rc_visibility.upper_counts.w != 0u) {
         ivec3 upper_counts = ivec3(rc_visibility.upper_counts.xyz);
-        ivec2 ix = rc_upper_axis(coords.x, upper_counts.x);
-        ivec2 iy = rc_upper_axis(coords.y, upper_counts.y);
-        ivec2 iz = rc_upper_axis(coords.z, upper_counts.z);
+        ivec2 ix = rc_upper_axis(coords.x, counts.x, upper_counts.x);
+        ivec2 iy = rc_upper_axis(coords.y, counts.y, upper_counts.y);
+        ivec2 iz = rc_upper_axis(coords.z, counts.z, upper_counts.z);
         for (int k = 0; k < 2; ++k) {
             for (int j = 0; j < 2; ++j) {
                 for (int i = 0; i < 2; ++i) {

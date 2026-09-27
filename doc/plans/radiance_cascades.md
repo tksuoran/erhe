@@ -105,9 +105,11 @@ integrating Monte Carlo noise.
 ## 3. Data layout
 
 Grid fit as DDGI: the padded content AABB, cascade 0 spacing `s0`, probe count
-clamped to `max_probes_cascade0` by growing `s0`. Cascade `i` probes sit at the
-centres of 2x2x2 blocks of cascade `i - 1` probes, so the trilinear merge
-weights are the constants 0.25 / 0.75 per axis. Cascade count: until cascade
+clamped to `max_probes_cascade0` by growing `s0`. Cascade `i` doubles the
+spacing of cascade `i - 1` and is centred on it; per axis its probes sit at
+the centres of the lower pairs (even lower count, merge weights 0.25 /
+0.75) or on the even lower probes (odd count, weights 1 / 0 and 0.5 / 0.5).
+Cascade count: until cascade
 `N - 1` has at most 2 probes on its longest axis, or `max_cascades`.
 
 Per cascade, two textures (storage + sampled, RGBA16F, rgb radiance, a beta):
@@ -475,7 +477,12 @@ sampling settings of `DDGI_SETTINGS`, both merge modes, worst of three
 runs, measured 2026-09-27 back to back with DDGI on the headless Vulkan
 editor (`gi_verify.py --compare ddgi,radiance_cascades --runs 3
 --rc-merge-mode ...`). The DDGI column of the same runs matches the phase 0
-baseline within its run-to-run noise.
+baseline within its run-to-run noise. The `corridor` rows were re-measured
+after the upper cascade grids were centred on the lower ones
+([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+"Layout"); the other stations predate that change, which moved the merged
+cascade 0 bias of `rc_texel_verify.py` by 1 - 6 points toward zero on
+every station.
 
 | Metric | RC `interpolate` | RC `visibility_masked` | Gate |
 |---|---|---|---|
@@ -485,7 +492,7 @@ baseline within its run-to-run noise.
 | `probe_offset_sweep` crawl-floor median irradiance | 0.0042 | 0.0000 | item 12 |
 | `cornell` red strip R / G, green strip G / R | 1.97, 1.97 | 2.05, 2.05 | >= 1.2 pass / pass |
 | `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 17.0 / 0.62 / 0.018 | 158 / 5.8 / 0.25 | 1.0 and 0.25 m > 1: fail / pass |
-| `corridor` monotonic violations; max log second difference | 0; 11.9 | 1; 9.3 | 0; <= DDGI (0.25): fail / fail |
+| `corridor` monotonic violations; max log second difference | 7; 1.96 | 0; undefined (zero beyond 8 m) | 0; <= DDGI (0.18): fail / fail |
 | `courtyard` shadowed wall mean irradiance | 0.15 | 0.14 | - |
 | `dynamic` updates to settle, light move / door open | 44 / 51 | 41 / 52 | <= half of DDGI (85 / 236, 78 / 225): fail (0.52, 0.53) / pass |
 | `cornell` back wall noise, per-point std / mean | 0 | 0 | below DDGI pass / pass |
@@ -507,15 +514,16 @@ Accuracy (item 12), `mean_rel_err` per group, RC `interpolate` /
 | `cornell` red strip / green strip / floor / back wall | 0.18 / 0.18 / 0.16 / 0.23; 0.21 / 0.19 / 0.18 / 0.33 | (0.10 / 0.11 / 0.08 / 0.04) |
 | `emissive_only` floor at 1.0 / 0.25 / 0.05 m panel | 0.07 / 0.84 / 0.97; 0.07 / 0.84 / 0.96 | (0.65 / 0.06 / 0.37) |
 | `emissive_only` room floor | 0.25; 0.33 | (0.42) |
-| `corridor` profile | 0.03; 0.00 | (0.23) |
+| `corridor` profile | 0.18; 0.49 | (0.23) |
 | `courtyard` shadowed wall / shadowed floor / sunlit floor | 0.13 / 0.03 / 0.07; 0.19 / 0.01 / 0.10 | (0.01 / 0.03 / 0.04) |
 | `dynamic` floor / side room floor | 0.18 / 0.81; 0.19 / 0.36 | (0.11 / 0.01) |
 
 Gate 12 fails in both modes: RC is below DDGI's error on the
-`emissive_only` 1.0 m panel and room floors, the `corridor` profile and the
-`probe_offset_sweep` room A walls, and above it everywhere else; the worst
-group bound 0.25 holds only on `corridor` and `courtyard` (and `cornell` in
-`interpolate`, 0.23). What the numbers say:
+`emissive_only` 1.0 m panel and room floors, the `corridor` profile
+(`interpolate`) and the `probe_offset_sweep` room A walls, and above it
+everywhere else; the worst group bound 0.25 holds only on `courtyard` and
+`corridor` (`interpolate`) (and `cornell` in `interpolate`, 0.23). What the
+numbers say:
 
 - **The field is dark by 16 - 30 %** in lit rooms (`cornell`, the room A
   floors, `dynamic`), `visibility_masked` darker than `interpolate`: the
@@ -533,10 +541,16 @@ group bound 0.25 holds only on `corridor` and `courtyard` (and `cornell` in
   (`q0` 4, no jitter): the 0.25 m panel reads 0.62 of the room median with
   `interpolate` (its floor 84 % dark), the 0.05 m panel is missed. Direction
   jitter (phase 6) integrates the footprint instead of its centre ray.
-- **Far field** in the corridor: the profile error is the smallest of any
-  field (3 %, DDGI 23 %) up to about 16 m, then the last five points fall
-  to about 1e-9 - the log second-difference gate reads that cliff, not
-  steps between cascades.
+- **Far field** in the corridor is decided by the coarse cascades, whose
+  spacing exceeds the 1.5 m corridor width: with the centred grids the
+  cascade 4 and 5 probes sit on the corridor's centre line and see the lit
+  end wall exactly, but the 2 x 2 cascade 3 probes per cross-section sit
+  outside the corridor walls. `interpolate` carries the far field through
+  them by start-point parallax (7 - 9 x the reference beyond 17 m, 0.13 x at
+  8 m); `visibility_masked` finds no usable cascade 3 probe for the
+  corridor's cascade 2 probes and falls back to `upper = (0, 0)`, so the
+  profile is exactly 0 beyond cascade 2's interval (8 m on). Both are the
+  merge approximation that `per_neighbour_trace` (phase 5) replaces.
 - **Convergence and noise** are the expected RC gains: no per-update noise
   without jitter, and 2 - 5 x fewer updates to settle; the light-move event
   misses the half-of-DDGI gate by 2 - 3 updates.

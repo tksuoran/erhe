@@ -99,10 +99,18 @@ auto get_radiance_interval(const float r0, const int cascade) -> glm::vec2
 
 auto get_upper_grid(const Probe_grid& lower) -> Probe_grid
 {
+    // Centred on the lower grid, so every cascade covers the same volume:
+    // an even lower count puts the upper probes at the centres of the lower
+    // pairs (origin moved by half a lower spacing), an odd one on the even
+    // lower probes (origin unchanged). Anchoring every cascade at the lower
+    // origin instead drifts the upper grids half a lower spacing per odd
+    // count toward +x +y +z, until the top cascades sit outside the volume.
     Probe_grid upper{};
     upper.counts  = (lower.counts + glm::ivec3{1}) / 2;
     upper.spacing = 2.0f * lower.spacing;
-    upper.origin  = lower.origin + (0.5f * lower.spacing);
+    const glm::vec3 lower_extent = glm::vec3{lower.counts - glm::ivec3{1}} * lower.spacing;
+    const glm::vec3 upper_extent = glm::vec3{upper.counts - glm::ivec3{1}} * upper.spacing;
+    upper.origin  = lower.origin + (0.5f * (lower_extent - upper_extent));
     return upper;
 }
 
@@ -188,13 +196,22 @@ auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascad
     }
 }
 
-auto get_upper_probe_axis(const int lower_index, const int upper_count) -> Upper_probe_axis
+auto get_upper_probe_axis(const int lower_index, const int lower_count, const int upper_count) -> Upper_probe_axis
 {
-    // Lower probe k at upper grid coordinate k / 2 - 1 / 4:
-    //   k = 2m     -> between m - 1 (weight 0.25) and m     (weight 0.75)
-    //   k = 2m + 1 -> between m     (weight 0.75) and m + 1 (weight 0.25)
     Upper_probe_axis axis{};
     const int last = std::max(0, upper_count - 1);
+    if ((lower_count % 2) != 0) {
+        // Odd lower count: lower probe k at upper grid coordinate k / 2.
+        //   k = 2m     -> on m     (weights 1, 0 with m + 1)
+        //   k = 2m + 1 -> between m and m + 1 (weights 0.5, 0.5)
+        const int m = lower_index / 2;
+        axis.index  = {std::clamp(m, 0, last), std::clamp(m + 1, 0, last)};
+        axis.weight = ((lower_index % 2) == 0) ? std::array<float, 2>{1.0f, 0.0f} : std::array<float, 2>{0.5f, 0.5f};
+        return axis;
+    }
+    // Even lower count: lower probe k at upper grid coordinate k / 2 - 1 / 4:
+    //   k = 2m     -> between m - 1 (weight 0.25) and m     (weight 0.75)
+    //   k = 2m + 1 -> between m     (weight 0.75) and m + 1 (weight 0.25)
     if ((lower_index % 2) == 0) {
         const int m = lower_index / 2;
         axis.index  = {std::clamp(m - 1, 0, last), std::clamp(m, 0, last)};
@@ -207,11 +224,11 @@ auto get_upper_probe_axis(const int lower_index, const int upper_count) -> Upper
     return axis;
 }
 
-auto get_upper_probes(const glm::ivec3& lower_coords, const glm::ivec3& upper_counts) -> Upper_probes
+auto get_upper_probes(const glm::ivec3& lower_coords, const glm::ivec3& lower_counts, const glm::ivec3& upper_counts) -> Upper_probes
 {
-    const Upper_probe_axis x = get_upper_probe_axis(lower_coords.x, upper_counts.x);
-    const Upper_probe_axis y = get_upper_probe_axis(lower_coords.y, upper_counts.y);
-    const Upper_probe_axis z = get_upper_probe_axis(lower_coords.z, upper_counts.z);
+    const Upper_probe_axis x = get_upper_probe_axis(lower_coords.x, lower_counts.x, upper_counts.x);
+    const Upper_probe_axis y = get_upper_probe_axis(lower_coords.y, lower_counts.y, upper_counts.y);
+    const Upper_probe_axis z = get_upper_probe_axis(lower_coords.z, lower_counts.z, upper_counts.z);
     Upper_probes probes{};
     std::size_t  n = 0;
     for (std::size_t k = 0; k < 2; ++k) {

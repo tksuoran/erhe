@@ -15,7 +15,8 @@
 // - Lower cascades: upper is the merged atlas of cascade i + 1 interpolated
 //   to this probe - the 8 upper probes of get_upper_probes()
 //   (src/editor/renderers/radiance_cascades_layout.cpp), trilinear weights
-//   0.25 / 0.75 per axis, indices clamped to the upper grid (clamp to edge:
+//   per axis (0.25 / 0.75 for an even lower count, 1 / 0 or 0.5 / 0.5 for
+//   an odd one), indices clamped to the upper grid (clamp to edge:
 //   a lower probe outside the upper probes' span takes the edge probe) -
 //   and at each upper probe the average of the 2x2 child texels
 //   (2u .. 2u+1, 2v .. 2v+1) of the octahedral tile that nest in this texel.
@@ -48,12 +49,17 @@ const uint c_flag_mask_radiance = 2u; // debug_cascade_mask: zero this cascade's
 // Probe state bits (Radiance_cascades_renderer::c_state_*)
 const uint c_state_inside = 256u;
 
-// One axis of the trilinear interpolation to the upper cascade: lower probe
-// k sits at upper grid coordinate k / 2 - 1 / 4 (get_upper_probe_axis()).
-void rc_upper_axis(int lower_index, int upper_count, out ivec2 index, out vec2 weight)
+// One axis of the trilinear interpolation to the upper cascade, centred on
+// this one (get_upper_probe_axis()): with an even lower count lower probe k
+// sits at upper grid coordinate k / 2 - 1 / 4, with an odd one at k / 2.
+void rc_upper_axis(int lower_index, int lower_count, int upper_count, out ivec2 index, out vec2 weight)
 {
     int last = max(0, upper_count - 1);
-    if ((lower_index % 2) == 0) {
+    if ((lower_count % 2) != 0) {
+        int m  = lower_index / 2;
+        index  = ivec2(clamp(m, 0, last), clamp(m + 1, 0, last));
+        weight = ((lower_index % 2) == 0) ? vec2(1.0, 0.0) : vec2(0.5, 0.5);
+    } else if ((lower_index % 2) == 0) {
         int m  = lower_index / 2;
         index  = ivec2(clamp(m - 1, 0, last), clamp(m, 0, last));
         weight = vec2(0.25, 0.75);
@@ -103,9 +109,9 @@ void main()
         ivec2 ix; vec2 wx;
         ivec2 iy; vec2 wy;
         ivec2 iz; vec2 wz;
-        rc_upper_axis(coords.x, upper_counts.x, ix, wx);
-        rc_upper_axis(coords.y, upper_counts.y, iy, wy);
-        rc_upper_axis(coords.z, upper_counts.z, iz, wz);
+        rc_upper_axis(coords.x, counts.x, upper_counts.x, ix, wx);
+        rc_upper_axis(coords.y, counts.y, upper_counts.y, iy, wy);
+        rc_upper_axis(coords.z, counts.z, upper_counts.z, iz, wz);
 
 #if ERHE_RC_MERGE_VISIBILITY
         uint lower_state = uint(texelFetch(s_rc_state, tile, 0).r + 0.5);
@@ -137,8 +143,8 @@ void main()
                 }
             }
         }
-        // interpolate: the weights sum to exactly 1 (products of 0.25 and
-        // 0.75), so the division is exact.
+        // interpolate: the weights sum to exactly 1 (products of 0, 0.25,
+        // 0.5, 0.75 and 1), so the division is exact.
         upper = (weight_sum > 0.0) ? (sum / weight_sum) : vec4(0.0);
     }
 

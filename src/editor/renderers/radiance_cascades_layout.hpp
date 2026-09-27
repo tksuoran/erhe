@@ -81,10 +81,12 @@ public:
 // Adjacent cascades share their boundary, cascade 0 starts at the probe.
 [[nodiscard]] auto get_radiance_interval(float r0, int cascade) -> glm::vec2;
 
-// The grid of the cascade above: probes at the centres of 2x2x2 blocks of
-// lower probes - spacing doubled, origin moved by half a lower spacing,
-// counts ceil(lower / 2) per axis (an odd lower count gives the last upper
-// probe a block that is half outside the lower grid).
+// The grid of the cascade above: spacing doubled, counts ceil(lower / 2)
+// per axis, centred on the lower grid so every cascade covers the same
+// volume. Per axis, an even lower count puts the upper probes at the
+// centres of the lower pairs (origin moved by half a lower spacing), an odd
+// one on the even lower probes (origin unchanged, both grids span the same
+// extent).
 [[nodiscard]] auto get_upper_grid(const Probe_grid& lower) -> Probe_grid;
 
 // Fits all cascades to the padded content box (see
@@ -98,16 +100,18 @@ public:
 [[nodiscard]] auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascades_layout_settings& settings) -> Radiance_cascades_layout;
 
 // One axis of the trilinear interpolation from a lower cascade probe to the
-// upper cascade: the two upper probe indices (clamped to the upper grid)
-// and their weights. Lower probe k sits at upper grid coordinate
-// k / 2 - 1 / 4, so the weights are always 0.25 and 0.75.
+// upper cascade (get_upper_grid(), centred on the lower grid): the two upper
+// probe indices (clamped to the upper grid) and their weights. With an even
+// lower count, lower probe k sits at upper grid coordinate k / 2 - 1 / 4
+// (weights 0.25 and 0.75); with an odd one at k / 2 (weights 1 and 0 for
+// even k, 0.5 and 0.5 for odd k).
 class Upper_probe_axis
 {
 public:
     std::array<int,   2> index {};
     std::array<float, 2> weight{};
 };
-[[nodiscard]] auto get_upper_probe_axis(int lower_index, int upper_count) -> Upper_probe_axis;
+[[nodiscard]] auto get_upper_probe_axis(int lower_index, int lower_count, int upper_count) -> Upper_probe_axis;
 
 // The 8 upper cascade probes a lower probe merges with, and their
 // trilinear weights (products of the per-axis weights; they sum to 1).
@@ -119,7 +123,7 @@ public:
     std::array<glm::ivec3, 8> coords {};
     std::array<float,      8> weights{};
 };
-[[nodiscard]] auto get_upper_probes(const glm::ivec3& lower_coords, const glm::ivec3& upper_counts) -> Upper_probes;
+[[nodiscard]] auto get_upper_probes(const glm::ivec3& lower_coords, const glm::ivec3& lower_counts, const glm::ivec3& upper_counts) -> Upper_probes;
 
 // Octahedral texel nesting: cascade i texel (u, v) covers the cascade i + 1
 // texels (2u .. 2u+1, 2v .. 2v+1) of the same octahedral tile layout.
