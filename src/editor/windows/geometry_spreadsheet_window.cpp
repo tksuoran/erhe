@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -18,6 +19,7 @@
 #include <imgui/imgui_internal.h> // IMGUI_TABLE_MAX_COLUMNS
 
 #include <algorithm>
+#include <charconv>
 
 namespace editor {
 
@@ -75,6 +77,11 @@ Geometry_spreadsheet_window::Geometry_spreadsheet_window(
             on_geometry_changed(message);
         }
     );
+    m_components_changed_subscription = app_message_bus.mesh_component_selection_changed.subscribe(
+        [this](Mesh_component_selection_changed_message&) {
+            m_row_filter_dirty = true;
+        }
+    );
 }
 
 void Geometry_spreadsheet_window::on_selection_changed()
@@ -98,11 +105,14 @@ void Geometry_spreadsheet_window::on_geometry_changed(const Mesh_geometry_change
     // edits made in place on the same Geometry object (new attributes).
     if (message.mesh && (message.mesh == m_target_mesh.lock())) {
         m_model.invalidate();
+        m_row_filter_dirty = true;
     }
 }
 
 void Geometry_spreadsheet_window::drop_target()
 {
+    set_hovered_element({}, GEO::NO_INDEX);
+    m_row_filter_dirty = true;
     m_target_mesh.reset();
     m_primitive_index = 0;
     m_model.release();
@@ -112,10 +122,11 @@ void Geometry_spreadsheet_window::drop_target()
 
 void Geometry_spreadsheet_window::set_target(const std::shared_ptr<erhe::scene::Mesh>& mesh, const std::size_t primitive_index)
 {
-    m_target_mode     = Spreadsheet_target_mode::pinned;
-    m_target_mesh     = mesh;
-    m_primitive_index = primitive_index;
-    m_follow_dirty    = false;
+    m_target_mode      = Spreadsheet_target_mode::pinned;
+    m_target_mesh      = mesh;
+    m_primitive_index  = primitive_index;
+    m_follow_dirty     = false;
+    m_row_filter_dirty = true;
 }
 
 void Geometry_spreadsheet_window::set_target_mode(const Spreadsheet_target_mode mode)
@@ -131,6 +142,21 @@ void Geometry_spreadsheet_window::set_domain(const Spreadsheet_domain domain)
     m_domain           = domain;
     m_requested_domain = domain;
     m_domain_requested = true;
+    m_row_filter_dirty = true;
+}
+
+auto Geometry_spreadsheet_window::get_row_filter() const -> Spreadsheet_row_filter
+{
+    return m_row_filter;
+}
+
+void Geometry_spreadsheet_window::set_row_filter(const Spreadsheet_row_filter row_filter)
+{
+    if (m_row_filter == row_filter) {
+        return;
+    }
+    m_row_filter       = row_filter;
+    m_row_filter_dirty = true;
 }
 
 auto Geometry_spreadsheet_window::get_target_mesh() const -> std::shared_ptr<erhe::scene::Mesh>
@@ -182,8 +208,9 @@ void Geometry_spreadsheet_window::resolve_follow_target()
             }
         }
         if (live_count == 1) {
-            m_target_mesh     = found->mesh;
-            m_primitive_index = found->primitive_index;
+            m_target_mesh      = found->mesh;
+            m_primitive_index  = found->primitive_index;
+            m_row_filter_dirty = true;
             return;
         }
     }
@@ -195,7 +222,8 @@ void Geometry_spreadsheet_window::resolve_follow_target()
         mesh = selection.get_last_selected<erhe::scene::Mesh>();
     }
     if (mesh != m_target_mesh.lock()) {
-        m_primitive_index = 0;
+        m_primitive_index  = 0;
+        m_row_filter_dirty = true;
     }
     m_target_mesh = mesh;
 }
@@ -232,14 +260,22 @@ auto Geometry_spreadsheet_window::refresh_target() -> std::shared_ptr<erhe::scen
             geometry = primitive->render_shape->get_geometry_const();
         }
     }
-    m_model.set_geometry(geometry);
+    if (m_model.set_geometry(geometry)) {
+        m_row_filter_dirty = true;
+    }
     m_model_released = false;
+    if (m_row_filter_dirty) {
+        update_row_filter(mesh);
+    }
     m_model.update(m_domain);
     return mesh;
 }
 
 void Geometry_spreadsheet_window::hidden()
 {
+    if (m_hovered_element != GEO::NO_INDEX) {
+        set_hovered_element({}, GEO::NO_INDEX);
+    }
     if (!m_model_released) {
         m_model.release();
         m_model_released = true;
@@ -266,7 +302,7 @@ void Geometry_spreadsheet_window::imgui()
         return;
     }
     imgui_domain_tabs();
-    imgui_table();
+    imgui_table(mesh);
 }
 
 void Geometry_spreadsheet_window::imgui_target_row(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -293,6 +329,15 @@ void Geometry_spreadsheet_window::imgui_target_row(const std::shared_ptr<erhe::s
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Keep showing this mesh when the selection changes");
+    }
+
+    ImGui::SameLine();
+    bool selected_only = (m_row_filter == Spreadsheet_row_filter::selected);
+    if (ImGui::Checkbox("Selected Only", &selected_only)) {
+        set_row_filter(selected_only ? Spreadsheet_row_filter::selected : Spreadsheet_row_filter::all);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Show only the rows of the selected components");
     }
 
     ImGui::SameLine();
@@ -331,11 +376,15 @@ void Geometry_spreadsheet_window::imgui_domain_tabs()
     m_domain_requested = false;
     if (selected != m_domain) {
         m_domain = selected;
+        set_hovered_element({}, GEO::NO_INDEX);
+        if (m_row_filter == Spreadsheet_row_filter::selected) {
+            update_row_filter(m_target_mesh.lock());
+        }
         m_model.update(m_domain);
     }
 }
 
-void Geometry_spreadsheet_window::imgui_table()
+void Geometry_spreadsheet_window::imgui_table(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     const std::span<const Spreadsheet_column> columns = m_model.get_columns(m_domain);
     const std::size_t                         row_count = m_model.get_row_count(m_domain);
@@ -409,6 +458,12 @@ void Geometry_spreadsheet_window::imgui_table()
 
     const ImVec4 absent_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
     std::array<char, 64> buffer{};
+    // The selection entry is looked up once per frame; rows test membership.
+    const Mesh_component_entry* const entry           = (m_domain == Spreadsheet_domain::corner) ? nullptr : find_selection_entry(mesh);
+    const GEO::Mesh&                  geo_mesh        = m_model.get_geometry()->get_mesh();
+    GEO::index_t                      hovered_element = GEO::NO_INDEX;
+    std::size_t                       clicked_row     = 0;
+    GEO::index_t                      clicked_element = GEO::NO_INDEX;
     m_drawn_rows.range_count = 0;
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(row_count));
@@ -428,7 +483,35 @@ void Geometry_spreadsheet_window::imgui_table()
         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
             const GEO::index_t element = m_model.get_row_element(m_domain, static_cast<std::size_t>(row));
             ImGui::TableNextRow();
-            for (int c = 0; c < column_count; ++c) {
+
+            // Index cell: a row-spanning selectable (frozen column, always visible).
+            bool selected = false;
+            switch (m_domain) {
+                case Spreadsheet_domain::vertex: selected = (entry != nullptr) && entry->vertices.contains(element); break;
+                case Spreadsheet_domain::facet:  selected = (entry != nullptr) && entry->facets.contains(element); break;
+                case Spreadsheet_domain::edge:   selected = (entry != nullptr) && entry->edges.contains(make_edge_key(geo_mesh.edges.vertex(element, 0), geo_mesh.edges.vertex(element, 1))); break;
+                case Spreadsheet_domain::corner: selected = m_corner_selection.contains(element); break;
+                default: break;
+            }
+            ImGui::TableSetColumnIndex(0);
+            const std::to_chars_result index_text = std::to_chars(buffer.data(), buffer.data() + buffer.size() - 1, element);
+            *index_text.ptr = '\0';
+            ImGui::PushID(static_cast<int>(element));
+            if (ImGui::Selectable(buffer.data(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                clicked_row     = static_cast<std::size_t>(row);
+                clicked_element = element;
+            }
+            if (erhe::imgui::is_item_recording()) {
+                const fmt::format_to_n_result<char*> result = fmt::format_to_n(buffer.data(), buffer.size() - 1, "row {}", element);
+                *result.out = '\0';
+                erhe::imgui::set_item_debug_label(buffer.data());
+            }
+            if (ImGui::IsItemHovered()) {
+                hovered_element = element;
+            }
+            ImGui::PopID();
+
+            for (int c = 1; c < column_count; ++c) {
                 // False for a column scrolled out horizontally or hidden: skip
                 // it before reading or formatting anything.
                 if (!ImGui::TableSetColumnIndex(c)) {
@@ -453,7 +536,204 @@ void Geometry_spreadsheet_window::imgui_table()
         }
     }
     clipper.End();
+    const bool table_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     ImGui::EndTable();
+
+    // The viewport hover highlight follows the hovered row; the tool is told
+    // only when the hovered row changes.
+    set_hovered_element(mesh, table_hovered ? hovered_element : GEO::NO_INDEX);
+    if (clicked_element != GEO::NO_INDEX) {
+        on_row_clicked(mesh, clicked_row, clicked_element);
+    }
 }
+
+auto Geometry_spreadsheet_window::find_selection_entry(const std::shared_ptr<erhe::scene::Mesh>& mesh) -> Mesh_component_entry*
+{
+    if (!mesh) {
+        return nullptr;
+    }
+    return m_context.mesh_component_selection->find_entry(mesh, m_primitive_index, m_model.get_geometry());
+}
+
+auto Geometry_spreadsheet_window::is_element_selected(const GEO::index_t element) -> bool
+{
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = m_model.get_geometry();
+    if (!geometry) {
+        return false;
+    }
+    if (m_domain == Spreadsheet_domain::corner) {
+        return m_corner_selection.contains(element);
+    }
+    const Mesh_component_entry* entry = find_selection_entry(m_target_mesh.lock());
+    if (entry == nullptr) {
+        return false;
+    }
+    switch (m_domain) {
+        case Spreadsheet_domain::vertex: return entry->vertices.contains(element);
+        case Spreadsheet_domain::facet:  return entry->facets.contains(element);
+        case Spreadsheet_domain::edge: {
+            const GEO::Mesh& geo_mesh = geometry->get_mesh();
+            return (element < geo_mesh.edges.nb()) && entry->edges.contains(make_edge_key(geo_mesh.edges.vertex(element, 0), geo_mesh.edges.vertex(element, 1)));
+        }
+        default: return false;
+    }
+}
+
+void Geometry_spreadsheet_window::update_row_filter(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    m_row_filter_dirty = false;
+    if (m_row_filter == Spreadsheet_row_filter::all) {
+        for (std::size_t i = 0; i < c_spreadsheet_domain_count; ++i) {
+            m_model.clear_row_filter(static_cast<Spreadsheet_domain>(i));
+        }
+        return;
+    }
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = m_model.get_geometry();
+    m_row_filter_scratch.clear();
+    if (m_domain == Spreadsheet_domain::corner) {
+        m_row_filter_scratch.assign(m_corner_selection.begin(), m_corner_selection.end());
+    } else if (geometry) {
+        const Mesh_component_entry* entry = find_selection_entry(mesh);
+        if (entry != nullptr) {
+            switch (m_domain) {
+                case Spreadsheet_domain::vertex: m_row_filter_scratch.assign(entry->vertices.begin(), entry->vertices.end()); break;
+                case Spreadsheet_domain::facet:  m_row_filter_scratch.assign(entry->facets.begin(), entry->facets.end()); break;
+                case Spreadsheet_domain::edge: {
+                    if (geometry->has_edge_connectivity()) {
+                        for (const Mesh_edge_key& key : entry->edges) {
+                            const GEO::index_t edge = geometry->get_edge(key.first, key.second);
+                            if (edge != GEO::NO_INDEX) {
+                                m_row_filter_scratch.push_back(edge);
+                            }
+                        }
+                        std::sort(m_row_filter_scratch.begin(), m_row_filter_scratch.end());
+                    }
+                    break;
+                }
+                default: break;
+            }
+        }
+    }
+    m_model.set_row_filter(m_domain, m_row_filter_scratch);
+}
+
+void Geometry_spreadsheet_window::on_row_clicked(const std::shared_ptr<erhe::scene::Mesh>& mesh, const std::size_t row, const GEO::index_t element)
+{
+    const ImGuiIO&    io        = ImGui::GetIO();
+    const bool        ctrl      = io.KeyCtrl;
+    const bool        shift     = io.KeyShift;
+    const std::size_t row_count = m_model.get_row_count(m_domain);
+    const std::size_t last_row  = (row_count > 0) ? (row_count - 1) : 0;
+    const std::size_t first     = std::min(std::min(m_anchor_row, row), last_row);
+    const std::size_t last      = std::min(std::max(m_anchor_row, row), last_row);
+
+    if (m_domain == Spreadsheet_domain::corner) {
+        // Corners are no component kind of Mesh_component_selection; the Corner
+        // tab keeps its own row selection.
+        if (shift) {
+            for (std::size_t r = first; r <= last; ++r) {
+                m_corner_selection.insert(m_model.get_row_element(m_domain, r));
+            }
+        } else if (ctrl) {
+            if (m_corner_selection.erase(element) == 0) {
+                m_corner_selection.insert(element);
+            }
+        } else {
+            m_corner_selection.clear();
+            m_corner_selection.insert(element);
+        }
+        if (!shift) {
+            m_anchor_row = row;
+        }
+        m_row_filter_dirty = true;
+        return;
+    }
+
+    // Vertex / Facet / Edge rows are the mesh component selection: the click
+    // switches to the matching component mode so the viewport shows it, and
+    // edits the target's entry with the viewport click rules (plain click
+    // replaces, Ctrl toggles; Shift adds the display-order range).
+    Mesh_component_selection& selection = *m_context.mesh_component_selection;
+    const Mesh_component_mode mode =
+        (m_domain == Spreadsheet_domain::vertex) ? Mesh_component_mode::vertex :
+        (m_domain == Spreadsheet_domain::facet)  ? Mesh_component_mode::face   :
+                                                   Mesh_component_mode::edge;
+    selection.set_mode(mode);
+    if (!ctrl && !shift) {
+        selection.clear_all();
+    }
+    Mesh_component_entry& entry = selection.find_or_create_entry(mesh, m_primitive_index, m_model.get_geometry());
+    if (shift) {
+        for (std::size_t r = first; r <= last; ++r) {
+            select_element(entry, m_model.get_row_element(m_domain, r), Row_select_op::add);
+        }
+    } else {
+        select_element(entry, element, ctrl ? Row_select_op::toggle : Row_select_op::add);
+        m_anchor_row = row;
+    }
+}
+
+void Geometry_spreadsheet_window::select_element(Mesh_component_entry& entry, const GEO::index_t element, const Row_select_op op)
+{
+    switch (m_domain) {
+        case Spreadsheet_domain::vertex: {
+            if (op == Row_select_op::toggle) { entry.toggle_vertex(element); } else { entry.add_vertex(element); }
+            break;
+        }
+        case Spreadsheet_domain::facet: {
+            if (op == Row_select_op::toggle) { entry.toggle_facet(element); } else { entry.add_facet(element); }
+            break;
+        }
+        case Spreadsheet_domain::edge: {
+            const GEO::Mesh&   geo_mesh = m_model.get_geometry()->get_mesh();
+            const GEO::index_t v0       = geo_mesh.edges.vertex(element, 0);
+            const GEO::index_t v1       = geo_mesh.edges.vertex(element, 1);
+            if (op == Row_select_op::toggle) { entry.toggle_edge(v0, v1); } else { entry.add_edge(v0, v1); }
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+}
+
+void Geometry_spreadsheet_window::set_hovered_element(const std::shared_ptr<erhe::scene::Mesh>& mesh, const GEO::index_t element)
+{
+    if ((element == m_hovered_element) && (m_domain == m_hovered_domain)) {
+        return;
+    }
+    m_hovered_element = element;
+    m_hovered_domain  = m_domain;
+    Mesh_component_selection_tool* tool = m_context.mesh_component_selection_tool;
+    if (tool == nullptr) {
+        return;
+    }
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = m_model.get_geometry();
+    if ((element == GEO::NO_INDEX) || !mesh || !geometry) {
+        tool->clear_external_hover();
+        return;
+    }
+    switch (m_domain) {
+        case Spreadsheet_domain::vertex: {
+            tool->set_external_hover(mesh, geometry, Mesh_component_mode::vertex, element, 0, 0);
+            break;
+        }
+        case Spreadsheet_domain::facet: {
+            tool->set_external_hover(mesh, geometry, Mesh_component_mode::face, element, 0, 0);
+            break;
+        }
+        case Spreadsheet_domain::edge: {
+            const GEO::Mesh& geo_mesh = geometry->get_mesh();
+            tool->set_external_hover(mesh, geometry, Mesh_component_mode::edge, element, geo_mesh.edges.vertex(element, 0), geo_mesh.edges.vertex(element, 1));
+            break;
+        }
+        default: {
+            // A corner is no component kind the viewport highlights.
+            tool->clear_external_hover();
+            break;
+        }
+    }
+}
+
 
 } // namespace editor

@@ -2358,7 +2358,8 @@ auto Mcp_server::query_geometry_spreadsheet(const nlohmann::json& args) -> std::
         {"visible",     window->is_window_visible()},
         {"target_mode", (window->get_target_mode() == Spreadsheet_target_mode::pinned) ? "pinned" : "follow_selection"},
         {"domain",      c_str(domain)},
-        {"precision",   model.get_precision()}
+        {"precision",   model.get_precision()},
+        {"row_filter",  (window->get_row_filter() == Spreadsheet_row_filter::selected) ? "selected" : "all"}
     };
     if (!mesh) {
         result["node"] = nullptr;
@@ -2419,7 +2420,7 @@ auto Mcp_server::query_geometry_spreadsheet(const nlohmann::json& args) -> std::
             const Formatted_cell cell = model.format_cell(column, element, buffer);
             cells.push_back(cell.present ? json(std::string{cell.text}) : json(nullptr));
         }
-        rows_json.push_back({{"row", row}, {"element", element}, {"cells", cells}});
+        rows_json.push_back({{"row", row}, {"element", element}, {"selected", window->is_element_selected(element)}, {"cells", cells}});
     }
     result["rows"] = rows_json;
     return make_json_content(result).dump();

@@ -718,7 +718,10 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     if (context.viewport_scene_view == nullptr) {
         return;
     }
-    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
+    const Mesh_component_mode mode           = m_mesh_component_selection.get_mode();
+    const bool                component_mode = is_mesh_component_mode(mode);
+    const bool                external_hover = is_mesh_component_mode(m_external_hover.mode);
+    if (!component_mode && !external_hover) {
         return;
     }
 
@@ -761,6 +764,9 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // scene) draws nothing - no stale ghost, no poll needed.
     m_mesh_component_selection.prune();
     for (const Mesh_component_entry& entry : m_mesh_component_selection.get_entries()) {
+        if (!component_mode) {
+            break;
+        }
         if (!m_mesh_component_selection.is_live(entry)) {
             continue;
         }
@@ -880,15 +886,22 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // App_message_bus hover_scene_view message (subscribed in the constructor)
     // and becomes null when the pointer leaves every viewport, so the highlight
     // does not linger on a stale hover in the previously hovered view.
-    const Pick_result hover = (get_hover_scene_view() == &context.scene_view)
+    // The pointer hover wins; otherwise the external hover (a Geometry
+    // Spreadsheet row) is drawn, in its own component kind.
+    Pick_result         hover      = (component_mode && (get_hover_scene_view() == &context.scene_view))
         ? pick(context.scene_view)
         : Pick_result{};
+    Mesh_component_mode hover_mode = mode;
+    if (!hover.valid && external_hover) {
+        hover      = resolve_external_hover();
+        hover_mode = m_external_hover.mode;
+    }
     if (hover.valid) {
         const erhe::scene::Node* hover_node = hover.mesh.get();
         if (hover_node != nullptr) {
             const glm::mat4  world_from_node = hover_node->world_from_node();
             const GEO::Mesh& geo_mesh        = hover.geometry->get_mesh();
-            switch (m_mesh_component_selection.get_mode()) {
+            switch (hover_mode) {
                 case Mesh_component_mode::face: {
                     m_scratch_positions.clear();
                     m_scratch_indices.clear();
@@ -931,6 +944,72 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             }
         }
     }
+}
+
+void Mesh_component_selection_tool::set_external_hover(
+    const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+    const Mesh_component_mode                        mode,
+    const GEO::index_t                               element,
+    const GEO::index_t                               edge_v0,
+    const GEO::index_t                               edge_v1
+)
+{
+    m_external_hover = External_hover{
+        .mesh     = mesh,
+        .geometry = geometry,
+        .mode     = mode,
+        .element  = element,
+        .edge_v0  = edge_v0,
+        .edge_v1  = edge_v1
+    };
+}
+
+void Mesh_component_selection_tool::clear_external_hover()
+{
+    m_external_hover = External_hover{};
+}
+
+auto Mesh_component_selection_tool::resolve_external_hover() const -> Pick_result
+{
+    Pick_result result{};
+    const std::shared_ptr<erhe::scene::Mesh>        mesh     = m_external_hover.mesh.lock();
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = m_external_hover.geometry.lock();
+    if (!mesh || !geometry || (mesh->get_item_host() == nullptr)) {
+        return result;
+    }
+    const GEO::Mesh& geo_mesh = geometry->get_mesh();
+    switch (m_external_hover.mode) {
+        case Mesh_component_mode::vertex: {
+            if (m_external_hover.element >= geo_mesh.vertices.nb()) {
+                return result;
+            }
+            result.vertex = m_external_hover.element;
+            break;
+        }
+        case Mesh_component_mode::face: {
+            if (m_external_hover.element >= geo_mesh.facets.nb()) {
+                return result;
+            }
+            result.facet = m_external_hover.element;
+            break;
+        }
+        case Mesh_component_mode::edge: {
+            if ((m_external_hover.edge_v0 >= geo_mesh.vertices.nb()) || (m_external_hover.edge_v1 >= geo_mesh.vertices.nb())) {
+                return result;
+            }
+            result.edge_v0 = m_external_hover.edge_v0;
+            result.edge_v1 = m_external_hover.edge_v1;
+            break;
+        }
+        default: {
+            return result;
+        }
+    }
+    result.valid    = true;
+    result.mesh     = mesh;
+    result.geometry = geometry;
+    return result;
 }
 
 void Mesh_component_selection_tool::viewport_toolbar()

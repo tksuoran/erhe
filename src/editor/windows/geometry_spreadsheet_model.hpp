@@ -95,8 +95,8 @@ public:
     // Selects the Geometry the model describes. A different Geometry object
     // (identity), or a changed element count of the same one, invalidates the
     // domain's caches. The model holds the Geometry until the next
-    // set_geometry() or release().
-    void set_geometry(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
+    // set_geometry() or release(). Returns true when the Geometry changed.
+    auto set_geometry(const std::shared_ptr<erhe::geometry::Geometry>& geometry) -> bool;
     [[nodiscard]] auto get_geometry() const -> const std::shared_ptr<erhe::geometry::Geometry>&;
 
     // Content of the current Geometry changed in place: rebuild all layouts.
@@ -110,6 +110,13 @@ public:
     // Sort rows of `domain` by `column` (index into get_columns()); a negative
     // column restores element order.
     void set_sort(Spreadsheet_domain domain, int column, Sort_direction direction);
+
+    // Limit the rows of `domain` to `elements` (ascending, unique element
+    // indices; indices past the element count are skipped), in the current
+    // sort order. clear_row_filter() shows every element again.
+    void set_row_filter  (Spreadsheet_domain domain, std::span<const GEO::index_t> elements);
+    void clear_row_filter(Spreadsheet_domain domain);
+    [[nodiscard]] auto has_row_filter(Spreadsheet_domain domain) const -> bool;
 
     // Rebuild the domain's caches when invalid. Call once per frame for the
     // domain being drawn, before the accessors below.
@@ -132,7 +139,10 @@ private:
     {
     public:
         std::vector<Spreadsheet_column> columns;
-        std::vector<GEO::index_t>       rows;          // display order; empty = element order
+        std::vector<GEO::index_t>       rows;          // display order, unless rows_identity
+        std::vector<GEO::index_t>       filter;        // row filter elements, when filter_enabled
+        bool                            filter_enabled{false};
+        bool                            rows_identity {true}; // row i is element i; rows unused
         std::size_t                     element_count{0};
         int                             sort_column  {-1};
         Sort_direction                  sort_direction{Sort_direction::ascending};

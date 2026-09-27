@@ -3,6 +3,7 @@
 #include "tools/tool.hpp"
 
 #include "app_message.hpp"
+#include "tools/mesh_component_selection.hpp" // Mesh_component_mode
 #include "erhe_commands/command.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -226,6 +227,22 @@ public:
     // Commits over the next frames via gesture_update, like a real gesture.
     void debug_region_select(int x, int y, int width, int height, bool is_brush, float brush_radius, bool replace, bool subtract);
 
+    // Highlight one component from outside the viewport - the Geometry
+    // Spreadsheet row under the pointer - drawn in the hover color like the
+    // pointer hover, in any mesh component mode. `mode` names the component
+    // kind (vertex / edge / face). element is the vertex or facet index; an
+    // edge is its vertex pair (edge_v0, edge_v1). Held weakly; the caller
+    // clears it when its hover ends.
+    void set_external_hover(
+        const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        Mesh_component_mode                              mode,
+        GEO::index_t                                     element,
+        GEO::index_t                                     edge_v0,
+        GEO::index_t                                     edge_v1
+    );
+    void clear_external_hover();
+
     // Draws the rubber-band box (and, later, brush circle) into the viewport
     // window's ImGui draw list. Called by Viewport_window::imgui().
     void draw_gesture_overlay(const Viewport_scene_view* viewport_scene_view);
@@ -257,6 +274,21 @@ private:
     };
 
     [[nodiscard]] auto pick(Scene_view& scene_view) const -> Pick_result;
+    // The external hover as a Pick_result; invalid when none is set or its
+    // mesh / geometry is gone or no longer addresses the element.
+    [[nodiscard]] auto resolve_external_hover() const -> Pick_result;
+
+    class External_hover
+    {
+    public:
+        std::weak_ptr<erhe::scene::Mesh>        mesh    {};
+        std::weak_ptr<erhe::geometry::Geometry> geometry{};
+        Mesh_component_mode                     mode    {Mesh_component_mode::object};
+        GEO::index_t                            element {0};
+        GEO::index_t                            edge_v0 {0};
+        GEO::index_t                            edge_v1 {0};
+    };
+    External_hover m_external_hover{};
 
     // Smooth local-space normal at a vertex (area-weighted average of incident
     // facet normals) and the world-space normal of an edge (mean of its two

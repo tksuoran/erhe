@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace erhe::imgui    { class Imgui_windows; }
@@ -19,10 +20,21 @@ namespace editor {
 
 class App_context;
 class App_message_bus;
+class Mesh_component_entry;
+
+enum class Row_select_op : unsigned int {
+    add,
+    toggle
+};
 
 enum class Spreadsheet_target_mode : unsigned int {
     follow_selection,
     pinned
+};
+
+enum class Spreadsheet_row_filter : unsigned int {
+    all,
+    selected
 };
 
 // Rows the window submitted in its last drawn frame, as [first, last) row
@@ -70,6 +82,13 @@ public:
     [[nodiscard]] auto get_target_mode    () const -> Spreadsheet_target_mode;
     [[nodiscard]] auto get_domain         () const -> Spreadsheet_domain;
     [[nodiscard]] auto get_drawn_rows     () const -> const Spreadsheet_drawn_rows&;
+    [[nodiscard]] auto get_row_filter     () const -> Spreadsheet_row_filter;
+    void               set_row_filter     (Spreadsheet_row_filter row_filter);
+
+    // Whether `element` of the current domain is selected: the target's
+    // Mesh_component_selection entry for Vertex / Facet / Edge, the window's
+    // own corner selection for Corner.
+    [[nodiscard]] auto is_element_selected(GEO::index_t element) -> bool;
 
     // The model as of the last drawn frame; call update_model() first to bring
     // it up to date with the current target outside of imgui().
@@ -88,7 +107,14 @@ private:
 
     void imgui_target_row(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void imgui_domain_tabs();
-    void imgui_table     ();
+    void imgui_table     (const std::shared_ptr<erhe::scene::Mesh>& mesh);
+
+    // Row selection (doc/editor/geometry_spreadsheet.md section 5).
+    void update_row_filter(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    void on_row_clicked   (const std::shared_ptr<erhe::scene::Mesh>& mesh, std::size_t row, GEO::index_t element);
+    void select_element   (Mesh_component_entry& entry, GEO::index_t element, Row_select_op op);
+    void set_hovered_element(const std::shared_ptr<erhe::scene::Mesh>& mesh, GEO::index_t element);
+    [[nodiscard]] auto find_selection_entry(const std::shared_ptr<erhe::scene::Mesh>& mesh) -> Mesh_component_entry*;
 
     App_context&                                                   m_context;
     erhe::message_bus::Subscription<Selection_message>             m_selection_subscription;
@@ -96,6 +122,7 @@ private:
     erhe::message_bus::Subscription<Mesh_component_mode_changed_message> m_mode_subscription;
     erhe::message_bus::Subscription<Items_removed_message>         m_items_removed_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_component_selection_changed_message> m_components_changed_subscription;
 
     std::weak_ptr<erhe::scene::Mesh> m_target_mesh;
     std::size_t                      m_primitive_index{0};
@@ -107,6 +134,14 @@ private:
     Geometry_spreadsheet_model       m_model;
     bool                             m_model_released {true};
     Spreadsheet_drawn_rows           m_drawn_rows;
+
+    Spreadsheet_row_filter           m_row_filter      {Spreadsheet_row_filter::all};
+    bool                             m_row_filter_dirty{true};
+    std::vector<GEO::index_t>        m_row_filter_scratch;
+    std::set<GEO::index_t>           m_corner_selection;   // the Corner tab's own row selection
+    std::size_t                      m_anchor_row      {0}; // Shift+click range anchor, display order
+    GEO::index_t                     m_hovered_element {GEO::NO_INDEX};
+    Spreadsheet_domain               m_hovered_domain  {Spreadsheet_domain::vertex};
 
     // Initial column widths, measured once per column layout.
     std::vector<float>               m_column_widths;

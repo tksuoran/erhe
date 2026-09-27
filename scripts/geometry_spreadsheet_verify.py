@@ -80,6 +80,16 @@ class Editor:
         self.call("imgui_click", args)
         self.advance(3)
 
+    def click_row(self, element, modifiers=None):
+        """Click a row near its left end: a row spans every column, so its
+        center lies past the window edge when the table scrolls horizontally."""
+        item = self.call("get_imgui_item_rect", {"window": WINDOW, "label": f"row {element}"})
+        rect = item.get("rect", item)
+        x = rect["x"] + 8.0
+        y = item["center_y"] if "center_y" in item else rect["y"] + (rect["height"] * 0.5)
+        self.call("mouse_click", {"x": x, "y": y, "modifiers": modifiers or []})
+        self.advance(3)
+
     def select(self, name):
         self.call("select_items", {"scene_name": self.scene, "paths": [name]})
         self.advance(3)
@@ -264,6 +274,110 @@ def phase_2(e):
     e.advance(4)
 
 
+def selected_components(e, kind, node=BOX):
+    """The mesh component selection's `kind` list for the node's live entry."""
+    for entry in e.call("get_mesh_component_selection")["entries"]:
+        if (entry.get("node_name") == node) and entry["live"]:
+            return entry[kind]
+    return []
+
+
+def rows_elements(sheet):
+    return [row["element"] for row in sheet["rows"]]
+
+
+def phase_3(e):
+    print("\n[phase 3] selection sync")
+    e.select(BOX)
+    e.click("Vertex")
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": BOX, "mode": "vertex", "vertices": [1, 5, 7]})
+    e.advance(3)
+    s = e.sheet(first_row=0, row_count=10)
+    selected = [row["element"] for row in s["rows"] if row["selected"]]
+    check_true("component selection shows as selected rows", selected == [1, 5, 7], f"{selected}")
+
+    e.click("Selected Only")
+    s = e.sheet(first_row=0, row_count=64)
+    check_true("Selected Only: rows are the selected vertices", (s["row_filter"] == "selected") and (rows_elements(s) == [1, 5, 7]), f"{rows_elements(s)}")
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": BOX, "vertices": [2], "extend": True})
+    e.advance(3)
+    s = e.sheet(first_row=0, row_count=64)
+    check_true("Selected Only follows a selection change (message driven)", rows_elements(s) == [1, 2, 5, 7], f"{rows_elements(s)}")
+    e.call("grow_mesh_selection", {})
+    e.advance(3)
+    s = e.sheet(first_row=0, row_count=256)
+    grown = selected_components(e, "vertices")
+    check_true("Selected Only follows grow", rows_elements(s) == sorted(grown) and (len(grown) > 4), f"{len(rows_elements(s))} rows vs {len(grown)} selected")
+
+    e.click("Facet")
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": BOX, "mode": "face", "facets": [3, 2]})
+    e.advance(3)
+    s = e.sheet(first_row=0, row_count=64)
+    check_true("Selected Only, Facet tab", (s["domain"] == "Facet") and (rows_elements(s) == [2, 3]), f"{rows_elements(s)}")
+
+    e.click("Edge")
+    edge_values = e.values("edge", [10])
+    v0, v1 = edge_values[0]["vertices"]
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": BOX, "mode": "edge", "edges": [[v1, v0]]})
+    e.advance(3)
+    s = e.sheet(first_row=0, row_count=64)
+    check_true("Selected Only, Edge tab maps the vertex pair to its edge", rows_elements(s) == [10], f"{rows_elements(s)}")
+
+    # Sorting applies within the filtered rows.
+    e.click("Vertex")
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": BOX, "mode": "vertex", "vertices": [3, 8, 20, 40]})
+    e.advance(3)
+    e.click("position.x")
+    e.click("position.x")
+    s = e.sheet(first_row=0, row_count=64)
+    c = column_index(s, "position.x")
+    values = [cell_float(row["cells"][c]) for row in s["rows"]]
+    check_true("Selected Only rows sort descending", (sorted(rows_elements(s)) == [3, 8, 20, 40]) and (values == sorted(values, reverse=True)), f"{rows_elements(s)} {values}")
+    e.click("position.x")
+    e.click("Selected Only")
+
+    # Row clicks edit the component selection.
+    e.call("clear_mesh_component_selection", {})
+    e.advance(2)
+    e.click_row(10)
+    check_true("click selects the vertex", selected_components(e, "vertices") == [10])
+    mode = e.call("get_mesh_component_selection")["mode"]
+    check_true("click switches to vertex component mode", mode == "vertex", mode)
+    e.click_row(12, modifiers=["ctrl"])
+    check_true("Ctrl+click adds", selected_components(e, "vertices") == [10, 12], f"{selected_components(e, 'vertices')}")
+    e.click_row(14, modifiers=["shift"])
+    check_true("Shift+click adds the range", selected_components(e, "vertices") == [10, 12, 13, 14], f"{selected_components(e, 'vertices')}")
+    e.click_row(12, modifiers=["ctrl"])
+    check_true("Ctrl+click toggles off", selected_components(e, "vertices") == [10, 13, 14], f"{selected_components(e, 'vertices')}")
+    e.click_row(3)
+    check_true("plain click replaces", selected_components(e, "vertices") == [3], f"{selected_components(e, 'vertices')}")
+
+    e.click("Facet")
+    e.click_row(5)
+    check_true("Facet row click selects the facet", (selected_components(e, "facets") == [5]) and (e.call("get_mesh_component_selection")["mode"] == "face"))
+    e.click("Edge")
+    e.click_row(7)
+    edge = e.values("edge", [7])[0]["vertices"]
+    check_true("Edge row click selects the edge", selected_components(e, "edges") == [sorted(edge)], f"{selected_components(e, 'edges')} vs {edge}")
+
+    e.click("Corner")
+    e.call("imgui_scroll", {"window": WINDOW, "label": "normal.x", "dy": 100})  # phase 2 scrolled this table down
+    e.advance(4)
+    e.click_row(4)
+    e.click_row(6, modifiers=["ctrl"])
+    s = e.sheet(first_row=0, row_count=10)
+    selected = [row["element"] for row in s["rows"] if row["selected"]]
+    check_true("Corner tab keeps its own row selection", selected == [4, 6], f"{selected}")
+    e.click("Selected Only")
+    s = e.sheet(first_row=0, row_count=64)
+    check_true("Selected Only, Corner tab", rows_elements(s) == [4, 6], f"{rows_elements(s)}")
+    e.click("Selected Only")
+    e.call("clear_mesh_component_selection", {})
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.click("Vertex")
+    e.advance(2)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=DEFAULT_EDITOR)
@@ -277,6 +391,7 @@ def main():
         e.call("create_shape", {"scene_name": scene, "shape": "box", "name": BOX})
         e.advance(4)
         phase_2(e)
+        phase_3(e)
     finally:
         process.kill()
     return report()

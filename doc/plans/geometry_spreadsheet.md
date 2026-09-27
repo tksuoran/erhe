@@ -2,10 +2,9 @@
 
 Status: in progress
 
-This plan extends `doc/editor/geometry_spreadsheet.md` (the read-only window:
-target, columns, caches, clipped drawing, sorting) with row selection synced
-to the mesh component selection, numeric cell editing with undo, and the
-large-mesh performance check. It is also the "Set vertex attribute values"
+This plan extends `doc/editor/geometry_spreadsheet.md` (target, columns, caches,
+clipped drawing, sorting, row selection) with numeric cell editing with undo
+and the large-mesh performance check. It is also the "Set vertex attribute values"
 item of `doc/plans/mesh_component_selection.md`.
 
 ## 1. Requirements
@@ -13,9 +12,6 @@ item of `doc/plans/mesh_component_selection.md`.
 - R4 A cell of an editable attribute (D6) can be edited in place. Committing
   the edit makes one undoable operation (D7). The viewport shows the new
   value on the frame the operation runs.
-- R6 Row selection and the mesh component selection are the same state in
-  the vertex, facet and edge domains (D8). A "Selected only" toggle limits
-  the rows to the selected components.
 - R8 Performance, measured on a mesh with 1,000,000 vertices and ~6,000,000
   corners:
   - a steady-state frame with the window open does work proportional to the
@@ -65,47 +61,17 @@ item of `doc/plans/mesh_component_selection.md`.
 - **Shared geometry** follows the same policy as
   `Move_mesh_vertices_operation`: the edit applies to every mesh that shares
   the geometry.
-- **Fill down:** with several rows selected, "Set selected rows" in the
+- **Fill down:** with several rows selected
+  (`doc/editor/geometry_spreadsheet.md` section 5), "Set selected rows" in the
   column's context menu writes the edited value to every selected row, as one
   operation.
-
-### D8 Selection sync
-
-- A click on a row's index cell in the Vertex, Facet or Edge tab updates
-  `Mesh_component_selection`'s entry for the target:
-  - plain click replaces the selection;
-  - Ctrl toggles the row;
-  - Shift selects a range in display order.
-- The Corner tab has no component kind of its own, so its selection is local
-  to the window. It holds a `std::vector<GEO::index_t>`, cleared on a layout
-  rebuild.
-- `Mesh_component_selection`'s mutators publish no message today, because
-  `tool_render` reads the selection every frame. This plan adds
-  `Mesh_component_selection_changed_message` to `App_message_bus`. The
-  mutators publish it: set, add, toggle, clear, grow, shrink,
-  `set_after_operation` and prune. The window rebuilds its row order on that
-  message while "Selected only" is on, the same way a sort change rebuilds it
-  (`doc/editor/geometry_spreadsheet.md` section 3).
-- Row highlight reads the selection sets directly for the visible rows only.
-  A `std::set::contains` per visible row is bounded by the visible count.
-- Hovering a row publishes nothing. A hovered row in the Vertex, Facet or
-  Edge tab sets `Mesh_component_selection_tool`'s external hover (domain,
-  element). `tool_render` draws it in the hover color on the next frame, and
-  the window clears it when the pointer leaves the table.
 
 ## 3. Phases
 
 Each phase ends with a build of every target listed in `AGENTS.md`
 "Building", a headless MCP verification, and one commit.
 
-1. **Selection sync (D8).** Add `Mesh_component_selection_changed_message`,
-   row click to component selection, "Selected only", and hover highlight.
-   Verify with `scripts/geometry_spreadsheet_verify.py`:
-   - `select_mesh_components` via MCP, then check that the window's visible
-     row set equals the selection;
-   - click a row via UI injection, then check that
-     `get_mesh_component_selection` contains it.
-2. **Editing (D6, D7).** Add `Set_geometry_attribute_operation`, in-place
+1. **Editing (D6, D7).** Add `Set_geometry_attribute_operation`, in-place
    cell editing, position edits through `Move_mesh_vertices_operation`, and
    fill down. Add an MCP tool, `set_mesh_attribute_values`, that makes the
    same operation, so headless tests exercise the edit path. Verify with
@@ -114,7 +80,7 @@ Each phase ends with a build of every target listed in `AGENTS.md`
      `get_mesh_buffer_data` (the GPU buffer), then undo and redo;
    - set a position and check that normals are recomputed;
    - check with a `capture_screenshot` before and after.
-3. **Performance check (R8).** Load or create a mesh with 1,000,000
+2. **Performance check (R8).** Load or create a mesh with 1,000,000
    vertices and open the window on the Corner tab:
    - use Tracy to confirm that the window's zone time is flat when scrolling
      from the top of the table to the bottom;
@@ -125,9 +91,7 @@ Each phase ends with a build of every target listed in `AGENTS.md`
 
 ## 4. Documentation on landing
 
-- `doc/editor/geometry_spreadsheet.md` gets the row selection (D8) and the
-  edit path (D7), stated as the current design.
-- `doc/editor/mesh_component_selection.md` section 3 gets the selection
-  message (D8).
+- `doc/editor/geometry_spreadsheet.md` gets the edit path (D7), stated as the
+  current design.
 - The "Set vertex attribute values" item is removed from
   `doc/plans/mesh_component_selection.md`, and this plan is deleted.

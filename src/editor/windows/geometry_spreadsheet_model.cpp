@@ -233,13 +233,14 @@ auto get_domain_element_count(const erhe::geometry::Geometry& geometry, const Sp
     }
 }
 
-void Geometry_spreadsheet_model::set_geometry(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
+auto Geometry_spreadsheet_model::set_geometry(const std::shared_ptr<erhe::geometry::Geometry>& geometry) -> bool
 {
     if (geometry == m_geometry) {
-        return;
+        return false;
     }
     m_geometry = geometry;
     invalidate();
+    return true;
 }
 
 auto Geometry_spreadsheet_model::get_geometry() const -> const std::shared_ptr<erhe::geometry::Geometry>&
@@ -261,6 +262,9 @@ void Geometry_spreadsheet_model::release()
     for (Domain_cache& cache : m_domains) {
         std::vector<Spreadsheet_column>{}.swap(cache.columns);
         std::vector<GEO::index_t>{}.swap(cache.rows);
+        std::vector<GEO::index_t>{}.swap(cache.filter);
+        cache.filter_enabled = false;
+        cache.rows_identity  = true;
         cache.element_count = 0;
         cache.layout_valid  = false;
         cache.rows_valid    = false;
@@ -288,12 +292,37 @@ void Geometry_spreadsheet_model::set_sort(const Spreadsheet_domain domain, const
     cache.rows_valid     = false;
 }
 
+void Geometry_spreadsheet_model::set_row_filter(const Spreadsheet_domain domain, const std::span<const GEO::index_t> elements)
+{
+    Domain_cache& cache = m_domains[static_cast<std::size_t>(domain)];
+    cache.filter.assign(elements.begin(), elements.end());
+    cache.filter_enabled = true;
+    cache.rows_valid     = false;
+}
+
+void Geometry_spreadsheet_model::clear_row_filter(const Spreadsheet_domain domain)
+{
+    Domain_cache& cache = m_domains[static_cast<std::size_t>(domain)];
+    if (!cache.filter_enabled) {
+        return;
+    }
+    cache.filter.clear();
+    cache.filter_enabled = false;
+    cache.rows_valid     = false;
+}
+
+auto Geometry_spreadsheet_model::has_row_filter(const Spreadsheet_domain domain) const -> bool
+{
+    return m_domains[static_cast<std::size_t>(domain)].filter_enabled;
+}
+
 void Geometry_spreadsheet_model::update(const Spreadsheet_domain domain)
 {
     Domain_cache& cache = m_domains[static_cast<std::size_t>(domain)];
     if (!m_geometry) {
         cache.columns.clear();
         cache.rows.clear();
+        cache.rows_identity = true;
         cache.element_count = 0;
         cache.layout_valid  = false;
         cache.rows_valid    = false;
@@ -416,26 +445,39 @@ void Geometry_spreadsheet_model::build_rows(Domain_cache& cache)
     ERHE_PROFILE_FUNCTION();
 
     cache.rows.clear();
-    if ((cache.sort_column < 0) || (cache.element_count == 0)) {
-        return; // element order: row i is element i
+    const bool sorted = (cache.sort_column >= 0) && (static_cast<std::size_t>(cache.sort_column) < cache.columns.size());
+    if (!cache.filter_enabled && !sorted) {
+        cache.rows_identity = true; // element order: row i is element i
+        return;
     }
-    const Spreadsheet_column& column = cache.columns[static_cast<std::size_t>(cache.sort_column)];
-    if (column.kind == Spreadsheet_column_kind::element_index) {
-        if (cache.sort_direction == Sort_direction::ascending) {
-            return;
+    cache.rows_identity = false;
+
+    // The rows to show: the filter's elements, or every element.
+    if (cache.filter_enabled) {
+        for (const GEO::index_t element : cache.filter) {
+            if (element < cache.element_count) {
+                cache.rows.push_back(element);
+            }
         }
+    } else {
         cache.rows.resize(cache.element_count);
         for (std::size_t row = 0; row < cache.element_count; ++row) {
-            cache.rows[row] = static_cast<GEO::index_t>(cache.element_count - 1 - row);
+            cache.rows[row] = static_cast<GEO::index_t>(row);
         }
+    }
+    if (!sorted) {
         return;
     }
 
-    cache.rows.resize(cache.element_count);
-    for (std::size_t row = 0; row < cache.element_count; ++row) {
-        cache.rows[row] = static_cast<GEO::index_t>(row);
+    const Spreadsheet_column& column     = cache.columns[static_cast<std::size_t>(cache.sort_column)];
+    const bool                descending = (cache.sort_direction == Sort_direction::descending);
+    if (column.kind == Spreadsheet_column_kind::element_index) {
+        // Rows are already in ascending element order.
+        if (descending) {
+            std::reverse(cache.rows.begin(), cache.rows.end());
+        }
+        return;
     }
-    const bool descending = (cache.sort_direction == Sort_direction::descending);
     // Elements without a value sort last in both directions; ties keep
     // element order so the result does not depend on the sort algorithm.
     std::sort(
@@ -470,13 +512,13 @@ auto Geometry_spreadsheet_model::get_columns(const Spreadsheet_domain domain) co
 auto Geometry_spreadsheet_model::get_row_count(const Spreadsheet_domain domain) const -> std::size_t
 {
     const Domain_cache& cache = m_domains[static_cast<std::size_t>(domain)];
-    return cache.rows.empty() ? cache.element_count : cache.rows.size();
+    return cache.rows_identity ? cache.element_count : cache.rows.size();
 }
 
 auto Geometry_spreadsheet_model::get_row_element(const Spreadsheet_domain domain, const std::size_t row) const -> GEO::index_t
 {
     const Domain_cache& cache = m_domains[static_cast<std::size_t>(domain)];
-    return cache.rows.empty() ? static_cast<GEO::index_t>(row) : cache.rows[row];
+    return cache.rows_identity ? static_cast<GEO::index_t>(row) : cache.rows[row];
 }
 
 auto Geometry_spreadsheet_model::get_sort_column(const Spreadsheet_domain domain) const -> int

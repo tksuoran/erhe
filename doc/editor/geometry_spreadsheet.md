@@ -5,7 +5,7 @@ Stability: experimental
 The Geometry Spreadsheet window shows the per-element data of one mesh
 primitive's `erhe::geometry::Geometry` as a table: one tab per element domain
 (vertex, corner, facet, edge), one row per element, one column per attribute
-component. Remaining work (row selection sync, editing) is
+component. Remaining work (editing) is
 `doc/plans/geometry_spreadsheet.md`.
 
 Code: `src/editor/windows/geometry_spreadsheet_window.{hpp,cpp}` (the window)
@@ -78,11 +78,13 @@ change that announces nothing (a live paint stroke) still shows at once.
   different Geometry object, when the domain's element count changes, and on
   `Mesh_geometry_changed_message` for the target mesh (attributes added in
   place). The presence scan per attribute stops at the first present element.
-- **Row order.** Empty in element order (row `i` is element `i`), so a large
-  mesh costs no row memory until it is sorted. Sorting fills it with the
-  element indices in display order, `std::sort` over live values; elements
-  without a value sort last in both directions and ties keep element order.
-  It is rebuilt with the layout and when the sort changes.
+- **Row order.** Unused with no sort and no row filter (row `i` is element
+  `i`), so a large mesh costs no row memory until it is sorted or filtered.
+  Otherwise it holds the element indices in display order: the row filter's
+  elements (section 5) or every element, sorted with `std::sort` over live
+  values when a sort column is set; elements without a value sort last in
+  both directions and ties keep element order. It is rebuilt with the layout
+  and when the sort or the row filter changes.
 - Both caches are cleared with `clear()`, keeping capacity. A hidden (or
   collapsed / inactive-tab) window releases them and their memory, and the
   window's column-width cache, on the first hidden frame.
@@ -108,19 +110,54 @@ change that announces nothing (a live paint stroke) still shows at once.
 - The domain tabs record their plain domain name (`Vertex`, `Corner`, ...)
   for MCP UI driving (`erhe::imgui::set_item_debug_label`).
 
-## 5. MCP and verification
+## 5. Row selection
+
+Rows of the Vertex, Facet and Edge tabs are the mesh component selection
+(`doc/editor/mesh_component_selection.md` section 3) of the target's entry;
+the Corner tab, corners being no component kind, keeps its own row selection
+(a `std::set` in the window).
+
+- The index cell is a row-spanning `Selectable`, highlighted when the element
+  is selected. Membership is tested per drawn row (`Component_set::contains`
+  on the entry, looked up once per frame; an edge row tests its vertex-pair
+  key).
+- A click edits the selection with the viewport rules: plain click replaces
+  it (`clear_all()`, then add), Ctrl toggles the row, Shift adds every row
+  from the last plain / Ctrl clicked row, in display order. A Vertex / Facet /
+  Edge click also switches the component mode to vertex / face / edge so the
+  viewport shows the selection.
+- **Selected Only** limits the rows to the selected elements through the
+  model's row filter (`Geometry_spreadsheet_model::set_row_filter()`, sorted
+  like any row order). The filter is gathered from the entry when
+  `Mesh_component_selection_changed_message` arrives, on a target, geometry
+  or tab change, and on a Corner-tab click; edge keys map to edge indices with
+  `Geometry::get_edge()`.
+- The hovered Vertex / Facet / Edge row is highlighted in the viewport in the
+  hover color: the window calls
+  `Mesh_component_selection_tool::set_external_hover()` /
+  `clear_external_hover()` only when the hovered row changes, and the tool
+  draws it in any component mode while the pointer is not over a mesh in the
+  viewport. A hidden window clears it.
+- Rows record the item label `row <element>` for MCP UI driving. A row spans
+  every column, so with a horizontally scrolling table its rectangle center
+  can lie past the window edge; click near its left end
+  (`scripts/geometry_spreadsheet_verify.py` `click_row()`).
+
+## 6. MCP and verification
 
 `get_geometry_spreadsheet` reports the window's target, domain, counts, sort
 column, columns and the row ranges the clipper drew in the last frame, and
 the cell text of rows exactly as the window formats it (`null` for an absent
-value); `first_row` / `row_count` read any range. It resolves the target at
+value) and whether each row is selected; `first_row` / `row_count` read any
+range. It resolves the target at
 call time. `scripts/geometry_spreadsheet_verify.py` launches a headless editor
 and checks the window against `get_mesh_attribute_values`, the tabs, sorting,
 scrolling, a Catmull-Clark swap and its undo, pinning, hiding and target
-removal.
+removal, and the row selection in both directions (component selection to
+rows, Selected Only, row clicks with Ctrl / Shift to the component
+selection).
 
-## 6. Future work
+## 7. Future work
 
-- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - row
-  selection sync with the mesh component selection, cell editing with undo,
-  and the large-mesh performance check.
+- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - cell
+  editing with undo, and the large-mesh performance check.
