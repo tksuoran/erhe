@@ -18,5 +18,6 @@
 ✓phase-0d1::5787b3bba{reference_indirect_diffuse;erhe_ddgi_ray.glsl-shared;gate-12-Accuracy;crawl-space-dark-in-reference(scene-not-defect);placement-gate->accuracy}
 ✓phase-0d2::af58868d6{relocate-out-through-nearest-backface;probe-rays-t_min-0}+00f6ed920{backface-weight-from-unbiased-surface-point}+477756efc{probe_states-stats}+8f7dd9857{docs;post-fix-baseline};remaining-DDGI-error=discretization{spacing-sweep-evidence};no-relax-oscillation;history-reset-no-effect(reverted);known:offset-0.0-leak-0.0026(within-gate)+wall-plane-probe-side-random
 ✓PHASE-0-DONE
-⚡phase-1::selection+skeleton{Indirect_diffuse_source;Radiance_cascades_config;layout-math-unit-test;window;MCP;coder-running}
+✓phase-1::6fa96b9cb{set_indirect_diffuse_source-single-change-site;settings-v5-migration;probe_grid+content_bounds-shared;radiance_cascades_layout-12-tests;RC-skeleton-atlases}+dbf47588d{gi_verify-set_indirect_diffuse;docs}
+⚡phase-2::rc_trace.comp{texel-budget+hysteresis;cascade0-distance-texture;get_radiance_cascades_texels;coder-running}
 ?phase-0b..0d->phases-1..7
