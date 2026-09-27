@@ -361,6 +361,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
+- [plans/radiance_cascades.md](plans/radiance_cascades.md) (proposed): Radiance cascades
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)

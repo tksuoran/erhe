@@ -191,3 +191,5 @@ mode and the MCP `set_ddgi` tool.
 
 - [plans/ddgi.md](../plans/ddgi.md) - infinite bounces, sky radiance from the
   atmosphere LUTs, authored and cascaded volumes, the non-ray-query fallback.
+- [plans/radiance_cascades.md](../plans/radiance_cascades.md) - radiance
+  cascades as a second producer of this probe field.
