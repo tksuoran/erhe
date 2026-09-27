@@ -6,6 +6,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -14,6 +15,8 @@
 #include <cstdint>
 #include <memory>
 #include <random>
+#include <span>
+#include <vector>
 
 namespace erhe::graphics {
     class Bind_group_layout;
@@ -24,12 +27,11 @@ namespace erhe::graphics {
     class Gpu_timer;
     class Reloadable_shader_stages;
     class Ring_buffer_client;
+    class Sampler;
     class Texture;
     class Texture_heap;
 }
 namespace erhe::scene_renderer {
-    class Light_buffer;
-    class Light_projections;
     class Material_buffer;
     class Mesh_memory;
     class Program_interface;
@@ -55,6 +57,26 @@ enum class Ddgi_pass : unsigned int
 constexpr std::size_t c_ddgi_pass_count = 4;
 
 [[nodiscard]] auto c_str(Ddgi_pass pass) -> const char*;
+
+// One world-space point an irradiance query evaluates (MCP
+// sample_indirect_diffuse, doc/editor/ddgi.md "Irradiance queries").
+// view_direction points from the surface toward the viewer, exactly like
+// standard.frag's V; normal and view_direction are unit length.
+class Irradiance_query_point
+{
+public:
+    glm::vec3 position      {0.0f};
+    glm::vec3 normal        {0.0f, 1.0f, 0.0f};
+    glm::vec3 view_direction{0.0f, 1.0f, 0.0f};
+};
+
+enum class Irradiance_query_state : unsigned int
+{
+    idle      = 0, // nothing requested, or the last result was taken
+    queued    = 1, // points accepted, dispatch not recorded yet
+    in_flight = 2, // dispatch recorded, frame not retired yet
+    complete  = 3  // results readable
+};
 
 // Dynamic diffuse global illumination (doc/editor/ddgi.md).
 //
@@ -115,6 +137,9 @@ public:
 
     static constexpr std::size_t c_timing_history_size = 60;
 
+    // Upper bound on the points of one irradiance query.
+    static constexpr std::size_t c_max_irradiance_query_points = 4096;
+
     Ddgi_renderer(
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
@@ -145,6 +170,30 @@ public:
     [[nodiscard]] auto get_probes_per_update       () const -> int;
     [[nodiscard]] auto get_instance_count          () const -> std::size_t;
     [[nodiscard]] auto get_stats                   () const -> Stats;
+
+    // The probe volume parameters the forward pass samples with: the fitted
+    // grid plus the sampling settings. Invalid (counts 0) unless active.
+    [[nodiscard]] auto get_forward_parameters      () const -> erhe::scene_renderer::Ddgi_parameters;
+
+    // Irradiance query: evaluates ddgi_sample_irradiance() - the forward
+    // pass's function, with the forward pass's parameters - at world points
+    // on the GPU and reads the linear float results back
+    // (doc/editor/ddgi.md "Irradiance queries"). One query at a time:
+    // begin_irradiance_query() accepts the points (false when a query is
+    // queued or in flight, or when there are more than
+    // c_max_irradiance_query_points); record_irradiance_query() records the
+    // dispatch into the frame after the probe update; poll_irradiance_query()
+    // reports the state and reads the results back once that frame retired.
+    [[nodiscard]] auto begin_irradiance_query      (std::span<const Irradiance_query_point> points) -> bool;
+    void               cancel_irradiance_query     ();
+    [[nodiscard]] auto poll_irradiance_query       () -> Irradiance_query_state;
+    // Valid while poll_irradiance_query() reports complete: one rgb per
+    // point, and the update_count of the field that was sampled.
+    [[nodiscard]] auto get_irradiance_query_results     () const -> std::span<const glm::vec3>;
+    [[nodiscard]] auto get_irradiance_query_update_count() const -> uint64_t;
+    // Records a queued query. Called once per frame after tick(), outside a
+    // render pass; no-op unless a query is queued and the volume is active.
+    void record_irradiance_query(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
     // Refits the grid, reallocates the probe textures when needed, and
     // records this tick's probe trace into the command buffer. Must be
@@ -194,6 +243,13 @@ private:
         const char*             image_name,
         const char*             image_format,
         const char*             debug_label
+    );
+
+    // Builds the irradiance query pipeline (ddgi_sample.comp) and its
+    // persistent host-visible input / output buffers.
+    void create_query_pass(
+        erhe::graphics::Device&                  graphics_device,
+        erhe::scene_renderer::Program_interface& program_interface
     );
 
     // Copies the probe data texture into the host-visible mirror the debug
@@ -310,6 +366,26 @@ private:
     std::array<Pass_timing, c_ddgi_pass_count> m_pass_timings;
     uint64_t                                   m_update_count       {0};
     uint64_t                                   m_timing_sample_count{0};
+
+    // Irradiance query (ddgi_sample.comp). The input and output buffers are
+    // persistent, host-visible and sized for c_max_irradiance_query_points;
+    // the point / result vectors are filled on the MCP path, never per frame.
+    erhe::graphics::Shader_resource                           m_query_input_block;
+    erhe::graphics::Shader_resource                           m_query_output_block;
+    std::size_t                                               m_query_header_offset{0};
+    std::size_t                                               m_query_points_offset{0};
+    std::size_t                                               m_query_output_offset{0};
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_query_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_query_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_query_pipeline;
+    std::unique_ptr<erhe::graphics::Buffer>                   m_query_input_buffer;
+    std::unique_ptr<erhe::graphics::Buffer>                   m_query_output_buffer;
+    const erhe::graphics::Sampler*                            m_ddgi_sampler{nullptr};
+    std::vector<Irradiance_query_point>                       m_query_points;
+    std::vector<glm::vec3>                                    m_query_results;
+    Irradiance_query_state                                    m_query_state       {Irradiance_query_state::idle};
+    uint64_t                                                  m_query_frame       {0};
+    uint64_t                                                  m_query_update_count{0};
 };
 
 } // namespace editor

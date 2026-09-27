@@ -293,9 +293,13 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
 
 ## 10. Verification
 
-`scripts/gi_verify.py` builds each station in the headless Vulkan editor, waits
-until the field stats are stable, captures the station views and computes the
-statistics over the station rectangles. Each acceptance number is the worst
+`scripts/gi_verify.py` builds each station in the headless Vulkan editor and
+waits until the field stats are stable. Quality metrics are measured with the
+MCP tool `sample_indirect_diffuse` at world points defined by each station:
+linear float irradiance from the exact function the forward pass uses
+(doc/editor/ddgi.md "Irradiance queries"), so values around 1 % are not
+quantized away. Screenshots of the station views serve the disabled-regression
+item and visual review. Each acceptance number is the worst
 value over three runs. `--source ambient|ddgi|radiance_cascades` selects the
 producer; `--compare` runs DDGI and RC back to back and prints a table.
 

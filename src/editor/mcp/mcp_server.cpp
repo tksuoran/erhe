@@ -20,8 +20,10 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <httplib.h>
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -787,6 +789,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
         { "set_ddgi",                       &Mcp_server::action_set_ddgi                      },
         { "get_indirect_diffuse_stats",     &Mcp_server::query_indirect_diffuse_stats         },
+        { "sample_indirect_diffuse",        &Mcp_server::query_sample_indirect_diffuse        },
     };
     return c_tool_dispatch;
 }
@@ -1107,6 +1110,164 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
         {"timing_sample_count",      stats.timing_sample_count}
     };
     return make_json_content(result).dump();
+}
+
+namespace {
+
+// A finite [x, y, z] array, or nullopt.
+[[nodiscard]] auto parse_finite_vec3(const json& value) -> std::optional<glm::vec3>
+{
+    if (!value.is_array() || (value.size() != 3)) {
+        return std::nullopt;
+    }
+    glm::vec3 result{0.0f};
+    for (int i = 0; i < 3; ++i) {
+        if (!value[i].is_number()) {
+            return std::nullopt;
+        }
+        result[i] = value[i].get<float>();
+        if (!std::isfinite(result[i])) {
+            return std::nullopt;
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] auto vec3_json(const glm::vec3& value) -> json
+{
+    return json::array({value.x, value.y, value.z});
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
+{
+    // Linear float evaluation of the indirect diffuse field at world points
+    // (doc/editor/ddgi.md "Irradiance queries"): the forward pass's own
+    // ddgi_sample_irradiance(), run by Ddgi_renderer's ddgi_sample.comp and
+    // read back once the frame that recorded it has retired. The first pass
+    // queues the points and defers; later passes of the same request poll.
+    Ddgi_renderer* renderer = m_context.ddgi_renderer;
+
+    const bool continuation =
+        (m_irradiance_query_request != nullptr) &&
+        (m_irradiance_query_request == m_current_request) &&
+        (m_irradiance_query_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Irradiance_query_state state = (renderer != nullptr) ? renderer->poll_irradiance_query() : Irradiance_query_state::idle;
+        if (state == Irradiance_query_state::complete) {
+            m_irradiance_query_request = nullptr;
+            const std::span<const glm::vec3> results = renderer->get_irradiance_query_results();
+            json samples = json::array();
+            for (const glm::vec3& irradiance : results) {
+                samples.push_back(json{{"irradiance", vec3_json(irradiance)}});
+            }
+            json result = m_irradiance_query_header;
+            result["update_count"] = renderer->get_irradiance_query_update_count();
+            result["samples"]      = std::move(samples);
+            return make_json_content(result).dump();
+        }
+        if ((state == Irradiance_query_state::queued) || (state == Irradiance_query_state::in_flight)) {
+            if ((state == Irradiance_query_state::queued) && !renderer->is_active()) {
+                renderer->cancel_irradiance_query();
+                m_irradiance_query_request = nullptr;
+                return make_error_content("sample_indirect_diffuse: DDGI became inactive before the query was recorded");
+            }
+            m_defer_current_request = true;
+            return {};
+        }
+        m_irradiance_query_request = nullptr;
+        return make_error_content("sample_indirect_diffuse: the query was dropped");
+    }
+
+    // Arguments.
+    const auto samples_it = args.find("samples");
+    if ((samples_it == args.end()) || !samples_it->is_array() || samples_it->empty()) {
+        return make_error_content("sample_indirect_diffuse: 'samples' must be a non-empty array of {position:[x,y,z], normal:[x,y,z]}");
+    }
+    if (samples_it->size() > Ddgi_renderer::c_max_irradiance_query_points) {
+        return make_error_content(fmt::format(
+            "sample_indirect_diffuse: {} samples requested, at most {} per call",
+            samples_it->size(), Ddgi_renderer::c_max_irradiance_query_points
+        ));
+    }
+    std::optional<glm::vec3> view_position{};
+    if (args.contains("view_position")) {
+        view_position = parse_finite_vec3(args["view_position"]);
+        if (!view_position.has_value()) {
+            return make_error_content("sample_indirect_diffuse: 'view_position' must be a finite [x, y, z]");
+        }
+    }
+    std::vector<Irradiance_query_point> points;
+    points.reserve(samples_it->size());
+    for (std::size_t i = 0; i < samples_it->size(); ++i) {
+        const json& sample = (*samples_it)[i];
+        const std::optional<glm::vec3> position = sample.is_object() ? parse_finite_vec3(sample.value("position", json{})) : std::nullopt;
+        const std::optional<glm::vec3> normal   = sample.is_object() ? parse_finite_vec3(sample.value("normal",   json{})) : std::nullopt;
+        if (!position.has_value() || !normal.has_value()) {
+            return make_error_content(fmt::format("sample_indirect_diffuse: samples[{}] needs finite 'position' and 'normal' [x, y, z] arrays", i));
+        }
+        const float normal_length = glm::length(normal.value());
+        if (!(normal_length > 1.0e-6f)) {
+            return make_error_content(fmt::format("sample_indirect_diffuse: samples[{}].normal has zero length", i));
+        }
+        Irradiance_query_point point{};
+        point.position = position.value();
+        point.normal   = normal.value() / normal_length;
+        // standard.frag's V points from the surface toward the viewer.
+        // Without a view position the viewer sits on the normal (V = N).
+        point.view_direction = point.normal;
+        if (view_position.has_value()) {
+            const glm::vec3 to_viewer = view_position.value() - point.position;
+            const float     distance  = glm::length(to_viewer);
+            if (distance > 1.0e-6f) {
+                point.view_direction = to_viewer / distance;
+            }
+        }
+        points.push_back(point);
+    }
+
+    json header{
+        {"point_count",        points.size()},
+        {"view_direction",     view_position.has_value() ? "toward_view_position" : "normal"},
+        {"intensity_included", true}
+    };
+
+    // No active field: the forward pass shades with the flat scene ambient,
+    // which is also what the shader returns without a volume.
+    if ((renderer == nullptr) || !renderer->is_active()) {
+        const std::shared_ptr<Scene_root> scene_root = (m_context.app_scenes != nullptr)
+            ? m_context.app_scenes->get_single_scene_root()
+            : std::shared_ptr<Scene_root>{};
+        if (!scene_root) {
+            return make_error_content("sample_indirect_diffuse: no scene");
+        }
+        const glm::vec3 ambient = scene_root->get_scene().get_ambient_light();
+        json samples = json::array();
+        for (std::size_t i = 0; i < points.size(); ++i) {
+            samples.push_back(json{{"irradiance", vec3_json(ambient)}});
+        }
+        header["source"]       = "ambient";
+        header["update_count"] = 0;
+        header["samples"]      = std::move(samples);
+        return make_json_content(header).dump();
+    }
+
+    if (!renderer->begin_irradiance_query(std::span<const Irradiance_query_point>{points})) {
+        // An earlier query (from a request that has since expired) is still
+        // queued or in flight; it completes within a few frames. Wait for
+        // it and try again on the next pass.
+        static_cast<void>(renderer->poll_irradiance_query());
+        m_defer_current_request = true;
+        return {};
+    }
+    header["source"]    = "ddgi";
+    header["intensity"] = (m_context.editor_settings != nullptr) ? m_context.editor_settings->ddgi.intensity : 1.0f;
+    m_irradiance_query_header      = std::move(header);
+    m_irradiance_query_request     = m_current_request;
+    m_irradiance_query_enqueued_at = m_current_request->enqueued_at;
+    m_defer_current_request        = true;
+    return {};
 }
 
 auto Mcp_server::find_scene(const std::string& name) -> Scene_root*

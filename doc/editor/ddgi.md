@@ -154,6 +154,46 @@ grid origin / spacing / counts, probe count, rays per probe, probes and rays per
 update, `gpu_ms` per pass and `gpu_ms_total` (`last_ms`, `average_ms`), the
 derived figures above, and `texture_bytes`.
 
+## Irradiance queries
+
+The MCP tool `sample_indirect_diffuse` evaluates the field at world points and
+returns linear float RGB, so verification measures the indirect term itself
+instead of an 8-bit tonemapped screenshot of it. While DDGI is active,
+`res/editor/shaders/ddgi_sample.comp` includes `erhe_ddgi.glsl` and calls
+`ddgi_sample_irradiance` - the forward pass's function - with the forward
+pass's light block contents (`Ddgi_renderer::get_forward_parameters()`, the
+single source of the `Ddgi_parameters` `Editor::tick()` publishes, plus the
+scene ambient) and the same three atlases and sampler. Each result is exactly
+what `standard.frag` multiplies by base colour and occlusion, the configured
+`intensity` included.
+
+- Arguments: `samples` (1 to `c_max_irradiance_query_points` = 4096 entries of
+  `{position, normal}`; the normal is normalized) and an optional
+  `view_position`. The view direction is the surface-to-viewer vector, like
+  `standard.frag`'s `V`: `normalize(view_position - position)`, or the normal
+  when `view_position` is omitted (the sample point is then biased by
+  `normal_bias + view_bias` along the normal).
+- Result: `source` (`"ddgi"` or `"ambient"`), `update_count` (the field's
+  update counter when the query was recorded, the counter
+  `get_indirect_diffuse_stats` reports; 0 for `ambient`), `intensity` and
+  `intensity_included: true` (ddgi only), `view_direction` (`"normal"` or
+  `"toward_view_position"`), `point_count`, and `samples`, index-aligned with
+  the input, each `{irradiance: [r, g, b]}`.
+- With no active field the tool answers immediately with the flat scene
+  ambient per sample - what the forward pass shades with then.
+- Flow: the first MCP pass hands the points to
+  `Ddgi_renderer::begin_irradiance_query()` and defers the request;
+  `Editor::tick()` calls `record_irradiance_query()` right after the probe
+  update, which fills a persistent host-visible input buffer, dispatches one
+  thread per point into a persistent host-visible output buffer and records
+  the frame index; later passes poll `poll_irradiance_query()`, which reads the
+  results back once `Device::is_frame_completed()` reports that frame retired
+  (typically two to three frames). One query runs at a time; the tool cannot
+  run inside `batch`.
+- The bind group layout carries the light block (binding 1), the input and
+  output storage buffers (2, 3) and the three atlases as combined image
+  samplers at user bindings 4-6, which Vulkan offsets to 8-10.
+
 ## Phases
 
 The renderer is built out of these parts; the labels are cited from source

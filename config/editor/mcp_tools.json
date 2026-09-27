@@ -4122,6 +4122,52 @@
     "name": "get_indirect_diffuse_stats"
   },
   {
+    "description": "Evaluate the indirect diffuse field at world points and return linear float RGB (doc/editor/ddgi.md \"Irradiance queries\"). While DDGI is active the editor runs the forward pass's own ddgi_sample_irradiance() (res/shaders/erhe_ddgi.glsl) on the GPU with the forward pass's light block and probe atlases, and reads the results back a few frames later; the result has 'source' \"ddgi\", 'update_count' (the field's update counter when the query was recorded, same counter as get_indirect_diffuse_stats) and 'intensity' (the configured multiplier, already included in every irradiance, 'intensity_included' true). With no active field it returns 'source' \"ambient\" and the flat scene ambient the shader uses instead, per sample. 'samples' is index-aligned with the input: {irradiance:[r,g,b]} - the value standard.frag multiplies by base color and occlusion. At most 4096 samples per call; cannot run inside batch.",
+    "inputSchema": {
+      "properties": {
+        "samples": {
+          "description": "World points to evaluate: [{position:[x,y,z], normal:[x,y,z]}, ...], 1 to 4096 entries; the normal is normalized by the tool",
+          "items": {
+            "properties": {
+              "normal": {
+                "description": "Surface normal [x, y, z] (nonzero)",
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "position": {
+                "description": "World position [x, y, z]",
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "position",
+              "normal"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "view_position": {
+          "description": "Viewer world position [x, y, z] for the view-bias term: view direction = normalize(view_position - position), surface toward viewer as in standard.frag. Omitted: the viewer sits on the normal (view direction = normal), so the sample point is biased by (normal_bias + view_bias) along the normal; the result's 'view_direction' reports which was used",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "samples"
+      ],
+      "type": "object"
+    },
+    "name": "sample_indirect_diffuse"
+  },
+  {
     "description": "Activate dynamic rigid bodies (bodies enter the world deactivated). Scoped since 2026-08-09: node_ids wakes exactly those nodes' bodies, node_id/node_name wakes the SUBTREE under that node (union when combined); no filter wakes the whole scene. Scope iterative re-settles (--only rebuilds) so already-settled structures elsewhere stay asleep.",
     "inputSchema": {
       "properties": {

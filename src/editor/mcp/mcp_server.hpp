@@ -511,6 +511,7 @@ private:
     auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;
     auto action_set_ddgi                      (const nlohmann::json& args) -> std::string;
     auto query_indirect_diffuse_stats         (const nlohmann::json& args) -> std::string;
+    auto query_sample_indirect_diffuse        (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
@@ -720,6 +721,15 @@ private:
         erhe::scene_renderer::Shader_debug shader_debug;
     };
     std::vector<std::vector<Saved_shader_debug>>     m_shader_debug_stack;
+
+    // sample_indirect_diffuse: the request whose irradiance query is queued
+    // or in flight in Ddgi_renderer, deferring until the readback completes
+    // (main thread only). enqueued_at tells its own re-run from a new request
+    // allocated at the same address. The header holds the result fields
+    // decided on the first pass.
+    const Queued_request*                            m_irradiance_query_request{nullptr};
+    std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
+    nlohmann::json                                   m_irradiance_query_header;
 };
 
 } // namespace editor

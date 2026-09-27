@@ -1,0 +1,29 @@
+// DDGI irradiance query (doc/editor/ddgi.md "Irradiance queries").
+//
+// Evaluates ddgi_sample_irradiance() - the function the forward pass calls
+// in standard.frag, with the same light block contents and the same probe
+// atlases - at caller-supplied world points, and writes the linear float
+// result per point. The MCP tool sample_indirect_diffuse reads the output
+// back, so verification measures the field itself rather than a tonemapped
+// 8-bit screenshot of it.
+//
+// Input record per point (three vec4s): position.xyz, normal.xyz (unit),
+// view_direction.xyz (unit, surface -> viewer, like standard.frag's V).
+// Output: rgb = irradiance, including the configured intensity; a = 1.
+
+#include "erhe_ddgi.glsl"
+
+layout(local_size_x = ERHE_DDGI_SAMPLE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main()
+{
+    uint point_index = gl_GlobalInvocationID.x;
+    if (point_index >= ddgi_query_input.header.x) {
+        return;
+    }
+    uint base           = point_index * 3u;
+    vec3 position       = ddgi_query_input.points[base + 0u].xyz;
+    vec3 normal         = ddgi_query_input.points[base + 1u].xyz;
+    vec3 view_direction = ddgi_query_input.points[base + 2u].xyz;
+    ddgi_query_output.irradiance[point_index] = vec4(ddgi_sample_irradiance(position, normal, view_direction), 1.0);
+}

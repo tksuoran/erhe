@@ -80,6 +80,23 @@ constexpr unsigned int c_relocate_ray_data_binding_point   = 3;
 constexpr unsigned int c_relocate_probe_data_binding_point = 4;
 constexpr int          c_relocate_workgroup_size           = 64;
 
+// Irradiance query (ddgi_sample.comp): the light block at its shared binding
+// point, the point input and result output storage buffers, and the three
+// DDGI atlases as combined image samplers. Vulkan offsets the samplers past
+// the highest buffer binding (3), so user 4 / 5 / 6 land at 8 / 9 / 10,
+// clear of every buffer binding.
+constexpr unsigned int c_query_input_binding_point      = 2;
+constexpr unsigned int c_query_output_binding_point     = 3;
+constexpr unsigned int c_query_irradiance_binding_point = 4;
+constexpr unsigned int c_query_distance_binding_point   = 5;
+constexpr unsigned int c_query_probe_data_binding_point = 6;
+constexpr int          c_query_workgroup_size           = 64;
+// Input record per point: position, normal, view direction (vec4 each).
+constexpr std::size_t  c_query_vec4s_per_point          = 3;
+// Query buffer capacities are rounded up to this (a multiple of every
+// nonCoherentAtomSize the Vulkan spec allows).
+constexpr int          c_query_buffer_alignment         = 256;
+
 constexpr erhe::dataformat::Format c_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
 constexpr erhe::dataformat::Format c_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
 // Full float: one texel per probe is tiny, and it keeps the debug
@@ -134,6 +151,24 @@ Ddgi_renderer::Ddgi_renderer(
         "ddgi",
         static_cast<int>(c_control_binding_point),
         erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_query_input_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "ddgi_query_input",
+            .binding_point = static_cast<int>(c_query_input_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_query_output_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "ddgi_query_output",
+            .binding_point = static_cast<int>(c_query_output_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
     }
 {
     using namespace erhe::graphics;
@@ -365,6 +400,8 @@ Ddgi_renderer::Ddgi_renderer(
         }
     );
 
+    create_query_pass(graphics_device, program_interface);
+
     // Labels double as the Performance window plot names.
     m_pass_timings[static_cast<std::size_t>(Ddgi_pass::trace           )].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI trace");
     m_pass_timings[static_cast<std::size_t>(Ddgi_pass::blend_irradiance)].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI blend irradiance");
@@ -444,7 +481,265 @@ void Ddgi_renderer::create_blend_pass(
     );
 }
 
+void Ddgi_renderer::create_query_pass(
+    erhe::graphics::Device&                  graphics_device,
+    erhe::scene_renderer::Program_interface& program_interface
+)
+{
+    using namespace erhe::graphics;
+
+    const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
+
+    // header.x = point count
+    m_query_header_offset = m_query_input_block .add_uvec4("header"                                    )->get_offset_in_parent();
+    m_query_points_offset = m_query_input_block .add_vec4 ("points",     Shader_resource::unsized_array)->get_offset_in_parent();
+    m_query_output_offset = m_query_output_block.add_vec4 ("irradiance", Shader_resource::unsized_array)->get_offset_in_parent();
+
+    const Shader_resource& light_block = program_interface.light_interface.light_block;
+    const Binding_type light_binding_type = (light_block.get_type() == Shader_resource::Type::shader_storage_block)
+        ? Binding_type::storage_buffer
+        : Binding_type::uniform_buffer;
+
+    // The same sampler the forward pass samples the atlases with.
+    m_ddgi_sampler = &program_interface.light_interface.ddgi_sampler;
+
+    m_query_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = light_buffer_binding_point,
+                    .type          = light_binding_type,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_query_input_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_query_output_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = c_query_irradiance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_irradiance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = c_query_distance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_distance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = c_query_probe_data_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_probe_data",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                }
+            },
+            .debug_label = "DDGI irradiance query"
+        }
+    );
+
+    m_query_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = "ddgi_sample",
+            .defines             = { { "ERHE_DDGI_SAMPLE_GROUP_SIZE", fmt::format("{}", c_query_workgroup_size) } },
+            .struct_types        = { &program_interface.light_interface.light_struct },
+            .interface_blocks    = {
+                &program_interface.light_interface.light_block,
+                &m_query_input_block,
+                &m_query_output_block
+            },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "ddgi_sample.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = m_query_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_query_shader_stages);
+
+    m_query_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "ddgi_sample",
+            .shader_stages     = &m_query_shader_stages->shader_stages,
+            .bind_group_layout = m_query_bind_group_layout.get()
+        }
+    );
+
+    // Host-visible both ways: the CPU writes the points before the frame is
+    // submitted, and reads the results after the frame retired. Flushes and
+    // invalidations cover the whole buffer, so the capacity is rounded up to
+    // a multiple any nonCoherentAtomSize divides.
+    const auto make_query_buffer = [&](const std::size_t byte_count, const char* debug_label) -> std::unique_ptr<Buffer> {
+        return std::make_unique<Buffer>(
+            graphics_device,
+            Buffer_create_info{
+                .capacity_byte_count                    = static_cast<std::size_t>(round_up(static_cast<int>(byte_count), c_query_buffer_alignment)),
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::storage,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{debug_label}
+            }
+        );
+    };
+    m_query_input_buffer = make_query_buffer(
+        m_query_points_offset + (c_max_irradiance_query_points * c_query_vec4s_per_point * sizeof(glm::vec4)),
+        "DDGI irradiance query input"
+    );
+    m_query_output_buffer = make_query_buffer(
+        m_query_output_offset + (c_max_irradiance_query_points * sizeof(glm::vec4)),
+        "DDGI irradiance query output"
+    );
+}
+
 Ddgi_renderer::~Ddgi_renderer() noexcept = default;
+
+auto Ddgi_renderer::get_forward_parameters() const -> erhe::scene_renderer::Ddgi_parameters
+{
+    erhe::scene_renderer::Ddgi_parameters parameters{};
+    if (!is_active()) {
+        return parameters;
+    }
+    parameters.grid_origin       = m_grid.origin;
+    parameters.grid_spacing      = m_grid.spacing;
+    parameters.grid_counts       = m_grid.counts;
+    parameters.irradiance_texels = m_irradiance_texels;
+    parameters.distance_texels   = m_distance_texels;
+    parameters.normal_bias       = m_config.normal_bias;
+    parameters.view_bias         = m_config.view_bias;
+    parameters.depth_sharpness   = m_config.depth_sharpness;
+    parameters.intensity         = m_config.intensity;
+    return parameters;
+}
+
+auto Ddgi_renderer::begin_irradiance_query(const std::span<const Irradiance_query_point> points) -> bool
+{
+    if ((m_query_state == Irradiance_query_state::queued) || (m_query_state == Irradiance_query_state::in_flight)) {
+        return false;
+    }
+    if (points.empty() || (points.size() > c_max_irradiance_query_points) || !m_query_pipeline) {
+        return false;
+    }
+    m_query_points.assign(points.begin(), points.end());
+    m_query_results.clear();
+    m_query_state = Irradiance_query_state::queued;
+    return true;
+}
+
+void Ddgi_renderer::cancel_irradiance_query()
+{
+    // Only a query that has not been recorded can be dropped; a recorded one
+    // still writes the output buffer, so it runs to completion and the next
+    // begin_irradiance_query() waits for it.
+    if (m_query_state == Irradiance_query_state::queued) {
+        m_query_state = Irradiance_query_state::idle;
+    }
+}
+
+auto Ddgi_renderer::poll_irradiance_query() -> Irradiance_query_state
+{
+    if ((m_query_state == Irradiance_query_state::in_flight) && m_graphics_device.is_frame_completed(m_query_frame)) {
+        const std::size_t count      = m_query_points.size();
+        const std::size_t capacity   = m_query_output_buffer->get_capacity_byte_count();
+        const std::span<std::byte> mapped = m_query_output_buffer->map_bytes(0, capacity);
+        m_query_output_buffer->invalidate(0, capacity);
+        m_query_results.resize(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            glm::vec4 value{0.0f};
+            std::memcpy(&value, mapped.data() + m_query_output_offset + (i * sizeof(glm::vec4)), sizeof(glm::vec4));
+            m_query_results[i] = glm::vec3{value};
+        }
+        m_query_output_buffer->unmap();
+        m_query_state = Irradiance_query_state::complete;
+    }
+    return m_query_state;
+}
+
+auto Ddgi_renderer::get_irradiance_query_results() const -> std::span<const glm::vec3>
+{
+    return std::span<const glm::vec3>{m_query_results};
+}
+
+auto Ddgi_renderer::get_irradiance_query_update_count() const -> uint64_t
+{
+    return m_query_update_count;
+}
+
+void Ddgi_renderer::record_irradiance_query(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
+{
+    using namespace erhe::graphics;
+
+    if ((m_query_state != Irradiance_query_state::queued) || !is_active()) {
+        return;
+    }
+
+    // Points: header (count) + position / normal / view direction per point.
+    const std::size_t count             = m_query_points.size();
+    const std::size_t input_byte_count  = m_query_points_offset + (count * c_query_vec4s_per_point * sizeof(glm::vec4));
+    const std::size_t output_byte_count = m_query_output_offset + (count * sizeof(glm::vec4));
+    {
+        const std::size_t          capacity = m_query_input_buffer->get_capacity_byte_count();
+        const std::span<std::byte> mapped   = m_query_input_buffer->map_bytes(0, capacity);
+        const glm::uvec4 header{static_cast<uint32_t>(count), 0u, 0u, 0u};
+        std::memcpy(mapped.data() + m_query_header_offset, &header, sizeof(header));
+        for (std::size_t i = 0; i < count; ++i) {
+            const Irradiance_query_point& point = m_query_points[i];
+            const std::array<glm::vec4, c_query_vec4s_per_point> record{
+                glm::vec4{point.position,       1.0f},
+                glm::vec4{point.normal,         0.0f},
+                glm::vec4{point.view_direction, 0.0f}
+            };
+            std::memcpy(mapped.data() + m_query_points_offset + (i * sizeof(record)), record.data(), sizeof(record));
+        }
+        m_query_input_buffer->flush_bytes(0, capacity);
+        m_query_input_buffer->unmap();
+    }
+
+    // The light block contents the forward pass sees for DDGI: the scene
+    // ambient (the no-volume / zero-weight fallback) and the volume
+    // parameters. No lights: ddgi_sample_irradiance() does not read them.
+    const erhe::scene_renderer::Ddgi_parameters parameters  = get_forward_parameters();
+    const glm::vec3                             ambient     = scene_root.get_scene().get_ambient_light();
+    Ring_buffer_range                           light_range = m_light_buffer->update(nullptr, ambient, 0u, &parameters);
+
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_query_bind_group_layout.get());
+        encoder.set_compute_pipeline(*m_query_pipeline);
+        m_light_buffer->bind_light_buffer(encoder, light_range);
+        encoder.set_buffer(Buffer_target::storage, m_query_input_buffer.get(),  0, input_byte_count,  c_query_input_binding_point);
+        encoder.set_buffer(Buffer_target::storage, m_query_output_buffer.get(), 0, output_byte_count, c_query_output_binding_point);
+        encoder.set_sampled_image(c_query_irradiance_binding_point, *m_irradiance_texture, *m_ddgi_sampler);
+        encoder.set_sampled_image(c_query_distance_binding_point,   *m_distance_texture,   *m_ddgi_sampler);
+        encoder.set_sampled_image(c_query_probe_data_binding_point, *m_probe_data_texture, *m_ddgi_sampler);
+        const std::size_t group_size = static_cast<std::size_t>(c_query_workgroup_size);
+        encoder.dispatch_compute(static_cast<std::uintptr_t>((count + group_size - 1) / group_size), 1, 1);
+    }
+    light_range.release();
+
+    // Shader writes -> host reads once the frame's fence has signalled.
+    command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
+
+    m_query_frame        = m_graphics_device.get_frame_index();
+    m_query_update_count = m_update_count;
+    m_query_state        = Irradiance_query_state::in_flight;
+}
 
 auto Ddgi_renderer::is_supported() const -> bool
 {
