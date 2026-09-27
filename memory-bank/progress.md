@@ -14,6 +14,7 @@
 ✓phase-0b::a7c1beb62{creation_24_gi_test_rooms;7-stations-own-scene;viewport-fraction-rects-raycast-checked;DDGI-findings:pillar-faces-black(probe-in-pillar)+crawl-space-black+corridor-probes-outside-walls+weak-cornell-bleed~1.05}
 ✓phase-0c1::a87a7a909{sample_indirect_diffuse;ddgi_sample.comp;deferred-MCP-readback;cap-4096;Ddgi_renderer::get_forward_parameters-single-source}+315626c1f{Vulkan-Buffer_impl::invalidate-skips-coherent}
 ✓phase-0c2::d7b74666c{gi_verify.py;baseline-in-plan-section-10;DDGI-fails:pillar-faces-min/median-0.22(<0.25)+crawl-floor-near-black-0.0004;corridor/crawl-gates-relative-to-DDGI;timings->memory-bank/local/gi.md}
-⚡render_scene_image-MCP{user-asked;offscreen-window-independent;parity-with-viewport;gi_verify-capture_view-switch;coder-running}
-?phase-0d::DDGI-placement-fixes{pillar-faces+crawl-space}
+✓render_scene_image::be54a899f{Scene_image_capture-chain-shadow->Scene_image_view->post->readback;scene_only-skips-editor_aid;png|pfm;batch-refuses;expired-request-releases-chain;Scene_view::get_camera_viewport}+ba245bae7{gi_verify-uses-it}
+⚡phase-0d1::reference_indirect_diffuse{ground-truth-one-bounce-cosine-rays-same-hit-shading;gi_verify-error-vs-reference;coder-running}
+?phase-0d2::DDGI-placement-fixes{pillar-faces+crawl-space;judged-by-reference-error}
 ?phase-0b..0d->phases-1..7
