@@ -16,5 +16,7 @@
 ✓phase-0c2::d7b74666c{gi_verify.py;baseline-in-plan-section-10;DDGI-fails:pillar-faces-min/median-0.22(<0.25)+crawl-floor-near-black-0.0004;corridor/crawl-gates-relative-to-DDGI;timings->memory-bank/local/gi.md}
 ✓render_scene_image::be54a899f{Scene_image_capture-chain-shadow->Scene_image_view->post->readback;scene_only-skips-editor_aid;png|pfm;batch-refuses;expired-request-releases-chain;Scene_view::get_camera_viewport}+ba245bae7{gi_verify-uses-it}
 ✓phase-0d1::5787b3bba{reference_indirect_diffuse;erhe_ddgi_ray.glsl-shared;gate-12-Accuracy;crawl-space-dark-in-reference(scene-not-defect);placement-gate->accuracy}
-⚡phase-0d2::DDGI-error-root-causes{cornell-0.80+corridor-0.73+emissive-0.33..0.54+probe-plane-wall-1.38;spacing/rays-sweep-separates-bias-from-resolution;coder-running}
+✓phase-0d2::af58868d6{relocate-out-through-nearest-backface;probe-rays-t_min-0}+00f6ed920{backface-weight-from-unbiased-surface-point}+477756efc{probe_states-stats}+8f7dd9857{docs;post-fix-baseline};remaining-DDGI-error=discretization{spacing-sweep-evidence};no-relax-oscillation;history-reset-no-effect(reverted);known:offset-0.0-leak-0.0026(within-gate)+wall-plane-probe-side-random
+✓PHASE-0-DONE
+⚡phase-1::selection+skeleton{Indirect_diffuse_source;Radiance_cascades_config;layout-math-unit-test;window;MCP;coder-running}
 ?phase-0b..0d->phases-1..7
