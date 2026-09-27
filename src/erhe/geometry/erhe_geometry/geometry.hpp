@@ -323,7 +323,67 @@ public:
     inline auto vertex_joint_weights(size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_joint_weights_0 : vertex_joint_weights_1; }
     inline auto corner_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? corner_texcoord_0      : (i == 1) ? corner_texcoord_1 : corner_texcoord_2; }
     inline auto corner_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? corner_color_0         : corner_color_1        ; }
+
+    // Enumerate the attributes of one element domain: f(const char* name, Attribute_present<T>& attribute)
+    // is called once per attribute, in declaration order. The name is the member name.
+    template <typename F> void for_each_facet_attribute (F&& f);
+    template <typename F> void for_each_vertex_attribute(F&& f);
+    template <typename F> void for_each_corner_attribute(F&& f);
+    template <typename F> void for_each_edge_attribute  (F&& f);
 };
+
+template <typename F>
+void Mesh_attributes::for_each_facet_attribute(F&& f)
+{
+    f("facet_id",            facet_id);
+    f("facet_centroid",      facet_centroid);
+    f("facet_normal",        facet_normal);
+    f("facet_tangent",       facet_tangent);
+    f("facet_bitangent",     facet_bitangent);
+    f("facet_color_0",       facet_color_0);
+    f("facet_color_1",       facet_color_1);
+    f("facet_aniso_control", facet_aniso_control);
+}
+
+template <typename F>
+void Mesh_attributes::for_each_vertex_attribute(F&& f)
+{
+    f("vertex_normal",             vertex_normal);
+    f("vertex_normal_smooth",      vertex_normal_smooth);
+    f("vertex_texcoord_0",         vertex_texcoord_0);
+    f("vertex_texcoord_1",         vertex_texcoord_1);
+    f("vertex_texcoord_2",         vertex_texcoord_2);
+    f("vertex_tangent",            vertex_tangent);
+    f("vertex_bitangent",          vertex_bitangent);
+    f("vertex_color_0",            vertex_color_0);
+    f("vertex_color_1",            vertex_color_1);
+    f("vertex_joint_indices_0",    vertex_joint_indices_0);
+    f("vertex_joint_indices_1",    vertex_joint_indices_1);
+    f("vertex_joint_weights_0",    vertex_joint_weights_0);
+    f("vertex_joint_weights_1",    vertex_joint_weights_1);
+    f("vertex_aniso_control",      vertex_aniso_control);
+    f("vertex_valency_edge_count", vertex_valency_edge_count);
+}
+
+template <typename F>
+void Mesh_attributes::for_each_corner_attribute(F&& f)
+{
+    f("corner_normal",        corner_normal);
+    f("corner_texcoord_0",    corner_texcoord_0);
+    f("corner_texcoord_1",    corner_texcoord_1);
+    f("corner_texcoord_2",    corner_texcoord_2);
+    f("corner_tangent",       corner_tangent);
+    f("corner_bitangent",     corner_bitangent);
+    f("corner_color_0",       corner_color_0);
+    f("corner_color_1",       corner_color_1);
+    f("corner_aniso_control", corner_aniso_control);
+}
+
+template <typename F>
+void Mesh_attributes::for_each_edge_attribute(F&& f)
+{
+    f("edge_sharpness", edge_sharpness);
+}
 
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;

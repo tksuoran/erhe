@@ -544,9 +544,9 @@ auto Mcp_server::query_mesh_geometry_info(const json& args) -> std::string
             {"corners",  corner_count}
         }},
         {"attributes", {
-            {"facet",  attribute_presence_summary(attributes, facet_count,  [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_facet_attribute (a, f); })},
-            {"vertex", attribute_presence_summary(attributes, vertex_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_vertex_attribute(a, f); })},
-            {"corner", attribute_presence_summary(attributes, corner_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_corner_attribute(a, f); })}
+            {"facet",  attribute_presence_summary(attributes, facet_count,  [](erhe::geometry::Mesh_attributes& a, auto&& f){ a.for_each_facet_attribute(f); })},
+            {"vertex", attribute_presence_summary(attributes, vertex_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ a.for_each_vertex_attribute(f); })},
+            {"corner", attribute_presence_summary(attributes, corner_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ a.for_each_corner_attribute(f); })}
         }}
     }).dump();
 }
@@ -605,14 +605,14 @@ auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
                 return make_error_content("vertex index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.vertices.nb()));
             }
             elem["position"] = geo_vec_to_json(erhe::geometry::get_pointf(geo_mesh.vertices, idx));
-            for_each_vertex_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+            attributes.for_each_vertex_attribute([&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
         } else if (domain == "corner") {
             if (idx >= geo_mesh.facet_corners.nb()) {
                 return make_error_content("corner index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.facet_corners.nb()));
             }
             elem["vertex"] = geo_mesh.facet_corners.vertex(idx);
             elem["facet"]  = geometry->get_corner_facet(idx);
-            for_each_corner_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+            attributes.for_each_corner_attribute([&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
         } else if (domain == "facet") {
             if (idx >= geo_mesh.facets.nb()) {
                 return make_error_content("facet index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.facets.nb()));
@@ -625,7 +625,7 @@ auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
             }
             elem["corners"]  = corners;
             elem["vertices"] = vertices;
-            for_each_facet_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+            attributes.for_each_facet_attribute([&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
         } else { // edge
             if (idx >= geo_mesh.edges.nb()) {
                 return make_error_content("edge index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.edges.nb()));

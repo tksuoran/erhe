@@ -215,53 +215,6 @@ inline auto attribute_value_json(const erhe::geometry::Attribute_present<T>& ap,
     return e;
 }
 
-template <typename F>
-inline void for_each_facet_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
-{
-    f("facet_id",            a.facet_id);
-    f("facet_centroid",      a.facet_centroid);
-    f("facet_normal",        a.facet_normal);
-    f("facet_tangent",       a.facet_tangent);
-    f("facet_bitangent",     a.facet_bitangent);
-    f("facet_color_0",       a.facet_color_0);
-    f("facet_color_1",       a.facet_color_1);
-    f("facet_aniso_control", a.facet_aniso_control);
-}
-
-template <typename F>
-inline void for_each_vertex_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
-{
-    f("vertex_normal",             a.vertex_normal);
-    f("vertex_normal_smooth",      a.vertex_normal_smooth);
-    f("vertex_texcoord_0",         a.vertex_texcoord_0);
-    f("vertex_texcoord_1",         a.vertex_texcoord_1);
-    f("vertex_texcoord_2",         a.vertex_texcoord_2);
-    f("vertex_tangent",            a.vertex_tangent);
-    f("vertex_bitangent",          a.vertex_bitangent);
-    f("vertex_color_0",            a.vertex_color_0);
-    f("vertex_color_1",            a.vertex_color_1);
-    f("vertex_joint_indices_0",    a.vertex_joint_indices_0);
-    f("vertex_joint_indices_1",    a.vertex_joint_indices_1);
-    f("vertex_joint_weights_0",    a.vertex_joint_weights_0);
-    f("vertex_joint_weights_1",    a.vertex_joint_weights_1);
-    f("vertex_aniso_control",      a.vertex_aniso_control);
-    f("vertex_valency_edge_count", a.vertex_valency_edge_count);
-}
-
-template <typename F>
-inline void for_each_corner_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
-{
-    f("corner_normal",        a.corner_normal);
-    f("corner_texcoord_0",    a.corner_texcoord_0);
-    f("corner_texcoord_1",    a.corner_texcoord_1);
-    f("corner_texcoord_2",    a.corner_texcoord_2);
-    f("corner_tangent",       a.corner_tangent);
-    f("corner_bitangent",     a.corner_bitangent);
-    f("corner_color_0",       a.corner_color_0);
-    f("corner_color_1",       a.corner_color_1);
-    f("corner_aniso_control", a.corner_aniso_control);
-}
-
 // Per-domain summary: one entry per attribute that is present on at least one
 // element, with its type and how many elements carry it.
 template <typename ForEach>
