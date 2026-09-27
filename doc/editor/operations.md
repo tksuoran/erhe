@@ -93,3 +93,7 @@ Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `it
 - erhe::scene, erhe::geometry, erhe::primitive, erhe::physics
 - erhe::commands (for undo/redo key bindings)
 - editor: App_context, Mesh_memory
+
+## Future work
+
+- [plans/geometry_edit_node_order.md](../plans/geometry_edit_node_order.md) - primitive-swapping operations keep the node position among its siblings.

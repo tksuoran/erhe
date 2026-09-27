@@ -341,6 +341,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/geometry_graph/creation_tools.md](plans/geometry_graph/creation_tools.md) (in progress): AI creation tools and geometry-graph follow-ups
 - [plans/geometry_graph/geometry_nodes.md](plans/geometry_graph/geometry_nodes.md) (proposed): Geometry nodes: field system and further node types
 - [plans/geometry_graph/openvdb_sdf.md](plans/geometry_graph/openvdb_sdf.md) (in progress): OpenVDB SDF support in the geometry graph (phase 3 onward)
+- [plans/geometry_edit_node_order.md](plans/geometry_edit_node_order.md) (proposed): Geometry edits keep the node's place in the hierarchy
 - [plans/gl_worker_contexts.md](plans/gl_worker_contexts.md) (proposed): GL worker contexts: outstanding work
 - [plans/gltf.md](plans/gltf.md) (in progress): glTF: outstanding work
 - [plans/gltf_prefabs.md](plans/gltf_prefabs.md) (in progress): glTF scene prefabs: remaining phases
