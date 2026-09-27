@@ -4166,9 +4166,20 @@
     "name": "set_ddgi"
   },
   {
-    "description": "Report the measured cost of the indirect diffuse field (doc/editor/ddgi.md \"Performance\"). Returns 'source' (\"ddgi\" while DDGI is active, else \"ambient\") and a 'ddgi' object: grid origin / spacing / counts, probe count, rays per probe, probes and rays per update, per-pass GPU milliseconds (trace, blend_irradiance, blend_distance, relocate; last and mean over the last timing_history_size samples) and their total, ms per million rays (total mean / rays per update), updates and ms per full refresh (every probe traced once), probe texture bytes, and the update_count / timing_sample_count counters that advance while the field is being updated. GPU timings lag the update by the frames in flight and read 0 until the first measurement completes. Read-only; takes no arguments.",
+    "description": "Report the measured cost of the indirect diffuse field (doc/editor/ddgi.md \"Performance\"). Returns 'source' (\"ddgi\" while DDGI is active, else \"ambient\") and a 'ddgi' object: grid origin / spacing / counts, probe count, rays per probe, probes and rays per update, per-pass GPU milliseconds (trace, blend_irradiance, blend_distance, relocate; last and mean over the last timing_history_size samples) and their total, ms per million rays (total mean / rays per update), updates and ms per full refresh (every probe traced once), probe texture bytes, and the update_count / timing_sample_count counters that advance while the field is being updated. GPU timings lag the update by the frames in flight and read 0 until the first measurement completes. Also 'probe_states' (doc/editor/ddgi.md \"Probe state\"): every call requests a copy of the probe relocation / classification data after the next probe update, and the object reports the most recent copy that has retired - update_count (field updates when copied), active, inactive, relocated (|offset| > 1 mm) and max_offset_over_spacing - or null until the first copy retires (call again a few frames later). With 'probes' it also returns 'probe_data', index-aligned: {coords, offset:[x,y,z] (world units), state (1 active, 0 inactive)} from the same copy. Read-only.",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "probes": {
+          "description": "Optional probe grid coordinates [[x, y, z], ...] (0 <= x < grid_counts.x, ...) whose relocation offset and state to return in 'probe_data'",
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
       "type": "object"
     },
     "name": "get_indirect_diffuse_stats"

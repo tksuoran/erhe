@@ -1091,9 +1091,9 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
 auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
 {
     // Measured cost of the indirect diffuse field (doc/editor/ddgi.md
-    // "Performance", doc/plans/radiance_cascades.md section 8). Read-only;
-    // takes no arguments.
-    static_cast<void>(args);
+    // "Performance", doc/plans/radiance_cascades.md section 8), plus the
+    // probe relocation / classification state ("Probe state"). Read-only;
+    // optional 'probes' selects probes whose offset and state to return.
     Ddgi_renderer* renderer = m_context.ddgi_renderer;
     const bool     ddgi     = (renderer != nullptr) && renderer->is_active();
     json result{
@@ -1134,6 +1134,45 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
         {"update_count",             stats.update_count},
         {"timing_sample_count",      stats.timing_sample_count}
     };
+
+    // Probe state: report the last retired copy, and ask for a fresh one.
+    json probe_states = nullptr;
+    if (renderer->is_active()) {
+        const bool valid = renderer->poll_probe_states();
+        renderer->request_probe_states();
+        if (valid) {
+            const Ddgi_renderer::Probe_state_summary& summary = renderer->get_probe_state_summary();
+            probe_states = json{
+                {"update_count",            summary.update_count},
+                {"active",                  summary.active},
+                {"inactive",                summary.inactive},
+                {"relocated",               summary.relocated},
+                {"max_offset_over_spacing", summary.max_offset_over_spacing}
+            };
+            if (args.contains("probes") && args["probes"].is_array()) {
+                const std::span<const glm::vec4> states = renderer->get_probe_states();
+                json probe_data = json::array();
+                for (const json& entry : args["probes"]) {
+                    if (!entry.is_array() || (entry.size() != 3) || !entry[0].is_number_integer() || !entry[1].is_number_integer() || !entry[2].is_number_integer()) {
+                        return make_error_content("get_indirect_diffuse_stats: 'probes' entries must be [x, y, z] integer grid coordinates");
+                    }
+                    const glm::ivec3 coords{entry[0].get<int>(), entry[1].get<int>(), entry[2].get<int>()};
+                    if (glm::any(glm::lessThan(coords, glm::ivec3{0})) || glm::any(glm::greaterThanEqual(coords, grid.counts))) {
+                        return make_error_content("get_indirect_diffuse_stats: probe coordinates outside the grid");
+                    }
+                    const std::size_t index = static_cast<std::size_t>(coords.x + (grid.counts.x * (coords.y + (grid.counts.y * coords.z))));
+                    const glm::vec4   value = states[index];
+                    probe_data.push_back(json{
+                        {"coords", json::array({coords.x, coords.y, coords.z})},
+                        {"offset", json::array({value.x, value.y, value.z})},
+                        {"state",  value.w}
+                    });
+                }
+                result["ddgi"]["probe_data"] = probe_data;
+            }
+        }
+    }
+    result["ddgi"]["probe_states"] = probe_states;
     return make_json_content(result).dump();
 }
 

@@ -247,6 +247,30 @@ public:
     // The DDGI intensity the results include.
     [[nodiscard]] auto get_reference_query_intensity() const -> float;
 
+    // Probe relocation / classification state, read back on request
+    // (doc/editor/ddgi.md "Probe state"). request_probe_states() asks for a
+    // copy of the probe data texture after the next probe update (no-op
+    // while one is in flight); poll_probe_states() reads a retired copy into
+    // the snapshot and reports whether the snapshot is valid for the current
+    // grid. The snapshot holds one vec4 per probe, indexed like
+    // probe_index = x + counts.x * (y + counts.y * z): xyz the relocation
+    // offset in world units, w the state (1 active, 0 inactive).
+    class Probe_state_summary
+    {
+    public:
+        uint64_t update_count           {0};    // field updates when the probe data was copied
+        int      active                 {0};
+        int      inactive               {0};
+        int      relocated              {0};    // |offset| > c_relocated_offset_m
+        float    max_offset_over_spacing{0.0f}; // largest |offset| / smallest grid spacing
+    };
+    static constexpr float c_relocated_offset_m = 1.0e-3f;
+
+    void               request_probe_states       ();
+    [[nodiscard]] auto poll_probe_states          () -> bool;
+    [[nodiscard]] auto get_probe_state_summary    () const -> const Probe_state_summary&;
+    [[nodiscard]] auto get_probe_states           () const -> std::span<const glm::vec4>;
+
     // Refits the grid, reallocates the probe textures when needed, and
     // records this tick's probe trace into the command buffer. Must be
     // called outside a render pass. No-op unless supported and enabled.
@@ -329,11 +353,11 @@ private:
         erhe::scene_renderer::Program_interface& program_interface
     );
 
-    // Copies the probe data texture into the host-visible mirror the debug
-    // overlay reads. Recorded into the frame's command buffer, so the
-    // overlay sees the previous frame's probes - fine for a debug aid, and
-    // it costs no stall.
-    void copy_probe_data_for_debug(erhe::graphics::Command_buffer& command_buffer);
+    // Copies the probe data texture into a host-visible buffer: the mirror
+    // the debug overlay reads, or the probe state readback. Recorded into the
+    // frame's command buffer, so the overlay sees the previous frame's
+    // probes - fine for a debug aid, and it costs no stall.
+    void copy_probe_data(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Buffer& destination);
 
     // Per-pass GPU timer plus a fixed ring of its recent results.
     class Pass_timing
@@ -439,6 +463,18 @@ private:
     // w state), refreshed while the probe overlay is enabled.
     std::unique_ptr<erhe::graphics::Buffer> m_probe_readback_buffer;
     bool                                    m_probe_readback_valid{false};
+
+    // Probe state readback (request_probe_states()): a separate host-visible
+    // copy, so the overlay's per-frame copies never overwrite one being read.
+    // The snapshot vector is filled on the MCP path only.
+    std::unique_ptr<erhe::graphics::Buffer> m_probe_state_readback_buffer;
+    bool                                    m_probe_state_requested        {false};
+    bool                                    m_probe_state_in_flight        {false};
+    bool                                    m_probe_state_valid            {false};
+    uint64_t                                m_probe_state_frame            {0};
+    uint64_t                                m_probe_state_copy_update_count{0};
+    std::vector<glm::vec4>                  m_probe_states;
+    Probe_state_summary                     m_probe_state_summary;
 
     std::array<Pass_timing, c_ddgi_pass_count> m_pass_timings;
     uint64_t                                   m_update_count       {0};

@@ -1403,6 +1403,19 @@ void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_bu
         }
     );
     m_probe_readback_valid = false;
+    m_probe_state_readback_buffer = std::make_unique<Buffer>(
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = probe_data_byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+            .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+            .debug_label                            = erhe::utility::Debug_label{"DDGI probe state readback"}
+        }
+    );
+    m_probe_state_in_flight = false;
+    m_probe_state_valid     = false;
 
     // Refits happen at runtime (content moved, settings changed), so this is
     // a render-log event, not a startup one.
@@ -1490,11 +1503,11 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     return true;
 }
 
-void Ddgi_renderer::copy_probe_data_for_debug(erhe::graphics::Command_buffer& command_buffer)
+void Ddgi_renderer::copy_probe_data(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Buffer& destination)
 {
     using namespace erhe::graphics;
 
-    if (!m_probe_readback_buffer || !m_probe_data_texture) {
+    if (!m_probe_data_texture) {
         return;
     }
     const int         width         = m_probe_data_texture->get_width();
@@ -1502,7 +1515,8 @@ void Ddgi_renderer::copy_probe_data_for_debug(erhe::graphics::Command_buffer& co
     const std::size_t bytes_per_row = static_cast<std::size_t>(width) * erhe::dataformat::get_format_size_bytes(c_probe_data_format);
     const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
 
-    command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::transfer_src_optimal);
+    // copy_from_texture() moves the image from its tracked layout
+    // (shader_read_only_optimal after the update) to transfer_src and back.
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
@@ -1511,16 +1525,73 @@ void Ddgi_renderer::copy_probe_data_for_debug(erhe::graphics::Command_buffer& co
             0,                             // source_level
             glm::ivec3{0, 0, 0},           // source_origin
             glm::ivec3{width, height, 1},  // source_size
-            m_probe_readback_buffer.get(), // destination_buffer
+            &destination,                  // destination_buffer
             0,                             // destination_offset
             static_cast<std::uintptr_t>(bytes_per_row),
             static_cast<std::uintptr_t>(byte_count)
         );
     }
-    command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::shader_read_only_optimal);
-    // The overlay reads whatever the previous frame left in the mirror; the
-    // copy recorded here lands before the next one runs.
-    m_probe_readback_valid = true;
+}
+
+void Ddgi_renderer::request_probe_states()
+{
+    m_probe_state_requested = true;
+}
+
+auto Ddgi_renderer::poll_probe_states() -> bool
+{
+    if (m_probe_state_in_flight && m_probe_state_readback_buffer && m_graphics_device.is_frame_completed(m_probe_state_frame)) {
+        m_probe_state_in_flight = false;
+        const int         probe_count = m_grid.get_probe_count();
+        const int         tiles_x     = m_grid.counts.x * m_grid.counts.z;
+        const float       min_spacing = std::min(m_grid.spacing.x, std::min(m_grid.spacing.y, m_grid.spacing.z));
+        const std::size_t capacity    = m_probe_state_readback_buffer->get_capacity_byte_count();
+        const std::span<std::byte> mapped = m_probe_state_readback_buffer->map_bytes(0, capacity);
+        m_probe_state_readback_buffer->invalidate(0, capacity);
+        m_probe_states.resize(static_cast<std::size_t>(probe_count));
+        Probe_state_summary summary{};
+        summary.update_count = m_probe_state_copy_update_count;
+        float max_offset = 0.0f;
+        for (int z = 0; z < m_grid.counts.z; ++z) {
+            for (int y = 0; y < m_grid.counts.y; ++y) {
+                for (int x = 0; x < m_grid.counts.x; ++x) {
+                    // Probe data texel layout: tile (x + counts.x * z, y).
+                    const std::size_t texel =
+                        (static_cast<std::size_t>(y) * static_cast<std::size_t>(tiles_x)) +
+                        static_cast<std::size_t>(x + (m_grid.counts.x * z));
+                    glm::vec4 value{0.0f};
+                    std::memcpy(&value, mapped.data() + (texel * sizeof(glm::vec4)), sizeof(glm::vec4));
+                    const std::size_t probe_index = static_cast<std::size_t>(x + (m_grid.counts.x * (y + (m_grid.counts.y * z))));
+                    m_probe_states[probe_index] = value;
+                    const float offset = glm::length(glm::vec3{value});
+                    max_offset = std::max(max_offset, offset);
+                    if (value.w < 0.5f) {
+                        ++summary.inactive;
+                    } else {
+                        ++summary.active;
+                    }
+                    if (offset > c_relocated_offset_m) {
+                        ++summary.relocated;
+                    }
+                }
+            }
+        }
+        m_probe_state_readback_buffer->unmap();
+        summary.max_offset_over_spacing = (min_spacing > 0.0f) ? (max_offset / min_spacing) : 0.0f;
+        m_probe_state_summary = summary;
+        m_probe_state_valid   = true;
+    }
+    return m_probe_state_valid;
+}
+
+auto Ddgi_renderer::get_probe_state_summary() const -> const Probe_state_summary&
+{
+    return m_probe_state_summary;
+}
+
+auto Ddgi_renderer::get_probe_states() const -> std::span<const glm::vec4>
+{
+    return std::span<const glm::vec4>{m_probe_states};
 }
 
 void Ddgi_renderer::render(const Render_context& context)
@@ -1833,8 +1904,18 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::shader_read_only_optimal);
 
-    if (m_config.debug_draw_probes) {
-        copy_probe_data_for_debug(command_buffer);
+    if (m_config.debug_draw_probes && m_probe_readback_buffer) {
+        copy_probe_data(command_buffer, *m_probe_readback_buffer);
+        // The overlay reads whatever the previous frame left in the mirror;
+        // the copy recorded here lands before the next one runs.
+        m_probe_readback_valid = true;
+    }
+    if (m_probe_state_requested && !m_probe_state_in_flight && m_probe_state_readback_buffer) {
+        copy_probe_data(command_buffer, *m_probe_state_readback_buffer);
+        m_probe_state_requested         = false;
+        m_probe_state_in_flight         = true;
+        m_probe_state_frame             = m_graphics_device.get_frame_index();
+        m_probe_state_copy_update_count = m_update_count;
     }
 
     // Advance the round-robin cursor for the next tick.
