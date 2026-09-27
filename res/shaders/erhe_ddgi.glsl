@@ -105,8 +105,16 @@ vec3 ddgi_sample_irradiance(vec3 world_position, vec3 normal, vec3 view_directio
         float weight    = trilinear.x * trilinear.y * trilinear.z;
 
         // Smooth backface weight: probes behind the surface fade out rather
-        // than switching off, which would show as a hard seam.
-        float n_dot_d = dot(normal, probe_direction);
+        // than switching off, which would show as a hard seam. "Behind" is
+        // judged from the surface point itself, not from the biased point:
+        // a probe between the surface and the biased point (a probe
+        // relocated off this surface, or a probe plane closer to the surface
+        // than the bias) is in front of the surface and must keep its full
+        // weight.
+        vec3  surface_to_probe  = probe_position - world_position;
+        float surface_distance  = length(surface_to_probe);
+        vec3  surface_direction = (surface_distance > 1.0e-6) ? (surface_to_probe / surface_distance) : normal;
+        float n_dot_d = dot(normal, surface_direction);
         weight *= (n_dot_d * 0.5 + 0.5) * (n_dot_d * 0.5 + 0.5) + 0.2;
 
         // Chebyshev visibility: how likely is this probe to actually see the
@@ -133,6 +141,9 @@ vec3 ddgi_sample_irradiance(vec3 world_position, vec3 normal, vec3 view_directio
         weight_sum     += weight;
     }
 
+    // Every corner probe is classified inactive (enclosed in geometry): no
+    // field value exists here, and the flat ambient the shader uses without
+    // a volume stands in.
     if (weight_sum <= 0.0) {
         return light_block.ambient_light.rgb;
     }
