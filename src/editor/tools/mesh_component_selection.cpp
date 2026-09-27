@@ -49,6 +49,13 @@ void Mesh_component_entry::clear()
     edges.clear();
 }
 
+void Mesh_component_entry::set_owner(Mesh_component_selection* const owner)
+{
+    vertices.set_owner(owner);
+    facets  .set_owner(owner);
+    edges   .set_owner(owner);
+}
+
 void Mesh_component_entry::add_vertex(const GEO::index_t vertex)
 {
     vertices.insert(vertex);
@@ -98,6 +105,21 @@ Mesh_component_selection::Mesh_component_selection(App_message_bus& app_message_
             on_mesh_geometry_changed(message);
         }
     );
+    // The queued announcement has been delivered: the next write queues a new one.
+    m_selection_changed_subscription = app_message_bus.mesh_component_selection_changed.subscribe(
+        [this](Mesh_component_selection_changed_message&) {
+            m_change_pending = false;
+        }
+    );
+}
+
+void Mesh_component_selection::on_components_changed()
+{
+    if (m_change_pending) {
+        return;
+    }
+    m_change_pending = true;
+    m_app_message_bus.mesh_component_selection_changed.queue_message(Mesh_component_selection_changed_message{});
 }
 
 void Mesh_component_selection::on_mesh_geometry_changed(Mesh_geometry_changed_message&)
@@ -154,6 +176,7 @@ auto Mesh_component_selection::find_or_create_entry(
         return *existing;
     }
     Mesh_component_entry& entry = m_entries.emplace_back();
+    entry.set_owner(this);
     entry.mesh            = mesh;
     entry.primitive_index = primitive_index;
     entry.geometry        = geometry;
@@ -162,7 +185,11 @@ auto Mesh_component_selection::find_or_create_entry(
 
 void Mesh_component_selection::clear_all()
 {
+    const bool had_components = !is_empty();
     m_entries.clear();
+    if (had_components) {
+        on_components_changed();
+    }
 }
 
 #pragma region Grow / Shrink

@@ -15,6 +15,7 @@ void App_message_bus::update()
     close_scene.update();
     skin_registered.update();
     bone_changed.update();
+    mesh_component_selection_changed.update();
 }
 
 }

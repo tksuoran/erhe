@@ -51,6 +51,57 @@ enum class Mesh_component_mode {
 using Mesh_edge_key = std::pair<GEO::index_t, GEO::index_t>;
 [[nodiscard]] auto make_edge_key(GEO::index_t a, GEO::index_t b) -> Mesh_edge_key;
 
+class Mesh_component_selection;
+
+// A set of selected component keys whose every write tells the owning
+// Mesh_component_selection, so a change is announced
+// (Mesh_component_selection_changed_message) by construction, whichever of the
+// many editing sites (tool clicks, region select, grow / shrink, MCP,
+// operations remapping the selection) made it. Reads behave like the
+// std::set it wraps; a set without an owner (a detached copy) announces
+// nothing.
+template <typename Key>
+class Component_set
+{
+public:
+    using Set            = std::set<Key>;
+    using const_iterator = typename Set::const_iterator;
+
+    Component_set() = default;
+    Component_set(const Component_set& other) = default;
+    Component_set(Component_set&& other) noexcept = default;
+    ~Component_set() noexcept = default;
+
+    // Assignment replaces the keys and keeps this set's owner. A move from
+    // another Component_set is the entry vector reorganizing itself (erase_if
+    // in prune(), reallocation) and announces nothing; every other write does.
+    auto operator=(const Component_set& other) -> Component_set&;
+    auto operator=(Component_set&& other) noexcept -> Component_set&;
+    auto operator=(const Set& keys) -> Component_set&;
+    auto operator=(Set&& keys) -> Component_set&;
+
+    void set_owner(Mesh_component_selection* owner) { m_owner = owner; }
+
+    [[nodiscard]] auto begin   () const -> const_iterator { return m_keys.begin(); }
+    [[nodiscard]] auto end     () const -> const_iterator { return m_keys.end(); }
+    [[nodiscard]] auto size    () const -> std::size_t    { return m_keys.size(); }
+    [[nodiscard]] auto empty   () const -> bool           { return m_keys.empty(); }
+    [[nodiscard]] auto contains(const Key& key) const -> bool           { return m_keys.contains(key); }
+    [[nodiscard]] auto find    (const Key& key) const -> const_iterator { return m_keys.find(key); }
+    [[nodiscard]] auto get     () const -> const Set&     { return m_keys; }
+    operator const Set&() const { return m_keys; }
+
+    auto insert(const Key& key) -> bool;
+    auto erase (const Key& key) -> bool;
+    void clear ();
+
+private:
+    void changed();
+
+    Set                       m_keys {};
+    Mesh_component_selection* m_owner{nullptr};
+};
+
 // One mesh+primitive's selected sub-components, addressed by the Geometry the
 // indices index into. The selection is "live" only while the mesh is in the
 // scene and the primitive still carries this exact Geometry object. A geometry
@@ -66,12 +117,13 @@ public:
     std::weak_ptr<erhe::scene::Mesh>        mesh           {};
     std::size_t                             primitive_index{std::numeric_limits<std::size_t>::max()};
     std::weak_ptr<erhe::geometry::Geometry> geometry       {};
-    std::set<GEO::index_t>                  vertices       {};
-    std::set<GEO::index_t>                  facets         {};
-    std::set<Mesh_edge_key>                 edges          {};
+    Component_set<GEO::index_t>             vertices       {};
+    Component_set<GEO::index_t>             facets         {};
+    Component_set<Mesh_edge_key>            edges          {};
 
     [[nodiscard]] auto is_empty() const -> bool;
     void               clear();
+    void               set_owner(Mesh_component_selection* owner);
 
     void add_vertex   (GEO::index_t vertex);
     void toggle_vertex(GEO::index_t vertex);
@@ -119,8 +171,8 @@ public:
     // every live entry. Grow adds the immediate neighbors of the selection's
     // boundary; shrink drops the components that lie on that boundary. No-op in
     // object mode and for non-live entries. Like the other selection mutators
-    // (clear_all / set_after_operation), these are not undoable and publish no
-    // message - tool_render reads the selection each frame.
+    // (clear_all / set_after_operation), these are not undoable; the change is
+    // announced through Component_set (Mesh_component_selection_changed_message).
     void grow();
     void shrink();
 
@@ -152,13 +204,92 @@ public:
     [[nodiscard]] auto get_entries()       ->       std::vector<Mesh_component_entry>&;
     [[nodiscard]] auto get_entries() const -> const std::vector<Mesh_component_entry>&;
 
+    // Called by Component_set on every write, and by the entry list edits
+    // (clear_all, prune). Queues one Mesh_component_selection_changed_message
+    // per message bus update however many writes happen before it.
+    void on_components_changed();
+
 private:
     void on_mesh_geometry_changed(Mesh_geometry_changed_message& message);
 
-    erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message>             m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_component_selection_changed_message> m_selection_changed_subscription;
     App_message_bus&                  m_app_message_bus;
     Mesh_component_mode               m_mode   {Mesh_component_mode::object};
     std::vector<Mesh_component_entry> m_entries{};
+    bool                              m_change_pending{false};
 };
+
+template <typename Key>
+auto Component_set<Key>::operator=(const Component_set& other) -> Component_set&
+{
+    if (this != &other) {
+        m_keys = other.m_keys;
+        changed();
+    }
+    return *this;
+}
+
+template <typename Key>
+auto Component_set<Key>::operator=(Component_set&& other) noexcept -> Component_set&
+{
+    if (this != &other) {
+        m_keys = std::move(other.m_keys);
+    }
+    return *this;
+}
+
+template <typename Key>
+auto Component_set<Key>::operator=(const Set& keys) -> Component_set&
+{
+    m_keys = keys;
+    changed();
+    return *this;
+}
+
+template <typename Key>
+auto Component_set<Key>::operator=(Set&& keys) -> Component_set&
+{
+    m_keys = std::move(keys);
+    changed();
+    return *this;
+}
+
+template <typename Key>
+auto Component_set<Key>::insert(const Key& key) -> bool
+{
+    const bool inserted = m_keys.insert(key).second;
+    if (inserted) {
+        changed();
+    }
+    return inserted;
+}
+
+template <typename Key>
+auto Component_set<Key>::erase(const Key& key) -> bool
+{
+    const bool erased = (m_keys.erase(key) != 0);
+    if (erased) {
+        changed();
+    }
+    return erased;
+}
+
+template <typename Key>
+void Component_set<Key>::clear()
+{
+    if (!m_keys.empty()) {
+        m_keys.clear();
+        changed();
+    }
+}
+
+template <typename Key>
+void Component_set<Key>::changed()
+{
+    if (m_owner != nullptr) {
+        m_owner->on_components_changed();
+    }
+}
 
 } // namespace editor

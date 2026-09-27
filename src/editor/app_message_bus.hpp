@@ -35,6 +35,7 @@ public:
     erhe::message_bus::Message_bus<Skin_registered_message,       queue> skin_registered;
     erhe::message_bus::Message_bus<Bone_changed_message,          queue> bone_changed;
     erhe::message_bus::Message_bus<Mesh_component_mode_changed_message, sync> mesh_component_mode_changed;
+    erhe::message_bus::Message_bus<Mesh_component_selection_changed_message, queue> mesh_component_selection_changed;
     erhe::message_bus::Message_bus<Render_scene_view_message,     sync>  render_scene_view;
     erhe::message_bus::Message_bus<Animation_update_message,      sync>  animation_update;
     // Sent only from Asset_manager::flush_pending_removals(), which Editor::tick

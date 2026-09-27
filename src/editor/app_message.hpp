@@ -190,6 +190,14 @@ struct Mesh_component_mode_changed_message
 {
 };
 
+// Queued by Mesh_component_selection when the selected components change (any
+// Component_set write, clear_all, prune): at most one per message bus update.
+// Carries no payload; subscribers read the selection back via
+// App_context::mesh_component_selection.
+struct Mesh_component_selection_changed_message
+{
+};
+
 struct Render_scene_view_message
 {
     Scene_view* scene_view{nullptr};

@@ -19,8 +19,8 @@ Implemented scope:
 - A Blender-style mode selector: **Object / Vertex / Edge / Face**. In a
   component mode a viewport left-click selects components; Object mode leaves
   object selection unchanged.
-- A single active mesh at a time. Switching to a different mesh clears the
-  component selection.
+- Selections on several meshes at once, one entry per mesh primitive
+  (section 3).
 - Faces drawn as filled translucent triangles, edges as lines, vertices as
   camera-facing quads, plus a highlight of the component under the pointer.
 - Desktop viewport only (see section 6).
@@ -59,29 +59,40 @@ standalone `App_context` part (no constructor dependencies). The object
 `Selection` gate and future editing code reach it through `App_context`,
 mirroring how `Selection` is separate from `Selection_tool`.
 
-It stores:
+It stores the current `Mesh_component_mode` and a list of
+`Mesh_component_entry`, one per (mesh, primitive index, `Geometry`) that has
+selected components. An entry holds the mesh and the `Geometry` as
+`std::weak_ptr`, and the selected vertices, facets and edges; an edge is keyed
+by its canonical (min, max) vertex pair (`make_edge_key()`), so an edge reached
+from either adjacent facet maps to one key.
 
-- the current `Mesh_component_mode`;
-- the active mesh (`std::weak_ptr<Mesh>`) and primitive index;
-- the active `Geometry` (`std::weak_ptr`) the indices were picked against;
-- `std::set<GEO::index_t>` of selected vertices and facets;
-- `std::set<std::pair<GEO::index_t, GEO::index_t>>` of selected edges, keyed by
-  the canonical (min, max) vertex pair so an edge reached from either adjacent
-  facet maps to one entry.
+Liveness instead of invalidation:
 
-Invalidation:
+- `is_live(entry)` holds while the mesh is in a scene (its node has an item
+  host), the primitive index exists, the primitive has no separate collision
+  shape, and the primitive's shape still carries exactly the entry's
+  `Geometry`. Only live entries are drawn and edited.
+- Geometry edits (Catmull-Clark, Conway, ...) allocate a new `Geometry` and
+  swap it in with `Mesh::set_primitives()`; the old entry becomes dormant and
+  is kept, so undo, which restores the old `Geometry`, makes it live again.
+  `set_after_operation()` installs the operation's remapped selection as an
+  entry on the result `Geometry`.
+- `prune()` drops the entries whose mesh or `Geometry` is gone or that hold
+  nothing.
 
-- `set_active_mesh(mesh, primitive_index)` clears the sets when the target
-  mesh / primitive changes (single-active-mesh scope).
-- `set_active_geometry(geometry)` clears the sets when the `Geometry` object
-  changes. Geometry edits (Catmull-Clark, Conway, ...) and undo allocate a
-  fresh `Geometry` and swap it in via `Mesh::set_primitives()`, so the stored
-  facet / vertex / edge indices no longer address the live mesh. The tool
-  calls this each frame with the active mesh's current geometry (and on each
-  pick), so a stale selection is dropped before it can index the new -- and
-  possibly smaller -- mesh. Because edits always produce a new `Geometry`
-  object rather than mutating one in place, this identity check fully covers
-  the staleness; no per-index bounds clamping is needed.
+Change announcement: the three sets are `Component_set<Key>`, a `std::set`
+wrapper whose every write (insert, erase, clear, assignment of new keys)
+calls `Mesh_component_selection::on_components_changed()`, and `clear_all()` /
+`prune()` do the same for the entry list. That queues one
+`Mesh_component_selection_changed_message` per message bus update, however
+many writes happen before it, so a region select of thousands of facets
+announces once. Because the notification lives in the set type, every editing
+site (tool clicks, region and brush select, grow / shrink, MCP, operations
+remapping the selection, the Geometry Spreadsheet) announces its change
+without code of its own. A move between two `Component_set`s is the entry
+vector reorganizing itself and announces nothing. Reads keep the `std::set`
+interface (`begin` / `end` / `size` / `contains` / `find`, and a conversion
+to `const std::set<Key>&`).
 
 ## 4. Picking
 
