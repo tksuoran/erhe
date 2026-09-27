@@ -23,9 +23,13 @@ class Box3d_rigid_body;
 // | save_state / restore_state           | not implemented, warns    | Box3D exposes no world snapshot API
 // | static friction                      | ignored, dynamic used     | b3SurfaceMaterial carries a single friction
 // | independent 6-DOF joints             | approximated              | Box3D has no generic six-DOF joint
-// | universal joints (2 rotational DOF)  | approximated by spherical | no equivalent; the third axis stays free
-// | multi-axis translation limits        | unsupported, warns        | no equivalent
+// | universal joints (2 rotational DOF)  | spherical, twist locked   | no equivalent; a locked swing-twist twist admits every swing, a Hooke joint does not
+// | multi-axis translation limits        | distance joint, warns     | with rotation free: the sphere inscribed in the ranges; otherwise a prismatic joint along the widest axis
+// | independent swing limits             | one cone, warns           | the cone spans both swing axes with the widest reach
 // | rotation limits beyond +/-0.99 pi    | clamped                   | Box3D range limit
+// | soft limits                          | weld only, warns          | the other joints' limits are hard; the base constraint softness would soften the anchor too
+// | position drive max force             | dropped, warns            | the revolute / prismatic / spherical springs are unbounded
+// | velocity drive gain                  | per-step motor force cap  | Box3D motors are velocity constraints; prepare_step() sets the cap to damping * abs(target - v)
 // | nested offset-center-of-mass         | ignored, errors           | Box3D carries the center of mass on the body
 // | rotated mesh inside a compound       | rotation ignored, warns   | b3CreateMeshShape takes a scale but no transform
 // | mesh on a dynamic body               | forced static, errors     | Box3D has no b3ComputeMeshMass

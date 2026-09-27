@@ -24,23 +24,38 @@ namespace {
     return !lhs.limited || ((lhs.min == rhs.min) && (lhs.max == rhs.max));
 }
 
-// A translation axis as JPH::SixDOFConstraint enforces it: an inverted or
-// empty range (min >= max) is a fixed axis, fixed at zero.
+// A translation axis as JPH::SixDOFConstraint enforces it, after the fold of
+// fixed values into frame A: an inverted range (min > max) is a fixed axis,
+// fixed at zero.
 [[nodiscard]] auto enforced_translation(const Constraint_axis_limit& limit) -> Constraint_axis_limit
 {
     if (!limit.limited) {
         return Constraint_axis_limit{};
     }
-    if (limit.min >= limit.max) {
+    if (limit.min > limit.max) {
         return Constraint_axis_limit{.limited = true, .min = 0.0f, .max = 0.0f};
     }
     return Constraint_axis_limit{.limited = true, .min = limit.min, .max = limit.max};
 }
 
+// A drive spring as Jolt takes it. Jolt's mass normalized mode is the
+// KHR_physics_rigid_bodies acceleration mode.
+[[nodiscard]] auto to_jolt_spring(const Constraint_axis_drive& drive) -> JPH::SpringSettings
+{
+    return JPH::SpringSettings{
+        (drive.mode == Drive_force_mode::acceleration)
+            ? JPH::ESpringMode::MassNormalizedStiffnessAndDamping
+            : JPH::ESpringMode::StiffnessAndDamping,
+        drive.stiffness,
+        drive.damping
+    };
+}
+
 // A rotation axis as JPH::SixDOFConstraint and SwingTwistConstraintPart
-// enforce it: the range is clamped to [-pi, pi], an inverted range becomes
-// [0, 0], a range inside +-0.5 degrees is locked at zero and a range wider
-// than +-179.5 degrees is free.
+// enforce it: the range is clamped to [-pi, pi], an inverted or empty range
+// (a fixed axis, at zero: the fold moved any authored value into frame A)
+// becomes [0, 0], a range inside +-0.5 degrees is locked at zero and a range
+// wider than +-179.5 degrees is free.
 [[nodiscard]] auto enforced_rotation(const Constraint_axis_limit& limit) -> Constraint_axis_limit
 {
     if (!limit.limited) {
@@ -51,7 +66,7 @@ namespace {
     constexpr float free_angle    = 179.5f * pi / 180.0f;
     float min = std::clamp(limit.min, -pi, pi);
     float max = std::clamp(limit.max, -pi, pi);
-    if (min > max) {
+    if (min >= max) {
         min = 0.0f;
         max = 0.0f;
     }
@@ -66,8 +81,14 @@ namespace {
 
 } // anonymous namespace
 
-auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape
+auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& authored_limits) -> Joint_limit_shape
 {
+    // What the constraint does: fold the fixed values into frame A, then
+    // apply Jolt's own clamps to the folded limits.
+    Transform                            folded_frame{};
+    std::array<Constraint_axis_limit, 6> limits = authored_limits;
+    const Fixed_axis_fold                fold   = fold_fixed_axis_values(folded_frame, limits);
+
     Joint_limit_shape shape{};
     shape.twist_axis  = 0;
     shape.swing_model = Swing_limit_model::pyramid;
@@ -78,13 +99,19 @@ auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limit
     shape.swing[0] = enforced_rotation(limits[4]);
     shape.swing[1] = enforced_rotation(limits[5]);
     shape.is_exact =
+        fold.exact &&
         same_limit(shape.translation[0], limits[0]) &&
         same_limit(shape.translation[1], limits[1]) &&
         same_limit(shape.translation[2], limits[2]) &&
         same_limit(shape.twist,          limits[3]) &&
         same_limit(shape.swing[0],       limits[4]) &&
         same_limit(shape.swing[1],       limits[5]);
+    restore_folded_fixed_values(shape, authored_limits, fold);
     return shape;
+}
+
+void Jolt_constraint::prepare_step(const float)
+{
 }
 
 auto IConstraint::create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*
@@ -198,10 +225,96 @@ namespace {
     return static_cast<JPH::SixDOFConstraintSettings::EAxis>(axis_index);
 }
 
+[[nodiscard]] auto inverse_mass(const JPH::Body* body) -> float
+{
+    return body->IsDynamic() ? body->GetMotionProperties()->GetInverseMass() : 0.0f;
+}
+
+// The effective mass of one degree of freedom of the joint, the mass a drive
+// on that axis acts on: along a translation axis the reduced mass of the
+// bodies, about a rotation axis 1 / (a . (I_A^-1 + I_B^-1) . a) with the axis
+// in world space and the world inverse inertia tensors (zero for a body that
+// is not dynamic). Zero when neither body can move.
+[[nodiscard]] auto effective_mass(const JPH::Body* body_a, const JPH::Body* body_b, const JPH::Vec3 world_axis, const bool is_translation) -> float
+{
+    if (is_translation) {
+        const float k = inverse_mass(body_a) + inverse_mass(body_b);
+        return (k > 0.0f) ? (1.0f / k) : 0.0f;
+    }
+    JPH::Mat44 inverse_inertia = JPH::Mat44::sZero();
+    if (body_a->IsDynamic()) {
+        inverse_inertia = inverse_inertia + body_a->GetInverseInertia();
+    }
+    if (body_b->IsDynamic()) {
+        inverse_inertia = inverse_inertia + body_b->GetInverseInertia();
+    }
+    const float k = world_axis.Dot(inverse_inertia.Multiply3x3(world_axis));
+    return (k > 0.0f) ? (1.0f / k) : 0.0f;
+}
+
 } // anonymous namespace
 
-Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settings& settings)
+void Jolt_six_dof_constraint::prepare_step(const float)
 {
+    bool any_active = false;
+    for (const Velocity_drive& drive : m_velocity_drives) {
+        any_active = any_active || drive.active;
+    }
+    if (!any_active || (m_constraint == nullptr)) {
+        return;
+    }
+
+    // The linear motor targets are in body 1's constraint space and the
+    // angular ones in body 2's (JPH::SixDOFConstraint::SetTargetVelocityCS /
+    // SetTargetAngularVelocityCS), so the current relative velocities are
+    // measured the same way: the relative velocity of the anchor point on
+    // body 2, and the relative angular velocity.
+    const JPH::RMat44 com_a          = m_body_a->GetCenterOfMassTransform();
+    const JPH::RMat44 com_b          = m_body_b->GetCenterOfMassTransform();
+    const JPH::Mat44  world_from_cs1 = JPH::Mat44::sRotation(m_body_a->GetRotation()) * m_constraint->GetConstraintToBody1Matrix();
+    const JPH::Mat44  world_from_cs2 = JPH::Mat44::sRotation(m_body_b->GetRotation()) * m_constraint->GetConstraintToBody2Matrix();
+    const JPH::RVec3  anchor         = com_b * m_constraint->GetConstraintToBody2Matrix().GetTranslation();
+    const JPH::Vec3   r_a            = JPH::Vec3{anchor - com_a.GetTranslation()};
+    const JPH::Vec3   r_b            = JPH::Vec3{anchor - com_b.GetTranslation()};
+    const JPH::Vec3   v_a            = m_body_a->GetLinearVelocity() + m_body_a->GetAngularVelocity().Cross(r_a);
+    const JPH::Vec3   v_b            = m_body_b->GetLinearVelocity() + m_body_b->GetAngularVelocity().Cross(r_b);
+    const JPH::Vec3   v_cs           = world_from_cs1.Multiply3x3Transposed(v_b - v_a);
+    const JPH::Vec3   w_cs           = world_from_cs2.Multiply3x3Transposed(m_body_b->GetAngularVelocity() - m_body_a->GetAngularVelocity());
+
+    for (std::size_t axis_index = 0; axis_index < 6; ++axis_index) {
+        const Velocity_drive& drive = m_velocity_drives[axis_index];
+        if (!drive.active) {
+            continue;
+        }
+        const bool  is_translation = axis_index < 3;
+        const float velocity       = is_translation ? v_cs[static_cast<JPH::uint>(axis_index)] : w_cs[static_cast<JPH::uint>(axis_index - 3)];
+        const float error          = std::abs(drive.target - velocity);
+        const float cap            = std::isfinite(drive.gain) ? std::min(drive.max_force, drive.gain * error) : drive.max_force;
+        if (!std::isfinite(cap)) {
+            continue; // unbounded: the motor keeps its default limits
+        }
+        JPH::MotorSettings& motor_settings = m_constraint->GetMotorSettings(to_jolt_axis(axis_index));
+        if (is_translation) {
+            motor_settings.SetForceLimits(-cap, cap);
+        } else {
+            motor_settings.SetTorqueLimits(-cap, cap);
+        }
+    }
+}
+
+Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settings& authored_settings)
+{
+    // Jolt fixes an axis at zero only: a fixed axis authored at another value
+    // is folded into frame A first (joint_limits.hpp).
+    Six_dof_constraint_settings settings = authored_settings;
+    const Fixed_axis_fold fold = fold_fixed_axis_values(settings.frame_in_a, settings.limits);
+    if (!fold.exact) {
+        log_physics->warn(
+            "Six-dof constraint: a fixed rotation at a non-zero angle cannot be folded into the joint frame "
+            "while a translation axis is not fixed; it is fixed at 0"
+        );
+    }
+
     // Frame space convention:
     //
     // erhe::physics body transforms (IRigid_body get/set_world_transform) are node
@@ -239,6 +352,8 @@ Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settin
     // with zero center of mass.
     const JPH::Vec3 com_offset_a = body_a->GetShape()->GetCenterOfMass();
     const JPH::Vec3 com_offset_b = body_b->GetShape()->GetCenterOfMass();
+    m_body_a = body_a;
+    m_body_b = body_b;
 
     JPH::SixDOFConstraintSettings jolt_settings{};
     jolt_settings.mSpace     = JPH::EConstraintSpace::LocalToBodyCOM;
@@ -298,11 +413,7 @@ Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settin
         JPH::MotorSettings& motor_settings = jolt_settings.mMotorSettings[axis_index];
         // The spring is used only by position motors; setting it is harmless for
         // velocity motors.
-        motor_settings.mSpringSettings = JPH::SpringSettings{
-            JPH::ESpringMode::StiffnessAndDamping,
-            drive.stiffness,
-            drive.damping
-        };
+        motor_settings.mSpringSettings = to_jolt_spring(drive);
         if (std::isfinite(drive.max_force)) {
             if (is_translation) {
                 motor_settings.SetForceLimits(-drive.max_force, drive.max_force);
@@ -339,6 +450,12 @@ Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settin
                 target_angles.SetComponent(component, drive.position_target);
                 has_angular_position_target = true;
             }
+            if (drive.velocity_target != 0.0f) {
+                log_physics->warn(
+                    "Six-dof constraint axis {}: position drive velocity target {} dropped; a position motor damps toward rest",
+                    axis_index, drive.velocity_target
+                );
+            }
         } else {
             m_constraint->SetMotorState(jolt_axis, JPH::EMotorState::Velocity);
             if (is_translation) {
@@ -346,6 +463,16 @@ Jolt_six_dof_constraint::Jolt_six_dof_constraint(const Six_dof_constraint_settin
             } else {
                 target_angular_velocity.SetComponent(component, drive.velocity_target);
             }
+            // The motor's force bound follows the velocity error from now on
+            // (prepare_step), so the drive's damping is its gain.
+            const JPH::Vec3 world_axis = JPH::Mat44::sRotation(body_a->GetRotation()).Multiply3x3(
+                to_jolt(glm::normalize(settings.frame_in_a.basis[static_cast<int>(component)]))
+            );
+            Velocity_drive& velocity_drive = m_velocity_drives[axis_index];
+            velocity_drive.active    = true;
+            velocity_drive.gain      = velocity_drive_gain(drive, effective_mass(body_a, body_b, world_axis, is_translation));
+            velocity_drive.max_force = drive.max_force;
+            velocity_drive.target    = drive.velocity_target;
         }
     }
     m_constraint->SetTargetVelocityCS(target_velocity);

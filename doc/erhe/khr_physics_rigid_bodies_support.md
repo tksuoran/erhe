@@ -167,9 +167,16 @@ physics fields of `get_node_details`.
   be re-imported; use `.glb` for a round-trip and `.gltf` for JSON inspection.
 - Friction is dynamic friction: there is no velocity-threshold selection
   between static and dynamic friction.
-- Acceleration-mode drives are approximated as force mode, warned once.
 - Multi-axis joint limits are applied per axis, a box approximation of radial
-  limits, warned.
+  limits, warned. The Box3D backend reads a per-axis range with free rotation
+  back as a sphere (its distance joint), so a 3D linear limit simulates
+  exactly there.
+- A fixed axis authored at a non-zero value (the `RigidBodies_Joint_08` hinge
+  offset) is folded into the first attachment frame, on both backends.
+- A velocity drive's `damping` is honored as its gain on both backends: the
+  motor's force bound is re-derived from the velocity error every step, so
+  the `WaterWheel` brake (`velocityTarget` 0, `damping` 0.15) damps the wheel
+  rather than locking it.
 - Angular soft limits fall back to a hard limit with a warning, because Jolt
   `SixDOF` springs are translation-only.
 - A world interns at most 64 collision system strings (uint64 bitsets).

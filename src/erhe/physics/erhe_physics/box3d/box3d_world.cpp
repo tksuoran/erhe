@@ -1,4 +1,5 @@
 #include "erhe_physics/box3d/box3d_world.hpp"
+#include "erhe_physics/box3d/box3d_constraint.hpp"
 #include "erhe_physics/box3d/box3d_material_registry.hpp"
 #include "erhe_physics/box3d/box3d_overlap_query.hpp"
 #include "erhe_physics/box3d/box3d_rigid_body.hpp"
@@ -106,6 +107,13 @@ auto Box3d_world::create_rigid_body_shared(const IRigid_body_create_info& create
 
 void Box3d_world::update_fixed_step(const double dt)
 {
+    // Every constraint of a Box3D build is a Box3d_constraint. A six-DOF
+    // constraint with a velocity drive re-derives its motor force limit from
+    // the current velocity error here (Box3d_constraint::prepare_step).
+    for (IConstraint* constraint : m_constraints) {
+        static_cast<Box3d_constraint*>(constraint)->prepare_step(static_cast<float>(dt));
+    }
+
     b3World_Step(m_world, static_cast<float>(dt), world_sub_step_count);
 
     // Box3D buffers its events in the world until the next step, so they are

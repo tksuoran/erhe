@@ -34,13 +34,35 @@ TEST(Enforced_joint_limits_jolt, hinge_about_y_is_pyramid_twist_x)
 
 TEST(Enforced_joint_limits_jolt, fixed_translation_is_fixed_at_zero)
 {
+    // Folded into frame A (fold_fixed_axis_values), so the authored value
+    // holds.
     std::array<Constraint_axis_limit, 6> limits{};
     limits[1] = ranged_axis(0.25f, 0.25f);
     const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
     EXPECT_TRUE(shape.translation[1].limited);
-    EXPECT_FLOAT_EQ(0.0f, shape.translation[1].min);
-    EXPECT_FLOAT_EQ(0.0f, shape.translation[1].max);
-    EXPECT_FALSE(shape.is_exact);
+    EXPECT_FLOAT_EQ(0.25f, shape.translation[1].min);
+    EXPECT_FLOAT_EQ(0.25f, shape.translation[1].max);
+    EXPECT_TRUE(shape.is_exact);
+}
+
+TEST(Enforced_joint_limits_jolt, fixed_rotation_folds_only_with_fixed_translation)
+{
+    std::array<Constraint_axis_limit, 6> limits{};
+    for (std::size_t axis = 0; axis < 6; ++axis) {
+        limits[axis] = ranged_axis(0.0f, 0.0f);
+    }
+    limits[4] = ranged_axis(0.3f, 0.3f);
+    {
+        const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
+        EXPECT_FLOAT_EQ(0.3f, shape.swing[0].min);
+        EXPECT_TRUE(shape.is_exact);
+    }
+    limits[0] = ranged_axis(-1.0f, 1.0f);
+    {
+        const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
+        EXPECT_FLOAT_EQ(0.0f, shape.swing[0].min);
+        EXPECT_FALSE(shape.is_exact);
+    }
 }
 
 TEST(Enforced_joint_limits_jolt, rotation_clamped_locked_and_freed)

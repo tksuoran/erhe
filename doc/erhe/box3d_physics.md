@@ -144,9 +144,33 @@ bite.
   and kills the process silently: no exception, no minidump, the log just
   stops. Apply common fields ONTO the already-initialized base.
 - **Frame conventions differ per joint type**: revolute rotates about frame Z,
-  prismatic slides along frame X. The joint frames must be rotated to carry the
-  selected erhe axis onto the axis Box3D expects. This is the easiest thing
-  here to get silently wrong.
+  prismatic slides along frame X, the spherical joint twists about frame B's Z
+  with its cone about frame A's Z. The joint frames must be rotated to carry
+  the selected erhe axis onto the axis Box3D expects. This is the easiest
+  thing here to get silently wrong.
+- **Box3D fixes an axis at zero only.** A fixed axis authored at another
+  value is folded into frame A before classification
+  (`fold_fixed_axis_values`, `joint_limits.hpp`), which is exact for a
+  translation and for a rotation while every translation axis is fixed.
+- **A slack distance joint needs the spring enabled at zero hertz.** With
+  `enableSpring == false` the distance joint is rigid at `length` and ignores
+  its limits (`distance_joint.c`); with the spring on and `hertz == 0` the
+  spring applies nothing and `minLength` / `maxLength` act alone. That is
+  how a per-axis translation range with free rotation is simulated.
+- **Box3D's springs are frequency and damping ratio**, which is the
+  KHR_physics_rigid_bodies acceleration mode: `hertz = sqrt(k) / (2 pi)`,
+  `ratio = c / (2 sqrt(k))`, no mass involved. A force mode stiffness needs
+  the effective mass of the axis: the reduced mass along a translation axis,
+  `1 / (a . (I_A^-1 + I_B^-1) . a)` about a rotation axis
+  (`b3Body_GetWorldInverseRotationalInertia`, zero for a static body).
+- **Box3D motors are velocity constraints clamped to a force**, while a
+  KHR velocity drive is `damping * (target - v)`: with the target at zero and
+  a large cap the motor locks the joint, which is what the `WaterWheel`
+  sample's light brake became. `Box3d_constraint::prepare_step()`, called by
+  the world before every `b3World_Step`, sets the cap to `damping * |target - v|`
+  (times the effective mass in acceleration mode). The spherical joint's
+  `motorVelocity` is a world space relative angular velocity, re-expressed
+  there from body A space each step.
 - Point-to-point softness comes from `b3JointDef::constraintHertz` /
   `constraintDampingRatio`, NOT from `b3SphericalJointDef`'s spring, which
   aligns the two frames' rotations rather than their positions.

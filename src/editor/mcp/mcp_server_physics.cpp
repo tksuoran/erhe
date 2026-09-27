@@ -881,7 +881,9 @@ namespace {
     return json{
         {"exact", shape.is_exact},
         {"limits", {
+            {"translation_model", (shape.translation_model == erhe::physics::Translation_limit_model::box) ? "box" : "sphere"},
             {"translation", json::array({limit_to_json(shape.translation[0]), limit_to_json(shape.translation[1]), limit_to_json(shape.translation[2])})},
+            {"distance",    limit_to_json(shape.distance)},
             {"twist_axis",  shape.twist_axis},
             {"twist",       limit_to_json(shape.twist)},
             {"swing_model", (shape.swing_model == erhe::physics::Swing_limit_model::pyramid) ? "pyramid" : "cone"},
@@ -890,6 +892,7 @@ namespace {
         }},
         {"coordinates", {
             {"translation", vec3_to_json(coordinates.translation)},
+            {"distance",    coordinates.distance},
             {"twist",       coordinates.twist},
             {"swing",       json::array({coordinates.swing[0], coordinates.swing[1]})},
             {"cone",        coordinates.cone}

@@ -80,4 +80,62 @@ TEST(Enforced_joint_limits_box3d, free_ball_joint_is_exact)
     EXPECT_TRUE(shape.is_exact);
 }
 
+TEST(Enforced_joint_limits_box3d, universal_joint_locks_the_twist_about_the_fixed_axis)
+{
+    const std::array<Constraint_axis_limit, 6> limits{
+        fixed_axis(), fixed_axis(), fixed_axis(),
+        fixed_axis(), Constraint_axis_limit{}, Constraint_axis_limit{}
+    };
+    const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
+    EXPECT_EQ(0, shape.twist_axis);
+    EXPECT_EQ(Swing_limit_model::cone, shape.swing_model);
+    EXPECT_TRUE(shape.twist.limited);
+    EXPECT_FLOAT_EQ(0.0f, shape.twist.min);
+    EXPECT_FLOAT_EQ(0.0f, shape.twist.max);
+    EXPECT_FALSE(shape.cone.limited);
+    EXPECT_FALSE(shape.is_exact);
+}
+
+TEST(Enforced_joint_limits_box3d, fixed_translation_holds_its_authored_value)
+{
+    // Folded into frame A, so the hinge keeps the 1 m offset it was authored
+    // with.
+    const std::array<Constraint_axis_limit, 6> limits{
+        ranged_axis(1.0f, 1.0f), fixed_axis(), fixed_axis(),
+        Constraint_axis_limit{}, fixed_axis(), fixed_axis()
+    };
+    const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
+    EXPECT_EQ(0, shape.twist_axis);
+    EXPECT_FALSE(shape.twist.limited);
+    EXPECT_TRUE(shape.translation[0].limited);
+    EXPECT_FLOAT_EQ(1.0f, shape.translation[0].min);
+    EXPECT_FLOAT_EQ(1.0f, shape.translation[0].max);
+    EXPECT_TRUE(shape.is_exact);
+}
+
+TEST(Enforced_joint_limits_box3d, radial_translation_range_is_a_sphere)
+{
+    const std::array<Constraint_axis_limit, 6> limits{
+        ranged_axis(0.0f, 1.0f), ranged_axis(0.0f, 1.0f), ranged_axis(0.0f, 1.0f),
+        Constraint_axis_limit{}, Constraint_axis_limit{}, Constraint_axis_limit{}
+    };
+    const Joint_limit_shape shape = erhe::physics::get_enforced_joint_limits(limits);
+    EXPECT_EQ(erhe::physics::Translation_limit_model::sphere, shape.translation_model);
+    EXPECT_TRUE(shape.distance.limited);
+    EXPECT_FLOAT_EQ(0.0f, shape.distance.min);
+    EXPECT_FLOAT_EQ(1.0f, shape.distance.max);
+    EXPECT_FLOAT_EQ(-1.0f, shape.translation[2].min); // the bounding box
+    EXPECT_FALSE(shape.twist.limited);
+    EXPECT_FALSE(shape.cone.limited);
+    EXPECT_TRUE(shape.is_exact);
+
+    // Two meters straight along X lies outside the sphere on every axis entry.
+    erhe::physics::Joint_coordinates coordinates{};
+    coordinates.translation = glm::vec3{2.0f, 0.0f, 0.0f};
+    coordinates.distance    = 2.0f;
+    const erhe::physics::Joint_range_check check = erhe::physics::check_joint_range(shape, coordinates, 0.001f, 0.001f);
+    EXPECT_FALSE(check.translation_ok[1]);
+    EXPECT_FALSE(check.all_ok());
+}
+
 } // anonymous namespace

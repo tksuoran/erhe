@@ -223,7 +223,6 @@ void Physics_joint_settings::on_property_changed(const erhe::property::Property_
 
 void Physics_joint_settings::refresh_mirrors()
 {
-    bool acceleration_drive = false;
     for (std::size_t axis = 0; axis < c_joint_axis_count; ++axis) {
         // An unwritten side of the limit is the unbounded one: Jolt treats a
         // translation limit of lowest() .. max() as a free axis and clamps a
@@ -245,13 +244,11 @@ void Physics_joint_settings::refresh_mirrors()
         limit.damping   = get_value(limit_damping_property[axis]);
 
         const Joint_axis_drive drive_mode = get_value(drive_property[axis]);
-        if (drive_mode == Joint_axis_drive::acceleration) {
-            acceleration_drive = true;
-        }
         const float drive_stiffness = get_value(drive_stiffness_property[axis]);
         const float drive_max_force = get_value(drive_max_force_property[axis]);
         Constraint_axis_drive& drive = m_drives[axis];
         drive.enabled             = (drive_mode != Joint_axis_drive::off);
+        drive.mode                = (drive_mode == Joint_axis_drive::acceleration) ? Drive_force_mode::acceleration : Drive_force_mode::force;
         drive.use_position_target = (drive_stiffness > 0.0f);
         drive.position_target     = get_value(drive_position_target_property[axis]);
         drive.velocity_target     = get_value(drive_velocity_target_property[axis]);
@@ -260,13 +257,6 @@ void Physics_joint_settings::refresh_mirrors()
         // Zero is the unlimited drive force: a drive that applies no force is
         // Joint_axis_drive::off.
         drive.max_force = (drive_max_force > 0.0f) ? drive_max_force : std::numeric_limits<float>::infinity();
-    }
-    if (acceleration_drive && !m_warned_acceleration_drive) {
-        m_warned_acceleration_drive = true;
-        log_physics->warn(
-            "Joint settings '{}': acceleration mode drives are not supported; treating as force mode",
-            get_name()
-        );
     }
 }
 

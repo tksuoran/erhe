@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace erhe::physics {
 
@@ -20,6 +21,10 @@ Box3d_constraint::~Box3d_constraint() noexcept
         b3DestroyJoint(m_joint, true);
         m_is_valid = false;
     }
+}
+
+void Box3d_constraint::prepare_step(const float)
+{
 }
 
 namespace {
@@ -117,6 +122,25 @@ public:
     return result;
 }
 
+// The effective mass of one degree of freedom of the joint, the mass a spring
+// or a drive on that axis acts on: along a translation axis the reduced mass
+// of the bodies, about a rotation axis 1 / (a . (I_A^-1 + I_B^-1) . a) with
+// the axis in world space and the world inverse inertia tensors (zero for a
+// static body). Zero when neither body can move.
+[[nodiscard]] auto effective_mass(const Joint_bodies& bodies, const Transform& frame_in_a, const std::size_t axis_index) -> float
+{
+    if (axis_index < 3) {
+        return reduced_mass(bodies.mass_a, bodies.mass_b);
+    }
+    const glm::vec3 local_axis = glm::normalize(frame_in_a.basis[static_cast<int>(axis_index - 3)]);
+    const glm::vec3 world_axis = from_box3d(b3Body_GetWorldVector(bodies.body_a, to_box3d(local_axis)));
+    const glm::mat3 inverse_inertia =
+        from_box3d(b3Body_GetWorldInverseRotationalInertia(bodies.body_a)) +
+        from_box3d(b3Body_GetWorldInverseRotationalInertia(bodies.body_b));
+    const float k = glm::dot(world_axis, inverse_inertia * world_axis);
+    return (k > 0.0f) ? (1.0f / k) : 0.0f;
+}
+
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -186,11 +210,22 @@ public:
 class Box3d_six_dof_constraint : public Box3d_constraint
 {
 public:
-    explicit Box3d_six_dof_constraint(const Six_dof_constraint_settings& settings)
+    explicit Box3d_six_dof_constraint(const Six_dof_constraint_settings& authored_settings)
     {
-        const Joint_bodies bodies = resolve_bodies(settings.rigid_body_a, settings.rigid_body_b, "six-dof constraint");
+        const Joint_bodies bodies = resolve_bodies(authored_settings.rigid_body_a, authored_settings.rigid_body_b, "six-dof constraint");
         if (!bodies.valid) {
             return;
+        }
+
+        // Box3D fixes an axis at zero only: a fixed axis authored at another
+        // value is folded into frame A first (joint_limits.hpp).
+        Six_dof_constraint_settings settings = authored_settings;
+        const Fixed_axis_fold fold = fold_fixed_axis_values(settings.frame_in_a, settings.limits);
+        if (!fold.exact) {
+            log_physics->warn(
+                "box3d six-dof constraint: a fixed rotation at a non-zero angle cannot be folded into the joint frame "
+                "while a translation axis is not fixed; it is fixed at 0"
+            );
         }
 
         const Six_dof_classification classification = classify_six_dof(settings.limits);
@@ -202,6 +237,12 @@ public:
                 c_str(classification.kind)
             );
         }
+        if (classification.kind != Six_dof_joint_kind::weld) {
+            warn_dropped_soft_limits(settings, c_str(classification.kind));
+        }
+
+        m_body_a = bodies.body_a;
+        m_body_b = bodies.body_b;
 
         Joint_base_values base{};
         base.body_a        = bodies.body_a;
@@ -209,20 +250,88 @@ public:
         base.local_frame_a = to_box3d(settings.frame_in_a);
         base.local_frame_b = to_box3d(settings.frame_in_b);
 
-        const float joint_mass = reduced_mass(bodies.mass_a, bodies.mass_b);
-        const b3WorldId world  = bodies.world->get_box3d_world();
+        const b3WorldId world = bodies.world->get_box3d_world();
 
         switch (classification.kind) {
-            case Six_dof_joint_kind::weld:      create_weld     (world, base, settings, joint_mass); break;
-            case Six_dof_joint_kind::revolute:  create_revolute (world, base, settings, classification, joint_mass); break;
-            case Six_dof_joint_kind::prismatic: create_prismatic(world, base, settings, classification, joint_mass); break;
-            case Six_dof_joint_kind::spherical: create_spherical(world, base, settings, joint_mass); break;
+            case Six_dof_joint_kind::weld:      create_weld     (world, base, bodies, settings); break;
+            case Six_dof_joint_kind::revolute:  create_revolute (world, base, bodies, settings, classification); break;
+            case Six_dof_joint_kind::prismatic: create_prismatic(world, base, bodies, settings, classification); break;
+            case Six_dof_joint_kind::distance:  create_distance (world, base, settings, classification); break;
+            case Six_dof_joint_kind::spherical: create_spherical(world, base, bodies, settings, classification); break;
             case Six_dof_joint_kind::filter:    create_filter   (world, base); break;
             default: break;
         }
     }
 
+    // The velocity drive of the joint's degree of freedom: the motor's force
+    // limit follows the current velocity error, so the motor behaves as the
+    // finite-gain viscous coupling the drive states.
+    void prepare_step(const float) override
+    {
+        if (!m_is_valid || !m_velocity_drive.active) {
+            return;
+        }
+        const Velocity_drive& drive = m_velocity_drive;
+        switch (b3Joint_GetType(m_joint)) {
+            case b3_revoluteJoint: {
+                // The hinge axis is the Z axis of (the remapped) frame A.
+                const b3Transform frame_a    = b3Joint_GetLocalFrameA(m_joint);
+                const glm::vec3   hinge_axis = from_box3d(b3Body_GetWorldVector(m_body_a, b3RotateVector(frame_a.q, b3Vec3{0.0f, 0.0f, 1.0f})));
+                const glm::vec3   relative   = from_box3d(b3Body_GetAngularVelocity(m_body_b)) - from_box3d(b3Body_GetAngularVelocity(m_body_a));
+                const float       speed      = glm::dot(relative, hinge_axis);
+                b3RevoluteJoint_SetMaxMotorTorque(m_joint, force_limit(drive, std::abs(drive.target - speed)));
+                break;
+            }
+            case b3_prismaticJoint: {
+                const float speed = b3PrismaticJoint_GetSpeed(m_joint);
+                b3PrismaticJoint_SetMaxMotorForce(m_joint, force_limit(drive, std::abs(drive.target - speed)));
+                break;
+            }
+            case b3_sphericalJoint: {
+                // The motor velocity is a world space relative angular
+                // velocity, so the target in body A space is re-expressed in
+                // world space each step as body A turns.
+                const glm::vec3 target_world = from_box3d(b3Body_GetWorldVector(m_body_a, to_box3d(drive.target_in_body_a)));
+                const glm::vec3 relative     = from_box3d(b3Body_GetAngularVelocity(m_body_b)) - from_box3d(b3Body_GetAngularVelocity(m_body_a));
+                b3SphericalJoint_SetMotorVelocity(m_joint, to_box3d(target_world));
+                b3SphericalJoint_SetMaxMotorTorque(m_joint, force_limit(drive, glm::length(target_world - relative)));
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+
 private:
+    class Velocity_drive
+    {
+    public:
+        bool      active          {false};
+        float     gain            {0.0f};   // force per unit velocity error; infinity = hard motor
+        float     max_force       {0.0f};   // the authored bound, made finite
+        float     target          {0.0f};   // revolute / prismatic
+        glm::vec3 target_in_body_a{0.0f};   // spherical: the angular velocity target in body A space
+    };
+
+    [[nodiscard]] static auto force_limit(const Velocity_drive& drive, const float velocity_error) -> float
+    {
+        if (!std::isfinite(drive.gain)) {
+            return drive.max_force;
+        }
+        return std::min(drive.max_force, drive.gain * velocity_error);
+    }
+
+    // The joint's motor is bounded to its authored max force at creation; the
+    // per-step clamp then takes over from prepare_step().
+    void set_velocity_drive(const Constraint_axis_drive& drive, const float mass)
+    {
+        m_velocity_drive.active    = true;
+        m_velocity_drive.gain      = velocity_drive_gain(drive, mass);
+        m_velocity_drive.max_force = finite_force(drive.max_force);
+        m_velocity_drive.target    = drive.velocity_target;
+    }
+
     // Rotates both joint frames so the erhe axis lands on the axis Box3D's
     // joint type actually uses.
     static void remap_frames(b3JointDef& joint_base, const glm::quat& rotation)
@@ -244,36 +353,75 @@ private:
         }
     }
 
+    // Only the weld joint has springs on its (fixed) axes; the limits of the
+    // other joints are hard.
+    static void warn_dropped_soft_limits(const Six_dof_constraint_settings& settings, const char* kind)
+    {
+        for (std::size_t axis = 0; axis < 6; ++axis) {
+            const Constraint_axis_limit& limit = settings.limits[axis];
+            if (limit.limited && limit.stiffness.has_value()) {
+                log_physics->warn(
+                    "box3d six-dof constraint: soft limit on axis {} (stiffness {}) dropped; a {} joint's limits are hard",
+                    axis, limit.stiffness.value(), kind
+                );
+            }
+        }
+    }
+
+    // A position drive is a Box3D spring: stiffness and damping toward the
+    // target. The spring has no force bound and no velocity target, so those
+    // parts of the drive are reported.
+    static void warn_partial_position_drive(const Constraint_axis_drive& drive, const std::size_t axis, const char* kind)
+    {
+        if (std::isfinite(drive.max_force)) {
+            log_physics->warn(
+                "box3d six-dof constraint: position drive on axis {} max force {} dropped; a {} joint spring is unbounded",
+                axis, drive.max_force, kind
+            );
+        }
+        if (drive.velocity_target != 0.0f) {
+            log_physics->warn(
+                "box3d six-dof constraint: position drive on axis {} velocity target {} dropped; a {} joint spring damps toward rest",
+                axis, drive.velocity_target, kind
+            );
+        }
+    }
+
     void create_weld(
         const b3WorldId                    world,
         const Joint_base_values&           base,
-        const Six_dof_constraint_settings& settings,
-        const float                        joint_mass
+        const Joint_bodies&                bodies,
+        const Six_dof_constraint_settings& settings
     )
     {
         b3WeldJointDef joint_def = b3DefaultWeldJointDef();
         base.apply_to(joint_def.base);
         // A weld's only tuning is spring stiffness; 0 hertz means rigid, which
-        // is what a hard-limited axis wants.
-        float linear_stiffness  = 0.0f;
-        float angular_stiffness = 0.0f;
-        float linear_damping    = 0.0f;
-        float angular_damping   = 0.0f;
+        // is what a hard-limited axis wants. The stiffness is a force per
+        // meter (or per radian): converted with the effective mass of the
+        // softest axis that names it.
+        float linear_hertz    = 0.0f;
+        float angular_hertz   = 0.0f;
+        float linear_damping  = 0.0f;
+        float angular_damping = 0.0f;
         for (std::size_t axis = 0; axis < 6; ++axis) {
             const Constraint_axis_limit& limit = settings.limits[axis];
             if (!limit.stiffness.has_value()) {
                 continue;
             }
+            const float mass  = effective_mass(bodies, settings.frame_in_a, axis);
+            const float hertz = stiffness_to_hertz(limit.stiffness.value(), mass);
+            const float ratio = damping_to_ratio(limit.damping, limit.stiffness.value(), mass);
             if (axis < 3) {
-                linear_stiffness = limit.stiffness.value();
-                linear_damping   = limit.damping;
+                linear_hertz   = hertz;
+                linear_damping = ratio;
             } else {
-                angular_stiffness = limit.stiffness.value();
-                angular_damping   = limit.damping;
+                angular_hertz   = hertz;
+                angular_damping = ratio;
             }
         }
-        joint_def.linearHertz         = stiffness_to_hertz(linear_stiffness,  joint_mass);
-        joint_def.angularHertz        = stiffness_to_hertz(angular_stiffness, joint_mass);
+        joint_def.linearHertz         = linear_hertz;
+        joint_def.angularHertz        = angular_hertz;
         joint_def.linearDampingRatio  = linear_damping;
         joint_def.angularDampingRatio = angular_damping;
 
@@ -284,9 +432,9 @@ private:
     void create_revolute(
         const b3WorldId                    world,
         const Joint_base_values&           base,
+        const Joint_bodies&                bodies,
         const Six_dof_constraint_settings& settings,
-        const Six_dof_classification&      classification,
-        const float                        joint_mass
+        const Six_dof_classification&      classification
     )
     {
         b3RevoluteJointDef joint_def = b3DefaultRevoluteJointDef();
@@ -297,6 +445,7 @@ private:
         const std::size_t              axis_index = static_cast<std::size_t>(3 + classification.axis);
         const Constraint_axis_limit&   limit      = settings.limits[axis_index];
         const Constraint_axis_drive&   drive      = settings.drives[axis_index];
+        const float                    mass       = effective_mass(bodies, settings.frame_in_a, axis_index);
 
         if (classify_axis(limit) == Axis_state::limited) {
             joint_def.enableLimit = true;
@@ -305,14 +454,17 @@ private:
         }
         if (drive.enabled) {
             if (drive.use_position_target) {
+                const Box3d_spring spring = drive_to_box3d_spring(drive, mass);
                 joint_def.enableSpring = true;
                 joint_def.targetAngle  = drive.position_target;
-                joint_def.hertz        = stiffness_to_hertz(drive.stiffness, joint_mass);
-                joint_def.dampingRatio = drive.damping;
+                joint_def.hertz        = spring.hertz;
+                joint_def.dampingRatio = spring.damping_ratio;
+                warn_partial_position_drive(drive, axis_index, "revolute");
             } else {
                 joint_def.enableMotor    = true;
                 joint_def.motorSpeed     = drive.velocity_target;
                 joint_def.maxMotorTorque = finite_force(drive.max_force);
+                set_velocity_drive(drive, mass);
             }
         }
         warn_dropped_drives(settings, static_cast<int>(axis_index), "revolute");
@@ -324,9 +476,9 @@ private:
     void create_prismatic(
         const b3WorldId                    world,
         const Joint_base_values&           base,
+        const Joint_bodies&                bodies,
         const Six_dof_constraint_settings& settings,
-        const Six_dof_classification&      classification,
-        const float                        joint_mass
+        const Six_dof_classification&      classification
     )
     {
         b3PrismaticJointDef joint_def = b3DefaultPrismaticJointDef();
@@ -337,6 +489,7 @@ private:
         const std::size_t            axis_index = static_cast<std::size_t>(classification.axis);
         const Constraint_axis_limit& limit      = settings.limits[axis_index];
         const Constraint_axis_drive& drive      = settings.drives[axis_index];
+        const float                  mass       = effective_mass(bodies, settings.frame_in_a, axis_index);
 
         if (classify_axis(limit) == Axis_state::limited) {
             joint_def.enableLimit      = true;
@@ -345,14 +498,17 @@ private:
         }
         if (drive.enabled) {
             if (drive.use_position_target) {
-                joint_def.enableSpring     = true;
+                const Box3d_spring spring = drive_to_box3d_spring(drive, mass);
+                joint_def.enableSpring      = true;
                 joint_def.targetTranslation = drive.position_target;
-                joint_def.hertz             = stiffness_to_hertz(drive.stiffness, joint_mass);
-                joint_def.dampingRatio      = drive.damping;
+                joint_def.hertz             = spring.hertz;
+                joint_def.dampingRatio      = spring.damping_ratio;
+                warn_partial_position_drive(drive, axis_index, "prismatic");
             } else {
                 joint_def.enableMotor   = true;
                 joint_def.motorSpeed    = drive.velocity_target;
                 joint_def.maxMotorForce = finite_force(drive.max_force);
+                set_velocity_drive(drive, mass);
             }
         }
         warn_dropped_drives(settings, static_cast<int>(axis_index), "prismatic");
@@ -361,77 +517,154 @@ private:
         m_is_valid = true;
     }
 
-    // A spherical joint always exposes all three rotational axes, so it needs
-    // the raw limits rather than the classification's single chosen axis.
-    void create_spherical(
+    // Rotation free, the frame origins kept within a length range: a distance
+    // joint with the spring enabled at zero hertz applies its length limits
+    // only (distance_joint.c: with the spring disabled the joint is rigid at
+    // its rest length and the limits are ignored). An equal minimum and
+    // maximum is that rigid rod.
+    void create_distance(
         const b3WorldId                    world,
         const Joint_base_values&           base,
         const Six_dof_constraint_settings& settings,
-        const float                        joint_mass
+        const Six_dof_classification&      classification
+    )
+    {
+        b3DistanceJointDef joint_def = b3DefaultDistanceJointDef();
+        base.apply_to(joint_def.base);
+
+        const float min_length = classification.min_distance;
+        const float max_length = std::isfinite(classification.max_distance) ? classification.max_distance : B3_HUGE;
+        const b3Pos anchor_a   = b3Body_GetWorldPoint(base.body_a, base.local_frame_a.p);
+        const b3Pos anchor_b   = b3Body_GetWorldPoint(base.body_b, base.local_frame_b.p);
+        const float length     = b3Length(b3SubPos(anchor_b, anchor_a));
+
+        joint_def.length       = std::clamp(length, min_length, max_length);
+        joint_def.enableSpring = min_length < max_length;
+        joint_def.hertz        = 0.0f;
+        joint_def.dampingRatio = 0.0f;
+        joint_def.enableLimit  = true;
+        joint_def.minLength    = min_length;
+        joint_def.maxLength    = max_length;
+
+        for (std::size_t axis = 0; axis < 6; ++axis) {
+            if (settings.drives[axis].enabled) {
+                log_physics->warn(
+                    "box3d six-dof constraint: drive on axis {} dropped; a distance joint drives no axis",
+                    axis
+                );
+            }
+        }
+
+        m_joint    = b3CreateDistanceJoint(world, &joint_def);
+        m_is_valid = true;
+    }
+
+    // A spherical joint always exposes all three rotational axes, so it needs
+    // the raw limits rather than a single chosen axis: the classified twist
+    // axis takes the twist limit and the cone spans the other two.
+    void create_spherical(
+        const b3WorldId                    world,
+        const Joint_base_values&           base,
+        const Joint_bodies&                bodies,
+        const Six_dof_constraint_settings& settings,
+        const Six_dof_classification&      classification
     )
     {
         b3SphericalJointDef joint_def = b3DefaultSphericalJointDef();
         base.apply_to(joint_def.base);
+        // Box3D's spherical joint twists about frame Z and its cone is about
+        // frame A's Z.
+        const int twist_axis = classification.axis;
+        remap_frames(joint_def.base, revolute_frame_rotation(twist_axis));
 
-        // A cone limit constrains two rotational axes together, so the widest
-        // limited swing axis sets the cone half-angle; the twist limit takes
-        // the frame Z axis.
-        float cone_angle    = 0.0f;
-        bool  has_cone      = false;
-        for (int axis = 0; axis < 2; ++axis) {
-            const Constraint_axis_limit& limit = settings.limits[static_cast<std::size_t>(3 + axis)];
+        // A cone limit constrains the two swing axes together, so the widest
+        // reach of the limited swing ranges sets the cone half-angle.
+        const std::array<int, 2> swing_axes = get_swing_axes(twist_axis);
+        float cone_angle = 0.0f;
+        bool  has_cone   = false;
+        for (const int swing_axis : swing_axes) {
+            const Constraint_axis_limit& limit = settings.limits[static_cast<std::size_t>(3 + swing_axis)];
             if (classify_axis(limit) != Axis_state::limited) {
                 continue;
             }
-            const float half_range = 0.5f * (limit.max - limit.min);
-            cone_angle = (half_range > cone_angle) ? half_range : cone_angle;
+            cone_angle = std::max(cone_angle, std::max(std::abs(limit.min), std::abs(limit.max)));
             has_cone   = true;
         }
         if (has_cone) {
             joint_def.enableConeLimit = true;
-            joint_def.coneAngle       = (cone_angle > max_joint_angle) ? max_joint_angle : cone_angle;
+            joint_def.coneAngle       = std::min(cone_angle, max_joint_angle);
         }
 
-        const Constraint_axis_limit& twist_limit = settings.limits[5];
-        if (classify_axis(twist_limit) == Axis_state::limited) {
-            joint_def.enableTwistLimit = true;
-            joint_def.lowerTwistAngle  = clamp_angle(twist_limit.min);
-            joint_def.upperTwistAngle  = clamp_angle(twist_limit.max);
+        const Constraint_axis_limit& twist_limit = settings.limits[static_cast<std::size_t>(3 + twist_axis)];
+        switch (classify_axis(twist_limit)) {
+            case Axis_state::limited: {
+                joint_def.enableTwistLimit = true;
+                joint_def.lowerTwistAngle  = clamp_angle(twist_limit.min);
+                joint_def.upperTwistAngle  = clamp_angle(twist_limit.max);
+                break;
+            }
+            case Axis_state::fixed: {
+                // A universal joint: the twist about the fixed axis is locked.
+                joint_def.enableTwistLimit = true;
+                joint_def.lowerTwistAngle  = 0.0f;
+                joint_def.upperTwistAngle  = 0.0f;
+                break;
+            }
+            default: {
+                break;
+            }
         }
 
         // A spherical joint's motor takes an angular velocity vector, so all
-        // three rotational drives can be carried at once.
+        // three rotational velocity drives are carried at once, with the
+        // largest gain and bound; its alignment spring carries one position
+        // drive.
         glm::vec3 motor_velocity{0.0f};
         bool      has_velocity_drive = false;
+        float     max_gain           = 0.0f;
         float     max_torque         = 0.0f;
-        float     spring_stiffness   = 0.0f;
-        float     spring_damping     = 0.0f;
         bool      has_position_drive = false;
         for (int axis = 0; axis < 3; ++axis) {
-            const Constraint_axis_drive& drive = settings.drives[static_cast<std::size_t>(3 + axis)];
+            const std::size_t            axis_index = static_cast<std::size_t>(3 + axis);
+            const Constraint_axis_drive& drive      = settings.drives[axis_index];
             if (!drive.enabled) {
                 continue;
             }
+            const float mass = effective_mass(bodies, settings.frame_in_a, axis_index);
             if (drive.use_position_target) {
-                has_position_drive = true;
-                spring_stiffness   = drive.stiffness;
-                spring_damping     = drive.damping;
+                if (has_position_drive) {
+                    log_physics->warn("box3d six-dof constraint: position drive on axis {} dropped; a spherical joint has one alignment spring", axis_index);
+                    continue;
+                }
+                const Box3d_spring spring = drive_to_box3d_spring(drive, mass);
+                has_position_drive     = true;
+                joint_def.enableSpring = true;
+                joint_def.hertz        = spring.hertz;
+                joint_def.dampingRatio = spring.damping_ratio;
+                joint_def.targetRotation = to_box3d(
+                    glm::inverse(revolute_frame_rotation(twist_axis)) *
+                    glm::angleAxis(drive.position_target, glm::vec3{(axis == 0) ? 1.0f : 0.0f, (axis == 1) ? 1.0f : 0.0f, (axis == 2) ? 1.0f : 0.0f}) *
+                    revolute_frame_rotation(twist_axis)
+                );
+                warn_partial_position_drive(drive, axis_index, "spherical");
             } else {
-                has_velocity_drive          = true;
-                motor_velocity[axis]        = drive.velocity_target;
-                const float drive_max_force = finite_force(drive.max_force);
-                max_torque                  = (drive_max_force > max_torque) ? drive_max_force : max_torque;
+                has_velocity_drive   = true;
+                motor_velocity[axis] = drive.velocity_target;
+                max_gain             = std::max(max_gain, velocity_drive_gain(drive, mass));
+                max_torque           = std::max(max_torque, finite_force(drive.max_force));
             }
         }
         if (has_velocity_drive) {
+            // The motor velocity is a world space relative angular velocity;
+            // prepare_step() keeps it current from the body A space target.
+            const glm::vec3 target_in_body_a = settings.frame_in_a.basis * motor_velocity;
             joint_def.enableMotor    = true;
-            joint_def.motorVelocity  = to_box3d(motor_velocity);
+            joint_def.motorVelocity  = b3Body_GetWorldVector(bodies.body_a, to_box3d(target_in_body_a));
             joint_def.maxMotorTorque = max_torque;
-        }
-        if (has_position_drive) {
-            joint_def.enableSpring = true;
-            joint_def.hertz        = stiffness_to_hertz(spring_stiffness, joint_mass);
-            joint_def.dampingRatio = spring_damping;
+            m_velocity_drive.active           = true;
+            m_velocity_drive.gain             = max_gain;
+            m_velocity_drive.max_force        = max_torque;
+            m_velocity_drive.target_in_body_a = target_in_body_a;
         }
         for (int axis = 0; axis < 3; ++axis) {
             if (settings.drives[static_cast<std::size_t>(axis)].enabled) {
@@ -458,6 +691,10 @@ private:
         m_joint    = b3CreateFilterJoint(world, &joint_def);
         m_is_valid = true;
     }
+
+    b3BodyId       m_body_a{};
+    b3BodyId       m_body_b{};
+    Velocity_drive m_velocity_drive{};
 };
 
 // -----------------------------------------------------------------------------
@@ -497,13 +734,18 @@ namespace {
 
 } // anonymous namespace
 
-// The shapes follow Box3d_six_dof_constraint's joint creation: the weld, the
-// revolute joint about the classified axis, the prismatic joint along it, the
-// spherical joint (twist about Z, one cone of the widest limited swing half
-// range about Z) and the filter joint (nothing constrained).
-auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limits) -> Joint_limit_shape
+// The shapes follow Box3d_six_dof_constraint's joint creation: the fold of
+// fixed values into frame A, then the weld, the revolute joint about the
+// classified axis, the prismatic joint along it, the distance joint (a sphere
+// of the translation ranges), the spherical joint (twist about the classified
+// twist axis, one cone of the widest limited swing reach about it, a locked
+// twist for a universal joint) and the filter joint (nothing constrained).
+auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& authored_limits) -> Joint_limit_shape
 {
-    const Six_dof_classification classification = classify_six_dof(limits);
+    Transform                            folded_frame{};
+    std::array<Constraint_axis_limit, 6> limits = authored_limits;
+    const Fixed_axis_fold                fold   = fold_fixed_axis_values(folded_frame, limits);
+    const Six_dof_classification         classification = classify_six_dof(limits);
 
     Joint_limit_shape shape{};
     for (std::size_t axis = 0; axis < 3; ++axis) {
@@ -530,24 +772,44 @@ auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limit
             shape.translation[axis] = carried_axis(limits[axis], false);
             break;
         }
-        case Six_dof_joint_kind::spherical: {
-            shape.twist_axis  = 2;
+        case Six_dof_joint_kind::distance: {
+            const float radius = classification.max_distance;
+            shape.translation_model = Translation_limit_model::sphere;
+            shape.distance = std::isfinite(radius)
+                ? Constraint_axis_limit{.limited = true, .min = classification.min_distance, .max = radius}
+                : Constraint_axis_limit{};
+            for (std::size_t axis = 0; axis < 3; ++axis) {
+                shape.translation[axis] = std::isfinite(radius)
+                    ? Constraint_axis_limit{.limited = true, .min = -radius, .max = radius}
+                    : Constraint_axis_limit{};
+            }
+            shape.twist       = Constraint_axis_limit{};
             shape.swing_model = Swing_limit_model::cone;
-            shape.twist       = carried_axis(limits[5], true);
+            shape.swing       = {Constraint_axis_limit{}, Constraint_axis_limit{}};
+            shape.cone        = Constraint_axis_limit{};
+            break;
+        }
+        case Six_dof_joint_kind::spherical: {
+            const int twist_axis = classification.axis;
+            shape.twist_axis  = twist_axis;
+            shape.swing_model = Swing_limit_model::cone;
+            const Constraint_axis_limit& twist_limit = limits[static_cast<std::size_t>(3 + twist_axis)];
+            shape.twist = carried_axis(twist_limit, true);
+            const std::array<int, 2> swing_axes = get_swing_axes(twist_axis);
             float cone_angle = 0.0f;
             bool  has_cone   = false;
-            for (std::size_t axis = 3; axis < 5; ++axis) {
-                if (classify_axis(limits[axis]) != Axis_state::limited) {
+            for (const int swing_axis : swing_axes) {
+                const Constraint_axis_limit& limit = limits[static_cast<std::size_t>(3 + swing_axis)];
+                if (classify_axis(limit) != Axis_state::limited) {
                     continue;
                 }
-                const float half_range = 0.5f * (limits[axis].max - limits[axis].min);
-                cone_angle = std::max(cone_angle, half_range);
+                cone_angle = std::max(cone_angle, std::max(std::abs(limit.min), std::abs(limit.max)));
                 has_cone   = true;
             }
             shape.cone = has_cone
                 ? Constraint_axis_limit{.limited = true, .min = 0.0f, .max = std::min(cone_angle, max_joint_angle)}
                 : Constraint_axis_limit{};
-            matches = same_limit(shape.twist, limits[5]);
+            matches = same_limit(shape.twist, twist_limit);
             break;
         }
         case Six_dof_joint_kind::filter: {
@@ -560,13 +822,8 @@ auto get_enforced_joint_limits(const std::array<Constraint_axis_limit, 6>& limit
             break;
         }
     }
-    // A fixed axis is welded at zero whatever value it was authored at.
-    for (std::size_t axis = 0; axis < 6; ++axis) {
-        if ((classify_axis(limits[axis]) == Axis_state::fixed) && ((limits[axis].min != 0.0f) || (limits[axis].max != 0.0f))) {
-            matches = false;
-        }
-    }
-    shape.is_exact = classification.is_exact && matches;
+    restore_folded_fixed_values(shape, authored_limits, fold);
+    shape.is_exact = classification.is_exact && matches && fold.exact;
     return shape;
 }
 

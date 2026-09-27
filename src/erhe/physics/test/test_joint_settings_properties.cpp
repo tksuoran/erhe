@@ -81,6 +81,7 @@ TEST(Joint_settings_properties, a_drive_mirrors_its_mode_and_its_unlimited_force
 
     const erhe::physics::Constraint_axis_drive& drive = settings->get_axis_drives()[c_rot_z];
     EXPECT_TRUE(drive.enabled);
+    EXPECT_EQ(drive.mode, erhe::physics::Drive_force_mode::force);
     EXPECT_TRUE(drive.use_position_target);
     EXPECT_FLOAT_EQ(drive.position_target, 0.25f);
     EXPECT_FLOAT_EQ(drive.stiffness, 80.0f);
@@ -88,6 +89,9 @@ TEST(Joint_settings_properties, a_drive_mirrors_its_mode_and_its_unlimited_force
 
     settings->set_axis_drive_max_force(c_rot_z, 500.0f);
     EXPECT_FLOAT_EQ(settings->get_axis_drives()[c_rot_z].max_force, 500.0f);
+
+    settings->set_axis_drive(c_rot_z, Joint_axis_drive::acceleration);
+    EXPECT_EQ(settings->get_axis_drives()[c_rot_z].mode, erhe::physics::Drive_force_mode::acceleration);
 
     settings->set_axis_drive(c_rot_z, Joint_axis_drive::off);
     EXPECT_FALSE(settings->get_axis_drives()[c_rot_z].enabled);

@@ -9,6 +9,30 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::physics`: `Drive_force_mode` and `Constraint_axis_drive::mode`
+  (`erhe_physics/iconstraint.hpp`): the KHR_physics_rigid_bodies drive
+  `force` / `acceleration` mode, honored by both backends.
+- `erhe::physics`: `fold_fixed_axis_values()`, `Fixed_axis_fold` and
+  `restore_folded_fixed_values()` (`erhe_physics/joint_limits.hpp`): a fixed
+  axis authored at a non-zero value folds into frame A, so both backends hold
+  it at that value.
+- `erhe::physics`: `Translation_limit_model`, `Joint_limit_shape::translation_model`
+  / `distance` and `Joint_coordinates::distance` (`erhe_physics/joint_limits.hpp`):
+  the sphere the Box3D distance joint enforces.
+- `erhe::physics`: `Six_dof_joint_kind::distance`, `Six_dof_classification::min_distance`
+  / `max_distance`, `damping_to_ratio()`, `Box3d_spring` and
+  `drive_to_box3d_spring()` (`erhe_physics/box3d_six_dof_classifier.hpp`);
+  `Six_dof_classification::axis` is the twist axis of a spherical joint.
+- `erhe::physics`: `velocity_drive_gain()` (`erhe_physics/joint_limits.hpp`),
+  and `Box3d_constraint::prepare_step()` / `Jolt_constraint::prepare_step()`,
+  called by the world's `update_fixed_step()` before the engine step: a
+  velocity drive's motor force bound follows the current velocity error.
+
+### Changed
+
+- `erhe::physics`: `Physics_joint_settings` no longer warns about acceleration
+  mode drives; the mirror carries the mode.
+
 - `erhe::commands`: `Binding_desc` (`erhe_commands/binding_desc.hpp`), a value
   description of one binding with a compact text form (`to_string()`,
   `parse()`) and a display label (`to_display_string()`), plus

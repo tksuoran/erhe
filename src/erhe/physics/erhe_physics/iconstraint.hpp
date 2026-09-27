@@ -49,17 +49,34 @@ public:
     float                damping  {0.0f};
 };
 
+// How a drive's stiffness and damping are scaled (the KHR_physics_rigid_bodies
+// drive `mode`). The drive force is
+//   stiffness * (position_target - p) + damping * (velocity_target - v)
+// clamped to max_force.
+//   force        : stiffness in N/m or Nm/rad, damping in Ns/m or Nms/rad
+//   acceleration : the same expression scaled by the effective mass of the
+//                  driven degree of freedom, so stiffness is 1/s^2 and damping
+//                  1/s and the drive behaves the same whatever the bodies
+//                  weigh. Jolt: MassNormalizedStiffnessAndDamping; Box3D: its
+//                  springs are frequency / damping ratio, which is this mode
+//                  (hertz = sqrt(stiffness) / (2 pi), ratio = damping / (2 sqrt(stiffness)))
+enum class Drive_force_mode : unsigned int {
+    force        = 0,
+    acceleration = 1
+};
+
 // Per-axis drive (motor) for Six_dof_constraint_settings.
 class Constraint_axis_drive
 {
 public:
-    bool  enabled            {false};
-    bool  use_position_target{false}; // true when the spec drive stiffness > 0
-    float position_target    {0.0f};  // meters (translation axes) or radians (rotation axes)
-    float velocity_target    {0.0f};  // m/s (translation axes) or rad/s (rotation axes)
-    float stiffness          {0.0f};
-    float damping            {0.0f};
-    float max_force          {std::numeric_limits<float>::infinity()}; // N (translation axes) or Nm (rotation axes)
+    bool             enabled            {false};
+    bool             use_position_target{false}; // true when the spec drive stiffness > 0
+    Drive_force_mode mode               {Drive_force_mode::force};
+    float            position_target    {0.0f};  // meters (translation axes) or radians (rotation axes)
+    float            velocity_target    {0.0f};  // m/s (translation axes) or rad/s (rotation axes)
+    float            stiffness          {0.0f};
+    float            damping            {0.0f};
+    float            max_force          {std::numeric_limits<float>::infinity()}; // N (translation axes) or Nm (rotation axes)
 };
 
 class Six_dof_constraint_settings

@@ -2313,10 +2313,9 @@ The mirror types are the ones `Six_dof_constraint_settings` is made of, so
 `Operations::is_hinge_settings` reads the mirror; and
 `build_physics_description` / `import_physics` translate between the
 properties and `erhe::scene::Physics_joint_description`, which is also how the
-USD reader and writer reach the item. `Constraint_axis_drive` has no
-acceleration-mode field, so an axis drive of `acceleration` mirrors as `force`
-with one warning per item while the property keeps the authored value, so the
-file round trips.
+USD reader and writer reach the item. An axis drive of `acceleration` mirrors
+as `Constraint_axis_drive::mode == Drive_force_mode::acceleration`, which both
+backends honor (`doc/erhe/physics.md`).
 
 **The consequence of an edit.** A live constraint follows every source of a
 change the way a collision filter's assignment does (section 4.21):

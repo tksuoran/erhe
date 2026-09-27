@@ -119,9 +119,6 @@ private:
 
     std::array<Constraint_axis_limit, c_joint_axis_count> m_limits{};
     std::array<Constraint_axis_drive, c_joint_axis_count> m_drives{};
-    // Constraint_axis_drive has no acceleration mode, so an acceleration
-    // drive mirrors as force and says so once per item.
-    bool m_warned_acceleration_drive{false};
 };
 
 } // namespace erhe::physics

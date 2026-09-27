@@ -74,17 +74,25 @@ a specific engine.
   library is built with actually enforces, as a `Joint_limit_shape`: per-axis translation
   ranges, the twist axis and range, and the swing model - `pyramid` (a range per swing axis,
   the swing half-angle `atan2(q_k, q_w)` clamped) or `cone` (a symmetric half-angle about the
-  twist axis). Jolt: twist about X, pyramid swing about Y / Z, rotation ranges clamped to
-  [-pi, pi], a range inside +-0.5 degrees locked at zero, one wider than +-179.5 degrees free,
-  a fixed translation fixed at zero. Box3D: the classified joint (weld; revolute twisting
-  about its axis; prismatic; spherical twisting about Z with a cone of the widest limited swing
-  half range; filter). `none`: the authored limits. `is_exact` is false where the enforced
-  shape differs from the authored limits (the Box3D classification is not exact, a fixed axis
-  authored at a non-zero value). Implemented next to each backend's six-DOF factory, so a joint
-  not built yet and a live one read the same shape.
+  twist axis), and the translation model - `box` (a range per axis) or `sphere` (the
+  distance between the frame origins confined to `distance`, the per-axis entries its
+  bounding box). Both backends fix an axis at zero only, so a fixed axis authored at another
+  value is first folded into frame A by `fold_fixed_axis_values()` (a translation always; a
+  rotation while every translation axis is fixed, as the contract's `q_swing * q_twist` of
+  the fixed angles) and the enforced shape reports the authored value
+  (`restore_folded_fixed_values()`). Jolt: twist about X, pyramid swing about Y / Z, rotation
+  ranges clamped to [-pi, pi], a range inside +-0.5 degrees locked at zero, one wider than
+  +-179.5 degrees free. Box3D: the classified joint (weld; revolute twisting about its axis;
+  prismatic; distance, a sphere of the inscribed translation reach with rotation free;
+  spherical twisting about the classified twist axis with a cone of the widest limited swing
+  reach about it, a universal joint's twist locked at zero; filter). `none`: the authored
+  limits. `is_exact` is false where the enforced shape differs from the authored limits (the
+  Box3D classification is not exact, a fixed rotation that could not fold). Implemented next
+  to each backend's six-DOF factory, so a joint not built yet and a live one read the same
+  shape.
   `measure_joint_coordinates(frame_a, frame_b, shape)` decomposes the relative pose of two world
-  anchor frames the same way (translation in frame A, twist about the twist axis, the pyramid
-  swing angles and the cone angle of `q = inverse(q_a) * q_b = q_swing * q_twist`);
+  anchor frames the same way (translation in frame A and its length, twist about the twist
+  axis, the pyramid swing angles and the cone angle of `q = inverse(q_a) * q_b = q_swing * q_twist`);
   `check_joint_range()` tests the coordinates against the shape with a tolerance;
   `pyramid_swing_direction()` is the twist axis turned by a pair of pyramid swing angles. The
   editor's joint constraint visualization draws with them (`doc/editor/tools.md`).
@@ -144,15 +152,23 @@ a specific engine.
 - Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). The suite
   builds for the simulating backends (`jolt`, `box3d`). Every build runs the
   backend-neutral tests, which step a real `IWorld` through the interface (body
-  activation, trial-placement overlap queries). A `box3d` build adds the Box3D-specific
+  activation, trial-placement overlap queries, six-DOF joints: the fold of a fixed
+  translation, a distance range, acceleration-mode position and velocity drives). A
+  `box3d` build adds the Box3D-specific
   tests: pure logic (hull builder, shape descriptors, collision filter table, six-DOF
   classifier) and the activation / sensor events `Box3d_world` synthesizes.
 - KHR_physics_rigid_bodies support, its design and its known limitations are described in
   `doc/erhe/khr_physics_rigid_bodies_support.md`. Jolt-imposed limits: triangle mesh shapes are
   static/kinematic only; sensors must be non-static to detect static bodies (callers create
   static triggers as kinematic non-physical); six-DOF angular soft limits fall back to hard
-  limits; acceleration-mode drives run as force mode. Box3D's own limits are in the table
-  below.
+  limits. A drive's `Drive_force_mode` is honored by both backends: Jolt's
+  `MassNormalizedStiffnessAndDamping` springs are the acceleration mode, and Box3D's
+  frequency / damping ratio springs are that mode already, a force mode drive being converted
+  with the effective mass of its axis. A velocity drive is a finite-gain viscous coupling
+  (`damping * (target - v)`) while both engines' motors are velocity constraints bounded by a
+  force, so each backend's constraint re-derives the bound from the current velocity error
+  before every step (`prepare_step()`, called by the world; `velocity_drive_gain()`). Box3D's
+  own limits are in the table below.
 
 ## Box3D backend
 
@@ -171,9 +187,13 @@ anything non-trivial here.
 | `save_state` / `restore_state`       | not implemented, warns    | Box3D exposes no world snapshot API |
 | static friction                      | ignored, dynamic used     | `b3SurfaceMaterial` carries a single friction |
 | independent 6-DOF joints             | approximated              | Box3D has no generic six-DOF joint |
-| universal joints (2 rotational DOF)  | approximated by spherical | no equivalent; the third axis stays free |
-| multi-axis translation limits        | unsupported, warns        | no equivalent |
+| universal joints (2 rotational DOF)  | spherical, twist locked   | no equivalent; a locked swing-twist twist admits every swing, a Hooke joint does not |
+| multi-axis translation limits        | distance joint, warns     | with rotation free: the sphere inscribed in the ranges; otherwise a prismatic joint along the widest axis |
+| independent swing limits             | one cone, warns           | the cone spans both swing axes with the widest reach |
 | rotation limits beyond +/-0.99 pi    | clamped                   | Box3D range limit |
+| soft limits                          | weld only, warns          | the other joints' limits are hard; the base constraint softness would soften the anchor too |
+| position drive max force             | dropped, warns            | the revolute / prismatic / spherical springs are unbounded |
+| velocity drive gain                  | per-step motor force cap  | Box3D motors are velocity constraints; `prepare_step()` sets the cap to `damping * abs(target - v)` |
 | nested offset-center-of-mass         | ignored, errors           | Box3D carries the center of mass on the body |
 | rotated mesh inside a compound       | rotation ignored, warns   | `b3CreateMeshShape` takes a scale but no transform |
 | mesh on a dynamic body               | forced static, errors     | Box3D has no `b3ComputeMeshMass` |

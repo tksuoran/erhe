@@ -154,15 +154,88 @@ TEST(six_dof_classifier, limited_spherical_is_inexact)
     EXPECT_FALSE(classification.is_exact);
 }
 
-TEST(six_dof_classifier, universal_joint_is_inexact_spherical)
+TEST(six_dof_classifier, universal_joint_is_inexact_spherical_twisting_about_the_fixed_axis)
 {
-    // Two rotational degrees of freedom: a spherical joint permits a third.
+    // Two rotational degrees of freedom: a spherical joint with its twist
+    // locked about the fixed axis admits every swing, which a Hooke joint
+    // does not.
     std::array<Constraint_axis_limit, 6> limits = all_fixed();
     limits[3] = free_axis();
     limits[4] = free_axis();
     const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
     EXPECT_EQ(classification.kind, Six_dof_joint_kind::spherical);
+    EXPECT_EQ(classification.axis, 2);
     EXPECT_FALSE(classification.is_exact);
+}
+
+TEST(six_dof_classifier, spherical_twist_axis_follows_the_limit_pattern)
+{
+    // One limited axis among two free ones is the twist; about X it is the
+    // contract's own twist and exact.
+    {
+        std::array<Constraint_axis_limit, 6> limits = all_fixed();
+        limits[3] = limited_axis(-0.5f, 0.5f);
+        limits[4] = free_axis();
+        limits[5] = free_axis();
+        const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+        EXPECT_EQ(classification.kind, Six_dof_joint_kind::spherical);
+        EXPECT_EQ(classification.axis, 0);
+        EXPECT_TRUE(classification.is_exact);
+    }
+    {
+        std::array<Constraint_axis_limit, 6> limits = all_fixed();
+        limits[3] = free_axis();
+        limits[4] = limited_axis(-0.5f, 0.5f);
+        limits[5] = free_axis();
+        const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+        EXPECT_EQ(classification.axis, 1);
+        EXPECT_FALSE(classification.is_exact);
+    }
+    // One free axis among two limited ones (a cone about it) is the twist.
+    {
+        std::array<Constraint_axis_limit, 6> limits = all_fixed();
+        limits[3] = free_axis();
+        limits[4] = limited_axis(-0.4f, 0.4f);
+        limits[5] = limited_axis(-0.4f, 0.4f);
+        const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+        EXPECT_EQ(classification.axis, 0);
+    }
+    // Three limited: the odd range out is the twist.
+    {
+        std::array<Constraint_axis_limit, 6> limits = all_fixed();
+        limits[3] = limited_axis(-0.4f, 0.4f);
+        limits[4] = limited_axis(-0.1f, 0.1f);
+        limits[5] = limited_axis(-0.4f, 0.4f);
+        const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+        EXPECT_EQ(classification.axis, 1);
+    }
+}
+
+TEST(six_dof_classifier, radial_translation_range_with_free_rotation_is_distance)
+{
+    // A KHR 3D linear limit imports as one range on each translation axis.
+    std::array<Constraint_axis_limit, 6> limits = all_free();
+    limits[0] = limited_axis(0.0f, 1.0f);
+    limits[1] = limited_axis(0.0f, 1.0f);
+    limits[2] = limited_axis(0.0f, 1.0f);
+    const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+    EXPECT_EQ(classification.kind, Six_dof_joint_kind::distance);
+    EXPECT_TRUE(classification.is_exact);
+    EXPECT_FLOAT_EQ(classification.min_distance, 0.0f);
+    EXPECT_FLOAT_EQ(classification.max_distance, 1.0f);
+}
+
+TEST(six_dof_classifier, box_translation_range_with_free_rotation_is_an_inscribed_distance)
+{
+    std::array<Constraint_axis_limit, 6> limits = all_free();
+    limits[0] = limited_axis(-0.25f, 0.25f);
+    limits[1] = limited_axis(-0.5f,  0.5f);
+    limits[2] = limited_axis(-0.25f, 0.25f);
+    const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
+    EXPECT_EQ(classification.kind, Six_dof_joint_kind::distance);
+    EXPECT_FALSE(classification.is_exact);
+    EXPECT_FLOAT_EQ(classification.min_distance, 0.0f);
+    EXPECT_FLOAT_EQ(classification.max_distance, 0.25f);
 }
 
 TEST(six_dof_classifier, mixed_translation_and_rotation_is_inexact)
@@ -178,15 +251,17 @@ TEST(six_dof_classifier, mixed_translation_and_rotation_is_inexact)
     EXPECT_EQ(classification.axis, 0);
 }
 
-TEST(six_dof_classifier, planar_joint_is_inexact)
+TEST(six_dof_classifier, planar_joint_is_inexact_prismatic_along_the_wider_axis)
 {
-    // Two free translation axes: not representable, and not a prismatic joint.
+    // Two non-fixed translation axes with the rotation fixed: not
+    // representable; a prismatic joint along the wider axis keeps one of them.
     std::array<Constraint_axis_limit, 6> limits = all_fixed();
-    limits[0] = free_axis();
+    limits[0] = limited_axis(-0.1f, 0.1f);
     limits[2] = free_axis();
     const erhe::physics::Six_dof_classification classification = erhe::physics::classify_six_dof(limits);
     EXPECT_FALSE(classification.is_exact);
-    EXPECT_EQ(classification.kind, Six_dof_joint_kind::weld);
+    EXPECT_EQ(classification.kind, Six_dof_joint_kind::prismatic);
+    EXPECT_EQ(classification.axis, 2);
 }
 
 TEST(six_dof_classifier, describe_axis_states)

@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_body_activation.cpp
     test_collision_filter_properties.cpp
+    test_joint_drives.cpp
     test_joint_limits.cpp
     test_joint_reach.cpp
     test_joint_settings_properties.cpp

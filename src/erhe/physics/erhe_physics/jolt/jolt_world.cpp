@@ -454,9 +454,15 @@ void Jolt_world::update_fixed_step(const double dt)
     // within a collision step. Usually you would set this to 1.
     //const int cIntegrationSubSteps = 1;
 
-    //float inDeltaTime, 
-    // int inCollisionSteps, 
-    // TempAllocator *inTempAllocator, 
+    // A six-DOF constraint with a velocity drive re-derives its motor force
+    // limit from the current velocity error (Jolt_constraint::prepare_step).
+    for (Jolt_constraint* const constraint : m_constraints) {
+        constraint->prepare_step(static_cast<float>(dt));
+    }
+
+    //float inDeltaTime,
+    // int inCollisionSteps,
+    // TempAllocator *inTempAllocator,
     // JobSystem *inJobSystem
     m_physics_system.Update(
         static_cast<float>(dt),

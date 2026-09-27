@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace erhe::physics {
 
@@ -66,6 +67,93 @@ auto get_swing_axes(const int twist_axis) -> std::array<int, 2>
     };
 }
 
+auto fold_fixed_axis_values(Transform& frame_in_a, std::array<Constraint_axis_limit, 6>& limits) -> Fixed_axis_fold
+{
+    Fixed_axis_fold fold{};
+
+    const auto is_fixed = [](const Constraint_axis_limit& limit) -> bool {
+        return limit.limited && (limit.min == limit.max);
+    };
+    const auto is_fixed_non_zero = [&is_fixed](const Constraint_axis_limit& limit) -> bool {
+        return is_fixed(limit) && (limit.min != 0.0f);
+    };
+
+    // Translation: the offset is measured in the authored basis, so it is
+    // applied before any rotation of that basis.
+    glm::vec3 offset{0.0f};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        if (!is_fixed_non_zero(limits[axis])) {
+            continue;
+        }
+        offset[static_cast<int>(axis)] = limits[axis].min;
+        limits[axis].min  = 0.0f;
+        limits[axis].max  = 0.0f;
+        fold.folded[axis] = true;
+    }
+    frame_in_a.origin += frame_in_a.basis * offset;
+
+    const bool all_translation_fixed = is_fixed(limits[0]) && is_fixed(limits[1]) && is_fixed(limits[2]);
+    const bool any_rotation_to_fold  = is_fixed_non_zero(limits[3]) || is_fixed_non_zero(limits[4]) || is_fixed_non_zero(limits[5]);
+    if (!any_rotation_to_fold) {
+        return fold;
+    }
+    if (!all_translation_fixed) {
+        fold.exact = false;
+        return fold;
+    }
+
+    // The contract's relative rotation for the fixed angles: q = q_swing * q_twist
+    // with the twist about X and the pyramid swing about Y and Z.
+    const float twist_x = is_fixed(limits[3]) ? limits[3].min : 0.0f;
+    const float swing_y = is_fixed(limits[4]) ? limits[4].min : 0.0f;
+    const float swing_z = is_fixed(limits[5]) ? limits[5].min : 0.0f;
+    const glm::quat twist = glm::angleAxis(twist_x, glm::vec3{1.0f, 0.0f, 0.0f});
+    const glm::quat swing = pyramid_swing_rotation(0, swing_y, swing_z);
+    frame_in_a.basis = frame_in_a.basis * glm::mat3_cast(glm::normalize(swing * twist));
+    for (std::size_t axis = 3; axis < 6; ++axis) {
+        if (!is_fixed_non_zero(limits[axis])) {
+            continue;
+        }
+        limits[axis].min  = 0.0f;
+        limits[axis].max  = 0.0f;
+        fold.folded[axis] = true;
+    }
+    return fold;
+}
+
+void restore_folded_fixed_values(
+    Joint_limit_shape&                          shape,
+    const std::array<Constraint_axis_limit, 6>& authored_limits,
+    const Fixed_axis_fold&                      fold
+)
+{
+    for (std::size_t axis = 0; axis < 6; ++axis) {
+        if (!fold.folded[axis]) {
+            continue;
+        }
+        const Constraint_axis_limit authored{.limited = true, .min = authored_limits[axis].min, .max = authored_limits[axis].min};
+        if (axis < 3) {
+            shape.translation[axis] = authored;
+            continue;
+        }
+        const int rotation_axis = static_cast<int>(axis - 3);
+        if (rotation_axis == shape.twist_axis) {
+            shape.twist = authored;
+        } else if (shape.swing_model == Swing_limit_model::pyramid) {
+            const std::array<int, 2> swing_axes = get_swing_axes(shape.twist_axis);
+            shape.swing[(swing_axes[0] == rotation_axis) ? 0 : 1] = authored;
+        }
+    }
+}
+
+auto velocity_drive_gain(const Constraint_axis_drive& drive, const float effective_mass) -> float
+{
+    if (drive.damping <= 0.0f) {
+        return std::numeric_limits<float>::infinity();
+    }
+    return (drive.mode == Drive_force_mode::acceleration) ? (drive.damping * effective_mass) : drive.damping;
+}
+
 auto measure_joint_coordinates(
     const Transform&         world_from_frame_a,
     const Transform&         world_from_frame_b,
@@ -74,6 +162,7 @@ auto measure_joint_coordinates(
 {
     Joint_coordinates coordinates{};
     coordinates.translation = glm::transpose(world_from_frame_a.basis) * (world_from_frame_b.origin - world_from_frame_a.origin);
+    coordinates.distance    = glm::length(coordinates.translation);
 
     const glm::quat q_a = rotation_of(world_from_frame_a.basis);
     const glm::quat q_b = rotation_of(world_from_frame_b.basis);
@@ -117,8 +206,13 @@ auto check_joint_range(
 ) -> Joint_range_check
 {
     Joint_range_check check{};
-    for (std::size_t axis = 0; axis < 3; ++axis) {
-        check.translation_ok[axis] = is_within(shape.translation[axis], coordinates.translation[static_cast<int>(axis)], linear_tolerance);
+    if (shape.translation_model == Translation_limit_model::sphere) {
+        const bool distance_ok = is_within(shape.distance, coordinates.distance, linear_tolerance);
+        check.translation_ok = {distance_ok, distance_ok, distance_ok};
+    } else {
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            check.translation_ok[axis] = is_within(shape.translation[axis], coordinates.translation[static_cast<int>(axis)], linear_tolerance);
+        }
     }
     check.twist_ok = is_within(shape.twist, coordinates.twist, angular_tolerance);
     if (shape.swing_model == Swing_limit_model::pyramid) {
