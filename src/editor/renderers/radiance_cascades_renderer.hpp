@@ -76,11 +76,12 @@ enum class Rc_preview_channel : unsigned int
 // The timed GPU passes of one radiance cascades update.
 enum class Rc_pass : unsigned int
 {
-    trace  = 0,
-    merge  = 1,
-    reduce = 2
+    trace           = 0,
+    merge           = 1,
+    reduce          = 2,
+    neighbour_trace = 3  // merge mode per_neighbour_trace only: the connecting segments
 };
-constexpr std::size_t c_rc_pass_count = 3;
+constexpr std::size_t c_rc_pass_count = 4;
 
 // World-space radiance cascades (doc/editor/radiance_cascades.md,
 // doc/plans/radiance_cascades.md): the second producer of the indirect
@@ -107,12 +108,18 @@ public:
     // into rows of tiles_per_row), R32F holding an integer-valued float,
     // the probe state of the visibility pass (c_state_* bits); allocated
     // only in the visibility_masked merge mode.
+    // neighbours holds, per raw texel, the 8 connecting segments of the
+    // per_neighbour_trace merge mode (RGBA16F, rgb radiance, a beta; a
+    // 4 x 2 texel block per raw texel, segment n at
+    // (4 x + (n & 3), 2 y + (n >> 2))); allocated only in that mode, for
+    // every cascade but the top one.
     class Cascade_textures
     {
     public:
         std::shared_ptr<erhe::graphics::Texture> raw;
         std::shared_ptr<erhe::graphics::Texture> merged;
         std::shared_ptr<erhe::graphics::Texture> state;
+        std::shared_ptr<erhe::graphics::Texture> neighbours;
     };
 
     // Probe state bits (rc_visibility.comp, rc_merge.comp): bits 0 - 7 = the
@@ -137,14 +144,20 @@ public:
     {
     public:
         Pass_time trace{};
+        Pass_time neighbour_trace{};             // merge mode per_neighbour_trace: the connecting segments
         Pass_time merge{};
         Pass_time reduce{};
-        Pass_time total{};                       // trace + merge + reduce
+        Pass_time total{};                       // trace + neighbour_trace + merge + reduce
         uint64_t  update_count            {0};   // ticks that dispatched the trace (and the merge and reduce)
         uint64_t  timing_sample_count     {0};   // GPU timing samples taken
         uint64_t  completed_sweeps        {0};   // full passes of the cursor over all texels since the atlases were allocated
         int64_t   texels_per_update       {0};   // the budget clamped to the total texel count
-        int64_t   rays_per_update         {0};   // one interval ray per texel
+        // Rays per update: one interval ray per texel, plus in the
+        // per_neighbour_trace merge mode the connecting segments (up to 8
+        // per texel of every cascade but the top one) - the mean over a
+        // full sweep, since the cursor's runs cross cascades.
+        int64_t   rays_per_update         {0};
+        int64_t   neighbour_rays_per_update{0};  // the connecting segments of rays_per_update
         int64_t   updates_per_full_refresh{0};   // ticks until every texel is traced once
         double    ms_per_million_rays     {0.0}; // total.average_ms per 1e6 rays_per_update
         double    full_refresh_ms         {0.0}; // updates_per_full_refresh x total.average_ms
@@ -218,7 +231,10 @@ public:
     // change sites (Radiance Cascades window combo, MCP
     // set_radiance_cascades) after they store the setting; the constructor
     // takes the loaded setting. visibility_masked allocates and computes
-    // the probe states on the next tick, interpolate releases them.
+    // the probe states on the next tick, the other modes release them.
+    // Switching into or out of per_neighbour_trace refits on the next tick:
+    // that mode's neighbour atlases are part of the layout (the atlas fit
+    // leaves room for them) and start with a fresh first fill.
     void               set_merge_mode(Radiance_cascades_merge_mode mode);
     [[nodiscard]] auto get_merge_mode() const -> Radiance_cascades_merge_mode;
 
@@ -319,7 +335,18 @@ private:
 
     // Records the budgeted trace dispatches: the texel cursor walks the
     // cascades in order, one dispatch per contiguous run of one cascade.
+    // The runs are kept in m_trace_runs for record_neighbour_trace().
     void record_trace(
+        erhe::graphics::Command_buffer&          command_buffer,
+        const Scene_tlas::Frame&                 tlas_frame,
+        const erhe::graphics::Ring_buffer_range& light_range,
+        erhe::scene_renderer::Material_set&      material_set
+    );
+    // Merge mode per_neighbour_trace: traces the connecting segments of the
+    // texel runs record_trace() traced this frame (rc_trace.comp,
+    // ERHE_RC_TRACE_NEIGHBOURS), for every cascade but the top one, into
+    // the neighbour atlases; timed as its own pass.
+    void record_neighbour_trace(
         erhe::graphics::Command_buffer&          command_buffer,
         const Scene_tlas::Frame&                 tlas_frame,
         const erhe::graphics::Ring_buffer_range& light_range,
@@ -370,6 +397,10 @@ private:
     std::array<std::size_t,      c_max_radiance_cascades>    m_cascade_byte_counts{};
     // First texel of each cascade in the global texel order the cursor walks.
     std::array<int64_t,          c_max_radiance_cascades>    m_cascade_texel_offsets{};
+    // The connecting segments one full sweep traces in the
+    // per_neighbour_trace mode (per probe of every cascade but the top one,
+    // its upper probes of nonzero weight x q_i^2); 0 in the other modes.
+    int64_t                                                  m_neighbour_rays_per_sweep{0};
     std::size_t                                              m_texture_byte_count{0};
     uint64_t                                                 m_fit_count{0};
 
@@ -397,11 +428,27 @@ private:
     };
     Trace_pass                                                m_trace_cascade0;
     Trace_pass                                                m_trace_upper;
+    // The per_neighbour_trace connecting segments (writes the neighbour
+    // atlas only).
+    Trace_pass                                                m_trace_neighbours;
+    // The texel runs of this frame's trace, replayed by the neighbour
+    // trace; cleared per frame, capacity kept.
+    class Trace_run
+    {
+    public:
+        int      cascade      {0};
+        int64_t  first_texel  {0};
+        int64_t  count        {0};
+        uint32_t flags        {0};     // rc_trace.comp dispatch.w flags of the run
+        bool     needs_barrier{false}; // a run of the same cascade precedes it this frame
+    };
+    std::vector<Trace_run>                                    m_trace_runs;
     std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_projections>  m_light_projections;
     uint32_t                                                  m_tlas_binding_point    {0};
     uint32_t                                                  m_raw_binding_point     {0};
     uint32_t                                                  m_distance_binding_point{0};
+    uint32_t                                                  m_neighbours_binding_point{0};
 
     // Control block field offsets, resolved once at construction.
     class Control_offsets
@@ -410,8 +457,11 @@ private:
         std::size_t grid_origin {0};
         std::size_t grid_spacing{0};
         std::size_t grid_counts {0};
-        std::size_t dispatch    {0};
-        std::size_t params      {0};
+        std::size_t dispatch     {0};
+        std::size_t params       {0};
+        std::size_t upper_origin {0};
+        std::size_t upper_spacing{0};
+        std::size_t upper_counts {0};
     };
     Control_offsets m_control_offsets{};
 
@@ -432,11 +482,13 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>                  m_merge_sampler;
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_merge_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_shader_stages;
-    // rc_merge.comp variants: interpolate (ERHE_RC_MERGE_VISIBILITY 0) and
-    // visibility_masked (1).
+    // rc_merge.comp variants: interpolate (ERHE_RC_MERGE_MODE 0),
+    // visibility_masked (1) and per_neighbour_trace (2).
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_visibility_shader_stages;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_neighbours_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_pipeline;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_visibility_pipeline;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_neighbours_pipeline;
     Radiance_cascades_merge_mode                              m_merge_mode;
 
     // Visibility pass (rc_visibility.comp): the trace's buffers and TLAS,

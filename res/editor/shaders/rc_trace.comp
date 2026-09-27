@@ -27,6 +27,21 @@
 // backface hit, +t_{1} (= r0) for a miss. The upper cascade variant does
 // not reference the distance texture, so its dispatches are no writes of it.
 //
+// The neighbour variant (ERHE_RC_TRACE_NEIGHBOURS 1, merge mode
+// per_neighbour_trace, every cascade but the top one) traces, for the same
+// texel runs, the connecting segments of the "bilinear fix" instead of the
+// raw interval: for each of the 8 upper probes u_n of this probe
+// (erhe_rc_upper.glsl, the merge's stencil) the segment from this probe's
+// interval start p + t_i d to u_n's interval start u_n + t_{i+1} d, with d
+// the texel-centre direction, shaded with the same transport (front face
+// hit: shade_surface() seen along the segment, beta 0; backface: 0, beta
+// 0; miss: 0, beta 1). Upper probes of weight 0 are not traced and store
+// (0, 0). Each segment is blended into its texel of the 4 x 2 block of the
+// neighbour atlas (rc_neighbour_texel()) with the same hysteresis and
+// first-fill rule; the variant writes neither the raw atlas nor the
+// distance texture. The merge (rc_merge.comp, ERHE_RC_MERGE_MODE 2) merges
+// each segment with its own upper probe.
+//
 // The material / light / instance-record / control blocks and the storage
 // images are declared by the bind group layout + interface blocks; the
 // acceleration structure binding and the stream-1 attribute offsets come in
@@ -38,6 +53,7 @@ layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
 
 #include "erhe_ray_hit.glsl"
 #include "erhe_ddgi_ray.glsl"
+#include "erhe_rc_upper.glsl"
 
 // rc_trace.dispatch.w flags
 const uint c_flag_blend = 1u; // blend with the texel's history
@@ -89,11 +105,48 @@ void main()
     float t_start        = rc_trace.grid_origin.w;
     float t_end          = rc_trace.grid_spacing.w;
 
+    uint flags = rc_trace.dispatch.w;
+
+#if ERHE_RC_TRACE_NEIGHBOURS
+    ivec3 upper_counts = ivec3(rc_trace.upper_counts.xyz);
+    ivec2 ix; vec2 wx;
+    ivec2 iy; vec2 wy;
+    ivec2 iz; vec2 wz;
+    rc_upper_axis(int(coords.x), int(counts.x), upper_counts.x, ix, wx);
+    rc_upper_axis(int(coords.y), int(counts.y), upper_counts.y, iy, wy);
+    rc_upper_axis(int(coords.z), int(counts.z), upper_counts.z, iz, wz);
+    vec3 segment_start = probe_position + (t_start * direction);
+    for (int k = 0; k < 2; ++k) {
+        for (int j = 0; j < 2; ++j) {
+            for (int i = 0; i < 2; ++i) {
+                int   n            = i + (2 * j) + (4 * k);
+                ivec2 output_texel = rc_neighbour_texel(atlas_texel, n);
+                float weight       = wx[i] * wy[j] * wz[k];
+                vec4  traced       = vec4(0.0);
+                if (weight > 0.0) {
+                    vec3  upper_position = rc_trace.upper_origin.xyz + (vec3(ix[i], iy[j], iz[k]) * rc_trace.upper_spacing.xyz);
+                    vec3  segment        = (upper_position + (t_end * direction)) - segment_start;
+                    float length_m       = length(segment);
+                    bool  hit            = false;
+                    vec4  ray            = vec4(0.0);
+                    if (length_m > 0.0) {
+                        ray = ddgi_trace_ray_segment(segment_start, segment / length_m, 0.0, length_m, vec3(0.0), hit);
+                    }
+                    traced = hit ? vec4(ray.rgb, 0.0) : vec4(0.0, 0.0, 0.0, 1.0);
+                    if ((flags & c_flag_blend) != 0u) {
+                        vec4 history = imageLoad(i_rc_neighbours, output_texel);
+                        traced = mix(traced, history, rc_trace.params.x);
+                    }
+                }
+                imageStore(i_rc_neighbours, output_texel, traced);
+            }
+        }
+    }
+#else
     bool hit;
     vec4 ray    = ddgi_trace_ray_segment(probe_position, direction, t_start, t_end, vec3(0.0), hit);
     vec4 traced = hit ? vec4(ray.rgb, 0.0) : vec4(0.0, 0.0, 0.0, 1.0);
 
-    uint flags = rc_trace.dispatch.w;
     if ((flags & c_flag_blend) != 0u) {
         vec4 history = imageLoad(i_rc_raw, atlas_texel);
         traced = mix(traced, history, rc_trace.params.x);
@@ -102,5 +155,6 @@ void main()
 
 #if ERHE_RC_TRACE_WRITE_DISTANCE
     imageStore(i_rc_distance, atlas_texel, vec4(hit ? ray.a : t_end, 0.0, 0.0, 0.0));
+#endif
 #endif
 }

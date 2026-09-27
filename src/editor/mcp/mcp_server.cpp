@@ -1172,7 +1172,13 @@ namespace {
         {"completed_sweeps",         stats.completed_sweeps},
         {"texels_per_update",        stats.texels_per_update},
         {"rays_per_update",          stats.rays_per_update},
-        {"gpu_ms",                   json{{"trace", pass_time_json(stats.trace)}, {"merge", pass_time_json(stats.merge)}, {"reduce", pass_time_json(stats.reduce)}}},
+        {"neighbour_rays_per_update", stats.neighbour_rays_per_update},
+        {"gpu_ms",                   json{
+            {"trace",           pass_time_json(stats.trace)},
+            {"neighbour_trace", pass_time_json(stats.neighbour_trace)},
+            {"merge",           pass_time_json(stats.merge)},
+            {"reduce",          pass_time_json(stats.reduce)}
+        }},
         {"gpu_ms_total",             pass_time_json(stats.total)},
         {"timing_history_size",      Radiance_cascades_renderer::c_timing_history_size},
         {"ms_per_million_rays",      stats.ms_per_million_rays},
@@ -1270,7 +1276,7 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             const json& value = args["merge_mode"];
             Radiance_cascades_merge_mode parsed{};
             if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
-                return make_error_content("set_radiance_cascades: 'merge_mode' must be \"interpolate\" or \"visibility_masked\"");
+                return make_error_content("set_radiance_cascades: 'merge_mode' must be \"interpolate\", \"visibility_masked\" or \"per_neighbour_trace\"");
             }
             config.merge_mode = parsed;
             renderer->set_merge_mode(parsed);

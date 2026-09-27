@@ -71,13 +71,13 @@ section, `editor_settings.radiance_cascades`):
 | `interval_scale` | 1.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
 | `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
 | `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced |
-| `merge_mode` | `interpolate` | `Radiance_cascades_merge_mode`: `interpolate` or `visibility_masked` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is chosen after plan phase 4 from the surface-level `gi_verify.py` accuracy |
+| `merge_mode` | `per_neighbour_trace` | `Radiance_cascades_merge_mode`: `interpolate`, `visibility_masked` or `per_neighbour_trace` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is the mode that passed the most `gi_verify.py` gates (doc/plans/radiance_cascades.md section 10, "Merge mode default") |
 | `debug_cascade_mask` | 0 | debug bitmask of the merge ("Merge"): bit `i` zeroes cascade `i`'s radiance, bit 12 the sky; not in the Settings window, edited with the Radiance Cascades window's checkboxes |
 
 `Radiance_cascades_config` v2 added `texels_per_frame` and `hysteresis`, v3
 `debug_cascade_mask`, v4 `merge_mode`; an older file reads them as the
-defaults. The plan's third merge mode, `per_neighbour_trace`, arrives in
-plan phase 5.
+defaults. `per_neighbour_trace` is a later enum value of the same v4
+field, so a v4 file reads any of the three modes.
 
 The field's sampling parameters (irradiance / distance texels, depth
 sharpness, biases, intensity) are the DDGI settings (`Ddgi_config`, passed
@@ -120,9 +120,16 @@ glm only) and unit tested by `editor_renderer_tests`
   `probe_index = x + nx * (y + ny * z)` into rows of
   `min(ceil(sqrt(probes)), max_texture_size / q_i)` tiles
   (`Radiance_cascade::get_tile_origin()`), so the atlas stays close to square
-  and both sides stay within `Device_info::max_texture_size`. When a cascade
-  would still exceed it, the cascade 0 budget is lowered (growing `s0`) and
-  the fit repeated.
+  and both sides stay within `Device_info::max_texture_size`. In the
+  `per_neighbour_trace` merge mode every cascade but the top one also has a
+  neighbour atlas of 4 x 2 texels per raw texel ("Textures"); the fit
+  settings then carry that block (`atlas_block_width` /
+  `atlas_block_height`, `c_neighbour_block_width` / `_height`) and the
+  row length is chosen so the neighbour atlas fits too. The block is part
+  of the fit settings, so switching into or out of that mode refits. When
+  a cascade would still exceed the limit, the cascade 0 budget is lowered
+  (growing `s0`) and the fit repeated; at the default 16384 limit the
+  block changes no layout of the stations (unit tested).
 - **Merge math**: `get_child_texels()` - cascade `i` texel `(u, v)` covers
   cascade `i + 1` texels `(2u .. 2u+1, 2v .. 2v+1)`, the octahedral nesting of
   the merge; `get_upper_probes()` - the 8 cascade `i + 1` probes of a cascade
@@ -158,6 +165,13 @@ recorded into the frame command buffer, and left in
 `2 x atlas width x atlas height x 8` bytes, plus
 `tiles_per_row x tile_rows x 4` bytes for the probe state and
 `atlas width x atlas height x 4` bytes for cascade 0's distance texture.
+In the `per_neighbour_trace` merge mode every cascade but the top one
+also has a **neighbours** texture, RGBA16F, 4 x 2 texels per raw texel
+(`4 x atlas width` by `2 x atlas height`, 8 times its raw atlas): the 8
+connecting segments of each texel ("Trace", "Merge"), segment `n` of raw
+texel `(x, y)` at `(4 x + (n & 3), 2 y + (n >> 2))`
+(`rc_neighbour_texel()` in `res/editor/shaders/erhe_rc_upper.glsl`),
+allocated with the layout in that mode.
 The probe field atlases of "Reduce" come on top (the reported total
 `texture_bytes` includes them).
 
@@ -204,6 +218,28 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   unblended. Without direction jitter a static scene is exact after the
   first sweep; the hysteresis matters once jitter or scene changes arrive
   (plan phase 6).
+- **Connecting segments** (merge mode `per_neighbour_trace` only): after
+  the raw runs, the same runs are traced again with the neighbour variant
+  (`ERHE_RC_TRACE_NEIGHBOURS 1`, `record_neighbour_trace()`), for every
+  cascade but the top one. Per texel, for each of the 8 upper probes
+  `u_n` of the merge stencil (`get_upper_probes()`, shared by the
+  shaders through `erhe_rc_upper.glsl`) the segment from this probe's
+  interval start `p + t_i d` to `u_n`'s interval start `u_n + t_{i+1} d`,
+  `d` the texel-centre direction, is traced from `t = 0` over its length
+  with the same transport (front face hit shaded as seen along the
+  segment, beta 0; backface 0, beta 0; miss 0, beta 1), and blended into
+  its texel of the neighbour atlas with the same hysteresis and first-fill
+  flag as the run's raw texels. Upper probes of weight 0 (odd lower
+  counts) are not traced and store (0, 0). The variant writes only the
+  neighbour atlas. **Budget**: `texels_per_frame` counts texels, as in the
+  other modes, so a texel below the top cascade costs its raw ray plus up
+  to 8 segments; the raw interval stays traced (cascade 0's distance
+  texture and classification feed the reduce, and the raw atlases stay
+  valid for the preview and the readback checks), which is one ray in
+  nine. The segments run in their own pass rather than in the merge: the
+  merge runs over every texel each update, so tracing there would make
+  its cost 8 rays per texel of the whole layout per update, outside the
+  budget, and would drop the hysteresis the raw intervals have.
 - **Cascade 0 distance.** Cascade 0 runs also store the signed hit distance
   in the distance texture, same texel address as the raw atlas and not
   blended: `+t` for a front face hit, `-t` for a backface hit, `r0` (the
@@ -214,18 +250,24 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   shared with `Ddgi_renderer`; no trace without a scene camera), and the
   renderer's own `Scene_tlas`, rebuilt each frame it traces. Binding points
   follow DDGI's trace layout: material 0, light 1, control 2, instance
-  records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`r32f`); the
-  texture heap is set 1.
+  records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`r32f`),
+  neighbour atlas 7 (`rgba16f`; the raw variants bind their raw atlas
+  there, unreferenced); the texture heap is set 1.
 - **Timing.** One explicit-range `Gpu_timer` per pass
-  (`Scoped_gpu_timer`, plot names `RC trace` and `RC merge`) brackets all of
+  (`Scoped_gpu_timer`, plot names `RC trace`, `RC neighbour trace` and
+  `RC merge`) brackets all of
   a frame's dispatches of that pass. `Radiance_cascades_renderer::get_stats()`
-  derives, like DDGI's: `trace`, `merge` and their sum `total`, each last /
-  mean over the last 60 samples; `texels_per_update` and `rays_per_update`
-  (one ray per texel), `ms_per_million_rays` (total mean per million rays),
+  derives, like DDGI's: `trace`, `neighbour_trace` (0 outside its mode),
+  `merge` and their sum `total`, each last /
+  mean over the last 60 samples; `texels_per_update`, `rays_per_update`
+  (one ray per texel plus the connecting segments) and
+  `neighbour_rays_per_update` (the segments: their count per full sweep,
+  from `get_upper_probes()` at allocation, spread over the updates of a
+  sweep), `ms_per_million_rays` (total mean per million rays),
   `updates_per_full_refresh` = ceil(total texels / texels per update) and
   `full_refresh_ms` (updates x total mean), `update_count`,
   `timing_sample_count` and `completed_sweeps`. The history is cleared when
-  another source is selected.
+  another source or another merge mode is selected.
 
 ## Merge
 
@@ -254,15 +296,27 @@ count, not to the trace budget.
   same edge probe as its 0.75 weight, so it takes the edge probe's value
   on that axis instead of extrapolating; with an odd lower count the edge
   probes coincide with upper probes.
-- **Merge modes** (`merge_mode`, two variants of the shader,
-  `ERHE_RC_MERGE_VISIBILITY` 0 / 1). `interpolate`: all 8 upper probes with
-  their trilinear weights. `visibility_masked`: only usable upper probes
+- **Merge modes** (`merge_mode`, three variants of the shader,
+  `ERHE_RC_MERGE_MODE` 0 / 1 / 2, the enum values). `interpolate`: all 8
+  upper probes with their trilinear weights. `per_neighbour_trace` (the
+  "bilinear fix", here trilinear): the texel's own interval is replaced
+  by its 8 connecting segments ("Trace"), each merged with its own upper
+  probe before the weight,
+  `merged = sum_n w_n (segment_n.rgb + segment_n.a * upper_n.rgb, segment_n.a * upper_n.a)`,
+  so every upper interval continues exactly where the lower ray, re-aimed
+  at that upper probe, ends. The segments use the texel-centre direction
+  and the upper value is the 2x2 child average ("pre-averaged", 8 rays per
+  texel instead of 32): the known approximation is that the segment
+  direction differs from the child directions by up to half a lower texel
+  and each segment is one ray, not a footprint average. The top cascade
+  takes the `interpolate` variant (it merges with the sky in every mode).
+  `visibility_masked`: only usable upper probes
   take part: the
   lower probe's state marks the segment to that upper probe unobstructed,
   and the upper probe's state does not mark it inside geometry. The
   trilinear weights of the usable probes are renormalized to sum to 1.
-  Neither mode is better everywhere (measured under "Verification"), so
-  both stay selectable; `set_merge_mode()` is called by the change sites
+  No mode is better everywhere (measured under "Verification"), so
+  all three stay selectable; `set_merge_mode()` is called by the change sites
   (the Radiance Cascades window combo, MCP `set_radiance_cascades`) after
   they store the setting, and the constructor takes the loaded one.
   With no usable upper probe, `upper = (0, 0)`: nothing beyond the
@@ -303,11 +357,13 @@ count, not to the trace budget.
   which orders its writes before the next dispatch's reads); the merged
   atlas being written is the only storage image, so each dispatch has
   exactly one write. The probe states of the cascade and of the cascade
-  above are sampled too (the `interpolate` variant does not reference
-  them; its raw atlas is bound in their place). The top cascade binds its
+  above and the cascade's neighbour atlas are sampled too (only the
+  variant of their mode references them; the raw atlas is bound in their
+  place otherwise). The top cascade binds its
   own raw atlas and state for the unused upper samplers. Binding points: control block 2, raw
-  sampler 0, upper sampler 1, state 2, upper state 3 (Vulkan offsets the
-  samplers past the control block, to 3 - 6), merged storage image 7.
+  sampler 0, upper sampler 1, state 2, upper state 3, neighbour atlas 4
+  (Vulkan offsets the samplers past the control block, to 3 - 7), merged
+  storage image 8.
 - **Debug cascade mask** (`debug_cascade_mask`, read every tick): a masked
   cascade contributes its transparency but no radiance, and bit 12 masks
   the sky, so the merged atlases show only the unmasked interval bands, as
@@ -326,9 +382,13 @@ count, not to the trace budget.
   but the same test also removes coarse probes that lie outside a closed
   room or inside its walls whose intervals, starting back inside the
   room, carried part of its far field - so in `cornell` the far field gets
-  darker. The `per_neighbour_trace` merge mode (plan section 5, phase 5)
-  traces from the lower probe to each upper interval start and removes
-  the start-point parallax.
+  darker. The `per_neighbour_trace` merge mode traces from the lower
+  probe's interval start to each upper interval start, so an upper
+  interval behind a wall is continued only through a segment that the
+  wall blocks: it removes the start-point parallax; what remains is the
+  upper interval's own offset (it starts at `u_n + t_{i+1} d`, up to
+  three quarters of an upper spacing from the lower ray) and the
+  pre-averaged direction ("Verification").
 
 ## Reduce
 
@@ -450,7 +510,8 @@ tick records it, so the copy costs nothing while the window is closed.
   `tile_texels`, `interval` `[start, end]` in metres, `texels`, `atlas_size`
   and `texture_bytes`, and the trace cost ("Trace"): `update_count`,
   `timing_sample_count`, `completed_sweeps`, `texels_per_update`,
-  `rays_per_update`, `gpu_ms` `{trace, merge, reduce}` and `gpu_ms_total` (their
+  `rays_per_update`, `neighbour_rays_per_update`, `gpu_ms`
+  `{trace, neighbour_trace, merge, reduce}` and `gpu_ms_total` (their
   sum; each `last_ms`, `average_ms`), `timing_history_size`, `ms_per_million_rays`,
   `updates_per_full_refresh` and `full_refresh_ms`, and `visibility`
   `{last_ms, update_count}` (the visibility pass, "Merge") - the fields
@@ -520,24 +581,48 @@ tick records it, so the copy costs nothing while the window is closed.
     upper probes with the documented weights and border rule, the unusable
     ones skipped and the rest renormalized, 2x2 child average; sky for the
     top cascade): 0 failures, worst relative difference 0.1 % (the
-    half-float store).
+    half-float store); `interpolate` and `visibility_masked`.
+  - **Per-neighbour exact check** (`per_neighbour_trace`; the segments are
+    not read back): 1500 sampled texels per cascade below the top one,
+    each merge recomputed from CPU ground-truth segments (the raw check's
+    box intersection and shading, from `p + t_i d` to `u_n + t_{i+1} d`)
+    and the read-back 2x2 child averages of the upper probes; the top
+    cascade takes the sky check. 0 failures on every station, worst
+    relative difference 0.15 % (tolerance 0.5 %, the raw shading
+    tolerance). Up to 47 of 1500 texels per cascade are skipped: besides
+    the raw skip rule, a segment that hits a front face within 0.1 mm of
+    another part (the line where a wall stands on the floor) - segment
+    ends lie on the probe grids, whose planes coincide with the room
+    faces, and there a 0.1 mm shift flips the committed face and the
+    shadow ray (measured: a `cornell` segment reading 0.2085 reads 0.1081
+    shifted by 0.1 mm).
   - **Approximation** against the full-range ground truth (400 interior
     cascade 0 texels per station, 8 x 8 sub-directions per texel, relative
     luminance error with a floor of 10 % of the sample's mean truth),
-    `visibility_masked`, with `interpolate` in parentheses (both from one
-    station build per run):
+    `interpolate` / `visibility_masked` / `per_neighbour_trace`, all from
+    one station build per run:
 
     | Station | median | p90 | max | mean bias |
     |---|---|---|---|---|
-    | `cornell` | 0.13 (0.13) | 0.75 (0.67) | 2.1 (2.1) | -21 % (-17 %) |
-    | `emissive_only` | 0.00 (0.00) | 0.51 (0.95) | 34.8 (20.9) | -12 % (-14 %) |
-    | `courtyard` | 0.07 (0.08) | 0.37 (0.38) | 0.69 (0.71) | -9 % (-12 %) |
-    | `leak_pair` | 0.01 (0.03) | 0.33 (0.38) | 2.8 (3.7) | -8 % (-10 %) |
-    | `corridor` | 0.00 (0.00) | 0.70 (0.69) | 1.0 (7.6) | -25 % (-31 %) |
+    | `cornell` | 0.13 / 0.13 / 0.17 | 0.67 / 0.75 / 1.15 | 2.1 / 2.1 / 4.4 | -17 / -21 / -2 % |
+    | `emissive_only` | 0.00 / 0.00 / 0.00 | 0.95 / 0.51 / 2.61 | 20.9 / 34.8 / 96.5 | -14 / -12 / -15 % |
+    | `courtyard` | 0.08 / 0.07 / 0.07 | 0.38 / 0.37 / 0.42 | 0.71 / 0.69 / 3.1 | -12 / -9 / +1 % |
+    | `leak_pair` | 0.03 / 0.01 / 0.00 | 0.38 / 0.33 / 0.14 | 3.7 / 2.8 / 0.29 | -10 / -8 / -2 % |
+    | `corridor` | 0.00 / 0.00 / 0.00 | 0.69 / 0.70 / 0.86 | 7.6 / 1.0 / 8.0 | -31 / -25 / -27 % |
 
     `leak_pair` room B (no light; 201 sampled texels): mean merged
-    luminance 0.0014 (0.0024), 1 - 2 % of room A's mean truth; worst texel
-    0.035 (0.046). The dark bias follows the upper
+    luminance 0.0024 / 0.0014 / 0.0000, the first two 1 - 2 % of room A's
+    mean truth; worst texel 0.046 / 0.035 / 0.0000. `per_neighbour_trace`
+    has the smallest bias on four stations and no room B light, but the
+    widest tail: its cascade 0 segments leave the probe toward upper
+    interval starts up to 1.3 m off the texel ray (0.75 of an upper
+    spacing per axis) while `r0` is 0.87 m, so a texel can see a small
+    emitter it does not point at (the worst `emissive_only` texels read
+    0.83 - 0.87 where the truth is 0). Its remaining leak is the
+    pre-averaged upper value: a child direction's interval can start
+    across a thin wall from the segment end (doc/plans/radiance_cascades.md
+    section 10, "What the numbers say"). For the other two modes the dark
+    bias follows the upper
     stencils: over the sampled interior probes the mean weight of upper
     probes the lower probe cannot see is 0.0 - 0.15 for cascade 1 and
     0.3 - 1.0 for the coarser cascades, whose probes lie mostly in the
@@ -545,9 +630,11 @@ tick records it, so the copy costs nothing while the window is closed.
     probes, starting back inside the room, carry part of the far field:
     `visibility_masked` drops them and the `cornell` bias grows from -17 %
     to -21 %, while the bright `corridor` outliers of 7.6 are gone. The script
-    fails only on median > 0.25 or p90 > 1.5, about twice the worst
-    station: a broken merge (wrong child texels or upper probes) reads as
-    errors of order 1 on most texels.
+    fails only on median > 0.25 or p90 > 1.5 (5.0 for
+    `per_neighbour_trace`), about twice the worst station of the mode: a
+    broken merge (wrong child texels or upper probes) reads as errors of
+    order 1 on most texels; the mode's exact check is the per-neighbour
+    check above.
   - **Mask decomposition** (`cornell`, `interpolate`): mean merged cascade
     0 luminance with all bands 0.009449, sum of the single-band means
     0.009449 (worst channel 0.001 %), all bands masked 0; the bands
@@ -558,21 +645,30 @@ tick records it, so the copy costs nothing while the window is closed.
   texels), 0.046 / 0.054 (`emissive_only`, 77 K), 0.041 / 0.107
   (`courtyard`, 202 K), 0.046 / 0.079 (`leak_pair`, 128 K), 0.039 / 0.127
   (`corridor`, 247 K): the merge touches every texel each update, the trace
-  only the budget; both modes cost the same within the timing noise. The
+  only the budget; `interpolate` and `visibility_masked` cost the same
+  within the timing noise. The
   visibility pass (`visibility_masked`), once per refit or geometry edit:
-  0.6 - 1.5 ms across the stations and runs.
+  0.6 - 1.5 ms across the stations and runs. `per_neighbour_trace` at the
+  same budget: 4.6 - 7.2 x the rays per update (`corridor` 300 K,
+  the others 405 - 456 K), neighbour trace 0.15 - 0.21 ms, merge about
+  twice the other modes' (0.08 `cornell` - 0.29 `corridor`); per update
+  1.5 - 2.1 x `interpolate` over the `gi_verify.py` stations.
 - Vulkan validation (synchronization validation on): a `cornell` run with a
   20000 texel budget (runs crossing cascades, the cursor wrapping into
   cascade 0 within a frame), the raw and merged previews, mask edits and a
   readback reports no error and no warning naming the radiance cascades
-  resources.
+  resources; so does a `cornell` `rc_texel_verify.py` run through all
+  three merge modes (the refits into and out of `per_neighbour_trace`, the
+  neighbour trace and its merge variant, the readbacks).
 - `editor_renderer_tests`: cascade fit (cascade 0 counts and spacing, nesting
   of the upper grids, cascade count and `max_cascades`, probe budget, atlas
-  size limit, tile placement), interval bounds, octahedral round trip and
+  size limit, tile placement, the neighbour atlas block within the size
+  limit and without effect at the default one), interval bounds,
+  octahedral round trip and
   2x2 nesting, and the upper-probe indices and weights (for an interior probe
   the weighted upper positions reproduce the lower probe position).
 - Reduce, same script and readback ("Reduce"; every supported station,
-  both merge modes): for 3 free interior cascade 0 probes per station, the
+  every merge mode): for 3 free interior cascade 0 probes per station, the
   irradiance and distance field texels containing the normals +y, +x and
   -z, and the probe state, against the reduce recomputed on the CPU from
   the read-back merged cascade 0 texels and signed distances of the same
@@ -580,10 +676,12 @@ tick records it, so the copy costs nothing while the window is closed.
   skipped, DDGI's classification threshold): 0 failures, worst relative
   difference 0.09 % (the half-float store; tolerance 0.2 %).
 - `py -3 scripts/gi_verify.py --station all --source radiance_cascades
-  [--rc-merge-mode interpolate|visibility_masked]` pins `RC_SETTINGS` and
+  [--rc-merge-mode interpolate|visibility_masked|per_neighbour_trace]`
+  (default `per_neighbour_trace`, the config default) pins `RC_SETTINGS` and
   the field sampling settings (`DDGI_SETTINGS`) of the creation module,
   selects the source, prints each station's cascade layout, stores it
   under `radiance_cascades` in the JSON record, and measures the field
-  like DDGI's. The first full run against DDGI and its gates are in
+  like DDGI's. The three-mode comparison against DDGI, its gates and the
+  merge-mode default are in
   [../plans/radiance_cascades.md](../plans/radiance_cascades.md) section
-  10, "Radiance cascades (phase 4)".
+  10, "Radiance cascades (phase 5)".

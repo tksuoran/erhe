@@ -117,19 +117,21 @@ auto get_upper_grid(const Probe_grid& lower) -> Probe_grid
 namespace {
 
 // Atlas tiling of one cascade: rows of probe tiles, close to square, with
-// no side above max_texture_size. Returns false when even the widest
-// allowed row leaves too many rows.
-[[nodiscard]] auto place_tiles(Radiance_cascade& cascade, const int max_texture_size) -> bool
+// no side above max_texture_size - after scaling by block (texels per raw
+// texel of the cascade's largest atlas). Returns false when even the
+// widest allowed row leaves too many rows.
+[[nodiscard]] auto place_tiles(Radiance_cascade& cascade, const int max_texture_size, const glm::ivec2 block) -> bool
 {
-    const int probe_count     = cascade.get_probe_count();
-    const int max_tiles_side  = max_texture_size / cascade.tile_texels;
-    if ((probe_count <= 0) || (max_tiles_side <= 0)) {
+    const int probe_count    = cascade.get_probe_count();
+    const int max_tiles_x    = max_texture_size / (cascade.tile_texels * block.x);
+    const int max_tiles_y    = max_texture_size / (cascade.tile_texels * block.y);
+    if ((probe_count <= 0) || (max_tiles_x <= 0) || (max_tiles_y <= 0)) {
         return false;
     }
     const int square_side = static_cast<int>(std::ceil(std::sqrt(static_cast<double>(probe_count))));
-    cascade.tiles_per_row = std::clamp(square_side, 1, max_tiles_side);
+    cascade.tiles_per_row = std::clamp(square_side, 1, max_tiles_x);
     cascade.tile_rows     = (probe_count + cascade.tiles_per_row - 1) / cascade.tiles_per_row;
-    return cascade.tile_rows <= max_tiles_side;
+    return cascade.tile_rows <= max_tiles_y;
 }
 
 } // anonymous namespace
@@ -145,6 +147,7 @@ auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascad
     const int   q0               = std::max(1, settings.cascade0_tile_texels);
     const float interval_scale   = std::max(1.0f, settings.interval_scale);
     const int   max_texture_size = std::max(1, settings.max_texture_size);
+    const glm::ivec2 atlas_block{std::max(1, settings.atlas_block_width), std::max(1, settings.atlas_block_height)};
     int         probe_budget     = std::max(8, settings.max_probes_cascade0);
 
     for (;;) {
@@ -178,7 +181,10 @@ auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascad
             cascade.tile_texels    = q0 << i;
             cascade.interval_start = interval.x;
             cascade.interval_end   = interval.y;
-            if (!place_tiles(cascade, max_texture_size)) {
+            // The top cascade (at most 2 probes on its longest axis, or the
+            // last one allowed) has no upper cascade, so no neighbour atlas.
+            const bool is_top = (i == (max_cascades - 1)) || (std::max(grid.counts.x, std::max(grid.counts.y, grid.counts.z)) <= 2);
+            if (!place_tiles(cascade, max_texture_size, is_top ? glm::ivec2{1, 1} : atlas_block)) {
                 fits = false;
                 break;
             }

@@ -345,7 +345,7 @@ RC_SETTINGS = {
 }
 
 
-def set_radiance_cascades(c, merge_mode="interpolate"):
+def set_radiance_cascades(c, merge_mode="per_neighbour_trace"):
     """Pin the field sampling settings (DDGI_SETTINGS, without selecting DDGI)
     and the radiance cascades settings (RC_SETTINGS plus merge_mode), and
     select radiance cascades as the indirect diffuse source."""

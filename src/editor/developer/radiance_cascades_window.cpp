@@ -120,7 +120,7 @@ void Radiance_cascades_window::imgui()
         ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(renderer->get_texture_byte_count())));
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade, plus the cascade 0 R32F distance texture; the total includes the probe field atlases.");
+    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade (plus the 4 x 2 neighbour atlas in the per_neighbour_trace merge mode), plus the cascade 0 R32F distance texture; the total includes the probe field atlases.");
 
     // GPU cost of the trace, merge and reduce
     // (doc/editor/radiance_cascades.md "Trace", "Merge", "Reduce").
@@ -138,6 +138,7 @@ void Radiance_cascades_window::imgui()
                 ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", time.average_ms);
             };
             row("trace", stats.trace);
+            row("neighbour trace", stats.neighbour_trace);
             row("merge", stats.merge);
             row("reduce", stats.reduce);
             row("total", stats.total);
@@ -148,7 +149,12 @@ void Radiance_cascades_window::imgui()
             stats.visibility_last_ms,
             static_cast<unsigned long long>(stats.visibility_update_count)
         );
-        ImGui::Text("Texels (rays) per update: %lld", static_cast<long long>(stats.texels_per_update));
+        ImGui::Text(
+            "Texels per update: %lld, rays per update: %lld (connecting segments %lld)",
+            static_cast<long long>(stats.texels_per_update),
+            static_cast<long long>(stats.rays_per_update),
+            static_cast<long long>(stats.neighbour_rays_per_update)
+        );
         ImGui::Text("Cost: %.3f ms per million rays", stats.ms_per_million_rays);
         ImGui::Text("Full refresh: %lld updates, %.2f ms", static_cast<long long>(stats.updates_per_full_refresh), stats.full_refresh_ms);
         ImGui::Text("Updates: %llu, full sweeps: %llu", static_cast<unsigned long long>(stats.update_count), static_cast<unsigned long long>(stats.completed_sweeps));

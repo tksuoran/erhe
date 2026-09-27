@@ -17,7 +17,7 @@ produces no field is measured as the flat ambient term it leaves in place
 Usage:
     py -3 scripts/gi_verify.py [--station NAME|all] [--source ambient|ddgi|radiance_cascades]
                                [--compare A,B] [--runs N] [--enforce]
-                               [--rc-merge-mode interpolate|visibility_masked]
+                               [--rc-merge-mode interpolate|visibility_masked|per_neighbour_trace]
                                [--screenshot-reference DIR | --screenshot-compare DIR]
                                [--screenshot-source render|window]
                                [--reuse] [--port N] [--editor PATH]
@@ -256,7 +256,7 @@ def stop_editor(c, process):
 class Field:
     """Source selection, sampling and stats for one source."""
 
-    def __init__(self, c, source, tool_names, rc_merge_mode="interpolate"):
+    def __init__(self, c, source, tool_names, rc_merge_mode="per_neighbour_trace"):
         self.c = c
         self.source = source
         self.rc_merge_mode = rc_merge_mode
@@ -636,6 +636,9 @@ def cost_metrics(field):
         "probe_count": stats.get("probe_count"),
         "rays_per_update": stats.get("rays_per_update"),
         "updates_per_full_refresh": stats.get("updates_per_full_refresh"),
+        # Radiance cascades per_neighbour_trace: the connecting segments,
+        # reported separately (0 / absent otherwise).
+        "neighbour_trace_ms_avg": stats.get("gpu_ms", {}).get("neighbour_trace", {}).get("average_ms"),
     }
 
 
@@ -864,7 +867,7 @@ def main():
     parser.add_argument("--compare", default=None, metavar="A,B", help="two sources measured back to back per station")
     parser.add_argument("--runs", type=int, default=3, help="full runs; each metric is the worst over the runs")
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
-    parser.add_argument("--rc-merge-mode", default="interpolate", choices=["interpolate", "visibility_masked"],
+    parser.add_argument("--rc-merge-mode", default="per_neighbour_trace", choices=["interpolate", "visibility_masked", "per_neighbour_trace"],
                         help="radiance cascades merge mode (doc/editor/radiance_cascades.md \"Merge\")")
     parser.add_argument("--screenshot-reference", default=None, metavar="DIR")
     parser.add_argument("--screenshot-compare", default=None, metavar="DIR")

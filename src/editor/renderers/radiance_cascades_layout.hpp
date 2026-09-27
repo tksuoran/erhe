@@ -25,6 +25,12 @@ namespace editor {
 // the one below it, so even a 4096^3 cascade 0 is covered by 12 cascades.
 constexpr int c_max_radiance_cascades = 12;
 
+// The per_neighbour_trace merge mode stores 8 connecting segments per raw
+// texel of every cascade but the top one, as a 4 x 2 texel block of a
+// neighbour atlas (doc/editor/radiance_cascades.md "Merge").
+constexpr int c_neighbour_block_width  = 4;
+constexpr int c_neighbour_block_height = 2;
+
 class Radiance_cascades_layout_settings
 {
 public:
@@ -34,6 +40,12 @@ public:
     int   cascade0_tile_texels{4};       // q0: octahedral tile side of cascade 0
     float interval_scale      {1.0f};    // r0 = interval_scale * sqrt(3) * s0, >= 1
     int   max_texture_size    {16384};   // Device_info::max_texture_size
+    // Texels per raw texel of the largest atlas a non-top cascade
+    // allocates: 1 x 1, or c_neighbour_block_width x
+    // c_neighbour_block_height in the per_neighbour_trace merge mode (its
+    // neighbour atlas). The tiling keeps that atlas within max_texture_size.
+    int   atlas_block_width   {1};
+    int   atlas_block_height  {1};
 
     [[nodiscard]] auto operator==(const Radiance_cascades_layout_settings& other) const -> bool = default;
 };
@@ -94,8 +106,10 @@ public:
 // (fit_probe_grid() with the cascade 0 budget), each next cascade from
 // get_upper_grid(), until the top cascade has at most 2 probes on its
 // longest axis or max_cascades is reached. The atlas of every cascade must
-// stay within max_texture_size on both sides; when it would not, the
-// cascade 0 budget is lowered (which grows s0) and the fit repeated.
+// stay within max_texture_size on both sides, for every cascade but the top
+// one scaled by the atlas block (atlas_block_width / _height); when it
+// would not, the cascade 0 budget is lowered (which grows s0) and the fit
+// repeated.
 // Invalid (cascade_count 0) for an invalid box.
 [[nodiscard]] auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascades_layout_settings& settings) -> Radiance_cascades_layout;
 

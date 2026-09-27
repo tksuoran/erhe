@@ -123,6 +123,33 @@ TEST(Radiance_cascades_layout, atlases_stay_within_max_texture_size)
     }
 }
 
+TEST(Radiance_cascades_layout, neighbour_atlases_stay_within_max_texture_size)
+{
+    for (const int max_texture_size : {16384, 2048, 512}) {
+        Radiance_cascades_layout_settings settings{};
+        settings.max_texture_size   = max_texture_size;
+        settings.atlas_block_width  = editor::c_neighbour_block_width;
+        settings.atlas_block_height = editor::c_neighbour_block_height;
+        const Radiance_cascades_layout layout = fit_example(settings);
+        ASSERT_TRUE(layout.is_valid()) << max_texture_size;
+        for (int i = 0; i < layout.cascade_count; ++i) {
+            const Radiance_cascade& cascade = layout.cascades[static_cast<std::size_t>(i)];
+            const bool is_top = (i == (layout.cascade_count - 1));
+            const int  block_w = is_top ? 1 : editor::c_neighbour_block_width;
+            const int  block_h = is_top ? 1 : editor::c_neighbour_block_height;
+            EXPECT_LE(cascade.get_atlas_width () * block_w, max_texture_size) << i;
+            EXPECT_LE(cascade.get_atlas_height() * block_h, max_texture_size) << i;
+            EXPECT_GE(static_cast<int64_t>(cascade.tiles_per_row) * cascade.tile_rows, cascade.get_probe_count());
+        }
+    }
+    // At the default texture size the block does not change the layout.
+    Radiance_cascades_layout_settings plain{};
+    Radiance_cascades_layout_settings block{};
+    block.atlas_block_width  = editor::c_neighbour_block_width;
+    block.atlas_block_height = editor::c_neighbour_block_height;
+    EXPECT_TRUE(fit_example(plain) == fit_example(block));
+}
+
 TEST(Radiance_cascades_layout, tiles_wrap_probe_index_into_rows)
 {
     const Radiance_cascades_layout layout = fit_example(Radiance_cascades_layout_settings{});

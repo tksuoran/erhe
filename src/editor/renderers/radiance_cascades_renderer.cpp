@@ -64,15 +64,17 @@ constexpr unsigned int c_control_binding_point         = 2;
 constexpr unsigned int c_instance_record_binding_point = 3;
 
 // Merge pass layout: the control block, then as combined image samplers
-// the raw atlas and probe state of the cascade and the merged atlas and
-// probe state of the cascade above (user points 0 - 3; Vulkan offsets
-// samplers past the highest buffer binding, 2, so they land at 3 - 6), and
-// the merged atlas written as the storage image at raw binding point 7.
+// the raw atlas and probe state of the cascade, the merged atlas and probe
+// state of the cascade above and the cascade's neighbour atlas (user
+// points 0 - 4; Vulkan offsets samplers past the highest buffer binding,
+// 2, so they land at 3 - 7), and the merged atlas written as the storage
+// image at raw binding point 8.
 constexpr unsigned int c_merge_raw_binding_point         = 0;
 constexpr unsigned int c_merge_upper_binding_point       = 1;
 constexpr unsigned int c_merge_state_binding_point       = 2;
 constexpr unsigned int c_merge_upper_state_binding_point = 3;
-constexpr unsigned int c_merge_output_binding_point      = 7;
+constexpr unsigned int c_merge_neighbours_binding_point  = 4;
+constexpr unsigned int c_merge_output_binding_point      = 8;
 
 // Probe state texture (Cascade_textures::state): an integer-valued float
 // per probe.
@@ -231,6 +233,11 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_control_offsets.dispatch     = m_control_block.add_uvec4("dispatch"    )->get_offset_in_parent();
     // x = hysteresis
     m_control_offsets.params       = m_control_block.add_vec4 ("params"      )->get_offset_in_parent();
+    // Neighbour variant only: the upper cascade's grid origin, spacing and
+    // probe counts (the connecting segments end at its interval starts).
+    m_control_offsets.upper_origin  = m_control_block.add_vec4 ("upper_origin" )->get_offset_in_parent();
+    m_control_offsets.upper_spacing = m_control_block.add_vec4 ("upper_spacing")->get_offset_in_parent();
+    m_control_offsets.upper_counts  = m_control_block.add_uvec4("upper_counts" )->get_offset_in_parent();
 
     // Stream-1 attribute offsets (in uints) for the shared hit path's manual
     // vertex fetch, derived from the Mesh_memory vertex format exactly as
@@ -253,6 +260,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_tlas_binding_point     = c_instance_record_binding_point + 1;
     m_raw_binding_point      = c_instance_record_binding_point + 2;
     m_distance_binding_point = c_instance_record_binding_point + 3;
+    m_neighbours_binding_point = c_instance_record_binding_point + 4;
     m_trace_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
@@ -298,6 +306,14 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .glsl_type     = Glsl_type::image_2d,
                     .image_format  = "r32f",
                     .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_neighbours_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_neighbours",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
                 }
             },
             .debug_label       = "RC trace",
@@ -313,13 +329,15 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     if (use_position_fetch) {
         extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
     }
-    // Two variants of rc_trace.comp: cascade 0 dispatches also write the
-    // distance texture, the others do not reference it at all. A dispatch
-    // that statically uses a storage image counts as writing it, so a shared
-    // variant would make every cascade's dispatch a write of the distance
-    // texture, and consecutive dispatches of one frame would be
-    // write-after-write hazards although only cascade 0 writes it.
-    const auto make_trace_pass = [&](Trace_pass& pass, const char* write_distance_define, const char* name) {
+    // Three variants of rc_trace.comp: cascade 0 dispatches also write the
+    // distance texture, the other raw dispatches do not reference it at
+    // all, and the neighbour variant (merge mode per_neighbour_trace)
+    // writes only the neighbour atlas. A dispatch that statically uses a
+    // storage image counts as writing it, so a shared variant would make
+    // every cascade's dispatch a write of the distance texture, and
+    // consecutive dispatches of one frame would be write-after-write
+    // hazards although only cascade 0 writes it.
+    const auto make_trace_pass = [&](Trace_pass& pass, const char* write_distance_define, const char* neighbours_define, const char* name) {
         pass.shader_stages = std::make_unique<Reloadable_shader_stages>(
             graphics_device,
             Shader_stages_create_info{
@@ -332,7 +350,8 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     { "ERHE_RT_COLOR0_OFFSET",        fmt::format("{}", color0   .attribute->offset / 4) },
                     { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" },
                     { "ERHE_RC_TRACE_GROUP_SIZE",     fmt::format("{}", c_trace_workgroup_size) },
-                    { "ERHE_RC_TRACE_WRITE_DISTANCE", write_distance_define }
+                    { "ERHE_RC_TRACE_WRITE_DISTANCE", write_distance_define },
+                    { "ERHE_RC_TRACE_NEIGHBOURS",     neighbours_define }
                 },
                 .extensions          = extensions,
                 .struct_types        = {
@@ -361,8 +380,9 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
             }
         );
     };
-    make_trace_pass(m_trace_cascade0, "1", "rc_trace_cascade0");
-    make_trace_pass(m_trace_upper,    "0", "rc_trace");
+    make_trace_pass(m_trace_cascade0,   "1", "0", "rc_trace_cascade0");
+    make_trace_pass(m_trace_upper,      "0", "0", "rc_trace");
+    make_trace_pass(m_trace_neighbours, "0", "1", "rc_trace_neighbours");
 
     // Visibility pass: the trace's buffers and TLAS (the shared hit path
     // references the material and light blocks), and the cascade's probe
@@ -549,6 +569,15 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .stage_flags     = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point   = c_merge_neighbours_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_rc_neighbours",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_merge_output_binding_point,
                     .type          = Binding_type::storage_image,
                     .name          = "i_rc_merged",
@@ -561,19 +590,20 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
             .uses_texture_heap = false
         }
     );
-    // Two variants, one per merge mode; the interpolate variant does not
-    // reference the probe state samplers.
+    // One variant per merge mode (ERHE_RC_MERGE_MODE = the enum value);
+    // only visibility_masked references the probe state samplers, only
+    // per_neighbour_trace the neighbour atlas.
     const auto make_merge_pass = [&](
         std::unique_ptr<Reloadable_shader_stages>& stages,
         std::unique_ptr<Compute_pipeline>&         pipeline,
-        const char*                                visibility_define,
+        const char*                                mode_define,
         const char*                                name
     ) {
         stages = std::make_unique<Reloadable_shader_stages>(
             graphics_device,
             Shader_stages_create_info{
                 .name                = name,
-                .defines             = { { "ERHE_RC_MERGE_VISIBILITY", visibility_define } },
+                .defines             = { { "ERHE_RC_MERGE_MODE", mode_define } },
                 .interface_blocks    = { &m_merge_block },
                 .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_merge.comp" } },
                 .extra_include_paths = shader_paths(),
@@ -592,6 +622,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     };
     make_merge_pass(m_merge_shader_stages,            m_merge_pipeline,            "0", "rc_merge");
     make_merge_pass(m_merge_visibility_shader_stages, m_merge_visibility_pipeline, "1", "rc_merge_visibility");
+    make_merge_pass(m_merge_neighbours_shader_stages, m_merge_neighbours_pipeline, "2", "rc_merge_neighbours");
 
     // Reduce: grid_counts xyz = cascade 0 probe counts, w = q0; params x =
     // cascade 0 tiles per atlas row, y = field tiles per atlas row, z =
@@ -756,6 +787,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_pass_timings[static_cast<std::size_t>(Rc_pass::trace)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC trace");
     m_pass_timings[static_cast<std::size_t>(Rc_pass::merge)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC merge");
     m_pass_timings[static_cast<std::size_t>(Rc_pass::reduce)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC reduce");
+    m_pass_timings[static_cast<std::size_t>(Rc_pass::neighbour_trace)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC neighbour trace");
 
     m_supported = true;
     log_startup->info("Radiance_cascades_renderer: radiance cascades available");
@@ -769,8 +801,10 @@ auto Radiance_cascades_renderer::is_supported() const -> bool
         m_supported &&
         (m_trace_cascade0.pipeline != nullptr) &&
         (m_trace_upper.pipeline != nullptr) &&
+        (m_trace_neighbours.pipeline != nullptr) &&
         (m_merge_pipeline != nullptr) &&
         (m_merge_visibility_pipeline != nullptr) &&
+        (m_merge_neighbours_pipeline != nullptr) &&
         (m_visibility_pipeline != nullptr) &&
         (m_reduce_irradiance.pipeline != nullptr) &&
         (m_reduce_distance.pipeline != nullptr);
@@ -855,6 +889,11 @@ void Radiance_cascades_renderer::set_merge_mode(const Radiance_cascades_merge_mo
     } else {
         release_state_textures();
     }
+    // Into or out of per_neighbour_trace: the next tick's update_layout()
+    // sees the atlas block of the fit settings change and refits, which
+    // (re)allocates or releases the neighbour atlases with a first fill.
+    // The pass timings of the other mode would mislead.
+    clear_pass_timings();
 }
 
 auto Radiance_cascades_renderer::get_merge_mode() const -> Radiance_cascades_merge_mode
@@ -906,6 +945,13 @@ void Radiance_cascades_renderer::sample_pass_timings()
         results_ns[i] = m_pass_timings[i].timer->last_result();
         sum_ns += results_ns[i];
     }
+    // The neighbour trace runs only in its merge mode; outside it the timer
+    // still holds its last measurement.
+    if (m_merge_mode != Radiance_cascades_merge_mode::per_neighbour_trace) {
+        const std::size_t neighbour_index = static_cast<std::size_t>(Rc_pass::neighbour_trace);
+        sum_ns -= results_ns[neighbour_index];
+        results_ns[neighbour_index] = 0;
+    }
     if (sum_ns == 0) {
         return;
     }
@@ -946,16 +992,23 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
         return result;
     };
     stats.trace            = pass_time(Rc_pass::trace);
+    stats.neighbour_trace  = pass_time(Rc_pass::neighbour_trace);
     stats.merge            = pass_time(Rc_pass::merge);
     stats.reduce           = pass_time(Rc_pass::reduce);
-    stats.total.last_ms    = stats.trace.last_ms    + stats.merge.last_ms    + stats.reduce.last_ms;
-    stats.total.average_ms = stats.trace.average_ms + stats.merge.average_ms + stats.reduce.average_ms;
+    stats.total.last_ms    = stats.trace.last_ms    + stats.neighbour_trace.last_ms    + stats.merge.last_ms    + stats.reduce.last_ms;
+    stats.total.average_ms = stats.trace.average_ms + stats.neighbour_trace.average_ms + stats.merge.average_ms + stats.reduce.average_ms;
     stats.update_count        = m_update_count;
     stats.timing_sample_count = m_timing_sample_count;
     stats.completed_sweeps    = m_completed_sweeps;
     stats.texels_per_update   = m_texels_per_update;
-    stats.rays_per_update     = m_texels_per_update;
     const int64_t total_texels = m_layout.get_total_texels();
+    // The connecting segments per update: the sweep's segments spread over
+    // the updates of a sweep (the cursor's runs cross cascades, whose
+    // texels carry different segment counts).
+    stats.neighbour_rays_per_update = (total_texels > 0)
+        ? ((m_neighbour_rays_per_sweep * m_texels_per_update) + (total_texels / 2)) / total_texels
+        : 0;
+    stats.rays_per_update = m_texels_per_update + stats.neighbour_rays_per_update;
     stats.updates_per_full_refresh = (m_texels_per_update > 0)
         ? ((total_texels + m_texels_per_update - 1) / m_texels_per_update)
         : 0;
@@ -973,7 +1026,9 @@ void Radiance_cascades_renderer::release_textures()
     for (Cascade_textures& textures : m_cascade_textures) {
         textures.raw.reset();
         textures.merged.reset();
+        textures.neighbours.reset();
     }
+    m_neighbour_rays_per_sweep = 0;
     release_state_textures();
     release_field();
     m_distance_texture.reset();
@@ -1030,6 +1085,45 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
         m_cascade_texel_offsets[static_cast<std::size_t>(i)] = texel_offset;
         texel_offset += cascade.get_texel_count();
     }
+    // Merge mode per_neighbour_trace (the layout was fitted with its atlas
+    // block): a neighbour atlas for every cascade but the top one, and the
+    // connecting segments one full sweep traces - the upper probes of
+    // nonzero weight of each probe, for each of its q_i^2 texels. Cold path:
+    // runs once per allocation.
+    if (m_fit_settings.atlas_block_width == c_neighbour_block_width) {
+        for (int i = 0; (i + 1) < m_layout.cascade_count; ++i) {
+            const Radiance_cascade& cascade = m_layout.cascades[static_cast<std::size_t>(i)];
+            const Radiance_cascade& upper   = m_layout.cascades[static_cast<std::size_t>(i + 1)];
+            Cascade_textures& textures = m_cascade_textures[static_cast<std::size_t>(i)];
+            textures.neighbours = make_texture(
+                fmt::format("RC cascade {} neighbours", i),
+                c_radiance_format,
+                cascade.get_atlas_width () * c_neighbour_block_width,
+                cascade.get_atlas_height() * c_neighbour_block_height
+            );
+            const std::size_t bytes =
+                static_cast<std::size_t>(c_neighbour_block_width * c_neighbour_block_height) *
+                static_cast<std::size_t>(cascade.get_atlas_texel_count()) * radiance_texel_bytes;
+            m_cascade_byte_counts[static_cast<std::size_t>(i)] += bytes;
+            m_texture_byte_count += bytes;
+
+            int64_t segments_per_texel_sum = 0;
+            for (int z = 0; z < cascade.grid.counts.z; ++z) {
+                for (int y = 0; y < cascade.grid.counts.y; ++y) {
+                    for (int x = 0; x < cascade.grid.counts.x; ++x) {
+                        const Upper_probes upper_probes = get_upper_probes(glm::ivec3{x, y, z}, cascade.grid.counts, upper.grid.counts);
+                        for (const float weight : upper_probes.weights) {
+                            if (weight > 0.0f) {
+                                ++segments_per_texel_sum;
+                            }
+                        }
+                    }
+                }
+            }
+            const int64_t q = static_cast<int64_t>(cascade.tile_texels);
+            m_neighbour_rays_per_sweep += segments_per_texel_sum * q * q;
+        }
+    }
     {
         const Radiance_cascade& cascade0 = m_layout.cascades[0];
         m_distance_texture = make_texture("RC cascade 0 distance", c_distance_format, cascade0.get_atlas_width(), cascade0.get_atlas_height());
@@ -1078,7 +1172,11 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
         .max_cascades         = std::clamp(m_config.max_cascades, 1, c_max_radiance_cascades),
         .cascade0_tile_texels = std::clamp(m_config.cascade0_tile_texels, 1, 64),
         .interval_scale       = std::max(1.0f,  m_config.interval_scale),
-        .max_texture_size     = max_texture_size
+        .max_texture_size     = max_texture_size,
+        // The per_neighbour_trace merge mode's neighbour atlases are part
+        // of the layout: switching into or out of the mode refits.
+        .atlas_block_width    = (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) ? c_neighbour_block_width  : 1,
+        .atlas_block_height   = (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) ? c_neighbour_block_height : 1
     };
     const float padding_m = std::max(0.0f, m_config.volume_padding_m);
 
@@ -1401,6 +1499,7 @@ void Radiance_cascades_renderer::record_trace(
         // images and need none.
         std::array<bool, c_max_radiance_cascades> dispatched{};
         int64_t remaining = m_texels_per_update;
+        m_trace_runs.clear();
         while (remaining > 0) {
             int cascade_index = m_layout.cascade_count - 1;
             while ((cascade_index > 0) && (m_cascade_texel_offsets[static_cast<std::size_t>(cascade_index)] > m_texel_cursor)) {
@@ -1410,7 +1509,8 @@ void Radiance_cascades_renderer::record_trace(
             const int64_t           first_texel = m_texel_cursor - m_cascade_texel_offsets[static_cast<std::size_t>(cascade_index)];
             const int64_t           count       = std::min({remaining, cascade.get_texel_count() - first_texel, c_max_texels_per_dispatch});
 
-            if (dispatched[static_cast<std::size_t>(cascade_index)]) {
+            const bool needs_barrier = dispatched[static_cast<std::size_t>(cascade_index)];
+            if (needs_barrier) {
                 command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
             }
             dispatched[static_cast<std::size_t>(cascade_index)] = true;
@@ -1418,6 +1518,15 @@ void Radiance_cascades_renderer::record_trace(
             // First sweep since the allocation: every texel is new, and its
             // history is the allocation clear, not a trace.
             const uint32_t flags = (m_completed_sweeps > 0) ? c_flag_blend : 0u;
+            m_trace_runs.push_back(
+                Trace_run{
+                    .cascade       = cascade_index,
+                    .first_texel   = first_texel,
+                    .count         = count,
+                    .flags         = flags,
+                    .needs_barrier = needs_barrier
+                }
+            );
 
             const std::size_t byte_count = m_control_block.get_size_bytes();
             Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
@@ -1460,6 +1569,8 @@ void Radiance_cascades_renderer::record_trace(
                 // Bound for every dispatch (the layout has the binding); only
                 // the cascade 0 variant references it.
                 encoder.set_storage_image(m_distance_binding_point, *m_distance_texture);
+                // Not referenced by the raw variants; the raw atlas stands in.
+                encoder.set_storage_image(m_neighbours_binding_point, *m_cascade_textures[static_cast<std::size_t>(cascade_index)].raw);
                 material_set.bind(encoder);
                 encoder.dispatch_compute(
                     static_cast<std::uintptr_t>((count + c_trace_workgroup_size - 1) / c_trace_workgroup_size),
@@ -1478,12 +1589,122 @@ void Radiance_cascades_renderer::record_trace(
         }
     }
 
+    // Merge mode per_neighbour_trace: the connecting segments of the same
+    // runs, while the raw atlases and the distance texture (bound, not
+    // referenced, by the neighbour variant) are still in general layout.
+    if (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) {
+        record_neighbour_trace(command_buffer, tlas_frame, light_range, material_set);
+    }
+
     // The raw atlases become sampled textures for the merge pass.
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     for (int i = 0; i < m_layout.cascade_count; ++i) {
         command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].raw, Image_layout::shader_read_only_optimal);
     }
     command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::shader_read_only_optimal);
+}
+
+void Radiance_cascades_renderer::record_neighbour_trace(
+    erhe::graphics::Command_buffer&          command_buffer,
+    const Scene_tlas::Frame&                 tlas_frame,
+    const erhe::graphics::Ring_buffer_range& light_range,
+    erhe::scene_renderer::Material_set&      material_set
+)
+{
+    using namespace erhe::graphics;
+
+    const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
+    for (int i = 0; (i + 1) < m_layout.cascade_count; ++i) {
+        command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].neighbours, Image_layout::general);
+    }
+
+    {
+        const Scoped_gpu_timer neighbour_timer{*m_pass_timings[static_cast<std::size_t>(Rc_pass::neighbour_trace)].timer, command_buffer};
+
+        // The runs of this frame's raw trace (record_trace()), with the same
+        // first-fill flags and the same barrier rule: a second run of a
+        // cascade in one frame is ordered after the first. The top cascade
+        // has no upper cascade and no neighbour atlas.
+        for (const Trace_run& run : m_trace_runs) {
+            if ((run.cascade + 1) >= m_layout.cascade_count) {
+                continue;
+            }
+            const std::size_t       index   = static_cast<std::size_t>(run.cascade);
+            const Radiance_cascade& cascade = m_layout.cascades[index];
+            const Radiance_cascade& upper   = m_layout.cascades[index + 1];
+            if (run.needs_barrier) {
+                command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+            }
+
+            const std::size_t byte_count = m_control_block.get_size_bytes();
+            Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+            {
+                std::span<std::byte> gpu_data = control_range.get_span();
+                std::memset(gpu_data.data(), 0, byte_count);
+                const glm::vec4  grid_origin {cascade.grid.origin,  cascade.interval_start};
+                const glm::vec4  grid_spacing{cascade.grid.spacing, cascade.interval_end};
+                const glm::uvec4 grid_counts{
+                    static_cast<uint32_t>(cascade.grid.counts.x),
+                    static_cast<uint32_t>(cascade.grid.counts.y),
+                    static_cast<uint32_t>(cascade.grid.counts.z),
+                    static_cast<uint32_t>(cascade.tile_texels)
+                };
+                const glm::uvec4 dispatch{
+                    static_cast<uint32_t>(run.first_texel),
+                    static_cast<uint32_t>(run.count),
+                    static_cast<uint32_t>(cascade.tiles_per_row),
+                    run.flags
+                };
+                const glm::vec4  params       {hysteresis, 0.0f, 0.0f, 0.0f};
+                const glm::vec4  upper_origin {upper.grid.origin,  0.0f};
+                const glm::vec4  upper_spacing{upper.grid.spacing, 0.0f};
+                const glm::uvec4 upper_counts{
+                    static_cast<uint32_t>(upper.grid.counts.x),
+                    static_cast<uint32_t>(upper.grid.counts.y),
+                    static_cast<uint32_t>(upper.grid.counts.z),
+                    0u
+                };
+                write(gpu_data, m_control_offsets.grid_origin,   as_span(grid_origin  ));
+                write(gpu_data, m_control_offsets.grid_spacing,  as_span(grid_spacing ));
+                write(gpu_data, m_control_offsets.grid_counts,   as_span(grid_counts  ));
+                write(gpu_data, m_control_offsets.dispatch,      as_span(dispatch     ));
+                write(gpu_data, m_control_offsets.params,        as_span(params       ));
+                write(gpu_data, m_control_offsets.upper_origin,  as_span(upper_origin ));
+                write(gpu_data, m_control_offsets.upper_spacing, as_span(upper_spacing));
+                write(gpu_data, m_control_offsets.upper_counts,  as_span(upper_counts ));
+                control_range.bytes_written(byte_count);
+                control_range.close();
+            }
+            {
+                Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+                encoder.set_bind_group_layout(m_trace_bind_group_layout.get());
+                encoder.set_compute_pipeline(*m_trace_neighbours.pipeline);
+                m_light_buffer->bind_light_buffer(encoder, light_range);
+                m_scene_tlas->bind_instance_records(encoder, tlas_frame);
+                encoder.set_acceleration_structure(m_tlas_binding_point, *tlas_frame.acceleration_structure);
+                m_control_buffer->bind(encoder, control_range);
+                // The raw atlas and the distance texture are bound for the
+                // layout's bindings; the neighbour variant references only
+                // the neighbour atlas.
+                encoder.set_storage_image(m_raw_binding_point,        *m_cascade_textures[index].raw);
+                encoder.set_storage_image(m_distance_binding_point,   *m_distance_texture);
+                encoder.set_storage_image(m_neighbours_binding_point, *m_cascade_textures[index].neighbours);
+                material_set.bind(encoder);
+                encoder.dispatch_compute(
+                    static_cast<std::uintptr_t>((run.count + c_trace_workgroup_size - 1) / c_trace_workgroup_size),
+                    1,
+                    1
+                );
+            }
+            control_range.release();
+        }
+    }
+
+    // The neighbour atlases become sampled textures for the merge pass.
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    for (int i = 0; (i + 1) < m_layout.cascade_count; ++i) {
+        command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].neighbours, Image_layout::shader_read_only_optimal);
+    }
 }
 
 void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& command_buffer, const glm::vec3& sky_radiance)
@@ -1514,11 +1735,20 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
         Texture&                raw     = *m_cascade_textures[index].raw;
         Texture&                merged  = *m_cascade_textures[index].merged;
         const Texture&          upper_merged = is_top ? raw : *m_cascade_textures[index + 1].merged;
-        // The interpolate variant does not reference the state samplers;
-        // the raw atlas stands in for them.
+        // Only the visibility_masked variant references the state samplers
+        // and only the per_neighbour_trace variant the neighbour atlas; the
+        // raw atlas stands in for them. The top cascade has no neighbour
+        // atlas and merges with the sky in every mode, so it takes the
+        // interpolate variant in per_neighbour_trace.
         const bool              visibility   = (m_merge_mode == Radiance_cascades_merge_mode::visibility_masked);
+        const bool              neighbours   = (m_merge_mode == Radiance_cascades_merge_mode::per_neighbour_trace) && !is_top;
         const Texture&          state        = visibility ? *m_cascade_textures[index].state : raw;
         const Texture&          upper_state  = (visibility && !is_top) ? *m_cascade_textures[index + 1].state : state;
+        const Texture&          neighbour_atlas = neighbours ? *m_cascade_textures[index].neighbours : raw;
+        const Compute_pipeline& pipeline =
+            visibility ? *m_merge_visibility_pipeline :
+            neighbours ? *m_merge_neighbours_pipeline :
+                         *m_merge_pipeline;
 
         uint32_t flags = 0u;
         if (is_top) {
@@ -1566,12 +1796,13 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
         {
             Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_merge_bind_group_layout.get());
-            encoder.set_compute_pipeline(visibility ? *m_merge_visibility_pipeline : *m_merge_pipeline);
+            encoder.set_compute_pipeline(pipeline);
             m_control_buffer->bind(encoder, control_range);
             encoder.set_sampled_image(c_merge_raw_binding_point,   raw,          *m_merge_sampler);
             encoder.set_sampled_image(c_merge_upper_binding_point, upper_merged, *m_merge_sampler);
             encoder.set_sampled_image(c_merge_state_binding_point,       state,       *m_merge_sampler);
             encoder.set_sampled_image(c_merge_upper_state_binding_point, upper_state, *m_merge_sampler);
+            encoder.set_sampled_image(c_merge_neighbours_binding_point,  neighbour_atlas, *m_merge_sampler);
             encoder.set_storage_image(c_merge_output_binding_point, merged);
             encoder.dispatch_compute(
                 static_cast<std::uintptr_t>((width  + c_merge_workgroup_size - 1) / c_merge_workgroup_size),

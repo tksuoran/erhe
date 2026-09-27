@@ -177,10 +177,11 @@ textures.
 The merge and reduce passes run whenever a trace dispatch ran; they touch
 about `2 * M0` texels, far below the trace cost.
 
-Merge-quality option `merge_mode`, three modes; the default is chosen after
-phase 4 from the surface-level `gi_verify.py` accuracy:
+Merge-quality option `merge_mode`, three modes; the default,
+`per_neighbour_trace`, is the mode that passed the most section 10 gates
+(section 10, "Merge mode default"):
 
-- `interpolate` (default for now) - trilinear weights over the 8 upper
+- `interpolate` - trilinear weights over the 8 upper
   probes. Upper intervals start at the upper probe, not at the lower probe
   (start-point parallax), so parallax across one upper spacing can show as
   ringing near high-contrast emitters, and an upper interval can start on
@@ -193,10 +194,18 @@ phase 4 from the surface-level `gi_verify.py` accuracy:
   upper probes (`upper = (0, 0)` when none is). Reduces the leak, but
   darkens closed rooms: coarse probes outside a room carry part of its far
   field through intervals that start back inside it.
-- `per_neighbour_trace` - the community "bilinear fix": cascade `i` traces
-  eight intervals per texel, one from its probe to the interval start of each
-  upper neighbour, and merges each with that neighbour before the trilinear
-  weight. Costs 8x cascade `i` tracing; removes the ringing.
+- `per_neighbour_trace` (default) - the community "bilinear fix", here
+  trilinear: every cascade below the top one traces, per texel, a
+  connecting segment from its interval start `p + t_i d` to the interval
+  start `u_n + t_{i+1} d` of each upper probe `u_n` of nonzero weight, and
+  merges each segment with that probe's 2x2-averaged upper value before
+  the trilinear weight (the "pre-averaged" variant: 8 rays per texel along
+  the texel-centre direction). The segments run in their own budgeted,
+  hysteresis-blended pass next to the trace and are stored in a 4 x 2
+  neighbour atlas per cascade
+  ([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+  "Trace", "Merge"). Removes the start-point parallax leak; costs up to 8
+  more rays per texel below the top cascade.
 
 ## 6. Multi-bounce and change response
 
@@ -323,10 +332,17 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    generalized to wrapped tile rows (`tiles_per_row`, shared by both
    producers and the forward pass); the reduce exact-algebra check of
    `scripts/rc_texel_verify.py`; and the first full `gi_verify.py` run for
-   RC, both merge modes (section 10, "Radiance cascades (phase 4)").
-5. **`per_neighbour_trace` merge mode**, its cost reported separately.
-   Directly after phase 4: it is the fix for the start-point parallax leak
-   phase 3 measured, and the merge-mode default is chosen with it.
+   RC.
+5. **`per_neighbour_trace` merge mode** - built, described in
+   [../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+   "Trace" and "Merge": the connecting segment pass
+   (`rc_trace.comp` neighbour variant, the 4 x 2 neighbour atlases, the
+   `RC neighbour trace` timer, `neighbour_rays_per_update`), the third
+   `rc_merge.comp` variant, the layout's atlas block, the per-neighbour
+   exact check of `scripts/rc_texel_verify.py`, and the merge-mode default
+   `per_neighbour_trace`, chosen from the three-mode `gi_verify.py`
+   comparison (section 10, "Radiance cascades (phase 5)"). Gates 2, 6, 9
+   and 12 still fail; the causes measured so far are listed there.
 6. **Temporal, multi-bounce, defaults.** Direction jitter, `multi_bounce`,
    change-driven hysteresis reset; RC defaults chosen against the section 8
    budget.
@@ -468,95 +484,139 @@ metre), so its smoothness is measured on the logarithm of the profile. The `ambi
 for every indirect metric (scene ambient is black) except `courtyard` (0.099,
 the flat sky term); its ratios are undefined rather than 1.0.
 
-### Radiance cascades (phase 4)
+### Radiance cascades (phase 5)
 
 RC at the pinned `RC_SETTINGS` of the creation module (the
 `Radiance_cascades_config` defaults: `s0` 0.5 m, `q0` 4, `interval_scale` 1,
 65536 texels per frame, hysteresis 0.9, no direction jitter) with the field
-sampling settings of `DDGI_SETTINGS`, both merge modes, worst of three
-runs, measured 2026-09-27 back to back with DDGI on the headless Vulkan
-editor (`gi_verify.py --compare ddgi,radiance_cascades --runs 3
---rc-merge-mode ...`). The DDGI column of the same runs matches the phase 0
-baseline within its run-to-run noise. The `corridor` rows were re-measured
-after the upper cascade grids were centred on the lower ones
-([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
-"Layout"); the other stations predate that change, which moved the merged
-cascade 0 bias of `rc_texel_verify.py` by 1 - 6 points toward zero on
-every station.
+sampling settings of `DDGI_SETTINGS`, all three merge modes, worst of three
+runs each, measured 2026-09-28 back to back with DDGI on the headless
+Vulkan editor (`gi_verify.py --compare ddgi,radiance_cascades --station all
+--runs 3 --rc-merge-mode ...`, one comparison per mode). The DDGI columns of
+the three comparisons match the phase 0 baseline within its run-to-run
+noise; where a gate compares with DDGI, the DDGI value is the worst of all
+nine DDGI runs (see "Merge mode default").
 
-| Metric | RC `interpolate` | RC `visibility_masked` | Gate |
-|---|---|---|---|
-| `leak_pair` leak (worst of floor and shared-wall face) | 0.039 (floor; wall 0.011) | 0.017 (floor; wall 0.0000) | <= 0.01 fail / fail |
-| `probe_offset_sweep` leak at offset 0.0 / 0.25 / 0.5 | 0.047 / 0.035 / 0.051 | 0.035 / 0.018 / 0.025 | worst <= 0.02 fail / fail |
-| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.30, 0.49, 0.40 | 0.29, 0.47, 0 | recorded |
-| `probe_offset_sweep` crawl-floor median irradiance | 0.0042 | 0.0000 | item 12 |
-| `cornell` red strip R / G, green strip G / R | 1.97, 1.97 | 2.05, 2.05 | >= 1.2 pass / pass |
-| `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 17.0 / 0.62 / 0.018 | 158 / 5.8 / 0.25 | 1.0 and 0.25 m > 1: fail / pass |
-| `corridor` monotonic violations; max log second difference | 7; 1.96 | 0; undefined (zero beyond 8 m) | 0; <= DDGI (0.18): fail / fail |
-| `courtyard` shadowed wall mean irradiance | 0.15 | 0.14 | - |
-| `dynamic` updates to settle, light move / door open | 44 / 51 | 41 / 52 | <= half of DDGI (85 / 236, 78 / 225): fail (0.52, 0.53) / pass |
-| `cornell` back wall noise, per-point std / mean | 0 | 0 | below DDGI pass / pass |
-| Vulkan validation (item 10) | 0 errors | 0 errors | pass |
-| Cost (item 9): per update and full refresh vs DDGI | 1.7 - 2.6 x; 1.7 - 9 x | 1.7 - 2.6 x; 1.7 - 9 x | <= DDGI fail / fail |
+| Metric | `interpolate` | `visibility_masked` | `per_neighbour_trace` | DDGI | Gate |
+|---|---|---|---|---|---|
+| `leak_pair` leak | 0.027 | 0.011 | 0.0000 | 0.0008 | <= 0.01: fail / fail / pass |
+| `probe_offset_sweep` leak at offset 0.0 / 0.25 / 0.5 | 0.046 / 0.029 / 0.048 | 0.041 / 0.0095 / 0.024 | 0.0003 / 0.0000 / 0.017 | 0.0047 / 0.0020 / 0.0006 | worst <= 0.02 and <= DDGI's worst: fail / fail / fail (0.017 > 0.0047) |
+| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.36, 0.61, 0.31 | 0.34, 0.55, undefined (median 0) | 0.28, 0.51, 0.064 | 0.18 - 0.24, 0.26 - 0.59, 0.43 - 0.49 | recorded |
+| `probe_offset_sweep` crawl-floor median irradiance | 0.0047 | 0 | 0.00014 | 0.0004 | item 12 |
+| `cornell` red strip R / G, green strip G / R | 1.97, 1.97 | 2.05, 2.05 | 1.86, 1.86 | 1.94 | >= 1.2: pass / pass / pass |
+| `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 28.8 / 1.06 / 0.029 | 158 / 5.8 / 0.28 | 34.4 / 5.1 / 0.25 | 6.8 - 7.0 / 4.7 - 4.8 / 0.49 - 0.51 | 1.0 and 0.25 m > 1: pass / pass / pass |
+| `corridor` monotonic violations; max log second difference | 7; 1.96 | 0; undefined (0 beyond 8 m) | 0; undefined (0 from 13.8 m) | 0; 0.23 | 0 and <= DDGI: fail / fail / fail |
+| `courtyard` shadowed wall mean irradiance | 0.145 | 0.148 | 0.174 | 0.173 | - |
+| `dynamic` updates to settle, light move / door open | 43 / 47 | 39 / 47 | 40 / 48 | 90 / 258 | <= half: pass / pass / pass |
+| `cornell` back wall noise, per-point std / mean | 0 | 0 | 0 | 0.0038 | below DDGI: pass / pass / pass |
+| Cost (item 9): per update; full refresh, vs DDGI | 1.6 - 2.8 x; 1.6 - 9.7 x | 1.6 - 2.7 x; 1.6 - 9.5 x | 2.8 - 4.5 x; 3.5 - 15.6 x | 1 | <= DDGI: fail / fail / fail |
+| Vulkan validation (item 10) | 0 errors | 0 errors | 0 errors | - | pass / pass / pass |
 
 Accuracy (item 12), `mean_rel_err` per group, RC `interpolate` /
-`visibility_masked` (DDGI of the same runs in parentheses):
+`visibility_masked` / `per_neighbour_trace` (DDGI, worst of the nine runs,
+in parentheses):
 
 | Group | RC | (DDGI) |
 |---|---|---|
-| `leak_pair` room A floor / shared wall | 0.30 / 0.28; 0.44 / 0.18 | (0.01 / 0.08) |
-| `leak_pair` room B floor / shared wall | 2.71 / 0.75; 0.97 / 0.00 | (0.02 / 0.09) |
-| `probe_offset_sweep` room A floor, offset 0.0 / 0.25 / 0.5 | 0.31 / 0.28 / 0.29; 0.45 / 0.41 / 0.44 | (0.07 / 0.03 / 0.04) |
-| `probe_offset_sweep` room B floor, offset 0.0 / 0.25 / 0.5 | 3.26 / 2.40 / 3.24; 1.93 / 1.02 / 1.24 | (0.04 / 0.03 / 0.01) |
-| `probe_offset_sweep` room A wall, offset 0.0 / 0.25 / 0.5 | 0.27 / 0.29 / 0.36; 0.12 / 0.16 / 0.15 | (0.37 / 0.04 / 0.19) |
-| `probe_offset_sweep` room B wall, offset 0.0 / 0.25 / 0.5 | 0.67 / 0.32 / 2.18; 0.06 / 0.00 / 0.30 | (0.25 / 0.15 / 0.05) |
-| `probe_offset_sweep` pillar faces / pillar base / crawl floor | 0.24 / 0.27 / 1.87; 0.22 / 0.24 / 0.08 | (0.21 / 0.19 / 0.09) |
-| `cornell` red strip / green strip / floor / back wall | 0.18 / 0.18 / 0.16 / 0.23; 0.21 / 0.19 / 0.18 / 0.33 | (0.10 / 0.11 / 0.08 / 0.04) |
-| `emissive_only` floor at 1.0 / 0.25 / 0.05 m panel | 0.07 / 0.84 / 0.97; 0.07 / 0.84 / 0.96 | (0.65 / 0.06 / 0.37) |
-| `emissive_only` room floor | 0.25; 0.33 | (0.42) |
-| `corridor` profile | 0.18; 0.49 | (0.23) |
-| `courtyard` shadowed wall / shadowed floor / sunlit floor | 0.13 / 0.03 / 0.07; 0.19 / 0.01 / 0.10 | (0.01 / 0.03 / 0.04) |
-| `dynamic` floor / side room floor | 0.18 / 0.81; 0.19 / 0.36 | (0.11 / 0.01) |
+| `leak_pair` room A floor / shared wall | 0.27 / 0.24; 0.40 / 0.09; 0.09 / 0.09 | (0.01 / 0.08) |
+| `leak_pair` room B floor / shared wall | 1.96 / 1.41; 0.66 / 0.00; 0.00 / 0.00 | (0.02 / 0.09) |
+| `probe_offset_sweep` room A floor, offset 0.0 / 0.25 / 0.5 | 0.31 / 0.29 / 0.29; 0.41 / 0.45 / 0.44; 0.09 / 0.09 / 0.10 | (0.07 / 0.03 / 0.04) |
+| `probe_offset_sweep` room B floor, offset 0.0 / 0.25 / 0.5 | 3.18 / 1.96 / 3.00; 2.39 / 0.50 / 1.18; 0.03 / 0.00 / 1.40 | (0.05 / 0.03 / 0.01) |
+| `probe_offset_sweep` room A wall, offset 0.0 / 0.25 / 0.5 | 0.26 / 0.29 / 0.35; 0.11 / 0.22 / 0.20; 0.11 / 0.15 / 0.14 | (0.37 / 0.05 / 0.19) |
+| `probe_offset_sweep` room B wall, offset 0.0 / 0.25 / 0.5 | 0.10 / 0.09 / 2.07; 0.06 / 0.00 / 0.22; 0.00 / 0.00 / 0.02 | (0.44 / 0.16 / 0.05) |
+| `probe_offset_sweep` pillar faces / pillar base / crawl floor | 0.18 / 0.16 / 1.98; 0.11 / 0.07 / 0.08; 0.12 / 0.16 / 0.02 | (0.24 / 0.21 / 0.11) |
+| `cornell` red strip / green strip / floor / back wall | 0.18 / 0.18 / 0.16 / 0.23; 0.21 / 0.19 / 0.18 / 0.33; 0.15 / 0.12 / 0.15 / 0.04 | (0.10 / 0.11 / 0.08 / 0.04) |
+| `emissive_only` floor at 1.0 / 0.25 / 0.05 m panel | 0.07 / 0.84 / 0.97; 0.07 / 0.83 / 0.95; 0.28 / 0.21 / 0.76 | (0.65 / 0.06 / 0.38) |
+| `emissive_only` room floor | 0.28; 0.33; 0.02 | (0.42) |
+| `corridor` profile | 0.18; 0.49; 0.08 | (0.23) |
+| `courtyard` shadowed wall / shadowed floor / sunlit floor | 0.17 / 0.03 / 0.03; 0.15 / 0.06 / 0.01; 0.01 / 0.15 / 0.30 | (0.01 / 0.03 / 0.04) |
+| `dynamic` floor / side room floor | 0.13 / 0.85; 0.15 / 0.22; 0.19 / 0.02 | (0.11 / 0.01) |
+| worst group except `floor_0.05`, over all stations | 3.18; 2.39; 1.40 | (0.65) |
 
-Gate 12 fails in both modes: RC is below DDGI's error on the
-`emissive_only` 1.0 m panel and room floors, the `corridor` profile
-(`interpolate`) and the `probe_offset_sweep` room A walls, and above it
-everywhere else; the worst group bound 0.25 holds only on `courtyard` and
-`corridor` (`interpolate`) (and `cornell` in `interpolate`, 0.23). What the
-numbers say:
+Gate 12 fails in every mode. `per_neighbour_trace` is at or below DDGI's
+error on both `leak_pair` room B groups, the room B walls and two of the
+three room A walls and room B floors of `probe_offset_sweep`, its pillar
+and crawl groups,
+the `cornell` back wall, the `emissive_only` 1.0 m panel and room floors,
+the `corridor` profile and the `courtyard` shadowed wall, and above it
+elsewhere; its worst group per station is within 0.25 on `leak_pair`,
+`cornell`, `corridor` and `dynamic`, and exceeds it on
+`probe_offset_sweep` (1.40), `emissive_only` (0.28) and `courtyard`
+(0.30).
 
-- **The field is dark by 16 - 30 %** in lit rooms (`cornell`, the room A
-  floors, `dynamic`), `visibility_masked` darker than `interpolate`: the
-  merged-cascade bias measured in phase 3 ([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
-  "Verification": -17 % / -21 % on `cornell`'s merged texels), carried
-  through the reduce unchanged - the reduce itself is exact
-  (`rc_texel_verify.py`: every checked field texel within the half-float
-  store of the CPU convolution of the read-back merged texels).
-- **Leaks** are the start-point parallax of the merge: room B's merged
-  texels already carry about 2 % of room A's light, which `interpolate`
-  shows on the room B floor at 3.9 % of room A's (darker) floor;
-  `visibility_masked` halves it. Phase 5's `per_neighbour_trace` is the fix
-  the plan assigns.
-- **Small near emitters** depend on cascade 0's 16 texel-centre directions
-  (`q0` 4, no jitter): the 0.25 m panel reads 0.62 of the room median with
-  `interpolate` (its floor 84 % dark), the 0.05 m panel is missed. Direction
-  jitter (phase 6) integrates the footprint instead of its centre ray.
-- **Far field** in the corridor is decided by the coarse cascades, whose
-  spacing exceeds the 1.5 m corridor width: with the centred grids the
-  cascade 4 and 5 probes sit on the corridor's centre line and see the lit
-  end wall exactly, but the 2 x 2 cascade 3 probes per cross-section sit
-  outside the corridor walls. `interpolate` carries the far field through
-  them by start-point parallax (7 - 9 x the reference beyond 17 m, 0.13 x at
-  8 m); `visibility_masked` finds no usable cascade 3 probe for the
-  corridor's cascade 2 probes and falls back to `upper = (0, 0)`, so the
-  profile is exactly 0 beyond cascade 2's interval (8 m on). Both are the
-  merge approximation that `per_neighbour_trace` (phase 5) replaces.
-- **Convergence and noise** are the expected RC gains: no per-update noise
-  without jitter, and 2 - 5 x fewer updates to settle; the light-move event
-  misses the half-of-DDGI gate by 2 - 3 updates.
-- **Cost** is not yet within the section 8 budget at the RC defaults: the
-  reduce is the largest pass (the numbers are machine-specific and not
-  recorded here); phase 6 chooses the defaults against the budget.
+#### Merge mode default
+
+Rule: the default is the mode that passes the most of the section 10 gates
+2, 4 - 10 and 12 (each as worded above; items 1, 3 and 11 are recorded or
+backend checks), ties broken by the worst group `mean_rel_err` of item 12
+over all stations (except `floor_0.05`), then by cost. Every mode is gated
+against the same DDGI numbers, the worst over the nine DDGI runs of the
+three comparisons: the DDGI light-move settle count alone varies 70 - 90
+between comparisons, which would decide gate 7 for `per_neighbour_trace`
+(40 updates) by DDGI's noise, not by the mode.
+
+- Gates passed: `interpolate` 4, 5, 7, 8, 10; `visibility_masked` 4, 5, 7,
+  8, 10; `per_neighbour_trace` 4, 5, 7, 8, 10 - five each.
+  (`per_neighbour_trace` also passes the first two parts of gate 2, the
+  `leak_pair` leak and the 2 % offset bound, which the others fail.)
+- Tie-break, worst group: 3.18, 2.39, 1.40.
+
+**`per_neighbour_trace` is the default** (`Radiance_cascades_config` and
+the creation module's `RC_SETTINGS` runs).
+
+#### What the numbers say
+
+- **Leaks**: `per_neighbour_trace` removes the start-point parallax leak:
+  room B of `leak_pair` reads 0 (texel level too: `rc_texel_verify.py`,
+  mean merged luminance of the sampled room B texels 0.00000, against
+  0.0024 `interpolate` and 0.0014 `visibility_masked`). The remaining
+  `probe_offset_sweep` leak at offset 0.5 (0.017, gate 2) is the
+  pre-averaged upper value: traced back from a room B cascade 0 texel
+  (probe (1.75, 1.26, 8.56), direction (-0.41, -0.41, 0.82)), its segment
+  ends in room B at (1.65, 0.66, 9.27), but one of the 2x2 child
+  directions of the upper probe at x 2.0 starts its interval at
+  (1.446, 0.455, 8.93), 4 mm on the room A side of the 0.1 m wall (face at
+  x 1.45): the child interval starts sit up to `t_{i+1}` times the child
+  offset angle (here 0.44 m) from the segment end. Tracing a segment per
+  child direction (32 rays per texel instead of 8) ends every segment
+  exactly at its child's interval start; it is not built.
+- **Dark bias**: the merged cascade 0 texels of `per_neighbour_trace` are
+  within -2 % .. +1 % of the full-range truth on `cornell`, `courtyard`
+  and `leak_pair` (-17 % .. -21 % for the other modes;
+  [../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+  "Verification"), -15 % on `emissive_only` and -27 % on `corridor`.
+- **Far field**: in `corridor` every mode fails gate 6. The 2 x 2
+  cascade 3 probes per cross-section sit outside the 1.5 m corridor (hidden
+  upper weight 1.00 for cascade 3 from every sampled cascade 0 probe,
+  `rc_texel_verify.py`); `interpolate` carries the far field through them
+  by start-point parallax (7 monotonic violations), `visibility_masked`
+  drops them (profile 0 beyond 8 m), and `per_neighbour_trace` traces its
+  cascade 2 segments into the walls toward them (profile exactly 0 from
+  13.8 m on, every run). Its profile error over the corridor is the
+  smallest of all (0.08, DDGI 0.23), because the near and mid field carry
+  the group mean.
+- **Small near emitters**: the 0.25 m panel passes in every mode
+  (`interpolate` read 0.62 before the upper grids were centred). With `per_neighbour_trace` the
+  cascade 0 segments leave the probe toward upper interval starts up to
+  1.3 m (0.75 of an upper spacing per axis) off the texel ray while `r0`
+  is 0.87 m, so a texel that does not point at a small emitter can see
+  it: the worst `emissive_only` texels read 0.83 - 0.87 where the truth is
+  0 (p90 of the texel error 2.6 against 0.5 - 1.0 for the other modes),
+  and the 1.0 m panel floor is 28 % off (7 % in the other modes).
+- **Accuracy failures not isolated in this phase**: the `courtyard`
+  sunlit floor (+30 % with `per_neighbour_trace`, 3 % otherwise) and the
+  `cornell` / `dynamic` floors (15 - 19 %) have no measured cause yet.
+- **Convergence and noise**: 39 - 43 updates to settle after the light
+  move and 47 - 48 after the door opens in every mode, no per-update noise
+  without jitter: the merge mode does not change either; both are set by
+  the raw and segment hysteresis (0.9) and the budget.
+- **Cost**: `per_neighbour_trace` adds its connecting segments (up to 8
+  rays per texel below the top cascade; 4.6 - 7.2 x the rays of the other
+  modes per update at the same texel budget) as the separately timed
+  neighbour trace pass, and its merge reads 8 segment texels per texel
+  (about twice the merge time); per update it costs 1.5 - 2.1 x
+  `interpolate`. Phase 6 chooses the defaults against the section 8
+  budget.
 
 ## 11. Follow-ups (not in the phases)
 
