@@ -18,12 +18,6 @@ The component selection has to survive the edit, so the geometry-identity
 invalidation of `doc/editor/mesh_component_selection.md` section 3 has to relax to an
 index remap for an in-place edit.
 
-## Multiple meshes
-
-Let a component selection span several meshes at once. The data model becomes
-a map keyed by (mesh, primitive index) instead of a single active mesh, and
-the rendering iterates the map.
-
 ## Skinned meshes
 
 Component selection on a skinned (deforming) mesh. CPU raytrace picking uses

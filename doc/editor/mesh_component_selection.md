@@ -25,8 +25,8 @@ Implemented scope:
   camera-facing quads, plus a highlight of the component under the pointer.
 - Desktop viewport only (see section 6).
 
-Editing the selection, multi-mesh and skinned-mesh selection, and
-compute-shader selection over the GPU vertex and index buffers are
+Editing the selection, skinned-mesh selection, and compute-shader selection
+over the GPU vertex and index buffers are
 `doc/plans/mesh_component_selection.md`.
 
 ## 2. Mode selector and command coexistence
@@ -238,5 +238,5 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 ## 9. Future work
 
 - [plans/mesh_component_selection.md](../plans/mesh_component_selection.md) -
-  editing the selection, multiple meshes, skinned meshes, and compute
-  selection over the vertex and index buffers.
+  editing the selection, skinned meshes, and compute selection over the
+  vertex and index buffers.
