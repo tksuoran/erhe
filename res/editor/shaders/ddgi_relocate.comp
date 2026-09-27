@@ -4,12 +4,18 @@
 // tick's ray data. Two independent decisions come out of the same
 // statistics:
 //
-//  - Relocation: a probe that sits inside or right up against geometry
-//    records the inside of a wall and bleeds it into its whole
-//    interpolation neighbourhood. Such a probe is nudged toward the most
-//    open direction it saw, clamped to a fraction of the grid spacing so it
-//    never crosses into a neighbour's cell. Probes with clear surroundings
-//    relax back toward their grid position.
+//  - Relocation: a probe inside geometry records the inside of a wall
+//    and a probe right up against a surface records mostly that surface;
+//    either bleeds into its whole interpolation neighbourhood. A probe is
+//    inside geometry when many of its rays hit backfaces AND its closest hit
+//    is a backface (a point inside a closed solid meets the solid's
+//    boundary from within first); it leaves through that closest backface,
+//    the shortest way out, ending the near-surface distance past it. A
+//    probe whose closest hit is a frontface nearer than the near-surface
+//    distance is pushed straight away from it. Probes with clear
+//    surroundings relax back toward their grid position. The offset is
+//    clamped to a fraction of the grid spacing so a probe never crosses
+//    into a neighbour's cell.
 //  - Classification: a probe that sees mostly backfaces is enclosed in
 //    geometry and cannot contribute anything meaningful. Its state flag
 //    goes to 0 and the sampling path drops it from the interpolation.
@@ -69,11 +75,11 @@ void main()
     ivec3 coords = probe_coords(probe_index);
     ivec2 texel  = ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y);
 
-    uint  backface_count = 0u;
-    float nearest_front  = 1.0e30;
+    uint  backface_count          = 0u;
+    float nearest_front           = 1.0e30;
     vec3  nearest_front_direction = vec3(0.0);
-    float farthest       = 0.0;
-    vec3  farthest_direction = vec3(0.0, 1.0, 0.0);
+    float nearest_back            = 1.0e30;
+    vec3  nearest_back_direction  = vec3(0.0);
 
     for (uint ray = 0u; ray < ray_count; ++ray) {
         vec4 ray_sample  = imageLoad(i_ray_data, ivec2(int(ray), int(probe_slot)));
@@ -81,38 +87,36 @@ void main()
         float distance_value = ray_sample.w;
         if (distance_value < 0.0) {
             ++backface_count;
+            if (-distance_value < nearest_back) {
+                nearest_back           = -distance_value;
+                nearest_back_direction = direction;
+            }
             continue;
         }
         if (distance_value < nearest_front) {
             nearest_front           = distance_value;
             nearest_front_direction = direction;
         }
-        if (distance_value > farthest) {
-            farthest           = distance_value;
-            farthest_direction = direction;
-        }
     }
 
     float backface_ratio = float(backface_count) / float(ray_count);
     float min_spacing    = min(ddgi.grid_spacing.x, min(ddgi.grid_spacing.y, ddgi.grid_spacing.z));
     float max_offset     = c_max_offset_fraction * min_spacing;
+    float near_threshold = c_near_surface_fraction * min_spacing;
+    bool  inside         = (backface_ratio > c_backface_ratio_threshold) && (nearest_back < nearest_front);
 
     vec4 probe_data = imageLoad(i_probe_data, texel);
     vec3 offset     = probe_data.xyz;
 
     if (ddgi.flags.x != 0u) {
-        if (backface_ratio > c_backface_ratio_threshold) {
-            // Enclosed: head for the most open direction, at most half the
-            // distance actually seen that way (so the probe never lands on
-            // the surface it was aiming past).
-            offset += farthest_direction * min(0.5 * farthest, max_offset);
+        if (inside) {
+            // Out through the nearest boundary of the enclosing solid, and
+            // the near-surface distance beyond it.
+            offset += nearest_back_direction * (nearest_back + near_threshold);
+        } else if (nearest_front < near_threshold) {
+            offset -= nearest_front_direction * (near_threshold - nearest_front);
         } else {
-            float near_threshold = c_near_surface_fraction * min_spacing;
-            if (nearest_front < near_threshold) {
-                offset -= nearest_front_direction * (near_threshold - nearest_front);
-            } else {
-                offset *= c_relax;
-            }
+            offset *= c_relax;
         }
         float offset_length = length(offset);
         if (offset_length > max_offset) {

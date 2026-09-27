@@ -21,7 +21,14 @@
 vec4 ddgi_trace_ray_radiance(vec3 origin, vec3 direction, float t_max, vec3 sky_radiance)
 {
     Hit_surface surface;
-    if (!trace_closest(origin, direction, t_max, surface)) {
+    // The origin is a point in free space (a probe, or a surface point
+    // already pushed off its surface by the reference's normal bias), not a
+    // surface the ray leaves: t_min = 0, so a surface right at the origin is
+    // hit. A probe sitting on a face therefore sees that face (as a front
+    // or a backface, by which side of it the probe is on) instead of looking
+    // through it, which is what the relocation pass needs to move it off
+    // the face to the correct side.
+    if (!trace_closest_from(origin, direction, 0.0, t_max, surface)) {
         return vec4(sky_radiance, t_max);
     }
     if (surface.backface) {

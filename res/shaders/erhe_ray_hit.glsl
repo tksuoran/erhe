@@ -121,11 +121,15 @@ vec3 fetch_position(Instance_record record, Uint_data position_data, uint vertex
     return fetch_vec3(position_data, byte_offset >> 2u);
 }
 
-// Closest-hit trace + attribute/material fetch. Returns false on miss.
-bool trace_closest(vec3 origin, vec3 direction, float t_max, out Hit_surface surface)
+// Closest-hit trace + attribute/material fetch over [t_min, t_max].
+// Returns false on miss. A ray leaving a surface needs t_min > 0 to escape
+// self-intersection (trace_closest() below); a ray starting at a point in
+// free space, such as a DDGI probe, passes 0 so geometry right at its
+// origin is seen.
+bool trace_closest_from(vec3 origin, vec3 direction, float t_min, float t_max, out Hit_surface surface)
 {
     rayQueryEXT ray_query;
-    rayQueryInitializeEXT(ray_query, s_tlas, gl_RayFlagsOpaqueEXT, c_mask_all, origin, c_t_min, direction, t_max);
+    rayQueryInitializeEXT(ray_query, s_tlas, gl_RayFlagsOpaqueEXT, c_mask_all, origin, t_min, direction, t_max);
     while (rayQueryProceedEXT(ray_query)) {
         // All BLAS geometry is opaque; candidates are committed automatically.
         // Transparency is handled by continuation rays, not any-hit filtering.
@@ -222,6 +226,12 @@ bool trace_closest(vec3 origin, vec3 direction, float t_max, out Hit_surface sur
     surface.material_index   = record.material_index;
     surface.hit_t            = hit_t;
     return true;
+}
+
+// Closest-hit trace for a ray leaving a surface (see trace_closest_from()).
+bool trace_closest(vec3 origin, vec3 direction, float t_max, out Hit_surface surface)
+{
+    return trace_closest_from(origin, direction, c_t_min, t_max, surface);
 }
 
 // True when nothing opaque lies between the (offset) surface point and the
