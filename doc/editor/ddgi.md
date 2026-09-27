@@ -69,7 +69,10 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
    through `res/shaders/erhe_ray_hit.glsl`. On miss: scene ambient. Backface
    hit: store `-distance` and zero radiance. This per-ray transport is
    `ddgi_trace_ray_radiance()` in `res/editor/shaders/erhe_ddgi_ray.glsl`,
-   which the reference irradiance query (below) calls too. Its rays start
+   which the reference irradiance query (below) calls too; the radiance
+   cascades interval trace calls its segment form
+   `ddgi_trace_ray_segment()` ([radiance_cascades.md](radiance_cascades.md)
+   "Trace"). Its rays start
    at `t_min = 0` (`trace_closest_from()` in `res/shaders/erhe_ray_hit.glsl`;
    `trace_closest()` keeps the 1 mm `t_min` for rays leaving a surface): the
    origin is a point in free space, so a face the probe sits on is hit - as a

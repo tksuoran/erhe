@@ -518,6 +518,7 @@ private:
     auto action_set_indirect_diffuse          (const nlohmann::json& args) -> std::string;
     auto action_set_radiance_cascades         (const nlohmann::json& args) -> std::string;
     auto query_indirect_diffuse_stats         (const nlohmann::json& args) -> std::string;
+    auto query_radiance_cascades_texels       (const nlohmann::json& args) -> std::string;
     auto query_sample_indirect_diffuse        (const nlohmann::json& args) -> std::string;
     auto query_reference_indirect_diffuse     (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
@@ -744,6 +745,14 @@ private:
     const Queued_request*                            m_reference_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_reference_query_enqueued_at{};
     nlohmann::json                                   m_reference_query_header;
+
+    // get_radiance_cascades_texels: the request waiting for the raw atlas
+    // readback of Radiance_cascades_renderer (main thread only), identified
+    // like the irradiance query above; the texel list is validated on the
+    // first pass and again against the layout the copy was made with.
+    const Queued_request*                            m_rc_texels_request{nullptr};
+    std::chrono::steady_clock::time_point            m_rc_texels_enqueued_at{};
+    nlohmann::json                                   m_rc_texels_args;
 
     // render_scene_image: the offscreen capture chain of the pending request
     // (doc/editor/rendergraph.md "Scene image capture"), existing only while

@@ -36,6 +36,8 @@ erhe_target_sources_grouped(
     res/editor/shaders/ddgi_sample.comp
     res/editor/shaders/ddgi_reference.comp
     res/editor/shaders/erhe_ddgi_ray.glsl
+    res/editor/shaders/rc_preview.comp
+    res/editor/shaders/rc_trace.comp
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
     res/editor/shaders/brush.frag
@@ -517,6 +519,8 @@ erhe_target_sources_grouped(
     renderers/scene_tlas.hpp
     renderers/sky_renderer.cpp
     renderers/sky_renderer.hpp
+    renderers/trace_lights.cpp
+    renderers/trace_lights.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
     rig/bone_bind.cpp

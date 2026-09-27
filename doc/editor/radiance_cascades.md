@@ -7,10 +7,11 @@ diffuse probe field, next to DDGI ([ddgi.md](ddgi.md)). The design and the
 remaining phases are in
 [../plans/radiance_cascades.md](../plans/radiance_cascades.md); this document
 describes what exists: the source selection, the cascade layout and its
-atlases, the developer window and the MCP tools. The trace, merge and reduce
-passes do not exist yet, so the renderer produces no probe field: while
-radiance cascades are the selected source, no field is bound and the forward
-pass shades non-lightmapped draws with the flat scene ambient term.
+atlases, the interval trace, the developer window and the MCP tools. The
+merge and reduce passes do not exist yet, so the renderer produces no probe
+field: while radiance cascades are the selected source, no field is bound
+and the forward pass shades non-lightmapped draws with the flat scene
+ambient term.
 
 The feature requires GPU ray query (`Device_info::use_ray_query`), like DDGI;
 without it `Radiance_cascades_renderer::is_supported()` is false and its tick
@@ -66,6 +67,11 @@ section, `editor_settings.radiance_cascades`):
 | `max_cascades` | 8 | upper bound on the cascade count (at most 12) |
 | `cascade0_tile_texels` | 4 | `q0`, the cascade 0 octahedral tile side |
 | `interval_scale` | 1.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
+| `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
+| `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced |
+
+`Radiance_cascades_config` v2 added `texels_per_frame` and `hysteresis`; a
+v1 file reads them as the defaults.
 
 The field's sampling parameters (irradiance / distance texels, biases,
 intensity) are the DDGI settings, so both producers render the same way.
@@ -123,10 +129,79 @@ is constructed in `editor.cpp`'s `post_processing_task` next to
 `App_context::radiance_cascades_renderer`. Per cascade it allocates two
 atlases of the cascade's atlas size, RGBA16F, storage + sampled + transfer:
 **raw** (the traced intervals, rgb radiance and a transparency beta) and
-**merged** (raw merged with everything beyond it). Both are cleared to zero at
-allocation, recorded into the frame command buffer, and left in
+**merged** (raw merged with everything beyond it). Cascade 0 also has a
+**distance** texture of its atlas size, R32F: the signed hit distance of
+each raw texel's last trace (see "Trace"), which the reduce pass turns into
+the distance moments and the probe classification. All are cleared to zero
+at allocation, recorded into the frame command buffer, and left in
 `shader_read_only_optimal`. Texture memory per cascade is
-`2 x atlas width x atlas height x 8` bytes.
+`2 x atlas width x atlas height x 8` bytes, plus
+`atlas width x atlas height x 4` bytes for cascade 0's distance texture.
+
+## Trace
+
+`res/editor/shaders/rc_trace.comp`, recorded by
+`Radiance_cascades_renderer::tick()` into the frame command buffer after the
+refit (doc/plans/radiance_cascades.md section 5, pass 1).
+
+- **Texel order and budget.** All cascades' probe texels form one global
+  order: cascade 0 first, and within a cascade
+  `texel_index = probe_index * q^2 + v * q + u`
+  (`probe_index = x + nx * (y + ny * z)`, `(u, v)` the texel of the probe's
+  `q x q` tile). A cursor walks this order; each frame traces the next
+  `texels_per_frame` texels (clamped to the total, so no texel is traced
+  twice in one frame), wrapping to cascade 0 after the last cascade. Each
+  contiguous run inside one cascade is one dispatch of one thread per texel
+  (64-wide workgroups, runs split at 65535 workgroups), with its own control
+  block from the ring buffer (cascade grid, interval, tile side, tiles per
+  row, run start and length, flags, hysteresis). A dispatch declares a write
+  of its whole raw atlas, so a second run of a cascade in the same frame
+  (the cursor wrapping into the cascade it started in, or a run split at the
+  dispatch limit) is ordered after the first by a barrier; runs of different
+  cascades write different images and need none. Two pipeline variants of
+  the shader (`ERHE_RC_TRACE_WRITE_DISTANCE`) keep the upper cascades from
+  referencing the distance texture, so only cascade 0 dispatches count as
+  its writers (Vulkan synchronization validation). The sizes are CPU-known; there is no
+  indirect dispatch.
+- **Ray.** From the probe's grid position (no relocation) along the
+  octahedral decode of the texel centre (`get_texel_direction()`, the same
+  convention as `erhe_ddgi.glsl`), over the cascade's interval
+  `[t_i, t_{i+1}]`: `ray query` with `tmin = t_i`, `tmax = t_{i+1}`.
+- **Transport** is DDGI's (`ddgi_trace_ray_segment()` in
+  `res/editor/shaders/erhe_ddgi_ray.glsl`, whose `[0, t_max]` form is the
+  DDGI probe and reference ray): a front face hit carries `shade_surface()`
+  (direct lights with traced shadow rays, scene ambient x base colour,
+  emission), beta 0; a backface hit carries radiance 0, beta 0; a miss
+  carries radiance 0, beta 1 - the merge pass adds what lies beyond the
+  interval.
+- **Hysteresis.** The result is blended into the raw atlas as
+  `mix(traced, history, hysteresis)`. **First fill:** until the cursor has
+  wrapped once after an allocation (`completed_sweeps` 0) every traced texel
+  is new and its history is the allocation clear, so those runs are written
+  unblended. Without direction jitter a static scene is exact after the
+  first sweep; the hysteresis matters once jitter or scene changes arrive
+  (plan phase 5).
+- **Cascade 0 distance.** Cascade 0 runs also store the signed hit distance
+  in the distance texture, same texel address as the raw atlas and not
+  blended: `+t` for a front face hit, `-t` for a backface hit, `r0` (the
+  interval end) for a miss.
+- **Trace inputs** are built as for DDGI: the scene root's forward
+  `Material_set`, a `Light_buffer` with projections fitted by
+  `fit_trace_light_projections()` (`src/editor/renderers/trace_lights.{hpp,cpp}`,
+  shared with `Ddgi_renderer`; no trace without a scene camera), and the
+  renderer's own `Scene_tlas`, rebuilt each frame it traces. Binding points
+  follow DDGI's trace layout: material 0, light 1, control 2, instance
+  records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`r32f`); the
+  texture heap is set 1.
+- **Timing.** One explicit-range `Gpu_timer` (`Scoped_gpu_timer`, plot name
+  `RC trace`) brackets all of a frame's trace dispatches.
+  `Radiance_cascades_renderer::get_stats()` derives, like DDGI's:
+  `trace` last / mean over the last 60 samples, `texels_per_update` and
+  `rays_per_update` (one ray per texel), `ms_per_million_rays`,
+  `updates_per_full_refresh` = ceil(total texels / texels per update) and
+  `full_refresh_ms`, `update_count`, `timing_sample_count` and
+  `completed_sweeps`. The history is cleared when another source is
+  selected.
 
 ## Radiance Cascades window
 
@@ -135,7 +210,17 @@ The developer window `Radiance_cascades_window`
 `radiance_cascades`) shows the source combo and, while radiance cascades are
 selected, a table with one row per cascade - probe counts, probe count,
 spacing, tile size, interval, texels, atlas size and memory - plus totals,
-the cascade 0 origin and `r0`.
+the cascade 0 origin and `r0`; the trace GPU time and cost figures; and an
+atlas preview of a chosen cascade and channel (radiance with a scale, beta,
+or cascade 0 signed distance - green front face, red backface, brightness
+distance / `r0`).
+
+The raw atlases carry beta in alpha, which the ImGui image widget would use
+as opacity (every hit texel would vanish), so the preview is an opaque copy
+written by `res/editor/shaders/rc_preview.comp` into one preview texture
+(`Radiance_cascades_renderer::request_preview()`). The window requests it
+each frame it shows the preview and the next tick records it, so the copy
+costs nothing while the window is closed.
 
 ## MCP
 
@@ -145,7 +230,7 @@ the cascade 0 origin and `r0`.
   shorthand: true selects DDGI, false returns a DDGI selection to ambient.
 - `set_radiance_cascades {probe_spacing_m, volume_padding_m,
   max_probes_cascade0, max_cascades, cascade0_tile_texels, interval_scale,
-  show_window}` writes the settings (explicit arguments, omitted ones
+  texels_per_frame, hysteresis, show_window}` writes the settings (explicit arguments, omitted ones
   unchanged) and returns the layout of the last fit plus the stored
   `config`; the renderer refits on its next tick.
 - `get_indirect_diffuse_stats` reports `source` (the selected value) and a
@@ -154,13 +239,55 @@ the cascade 0 origin and `r0`.
   `texels` and `texture_bytes`, `fit_count`, and `cascades`, one entry per
   cascade with `grid_origin`, `grid_spacing`, `grid_counts`, `probe_count`,
   `tile_texels`, `interval` `[start, end]` in metres, `texels`, `atlas_size`
-  and `texture_bytes`. It carries the cost fields of the `ddgi` object
-  (`update_count`, `gpu_ms_total`, `ms_per_million_rays`, ...), all 0 until
-  the trace pass exists.
+  and `texture_bytes`, and the trace cost ("Trace"): `update_count`,
+  `timing_sample_count`, `completed_sweeps`, `texels_per_update`,
+  `rays_per_update`, `gpu_ms` `{trace}` and `gpu_ms_total` (`last_ms`,
+  `average_ms`), `timing_history_size`, `ms_per_million_rays`,
+  `updates_per_full_refresh` and `full_refresh_ms` - the fields
+  `scripts/gi_verify.py` reads for both sources.
+- `get_radiance_cascades_texels {texels}` reads raw texels back, on request
+  only: it asks `Radiance_cascades_renderer::request_texel_readback()` for a
+  copy of every raw atlas and the distance texture after the next trace
+  (one host-visible buffer, allocated on the first request and grown to the
+  largest layout asked for) and answers once that frame retired
+  (`poll_texel_readback()`; a few frames, so not inside `batch`). Needs the
+  source active. Result: `update_count` and `completed_sweeps` at copy time;
+  `cascades`, per cascade `{index, texel_count, mean_radiance,
+  beta_one_fraction}` (beta > 0.5: the interval is empty along that
+  direction), cascade 0 also `backface_fraction` and `backface_probe_count`
+  (probes with at least one backface texel - probes inside geometry); and
+  `texels`, index-aligned with the optional input `[{cascade, probe:[x,y,z],
+  texel:[u,v]}]` (at most 4096): `{cascade, probe, texel, probe_position,
+  direction, interval, radiance, beta}`, cascade 0 also `signed_distance`.
 - `sample_indirect_diffuse` answers `source` `"ambient"` while radiance
   cascades are selected: no field is bound.
 
 ## Verification
+
+- Trace against an analytic ground truth,
+  `py -3 scripts/rc_texel_verify.py [--station ...] [--reuse]` (self-launching
+  headless editor with config backup / restore like `gi_verify.py`; exit
+  1 on any failure; tolerances and the skip rule in its docstring): every
+  raw texel of every cascade of `cornell`, `emissive_only` and
+  `courtyard` (read with `get_radiance_cascades_texels` after two sweeps)
+  matches a CPU ray /
+  axis-aligned box intersection of the station's parts over the texel's
+  interval, shaded with the `shade_surface()` formula (GGX + Lambert, spot /
+  directional light with range, cone and shadow tests, ambient, emission):
+  hit / miss / backface agree for every texel, cascade 0 signed distance
+  within 1 mm, front face radiance within 0.1 % (half-float storage; the
+  script's tolerance is 0.5 %), the emitter panels exactly 4.0. Texels whose
+  reference hit lies within 0.1 mm of an interval end, or ties between
+  coincident faces of touching parts (the floor top under a wall bottom,
+  where either face is a valid hit), are skipped and counted - about 0.1 %
+  of the texels.
+- Per station summary: cascade 0 beta = 1 for 82 - 88 % of the texels
+  (most short intervals are empty), backface texels only where probes sit
+  inside parts (`leak_pair` 96, `probe_offset_sweep` 872 and `dynamic` 36
+  cascade 0 probes; 0 in `cornell`, `emissive_only`, `corridor` and
+  `courtyard`), every upward cascade 0 ray inside the `courtyard` walls
+  empty. The top cascade reads beta = 1 for 97 - 100 % of its texels: in
+  these rooms its interval starts beyond the far wall.
 
 - `editor_renderer_tests`: cascade fit (cascade 0 counts and spacing, nesting
   of the upper grids, cascade count and `max_cascades`, probe budget, atlas

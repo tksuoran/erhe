@@ -1,19 +1,44 @@
 #include "renderers/radiance_cascades_renderer.hpp"
 
+#include "app_context.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
+#include "renderers/trace_lights.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/material_buffer.hpp"
+#include "erhe_scene_renderer/material_set.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
+#include <glm/gtc/packing.hpp>
 
 #include <algorithm>
+#include <cstring>
+#include <filesystem>
 #include <string>
+#include <utility>
 
 namespace editor {
 
@@ -21,31 +46,330 @@ namespace {
 
 // rgb radiance, a transparency beta (doc/plans/radiance_cascades.md section 3).
 constexpr erhe::dataformat::Format c_radiance_format = erhe::dataformat::Format::format_16_vec4_float;
+// Cascade 0 signed hit distance per raw texel. Full float: one channel per
+// cascade 0 texel is small, and the readback is a plain memcpy.
+constexpr erhe::dataformat::Format c_distance_format = erhe::dataformat::Format::format_32_scalar_float;
+
+// Raw binding points of the trace bind group layout, as in Ddgi_renderer:
+// 0 and 1 are the shared material / light block binding points
+// (erhe_scene_renderer), 2 the control block, 3 the instance records, then
+// the acceleration structure and the two storage images (raw bindings are
+// not offset past the buffer bindings).
+constexpr unsigned int c_control_binding_point         = 2;
+constexpr unsigned int c_instance_record_binding_point = 3;
+
+// Preview pass layout: the control block, then the raw atlas, the
+// distance texture and the preview output as storage images.
+constexpr unsigned int c_preview_raw_binding_point      = 3;
+constexpr unsigned int c_preview_distance_binding_point = 4;
+constexpr unsigned int c_preview_output_binding_point   = 5;
+constexpr int          c_preview_workgroup_size         = 8; // rc_preview.comp local size, both axes
+
+// One thread per texel.
+constexpr int     c_trace_workgroup_size = 64;
+// Largest texel run of one dispatch: the Vulkan-guaranteed minimum of
+// maxComputeWorkGroupCount[0] (65535) workgroups.
+constexpr int64_t c_max_texels_per_dispatch = int64_t{65535} * c_trace_workgroup_size;
+
+// rc_trace.comp dispatch.w flags.
+constexpr uint32_t c_flag_blend = 1u;
+
+// Readback buffer offsets are rounded up to this (a multiple of every texel
+// size and of every nonCoherentAtomSize the Vulkan spec allows).
+constexpr std::size_t c_readback_alignment = 256;
+
+[[nodiscard]] auto round_up(const std::size_t value, const std::size_t multiple) -> std::size_t
+{
+    return ((value + multiple - 1) / multiple) * multiple;
+}
+
+[[nodiscard]] auto shader_paths() -> std::vector<std::filesystem::path>
+{
+    return {
+        std::filesystem::path{"res"} / std::filesystem::path{"shaders"},
+        std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}
+    };
+}
 
 } // anonymous namespace
 
 Radiance_cascades_renderer::Radiance_cascades_renderer(
-    erhe::graphics::Device&         graphics_device,
-    const Radiance_cascades_config& config,
-    const Producer_selection        selection
+    erhe::graphics::Device&                  graphics_device,
+    erhe::graphics::Command_buffer&          init_command_buffer,
+    App_context&                             context,
+    erhe::scene_renderer::Program_interface& program_interface,
+    erhe::scene_renderer::Mesh_memory&       mesh_memory,
+    const Radiance_cascades_config&          config,
+    const Producer_selection                 selection
 )
     : m_graphics_device{graphics_device}
+    , m_context        {context}
     , m_config         {config}
     , m_selection      {selection}
+    , m_control_block{
+        graphics_device,
+        "rc_trace",
+        static_cast<int>(c_control_binding_point),
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_preview_block{
+        graphics_device,
+        "rc_preview",
+        static_cast<int>(c_control_binding_point),
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
 {
+    using namespace erhe::graphics;
+
     // Ray query gates the whole feature, as for DDGI: the interval trace has
     // no rasterized fallback (doc/plans/radiance_cascades.md section 11).
-    m_supported = graphics_device.get_info().use_ray_query;
-    if (!m_supported) {
+    if (!graphics_device.get_info().use_ray_query) {
         log_startup->info("Radiance_cascades_renderer: ray query not available, radiance cascades disabled");
+        return;
     }
+    const bool use_position_fetch = graphics_device.get_info().use_ray_tracing_position_fetch;
+
+    const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
+
+    m_scene_tlas = std::make_unique<Scene_tlas>(
+        graphics_device,
+        mesh_memory,
+        c_instance_record_binding_point,
+        "Radiance_cascades_renderer"
+    );
+
+    // Control block (std140), one per dispatch: the cascade and the texel
+    // run the dispatch traces.
+    // xyz = cascade grid origin, w = interval start t_i
+    m_control_offsets.grid_origin  = m_control_block.add_vec4 ("grid_origin" )->get_offset_in_parent();
+    // xyz = cascade grid spacing, w = interval end t_{i+1}
+    m_control_offsets.grid_spacing = m_control_block.add_vec4 ("grid_spacing")->get_offset_in_parent();
+    // xyz = probe counts, w = octahedral tile side q_i
+    m_control_offsets.grid_counts  = m_control_block.add_uvec4("grid_counts" )->get_offset_in_parent();
+    // x = first texel of the run, y = texel count, z = tiles per atlas row,
+    // w = flags (c_flag_blend)
+    m_control_offsets.dispatch     = m_control_block.add_uvec4("dispatch"    )->get_offset_in_parent();
+    // x = hysteresis
+    m_control_offsets.params       = m_control_block.add_vec4 ("params"      )->get_offset_in_parent();
+
+    // Stream-1 attribute offsets (in uints) for the shared hit path's manual
+    // vertex fetch, derived from the Mesh_memory vertex format exactly as
+    // Ddgi_renderer does.
+    const erhe::dataformat::Vertex_format&   vertex_format = mesh_memory.vertex_format_not_skinned;
+    const erhe::dataformat::Attribute_stream normal        = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute);
+    const erhe::dataformat::Attribute_stream tangent       = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent,   0);
+    const erhe::dataformat::Attribute_stream texcoord0     = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tex_coord, 0);
+    const erhe::dataformat::Attribute_stream color0        = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color,     0);
+    ERHE_VERIFY((normal   .attribute != nullptr) && (normal   .stream != nullptr));
+    ERHE_VERIFY((tangent  .attribute != nullptr) && (tangent  .stream != nullptr));
+    ERHE_VERIFY((texcoord0.attribute != nullptr) && (texcoord0.stream != nullptr));
+    ERHE_VERIFY((color0   .attribute != nullptr) && (color0   .stream != nullptr));
+
+    auto to_binding_type = [](const Shader_resource& block) -> Binding_type {
+        return (block.get_type() == Shader_resource::Type::shader_storage_block)
+            ? Binding_type::storage_buffer
+            : Binding_type::uniform_buffer;
+    };
+    m_tlas_binding_point     = c_instance_record_binding_point + 1;
+    m_raw_binding_point      = c_instance_record_binding_point + 2;
+    m_distance_binding_point = c_instance_record_binding_point + 3;
+    m_trace_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = material_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.material_interface.material_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.light_interface.light_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_instance_record_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_tlas_binding_point,
+                    .type          = Binding_type::acceleration_structure,
+                    .name          = "s_tlas",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_raw_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_raw",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_distance_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_distance",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "r32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = "RC trace",
+            .uses_texture_heap = true
+        }
+    );
+
+    std::vector<Shader_stage_extension> extensions{
+        { Shader_type::compute_shader, "GL_EXT_ray_query" },
+        { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
+        { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
+    };
+    if (use_position_fetch) {
+        extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+    }
+    // Two variants of rc_trace.comp: cascade 0 dispatches also write the
+    // distance texture, the others do not reference it at all. A dispatch
+    // that statically uses a storage image counts as writing it, so a shared
+    // variant would make every cascade's dispatch a write of the distance
+    // texture, and consecutive dispatches of one frame would be
+    // write-after-write hazards although only cascade 0 writes it.
+    const auto make_trace_pass = [&](Trace_pass& pass, const char* write_distance_define, const char* name) {
+        pass.shader_stages = std::make_unique<Reloadable_shader_stages>(
+            graphics_device,
+            Shader_stages_create_info{
+                .name                = name,
+                .defines             = {
+                    { "ERHE_TLAS_BINDING",            fmt::format("{}", m_tlas_binding_point) },
+                    { "ERHE_RT_NORMAL_OFFSET",        fmt::format("{}", normal   .attribute->offset / 4) },
+                    { "ERHE_RT_TANGENT_OFFSET",       fmt::format("{}", tangent  .attribute->offset / 4) },
+                    { "ERHE_RT_TEXCOORD0_OFFSET",     fmt::format("{}", texcoord0.attribute->offset / 4) },
+                    { "ERHE_RT_COLOR0_OFFSET",        fmt::format("{}", color0   .attribute->offset / 4) },
+                    { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" },
+                    { "ERHE_RC_TRACE_GROUP_SIZE",     fmt::format("{}", c_trace_workgroup_size) },
+                    { "ERHE_RC_TRACE_WRITE_DISTANCE", write_distance_define }
+                },
+                .extensions          = extensions,
+                .struct_types        = {
+                    &program_interface.material_interface.material_struct,
+                    &program_interface.light_interface.light_struct,
+                    &m_scene_tlas->get_instance_struct()
+                },
+                .interface_blocks    = {
+                    &program_interface.material_interface.material_block,
+                    &program_interface.light_interface.light_block,
+                    &m_control_block,
+                    &m_scene_tlas->get_instance_block()
+                },
+                .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_trace.comp" } },
+                .extra_include_paths = shader_paths(),
+                .bind_group_layout   = m_trace_bind_group_layout.get()
+            }
+        );
+        graphics_device.get_shader_monitor().add(*pass.shader_stages);
+        pass.pipeline = std::make_unique<Compute_pipeline>(
+            graphics_device,
+            Compute_pipeline_data{
+                .name              = name,
+                .shader_stages     = &pass.shader_stages->shader_stages,
+                .bind_group_layout = m_trace_bind_group_layout.get()
+            }
+        );
+    };
+    make_trace_pass(m_trace_cascade0, "1", "rc_trace_cascade0");
+    make_trace_pass(m_trace_upper,    "0", "rc_trace");
+
+    m_light_buffer = std::make_unique<erhe::scene_renderer::Light_buffer>(
+        graphics_device,
+        init_command_buffer,
+        program_interface.light_interface
+    );
+    m_light_projections = std::make_unique<erhe::scene_renderer::Light_projections>();
+    m_control_buffer = std::make_unique<Ring_buffer_client>(
+        graphics_device,
+        Buffer_target::uniform,
+        "Radiance_cascades_renderer::control",
+        c_control_binding_point
+    );
+
+    // Atlas preview: size x, y = atlas size, z = channel; params x = radiance
+    // scale, y = r0 (distance normalization).
+    m_preview_size_offset   = m_preview_block.add_uvec4("size"  )->get_offset_in_parent();
+    m_preview_params_offset = m_preview_block.add_vec4 ("params")->get_offset_in_parent();
+    m_preview_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_preview_raw_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_raw",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_preview_distance_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_distance",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "r32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_preview_output_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_preview",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label = "RC preview"
+        }
+    );
+    m_preview_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = "rc_preview",
+            .interface_blocks    = { &m_preview_block },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_preview.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = m_preview_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_preview_shader_stages);
+    m_preview_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "rc_preview",
+            .shader_stages     = &m_preview_shader_stages->shader_stages,
+            .bind_group_layout = m_preview_bind_group_layout.get()
+        }
+    );
+
+    // The label doubles as the Performance window plot name.
+    m_trace_timer = std::make_unique<Gpu_timer>(graphics_device, "RC trace");
+
+    m_supported = true;
+    log_startup->info("Radiance_cascades_renderer: radiance cascades available");
 }
 
 Radiance_cascades_renderer::~Radiance_cascades_renderer() noexcept = default;
 
 auto Radiance_cascades_renderer::is_supported() const -> bool
 {
-    return m_supported;
+    return m_supported && (m_trace_cascade0.pipeline != nullptr) && (m_trace_upper.pipeline != nullptr);
 }
 
 auto Radiance_cascades_renderer::is_selected() const -> bool
@@ -65,6 +389,7 @@ void Radiance_cascades_renderer::set_selection(const Producer_selection selectio
         release_textures();
         m_layout = Radiance_cascades_layout{};
         m_volume_bounds.reset();
+        clear_trace_timing();
     }
 }
 
@@ -89,6 +414,11 @@ auto Radiance_cascades_renderer::get_cascade_textures(const int cascade) const -
     return m_cascade_textures[static_cast<std::size_t>(cascade)];
 }
 
+auto Radiance_cascades_renderer::get_distance_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_distance_texture;
+}
+
 auto Radiance_cascades_renderer::get_cascade_texture_byte_count(const int cascade) const -> std::size_t
 {
     ERHE_VERIFY((cascade >= 0) && (cascade < c_max_radiance_cascades));
@@ -105,14 +435,69 @@ auto Radiance_cascades_renderer::get_fit_count() const -> uint64_t
     return m_fit_count;
 }
 
+void Radiance_cascades_renderer::sample_trace_timing()
+{
+    // The timer's result is the latest completed measurement of an earlier
+    // update; it reads 0 until the first one has completed.
+    const uint64_t ns = m_trace_timer->last_result();
+    if (ns == 0) {
+        return;
+    }
+    m_timing_last_ns = ns;
+    m_timing_history_ns[m_timing_history_next] = ns;
+    m_timing_history_next  = (m_timing_history_next + 1) % c_timing_history_size;
+    m_timing_history_count = std::min(m_timing_history_count + 1, c_timing_history_size);
+    ++m_timing_sample_count;
+}
+
+void Radiance_cascades_renderer::clear_trace_timing()
+{
+    m_timing_history_count = 0;
+    m_timing_history_next  = 0;
+    m_timing_last_ns       = 0;
+}
+
+auto Radiance_cascades_renderer::get_stats() const -> Stats
+{
+    Stats stats{};
+    uint64_t sum_ns = 0;
+    for (std::size_t i = 0; i < m_timing_history_count; ++i) {
+        sum_ns += m_timing_history_ns[i];
+    }
+    stats.trace.last_ms    = static_cast<double>(m_timing_last_ns) * 1.0e-6;
+    stats.trace.average_ms = (m_timing_history_count > 0)
+        ? (static_cast<double>(sum_ns) * 1.0e-6) / static_cast<double>(m_timing_history_count)
+        : 0.0;
+    stats.update_count        = m_update_count;
+    stats.timing_sample_count = m_timing_sample_count;
+    stats.completed_sweeps    = m_completed_sweeps;
+    stats.texels_per_update   = m_texels_per_update;
+    stats.rays_per_update     = m_texels_per_update;
+    const int64_t total_texels = m_layout.get_total_texels();
+    stats.updates_per_full_refresh = (m_texels_per_update > 0)
+        ? ((total_texels + m_texels_per_update - 1) / m_texels_per_update)
+        : 0;
+    stats.ms_per_million_rays = (stats.rays_per_update > 0)
+        ? (stats.trace.average_ms * 1.0e6) / static_cast<double>(stats.rays_per_update)
+        : 0.0;
+    stats.full_refresh_ms = static_cast<double>(stats.updates_per_full_refresh) * stats.trace.average_ms;
+    return stats;
+}
+
 void Radiance_cascades_renderer::release_textures()
 {
     for (Cascade_textures& textures : m_cascade_textures) {
         textures.raw.reset();
         textures.merged.reset();
     }
+    m_distance_texture.reset();
+    m_preview_texture.reset();
     m_cascade_byte_counts.fill(0);
+    m_cascade_texel_offsets.fill(0);
     m_texture_byte_count = 0;
+    m_texel_cursor       = 0;
+    m_completed_sweeps   = 0;
+    m_texels_per_update  = 0;
 }
 
 void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffer& command_buffer)
@@ -120,8 +505,7 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
     using namespace erhe::graphics;
 
     release_textures();
-    const std::size_t texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
-    const auto make_texture = [&](const std::string& debug_label, const int width, const int height) -> std::shared_ptr<Texture> {
+    const auto make_texture = [&](const std::string& debug_label, const erhe::dataformat::Format format, const int width, const int height) -> std::shared_ptr<Texture> {
         std::shared_ptr<Texture> texture = std::make_shared<Texture>(
             m_graphics_device,
             Texture_create_info{
@@ -131,7 +515,7 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
                                Image_usage_flag_bit_mask::transfer_dst |
                                Image_usage_flag_bit_mask::transfer_src,
                 .type        = Texture_type::texture_2d,
-                .pixelformat = c_radiance_format,
+                .pixelformat = format,
                 .width       = width,
                 .height      = height,
                 .level_count = 1,
@@ -145,16 +529,27 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
         return texture;
     };
 
+    const std::size_t radiance_texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
+    int64_t texel_offset = 0;
     for (int i = 0; i < m_layout.cascade_count; ++i) {
         const Radiance_cascade& cascade = m_layout.cascades[static_cast<std::size_t>(i)];
         const int width  = cascade.get_atlas_width();
         const int height = cascade.get_atlas_height();
         Cascade_textures& textures = m_cascade_textures[static_cast<std::size_t>(i)];
-        textures.raw    = make_texture(fmt::format("RC cascade {} raw",    i), width, height);
-        textures.merged = make_texture(fmt::format("RC cascade {} merged", i), width, height);
-        const std::size_t bytes = 2 * static_cast<std::size_t>(cascade.get_atlas_texel_count()) * texel_bytes;
+        textures.raw    = make_texture(fmt::format("RC cascade {} raw",    i), c_radiance_format, width, height);
+        textures.merged = make_texture(fmt::format("RC cascade {} merged", i), c_radiance_format, width, height);
+        const std::size_t bytes = 2 * static_cast<std::size_t>(cascade.get_atlas_texel_count()) * radiance_texel_bytes;
         m_cascade_byte_counts[static_cast<std::size_t>(i)] = bytes;
         m_texture_byte_count += bytes;
+        m_cascade_texel_offsets[static_cast<std::size_t>(i)] = texel_offset;
+        texel_offset += cascade.get_texel_count();
+    }
+    {
+        const Radiance_cascade& cascade0 = m_layout.cascades[0];
+        m_distance_texture = make_texture("RC cascade 0 distance", c_distance_format, cascade0.get_atlas_width(), cascade0.get_atlas_height());
+        const std::size_t bytes = static_cast<std::size_t>(cascade0.get_atlas_texel_count()) * erhe::dataformat::get_format_size_bytes(c_distance_format);
+        m_cascade_byte_counts[0] += bytes;
+        m_texture_byte_count     += bytes;
     }
 
     // Refits happen at runtime (content moved, settings changed), so this is
@@ -214,15 +609,432 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
     return true;
 }
 
+void Radiance_cascades_renderer::record_trace(
+    erhe::graphics::Command_buffer&          command_buffer,
+    const Scene_tlas::Frame&                 tlas_frame,
+    const erhe::graphics::Ring_buffer_range& light_range,
+    erhe::scene_renderer::Material_set&      material_set
+)
+{
+    using namespace erhe::graphics;
+
+    const int64_t total_texels = m_layout.get_total_texels();
+    // The budget is read every tick, so a change takes effect on the next
+    // frame without a refit; clamped so one update never traces a texel
+    // twice.
+    m_texels_per_update = std::clamp(static_cast<int64_t>(m_config.texels_per_frame), int64_t{1}, total_texels);
+    const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
+
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].raw, Image_layout::general);
+    }
+    command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::general);
+
+    {
+        const Scoped_gpu_timer trace_timer{*m_trace_timer, command_buffer};
+
+        // Walk the cursor over the global texel order (cascade 0 first),
+        // one dispatch per contiguous run of one cascade. Runs are disjoint,
+        // but a dispatch declares a write of its whole raw atlas (and, for
+        // cascade 0, of the distance texture), so a second run of a cascade
+        // in the same frame - the cursor wrapping into the cascade it started
+        // in, or a run split at the dispatch size limit - is ordered after
+        // the first by a barrier. Runs of different cascades write different
+        // images and need none.
+        std::array<bool, c_max_radiance_cascades> dispatched{};
+        int64_t remaining = m_texels_per_update;
+        while (remaining > 0) {
+            int cascade_index = m_layout.cascade_count - 1;
+            while ((cascade_index > 0) && (m_cascade_texel_offsets[static_cast<std::size_t>(cascade_index)] > m_texel_cursor)) {
+                --cascade_index;
+            }
+            const Radiance_cascade& cascade     = m_layout.cascades[static_cast<std::size_t>(cascade_index)];
+            const int64_t           first_texel = m_texel_cursor - m_cascade_texel_offsets[static_cast<std::size_t>(cascade_index)];
+            const int64_t           count       = std::min({remaining, cascade.get_texel_count() - first_texel, c_max_texels_per_dispatch});
+
+            if (dispatched[static_cast<std::size_t>(cascade_index)]) {
+                command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+            }
+            dispatched[static_cast<std::size_t>(cascade_index)] = true;
+
+            // First sweep since the allocation: every texel is new, and its
+            // history is the allocation clear, not a trace.
+            const uint32_t flags = (m_completed_sweeps > 0) ? c_flag_blend : 0u;
+
+            const std::size_t byte_count = m_control_block.get_size_bytes();
+            Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+            {
+                std::span<std::byte> gpu_data = control_range.get_span();
+                std::memset(gpu_data.data(), 0, byte_count);
+                const glm::vec4  grid_origin {cascade.grid.origin,  cascade.interval_start};
+                const glm::vec4  grid_spacing{cascade.grid.spacing, cascade.interval_end};
+                const glm::uvec4 grid_counts{
+                    static_cast<uint32_t>(cascade.grid.counts.x),
+                    static_cast<uint32_t>(cascade.grid.counts.y),
+                    static_cast<uint32_t>(cascade.grid.counts.z),
+                    static_cast<uint32_t>(cascade.tile_texels)
+                };
+                const glm::uvec4 dispatch{
+                    static_cast<uint32_t>(first_texel),
+                    static_cast<uint32_t>(count),
+                    static_cast<uint32_t>(cascade.tiles_per_row),
+                    flags
+                };
+                const glm::vec4 params{hysteresis, 0.0f, 0.0f, 0.0f};
+                write(gpu_data, m_control_offsets.grid_origin,  as_span(grid_origin ));
+                write(gpu_data, m_control_offsets.grid_spacing, as_span(grid_spacing));
+                write(gpu_data, m_control_offsets.grid_counts,  as_span(grid_counts ));
+                write(gpu_data, m_control_offsets.dispatch,     as_span(dispatch    ));
+                write(gpu_data, m_control_offsets.params,       as_span(params      ));
+                control_range.bytes_written(byte_count);
+                control_range.close();
+            }
+            {
+                const Trace_pass&       pass    = (cascade_index == 0) ? m_trace_cascade0 : m_trace_upper;
+                Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+                encoder.set_bind_group_layout(m_trace_bind_group_layout.get());
+                encoder.set_compute_pipeline(*pass.pipeline);
+                m_light_buffer->bind_light_buffer(encoder, light_range);
+                m_scene_tlas->bind_instance_records(encoder, tlas_frame);
+                encoder.set_acceleration_structure(m_tlas_binding_point, *tlas_frame.acceleration_structure);
+                m_control_buffer->bind(encoder, control_range);
+                encoder.set_storage_image(m_raw_binding_point, *m_cascade_textures[static_cast<std::size_t>(cascade_index)].raw);
+                // Bound for every dispatch (the layout has the binding); only
+                // the cascade 0 variant references it.
+                encoder.set_storage_image(m_distance_binding_point, *m_distance_texture);
+                material_set.bind(encoder);
+                encoder.dispatch_compute(
+                    static_cast<std::uintptr_t>((count + c_trace_workgroup_size - 1) / c_trace_workgroup_size),
+                    1,
+                    1
+                );
+            }
+            control_range.release();
+
+            remaining      -= count;
+            m_texel_cursor += count;
+            if (m_texel_cursor >= total_texels) {
+                m_texel_cursor = 0;
+                ++m_completed_sweeps;
+            }
+        }
+    }
+
+    // The raw atlases become sampled textures for the window preview and,
+    // from plan phase 3, the merge pass.
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].raw, Image_layout::shader_read_only_optimal);
+    }
+    command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::shader_read_only_optimal);
+}
+
+void Radiance_cascades_renderer::request_preview(const int cascade, const Rc_preview_channel channel, const float radiance_scale)
+{
+    m_preview_requested      = true;
+    m_preview_cascade        = cascade;
+    m_preview_channel        = channel;
+    m_preview_radiance_scale = radiance_scale;
+}
+
+auto Radiance_cascades_renderer::get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_preview_texture;
+}
+
+void Radiance_cascades_renderer::record_preview(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    const int               cascade_index = std::clamp(m_preview_cascade, 0, m_layout.cascade_count - 1);
+    const Radiance_cascade& cascade       = m_layout.cascades[static_cast<std::size_t>(cascade_index)];
+    const int               width         = cascade.get_atlas_width();
+    const int               height        = cascade.get_atlas_height();
+    // Sized to the previewed atlas; reallocated only when the window
+    // switches to a cascade of another size, or after a refit.
+    if (!m_preview_texture || (m_preview_texture->get_width() != width) || (m_preview_texture->get_height() != height)) {
+        m_preview_texture = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  = Image_usage_flag_bit_mask::storage | Image_usage_flag_bit_mask::sampled,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = c_radiance_format,
+                .width       = width,
+                .height      = height,
+                .level_count = 1,
+                .debug_label = erhe::utility::Debug_label{"RC preview"}
+            }
+        );
+    }
+
+    const std::size_t byte_count = m_preview_block.get_size_bytes();
+    Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+    {
+        std::span<std::byte> gpu_data = control_range.get_span();
+        std::memset(gpu_data.data(), 0, byte_count);
+        const glm::uvec4 size{
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height),
+            static_cast<uint32_t>(m_preview_channel),
+            0u
+        };
+        const glm::vec4 params{m_preview_radiance_scale, m_layout.r0, 0.0f, 0.0f};
+        write(gpu_data, m_preview_size_offset,   as_span(size  ));
+        write(gpu_data, m_preview_params_offset, as_span(params));
+        control_range.bytes_written(byte_count);
+        control_range.close();
+    }
+
+    Texture& raw = *m_cascade_textures[static_cast<std::size_t>(cascade_index)].raw;
+    command_buffer.transition_texture_layout(raw,                 Image_layout::general);
+    command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::general);
+    command_buffer.transition_texture_layout(*m_preview_texture,  Image_layout::general);
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_preview_bind_group_layout.get());
+        encoder.set_compute_pipeline(*m_preview_pipeline);
+        m_control_buffer->bind(encoder, control_range);
+        encoder.set_storage_image(c_preview_raw_binding_point,      raw);
+        encoder.set_storage_image(c_preview_distance_binding_point, *m_distance_texture);
+        encoder.set_storage_image(c_preview_output_binding_point,   *m_preview_texture);
+        encoder.dispatch_compute(
+            static_cast<std::uintptr_t>((width  + c_preview_workgroup_size - 1) / c_preview_workgroup_size),
+            static_cast<std::uintptr_t>((height + c_preview_workgroup_size - 1) / c_preview_workgroup_size),
+            1
+        );
+    }
+    control_range.release();
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    command_buffer.transition_texture_layout(raw,                 Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_preview_texture,  Image_layout::shader_read_only_optimal);
+}
+
+void Radiance_cascades_renderer::request_texel_readback()
+{
+    if (m_readback_state != Rc_readback_state::in_flight) {
+        m_readback_state = Rc_readback_state::requested;
+    }
+}
+
+void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    // Layout of the copy: every raw atlas, then the distance texture, each
+    // at an aligned offset, tightly packed rows.
+    const std::size_t radiance_texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
+    const std::size_t distance_texel_bytes = erhe::dataformat::get_format_size_bytes(c_distance_format);
+    std::size_t offset = 0;
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        m_readback_raw_offsets[static_cast<std::size_t>(i)] = offset;
+        offset = round_up(offset + (static_cast<std::size_t>(m_layout.cascades[static_cast<std::size_t>(i)].get_atlas_texel_count()) * radiance_texel_bytes), c_readback_alignment);
+    }
+    m_readback_distance_offset = offset;
+    offset = round_up(offset + (static_cast<std::size_t>(m_layout.cascades[0].get_atlas_texel_count()) * distance_texel_bytes), c_readback_alignment);
+    m_readback_byte_count = offset;
+
+    // Allocated on request only (the MCP path), grown to the largest layout
+    // asked for.
+    if (!m_readback_buffer || (m_readback_buffer->get_capacity_byte_count() < m_readback_byte_count)) {
+        m_readback_buffer = std::make_unique<Buffer>(
+            m_graphics_device,
+            Buffer_create_info{
+                .capacity_byte_count                    = m_readback_byte_count,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"RC texel readback"}
+            }
+        );
+    }
+
+    // copy_from_texture() moves each image from its tracked layout
+    // (shader_read_only_optimal after the trace) to transfer_src and back.
+    const auto copy = [&](Texture& texture, const std::size_t texel_bytes, const std::size_t destination_offset) {
+        const int         width         = texture.get_width();
+        const int         height        = texture.get_height();
+        const std::size_t bytes_per_row = static_cast<std::size_t>(width) * texel_bytes;
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            &texture,
+            0,                             // source_slice
+            0,                             // source_level
+            glm::ivec3{0, 0, 0},           // source_origin
+            glm::ivec3{width, height, 1},  // source_size
+            m_readback_buffer.get(),       // destination_buffer
+            static_cast<std::uintptr_t>(destination_offset),
+            static_cast<std::uintptr_t>(bytes_per_row),
+            static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))
+        );
+    };
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        copy(*m_cascade_textures[static_cast<std::size_t>(i)].raw, radiance_texel_bytes, m_readback_raw_offsets[static_cast<std::size_t>(i)]);
+    }
+    copy(*m_distance_texture, distance_texel_bytes, m_readback_distance_offset);
+
+    m_readback_layout       = m_layout;
+    m_readback_frame        = m_graphics_device.get_frame_index();
+    m_readback_update_count = m_update_count;
+    m_readback_sweep_count  = m_completed_sweeps;
+    m_readback_state        = Rc_readback_state::in_flight;
+}
+
+auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
+{
+    if ((m_readback_state != Rc_readback_state::in_flight) || !m_graphics_device.is_frame_completed(m_readback_frame)) {
+        return m_readback_state;
+    }
+
+    const std::span<std::byte> mapped = m_readback_buffer->map_bytes(0, m_readback_byte_count);
+    m_readback_buffer->invalidate(0, m_readback_byte_count);
+    m_readback_snapshot.assign(mapped.begin(), mapped.end());
+    m_readback_buffer->unmap();
+
+    // Per-cascade summaries over the probe texels.
+    for (int i = 0; i < m_readback_layout.cascade_count; ++i) {
+        const Radiance_cascade& cascade = m_readback_layout.cascades[static_cast<std::size_t>(i)];
+        const int               q       = cascade.tile_texels;
+        Cascade_summary         summary{};
+        glm::dvec3              radiance_sum{0.0};
+        int64_t                 beta_one_count = 0;
+        int64_t                 backface_count = 0;
+        for (int z = 0; z < cascade.grid.counts.z; ++z) {
+            for (int y = 0; y < cascade.grid.counts.y; ++y) {
+                for (int x = 0; x < cascade.grid.counts.x; ++x) {
+                    bool probe_has_backface = false;
+                    for (int v = 0; v < q; ++v) {
+                        for (int u = 0; u < q; ++u) {
+                            const glm::vec4 texel = read_raw_texel(i, glm::ivec3{x, y, z}, glm::ivec2{u, v});
+                            radiance_sum += glm::dvec3{texel};
+                            if (texel.a > 0.5f) {
+                                ++beta_one_count;
+                            }
+                            if ((i == 0) && (read_distance_texel(glm::ivec3{x, y, z}, glm::ivec2{u, v}) < 0.0f)) {
+                                ++backface_count;
+                                probe_has_backface = true;
+                            }
+                        }
+                    }
+                    if (probe_has_backface) {
+                        ++summary.backface_probe_count;
+                    }
+                }
+            }
+        }
+        summary.texel_count = cascade.get_texel_count();
+        const double texel_count = std::max(1.0, static_cast<double>(summary.texel_count));
+        summary.mean_radiance     = glm::vec3{radiance_sum / texel_count};
+        summary.beta_one_fraction = static_cast<float>(static_cast<double>(beta_one_count) / texel_count);
+        summary.backface_fraction = static_cast<float>(static_cast<double>(backface_count) / texel_count);
+        m_readback_summaries[static_cast<std::size_t>(i)] = summary;
+    }
+    m_readback_state = Rc_readback_state::complete;
+    return m_readback_state;
+}
+
+auto Radiance_cascades_renderer::get_readback_layout() const -> const Radiance_cascades_layout&
+{
+    return m_readback_layout;
+}
+
+auto Radiance_cascades_renderer::get_readback_update_count() const -> uint64_t
+{
+    return m_readback_update_count;
+}
+
+auto Radiance_cascades_renderer::get_readback_sweep_count() const -> uint64_t
+{
+    return m_readback_sweep_count;
+}
+
+auto Radiance_cascades_renderer::get_readback_summary(const int cascade) const -> const Cascade_summary&
+{
+    ERHE_VERIFY((cascade >= 0) && (cascade < m_readback_layout.cascade_count));
+    return m_readback_summaries[static_cast<std::size_t>(cascade)];
+}
+
+auto Radiance_cascades_renderer::read_raw_texel(const int cascade_index, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4
+{
+    ERHE_VERIFY((cascade_index >= 0) && (cascade_index < m_readback_layout.cascade_count));
+    const Radiance_cascade& cascade     = m_readback_layout.cascades[static_cast<std::size_t>(cascade_index)];
+    const int               probe_index = probe.x + (cascade.grid.counts.x * (probe.y + (cascade.grid.counts.y * probe.z)));
+    const glm::ivec2        atlas_texel = cascade.get_tile_origin(probe_index) + texel;
+    const std::size_t       texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
+    const std::size_t       offset      =
+        m_readback_raw_offsets[static_cast<std::size_t>(cascade_index)] +
+        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(cascade.get_atlas_width())) + static_cast<std::size_t>(atlas_texel.x)) * texel_bytes);
+    ERHE_VERIFY((offset + texel_bytes) <= m_readback_snapshot.size());
+    std::array<uint16_t, 4> halves{};
+    std::memcpy(halves.data(), m_readback_snapshot.data() + offset, sizeof(halves));
+    return glm::vec4{
+        glm::unpackHalf1x16(halves[0]),
+        glm::unpackHalf1x16(halves[1]),
+        glm::unpackHalf1x16(halves[2]),
+        glm::unpackHalf1x16(halves[3])
+    };
+}
+
+auto Radiance_cascades_renderer::read_distance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> float
+{
+    const Radiance_cascade& cascade     = m_readback_layout.cascades[0];
+    const int               probe_index = probe.x + (cascade.grid.counts.x * (probe.y + (cascade.grid.counts.y * probe.z)));
+    const glm::ivec2        atlas_texel = cascade.get_tile_origin(probe_index) + texel;
+    const std::size_t       offset      =
+        m_readback_distance_offset +
+        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(cascade.get_atlas_width())) + static_cast<std::size_t>(atlas_texel.x)) * sizeof(float));
+    ERHE_VERIFY((offset + sizeof(float)) <= m_readback_snapshot.size());
+    float distance = 0.0f;
+    std::memcpy(&distance, m_readback_snapshot.data() + offset, sizeof(float));
+    return distance;
+}
+
 void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
 {
-    if (!is_supported()) {
+    using namespace erhe::graphics;
+
+    if (!is_supported() || !is_selected()) {
         return;
     }
-    if (!is_selected()) {
+    if (!update_layout(command_buffer, scene_root)) {
         return;
     }
-    static_cast<void>(update_layout(command_buffer, scene_root));
+
+    // Trace inputs, as Ddgi_renderer::tick() builds them: the scene root's
+    // FORWARD material set (the TLAS instance records name slots in it,
+    // doc/erhe/draw_list_material_set.md D5), the light block with its
+    // projections, and this frame's TLAS.
+    erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
+    if (material_set.get_live_count() == 0) {
+        return;
+    }
+    if (!fit_trace_light_projections(m_context, m_graphics_device, scene_root, *m_light_projections)) {
+        return;
+    }
+    const glm::vec3   ambient     = scene_root.get_scene().get_ambient_light();
+    Scene_tlas::Frame tlas_frame  = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
+    ERHE_VERIFY(tlas_frame.is_valid());
+    Ring_buffer_range light_range = m_light_buffer->update(m_light_projections.get(), ambient);
+
+    sample_trace_timing();
+    ++m_update_count;
+    record_trace(command_buffer, tlas_frame, light_range, material_set);
+
+    light_range.release();
+    tlas_frame.instance_records.release();
+    material_set.unbind(command_buffer);
+
+    if (m_preview_requested) {
+        m_preview_requested = false;
+        record_preview(command_buffer);
+    }
+    if (m_readback_state == Rc_readback_state::requested) {
+        record_texel_readback(command_buffer);
+        // Transfer writes -> host reads once the frame's fence has signalled.
+        command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
+    }
 }
 
 } // namespace editor

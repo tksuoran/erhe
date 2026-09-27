@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Radiance_cascades_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Radiance Cascades",
     long_desc="World-space radiance cascades (doc/editor/radiance_cascades.md): a second producer of the indirect diffuse probe field, selected with the Indirect Diffuse source. Cascade 0 is a probe grid fitted to the padded content bounding box; every next cascade has probes at the centres of 2x2x2 blocks of the one below, doubled octahedral resolution and a doubled radiance interval. The field's sampling parameters (irradiance / distance texels, biases, intensity) are the DDGI settings. Requires GPU ray query support.",
     developer=False,
@@ -86,6 +86,33 @@ struct("Radiance_cascades_config",
             ui_min="1.0f",
             ui_max="4.0f",
             hard_min="1.0f"
+        ),
+        field(
+            "texels_per_frame",
+            Int,
+            added_in=2,
+            default="65536",
+            short_desc="Texels per frame",
+            long_desc="Per-frame trace budget: raw atlas texels (one interval ray each) traced per frame. A cursor walks all cascades, cascade 0 first, so a layout with more texels than this takes several frames per full refresh. Lower values cap the per-frame GPU cost at the price of slower convergence.",
+            visible=True,
+            developer=False,
+            ui_min="256",
+            ui_max="4194304",
+            hard_min="1"
+        ),
+        field(
+            "hysteresis",
+            Float,
+            added_in=2,
+            default="0.9f",
+            short_desc="Hysteresis",
+            long_desc="Temporal blend weight kept from the previous raw interval each time a texel is traced. 0 replaces the texel with the new trace. A texel traced for the first time since its atlas was allocated is written without blending.",
+            visible=True,
+            developer=False,
+            ui_min="0.0f",
+            ui_max="0.999f",
+            hard_min="0.0f",
+            hard_max="0.999f"
         ),
     ],
 )

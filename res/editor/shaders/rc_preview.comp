@@ -1,0 +1,36 @@
+// Radiance cascades atlas preview (doc/editor/radiance_cascades.md
+// "Radiance Cascades window").
+//
+// The raw atlases carry the transparency beta in alpha, which the ImGui
+// image widget would use as opacity (every hit texel has beta 0 and would
+// vanish). This pass writes an opaque copy of one cascade's atlas for the
+// window: one thread per atlas texel.
+//
+// rc_preview.params.z selects the channel:
+//  0 - radiance (rgb), times params.x,
+//  1 - beta as grey,
+//  2 - cascade 0 signed hit distance: front face hits green, backface hits
+//      red, brightness distance / params.y (r0); misses (distance = r0)
+//      read full green.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    if ((texel.x >= int(rc_preview.size.x)) || (texel.y >= int(rc_preview.size.y))) {
+        return;
+    }
+    uint channel = rc_preview.size.z;
+    vec3 color;
+    if (channel == 0u) {
+        color = imageLoad(i_rc_raw, texel).rgb * rc_preview.params.x;
+    } else if (channel == 1u) {
+        color = vec3(imageLoad(i_rc_raw, texel).a);
+    } else {
+        float distance   = imageLoad(i_rc_distance, texel).r;
+        float brightness = clamp(abs(distance) / max(rc_preview.params.y, 1.0e-6), 0.0, 1.0);
+        color = (distance < 0.0) ? vec3(brightness, 0.0, 0.0) : vec3(0.0, brightness, 0.0);
+    }
+    imageStore(i_rc_preview, texel, vec4(color, 1.0));
+}

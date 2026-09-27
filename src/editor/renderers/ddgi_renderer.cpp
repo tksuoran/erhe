@@ -1,12 +1,12 @@
 #include "renderers/ddgi_renderer.hpp"
 
 #include "app_context.hpp"
-#include "app_settings.hpp"
 #include "config/generated/ddgi_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/trace_lights.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -29,7 +29,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
-#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
@@ -1706,38 +1705,13 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     }
 
     // The lights need UBO slots and projection transforms even though DDGI
-    // never samples a shadow map (it traces shadow rays): Light_buffer only
-    // writes the slots present in the projections. Light_projections::apply
-    // fits shadow frusta around a view camera, which DDGI has none of - the
-    // fitted transforms are unused here, so any scene camera serves as the
-    // fit reference.
-    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene_root.get_scene().get_cameras();
-    if (cameras.empty()) {
+    // never samples a shadow map (it traces shadow rays).
+    if (!fit_trace_light_projections(m_context, m_graphics_device, scene_root, *m_light_projections)) {
         if (trace_reference) {
             fail_reference_query("the scene has no camera (the light block fit needs one)");
         }
         return;
     }
-    // Same limits the shadow render node resolves with: Light_set::resolve
-    // recomputes whenever the limits differ from the last call, so handing
-    // out a different set here would invalidate it every frame.
-    const erhe::scene_renderer::Light_count_limits light_count_limits = (m_context.app_settings != nullptr)
-        ? get_light_count_limits(m_context.app_settings->graphics.current_graphics_preset)
-        : erhe::scene_renderer::Light_count_limits{};
-    erhe::scene_renderer::Light_set& light_set = scene_root.get_light_set();
-    light_set.resolve(scene_root.layers().light()->lights, light_count_limits);
-
-    const Device_info& info = m_graphics_device.get_info();
-    m_light_projections->apply(
-        light_set,
-        cameras.front().get(),
-        erhe::math::Viewport{},
-        erhe::math::Viewport{},
-        {},     // no shadow map -> "no shadow map" sentinel in the light UBO
-        m_graphics_device.get_reverse_depth(),
-        info.coordinate_conventions.native_depth_range,
-        info.coordinate_conventions
-    );
 
     m_sky_radiance = scene_root.get_scene().get_ambient_light();
 

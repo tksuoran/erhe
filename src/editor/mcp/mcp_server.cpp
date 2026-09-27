@@ -494,6 +494,12 @@ auto Mcp_server::process_queued_requests() -> int
                 m_context.ddgi_renderer->cancel_reference_query();
                 log_mcp->warn("MCP server: reference_indirect_diffuse expired; its remaining chunks are cancelled");
             }
+            if (m_rc_texels_request == req.get()) {
+                // A recorded copy still completes; a request arriving while
+                // it is in flight reads it (its counters say when it was
+                // taken).
+                m_rc_texels_request = nullptr;
+            }
             if (m_scene_image_capture && (m_scene_image_request == req.get())) {
                 m_scene_image_request = nullptr;
                 log_mcp->warn("MCP server: render_scene_image expired; its capture is released once its GPU copy has retired");
@@ -812,6 +818,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_indirect_diffuse",           &Mcp_server::action_set_indirect_diffuse          },
         { "set_radiance_cascades",          &Mcp_server::action_set_radiance_cascades         },
         { "get_indirect_diffuse_stats",     &Mcp_server::query_indirect_diffuse_stats         },
+        { "get_radiance_cascades_texels",   &Mcp_server::query_radiance_cascades_texels       },
         { "sample_indirect_diffuse",        &Mcp_server::query_sample_indirect_diffuse        },
         { "reference_indirect_diffuse",     &Mcp_server::query_reference_indirect_diffuse     },
     };
@@ -1104,8 +1111,8 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
 
 namespace {
 
-// The radiance cascades layout and memory (doc/editor/radiance_cascades.md
-// "MCP"). The cost fields read 0 until the trace pass exists (plan phase 2).
+// The radiance cascades layout, memory and trace cost
+// (doc/editor/radiance_cascades.md "MCP").
 [[nodiscard]] auto radiance_cascades_stats_json(const Radiance_cascades_renderer& renderer) -> json
 {
     const Radiance_cascades_layout& layout = renderer.get_layout();
@@ -1125,9 +1132,10 @@ namespace {
             {"texture_bytes", renderer.get_cascade_texture_byte_count(i)}
         });
     }
-    const json zero_time{
-        {"last_ms",    0.0},
-        {"average_ms", 0.0}
+    const Radiance_cascades_renderer::Stats stats = renderer.get_stats();
+    const json trace_time{
+        {"last_ms",    stats.trace.last_ms},
+        {"average_ms", stats.trace.average_ms}
     };
     return json{
         {"supported",                renderer.is_supported()},
@@ -1140,15 +1148,17 @@ namespace {
         {"texture_bytes",            renderer.get_texture_byte_count()},
         {"fit_count",                renderer.get_fit_count()},
         {"cascades",                 cascades},
-        {"update_count",             0},
-        {"timing_sample_count",      0},
-        {"texels_per_update",        0},
-        {"rays_per_update",          0},
-        {"gpu_ms",                   json::object()},
-        {"gpu_ms_total",             zero_time},
-        {"ms_per_million_rays",      0.0},
-        {"updates_per_full_refresh", 0},
-        {"full_refresh_ms",          0.0}
+        {"update_count",             stats.update_count},
+        {"timing_sample_count",      stats.timing_sample_count},
+        {"completed_sweeps",         stats.completed_sweeps},
+        {"texels_per_update",        stats.texels_per_update},
+        {"rays_per_update",          stats.rays_per_update},
+        {"gpu_ms",                   json{{"trace", trace_time}}},
+        {"gpu_ms_total",             trace_time},
+        {"timing_history_size",      Radiance_cascades_renderer::c_timing_history_size},
+        {"ms_per_million_rays",      stats.ms_per_million_rays},
+        {"updates_per_full_refresh", stats.updates_per_full_refresh},
+        {"full_refresh_ms",          stats.full_refresh_ms}
     };
 }
 
@@ -1229,6 +1239,12 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
         if (args.contains("interval_scale")) {
             config.interval_scale = std::clamp(args.value("interval_scale", 1.0f), 1.0f, 64.0f);
         }
+        if (args.contains("texels_per_frame")) {
+            config.texels_per_frame = std::max(1, args.value("texels_per_frame", 65536));
+        }
+        if (args.contains("hysteresis")) {
+            config.hysteresis = std::clamp(args.value("hysteresis", 0.9f), 0.0f, 0.999f);
+        }
     }
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
@@ -1242,7 +1258,9 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"max_probes_cascade0",  config.max_probes_cascade0},
             {"max_cascades",         config.max_cascades},
             {"cascade0_tile_texels", config.cascade0_tile_texels},
-            {"interval_scale",       config.interval_scale}
+            {"interval_scale",       config.interval_scale},
+            {"texels_per_frame",     config.texels_per_frame},
+            {"hysteresis",           config.hysteresis}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }
@@ -1369,6 +1387,172 @@ namespace {
 }
 
 } // anonymous namespace
+
+namespace {
+
+// One requested raw texel of get_radiance_cascades_texels.
+class Rc_texel_address
+{
+public:
+    int        cascade{0};
+    glm::ivec3 probe  {0};
+    glm::ivec2 texel  {0};
+};
+
+// Parses and range-checks the 'texels' argument against a layout. Returns
+// an error message, empty on success.
+[[nodiscard]] auto parse_rc_texel_addresses(
+    const json&                     texels,
+    const Radiance_cascades_layout& layout,
+    std::vector<Rc_texel_address>&  out
+) -> std::string
+{
+    out.clear();
+    if (texels.is_null()) {
+        return {};
+    }
+    if (!texels.is_array()) {
+        return "'texels' must be an array of {cascade, probe:[x,y,z], texel:[u,v]}";
+    }
+    if (texels.size() > 4096) {
+        return "at most 4096 texels per call";
+    }
+    const auto is_int_array = [](const json& value, const std::size_t size) -> bool {
+        if (!value.is_array() || (value.size() != size)) {
+            return false;
+        }
+        for (const json& element : value) {
+            if (!element.is_number_integer()) {
+                return false;
+            }
+        }
+        return true;
+    };
+    for (std::size_t i = 0; i < texels.size(); ++i) {
+        const json& entry = texels[i];
+        if (
+            !entry.is_object() ||
+            !entry.contains("cascade") || !entry["cascade"].is_number_integer() ||
+            !entry.contains("probe")   || !is_int_array(entry["probe"], 3) ||
+            !entry.contains("texel")   || !is_int_array(entry["texel"], 2)
+        ) {
+            return fmt::format("texels[{}] needs integer 'cascade', 'probe' [x, y, z] and 'texel' [u, v]", i);
+        }
+        Rc_texel_address address{};
+        address.cascade = entry["cascade"].get<int>();
+        address.probe   = glm::ivec3{entry["probe"][0].get<int>(), entry["probe"][1].get<int>(), entry["probe"][2].get<int>()};
+        address.texel   = glm::ivec2{entry["texel"][0].get<int>(), entry["texel"][1].get<int>()};
+        if ((address.cascade < 0) || (address.cascade >= layout.cascade_count)) {
+            return fmt::format("texels[{}].cascade outside [0, {})", i, layout.cascade_count);
+        }
+        const Radiance_cascade& cascade = layout.cascades[static_cast<std::size_t>(address.cascade)];
+        if (glm::any(glm::lessThan(address.probe, glm::ivec3{0})) || glm::any(glm::greaterThanEqual(address.probe, cascade.grid.counts))) {
+            return fmt::format("texels[{}].probe outside the cascade {} grid", i, address.cascade);
+        }
+        if (glm::any(glm::lessThan(address.texel, glm::ivec2{0})) || glm::any(glm::greaterThanEqual(address.texel, glm::ivec2{cascade.tile_texels}))) {
+            return fmt::format("texels[{}].texel outside the {} x {} tile", i, cascade.tile_texels, cascade.tile_texels);
+        }
+        out.push_back(address);
+    }
+    return {};
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
+{
+    // Raw radiance interval texels and per-cascade summaries
+    // (doc/editor/radiance_cascades.md "MCP"): a copy of every raw atlas is
+    // requested after the next trace and read back once its frame retired.
+    // Nothing is copied unless this tool asks. Same deferral flow as
+    // sample_indirect_diffuse.
+    Radiance_cascades_renderer* renderer = m_context.radiance_cascades_renderer;
+
+    const bool continuation =
+        (m_rc_texels_request != nullptr) &&
+        (m_rc_texels_request == m_current_request) &&
+        (m_rc_texels_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Rc_readback_state state = (renderer != nullptr) ? renderer->poll_texel_readback() : Rc_readback_state::idle;
+        if (state == Rc_readback_state::complete) {
+            m_rc_texels_request = nullptr;
+            const Radiance_cascades_layout& layout = renderer->get_readback_layout();
+            std::vector<Rc_texel_address> addresses;
+            const std::string error = parse_rc_texel_addresses(m_rc_texels_args, layout, addresses);
+            if (!error.empty()) {
+                return make_error_content("get_radiance_cascades_texels: the layout changed before the copy: " + error);
+            }
+            json cascades = json::array();
+            for (int i = 0; i < layout.cascade_count; ++i) {
+                const Radiance_cascades_renderer::Cascade_summary& summary = renderer->get_readback_summary(i);
+                json entry{
+                    {"index",             i},
+                    {"texel_count",       summary.texel_count},
+                    {"mean_radiance",     vec3_json(summary.mean_radiance)},
+                    {"beta_one_fraction", summary.beta_one_fraction}
+                };
+                if (i == 0) {
+                    entry["backface_fraction"]    = summary.backface_fraction;
+                    entry["backface_probe_count"] = summary.backface_probe_count;
+                }
+                cascades.push_back(std::move(entry));
+            }
+            json texels = json::array();
+            for (const Rc_texel_address& address : addresses) {
+                const Radiance_cascade& cascade   = layout.cascades[static_cast<std::size_t>(address.cascade)];
+                const glm::vec4         value     = renderer->read_raw_texel(address.cascade, address.probe, address.texel);
+                const glm::vec3         position  = cascade.grid.origin + (glm::vec3{address.probe} * cascade.grid.spacing);
+                const glm::vec3         direction = get_texel_direction(address.texel, cascade.tile_texels);
+                json entry{
+                    {"cascade",        address.cascade},
+                    {"probe",          json::array({address.probe.x, address.probe.y, address.probe.z})},
+                    {"texel",          json::array({address.texel.x, address.texel.y})},
+                    {"probe_position", vec3_json(position)},
+                    {"direction",      vec3_json(direction)},
+                    {"interval",       json::array({cascade.interval_start, cascade.interval_end})},
+                    {"radiance",       vec3_json(glm::vec3{value})},
+                    {"beta",           value.a}
+                };
+                if (address.cascade == 0) {
+                    entry["signed_distance"] = renderer->read_distance_texel(address.probe, address.texel);
+                }
+                texels.push_back(std::move(entry));
+            }
+            return make_json_content(json{
+                {"update_count",     renderer->get_readback_update_count()},
+                {"completed_sweeps", renderer->get_readback_sweep_count()},
+                {"cascades",         std::move(cascades)},
+                {"texels",           std::move(texels)}
+            }).dump();
+        }
+        if ((state == Rc_readback_state::requested) || (state == Rc_readback_state::in_flight)) {
+            if ((state == Rc_readback_state::requested) && !renderer->is_active()) {
+                m_rc_texels_request = nullptr;
+                return make_error_content("get_radiance_cascades_texels: radiance cascades became inactive before the copy was recorded");
+            }
+            m_defer_current_request = true;
+            return {};
+        }
+        m_rc_texels_request = nullptr;
+        return make_error_content("get_radiance_cascades_texels: the readback was dropped");
+    }
+
+    if ((renderer == nullptr) || !renderer->is_active()) {
+        return make_error_content("get_radiance_cascades_texels: radiance cascades are not active (select them with set_indirect_diffuse; needs ray query and scene content)");
+    }
+    const json texels_arg = args.contains("texels") ? args["texels"] : json{};
+    std::vector<Rc_texel_address> addresses;
+    const std::string error = parse_rc_texel_addresses(texels_arg, renderer->get_layout(), addresses);
+    if (!error.empty()) {
+        return make_error_content("get_radiance_cascades_texels: " + error);
+    }
+    renderer->request_texel_readback();
+    m_rc_texels_args        = texels_arg;
+    m_rc_texels_request     = m_current_request;
+    m_rc_texels_enqueued_at = m_current_request->enqueued_at;
+    m_defer_current_request = true;
+    return {};
+}
 
 auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
 {

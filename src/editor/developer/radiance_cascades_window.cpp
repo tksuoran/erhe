@@ -7,10 +7,13 @@
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "windows/config_ui.hpp"
 
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
+
+#include <algorithm>
 
 namespace editor {
 
@@ -64,7 +67,7 @@ void Radiance_cascades_window::imgui()
         return;
     }
     if (!renderer->has_field()) {
-        ImGui::TextUnformatted("Layout only: no trace / merge / reduce yet; the forward pass uses the flat ambient term.");
+        ImGui::TextUnformatted("Trace only: no merge / reduce yet; the forward pass uses the flat ambient term.");
     }
 
     const Radiance_cascade& cascade0 = layout.cascades[0];
@@ -105,7 +108,67 @@ void Radiance_cascades_window::imgui()
         ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(renderer->get_texture_byte_count())));
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade.");
+    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade, plus the cascade 0 R32F distance texture.");
+
+    // GPU cost of the trace (doc/editor/radiance_cascades.md "Trace").
+    const Radiance_cascades_renderer::Stats stats = renderer->get_stats();
+    if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("radiance_cascades_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
+            ImGui::TableSetupColumn("Pass");
+            ImGui::TableSetupColumn("Last ms");
+            ImGui::TableSetupColumn("Avg ms");
+            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("trace");
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%.3f", stats.trace.last_ms);
+            ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", stats.trace.average_ms);
+            ImGui::EndTable();
+        }
+        ImGui::Text("Texels (rays) per update: %lld", static_cast<long long>(stats.texels_per_update));
+        ImGui::Text("Cost: %.3f ms per million rays", stats.ms_per_million_rays);
+        ImGui::Text("Full refresh: %lld updates, %.2f ms", static_cast<long long>(stats.updates_per_full_refresh), stats.full_refresh_ms);
+        ImGui::Text("Updates: %llu, full sweeps: %llu", static_cast<unsigned long long>(stats.update_count), static_cast<unsigned long long>(stats.completed_sweeps));
+    }
+
+    // Atlas preview. The raw atlases carry beta in alpha, which the image
+    // widget would use as opacity, so the renderer writes an opaque copy of
+    // the chosen cascade and channel (rc_preview.comp). Requested each frame
+    // the preview is shown; the copy lags the request by one frame.
+    if (ImGui::CollapsingHeader("Atlas preview", ImGuiTreeNodeFlags_DefaultOpen)) {
+        m_preview_cascade = std::clamp(m_preview_cascade, 0, layout.cascade_count - 1);
+        ImGui::SliderInt("Cascade", &m_preview_cascade, 0, layout.cascade_count - 1);
+        int channel = static_cast<int>(m_preview_channel);
+        const char* const channel_names[] = { "Radiance", "Beta", "Distance (cascade 0)" };
+        if (ImGui::Combo("Channel", &channel, channel_names, IM_ARRAYSIZE(channel_names))) {
+            m_preview_channel = static_cast<Rc_preview_channel>(channel);
+        }
+        if (m_preview_channel == Rc_preview_channel::radiance) {
+            ImGui::SliderFloat("Radiance scale", &m_preview_radiance_scale, 0.1f, 100.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+        }
+        const int preview_cascade = (m_preview_channel == Rc_preview_channel::distance) ? 0 : m_preview_cascade;
+        renderer->request_preview(preview_cascade, m_preview_channel, m_preview_radiance_scale);
+
+        const std::shared_ptr<erhe::graphics::Texture>& texture = renderer->get_preview_texture();
+        if (texture) {
+            const float avail_width    = std::max(64.0f, ImGui::GetContentRegionAvail().x);
+            const float aspect         = static_cast<float>(texture->get_height()) / static_cast<float>(texture->get_width());
+            const int   display_width  = static_cast<int>(avail_width);
+            const int   display_height = std::max(1, static_cast<int>(avail_width * aspect));
+            m_context.imgui_renderer->image(
+                erhe::imgui::Draw_texture_parameters{
+                    .texture_reference = texture,
+                    .width             = display_width,
+                    .height            = display_height,
+                    .uv0               = glm::vec2{0.0f, 0.0f},
+                    .uv1               = glm::vec2{1.0f, 1.0f},
+                    // Texel grids: magnify without smoothing so individual
+                    // directions stay distinguishable.
+                    .filter            = erhe::graphics::Filter::nearest,
+                    .debug_label       = erhe::utility::Debug_label{"radiance cascades atlas"}
+                }
+            );
+        }
+    }
 }
 
 } // namespace editor

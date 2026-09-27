@@ -284,8 +284,12 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    tests of the layout math. `scripts/gi_verify.py --source
    radiance_cascades` builds and reports the layout per station and measures
    the flat ambient term until phase 4 binds a field.
-2. **Trace.** `rc_trace.comp` with the texel budget and hysteresis; the window
-   previews raw atlases per cascade; the pass is timed.
+2. **Trace** - built, described in
+   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) "Trace":
+   `rc_trace.comp` with the texel budget, hysteresis and first-fill rule, the
+   cascade 0 signed distance texture, the raw atlas preview, the timed pass
+   and its cost in `get_indirect_diffuse_stats`, and the
+   `get_radiance_cascades_texels` readback.
 3. **Merge.** `rc_merge.comp`, `interpolate` mode; preview merged atlases;
    `debug_cascade_mask` zeroes chosen cascades' radiance (beta kept) to show
    each interval band as in the paper's figure 3.

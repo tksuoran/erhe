@@ -840,9 +840,10 @@ public:
         // whatever the source for pending reference irradiance queries, and
         // its tick skips the probe update unless it is selected.
         //
-        // Radiance cascades: refit the cascades and (re)allocate their
-        // atlases. It produces no probe field yet (plan phase 4), so the
-        // forward pass keeps the flat ambient term while it is selected.
+        // Radiance cascades: refit the cascades, (re)allocate their atlases
+        // and trace this frame's budget of raw intervals. It produces no
+        // probe field yet (plan phase 4), so the forward pass keeps the flat
+        // ambient term while it is selected.
         if (
             m_radiance_cascades_renderer &&
             m_radiance_cascades_renderer->is_selected() &&
@@ -2069,6 +2070,10 @@ public:
                 );
                 m_radiance_cascades_renderer = std::make_unique<Radiance_cascades_renderer>(
                     *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
+                    m_app_context,
+                    *m_program_interface.get(),
+                    *m_mesh_memory.get(),
                     m_editor_settings.radiance_cascades,
                     get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::radiance_cascades)
                 );
