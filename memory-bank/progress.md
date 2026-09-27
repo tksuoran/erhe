@@ -23,6 +23,7 @@
 ✓phase-3::cd0ac88b8{rc_merge.comp;exact-algebra-0-fail;approx-error-median-0..0.13-p90-0.43..0.86;mean-bias-11..34%-dark;leak_pair-B-picks-A-light-through-wall;mask-decomposition-exact}
 ✓phase-3b::92faf6288{merge_mode:interpolate(default)|visibility_masked;rc_visibility.comp-on-change;leak-0.0033->0.0025;cornell-bias-17->21%;premise-half-wrong:coarse-probes-outside-carry-far-field;remaining-leak=start-point-parallax->per_neighbour_trace-now-phase-5}
 ✓phase-4::89bbfe823{rc_reduce-exact-0.088%;Probe_field-published-one-place;shared-atlas-tile-wrap;RC-fails-leak(0.039/0.017)+far-field+accuracy(16-30%-dark)+cost(~2xDDGI;reduce-largest);passes-bounce+noise+door-convergence}
-⚡phase-4b::corridor-far-end-cliff-1e-9{trace-to-root;coder-running}
+✓phase-4b::e47fcc8c7{upper-grids-drifted-half-spacing-per-odd-count(radiance_cascades_layout.cpp:get_upper_grid);centred;odd-weights-1/0+0.5/0.5;corridor-c4-probes-back-on-centre-line}
+⚡phase-5::per_neighbour_trace{8-ray-pre-averaged-trilinear-fix;choose-merge-default-by-gates-rule;coder-running}
 ?follow-up::change-driven-refit-both-producers{doc/plans/ddgi.md}
 ?phase-0b..0d->phases-1..7
