@@ -328,6 +328,15 @@ void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t by
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
     ERHE_VERIFY(m_map.data() != nullptr);
 
+    // Same rule as flush_bytes(): host-coherent memory needs no
+    // invalidation, and VMA does not align suballocations of coherent memory
+    // to nonCoherentAtomSize, so the range would not be valid anyway
+    // (VUID-VkMappedMemoryRange-offset-00687).
+    const bool host_coherent = m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    if (host_coherent) {
+        return;
+    }
+
     VkDevice      vulkan_device = m_device_impl.get_vulkan_device();
     VmaAllocator  allocator     = m_vma_allocator;
     VkResult      result        = VK_SUCCESS;
