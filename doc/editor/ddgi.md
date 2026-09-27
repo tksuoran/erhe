@@ -64,7 +64,13 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
    through `res/shaders/erhe_ray_hit.glsl`. On miss: scene ambient. Backface
    hit: store `-distance` and zero radiance. This per-ray transport is
    `ddgi_trace_ray_radiance()` in `res/editor/shaders/erhe_ddgi_ray.glsl`,
-   which the reference irradiance query (below) calls too.
+   which the reference irradiance query (below) calls too. Its rays start
+   at `t_min = 0` (`trace_closest_from()` in `res/shaders/erhe_ray_hit.glsl`;
+   `trace_closest()` keeps the 1 mm `t_min` for rays leaving a surface): the
+   origin is a point in free space, so a face the probe sits on is hit - as a
+   frontface from its open side, as a backface from inside the solid -
+   instead of being looked through, which is what lets relocation move an
+   on-face probe to the correct side.
 2. **`ddgi_blend.comp`, irradiance variant** - one workgroup per probe,
    striding over the tile's texels. Cosine-weighted accumulation of the
    probe's rays, hysteresis blend against the existing texel, then the
@@ -72,10 +78,26 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
 3. **`ddgi_blend.comp`, distance variant** (`ERHE_DDGI_BLEND_DISTANCE`) - same
    shape, with `pow(max(0, cos), depth_sharpness)` weighting of distance and
    distance squared, plus the border copy.
-4. **`ddgi_relocate.comp`** - one thread per probe. The backface-hit ratio over
-   the probe's rays gives the inactive state; the offset is nudged toward the
-   most open direction, clamped to `0.5 * spacing`. Writes the probe data
-   texture.
+4. **`ddgi_relocate.comp`** - one thread per probe, from the probe's rays of
+   this update. State: inactive when more than 25 % of the rays hit
+   backfaces. Offset, first rule that applies:
+   - **inside geometry** - more than 25 % backfaces AND the closest hit is a
+     backface (a point inside a closed solid meets the solid's boundary from
+     within first): the offset moves along the closest backface's ray by its
+     distance plus the near-surface distance (5 % of the smallest spacing),
+     out of the solid through its nearest face;
+   - **near a surface** - the closest hit is a frontface nearer than the
+     near-surface distance: pushed straight away from it to that distance;
+   - otherwise the offset relaxes toward the grid position (`x 0.98` per
+     update); a relocated probe relaxes until the near-surface rule holds it,
+     so it settles at the near-surface distance from the face it left
+     through (a millimetre-scale relax / push jitter, no state change).
+
+   The offset is clamped to 0.45 x the smallest spacing, so a probe deeper
+   than that inside a solid cannot leave it and stays inactive. A probe in
+   touching or interpenetrating solids whose closest hit is a frontface of
+   the neighbouring solid is not moved and stays inactive. Writes the probe
+   data texture.
 
 Budgeting: a round-robin probe cursor with a `probes_per_frame` budget,
 mirroring the lightmap tile cursor.
@@ -83,9 +105,16 @@ mirroring the lightmap tile cursor.
 ## Runtime sampling
 
 - `res/shaders/erhe_ddgi.glsl`:
-  `ddgi_sample_irradiance(world_pos, normal, view_dir)` - surface-biased sample
-  point, 8 probe taps, trilinear x smooth-backface normal weight x Chebyshev
-  visibility weight, log-space blend, active-probe gate.
+  `ddgi_sample_irradiance(world_pos, normal, view_dir)` - the sample point is
+  biased by `normal_bias` along the normal and `view_bias` along the view
+  direction; the 8 active probes of its cell are blended linearly with
+  trilinear (of the biased point) x smooth-backface x Chebyshev visibility
+  (from the biased point) weights, each weight floored at `1e-4`. The
+  backface weight takes the direction from the unbiased surface point to the
+  probe, so a probe between the surface and the biased point - a probe
+  relocated off this surface, or a probe plane closer to the surface than the
+  bias - keeps its full weight. With all 8 probes inactive the function
+  returns the flat scene ambient.
 - Three texture heap slots next to `c_texture_heap_slot_lightmap`
   (`src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.hpp`): **5**
   `s_ddgi_irradiance`, **6** `s_ddgi_distance`, **7** `s_ddgi_probe_data` (read
@@ -94,8 +123,8 @@ mirroring the lightmap tile cursor.
   `Light_buffer::bind_ddgi(...)` with 1x1 black fallbacks from both
   `Forward_renderer` begin-pass sites.
 - Grid parameters ride in the existing `Light_block` (grid origin, spacing,
-  counts + rays, and a params vec4 of normal bias / view bias / irradiance gamma
-  / intensity) rather than a new binding point; `Light_buffer::update()` takes a
+  counts + rays, and a params vec4 of normal bias / view bias / depth
+  sharpness / intensity) rather than a new binding point; `Light_buffer::update()` takes a
   `Ddgi_parameters` argument.
 - Variant gating: `X(USE_DDGI)` in `ERHE_SHADER_BOOL`
   (`src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp`), seeded
@@ -154,7 +183,26 @@ The MCP tool `get_indirect_diffuse_stats` (no arguments) returns `source`
 (`"ddgi"` while DDGI is active, else `"ambient"`) and a `ddgi` object with the
 grid origin / spacing / counts, probe count, rays per probe, probes and rays per
 update, `gpu_ms` per pass and `gpu_ms_total` (`last_ms`, `average_ms`), the
-derived figures above, and `texture_bytes`.
+derived figures above, `texture_bytes`, and `probe_states` (below).
+
+## Probe state
+
+The relocation / classification state is observable without the overlay:
+every `get_indirect_diffuse_stats` call asks `Ddgi_renderer` for a copy of
+the probe data texture after the next probe update
+(`request_probe_states()`, a transfer into its own host-visible buffer,
+recorded only on request) and reports the most recent copy that has retired
+(`poll_probe_states()`): `probe_states` = `update_count` (field updates when
+copied), `active`, `inactive`, `relocated` (`|offset|` > 1 mm) and
+`max_offset_over_spacing`, or `null` until the first copy retires. The
+optional argument `probes` (`[[x, y, z], ...]` grid coordinates) adds
+`probe_data`, index-aligned: `{coords, offset, state}` from the same copy.
+
+GI test stations at the pinned settings, converged: `probe_offset_sweep` 18
+inactive / 65 relocated of 600 (the inactive ones sit where two room shells
+touch, see the relocation rule above), `corridor` 0 / 68 of 380 (probes
+closer to a wall than 5 % of the spacing, pushed out to that distance),
+every other station 0 / 0.
 
 ## Irradiance queries
 
@@ -251,6 +299,53 @@ interpolation, visibility), never by what a ray sees.
 `scripts/gi_verify.py` compares every station's measured field against this
 reference ([plans/radiance_cascades.md](../plans/radiance_cascades.md)
 section 10, "Accuracy").
+
+## Accuracy
+
+Measured against `reference_indirect_diffuse` on the GI test stations
+(numbers in [plans/radiance_cascades.md](../plans/radiance_cascades.md)
+"Baseline (phase 0)"). The probes themselves are accurate: the irradiance a
+probe stores, read back at the probe centre, is within 3 % of the reference
+evaluated at the probe position for the same normal, except in directions
+where the octahedral resolution limits it (below). What remains is the field's
+discretization, which a spacing sweep separates from bias (DDGI / reference
+of the group means; 128 and 512 rays per probe agree within 2 %):
+
+| Group | 1.5 m | 0.75 m | 0.5 m |
+|---|---|---|---|
+| `cornell` floor | 0.92 | 0.86 | 0.86 |
+| `emissive_only` room floor | 0.60 | 0.94 | 1.11 |
+| `emissive_only` floor at the 1.0 m panel | 0.36 | 1.29 | 1.55 |
+| `corridor` profile | 0.78 | 0.91 | 0.89 |
+| `leak_pair` room A wall | 1.08 | 1.08 | 1.02 |
+
+- **Probe-to-surface distance.** A surface gets the irradiance of the probe
+  layer in front of it, not its own. Near the `cornell` floor the irradiance
+  falls 18 % within 0.3 m of height, and the DDGI floor value equals the
+  reference at the height of the nearest interior probe layer (0.15 m above
+  the floor at 1.5 m spacing, 0.27 m at 0.5 m - the grid is fitted to the
+  padded content box, so the layer height does not shrink monotonically
+  with the spacing). Same for the pillar base (`probe_offset_sweep`): it
+  gets the irradiance 0.7 m above the slab, at the pillar's relocated probe,
+  and the face that probe left the pillar through decides which side of the
+  base it serves (0.80 to 1.12 x the reference over three runs).
+- **Near-field emitters.** In front of a small emitter the irradiance varies
+  faster than the probe spacing; the error changes sign between 1.5 m and
+  0.5 m spacing (probe layers closer to the panel centre than the floor).
+- **Octahedral resolution.** At `irradiance_texels` 6 the nearest texel
+  centre to a direction is up to 19.5 deg away (for -z, the octahedral
+  corners); a probe facing a small bright source reads up to 7 % dark there
+  (the `corridor` probes facing the lit end wall).
+- **A thin wall through a probe plane** (`probe_offset_sweep` offset 0.0):
+  each probe of that plane leaves the wall through its nearer face - which
+  side is decided by the update's ray rotation - and serves that side only.
+  On the other side the nearest probes are a full spacing away and the wall
+  face reads their brighter irradiance (1.37 x the reference on room A's
+  face when the probes went to room B, 1.16 when they went to room A). A
+  probe 0.075 m from the lit face of a thin wall also leaks slightly into
+  the room behind it: its distance lobe toward points behind the wall at
+  grazing angles mixes wall hits with long rays, so the Chebyshev variance
+  lets it through (0.35 % of the lit room at worst).
 
 ## Phases
 
