@@ -227,7 +227,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/editor.md](editor/editor.md) (mostly stable): The editor is the main application built on the erhe C++ graphics engine
 - [editor/four_view.md](editor/four_view.md) (experimental): Four linked viewports (top, front, right, perspective) docked as a 2 x 2 grid with a cross splitter
 - [editor/grid.md](editor/grid.md) (mostly stable): Editor grid: rendering, per-view plane in orthographic views, hover and snap, depth mode
-- [editor/geometry_spreadsheet.md](editor/geometry_spreadsheet.md) (experimental): Geometry Spreadsheet window: per-element attribute table with row caches and clipped drawing
+- [editor/geometry_spreadsheet.md](editor/geometry_spreadsheet.md) (experimental): Geometry Spreadsheet window: per-element attribute table with row caches, clipped drawing, selection sync and editing
 - [editor/geometry_graph_mesh.md](editor/geometry_graph_mesh.md) (mostly stable): Geometry node graph as a first-class Graph_mesh asset
 - [editor/geometry_graph_transform_from_node.md](editor/geometry_graph_transform_from_node.md) (mostly stable): transform_from_node geometry-graph node driven by a scene node
 - [editor/geometry_nodes.md](editor/geometry_nodes.md) (mostly stable): Geometry Nodes status and Blender architecture analysis
@@ -341,7 +341,6 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/geometry_graph/creation_tools.md](plans/geometry_graph/creation_tools.md) (in progress): AI creation tools and geometry-graph follow-ups
 - [plans/geometry_graph/geometry_nodes.md](plans/geometry_graph/geometry_nodes.md) (proposed): Geometry nodes: field system and further node types
 - [plans/geometry_graph/openvdb_sdf.md](plans/geometry_graph/openvdb_sdf.md) (in progress): OpenVDB SDF support in the geometry graph (phase 3 onward)
-- [plans/geometry_spreadsheet.md](plans/geometry_spreadsheet.md) (in progress): Geometry spreadsheet window: remaining work
 - [plans/gl_worker_contexts.md](plans/gl_worker_contexts.md) (proposed): GL worker contexts: outstanding work
 - [plans/gltf.md](plans/gltf.md) (in progress): glTF: outstanding work
 - [plans/gltf_prefabs.md](plans/gltf_prefabs.md) (in progress): glTF scene prefabs: remaining phases

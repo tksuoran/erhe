@@ -86,7 +86,3 @@ Reference instance structure protection applies to every drop (`prefabs/instance
 
 - erhe::imgui, erhe::rendergraph, erhe::scene, erhe::primitive
 - editor: App_context, App_message_bus, Scene_view, Viewport_scene_view, Content_library
-
-## Future work
-
-- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - Geometry Spreadsheet selection sync and editing.

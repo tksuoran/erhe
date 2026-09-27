@@ -151,12 +151,21 @@ private:
         bool                            rows_valid   {false};
     };
 
+    class Sort_key
+    {
+    public:
+        double       value  {0.0}; // negated for a descending sort
+        GEO::index_t element{0};
+        bool         present{false};
+    };
+
     void build_layout(Spreadsheet_domain domain, Domain_cache& cache);
     void build_rows  (Domain_cache& cache);
 
     std::shared_ptr<erhe::geometry::Geometry>                  m_geometry;
     std::array<Domain_cache, c_spreadsheet_domain_count>       m_domains;
     int                                                        m_precision{4};
+    std::vector<Sort_key>                                      m_sort_keys; // build_rows() scratch
 };
 
 [[nodiscard]] auto get_domain_element_count(const erhe::geometry::Geometry& geometry, Spreadsheet_domain domain) -> std::size_t;

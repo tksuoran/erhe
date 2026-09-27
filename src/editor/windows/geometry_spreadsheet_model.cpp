@@ -249,6 +249,7 @@ void Geometry_spreadsheet_model::invalidate()
 void Geometry_spreadsheet_model::release()
 {
     m_geometry.reset();
+    std::vector<Sort_key>{}.swap(m_sort_keys);
     for (Domain_cache& cache : m_domains) {
         std::vector<Spreadsheet_column>{}.swap(cache.columns);
         std::vector<GEO::index_t>{}.swap(cache.rows);
@@ -468,25 +469,34 @@ void Geometry_spreadsheet_model::build_rows(Domain_cache& cache)
         }
         return;
     }
-    // Elements without a value sort last in both directions; ties keep
-    // element order so the result does not depend on the sort algorithm.
+    // Each element's key is read once into the persistent scratch, and the
+    // sort compares plain keys: reading through the column accessor on every
+    // comparison costs O(n log n) accessor calls instead of n. Elements
+    // without a value sort last in both directions; ties keep element order
+    // so the result does not depend on the sort algorithm.
+    m_sort_keys.clear();
+    m_sort_keys.reserve(cache.rows.size());
+    for (const GEO::index_t element : cache.rows) {
+        double     value{0.0};
+        const bool present = read_cell(column, element, value);
+        m_sort_keys.push_back(Sort_key{.value = descending ? -value : value, .element = element, .present = present});
+    }
     std::sort(
-        cache.rows.begin(),
-        cache.rows.end(),
-        [this, &column, descending](const GEO::index_t lhs, const GEO::index_t rhs) -> bool {
-            double lhs_value{0.0};
-            double rhs_value{0.0};
-            const bool lhs_present = read_cell(column, lhs, lhs_value);
-            const bool rhs_present = read_cell(column, rhs, rhs_value);
-            if (lhs_present != rhs_present) {
-                return lhs_present;
+        m_sort_keys.begin(),
+        m_sort_keys.end(),
+        [](const Sort_key& lhs, const Sort_key& rhs) -> bool {
+            if (lhs.present != rhs.present) {
+                return lhs.present;
             }
-            if (lhs_present && (lhs_value != rhs_value)) {
-                return descending ? (lhs_value > rhs_value) : (lhs_value < rhs_value);
+            if (lhs.present && (lhs.value != rhs.value)) {
+                return lhs.value < rhs.value;
             }
-            return lhs < rhs;
+            return lhs.element < rhs.element;
         }
     );
+    for (std::size_t row = 0, end = m_sort_keys.size(); row < end; ++row) {
+        cache.rows[row] = m_sort_keys[row].element;
+    }
 }
 
 auto Geometry_spreadsheet_model::get_element_count(const Spreadsheet_domain domain) const -> std::size_t

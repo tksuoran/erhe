@@ -5,8 +5,7 @@ Stability: experimental
 The Geometry Spreadsheet window shows the per-element data of one mesh
 primitive's `erhe::geometry::Geometry` as a table: one tab per element domain
 (vertex, corner, facet, edge), one row per element, one column per attribute
-component, editable in place with undo. Remaining work is
-`doc/plans/geometry_spreadsheet.md`.
+component, editable in place with undo.
 
 Code: `src/editor/windows/geometry_spreadsheet_window.{hpp,cpp}` (the window)
 and `src/editor/windows/geometry_spreadsheet_model.{hpp,cpp}` (column layout,
@@ -110,6 +109,30 @@ change that announces nothing (a live paint stroke) still shows at once.
 - The domain tabs record their plain domain name (`Vertex`, `Corner`, ...)
   for MCP UI driving (`erhe::imgui::set_item_debug_label`).
 
+### Measured cost
+
+Measured on the headless Vulkan editor, Debug build, with a box of
+1,003,688 vertices and 4,014,744 corners (`create_shape` box, steps 408) on
+the Corner tab. Allocations were counted with a temporary debug-CRT
+allocation hook (`_CrtSetAllocHook`) that counts only main-thread
+allocations made inside `Geometry_spreadsheet_window::imgui()`, timed with
+`std::chrono::steady_clock` around the same call; the hook is not part of
+the code.
+
+| Frame | `imgui()` time (median) | Heap allocations |
+|---|---|---|
+| Steady, scrolled to the top (25 rows drawn) | 354 us | 0 |
+| Steady, scrolled to the middle / bottom (29-30 rows drawn) | 418 us | 0 |
+| Window hidden | not called | 0 |
+| First frame of a tab (layout build + ImGui table creation) | ~70 ms | ~270 KB |
+| Header click sorting 1,008,600 rows | 356 ms | ~20 MB (row order + sort keys, kept) |
+
+The steady cost depends on the drawn rows, not on the element count. The
+first-frame cost is the presence scan, which runs to the end for every
+attribute the geometry does not carry. The sort reads each element's key
+once into a persistent scratch vector and sorts the keys; comparing through
+the column accessor instead took 5.0 s for the same rows.
+
 ## 5. Row selection
 
 Rows of the Vertex, Facet and Edge tabs are the mesh component selection
@@ -198,8 +221,3 @@ selection), and editing (an attribute edit reaching the geometry, the
 window's columns and the GPU vertex buffer, undo and redo, a position edit
 refreshing the facet normals, a double-click / type / Enter edit, Escape,
 fill down, edge sharpness, refusal of derived attributes).
-
-## 8. Future work
-
-- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - the
-  large-mesh performance check.
