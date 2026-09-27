@@ -227,6 +227,9 @@ void Mesh_operation::make_entries(
                 .scene_mesh = scene_mesh,
                 .before = capture_physics(*node),
             };
+            // capture_physics() records the physics state only; undo restores
+            // these primitives, so they are part of the before version too.
+            entry.before.primitives = scene_mesh->get_primitives();
 
             const erhe::physics::Motion_mode motion_mode = entry.before.motion_mode;
 
