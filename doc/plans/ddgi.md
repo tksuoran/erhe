@@ -42,3 +42,13 @@ Reuse the probe field for indirect specular, not only diffuse.
 `Lightmap_baker` keeps its own copy of the acceleration structure code because
 its instance records carry texcoord-2 addresses. Extend `Scene_tlas` to carry
 those addresses and delete the copy.
+
+## Change-driven volume refit
+
+Both probe-field producers (`Ddgi_renderer`, `Radiance_cascades_renderer`)
+recompute the padded content bounds and compare the fit settings on every
+tick to decide whether to refit. That is per-frame work proportional to the
+scene. Drive the refit from the changes instead: content / transform change
+messages on `App_message_bus` for the bounds, and the settings change sites
+(the reflected Settings window, the DDGI / RC windows, `set_ddgi`,
+`set_radiance_cascades`) for the fit settings.
