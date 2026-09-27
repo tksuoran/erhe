@@ -3,6 +3,9 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "editor_log.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/set_geometry_attribute_operation.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
@@ -464,9 +467,30 @@ void Geometry_spreadsheet_window::imgui_table(const std::shared_ptr<erhe::scene:
     GEO::index_t                      hovered_element = GEO::NO_INDEX;
     std::size_t                       clicked_row     = 0;
     GEO::index_t                      clicked_element = GEO::NO_INDEX;
+    // An edit ends when its row no longer shows the edited cell (a layout
+    // rebuild, a sort or filter change, a tab switch).
+    if (m_edit.active && (
+        (m_edit.domain != m_domain) ||
+        (m_edit.layout_serial != layout_serial) ||
+        (m_edit.row >= row_count) ||
+        (m_model.get_row_element(m_domain, m_edit.row) != m_edit.element)
+    )) {
+        m_edit.active = false;
+    }
+
+    std::size_t  double_clicked_row     = 0;
+    GEO::index_t double_clicked_element = GEO::NO_INDEX;
+    GEO::index_t right_clicked_element  = GEO::NO_INDEX;
+    m_edit_commit = false;
+
     m_drawn_rows.range_count = 0;
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(row_count));
+    // The edited row stays submitted while scrolled out of view, so its input
+    // field keeps keyboard focus.
+    if (m_edit.active) {
+        clipper.IncludeItemByIndex(static_cast<int>(m_edit.row));
+    }
     while (clipper.Step()) {
         if (clipper.DisplayStart >= clipper.DisplayEnd) {
             continue;
@@ -508,6 +532,13 @@ void Geometry_spreadsheet_window::imgui_table(const std::shared_ptr<erhe::scene:
             }
             if (ImGui::IsItemHovered()) {
                 hovered_element = element;
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    double_clicked_row     = static_cast<std::size_t>(row);
+                    double_clicked_element = element;
+                }
+            }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                right_clicked_element = element;
             }
             ImGui::PopID();
 
@@ -515,6 +546,10 @@ void Geometry_spreadsheet_window::imgui_table(const std::shared_ptr<erhe::scene:
                 // False for a column scrolled out horizontally or hidden: skip
                 // it before reading or formatting anything.
                 if (!ImGui::TableSetColumnIndex(c)) {
+                    continue;
+                }
+                if (m_edit.active && (m_edit.element == element) && (m_edit.column == c)) {
+                    imgui_cell_editor(columns[static_cast<std::size_t>(c)]);
                     continue;
                 }
                 const Formatted_cell cell  = m_model.format_cell(columns[static_cast<std::size_t>(c)], element, buffer);
@@ -536,8 +571,28 @@ void Geometry_spreadsheet_window::imgui_table(const std::shared_ptr<erhe::scene:
         }
     }
     clipper.End();
-    const bool table_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+    const bool table_hovered  = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+    const int  hovered_column = ImGui::TableGetHoveredColumn();
     ImGui::EndTable();
+
+    if (m_edit_commit) {
+        m_edit_commit = false;
+        m_edit.active = false;
+        if (static_cast<std::size_t>(m_edit.column) < columns.size()) {
+            m_selected_scratch.clear();
+            m_selected_scratch.push_back(m_edit.element);
+            apply_cell_value(mesh, columns[static_cast<std::size_t>(m_edit.column)], m_selected_scratch, m_edit.value, Cell_value_op::set);
+        }
+    }
+    if ((double_clicked_element != GEO::NO_INDEX) && (hovered_column > 0) && (hovered_column < column_count)) {
+        begin_cell_edit(double_clicked_row, double_clicked_element, hovered_column);
+    }
+    if ((right_clicked_element != GEO::NO_INDEX) && (hovered_column > 0) && (hovered_column < column_count)) {
+        m_menu_element = right_clicked_element;
+        m_menu_column  = hovered_column;
+        ImGui::OpenPopup("##cell_menu");
+    }
+    imgui_cell_menu(mesh);
 
     // The viewport hover highlight follows the hovered row; the tool is told
     // only when the hovered row changes.
@@ -735,5 +790,175 @@ void Geometry_spreadsheet_window::set_hovered_element(const std::shared_ptr<erhe
     }
 }
 
+
+void Geometry_spreadsheet_window::gather_selected_elements(const std::shared_ptr<erhe::scene::Mesh>& mesh, std::vector<GEO::index_t>& out)
+{
+    out.clear();
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = m_model.get_geometry();
+    if (m_domain == Spreadsheet_domain::corner) {
+        out.assign(m_corner_selection.begin(), m_corner_selection.end());
+        return;
+    }
+    const Mesh_component_entry* entry = find_selection_entry(mesh);
+    if (!geometry || (entry == nullptr)) {
+        return;
+    }
+    switch (m_domain) {
+        case Spreadsheet_domain::vertex: out.assign(entry->vertices.begin(), entry->vertices.end()); break;
+        case Spreadsheet_domain::facet:  out.assign(entry->facets.begin(), entry->facets.end()); break;
+        case Spreadsheet_domain::edge: {
+            if (geometry->has_edge_connectivity()) {
+                for (const Mesh_edge_key& key : entry->edges) {
+                    const GEO::index_t edge = geometry->get_edge(key.first, key.second);
+                    if (edge != GEO::NO_INDEX) {
+                        out.push_back(edge);
+                    }
+                }
+                std::sort(out.begin(), out.end());
+            }
+            break;
+        }
+        default: break;
+    }
+}
+
+void Geometry_spreadsheet_window::begin_cell_edit(const std::size_t row, const GEO::index_t element, const int column)
+{
+    const std::span<const Spreadsheet_column> columns = m_model.get_columns(m_domain);
+    if (static_cast<std::size_t>(column) >= columns.size()) {
+        return;
+    }
+    const Spreadsheet_column& spreadsheet_column = columns[static_cast<std::size_t>(column)];
+    if (spreadsheet_column.edit != Spreadsheet_edit::editable) {
+        return;
+    }
+    double value{0.0};
+    static_cast<void>(m_model.read_cell(spreadsheet_column, element, value)); // an absent value starts at 0
+    m_edit = Spreadsheet_cell_edit{
+        .active        = true,
+        .request_focus = true,
+        .was_active    = false,
+        .frames        = 0,
+        .domain        = m_domain,
+        .row           = row,
+        .element       = element,
+        .column        = column,
+        .layout_serial = m_model.get_layout_serial(m_domain),
+        .value         = value,
+        .original      = value
+    };
+}
+
+void Geometry_spreadsheet_window::imgui_cell_editor(const Spreadsheet_column& column)
+{
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (m_edit.request_focus) {
+        ImGui::SetKeyboardFocusHere();
+        m_edit.request_focus = false;
+    }
+    const char* format = (column.value_type == Spreadsheet_value_type::f32) ? "%.9g" : "%.0f";
+    ImGui::InputScalar("##cell_edit", ImGuiDataType_Double, &m_edit.value, nullptr, nullptr, format);
+    ++m_edit.frames;
+    if (ImGui::IsItemActive()) {
+        m_edit.was_active = true;
+    }
+    // The commit is the edit's change site: Enter or focus loss with a new
+    // value. Escape restores the original value, so it commits nothing.
+    if (ImGui::IsItemDeactivated()) {
+        if (m_edit.value != m_edit.original) {
+            m_edit_commit = true;
+        } else {
+            m_edit.active = false;
+        }
+    } else if (!m_edit.was_active && (m_edit.frames > 2)) {
+        m_edit.active = false; // focus never arrived (e.g. another item took it)
+    }
+}
+
+void Geometry_spreadsheet_window::imgui_cell_menu(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (!ImGui::BeginPopup("##cell_menu")) {
+        return;
+    }
+    const std::span<const Spreadsheet_column> columns = m_model.get_columns(m_domain);
+    if ((m_menu_column <= 0) || (static_cast<std::size_t>(m_menu_column) >= columns.size()) || (m_menu_element == GEO::NO_INDEX)) {
+        ImGui::EndPopup();
+        return;
+    }
+    const Spreadsheet_column& column = columns[static_cast<std::size_t>(m_menu_column)];
+    std::array<char, 64> buffer{};
+    const Formatted_cell cell = m_model.format_cell(column, m_menu_element, buffer);
+    ImGui::TextDisabled("%s of %s %u: %.*s", column.get_label(), c_str(m_domain), m_menu_element, static_cast<int>(cell.text.size()), cell.text.data());
+    ImGui::Separator();
+    if (column.edit != Spreadsheet_edit::editable) {
+        ImGui::TextDisabled("Read-only column");
+        ImGui::EndPopup();
+        return;
+    }
+    gather_selected_elements(mesh, m_selected_scratch);
+    double value{0.0};
+    const bool present = m_model.read_cell(column, m_menu_element, value);
+    if (ImGui::MenuItem("Set Selected Rows To This Value", nullptr, false, present && !m_selected_scratch.empty())) {
+        apply_cell_value(mesh, column, m_selected_scratch, value, Cell_value_op::set);
+    }
+    if (column.kind == Spreadsheet_column_kind::attribute) {
+        if (ImGui::MenuItem("Remove Value", nullptr, false, present)) {
+            m_selected_scratch.clear();
+            m_selected_scratch.push_back(m_menu_element);
+            apply_cell_value(mesh, column, m_selected_scratch, 0.0, Cell_value_op::remove);
+        }
+    }
+    ImGui::EndPopup();
+}
+
+void Geometry_spreadsheet_window::apply_cell_value(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const Spreadsheet_column&                 column,
+    const std::vector<GEO::index_t>&          elements,
+    const double                              value,
+    const Cell_value_op                       op
+)
+{
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = m_model.get_geometry();
+    if (!mesh || !geometry || elements.empty()) {
+        return;
+    }
+    const std::string_view attribute =
+        (column.kind == Spreadsheet_column_kind::vertex_position) ? c_position_attribute :
+        (column.kind == Spreadsheet_column_kind::attribute)       ? std::string_view{column.attribute_name} :
+                                                                    std::string_view{};
+    if (attribute.empty()) {
+        return;
+    }
+    // Each element keeps its other components; an element without a value
+    // gets zeros, with w = 1 for a four-component attribute (opaque color,
+    // right-handed tangent).
+    std::vector<Geometry_attribute_value> values;
+    values.reserve(elements.size());
+    for (const GEO::index_t element : elements) {
+        const std::optional<Geometry_attribute_value> before = read_geometry_attribute(*geometry.get(), attribute, element);
+        if (!before.has_value()) {
+            return;
+        }
+        Geometry_attribute_value after = before.value();
+        if (op == Cell_value_op::remove) {
+            after.present = false;
+        } else {
+            if (!after.present) {
+                after.components = {0.0, 0.0, 0.0, (column.component_count == 4) ? 1.0 : 0.0};
+                after.present    = true;
+            }
+            after.components[column.component] = value;
+        }
+        values.push_back(after);
+    }
+    std::string error;
+    const std::shared_ptr<Operation> operation = make_geometry_attribute_operation(m_context, mesh, m_primitive_index, attribute, elements, values, error);
+    if (!operation) {
+        log_operations->warn("Geometry Spreadsheet: {}", error);
+        return;
+    }
+    m_context.operation_stack->queue(operation);
+}
 
 } // namespace editor

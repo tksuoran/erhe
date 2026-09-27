@@ -16,7 +16,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::geometry`: `Mesh_attributes::for_each_facet_attribute()`,
   `for_each_vertex_attribute()`, `for_each_corner_attribute()` and
   `for_each_edge_attribute()` (`erhe_geometry/geometry.hpp`): enumerate one
-  element domain's attributes as (member name, `Attribute_present<T>&`).
+  element domain's attributes as (member name, `Attribute_present<T>&`); the
+  const overloads pass `const Attribute_present<T>&`.
 - `erhe::physics`: `Drive_force_mode` and `Constraint_axis_drive::mode`
   (`erhe_physics/iconstraint.hpp`): the KHR_physics_rigid_bodies drive
   `force` / `acceleration` mode, honored by both backends.

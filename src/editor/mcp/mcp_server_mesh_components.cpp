@@ -15,6 +15,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "operations/set_edge_sharpness_operation.hpp"
+#include "operations/set_geometry_attribute_operation.hpp"
 #include "renderers/id_renderer.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
@@ -653,6 +654,83 @@ auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
         {"primitive_index", primitive_index},
         {"domain",          domain},
         {"elements",        elements}
+    }).dump();
+}
+
+auto Mcp_server::action_set_mesh_attribute_values(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    if (!mesh) {
+        return make_error_content("Node has no mesh: " + node->get_name());
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    const std::string attribute       = args.value("attribute", "");
+    if (attribute.empty()) {
+        return make_error_content("attribute is required (a Mesh_attributes member name such as corner_color_0, or position)");
+    }
+    if (!args.contains("elements") || !args["elements"].is_array() || args["elements"].empty()) {
+        return make_error_content("elements array is required");
+    }
+    std::vector<GEO::index_t> elements;
+    for (const json& element : args["elements"]) {
+        elements.push_back(element.get<GEO::index_t>());
+    }
+
+    // One value for all elements (value), one per element (values), or clear.
+    const auto parse_value = [](const json& value_json, Geometry_attribute_value& out) -> bool {
+        if (!value_json.is_array() || value_json.empty() || (value_json.size() > 4)) {
+            return false;
+        }
+        for (std::size_t i = 0; i < value_json.size(); ++i) {
+            if (!value_json[i].is_number()) {
+                return false;
+            }
+            out.components[i] = value_json[i].get<double>();
+        }
+        out.present = true;
+        return true;
+    };
+    std::vector<Geometry_attribute_value> values;
+    if (args.value("clear", false)) {
+        values.push_back(Geometry_attribute_value{});
+    } else if (args.contains("values")) {
+        for (const json& value_json : args["values"]) {
+            Geometry_attribute_value value{};
+            if (!parse_value(value_json, value)) {
+                return make_error_content("values: each entry must be an array of 1..4 numbers");
+            }
+            values.push_back(value);
+        }
+    } else if (args.contains("value")) {
+        Geometry_attribute_value value{};
+        if (!parse_value(args["value"], value)) {
+            return make_error_content("value must be an array of 1..4 numbers");
+        }
+        values.push_back(value);
+    } else {
+        return make_error_content("give value, values or clear");
+    }
+
+    std::string error;
+    const std::shared_ptr<Operation> operation = make_geometry_attribute_operation(m_context, mesh, primitive_index, attribute, elements, values, error);
+    if (!operation) {
+        return make_error_content(error);
+    }
+    const std::string description = operation->describe();
+    m_context.operation_stack->queue(operation);
+    return make_json_content({
+        {"queued",    true},
+        {"operation", description},
+        {"elements",  elements.size()}
     }).dump();
 }
 

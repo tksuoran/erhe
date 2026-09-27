@@ -5,7 +5,7 @@ Stability: experimental
 The Geometry Spreadsheet window shows the per-element data of one mesh
 primitive's `erhe::geometry::Geometry` as a table: one tab per element domain
 (vertex, corner, facet, edge), one row per element, one column per attribute
-component. Remaining work (editing) is
+component, editable in place with undo. Remaining work is
 `doc/plans/geometry_spreadsheet.md`.
 
 Code: `src/editor/windows/geometry_spreadsheet_window.{hpp,cpp}` (the window)
@@ -143,9 +143,48 @@ the Corner tab, corners being no component kind, keeps its own row selection
   can lie past the window edge; click near its left end
   (`scripts/geometry_spreadsheet_verify.py` `click_row()`).
 
-## 6. MCP and verification
+## 6. Editing
 
-`get_geometry_spreadsheet` reports the window's target, domain, counts, sort
+- **Editable columns:** `position` and every attribute except those the
+  geometry pipeline derives (`facet_id`, `facet_centroid`,
+  `vertex_normal_smooth`, `vertex_valency_edge_count`;
+  `is_editable_geometry_attribute()`); the other structural columns are
+  read-only.
+- **In place:** double-clicking a row edits the cell under the pointer
+  (`ImGui::TableGetHoveredColumn()`) when its column is editable. The cell
+  becomes an `ImGui::InputScalar` holding keyboard focus; the edited row stays
+  submitted while scrolled out of view (`ImGuiListClipper::IncludeItemByIndex`).
+  The commit is the widget's deactivation with a changed value (Enter or focus
+  loss) - the change site, no per-frame comparison of geometry state. Escape
+  restores the original value and so commits nothing. A layout rebuild, a sort
+  or filter change or a tab switch that moves the edited cell ends the edit.
+- **Cell menu** (right-click a row, over a column): **Set Selected Rows To
+  This Value** writes the cell's value into that column of every selected row
+  (section 5) as one operation; **Remove Value** clears the element's value of
+  the attribute (its present flag).
+- A component edit keeps the element's other components; an element without
+  a value gets zeros, with w = 1 for a four-component attribute.
+- **Operations:** every edit goes through `make_geometry_attribute_operation()`
+  (`src/editor/operations/set_geometry_attribute_operation.*`), which
+  validates the edit, captures the before values from the primitive's current
+  Geometry and returns one undoable operation, queued on `Operation_stack`:
+  - `position` -> `Move_mesh_vertices_operation`, which refreshes the baked
+    normals and the collision shape;
+  - any other attribute -> `Set_geometry_attribute_operation`: writes the
+    values into the same Geometry object (component selection entries keyed
+    on it survive), rebuilds one Primitive shared by every mesh referencing
+    the Geometry, publishes `Mesh_geometry_changed_message` and kicks off the
+    background re-optimization, following `Paint_colors_operation`;
+    `edge_sharpness` feeds no render stream, so its edit only publishes the
+    message.
+- An edit of shared geometry changes every mesh sharing it. The Shared / Fork
+  geometry edit mode of the viewport toolbar applies to gizmo transforms of
+  the component selection.
+
+## 7. MCP and verification
+
+`set_mesh_attribute_values` makes the same operation as a cell edit (value,
+per-element values, or clear). `get_geometry_spreadsheet` reports the window's target, domain, counts, sort
 column, columns and the row ranges the clipper drew in the last frame, and
 the cell text of rows exactly as the window formats it (`null` for an absent
 value) and whether each row is selected; `first_row` / `row_count` read any
@@ -155,9 +194,12 @@ and checks the window against `get_mesh_attribute_values`, the tabs, sorting,
 scrolling, a Catmull-Clark swap and its undo, pinning, hiding and target
 removal, and the row selection in both directions (component selection to
 rows, Selected Only, row clicks with Ctrl / Shift to the component
-selection).
+selection), and editing (an attribute edit reaching the geometry, the
+window's columns and the GPU vertex buffer, undo and redo, a position edit
+refreshing the facet normals, a double-click / type / Enter edit, Escape,
+fill down, edge sharpness, refusal of derived attributes).
 
-## 7. Future work
+## 8. Future work
 
-- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - cell
-  editing with undo, and the large-mesh performance check.
+- [plans/geometry_spreadsheet.md](../plans/geometry_spreadsheet.md) - the
+  large-mesh performance check.

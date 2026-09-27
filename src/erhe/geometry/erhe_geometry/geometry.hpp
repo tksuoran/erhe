@@ -325,65 +325,71 @@ public:
     inline auto corner_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? corner_color_0         : corner_color_1        ; }
 
     // Enumerate the attributes of one element domain: f(const char* name, Attribute_present<T>& attribute)
-    // is called once per attribute, in declaration order. The name is the member name.
-    template <typename F> void for_each_facet_attribute (F&& f);
-    template <typename F> void for_each_vertex_attribute(F&& f);
-    template <typename F> void for_each_corner_attribute(F&& f);
-    template <typename F> void for_each_edge_attribute  (F&& f);
+    // is called once per attribute, in declaration order. The name is the member name. The const
+    // overloads pass const Attribute_present<T>&.
+    template <typename F> void for_each_facet_attribute (F&& f)       { visit_facet_attributes (*this, f); }
+    template <typename F> void for_each_facet_attribute (F&& f) const { visit_facet_attributes (*this, f); }
+    template <typename F> void for_each_vertex_attribute(F&& f)       { visit_vertex_attributes(*this, f); }
+    template <typename F> void for_each_vertex_attribute(F&& f) const { visit_vertex_attributes(*this, f); }
+    template <typename F> void for_each_corner_attribute(F&& f)       { visit_corner_attributes(*this, f); }
+    template <typename F> void for_each_corner_attribute(F&& f) const { visit_corner_attributes(*this, f); }
+    template <typename F> void for_each_edge_attribute  (F&& f)       { visit_edge_attributes  (*this, f); }
+    template <typename F> void for_each_edge_attribute  (F&& f) const { visit_edge_attributes  (*this, f); }
+
+private:
+    template <typename Self, typename F>
+    static void visit_facet_attributes(Self& self, F& f)
+    {
+        f("facet_id",            self.facet_id);
+        f("facet_centroid",      self.facet_centroid);
+        f("facet_normal",        self.facet_normal);
+        f("facet_tangent",       self.facet_tangent);
+        f("facet_bitangent",     self.facet_bitangent);
+        f("facet_color_0",       self.facet_color_0);
+        f("facet_color_1",       self.facet_color_1);
+        f("facet_aniso_control", self.facet_aniso_control);
+    }
+
+    template <typename Self, typename F>
+    static void visit_vertex_attributes(Self& self, F& f)
+    {
+        f("vertex_normal",             self.vertex_normal);
+        f("vertex_normal_smooth",      self.vertex_normal_smooth);
+        f("vertex_texcoord_0",         self.vertex_texcoord_0);
+        f("vertex_texcoord_1",         self.vertex_texcoord_1);
+        f("vertex_texcoord_2",         self.vertex_texcoord_2);
+        f("vertex_tangent",            self.vertex_tangent);
+        f("vertex_bitangent",          self.vertex_bitangent);
+        f("vertex_color_0",            self.vertex_color_0);
+        f("vertex_color_1",            self.vertex_color_1);
+        f("vertex_joint_indices_0",    self.vertex_joint_indices_0);
+        f("vertex_joint_indices_1",    self.vertex_joint_indices_1);
+        f("vertex_joint_weights_0",    self.vertex_joint_weights_0);
+        f("vertex_joint_weights_1",    self.vertex_joint_weights_1);
+        f("vertex_aniso_control",      self.vertex_aniso_control);
+        f("vertex_valency_edge_count", self.vertex_valency_edge_count);
+    }
+
+    template <typename Self, typename F>
+    static void visit_corner_attributes(Self& self, F& f)
+    {
+        f("corner_normal",        self.corner_normal);
+        f("corner_texcoord_0",    self.corner_texcoord_0);
+        f("corner_texcoord_1",    self.corner_texcoord_1);
+        f("corner_texcoord_2",    self.corner_texcoord_2);
+        f("corner_tangent",       self.corner_tangent);
+        f("corner_bitangent",     self.corner_bitangent);
+        f("corner_color_0",       self.corner_color_0);
+        f("corner_color_1",       self.corner_color_1);
+        f("corner_aniso_control", self.corner_aniso_control);
+    }
+
+    template <typename Self, typename F>
+    static void visit_edge_attributes(Self& self, F& f)
+    {
+        f("edge_sharpness", self.edge_sharpness);
+    }
 };
-
-template <typename F>
-void Mesh_attributes::for_each_facet_attribute(F&& f)
-{
-    f("facet_id",            facet_id);
-    f("facet_centroid",      facet_centroid);
-    f("facet_normal",        facet_normal);
-    f("facet_tangent",       facet_tangent);
-    f("facet_bitangent",     facet_bitangent);
-    f("facet_color_0",       facet_color_0);
-    f("facet_color_1",       facet_color_1);
-    f("facet_aniso_control", facet_aniso_control);
-}
-
-template <typename F>
-void Mesh_attributes::for_each_vertex_attribute(F&& f)
-{
-    f("vertex_normal",             vertex_normal);
-    f("vertex_normal_smooth",      vertex_normal_smooth);
-    f("vertex_texcoord_0",         vertex_texcoord_0);
-    f("vertex_texcoord_1",         vertex_texcoord_1);
-    f("vertex_texcoord_2",         vertex_texcoord_2);
-    f("vertex_tangent",            vertex_tangent);
-    f("vertex_bitangent",          vertex_bitangent);
-    f("vertex_color_0",            vertex_color_0);
-    f("vertex_color_1",            vertex_color_1);
-    f("vertex_joint_indices_0",    vertex_joint_indices_0);
-    f("vertex_joint_indices_1",    vertex_joint_indices_1);
-    f("vertex_joint_weights_0",    vertex_joint_weights_0);
-    f("vertex_joint_weights_1",    vertex_joint_weights_1);
-    f("vertex_aniso_control",      vertex_aniso_control);
-    f("vertex_valency_edge_count", vertex_valency_edge_count);
-}
-
-template <typename F>
-void Mesh_attributes::for_each_corner_attribute(F&& f)
-{
-    f("corner_normal",        corner_normal);
-    f("corner_texcoord_0",    corner_texcoord_0);
-    f("corner_texcoord_1",    corner_texcoord_1);
-    f("corner_texcoord_2",    corner_texcoord_2);
-    f("corner_tangent",       corner_tangent);
-    f("corner_bitangent",     corner_bitangent);
-    f("corner_color_0",       corner_color_0);
-    f("corner_color_1",       corner_color_1);
-    f("corner_aniso_control", corner_aniso_control);
-}
-
-template <typename F>
-void Mesh_attributes::for_each_edge_attribute(F&& f)
-{
-    f("edge_sharpness", edge_sharpness);
-}
 
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;

@@ -5358,6 +5358,67 @@
     "name": "get_mesh_attribute_values"
   },
   {
+    "description": "Set one attribute of a mesh primitive's geometry on a list of elements, as one undoable operation - the same operation a Geometry Spreadsheet cell edit makes (doc/editor/geometry_spreadsheet.md). attribute is a Mesh_attributes member name as get_mesh_attribute_values reports it (corner_color_0, vertex_texcoord_0, facet_normal, edge_sharpness, ...), whose prefix names the element domain, or 'position' for vertex positions (refreshes the baked normals and the collision shape, like a vertex move). Derived attributes (facet_id, facet_centroid, vertex_normal_smooth, vertex_valency_edge_count) are refused. Give value (one value for every element), values (one per element) or clear: true (remove the elements' values; not for position). A value is an array of the attribute's components; missing trailing components are 0. The edit writes the same Geometry in place and rebuilds the primitive of every mesh sharing it; edge_sharpness only announces the change. The operation is queued and runs on the next frame.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "attribute": {
+          "description": "Mesh_attributes member name, or 'position'",
+          "type": "string"
+        },
+        "elements": {
+          "description": "Element indices in the attribute's domain",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "value": {
+          "description": "One value (1..4 numbers) for every element",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "values": {
+          "description": "One value (1..4 numbers) per element",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "clear": {
+          "description": "Remove the elements' values instead of setting one (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "attribute",
+        "elements"
+      ],
+      "type": "object"
+    },
+    "name": "set_mesh_attribute_values"
+  },
+  {
     "description": "Describe a primitive's GPU vertex / index buffer ranges without reading them: per stream the pool id, buffer id, byte offset, element count, stride and base_vertex; the index range and its per-mode sub-ranges (triangle fill, edge lines, corner points, polygon centroids); the vertex format's attributes with their offsets and formats; and the primitive's AABB with the position encoding and the exact scale / offset the vertex shader applies to a snorm16x3 position. Use this before get_mesh_buffer_data: it is what says which stream and byte offset to read, and how to decode what comes back.",
     "inputSchema": {
       "properties": {

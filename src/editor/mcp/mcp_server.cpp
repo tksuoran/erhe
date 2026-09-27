@@ -685,6 +685,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "debug_region_select",            &Mcp_server::action_debug_region_select           },
         { "get_mesh_geometry_info",         &Mcp_server::query_mesh_geometry_info             },
         { "get_mesh_attribute_values",      &Mcp_server::query_mesh_attribute_values          },
+        { "set_mesh_attribute_values",      &Mcp_server::action_set_mesh_attribute_values     },
         { "get_mesh_buffer_info",           &Mcp_server::query_mesh_buffer_info               },
         { "get_mesh_buffer_data",           &Mcp_server::query_mesh_buffer_data               },
         { "clear_mesh_component_selection", &Mcp_server::action_clear_mesh_component_selection},

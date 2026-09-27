@@ -27,6 +27,28 @@ enum class Row_select_op : unsigned int {
     toggle
 };
 
+enum class Cell_value_op : unsigned int {
+    set,
+    remove
+};
+
+// The one cell being edited in place.
+class Spreadsheet_cell_edit
+{
+public:
+    bool               active       {false};
+    bool               request_focus{false};
+    bool               was_active   {false};
+    int                frames       {0};
+    Spreadsheet_domain domain       {Spreadsheet_domain::vertex};
+    std::size_t        row          {0};
+    GEO::index_t       element      {0};
+    int                column       {0};
+    uint64_t           layout_serial{0};
+    double             value        {0.0};
+    double             original     {0.0};
+};
+
 enum class Spreadsheet_target_mode : unsigned int {
     follow_selection,
     pinned
@@ -115,6 +137,23 @@ private:
     void select_element   (Mesh_component_entry& entry, GEO::index_t element, Row_select_op op);
     void set_hovered_element(const std::shared_ptr<erhe::scene::Mesh>& mesh, GEO::index_t element);
     [[nodiscard]] auto find_selection_entry(const std::shared_ptr<erhe::scene::Mesh>& mesh) -> Mesh_component_entry*;
+    // The selected elements of the current domain, ascending, into `out`.
+    void gather_selected_elements(const std::shared_ptr<erhe::scene::Mesh>& mesh, std::vector<GEO::index_t>& out);
+
+    // Cell editing (doc/editor/geometry_spreadsheet.md section 6).
+    void begin_cell_edit (std::size_t row, GEO::index_t element, int column);
+    void imgui_cell_editor(const Spreadsheet_column& column);
+    void imgui_cell_menu (const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    // Writes `value` into component `column.component` of every element, as
+    // one undoable operation; Cell_value_op::remove clears the elements'
+    // values instead.
+    void apply_cell_value(
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        const Spreadsheet_column&                 column,
+        const std::vector<GEO::index_t>&          elements,
+        double                                    value,
+        Cell_value_op                             op
+    );
 
     App_context&                                                   m_context;
     erhe::message_bus::Subscription<Selection_message>             m_selection_subscription;
@@ -142,6 +181,12 @@ private:
     std::size_t                      m_anchor_row      {0}; // Shift+click range anchor, display order
     GEO::index_t                     m_hovered_element {GEO::NO_INDEX};
     Spreadsheet_domain               m_hovered_domain  {Spreadsheet_domain::vertex};
+
+    Spreadsheet_cell_edit            m_edit;
+    bool                             m_edit_commit     {false};
+    GEO::index_t                     m_menu_element    {GEO::NO_INDEX};
+    int                              m_menu_column     {-1};
+    std::vector<GEO::index_t>        m_selected_scratch;
 
     // Initial column widths, measured once per column layout.
     std::vector<float>               m_column_widths;

@@ -14,8 +14,10 @@ Exit code 0 when every check passes.
 """
 
 import argparse
+import base64
 import os
 import re
+import struct
 import subprocess
 import sys
 import time
@@ -109,6 +111,10 @@ def column_index(sheet, label):
 
 def cell_float(text):
     return None if text is None else float(text)
+
+
+def close_all(a, b):
+    return (a is not None) and (b is not None) and (len(a) == len(b)) and all(abs(x - y) <= TOLERANCE for x, y in zip(a, b))
 
 
 def close(a, b):
@@ -378,6 +384,160 @@ def phase_3(e):
     e.advance(2)
 
 
+def gpu_colors(e, node=BOX):
+    """The color_0 vertex attribute of every GPU vertex of the node's base build."""
+    info = e.call("get_mesh_buffer_info", {"scene_name": e.scene, "node_name": node, "variant": "original"})
+    for stream in info["vertex_streams"]:
+        for attribute in stream["attributes"]:
+            if (attribute["usage"] == "color") and (attribute["usage_index"] == 0):
+                data = e.call("get_mesh_buffer_data", {
+                    "scene_name": e.scene, "node_name": node, "variant": "original",
+                    "buffer": "vertex", "stream": stream["stream"], "element_count": stream["count"]
+                })
+                raw = base64.b64decode(data["data"])
+                stride = stream["stride"]
+                offset = attribute["offset"]
+                return [struct.unpack_from("<4f", raw, i * stride + offset) for i in range(stream["count"])]
+    return []
+
+
+def attribute_value(e, domain, attribute, element, node=BOX):
+    entry = e.values(domain, [element], node)[0]
+    if attribute == "position":
+        return entry["position"]
+    attr = entry["attributes"].get(attribute, {"present": False})
+    return attr.get("value") if attr["present"] else None
+
+
+def cell_point(e, element, label):
+    """Window point of the cell (row `element`, column `label`), both drawn."""
+    row = e.call("get_imgui_item_rect", {"window": WINDOW, "label": f"row {element}"})
+    header = e.call("get_imgui_item_rect", {"window": WINDOW, "label": label})
+    return header["center_x"], row["center_y"]
+
+
+def undo_top(e):
+    return e.call("get_undo_redo_stack")["undo"][-1]["description"]
+
+
+def phase_4(e):
+    print("\n[phase 4] editing")
+    e.select(BOX)
+    e.click("Corner")
+    e.call("imgui_scroll", {"window": WINDOW, "label": "normal.x", "dy": 100})
+    e.advance(3)
+    red = [1.0, 0.0, 0.0, 1.0]
+    before_gpu = gpu_colors(e)
+    check_true("GPU colors before: no red vertex", not any(close_all(c, red) for c in before_gpu), f"{len(before_gpu)} vertices")
+
+    # MCP edit of a corner color: geometry, window layout and GPU buffer.
+    result = e.call("set_mesh_attribute_values", {"scene_name": e.scene, "node_name": BOX, "attribute": "corner_color_0", "elements": [0, 1, 2, 3], "value": red})
+    e.advance(4)
+    check_true("set_mesh_attribute_values queues one operation", result.get("queued") is True, result.get("operation", ""))
+    check_true("corner color written to the geometry", close_all(attribute_value(e, "corner", "corner_color_0", 2) or [], red))
+    s = e.sheet(first_row=0, row_count=4)
+    c = column_index(s, "color_0.r")
+    check_true("new attribute column appears in the window", (c >= 0) and all(row["cells"][c] == "1.0000" for row in s["rows"]), f"column {c}")
+    red_count = sum(1 for color in gpu_colors(e) if close_all(color, red))
+    check_true("GPU vertex buffer carries the new color", red_count >= 4, f"{red_count} red vertices")
+    e.call("undo", {})
+    e.advance(4)
+    check_true("undo removes the color", attribute_value(e, "corner", "corner_color_0", 2) is None)
+    check_true("undo: column gone again", column_index(e.sheet(first_row=0, row_count=1), "color_0.r") < 0)
+    check_true("undo: GPU buffer back", not any(close_all(color, red) for color in gpu_colors(e)))
+    e.call("redo", {})
+    e.advance(4)
+    check_true("redo restores the color", close_all(attribute_value(e, "corner", "corner_color_0", 2) or [], red))
+    e.call("undo", {})
+    e.advance(4)
+
+    # Position edit: Move_mesh_vertices_operation refreshes the facet normals.
+    e.click("Vertex")
+    e.call("imgui_scroll", {"window": WINDOW, "label": "position.x", "dy": 100})
+    e.advance(3)
+    p0 = attribute_value(e, "vertex", "position", 0)
+    facets_of_0 = [element["facet"] for element in e.values("corner", list(range(384))) if element["vertex"] == 0]
+    normal_before = attribute_value(e, "facet", "facet_normal", facets_of_0[0])
+    e.call("set_mesh_attribute_values", {"scene_name": e.scene, "node_name": BOX, "attribute": "position", "elements": [0], "value": [p0[0] + 0.25, p0[1], p0[2]]})
+    e.advance(4)
+    p0_after = attribute_value(e, "vertex", "position", 0)
+    normal_after = attribute_value(e, "facet", "facet_normal", facets_of_0[0])
+    check_true("position edit moves the vertex", close(p0_after[0], p0[0] + 0.25), f"{p0} -> {p0_after}")
+    check_true("position edit refreshes the facet normal", not close_all(normal_before, normal_after), f"{normal_before} -> {normal_after}")
+    e.call("undo", {})
+    e.advance(4)
+    check_true("undo restores the position", close_all(attribute_value(e, "vertex", "position", 0), p0))
+
+    # UI edit: double-click the cell, type, Enter.
+    x, y = cell_point(e, 5, "position.y")
+    e.call("mouse_click", {"x": x, "y": y, "double": True})
+    e.advance(3)
+    e.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    e.call("type_text", {"text": "0.125"})
+    e.advance(3)
+    e.call("key_press", {"key": "enter"})
+    e.advance(5)
+    p5 = attribute_value(e, "vertex", "position", 5)
+    check_true("double-click + type + Enter edits the cell", close(p5[1], 0.125), f"{p5}")
+    s = e.sheet(first_row=5, row_count=1)
+    shown = s["rows"][0]["cells"][column_index(s, "position.y")]
+    check_true("the window shows the edited value", shown == "0.1250", shown)
+    check_true("the UI edit is one undoable operation", "Move 1 mesh vertices" in undo_top(e), undo_top(e))
+    e.call("undo", {})
+    e.advance(4)
+
+    # Escape cancels an edit.
+    x, y = cell_point(e, 6, "position.x")
+    before6 = attribute_value(e, "vertex", "position", 6)
+    depth = len(e.call("get_undo_redo_stack")["undo"])
+    e.call("mouse_click", {"x": x, "y": y, "double": True})
+    e.advance(3)
+    e.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    e.call("type_text", {"text": "9"})
+    e.call("key_press", {"key": "escape"})
+    e.advance(4)
+    unchanged = close_all(attribute_value(e, "vertex", "position", 6), before6) and (len(e.call("get_undo_redo_stack")["undo"]) == depth)
+    check_true("Escape cancels the edit", unchanged)
+
+    # Fill down: select rows, right-click a source cell, Set Selected Rows.
+    e.click_row(1)
+    e.click_row(3, modifiers=["shift"])
+    source_y = attribute_value(e, "vertex", "position", 20)[1]
+    before_ys = [attribute_value(e, "vertex", "position", v)[1] for v in (1, 2, 3)]
+    check_true("fill down source differs from the targets", not any(close(v, source_y) for v in before_ys), f"{before_ys} vs {source_y}")
+    x, y = cell_point(e, 20, "position.y")
+    e.call("mouse_click", {"x": x, "y": y, "button": "right"})
+    e.advance(3)
+    e.call("imgui_click", {"label": "Set Selected Rows To This Value"})
+    e.advance(4)
+    ys = [attribute_value(e, "vertex", "position", v)[1] for v in (1, 2, 3)]
+    check_true("fill down sets the column on every selected row", all(close(v, source_y) for v in ys), f"{ys} vs {source_y}")
+    check_true("fill down is one operation", "Move 3 mesh vertices" in undo_top(e), undo_top(e))
+    e.call("undo", {})
+    e.call("clear_mesh_component_selection", {})
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.advance(4)
+
+    # Edge sharpness: in place, no rebuild; the Edge tab gains the column.
+    e.click("Edge")
+    e.call("set_mesh_attribute_values", {"scene_name": e.scene, "node_name": BOX, "attribute": "edge_sharpness", "elements": [3], "value": [2.0]})
+    e.advance(4)
+    s = e.sheet(first_row=3, row_count=1)
+    c = column_index(s, "sharpness")
+    check_true("edge sharpness edit shows in the Edge tab", (c >= 0) and (s["rows"][0]["cells"][c] == "2.0000"), f"column {c}")
+    e.call("undo", {})
+    e.advance(4)
+
+    # Derived attributes are refused.
+    try:
+        e.call("set_mesh_attribute_values", {"scene_name": e.scene, "node_name": BOX, "attribute": "facet_centroid", "elements": [0], "value": [0, 0, 0]})
+        refused = False
+    except RuntimeError:
+        refused = True
+    check_true("derived attribute edit is refused", refused)
+    e.click("Vertex")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=DEFAULT_EDITOR)
@@ -392,6 +552,7 @@ def main():
         e.advance(4)
         phase_2(e)
         phase_3(e)
+        phase_4(e)
     finally:
         process.kill()
     return report()

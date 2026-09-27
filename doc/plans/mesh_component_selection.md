@@ -18,13 +18,6 @@ The component selection has to survive the edit, so the geometry-identity
 invalidation of `doc/editor/mesh_component_selection.md` section 3 has to relax to an
 index remap for an in-place edit.
 
-## Set vertex attribute values
-
-Edit per-vertex and per-corner attributes (color, UV, custom) on the
-selection, extending the per-corner editing `Paint_tool` already performs for
-vertex colors. Needs a small attribute-editing UI and the same write-back and
-re-upload path as the transform above.
-
 ## Multiple meshes
 
 Let a component selection span several meshes at once. The data model becomes

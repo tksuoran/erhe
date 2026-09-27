@@ -1,4 +1,5 @@
 #include "windows/geometry_spreadsheet_model.hpp"
+#include "operations/set_geometry_attribute_operation.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_profile/profile.hpp"
@@ -139,17 +140,6 @@ void set_label(Spreadsheet_column& column, const std::string_view base, const ch
         ? fmt::format_to_n(column.label.data(), capacity, "{}.{}", base, suffix)
         : fmt::format_to_n(column.label.data(), capacity, "{}", base);
     *result.out = '\0';
-}
-
-// Attributes the geometry pipeline derives from other data; everything else
-// in Mesh_attributes is user data and editable.
-auto is_derived_attribute(const std::string_view name) -> bool
-{
-    return
-        (name == "facet_id")             ||
-        (name == "facet_centroid")       ||
-        (name == "vertex_normal_smooth") ||
-        (name == "vertex_valency_edge_count");
 }
 
 auto make_structural_column(
@@ -409,7 +399,7 @@ void Geometry_spreadsheet_model::build_layout(const Spreadsheet_domain domain, D
             return;
         }
         const std::string_view base = strip_domain_prefix(name);
-        const Edit             edit = is_derived_attribute(name) ? Edit::read_only : Edit::editable;
+        const Edit             edit = is_editable_geometry_attribute(name) ? Edit::editable : Edit::read_only;
         for (std::size_t component = 0; component < Traits::component_count; ++component) {
             Spreadsheet_column column{
                 .kind            = Kind::attribute,
