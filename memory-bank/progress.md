@@ -15,6 +15,6 @@
 ✓phase-0c1::a87a7a909{sample_indirect_diffuse;ddgi_sample.comp;deferred-MCP-readback;cap-4096;Ddgi_renderer::get_forward_parameters-single-source}+315626c1f{Vulkan-Buffer_impl::invalidate-skips-coherent}
 ✓phase-0c2::d7b74666c{gi_verify.py;baseline-in-plan-section-10;DDGI-fails:pillar-faces-min/median-0.22(<0.25)+crawl-floor-near-black-0.0004;corridor/crawl-gates-relative-to-DDGI;timings->memory-bank/local/gi.md}
 ✓render_scene_image::be54a899f{Scene_image_capture-chain-shadow->Scene_image_view->post->readback;scene_only-skips-editor_aid;png|pfm;batch-refuses;expired-request-releases-chain;Scene_view::get_camera_viewport}+ba245bae7{gi_verify-uses-it}
-⚡phase-0d1::reference_indirect_diffuse{ground-truth-one-bounce-cosine-rays-same-hit-shading;gi_verify-error-vs-reference;coder-running}
-?phase-0d2::DDGI-placement-fixes{pillar-faces+crawl-space;judged-by-reference-error}
+✓phase-0d1::5787b3bba{reference_indirect_diffuse;erhe_ddgi_ray.glsl-shared;gate-12-Accuracy;crawl-space-dark-in-reference(scene-not-defect);placement-gate->accuracy}
+⚡phase-0d2::DDGI-error-root-causes{cornell-0.80+corridor-0.73+emissive-0.33..0.54+probe-plane-wall-1.38;spacing/rays-sweep-separates-bias-from-resolution;coder-running}
 ?phase-0b..0d->phases-1..7
