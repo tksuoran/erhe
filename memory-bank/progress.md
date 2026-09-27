@@ -20,5 +20,6 @@
 ✓PHASE-0-DONE
 ✓phase-1::6fa96b9cb{set_indirect_diffuse_source-single-change-site;settings-v5-migration;probe_grid+content_bounds-shared;radiance_cascades_layout-12-tests;RC-skeleton-atlases}+dbf47588d{gi_verify-set_indirect_diffuse;docs}
 ✓phase-2::4d51cd708{rc_trace.comp;ddgi_trace_ray_segment;R32F-c0-distance;rc_texel_verify.py-334k-texels-0-fail;RC-trace~0.7ms/Mray-vs-DDGI~6;top-cascade-beta1-in-small-rooms(expected)}
-⚡phase-3::rc_merge.comp{interpolate;debug_cascade_mask;exact-algebra+approximation-error-checks;coder-running}
+✓phase-3::cd0ac88b8{rc_merge.comp;exact-algebra-0-fail;approx-error-median-0..0.13-p90-0.43..0.86;mean-bias-11..34%-dark;leak_pair-B-picks-A-light-through-wall;mask-decomposition-exact}
+⚡phase-3b::visibility-aware-merge{per-cascade-probe-validity+lower->upper-visibility-mask-on-change;renormalize;coder-running}
 ?phase-0b..0d->phases-1..7
