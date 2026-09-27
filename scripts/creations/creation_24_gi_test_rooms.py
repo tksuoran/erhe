@@ -21,8 +21,16 @@ module has no side effects.
       "ambient":     [r, g, b],    # scene ambient
       "views":       [...],        # views for the NOMINAL layout (see below)
       "events":      {...},        # dynamic only: name -> fn(creation, info)
+      "event_groups": {...},       # dynamic only: event name -> sample groups it changes
       ...
   }
+
+STATIONS[name]["samples_for"](layout) returns the station's SAMPLE GROUPS:
+{group name: [{"position": [x, y, z], "normal": [x, y, z]}, ...]}, world
+points on the measured surfaces (grids inset from the edges) for the
+sample_indirect_diffuse MCP tool, which returns the linear float irradiance
+the forward pass shades with. scripts/gi_verify.py measures with these, not
+with screenshot pixels; the layout is the one build_station realized.
 
 A view is {"name", "eye", "target", "fov_y_deg", "rects": [...]}; a rect is
 {"name", "surface", "stat", "rect": [x0, y0, x1, y1]} with the rectangle in
@@ -199,6 +207,36 @@ def rect(name, surface, stat, quad, **extra):
 def view(name, eye, target, fov_y_deg, rects):
     return {"name": name, "eye": list(eye), "target": list(target),
             "fov_y_deg": float(fov_y_deg), "rects": rects}
+
+
+def grid_points(origin, axis_u, axis_v, nu, nv, normal):
+    """nu x nv sample points {position, normal} spanning the parallelogram
+    origin + [0, 1] axis_u + [0, 1] axis_v (ends included)."""
+    points = []
+    for j in range(nv):
+        fv = (j / (nv - 1)) if nv > 1 else 0.5
+        for i in range(nu):
+            fu = (i / (nu - 1)) if nu > 1 else 0.5
+            position = v_add(origin, v_add(v_scale(axis_u, fu), v_scale(axis_v, fv)))
+            points.append({"position": [round(p, 6) for p in position], "normal": list(normal)})
+    return points
+
+
+def floor_points(x0, x1, z0, z1, nx=5, nz=5, y=0.0, normal=(0.0, 1.0, 0.0)):
+    """Points on a horizontal surface at height y (a floor top by default)."""
+    return grid_points([x0, y, z0], [x1 - x0, 0.0, 0.0], [0.0, 0.0, z1 - z0], nx, nz, normal)
+
+
+def wall_x_points(x, facing, y0, y1, z0, z1, nz=5, ny=5):
+    """Points on the plane x = const, normal +X (facing = +1) or -X (-1)."""
+    return grid_points([x, y0, z0], [0.0, 0.0, z1 - z0], [0.0, y1 - y0, 0.0], nz, ny,
+                       (float(facing), 0.0, 0.0))
+
+
+def wall_z_points(z, facing, x0, x1, y0, y1, nx=5, ny=5):
+    """Points on the plane z = const, normal +Z (facing = +1) or -Z (-1)."""
+    return grid_points([x0, y0, z], [x1 - x0, 0.0, 0.0], [0.0, y1 - y0, 0.0], nx, ny,
+                       (0.0, 0.0, float(facing)))
 
 
 def resolve_views(views):
@@ -378,6 +416,25 @@ def pair_views(prefix, zc, shared_x, suffix=""):
     return [va, vb]
 
 
+def pair_samples(zc, shared_x, prefix=""):
+    """Room A / room B sample groups of one leak pair: the floor (5 x 5,
+    0.4 m clear of every wall) and the shared wall's face on each side."""
+    wall_a = shared_x - 0.5 * SHARED_T
+    wall_b = shared_x + 0.5 * SHARED_T
+    inset  = 0.4
+    z0, z1 = zc - 0.5 * PAIR_DEPTH + inset, zc + 0.5 * PAIR_DEPTH - inset
+    return {
+        f"{prefix}a_floor": floor_points(-PAIR_HALF_X + inset, wall_a - inset, z0, z1),
+        f"{prefix}b_floor": floor_points(wall_b + inset, PAIR_HALF_X - inset, z0, z1),
+        f"{prefix}a_wall":  wall_x_points(wall_a, -1, 0.3, ROOM_H - 0.3, z0, z1),
+        f"{prefix}b_wall":  wall_x_points(wall_b, +1, 0.3, ROOM_H - 0.3, z0, z1),
+    }
+
+
+def samples_leak_pair(layout):
+    return pair_samples(0.0, layout["shared_x"])
+
+
 def build_leak_pair(c, root):
     build_pair(c, "Pair", root, 0.0, 0.0, white_materials(c))
     return {"shared_x": 0.0}
@@ -482,6 +539,36 @@ def views_probe_offset_sweep(layout):
     return views
 
 
+def samples_probe_offset_sweep(layout):
+    """Per pair i the leak groups prefixed "pair<i>_"; the annex adds the
+    pillar's four faces, the raised floor ring around the pillar base and the
+    crawl-space floor deep under the slab (the plan's rectangle region)."""
+    groups = {}
+    for index, wall in enumerate(layout["walls"]):
+        groups.update(pair_samples(index * SWEEP_PITCH, wall["shared_x"], prefix=f"pair{index}_"))
+    zc = SWEEP_ANNEX_Z
+    px, pz = layout["pillar"]
+    slab_top = CRAWL_H + SLAB_T
+    h = 0.5 * PILLAR_SIDE
+    y0, y1 = slab_top + 0.2, ROOM_H - 0.4
+    face = []
+    face += wall_z_points(pz + h, +1, px - h + 0.05, px + h - 0.05, y0, y1, nx=3, ny=5)
+    face += wall_z_points(pz - h, -1, px - h + 0.05, px + h - 0.05, y0, y1, nx=3, ny=5)
+    face += wall_x_points(px + h, +1, y0, y1, pz - h + 0.05, pz + h - 0.05, nz=3, ny=5)
+    face += wall_x_points(px - h, -1, y0, y1, pz - h + 0.05, pz + h - 0.05, nz=3, ny=5)
+    base = []
+    for d in (0.1, 0.3, 0.6):
+        r = h + d
+        base += floor_points(px - h + 0.05, px + h - 0.05, pz + r, pz + r, nx=3, nz=1, y=slab_top)
+        base += floor_points(px - h + 0.05, px + h - 0.05, pz - r, pz - r, nx=3, nz=1, y=slab_top)
+        base += floor_points(px + r, px + r, pz - h + 0.05, pz + h - 0.05, nx=1, nz=3, y=slab_top)
+        base += floor_points(px - r, px - r, pz - h + 0.05, pz + h - 0.05, nx=1, nz=3, y=slab_top)
+    groups["pillar_faces"] = face
+    groups["pillar_base"]  = base
+    groups["crawl_floor"]  = floor_points(-3.0, -0.5, zc - 1.2, zc + 1.2)
+    return groups
+
+
 SWEEP_NOMINAL_LAYOUT = {
     "walls": [{"pair": sweep_pair_prefix(i), "shared_x": 0.0, "requested_offset": o, "realized_offset": None}
               for i, o in enumerate(SWEEP_OFFSETS)],
@@ -541,6 +628,23 @@ def views_cornell(layout):
     return [cornell_main_view()]
 
 
+def cornell_floor_samples():
+    """Floor strips next to the red (-X) and green (+X) walls and the floor
+    centre of the Cornell room."""
+    return {
+        "red_strip":   floor_points(-CORNELL_HALF + 0.15, -CORNELL_HALF + 0.55, -1.3, 1.3, nx=3, nz=7),
+        "green_strip": floor_points( CORNELL_HALF - 0.55,  CORNELL_HALF - 0.15, -1.3, 1.3, nx=3, nz=7),
+        "floor":       floor_points(-1.2, 1.2, -1.2, 1.2),
+    }
+
+
+def samples_cornell(layout):
+    del layout
+    groups = cornell_floor_samples()
+    groups["back_wall"] = wall_z_points(-CORNELL_HALF, +1, -1.2, 1.2, 0.4, 2.6)
+    return groups
+
+
 # emissive_only -----------------------------------------------------------------------
 EMISSIVE_HALF   = 2.0
 EMISSIVE_PANELS = [("Panel 1.0", 1.0, -1.2), ("Panel 0.25", 0.25, 0.0), ("Panel 0.05", 0.05, 1.2)]
@@ -577,6 +681,20 @@ def views_emissive_only(layout):
     return [view("main", [0.0, 1.9, 1.85], [0.0, 0.5, -2.0], 70.0, rects)]
 
 
+def samples_emissive_only(layout):
+    """floor_<side>: the floor right in front of each panel; room_floor: the
+    whole floor (its median is the reference level)."""
+    del layout
+    z_wall = -EMISSIVE_HALF
+    groups = {}
+    for name, side, x in EMISSIVE_PANELS:
+        tag = name.split()[1]
+        groups[f"floor_{tag}"] = floor_points(x - 0.3, x + 0.3, z_wall + 0.1, z_wall + 0.6, nx=3, nz=3)
+    groups["room_floor"] = floor_points(-EMISSIVE_HALF + 0.3, EMISSIVE_HALF - 0.3,
+                                        -EMISSIVE_HALF + 0.3, EMISSIVE_HALF - 0.3, nx=7, nz=7)
+    return groups
+
+
 # corridor ----------------------------------------------------------------------------
 CORRIDOR_HALF_W = 0.75
 CORRIDOR_H      = 2.5
@@ -608,6 +726,18 @@ def views_corridor(layout):
     return [view("main", [0.0, 2.2, CORRIDOR_LEN - 0.2], [0.0, 0.6, 11.0], 50.0, rects)]
 
 
+CORRIDOR_PROFILE_Z = [2.0 + 1.0 * i for i in range(21)]    # z of the floor profile points
+
+
+def samples_corridor(layout):
+    """profile: the floor centre line from z = 2 m to 22 m, 1 m apart, in
+    order of distance from the lit end wall."""
+    del layout
+    return {
+        "profile": [{"position": [0.0, 0.0, z], "normal": [0.0, 1.0, 0.0]} for z in CORRIDOR_PROFILE_Z],
+    }
+
+
 # courtyard ---------------------------------------------------------------------------
 COURTYARD_HALF    = 4.0
 COURTYARD_H       = 3.0
@@ -637,6 +767,15 @@ def views_courtyard(layout):
         rect("sunlit_floor", "Courtyard Floor", "mean_luminance",
              floor_quad(-2.0, 2.0, -1.5, 0.5)),
     ])]
+
+
+def samples_courtyard(layout):
+    del layout
+    return {
+        "shadowed_wall":  wall_z_points(COURTYARD_HALF, -1, -3.0, 3.0, 0.5, 2.6),
+        "shadowed_floor": floor_points(-3.0, 3.0, 2.6, 3.6, nx=5, nz=3),
+        "sunlit_floor":   floor_points(-3.0, 3.0, -2.0, 0.0, nx=5, nz=3),
+    }
 
 
 # dynamic -----------------------------------------------------------------------------
@@ -675,6 +814,15 @@ def views_dynamic(layout):
     return [main, side]
 
 
+def samples_dynamic(layout):
+    """The Cornell floor groups plus the side room floor behind the door."""
+    del layout
+    z_back = -CORNELL_HALF - T
+    groups = cornell_floor_samples()
+    groups["side_floor"] = floor_points(-1.2, 1.2, z_back - SIDE_DEPTH + 0.3, z_back - 0.3)
+    return groups
+
+
 def event_move_light(c, info):
     """Move the Cornell spot 1 m toward the front wall (+Z)."""
     del info
@@ -690,14 +838,17 @@ def event_open_door(c, info):
 
 # --- station table -------------------------------------------------------------------
 
-def _station(description, build, views, ambient=BLACK, nominal_layout=None, events=None):
+def _station(description, build, views, samples, ambient=BLACK, nominal_layout=None, events=None,
+             event_groups=None):
     return {
         "description": description,
         "build": build,
         "views_for": views,
         "views": resolve_views(views(nominal_layout or {"shared_x": 0.0})),
+        "samples_for": samples,
         "ambient": list(ambient),
         "events": events or {},
+        "event_groups": event_groups or {},
     }
 
 
@@ -705,33 +856,35 @@ STATIONS = {
     "leak_pair": _station(
         "Two 4 x 3 x 4 m rooms sharing one 0.1 m wall, point light in room A only: "
         "room B mean luminance relative to room A (leak through a wall thinner than the probe spacing).",
-        build_leak_pair, views_leak_pair),
+        build_leak_pair, views_leak_pair, samples_leak_pair),
     "probe_offset_sweep": _station(
         "Three leak pairs whose shared walls sit 0.0 / 0.25 / 0.5 probe spacings from the nearest probe "
         "plane, plus an annex with a 0.6 m crawl space under a raised floor and a 0.3 m pillar centred on "
         "a probe: leak ratio per offset, dark splotches at the pillar and in the crawl space.",
-        build_probe_offset_sweep, views_probe_offset_sweep, nominal_layout=SWEEP_NOMINAL_LAYOUT),
+        build_probe_offset_sweep, views_probe_offset_sweep, samples_probe_offset_sweep,
+        nominal_layout=SWEEP_NOMINAL_LAYOUT),
     "cornell": _station(
         "3 x 3 x 3 m room, red -X wall, green +X wall, spot light aimed at the floor: red / green ratio "
         "of the floor strip next to each coloured wall; back wall temporal noise.",
-        build_cornell, views_cornell),
+        build_cornell, views_cornell, samples_cornell),
     "emissive_only": _station(
         "Closed room without analytic lights, emissive panels of 1.0 / 0.25 / 0.05 m side on the back "
         "wall: floor luminance in front of each panel, temporal noise.",
-        build_emissive_only, views_emissive_only),
+        build_emissive_only, views_emissive_only, samples_emissive_only),
     "corridor": _station(
         "1.5 x 2.5 x 24 m corridor, spot light on the end wall at z = 0: floor luminance profile along "
         "the centre line (monotonic falloff, no steps).",
-        build_corridor, views_corridor),
+        build_corridor, views_corridor, samples_corridor),
     "courtyard": _station(
         "Walled 8 x 8 m yard, open top, sun from +Z at 45 degrees, non-black ambient as sky: shadowed "
         "wall luminance.",
-        build_courtyard, views_courtyard, ambient=COURTYARD_AMBIENT),
+        build_courtyard, views_courtyard, samples_courtyard, ambient=COURTYARD_AMBIENT),
     "dynamic": _station(
         "cornell plus a dark side room behind a 1 x 2 m pocket door; events move the light 1 m and slide "
         "the door open: frames until mean luminance settles after each event.",
-        build_dynamic, views_dynamic,
-        events={"move_light": event_move_light, "open_door": event_open_door}),
+        build_dynamic, views_dynamic, samples_dynamic,
+        events={"move_light": event_move_light, "open_door": event_open_door},
+        event_groups={"move_light": ["floor", "red_strip", "green_strip"], "open_door": ["side_floor"]}),
 }
 
 
@@ -746,9 +899,9 @@ def set_headlight(c, enabled):
 
 def build_station(c, name, ddgi=True):
     """Close every open scene, build station `name` in a fresh scene and
-    return its info: {"station", "scene", "layout", "views", "grid"}. With
-    ddgi=True DDGI is enabled on the fitted grid when this returns;
-    otherwise it is disabled (probe_offset_sweep always enables it while it
+    return its info: {"station", "scene", "layout", "views", "samples",
+    "grid"}. With ddgi=True DDGI is enabled on the fitted grid when this
+    returns; otherwise it is disabled (probe_offset_sweep always enables it while it
     places its walls, so both variants get the same wall positions).
 
     Turns the app-wide unlit-scene headlight off (no station may be lit by
@@ -765,7 +918,8 @@ def build_station(c, name, ddgi=True):
     layout = station["build"](c, root)
     c.settle()
     views = resolve_views(station["views_for"](layout if layout else {"shared_x": 0.0}))
-    info = {"station": name, "scene": c.scene, "layout": layout, "views": views, "grid": None,
+    samples = station["samples_for"](layout if layout else {"shared_x": 0.0})
+    info = {"station": name, "scene": c.scene, "layout": layout, "views": views, "samples": samples, "grid": None,
             "viewport": viewport_rect(c), "headlight_before": headlight_before}
     if ddgi:
         set_ddgi(c, True)

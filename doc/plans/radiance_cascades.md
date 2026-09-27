@@ -302,20 +302,26 @@ quantized away. Screenshots of the station views serve the disabled-regression
 item and visual review. Each acceptance number is the worst
 value over three runs. `--source ambient|ddgi|radiance_cascades` selects the
 producer; `--compare` runs DDGI and RC back to back and prints a table.
+Typical runs: `py -3 scripts/gi_verify.py --station all --source ddgi --runs 3`
+and `py -3 scripts/gi_verify.py --compare ddgi,radiance_cascades`; the script
+docstring lists the options (screenshot reference / compare, `--enforce`) and
+the convergence rule, and the JSON result lands in `logs/gi_verify/`.
 
 1. **Disabled regression** - source `ambient`: screenshots identical to the
    pre-change build. Source `ddgi`: identical to the pre-change DDGI output.
 2. **Leak** - `leak_pair` room B mean luminance <= 1 % of room A with RC; on
    `probe_offset_sweep` the worst offset <= 2 % and not above DDGI's worst.
-3. **Placement** - `probe_offset_sweep` pillar and crawl-space rectangles have
-   no pixel darker than 25 % of the rectangle median.
+3. **Placement** - `probe_offset_sweep` pillar faces, pillar base and
+   crawl-space floor sample groups have min / median >= 0.25, and the
+   crawl-floor median is at least DDGI's.
 4. **Bounce** - `cornell` floor strip next to the red wall red / green >= 1.2,
    next to the green wall green / red >= 1.2; about 1.0 with `ambient`.
 5. **Small emitters** - `emissive_only` floor in front of the 1.0 m and 0.25 m
    panels brighter than the room median; the 0.05 m panel result is recorded,
    not gated (it probes the documented limit).
-6. **Far field** - `corridor` profile monotonic; largest second difference
-   below 2 % of the profile maximum.
+6. **Far field** - `corridor` profile monotonic; largest second difference of
+   the logarithm of the profile (`max_log_second_difference`, no steps at
+   cascade interval boundaries) at most DDGI's.
 7. **Convergence** - `dynamic`: frames to settle after each event, RC at most
    half of DDGI's.
 8. **Noise** - static `cornell`, per-pixel luminance standard deviation over 30
@@ -324,6 +330,33 @@ producer; `--compare` runs DDGI and RC back to back and prints a table.
 10. **Validation** - Vulkan validation on for one run: zero errors.
 11. OpenGL and Metal builds compile and run with the source forced to
     `ambient` (no ray query there).
+
+### Baseline (phase 0)
+
+DDGI at the pinned station settings (`DDGI_SETTINGS` in the creation module:
+1.5 m spacing, 128 rays per probe, hysteresis 0.97), worst of three runs,
+measured 2026-09-27 on the headless Vulkan editor. The gates above are the RC
+gates; the DDGI column is what RC is compared against.
+
+| Metric | DDGI | Gate |
+|---|---|---|
+| `leak_pair` leak (room B / room A; worst of floor and shared-wall face) | 0.0009 | <= 0.01 pass |
+| `probe_offset_sweep` leak at offset 0.0 / 0.25 / 0.5 | 0.0001 / 0.0018 / 0.0008 | worst <= 0.02 pass |
+| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.22, 0.38, 0.45 | >= 0.25 fail (pillar faces) |
+| `probe_offset_sweep` crawl-floor median irradiance | 0.0004 (room A floor: 0.26) | RC >= DDGI |
+| `cornell` red strip R / G, green strip G / R | 1.88, 1.89 | >= 1.2 pass |
+| `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 6.95 / 4.89 / 0.53 | 1.0 and 0.25 m > 1 pass |
+| `corridor` monotonic violations; max log second difference | 0; 0.32 | 0; RC <= DDGI |
+| `courtyard` shadowed wall mean irradiance | 0.17 | - |
+| `dynamic` updates to settle, light move / door open | 70 / 183 | RC <= half |
+| `cornell` back wall noise, per-point std / mean (mean, max) | 0.0038, 0.0077 | RC below |
+| `emissive_only` 1.0 m panel floor noise (mean, max) | 0.023, 0.028 | - |
+
+The field updates once per frame, so updates equal frames. The corridor
+profile falls off roughly exponentially from the lit end (halving about every
+metre), so its smoothness is measured on the logarithm of the profile. The `ambient` source reads 0
+for every indirect metric (scene ambient is black) except `courtyard` (0.099,
+the flat sky term); its ratios are undefined rather than 1.0.
 
 ## 11. Follow-ups (not in the phases)
 

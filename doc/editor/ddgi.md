@@ -257,8 +257,14 @@ mode and the MCP `set_ddgi` tool.
 4. Regression: with DDGI disabled the frame matches the non-DDGI output, and a
    lightmap-baked scene looks unchanged with DDGI on.
 5. Performance: `py -3 scripts/mcp_call.py get_indirect_diffuse_stats` (and
-   the Ddgi window's "GPU time" section) report the per-pass GPU cost; the
-   lightmap baker's ~1.5 ms/frame budget is the benchmark to stay under.
+   the Ddgi window's "GPU time" section) report the per-pass GPU cost;
+   `scripts/gi_verify.py` records it per test station.
+6. GI test stations: `py -3 scripts/gi_verify.py --station all --source ddgi`
+   builds the `creation_24_gi_test_rooms` stations, measures leak, placement,
+   bounce, small emitters, far field, convergence, noise and cost through
+   `sample_indirect_diffuse` / `get_indirect_diffuse_stats`, and prints them
+   against the gates of [plans/radiance_cascades.md](../plans/radiance_cascades.md)
+   section 10, which also holds the DDGI baseline.
 
 ## Future work
 
