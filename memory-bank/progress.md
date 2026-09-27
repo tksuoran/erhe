@@ -10,5 +10,6 @@
 ⚡interactive-pass{doc/plans/rigging/interactive_test_pass.md;0-8-AUTOMATED-2026-09-25{scripts/ik_interactive_pass_verify.py;65/66-pass};decisions->options{ik_drag_options.md-section-3;50aa400cb+a9078a35c+ab2c9edb1;pass-70/71};F7-fixed-546a8cb75;pass-71/71;left=stiffness->Phase-3}
 
 [TASK::radiance-cascades]{started-2026-09-27;via-harness;doc/plans/radiance_cascades.md}
-?phase-0a::compute-Gpu_timer+DDGI-timings+get_indirect_diffuse_stats{coder-running}
+✓phase-0a::66c7e3233{Gpu_timer(Device&)+Scoped_gpu_timer;DDGI-4-pass-timings;get_indirect_diffuse_stats;default-scene-DDGI~0.3ms/update~8-9ms/Mray;GL-timer-not-compiled(no-GL-tree);Metal-timer-stub-reads-0}
+⚡phase-0b::creation_24_gi_test_rooms{coder-running}
 ?phase-0b..0d->phases-1..7
