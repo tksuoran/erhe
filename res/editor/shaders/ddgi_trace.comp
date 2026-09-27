@@ -27,6 +27,7 @@ layout(local_size_x = ERHE_DDGI_TRACE_GROUP_SIZE, local_size_y = 1, local_size_z
 layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
 
 #include "erhe_ray_hit.glsl"
+#include "erhe_ddgi_ray.glsl"
 
 // Golden-ratio spherical Fibonacci: a fixed, near-uniform direction set.
 // Rotating it per update decorrelates successive frames.
@@ -91,25 +92,8 @@ void main()
     // per probe: the blend passes read the same slot layout back.
     ivec2 ray_texel = ivec2(int(ray_index), int(probe_slot));
 
-    Hit_surface surface;
-    if (!trace_closest(probe_position, direction, ddgi.params.z, surface)) {
-        // Miss: the ray escaped the scene. Sky radiance is the scene ambient
-        // for now; the atmosphere LUTs are a later refinement.
-        imageStore(i_ray_data, ray_texel, vec4(ddgi.sky_radiance.rgb, ddgi.params.z));
-        return;
-    }
-
-    if (surface.backface) {
-        // Inside geometry along this direction. Zero radiance, negative
-        // distance - the blend shortens the probe's visibility and the
-        // classification pass counts these.
-        imageStore(i_ray_data, ray_texel, vec4(0.0, 0.0, 0.0, -surface.hit_t));
-        return;
-    }
-
-    // Outgoing radiance toward the probe. -direction is the view vector, so
-    // the shared shading path evaluates the BxDF for an observer sitting at
-    // the probe, exactly like a camera ray would.
-    vec3 radiance = shade_surface(surface, -direction);
-    imageStore(i_ray_data, ray_texel, vec4(radiance, surface.hit_t));
+    // Radiance + signed distance (negative = backface, the DDGI convention
+    // the distance blend and the classification pass read; t_max = miss,
+    // which carries the sky radiance - the scene ambient for now).
+    imageStore(i_ray_data, ray_texel, ddgi_trace_ray_radiance(probe_position, direction, ddgi.params.z, ddgi.sky_radiance.rgb));
 }

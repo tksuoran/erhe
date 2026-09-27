@@ -62,7 +62,9 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
    the material, shade against the `Light_buffer` lights with traced shadow
    rays - the `ray_trace.comp` hit path minus the Whitted branching, shared
    through `res/shaders/erhe_ray_hit.glsl`. On miss: scene ambient. Backface
-   hit: store `-distance` and zero radiance.
+   hit: store `-distance` and zero radiance. This per-ray transport is
+   `ddgi_trace_ray_radiance()` in `res/editor/shaders/erhe_ddgi_ray.glsl`,
+   which the reference irradiance query (below) calls too.
 2. **`ddgi_blend.comp`, irradiance variant** - one workgroup per probe,
    striding over the tile's texels. Cosine-weighted accumulation of the
    probe's rays, hysteresis blend against the existing texel, then the
@@ -193,6 +195,62 @@ what `standard.frag` multiplies by base colour and occlusion, the configured
 - The bind group layout carries the light block (binding 1), the input and
   output storage buffers (2, 3) and the three atlases as combined image
   samplers at user bindings 4-6, which Vulkan offsets to 8-10.
+
+## Reference irradiance
+
+The MCP tool `reference_indirect_diffuse` is the ground truth
+`sample_indirect_diffuse` is measured against: a Monte Carlo estimate of the
+irradiance at world points with exactly the light transport of a probe ray,
+so the two differ only by the field's discretization (probe placement,
+interpolation, visibility), never by what a ray sees.
+
+- Estimator: from each point, `rays_per_point` cosine-distributed rays leave
+  `position + normal_bias * normal` (default 0.01 m), each through
+  `ddgi_trace_ray_radiance()` (`res/editor/shaders/erhe_ddgi_ray.glsl`, shared
+  with `ddgi_trace.comp`): a front-face hit carries `shade_surface()` -
+  direct lights with traced shadow rays, ambient x base colour, emission;
+  single bounce, no field feedback - a backface hit carries 0, a miss the
+  scene ambient as sky radiance. The miss distance is unbounded; the probe
+  trace's `4 x` volume diagonal cannot be reached by content inside the
+  volume, so the two agree.
+- Convention: with the cosine pdf, the mean ray radiance is `E / pi`, the
+  cosine-weighted mean radiance the irradiance blend stores. The result is
+  that times the configured `intensity` - the quantity
+  `ddgi_sample_irradiance()` returns, same units, `intensity` included the
+  same way. `standard_error` is the standard error of the mean of the ray
+  luminances (`0.2126 R + 0.7152 G + 0.0722 B`), times the intensity.
+- Arguments: `samples` as for `sample_indirect_diffuse` (1 to 4096
+  `{position, normal}`), `rays_per_point` (1 to 65536, default 4096), `seed`
+  (default 1; ray directions hash `(seed, point, ray)`, so equal arguments
+  give equal results), `normal_bias`; `view_position` is accepted and
+  ignored. Points x rays per point is capped at `2^26`.
+- Result: `source` `"reference"`, `convention`, `intensity`,
+  `intensity_included: true`, `rays_per_point`, `seed`, `normal_bias`,
+  `ddgi_enabled`, `point_count`, and `samples` index-aligned with the input,
+  each `{irradiance: [r, g, b], standard_error, sky_fraction,
+  backface_fraction}`.
+- Runs whether DDGI is enabled or not; needs ray query (the tool answers
+  with an error otherwise) and one open scene with a camera (the light block
+  fit needs one; the query fails with that reason otherwise).
+- Flow: `Ddgi_renderer::begin_reference_query()` takes the points;
+  `Ddgi_renderer::tick()` builds its trace inputs - `Scene_tlas`, light
+  block, material set - once for both the probe update and a pending
+  reference query, and records the query as `ddgi_reference.comp`
+  dispatches of whole points, about `c_reference_rays_per_frame` (2^21) rays
+  per frame, so no submission runs long enough to risk a GPU timeout. One
+  workgroup per point reduces its rays in shared memory; the CPU turns the
+  per-point sums into the estimate once the frame of the last chunk
+  retired. 4096 points x 4096 rays take about a second. One query at a
+  time; the tool cannot run inside `batch`, and a request that expires
+  cancels the chunks not yet recorded.
+- Verified analytically in `courtyard` with the sun off: a floor-centre point
+  sees the sky through the 8 x 8 m opening 3 m up (form factor 0.687) and
+  walls of radiance `0.8 x ambient` elsewhere, and the estimate matches
+  `ambient x (F + 0.8 (1 - F))` within one standard error.
+
+`scripts/gi_verify.py` compares every station's measured field against this
+reference ([plans/radiance_cascades.md](../plans/radiance_cascades.md)
+section 10, "Accuracy").
 
 ## Phases
 

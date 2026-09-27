@@ -40,6 +40,23 @@ window captures the whole editor window with capture_screenshot and
 compares the viewport region only; that image depends on the editor's ImGui
 layout, so reference and compare runs need the same layout.
 
+Reference: after each station is built, the MCP tool
+`reference_indirect_diffuse` estimates the ground-truth irradiance at every
+sample point once (REFERENCE_RAYS cosine-distributed rays per point, the
+exact light transport of a DDGI probe ray, doc/editor/ddgi.md "Reference
+irradiance"; it does not depend on the source). Per sample group the
+table then reports `ref.<group>.ref_mean` (reference group mean luminance),
+`ref.<group>.mean_rel_err` (|measured group mean - reference group mean| /
+max(reference group mean, floor)) and `ref.<group>.worst_point_rel_err`
+(the largest per-point |measured - reference| / max(reference, floor)), and
+per station `ref.worst_group_mean_rel_err`. The floor is
+REFERENCE_FLOOR_FRACTION of the station's brightest reference group mean (the
+lit floor or wall): near-black points are judged by their absolute error
+against that level instead of blowing up the relative error.
+`ref.<group>.ref_point_rel_se` is the largest per-point reference standard
+error on the same scale - the noise level below which an error means
+nothing.
+
 Convergence: a check averages CHECK_SAMPLES samples; the field has converged
 when every group mean changed by < 0.5 % (or, where per-update noise is
 larger, by < 3 standard errors) between two checks one relaxation time
@@ -113,19 +130,24 @@ SHOT_HEIGHT = 720
 STATION_CAMERA = {"near": 0.02, "far": 60.0, "shadow_range": 30.0}
 # Noise: samples at this many distinct field updates.
 NOISE_SAMPLES = 30
+# Reference irradiance (reference_indirect_diffuse): rays per sample point,
+# fixed seed (the same station gives the same reference in every run), and
+# the error floor as a fraction of the station's brightest reference group.
+REFERENCE_RAYS = 16384
+REFERENCE_SEED = 1
+REFERENCE_FLOOR_FRACTION = 0.01
 
 # Section 10 gates. "min" gates pass when value >= limit, "max" when <= limit.
 GATES = {
     "leak_pair.leak_ratio":            ("max", 0.01),
     "probe_offset_sweep.worst_leak":   ("max", 0.02),
-    "probe_offset_sweep.placement":    ("min", 0.25),
     "cornell.red_strip_r_over_g":      ("min", 1.2),
     "cornell.green_strip_g_over_r":    ("min", 1.2),
     "emissive_only.panel_1.0_vs_median":  ("min", 1.0),
     "emissive_only.panel_0.25_vs_median": ("min", 1.0),
     "corridor.monotonic_violations":   ("max", 0),
 }
-# The relative section 10 gates (crawl-floor median, corridor
+# The relative section 10 gates (accuracy against the reference, corridor
 # max_log_second_difference, convergence, noise, cost: RC against DDGI) are
 # read from the --compare table.
 
@@ -231,6 +253,9 @@ class Field:
         self.c = c
         self.source = source
         self.tool_names = tool_names
+        # group -> per-point luminance of the station's quality measurement
+        # (measure_sample); cleared per station by run_station.
+        self.measured = {}
 
     def available(self):
         if self.source == "radiance_cascades":
@@ -251,6 +276,25 @@ class Field:
 
     def update_count(self):
         return int(self.stats().get("update_count", 0))
+
+    def reference(self, groups):
+        """Ground truth per group: {group: {"luminance": [...], "standard_error": [...],
+        "irradiance": [[r, g, b], ...]}} (reference_indirect_diffuse)."""
+        flat = []
+        index = []
+        for name, points in groups.items():
+            index.append((name, len(flat), len(points)))
+            flat += points
+        result = self.c.call("reference_indirect_diffuse",
+                             {"samples": flat, "rays_per_point": REFERENCE_RAYS, "seed": REFERENCE_SEED})
+        samples = result["samples"]
+        out = {}
+        for name, start, count in index:
+            part = samples[start:start + count]
+            out[name] = {"irradiance": [s["irradiance"] for s in part],
+                         "luminance": [luminance(s["irradiance"]) for s in part],
+                         "standard_error": [s["standard_error"] for s in part]}
+        return out
 
     def sample(self, groups):
         """-> (update_count, {group: [luminance...]}, {group: [rgb...]})."""
@@ -355,8 +399,12 @@ def wait_converged(field, groups):
 
 def measure_sample(field, groups):
     """The metric input: per-point values averaged over MEASURE_SAMPLES
-    field updates. -> (lum, rgb)."""
+    field updates. -> (lum, rgb). The luminance is also kept in
+    field.measured (group -> per-point luminance, merged over the station's
+    measure_sample calls), which reference_metrics() compares with the
+    reference."""
     _, lum, rgb, _ = sample_averaged(field, groups, MEASURE_SAMPLES)
+    field.measured.update(lum)
     return lum, rgb
 
 
@@ -522,6 +570,32 @@ def measure_dynamic(c, field, info, metrics):
         metrics[f"{event_name}_band_relative"] = max(band[k] / abs(settled[k]) for k in names if settled[k] != 0.0)             if any(settled[k] != 0.0 for k in names) else None
 
 
+def reference_metrics(reference, measured):
+    """Errors of the measured field against the reference, per group (see
+    the module docstring for the rule). -> {metric: value}."""
+    level = max([statistics.fmean(r["luminance"]) for r in reference.values()] + [0.0])
+    floor = max(REFERENCE_FLOOR_FRACTION * level, 1e-12)
+    metrics = {}
+    worst_group = None
+    for group, ref in reference.items():
+        if group not in measured:
+            continue
+        values = measured[group]
+        ref_mean = statistics.fmean(ref["luminance"])
+        mean = statistics.fmean(values)
+        mean_err = abs(mean - ref_mean) / max(ref_mean, floor)
+        point_err = max(abs(v - r) / max(r, floor) for v, r in zip(values, ref["luminance"]))
+        point_se = max(se / max(r, floor) for se, r in zip(ref["standard_error"], ref["luminance"]))
+        metrics[f"ref.{group}.ref_mean"] = ref_mean
+        metrics[f"ref.{group}.mean_rel_err"] = mean_err
+        metrics[f"ref.{group}.worst_point_rel_err"] = point_err
+        metrics[f"ref.{group}.ref_point_rel_se"] = point_se
+        worst_group = mean_err if worst_group is None else max(worst_group, mean_err)
+    metrics["ref.worst_group_mean_rel_err"] = worst_group
+    metrics["ref.floor"] = floor
+    return metrics
+
+
 def cost_metrics(field):
     if field.source == "ambient":
         return {}
@@ -618,6 +692,9 @@ def run_station(c, field, name, shot_dir, args):
     info = rooms.build_station(c, name, ddgi=(field.source == "ddgi"))
     field.select()
     c.settle()
+    # Ground truth for this build; independent of the source and its state.
+    reference = field.reference(info["samples"])
+    field.measured = {}
     record = {"station": name, "source": field.source, "grid": info["grid"], "metrics": {}}
     if name == "probe_offset_sweep":
         record["walls"] = info["layout"]["walls"]
@@ -638,6 +715,10 @@ def run_station(c, field, name, shot_dir, args):
         measure_courtyard(field, info, metrics)
     elif name == "dynamic":
         measure_dynamic(c, field, info, metrics)
+    metrics.update(reference_metrics(reference, field.measured))
+    record["reference"] = {g: {"luminance": r["luminance"], "standard_error": r["standard_error"]}
+                           for g, r in reference.items()}
+    record["measured_luminance"] = dict(field.measured)
     record["cost"] = cost_metrics(field)
     # dynamic: the views show the state after the events.
     screenshots = []
@@ -651,6 +732,8 @@ def run_station(c, field, name, shot_dir, args):
 # --- aggregation + report -------------------------------------------------------------------
 
 def lower_is_worse(metric):
+    if metric.startswith("ref."):
+        return False  # reference errors: larger is worse (group names may contain the keys below)
     return any(key in metric for key in LOWER_IS_WORSE)
 
 

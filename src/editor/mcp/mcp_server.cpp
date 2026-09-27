@@ -484,6 +484,12 @@ auto Mcp_server::process_queued_requests() -> int
                 );
                 m_input_gesture_steps.clear();
             }
+            if ((m_reference_query_request == req.get()) && (m_context.ddgi_renderer != nullptr)) {
+                // Stop tracing chunks nobody will read.
+                m_reference_query_request = nullptr;
+                m_context.ddgi_renderer->cancel_reference_query();
+                log_mcp->warn("MCP server: reference_indirect_diffuse expired; its remaining chunks are cancelled");
+            }
             if (m_scene_image_capture && (m_scene_image_request == req.get())) {
                 m_scene_image_request = nullptr;
                 log_mcp->warn("MCP server: render_scene_image expired; its capture is released once its GPU copy has retired");
@@ -801,6 +807,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_ddgi",                       &Mcp_server::action_set_ddgi                      },
         { "get_indirect_diffuse_stats",     &Mcp_server::query_indirect_diffuse_stats         },
         { "sample_indirect_diffuse",        &Mcp_server::query_sample_indirect_diffuse        },
+        { "reference_indirect_diffuse",     &Mcp_server::query_reference_indirect_diffuse     },
     };
     return c_tool_dispatch;
 }
@@ -1285,6 +1292,146 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
     m_irradiance_query_request     = m_current_request;
     m_irradiance_query_enqueued_at = m_current_request->enqueued_at;
     m_defer_current_request        = true;
+    return {};
+}
+
+auto Mcp_server::query_reference_indirect_diffuse(const json& args) -> std::string
+{
+    // Ground-truth irradiance at world points (doc/editor/ddgi.md "Reference
+    // irradiance"): cosine-distributed rays from each point, each carrying
+    // exactly what a DDGI probe ray carries (erhe_ddgi_ray.glsl), traced by
+    // Ddgi_renderer's ddgi_reference.comp in per-frame chunks. Same deferral
+    // flow as sample_indirect_diffuse.
+    Ddgi_renderer* renderer = m_context.ddgi_renderer;
+
+    const bool continuation =
+        (m_reference_query_request != nullptr) &&
+        (m_reference_query_request == m_current_request) &&
+        (m_reference_query_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Irradiance_query_state state = (renderer != nullptr) ? renderer->poll_reference_query() : Irradiance_query_state::idle;
+        if (state == Irradiance_query_state::complete) {
+            m_reference_query_request = nullptr;
+            json samples = json::array();
+            for (const Reference_irradiance_sample& sample : renderer->get_reference_query_results()) {
+                samples.push_back(json{
+                    {"irradiance",        vec3_json(sample.irradiance)},
+                    {"standard_error",    sample.standard_error},
+                    {"sky_fraction",      sample.sky_fraction},
+                    {"backface_fraction", sample.backface_fraction}
+                });
+            }
+            json result = m_reference_query_header;
+            result["intensity"] = renderer->get_reference_query_intensity();
+            result["samples"]   = std::move(samples);
+            return make_json_content(result).dump();
+        }
+        if ((state == Irradiance_query_state::queued) || (state == Irradiance_query_state::in_flight)) {
+            m_defer_current_request = true;
+            return {};
+        }
+        m_reference_query_request = nullptr;
+        if (state == Irradiance_query_state::failed) {
+            return make_error_content("reference_indirect_diffuse: " + renderer->get_reference_query_error());
+        }
+        return make_error_content("reference_indirect_diffuse: the query was dropped");
+    }
+
+    if ((renderer == nullptr) || !renderer->is_supported()) {
+        return make_error_content("reference_indirect_diffuse: needs GPU ray query support (Device_info::use_ray_query), which this device / backend does not have");
+    }
+
+    // Arguments.
+    const auto samples_it = args.find("samples");
+    if ((samples_it == args.end()) || !samples_it->is_array() || samples_it->empty()) {
+        return make_error_content("reference_indirect_diffuse: 'samples' must be a non-empty array of {position:[x,y,z], normal:[x,y,z]}");
+    }
+    if (samples_it->size() > Ddgi_renderer::c_max_irradiance_query_points) {
+        return make_error_content(fmt::format(
+            "reference_indirect_diffuse: {} samples requested, at most {} per call",
+            samples_it->size(), Ddgi_renderer::c_max_irradiance_query_points
+        ));
+    }
+    Reference_query_settings settings{};
+    if (args.contains("rays_per_point")) {
+        const json& value = args["rays_per_point"];
+        if (!value.is_number_integer() || (value.get<int64_t>() < 1) || (value.get<int64_t>() > Ddgi_renderer::c_max_reference_rays_per_point)) {
+            return make_error_content(fmt::format(
+                "reference_indirect_diffuse: 'rays_per_point' must be an integer in [1, {}]",
+                Ddgi_renderer::c_max_reference_rays_per_point
+            ));
+        }
+        settings.rays_per_point = value.get<int>();
+    }
+    if (args.contains("seed")) {
+        const json& value = args["seed"];
+        if (!value.is_number_integer() || (value.get<int64_t>() < 0) || (value.get<int64_t>() > int64_t{0xffffffff})) {
+            return make_error_content("reference_indirect_diffuse: 'seed' must be an integer in [0, 4294967295]");
+        }
+        settings.seed = static_cast<uint32_t>(value.get<int64_t>());
+    }
+    if (args.contains("normal_bias")) {
+        const json& value = args["normal_bias"];
+        if (!value.is_number() || !std::isfinite(value.get<float>()) || (value.get<float>() < 0.0f)) {
+            return make_error_content("reference_indirect_diffuse: 'normal_bias' must be a finite number >= 0");
+        }
+        settings.normal_bias = value.get<float>();
+    }
+    const int64_t total_rays = static_cast<int64_t>(samples_it->size()) * static_cast<int64_t>(settings.rays_per_point);
+    if (total_rays > Ddgi_renderer::c_max_reference_rays_per_query) {
+        return make_error_content(fmt::format(
+            "reference_indirect_diffuse: {} samples x {} rays = {} rays, at most {} per call; split the samples over several calls",
+            samples_it->size(), settings.rays_per_point, total_rays, Ddgi_renderer::c_max_reference_rays_per_query
+        ));
+    }
+    std::vector<Irradiance_query_point> points;
+    points.reserve(samples_it->size());
+    for (std::size_t i = 0; i < samples_it->size(); ++i) {
+        const json& sample = (*samples_it)[i];
+        const std::optional<glm::vec3> position = sample.is_object() ? parse_finite_vec3(sample.value("position", json{})) : std::nullopt;
+        const std::optional<glm::vec3> normal   = sample.is_object() ? parse_finite_vec3(sample.value("normal",   json{})) : std::nullopt;
+        if (!position.has_value() || !normal.has_value()) {
+            return make_error_content(fmt::format("reference_indirect_diffuse: samples[{}] needs finite 'position' and 'normal' [x, y, z] arrays", i));
+        }
+        const float normal_length = glm::length(normal.value());
+        if (!(normal_length > 1.0e-6f)) {
+            return make_error_content(fmt::format("reference_indirect_diffuse: samples[{}].normal has zero length", i));
+        }
+        Irradiance_query_point point{};
+        point.position       = position.value();
+        point.normal         = normal.value() / normal_length;
+        point.view_direction = point.normal; // unused: irradiance is view independent
+        points.push_back(point);
+    }
+
+    const std::shared_ptr<Scene_root> scene_root = (m_context.app_scenes != nullptr)
+        ? m_context.app_scenes->get_single_scene_root()
+        : std::shared_ptr<Scene_root>{};
+    if (!scene_root) {
+        return make_error_content("reference_indirect_diffuse: needs exactly one open scene (the one DDGI traces)");
+    }
+
+    if (!renderer->begin_reference_query(std::span<const Irradiance_query_point>{points}, settings)) {
+        // An earlier query (from a request that has since expired) has
+        // chunks in flight; it retires within a few frames.
+        static_cast<void>(renderer->poll_reference_query());
+        m_defer_current_request = true;
+        return {};
+    }
+    m_reference_query_header = json{
+        {"source",          "reference"},
+        {"convention",      "irradiance = intensity x cosine-weighted mean incident radiance (E / pi): the quantity ddgi_sample_irradiance returns, same units, intensity included the same way"},
+        {"intensity_included", true},
+        {"point_count",     points.size()},
+        {"rays_per_point",  settings.rays_per_point},
+        {"seed",            settings.seed},
+        {"normal_bias",     settings.normal_bias},
+        {"ddgi_enabled",    renderer->is_active()},
+        {"standard_error",  "of the luminance (0.2126 R + 0.7152 G + 0.0722 B) of irradiance"}
+    };
+    m_reference_query_request     = m_current_request;
+    m_reference_query_enqueued_at = m_current_request->enqueued_at;
+    m_defer_current_request       = true;
     return {};
 }
 

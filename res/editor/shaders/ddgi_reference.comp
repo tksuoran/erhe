@@ -1,0 +1,115 @@
+#include "erhe_bxdf.glsl"
+#include "erhe_light.glsl"
+#include "erhe_texture.glsl"
+
+// Ground-truth reference irradiance (doc/editor/ddgi.md "Reference
+// irradiance", MCP reference_indirect_diffuse).
+//
+// One workgroup per query point. The workgroup traces rays_per_point
+// cosine-distributed rays over the hemisphere of the point's normal, each
+// through ddgi_trace_ray_radiance() - the exact light transport of a DDGI
+// probe ray (erhe_ddgi_ray.glsl) - and writes the per-point sums the CPU
+// turns into the estimate and its standard error:
+//
+//   with pdf(w) = cos(w) / pi, E / pi = (1 / pi) * integral(L cos dw)
+//   = mean of L over the rays,
+//
+// which is the cosine-weighted mean radiance the DDGI irradiance blend
+// stores and ddgi_sample_irradiance() returns (before its intensity).
+//
+// Directions come from a per-(seed, point, ray) hash, independent per ray,
+// so the sample variance gives a valid standard error.
+//
+// Output per point (two vec4s):
+//   [0] rgb = sum of ray radiance, a = sum of squared ray luminance
+//   [1] x = backface hits, y = misses (sky), z = rays traced
+
+layout(local_size_x = ERHE_DDGI_REFERENCE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
+
+#include "erhe_ray_hit.glsl"
+#include "erhe_ddgi_ray.glsl"
+
+shared vec4 s_sums  [ERHE_DDGI_REFERENCE_GROUP_SIZE];
+shared vec2 s_counts[ERHE_DDGI_REFERENCE_GROUP_SIZE];
+
+// PCG hash (Jarzynski and Olano 2020).
+uint pcg_hash(uint value)
+{
+    uint state = (value * 747796405u) + 2891336453u;
+    uint word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float unit_float(uint bits)
+{
+    return float(bits >> 8u) * (1.0 / 16777216.0);
+}
+
+// Cosine-distributed direction around the unit normal n: Malley's method,
+// with the orthonormal basis of Duff et al. 2017.
+vec3 cosine_direction(vec3 n, vec2 u)
+{
+    float s    = (n.z >= 0.0) ? 1.0 : -1.0;
+    float a    = -1.0 / (s + n.z);
+    float b    = n.x * n.y * a;
+    vec3  t    = vec3(1.0 + s * n.x * n.x * a, s * b, -s * n.x);
+    vec3  bt   = vec3(b, s + n.y * n.y * a, -n.y);
+    float r    = sqrt(u.x);
+    float phi  = 6.2831853071795864769 * u.y;
+    float z    = sqrt(max(1.0 - u.x, 0.0));
+    return normalize((t * (r * cos(phi))) + (bt * (r * sin(phi))) + (n * z));
+}
+
+void main()
+{
+    uint local_index = gl_LocalInvocationID.x;
+    uint point_index = ddgi_reference.dispatch.x + gl_WorkGroupID.x;
+    // Uniform per workgroup: the whole group leaves together.
+    if (point_index >= ddgi_reference.dispatch.y) {
+        return;
+    }
+    uint  ray_count   = ddgi_reference.dispatch.z;
+    uint  seed        = ddgi_reference.dispatch.w;
+    float normal_bias = ddgi_reference.params.x;
+    float t_max       = ddgi_reference.params.y;
+    vec3  sky         = ddgi_reference.sky_radiance.rgb;
+
+    vec3 position = ddgi_reference_input.points[(2u * point_index) + 0u].xyz;
+    vec3 normal   = ddgi_reference_input.points[(2u * point_index) + 1u].xyz;
+    vec3 origin   = position + (normal * normal_bias);
+
+    const vec3 c_luminance = vec3(0.2126, 0.7152, 0.0722);
+
+    vec4 sums     = vec4(0.0);
+    vec2 counts   = vec2(0.0);
+    uint point_key = pcg_hash(seed ^ pcg_hash(point_index + 0x9e3779b9u));
+    for (uint ray = local_index; ray < ray_count; ray += uint(ERHE_DDGI_REFERENCE_GROUP_SIZE)) {
+        uint h0 = pcg_hash(point_key ^ pcg_hash(ray));
+        uint h1 = pcg_hash(h0);
+        vec3 direction = cosine_direction(normal, vec2(unit_float(h0), unit_float(h1)));
+        vec4 result    = ddgi_trace_ray_radiance(origin, direction, t_max, sky);
+        float y        = dot(result.rgb, c_luminance);
+        sums += vec4(result.rgb, y * y);
+        if (result.a < 0.0) {
+            counts.x += 1.0;
+        } else if (result.a >= t_max) {
+            counts.y += 1.0;
+        }
+    }
+    s_sums  [local_index] = sums;
+    s_counts[local_index] = counts;
+    barrier();
+    for (uint stride = uint(ERHE_DDGI_REFERENCE_GROUP_SIZE) / 2u; stride > 0u; stride /= 2u) {
+        if (local_index < stride) {
+            s_sums  [local_index] += s_sums  [local_index + stride];
+            s_counts[local_index] += s_counts[local_index + stride];
+        }
+        barrier();
+    }
+    if (local_index == 0u) {
+        ddgi_reference_output.sums[(2u * point_index) + 0u] = s_sums[0];
+        ddgi_reference_output.sums[(2u * point_index) + 1u] = vec4(s_counts[0], float(ray_count), 0.0);
+    }
+}

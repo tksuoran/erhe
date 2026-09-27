@@ -311,9 +311,11 @@ the convergence rule, and the JSON result lands in `logs/gi_verify/`.
    pre-change build. Source `ddgi`: identical to the pre-change DDGI output.
 2. **Leak** - `leak_pair` room B mean luminance <= 1 % of room A with RC; on
    `probe_offset_sweep` the worst offset <= 2 % and not above DDGI's worst.
-3. **Placement** - `probe_offset_sweep` pillar faces, pillar base and
-   crawl-space floor sample groups have min / median >= 0.25, and the
-   crawl-floor median is at least DDGI's.
+3. **Placement** - the `probe_offset_sweep` groups (shared-wall faces per
+   offset, pillar faces, pillar base, crawl-space floor) meet item 12
+   (Accuracy). Their min / median ratios are recorded only: the reference
+   itself reads 0.26 on the pillar faces and 0.23 on the base, and the crawl
+   space is dark in the reference (0.07 % of the lit floor).
 4. **Bounce** - `cornell` floor strip next to the red wall red / green >= 1.2,
    next to the green wall green / red >= 1.2; about 1.0 with `ambient`.
 5. **Small emitters** - `emissive_only` floor in front of the 1.0 m and 0.25 m
@@ -330,6 +332,18 @@ the convergence rule, and the JSON result lands in `logs/gi_verify/`.
 10. **Validation** - Vulkan validation on for one run: zero errors.
 11. OpenGL and Metal builds compile and run with the source forced to
     `ambient` (no ray query there).
+12. **Accuracy** - against the ground truth of the MCP tool
+    `reference_indirect_diffuse` (doc/editor/ddgi.md "Reference irradiance":
+    the probe ray's own light transport, integrated at each sample point, so
+    only the field's discretization differs). `gi_verify.py` reports per
+    sample group `ref.<group>.mean_rel_err` (group mean against reference
+    group mean) and `ref.<group>.worst_point_rel_err`, both relative to
+    `max(reference, 1 % of the station's brightest reference group)`. RC:
+    every group's `mean_rel_err` at most DDGI's, and on every station
+    `ref.worst_group_mean_rel_err <= 0.25`, except `emissive_only`
+    `floor_0.05` (the documented small-source limit, recorded). The bound sits
+    at the DDGI errors of the bounce-lit groups (`cornell` 0.20, pillar faces
+    0.25) and below DDGI's worst (0.68, 0.38, 0.27 in the baseline).
 
 ### Baseline (phase 0)
 
@@ -342,8 +356,8 @@ gates; the DDGI column is what RC is compared against.
 |---|---|---|
 | `leak_pair` leak (room B / room A; worst of floor and shared-wall face) | 0.0009 | <= 0.01 pass |
 | `probe_offset_sweep` leak at offset 0.0 / 0.25 / 0.5 | 0.0001 / 0.0018 / 0.0008 | worst <= 0.02 pass |
-| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.22, 0.38, 0.45 | >= 0.25 fail (pillar faces) |
-| `probe_offset_sweep` crawl-floor median irradiance | 0.0004 (room A floor: 0.26) | RC >= DDGI |
+| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.22, 0.38, 0.45 | recorded |
+| `probe_offset_sweep` crawl-floor median irradiance | 0.0004 (room A floor: 0.26) | item 12 |
 | `cornell` red strip R / G, green strip G / R | 1.88, 1.89 | >= 1.2 pass |
 | `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 6.95 / 4.89 / 0.53 | 1.0 and 0.25 m > 1 pass |
 | `corridor` monotonic violations; max log second difference | 0; 0.32 | 0; RC <= DDGI |
@@ -351,6 +365,50 @@ gates; the DDGI column is what RC is compared against.
 | `dynamic` updates to settle, light move / door open | 70 / 183 | RC <= half |
 | `cornell` back wall noise, per-point std / mean (mean, max) | 0.0038, 0.0077 | RC below |
 | `emissive_only` 1.0 m panel floor noise (mean, max) | 0.023, 0.028 | - |
+
+Accuracy against `reference_indirect_diffuse` (16384 rays per point, seed 1;
+worst of three runs; `mean` = `mean_rel_err`, `worst` =
+`worst_point_rel_err`; DDGI / ref = ratio of the group means, run 1). Gate
+12: RC `mean` <= DDGI's per group, and every station's worst group `mean`
+<= 0.25 (except `floor_0.05`).
+
+| Group | Reference mean | DDGI / ref | mean | worst |
+|---|---|---|---|---|
+| `leak_pair` room A floor / shared wall | 0.253 / 0.242 | 1.03 / 1.08 | 0.03 / 0.08 | 0.10 / 0.25 |
+| `leak_pair` room B floor / shared wall | 0 / 0 | - | 0.03 / 0.09 | 0.13 / 0.42 |
+| `probe_offset_sweep` room A shared wall, offset 0.0 / 0.25 / 0.5 | 0.193 / 0.171 / 0.150 | 1.38 / 1.05 / 1.19 | 0.38 / 0.05 / 0.19 | 0.78 / 0.26 / 0.45 |
+| `probe_offset_sweep` room B shared wall, offset 0.0 / 0.25 / 0.5 | 0 | - | 0.01 / 0.15 / 0.05 | 0.07 / 0.71 / 0.21 |
+| `probe_offset_sweep` pillar faces | 0.0562 | 1.24 | 0.25 | 0.87 |
+| `probe_offset_sweep` pillar base | 0.0480 | 0.99 | 0.01 | 0.52 |
+| `probe_offset_sweep` crawl floor | 0.00017 | 2.45 | 0.11 | 0.26 |
+| `cornell` red strip / green strip / floor / back wall | 0.041 / 0.058 / 0.050 / 0.069 | 0.82 / 0.80 / 0.83 / 0.95 | 0.18 / 0.20 / 0.17 / 0.05 | 0.35 / 0.35 / 0.41 / 0.16 |
+| `emissive_only` floor at 1.0 / 0.25 / 0.05 m panel | 0.536 / 0.129 / 0.021 | 0.33 / 0.95 / 0.65 | 0.68 / 0.05 / 0.35 | 0.77 / 1.17 / 0.55 |
+| `emissive_only` room floor | 0.0934 | 0.54 | 0.47 | 0.75 |
+| `corridor` profile | 0.0653 | 0.73 | 0.27 | 0.82 |
+| `courtyard` shadowed wall / shadowed floor / sunlit floor | 0.175 / 0.099 / 0.153 | 0.99 / 0.97 / 0.95 | 0.01 / 0.03 / 0.05 | 0.04 / 0.04 / 0.08 |
+| `dynamic` floor / side room floor | 0.049 / 0 | 0.81 / - | 0.19 / 0.02 | 0.39 / 0.07 |
+
+What the reference says about the phase 0 findings:
+
+- **Crawl space**: the reference crawl floor is near-black too (mean 0.00017,
+  0.07 % of the lit floor): the darkness is the scene, not a DDGI defect.
+  DDGI is 2.5x brighter there, which is 0.1 % of the lit floor in absolute
+  terms.
+- **Pillar**: the reference's own min / median is 0.26 on the pillar faces and
+  0.23 on the pillar base (DDGI: 0.22 and 0.38), so the dark sides are
+  mostly real shading and the gate 3 threshold of 0.25 sits at the
+  reference's own value. DDGI's error there is 25 % on the face mean (too
+  bright) with single points off by up to 87 %.
+- **Where DDGI is wrong**: the floor right in front of the 1.0 m emitter
+  (a third of the reference: near-field transport between 1.5 m probes), the
+  emissive room floor (half), the corridor profile (27 % dark on average), the bounce-lit `cornell` floor (about 20 %
+  dark), and the room A face of the shared wall when the wall sits on a probe
+  plane (38 % bright). The reference standard error per point
+  (`ref.<group>.ref_point_rel_se`) is at most 2.5 % on the other groups but
+  8 - 20 % on the `emissive_only` floors (small sources) and up to 71 % on the
+  far `corridor` points (the lit end wall is a tiny solid angle there), so
+  those groups' worst-point numbers are largely reference noise; their group
+  means are not.
 
 The field updates once per frame, so updates equal frames. The corridor
 profile falls off roughly exponentially from the lit end (halving about every

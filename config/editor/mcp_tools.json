@@ -4220,6 +4220,64 @@
     "name": "sample_indirect_diffuse"
   },
   {
+    "description": "Ground-truth reference for sample_indirect_diffuse (doc/editor/ddgi.md \"Reference irradiance\"): a Monte Carlo estimate of the irradiance at world points, rays_per_point cosine-distributed rays from each point (origin offset by normal_bias along the normal), each carrying exactly what a DDGI probe ray carries (res/editor/shaders/erhe_ddgi_ray.glsl, shared with ddgi_trace.comp: hit -> direct lights with traced shadow rays + ambient x base color + emission, single bounce; backface hit -> 0; miss -> the scene ambient as sky). It therefore differs from the DDGI field only by the field's discretization (probe placement, interpolation, visibility). Same units and convention as sample_indirect_diffuse: cosine-weighted mean incident radiance (E / pi) times the DDGI intensity ('intensity', 'intensity_included' true). Works whether DDGI is enabled or not; needs GPU ray query (error otherwise) and exactly one open scene with a camera. The editor traces it in per-frame chunks of about 2M rays, so a call takes a few frames; points x rays_per_point is capped at 67108864. Result: 'source' \"reference\", 'convention', 'rays_per_point', 'seed', 'normal_bias', 'ddgi_enabled', 'point_count', and 'samples' index-aligned with the input: {irradiance:[r,g,b], standard_error (of the irradiance luminance 0.2126 R + 0.7152 G + 0.0722 B), sky_fraction (rays that escaped), backface_fraction}. Cannot run inside batch.",
+    "inputSchema": {
+      "properties": {
+        "normal_bias": {
+          "description": "Ray origin offset along the normal in metres (default 0.01), so rays leave the surface the point lies on",
+          "type": "number"
+        },
+        "rays_per_point": {
+          "description": "Cosine-distributed rays per point, 1 to 65536 (default 4096); the standard error falls as 1 / sqrt(rays)",
+          "type": "integer"
+        },
+        "samples": {
+          "description": "World points to estimate: [{position:[x,y,z], normal:[x,y,z]}, ...], 1 to 4096 entries (the same form as sample_indirect_diffuse); the normal is normalized by the tool",
+          "items": {
+            "properties": {
+              "normal": {
+                "description": "Surface normal [x, y, z] (nonzero)",
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "position": {
+                "description": "World position [x, y, z]",
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "position",
+              "normal"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "seed": {
+          "description": "Random seed, 0 to 4294967295 (default 1); the same seed and arguments give the same estimate",
+          "type": "integer"
+        },
+        "view_position": {
+          "description": "Accepted for argument compatibility with sample_indirect_diffuse and ignored: the reference irradiance is view independent",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "samples"
+      ],
+      "type": "object"
+    },
+    "name": "reference_indirect_diffuse"
+  },
+  {
     "description": "Activate dynamic rigid bodies (bodies enter the world deactivated). Scoped since 2026-08-09: node_ids wakes exactly those nodes' bodies, node_id/node_name wakes the SUBTREE under that node (union when combined); no filter wakes the whole scene. Scope iterative re-settles (--only rebuilds) so already-settled structures elsewhere stay asleep.",
     "inputSchema": {
       "properties": {

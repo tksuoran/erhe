@@ -97,6 +97,20 @@ constexpr std::size_t  c_query_vec4s_per_point          = 3;
 // nonCoherentAtomSize the Vulkan spec allows).
 constexpr int          c_query_buffer_alignment         = 256;
 
+// Reference irradiance query (ddgi_reference.comp): the trace layout's
+// material / light / control / instance-record / TLAS bindings (0 - 4, the
+// control binding carrying the reference control block), then the point
+// input and sum output storage buffers. One workgroup per point.
+constexpr unsigned int c_reference_input_binding_point  = 5;
+constexpr unsigned int c_reference_output_binding_point = 6;
+constexpr int          c_reference_workgroup_size       = 64;
+// Input record per point: position, normal (vec4 each). Output: two vec4s.
+constexpr std::size_t  c_reference_vec4s_per_point      = 2;
+// Rays that travel this far count as escaped (sky). Unbounded in effect;
+// the probe trace's 4 x volume diagonal cannot be reached by content inside
+// the volume either, so the two agree.
+constexpr float        c_reference_t_max                = 1.0e30f;
+
 constexpr erhe::dataformat::Format c_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
 constexpr erhe::dataformat::Format c_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
 // Full float: one texel per probe is tiny, and it keeps the debug
@@ -166,6 +180,30 @@ Ddgi_renderer::Ddgi_renderer(
         erhe::graphics::Shader_resource::Block_create_info{
             .name          = "ddgi_query_output",
             .binding_point = static_cast<int>(c_query_output_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    }
+    , m_reference_control_block{
+        graphics_device,
+        "ddgi_reference",
+        static_cast<int>(c_control_binding_point),
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_reference_input_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "ddgi_reference_input",
+            .binding_point = static_cast<int>(c_reference_input_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_reference_output_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "ddgi_reference_output",
+            .binding_point = static_cast<int>(c_reference_output_binding_point),
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
             .writeonly     = true
         }
@@ -283,30 +321,35 @@ Ddgi_renderer::Ddgi_renderer(
         }
     );
 
+    // The shared hit path (erhe_ray_hit.glsl) needs these in every shader
+    // that includes it: the probe trace and the reference irradiance query.
+    const std::vector<std::pair<std::string, std::string>> ray_hit_defines{
+        { "ERHE_TLAS_BINDING",            fmt::format("{}", m_tlas_binding_point) },
+        { "ERHE_RT_NORMAL_OFFSET",        fmt::format("{}", normal   .attribute->offset / 4) },
+        { "ERHE_RT_TANGENT_OFFSET",       fmt::format("{}", tangent  .attribute->offset / 4) },
+        { "ERHE_RT_TEXCOORD0_OFFSET",     fmt::format("{}", texcoord0.attribute->offset / 4) },
+        { "ERHE_RT_COLOR0_OFFSET",        fmt::format("{}", color0   .attribute->offset / 4) },
+        { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" }
+    };
+    std::vector<Shader_stage_extension> ray_hit_extensions{
+        { Shader_type::compute_shader, "GL_EXT_ray_query" },
+        { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
+        { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
+    };
+    if (use_position_fetch) {
+        ray_hit_extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+    }
+
     m_trace_shader_stages = std::make_unique<Reloadable_shader_stages>(
         graphics_device,
         Shader_stages_create_info{
             .name                = "ddgi_trace",
-            .defines             = {
-                { "ERHE_TLAS_BINDING",            fmt::format("{}", m_tlas_binding_point) },
-                { "ERHE_DDGI_TRACE_GROUP_SIZE",   fmt::format("{}", c_trace_workgroup_size) },
-                { "ERHE_RT_NORMAL_OFFSET",        fmt::format("{}", normal   .attribute->offset / 4) },
-                { "ERHE_RT_TANGENT_OFFSET",       fmt::format("{}", tangent  .attribute->offset / 4) },
-                { "ERHE_RT_TEXCOORD0_OFFSET",     fmt::format("{}", texcoord0.attribute->offset / 4) },
-                { "ERHE_RT_COLOR0_OFFSET",        fmt::format("{}", color0   .attribute->offset / 4) },
-                { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" }
-            },
-            .extensions          = [&]() {
-                std::vector<Shader_stage_extension> extensions{
-                    { Shader_type::compute_shader, "GL_EXT_ray_query" },
-                    { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
-                    { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
-                };
-                if (use_position_fetch) {
-                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
-                }
-                return extensions;
+            .defines             = [&]() {
+                std::vector<std::pair<std::string, std::string>> defines = ray_hit_defines;
+                defines.emplace_back("ERHE_DDGI_TRACE_GROUP_SIZE", fmt::format("{}", c_trace_workgroup_size));
+                return defines;
             }(),
+            .extensions          = ray_hit_extensions,
             .struct_types        = {
                 &program_interface.material_interface.material_struct,
                 &program_interface.light_interface.light_struct,
@@ -401,6 +444,7 @@ Ddgi_renderer::Ddgi_renderer(
     );
 
     create_query_pass(graphics_device, program_interface);
+    create_reference_pass(graphics_device, program_interface, ray_hit_defines, ray_hit_extensions);
 
     // Labels double as the Performance window plot names.
     m_pass_timings[static_cast<std::size_t>(Ddgi_pass::trace           )].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI trace");
@@ -606,6 +650,343 @@ void Ddgi_renderer::create_query_pass(
         m_query_output_offset + (c_max_irradiance_query_points * sizeof(glm::vec4)),
         "DDGI irradiance query output"
     );
+}
+
+void Ddgi_renderer::create_reference_pass(
+    erhe::graphics::Device&                                     graphics_device,
+    erhe::scene_renderer::Program_interface&                    program_interface,
+    const std::vector<std::pair<std::string, std::string>>&     ray_hit_defines,
+    const std::vector<erhe::graphics::Shader_stage_extension>& ray_hit_extensions
+)
+{
+    using namespace erhe::graphics;
+
+    const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
+
+    // x = first point of this chunk, y = end point of this chunk, z = rays
+    // per point, w = seed
+    m_reference_dispatch_offset = m_reference_control_block.add_uvec4("dispatch"    )->get_offset_in_parent();
+    // x = normal bias, y = t_max
+    m_reference_params_offset   = m_reference_control_block.add_vec4 ("params"      )->get_offset_in_parent();
+    m_reference_sky_offset      = m_reference_control_block.add_vec4 ("sky_radiance")->get_offset_in_parent();
+    m_reference_points_offset   = m_reference_input_block  .add_vec4 ("points", Shader_resource::unsized_array)->get_offset_in_parent();
+    m_reference_output_offset   = m_reference_output_block .add_vec4 ("sums",   Shader_resource::unsized_array)->get_offset_in_parent();
+
+    auto to_binding_type = [](const Shader_resource& block) -> Binding_type {
+        return (block.get_type() == Shader_resource::Type::shader_storage_block)
+            ? Binding_type::storage_buffer
+            : Binding_type::uniform_buffer;
+    };
+    m_reference_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = material_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.material_interface.material_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.light_interface.light_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_instance_record_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_tlas_binding_point,
+                    .type          = Binding_type::acceleration_structure,
+                    .name          = "s_tlas",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_reference_input_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_reference_output_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = "DDGI reference irradiance",
+            .uses_texture_heap = true
+        }
+    );
+
+    m_reference_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = "ddgi_reference",
+            .defines             = [&]() {
+                std::vector<std::pair<std::string, std::string>> defines = ray_hit_defines;
+                defines.emplace_back("ERHE_DDGI_REFERENCE_GROUP_SIZE", fmt::format("{}", c_reference_workgroup_size));
+                return defines;
+            }(),
+            .extensions          = ray_hit_extensions,
+            .struct_types        = {
+                &program_interface.material_interface.material_struct,
+                &program_interface.light_interface.light_struct,
+                &m_scene_tlas->get_instance_struct()
+            },
+            .interface_blocks    = {
+                &program_interface.material_interface.material_block,
+                &program_interface.light_interface.light_block,
+                &m_reference_control_block,
+                &m_scene_tlas->get_instance_block(),
+                &m_reference_input_block,
+                &m_reference_output_block
+            },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "ddgi_reference.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = m_reference_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_reference_shader_stages);
+
+    m_reference_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "ddgi_reference",
+            .shader_stages     = &m_reference_shader_stages->shader_stages,
+            .bind_group_layout = m_reference_bind_group_layout.get()
+        }
+    );
+
+    // Same host-visible recipe as the irradiance query buffers.
+    const auto make_reference_buffer = [&](const std::size_t byte_count, const char* debug_label) -> std::unique_ptr<Buffer> {
+        return std::make_unique<Buffer>(
+            graphics_device,
+            Buffer_create_info{
+                .capacity_byte_count                    = static_cast<std::size_t>(round_up(static_cast<int>(byte_count), c_query_buffer_alignment)),
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::storage,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{debug_label}
+            }
+        );
+    };
+    m_reference_input_buffer = make_reference_buffer(
+        m_reference_points_offset + (c_max_irradiance_query_points * c_reference_vec4s_per_point * sizeof(glm::vec4)),
+        "DDGI reference irradiance input"
+    );
+    m_reference_output_buffer = make_reference_buffer(
+        m_reference_output_offset + (c_max_irradiance_query_points * c_reference_vec4s_per_point * sizeof(glm::vec4)),
+        "DDGI reference irradiance output"
+    );
+}
+
+auto Ddgi_renderer::begin_reference_query(
+    const std::span<const Irradiance_query_point> points,
+    const Reference_query_settings&               settings
+) -> bool
+{
+    if ((m_reference_state == Irradiance_query_state::queued) || (m_reference_state == Irradiance_query_state::in_flight)) {
+        return false;
+    }
+    if (points.empty() || (points.size() > c_max_irradiance_query_points) || !m_reference_pipeline) {
+        return false;
+    }
+    if ((settings.rays_per_point < 1) || (settings.rays_per_point > c_max_reference_rays_per_point)) {
+        return false;
+    }
+    if ((static_cast<int64_t>(points.size()) * static_cast<int64_t>(settings.rays_per_point)) > c_max_reference_rays_per_query) {
+        return false;
+    }
+    m_reference_points.assign(points.begin(), points.end());
+    m_reference_results.clear();
+    m_reference_settings   = settings;
+    m_reference_error.clear();
+    m_reference_next_point = 0;
+    m_reference_state      = Irradiance_query_state::queued;
+    return true;
+}
+
+void Ddgi_renderer::cancel_reference_query()
+{
+    // Chunks already recorded still write the output buffer; stop recording
+    // more, and let the next begin_reference_query() wait until the last
+    // recorded frame retired (poll_reference_query() reports in_flight until
+    // then, and complete - with partial results nobody reads - after).
+    if (m_reference_state == Irradiance_query_state::queued) {
+        m_reference_state = Irradiance_query_state::idle;
+    } else if (m_reference_state == Irradiance_query_state::in_flight) {
+        m_reference_next_point = m_reference_points.size();
+    }
+}
+
+auto Ddgi_renderer::reference_needs_dispatch() const -> bool
+{
+    return
+        ((m_reference_state == Irradiance_query_state::queued) || (m_reference_state == Irradiance_query_state::in_flight)) &&
+        (m_reference_next_point < m_reference_points.size());
+}
+
+void Ddgi_renderer::fail_reference_query(const char* reason)
+{
+    if (m_reference_state == Irradiance_query_state::queued) {
+        m_reference_error = reason;
+        m_reference_state = Irradiance_query_state::failed;
+    } else {
+        // Some chunks were recorded already: finish none of the rest, let
+        // them retire, and report the failure afterwards.
+        m_reference_error      = reason;
+        m_reference_next_point = m_reference_points.size();
+    }
+}
+
+auto Ddgi_renderer::poll_reference_query() -> Irradiance_query_state
+{
+    if (
+        (m_reference_state == Irradiance_query_state::in_flight) &&
+        (m_reference_next_point >= m_reference_points.size()) &&
+        m_graphics_device.is_frame_completed(m_reference_frame)
+    ) {
+        if (!m_reference_error.empty()) {
+            m_reference_state = Irradiance_query_state::failed;
+            return m_reference_state;
+        }
+        const std::size_t          count    = m_reference_points.size();
+        const std::size_t          capacity = m_reference_output_buffer->get_capacity_byte_count();
+        const std::span<std::byte> mapped   = m_reference_output_buffer->map_bytes(0, capacity);
+        m_reference_output_buffer->invalidate(0, capacity);
+        m_reference_results.resize(count);
+        const float intensity = m_reference_intensity;
+        for (std::size_t i = 0; i < count; ++i) {
+            std::array<glm::vec4, c_reference_vec4s_per_point> record{};
+            std::memcpy(
+                record.data(),
+                mapped.data() + m_reference_output_offset + (i * sizeof(record)),
+                sizeof(record)
+            );
+            // Ray sums -> estimate. Luminance is linear, so the mean ray
+            // luminance is the luminance of the mean radiance; the squared
+            // luminance sum gives the sample variance.
+            const double    ray_count     = std::max(1.0, static_cast<double>(record[1].z));
+            const glm::dvec3 sum_rgb      = glm::dvec3{record[0]};
+            const double    sum_y         = (0.2126 * sum_rgb.r) + (0.7152 * sum_rgb.g) + (0.0722 * sum_rgb.b);
+            const double    mean_y        = sum_y / ray_count;
+            const double    mean_y2       = static_cast<double>(record[0].a) / ray_count;
+            const double    variance      = (ray_count > 1.0)
+                ? (std::max(0.0, mean_y2 - (mean_y * mean_y)) * (ray_count / (ray_count - 1.0)))
+                : 0.0;
+            Reference_irradiance_sample& sample = m_reference_results[i];
+            sample.irradiance        = glm::vec3{sum_rgb / ray_count} * intensity;
+            sample.standard_error    = static_cast<float>(std::sqrt(variance / ray_count)) * intensity;
+            sample.backface_fraction = static_cast<float>(static_cast<double>(record[1].x) / ray_count);
+            sample.sky_fraction      = static_cast<float>(static_cast<double>(record[1].y) / ray_count);
+        }
+        m_reference_output_buffer->unmap();
+        m_reference_state = Irradiance_query_state::complete;
+    }
+    return m_reference_state;
+}
+
+auto Ddgi_renderer::get_reference_query_results() const -> std::span<const Reference_irradiance_sample>
+{
+    return std::span<const Reference_irradiance_sample>{m_reference_results};
+}
+
+auto Ddgi_renderer::get_reference_query_error() const -> const std::string&
+{
+    return m_reference_error;
+}
+
+auto Ddgi_renderer::get_reference_query_intensity() const -> float
+{
+    return m_reference_intensity;
+}
+
+void Ddgi_renderer::record_reference_chunk(
+    erhe::graphics::Command_buffer&          command_buffer,
+    const Scene_tlas::Frame&                 tlas_frame,
+    const erhe::graphics::Ring_buffer_range& light_range,
+    erhe::scene_renderer::Material_set&      material_set
+)
+{
+    using namespace erhe::graphics;
+
+    const std::size_t count = m_reference_points.size();
+    if (m_reference_state == Irradiance_query_state::queued) {
+        // First chunk: upload every point once. The buffer is not touched
+        // again until the query retired.
+        const std::size_t          capacity = m_reference_input_buffer->get_capacity_byte_count();
+        const std::span<std::byte> mapped   = m_reference_input_buffer->map_bytes(0, capacity);
+        for (std::size_t i = 0; i < count; ++i) {
+            const Irradiance_query_point& point = m_reference_points[i];
+            const std::array<glm::vec4, c_reference_vec4s_per_point> record{
+                glm::vec4{point.position, 1.0f},
+                glm::vec4{point.normal,   0.0f}
+            };
+            std::memcpy(mapped.data() + m_reference_points_offset + (i * sizeof(record)), record.data(), sizeof(record));
+        }
+        m_reference_input_buffer->flush_bytes(0, capacity);
+        m_reference_input_buffer->unmap();
+        // The intensity the forward pass multiplies the field with; the
+        // results include it the same way.
+        m_reference_intensity = std::max(0.0f, m_config.intensity);
+        m_reference_state     = Irradiance_query_state::in_flight;
+    }
+
+    // This frame's chunk: whole points, about c_reference_rays_per_frame rays.
+    const int64_t     rays_per_point   = static_cast<int64_t>(m_reference_settings.rays_per_point);
+    const std::size_t points_per_chunk = static_cast<std::size_t>(std::max<int64_t>(1, c_reference_rays_per_frame / rays_per_point));
+    const std::size_t first_point      = m_reference_next_point;
+    const std::size_t end_point        = std::min(count, first_point + points_per_chunk);
+
+    const std::size_t byte_count = m_reference_control_block.get_size_bytes();
+    Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+    {
+        std::span<std::byte> gpu_data = control_range.get_span();
+        std::memset(gpu_data.data(), 0, byte_count);
+        const glm::uvec4 dispatch{
+            static_cast<uint32_t>(first_point),
+            static_cast<uint32_t>(end_point),
+            static_cast<uint32_t>(m_reference_settings.rays_per_point),
+            m_reference_settings.seed
+        };
+        const glm::vec4 params{m_reference_settings.normal_bias, c_reference_t_max, 0.0f, 0.0f};
+        const glm::vec4 sky_radiance{m_sky_radiance, 0.0f};
+        write(gpu_data, m_reference_dispatch_offset, as_span(dispatch    ));
+        write(gpu_data, m_reference_params_offset,   as_span(params      ));
+        write(gpu_data, m_reference_sky_offset,      as_span(sky_radiance));
+        control_range.bytes_written(byte_count);
+        control_range.close();
+    }
+
+    const std::size_t input_byte_count  = m_reference_points_offset + (count * c_reference_vec4s_per_point * sizeof(glm::vec4));
+    const std::size_t output_byte_count = m_reference_output_offset + (count * c_reference_vec4s_per_point * sizeof(glm::vec4));
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_reference_bind_group_layout.get());
+        encoder.set_compute_pipeline(*m_reference_pipeline);
+        m_light_buffer->bind_light_buffer(encoder, light_range);
+        m_control_buffer->bind(encoder, control_range);
+        m_scene_tlas->bind_instance_records(encoder, tlas_frame);
+        encoder.set_acceleration_structure(m_tlas_binding_point, *tlas_frame.acceleration_structure);
+        encoder.set_buffer(Buffer_target::storage, m_reference_input_buffer.get(),  0, input_byte_count,  c_reference_input_binding_point);
+        encoder.set_buffer(Buffer_target::storage, m_reference_output_buffer.get(), 0, output_byte_count, c_reference_output_binding_point);
+        material_set.bind(encoder);
+        encoder.dispatch_compute(static_cast<std::uintptr_t>(end_point - first_point), 1, 1);
+    }
+    control_range.release();
+
+    m_reference_next_point = end_point;
+    if (m_reference_next_point >= count) {
+        // Shader writes -> host reads once the frame's fence has signalled.
+        command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
+    }
+    m_reference_frame = m_graphics_device.get_frame_index();
 }
 
 Ddgi_renderer::~Ddgi_renderer() noexcept = default;
@@ -1300,9 +1681,14 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
             m_volume_bounds = erhe::math::Aabb{};
             clear_pass_timings();
         }
-        return;
     }
-    if (!update_volume(command_buffer, scene_root)) {
+    // Two consumers of this frame's trace inputs (TLAS, lights, materials):
+    // the probe update, and a pending reference irradiance query - which
+    // runs whether DDGI is enabled or not. Building the inputs once serves
+    // both, and costs nothing while neither needs them.
+    const bool update_field    = m_config.enabled && update_volume(command_buffer, scene_root);
+    const bool trace_reference = reference_needs_dispatch();
+    if (!update_field && !trace_reference) {
         return;
     }
 
@@ -1313,6 +1699,9 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     // happens to have been rewritten from the same list a moment ago.
     erhe::scene_renderer::Material_set& material_set = scene_root.get_material_set();
     if (material_set.get_live_count() == 0) {
+        if (trace_reference) {
+            fail_reference_query("the scene has no materials (nothing to trace against)");
+        }
         return;
     }
 
@@ -1324,6 +1713,9 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     // fit reference.
     const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene_root.get_scene().get_cameras();
     if (cameras.empty()) {
+        if (trace_reference) {
+            fail_reference_query("the scene has no camera (the light block fit needs one)");
+        }
         return;
     }
     // Same limits the shadow render node resolves with: Light_set::resolve
@@ -1352,6 +1744,19 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     Scene_tlas::Frame tlas_frame     = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
     ERHE_VERIFY(tlas_frame.is_valid());
     Ring_buffer_range light_range    = m_light_buffer->update(m_light_projections.get(), m_sky_radiance);
+
+    if (trace_reference) {
+        // Outside the probe update's timers, so the pass timings stay the
+        // probe update's own.
+        record_reference_chunk(command_buffer, tlas_frame, light_range, material_set);
+    }
+    if (!update_field) {
+        light_range.release();
+        tlas_frame.instance_records.release();
+        material_set.unbind(command_buffer);
+        return;
+    }
+
     Ring_buffer_range control_range  = update_control_buffer();
 
     sample_pass_timings();

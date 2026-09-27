@@ -517,6 +517,7 @@ private:
     auto action_set_ddgi                      (const nlohmann::json& args) -> std::string;
     auto query_indirect_diffuse_stats         (const nlohmann::json& args) -> std::string;
     auto query_sample_indirect_diffuse        (const nlohmann::json& args) -> std::string;
+    auto query_reference_indirect_diffuse     (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
@@ -735,6 +736,12 @@ private:
     const Queued_request*                            m_irradiance_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
     nlohmann::json                                   m_irradiance_query_header;
+
+    // reference_indirect_diffuse: same request tracking for the reference
+    // irradiance query, which traces over several frames.
+    const Queued_request*                            m_reference_query_request{nullptr};
+    std::chrono::steady_clock::time_point            m_reference_query_enqueued_at{};
+    nlohmann::json                                   m_reference_query_header;
 
     // render_scene_image: the offscreen capture chain of the pending request
     // (doc/editor/rendergraph.md "Scene image capture"), existing only while

@@ -16,6 +16,8 @@
 #include <memory>
 #include <random>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace erhe::graphics {
@@ -28,12 +30,14 @@ namespace erhe::graphics {
     class Reloadable_shader_stages;
     class Ring_buffer_client;
     class Sampler;
+    class Shader_stage_extension;
     class Texture;
     class Texture_heap;
 }
 namespace erhe::scene_renderer {
     class Material_buffer;
     class Mesh_memory;
+    class Material_set;
     class Program_interface;
 }
 
@@ -75,7 +79,30 @@ enum class Irradiance_query_state : unsigned int
     idle      = 0, // nothing requested, or the last result was taken
     queued    = 1, // points accepted, dispatch not recorded yet
     in_flight = 2, // dispatch recorded, frame not retired yet
-    complete  = 3  // results readable
+    complete  = 3, // results readable
+    failed    = 4  // could not be recorded; the reference query reports why
+};
+
+// One point of a reference irradiance query (MCP reference_indirect_diffuse,
+// doc/editor/ddgi.md "Reference irradiance"). irradiance has the units and
+// the convention of ddgi_sample_irradiance(): cosine-weighted mean incident
+// radiance (E / pi), times the configured DDGI intensity.
+class Reference_irradiance_sample
+{
+public:
+    glm::vec3 irradiance       {0.0f};
+    float     standard_error   {0.0f}; // of the luminance of irradiance
+    float     sky_fraction     {0.0f}; // rays that escaped (sky radiance)
+    float     backface_fraction{0.0f}; // rays that hit a backface (zero radiance)
+};
+
+// Arguments of one reference irradiance query.
+class Reference_query_settings
+{
+public:
+    int      rays_per_point{4096};
+    uint32_t seed          {1u};
+    float    normal_bias   {0.01f}; // ray origin offset along the normal, metres
 };
 
 // Dynamic diffuse global illumination (doc/editor/ddgi.md).
@@ -140,6 +167,14 @@ public:
     // Upper bound on the points of one irradiance query.
     static constexpr std::size_t c_max_irradiance_query_points = 4096;
 
+    // Reference irradiance query bounds: rays per point, rays per query
+    // (points x rays per point), and the rays one frame traces - the query
+    // is split into per-frame chunks of whole points so no single
+    // submission runs long enough to risk a GPU timeout.
+    static constexpr int         c_max_reference_rays_per_point = 65536;
+    static constexpr int64_t     c_max_reference_rays_per_query = int64_t{1} << 26;
+    static constexpr int64_t     c_reference_rays_per_frame     = int64_t{1} << 21;
+
     Ddgi_renderer(
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
@@ -195,6 +230,23 @@ public:
     // render pass; no-op unless a query is queued and the volume is active.
     void record_irradiance_query(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
+    // Reference irradiance query: a Monte Carlo estimate of the irradiance
+    // at world points with the exact light transport of a DDGI probe ray
+    // (erhe_ddgi_ray.glsl), cosine-distributed rays from each point, so it
+    // differs from sample_indirect_diffuse only by the probe field's
+    // discretization (doc/editor/ddgi.md "Reference irradiance"). Runs
+    // whether DDGI is enabled or not (needs ray query support). tick()
+    // records it in per-frame chunks of c_reference_rays_per_frame rays;
+    // one query at a time, same state machine as the irradiance query plus
+    // failed (get_reference_query_error() says why).
+    [[nodiscard]] auto begin_reference_query        (std::span<const Irradiance_query_point> points, const Reference_query_settings& settings) -> bool;
+    void               cancel_reference_query       ();
+    [[nodiscard]] auto poll_reference_query         () -> Irradiance_query_state;
+    [[nodiscard]] auto get_reference_query_results  () const -> std::span<const Reference_irradiance_sample>;
+    [[nodiscard]] auto get_reference_query_error    () const -> const std::string&;
+    // The DDGI intensity the results include.
+    [[nodiscard]] auto get_reference_query_intensity() const -> float;
+
     // Refits the grid, reallocates the probe textures when needed, and
     // records this tick's probe trace into the command buffer. Must be
     // called outside a render pass. No-op unless supported and enabled.
@@ -243,6 +295,31 @@ private:
         const char*             image_name,
         const char*             image_format,
         const char*             debug_label
+    );
+
+    // Builds the reference irradiance pipeline (ddgi_reference.comp) and its
+    // persistent host-visible point / result buffers. Takes the probe
+    // trace's ray-hit defines and extensions, so both compile the shared
+    // hit path identically.
+    void create_reference_pass(
+        erhe::graphics::Device&                                     graphics_device,
+        erhe::scene_renderer::Program_interface&                    program_interface,
+        const std::vector<std::pair<std::string, std::string>>&     ray_hit_defines,
+        const std::vector<erhe::graphics::Shader_stage_extension>& ray_hit_extensions
+    );
+
+    // True while a reference query has chunks left to record.
+    [[nodiscard]] auto reference_needs_dispatch() const -> bool;
+    void               fail_reference_query    (const char* reason);
+
+    // Records the next chunk of the reference query against this frame's
+    // trace inputs (the same TLAS, light block and material set the probe
+    // trace uses).
+    void record_reference_chunk(
+        erhe::graphics::Command_buffer&          command_buffer,
+        const Scene_tlas::Frame&                 tlas_frame,
+        const erhe::graphics::Ring_buffer_range& light_range,
+        erhe::scene_renderer::Material_set&      material_set
     );
 
     // Builds the irradiance query pipeline (ddgi_sample.comp) and its
@@ -386,6 +463,31 @@ private:
     Irradiance_query_state                                    m_query_state       {Irradiance_query_state::idle};
     uint64_t                                                  m_query_frame       {0};
     uint64_t                                                  m_query_update_count{0};
+
+    // Reference irradiance query (ddgi_reference.comp). Buffers persistent
+    // and host-visible, sized for c_max_irradiance_query_points; the point /
+    // result vectors are filled on the MCP path only.
+    erhe::graphics::Shader_resource                           m_reference_control_block;
+    erhe::graphics::Shader_resource                           m_reference_input_block;
+    erhe::graphics::Shader_resource                           m_reference_output_block;
+    std::size_t                                               m_reference_dispatch_offset{0};
+    std::size_t                                               m_reference_params_offset  {0};
+    std::size_t                                               m_reference_sky_offset     {0};
+    std::size_t                                               m_reference_points_offset  {0};
+    std::size_t                                               m_reference_output_offset  {0};
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_reference_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_reference_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_reference_pipeline;
+    std::unique_ptr<erhe::graphics::Buffer>                   m_reference_input_buffer;
+    std::unique_ptr<erhe::graphics::Buffer>                   m_reference_output_buffer;
+    std::vector<Irradiance_query_point>                       m_reference_points;
+    std::vector<Reference_irradiance_sample>                  m_reference_results;
+    Reference_query_settings                                  m_reference_settings{};
+    std::string                                               m_reference_error;
+    Irradiance_query_state                                    m_reference_state     {Irradiance_query_state::idle};
+    std::size_t                                               m_reference_next_point{0}; // first point of the next chunk
+    uint64_t                                                  m_reference_frame     {0}; // frame of the last chunk
+    float                                                     m_reference_intensity {1.0f};
 };
 
 } // namespace editor
