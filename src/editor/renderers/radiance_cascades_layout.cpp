@@ -277,4 +277,83 @@ auto get_direction_texel(const glm::vec3& direction, const int tile_texels) -> g
     return glm::clamp(texel, glm::ivec2{0}, glm::ivec2{tile_texels - 1});
 }
 
+auto get_octahedral_texel_subdivisions(const int tile_texels) -> int
+{
+    return std::max(1, c_octahedral_integration_cells / std::max(1, tile_texels));
+}
+
+namespace {
+
+// Calls visit(texel_index, direction, solid_angle) for every subdivision
+// square of every texel of a tile_texels^2 octahedral tile.
+template <typename Visit>
+void for_each_texel_subdivision(const int tile_texels, Visit&& visit)
+{
+    const int    s          = get_octahedral_texel_subdivisions(tile_texels);
+    const int    cells      = tile_texels * s;
+    const double cell_side  = 2.0 / static_cast<double>(cells);
+    const double cell_area  = cell_side * cell_side;
+    for (int v = 0; v < tile_texels; ++v) {
+        for (int u = 0; u < tile_texels; ++u) {
+            const int texel_index = (v * tile_texels) + u;
+            for (int b = 0; b < s; ++b) {
+                for (int a = 0; a < s; ++a) {
+                    const glm::vec2 f{
+                        static_cast<float>(-1.0 + ((static_cast<double>((u * s) + a) + 0.5) * cell_side)),
+                        static_cast<float>(-1.0 + ((static_cast<double>((v * s) + b) + 0.5) * cell_side))
+                    };
+                    const glm::vec3 w      = octahedral_decode(f);
+                    const double    l1     = static_cast<double>(std::abs(w.x) + std::abs(w.y) + std::abs(w.z));
+                    visit(texel_index, w, cell_area * l1 * l1 * l1);
+                }
+            }
+        }
+    }
+}
+
+} // anonymous namespace
+
+void compute_octahedral_texel_solid_angles(const int tile_texels, std::vector<float>& out)
+{
+    const std::size_t   texel_count = static_cast<std::size_t>(tile_texels) * static_cast<std::size_t>(tile_texels);
+    std::vector<double> sums(texel_count, 0.0);
+    for_each_texel_subdivision(tile_texels, [&](const int texel_index, const glm::vec3&, const double solid_angle) {
+        sums[static_cast<std::size_t>(texel_index)] += solid_angle;
+    });
+    out.clear();
+    out.reserve(texel_count);
+    for (const double sum : sums) {
+        out.push_back(static_cast<float>(sum));
+    }
+}
+
+void compute_octahedral_lobe_weights(const int output_texels, const int tile_texels, const float exponent, std::vector<float>& out)
+{
+    const std::size_t   tile_count   = static_cast<std::size_t>(tile_texels) * static_cast<std::size_t>(tile_texels);
+    const std::size_t   output_count = static_cast<std::size_t>(output_texels) * static_cast<std::size_t>(output_texels);
+    std::vector<double> sums(output_count * tile_count, 0.0);
+    std::vector<glm::vec3> output_directions;
+    output_directions.reserve(output_count);
+    for (int y = 0; y < output_texels; ++y) {
+        for (int x = 0; x < output_texels; ++x) {
+            output_directions.push_back(get_texel_direction(glm::ivec2{x, y}, output_texels));
+        }
+    }
+    const double power = static_cast<double>(exponent);
+    for_each_texel_subdivision(tile_texels, [&](const int texel_index, const glm::vec3& w, const double solid_angle) {
+        for (std::size_t n = 0; n < output_count; ++n) {
+            const double cos_angle = static_cast<double>(glm::dot(output_directions[n], w));
+            if (cos_angle <= 0.0) {
+                continue;
+            }
+            sums[(n * tile_count) + static_cast<std::size_t>(texel_index)] += std::pow(cos_angle, power) * solid_angle;
+        }
+    });
+    out.clear();
+    out.reserve(sums.size());
+    for (const double sum : sums) {
+        out.push_back(static_cast<float>(sum));
+    }
+}
+
 } // namespace editor

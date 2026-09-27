@@ -35,9 +35,11 @@ erhe_target_sources_grouped(
     res/editor/shaders/ddgi_relocate.comp
     res/editor/shaders/ddgi_sample.comp
     res/editor/shaders/ddgi_reference.comp
+    res/editor/shaders/erhe_ddgi_border.glsl
     res/editor/shaders/erhe_ddgi_ray.glsl
     res/editor/shaders/rc_merge.comp
     res/editor/shaders/rc_preview.comp
+    res/editor/shaders/rc_reduce.comp
     res/editor/shaders/rc_trace.comp
     res/editor/shaders/rc_visibility.comp
     res/editor/shaders/brdf_slice.frag
@@ -68,6 +70,7 @@ erhe_target_sources_grouped(
     res/shaders/edge_lines.vert
     res/shaders/erhe_bxdf.glsl
     res/shaders/erhe_ddgi.glsl
+    res/shaders/erhe_ddgi_tiles.glsl
     res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl

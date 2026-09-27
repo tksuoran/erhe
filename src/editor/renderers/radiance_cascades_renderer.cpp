@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "config/generated/ddgi_config.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "editor_log.hpp"
@@ -83,6 +84,28 @@ constexpr int          c_merge_workgroup_size       = 8; // rc_merge.comp local 
 constexpr uint32_t c_merge_flag_top            = 1u; // top cascade: merge with the sky
 constexpr uint32_t c_merge_flag_mask_radiance  = 2u; // debug_cascade_mask: zero the cascade's radiance
 
+// Reduce pass layout (rc_reduce.comp): the control block, the weight
+// storage buffer, then as combined image samplers merged cascade 0 and the
+// cascade 0 distance texture (user points 0 and 1; Vulkan offsets them past
+// the highest buffer binding, 3, to 4 and 5), and the written atlas and
+// probe data as storage images at raw binding points 6 and 7.
+constexpr unsigned int c_reduce_weights_binding_point    = 3;
+constexpr unsigned int c_reduce_merged_binding_point     = 0;
+constexpr unsigned int c_reduce_distance_binding_point   = 1;
+constexpr unsigned int c_reduce_atlas_binding_point      = 6;
+constexpr unsigned int c_reduce_probe_data_binding_point = 7;
+constexpr int          c_reduce_workgroup_size           = 64; // one workgroup per probe, striding over its tile
+// Workgroups per row of the 2D reduce dispatch (within the Vulkan-guaranteed
+// maxComputeWorkGroupCount of 65535).
+constexpr int          c_reduce_dispatch_row             = 32768;
+
+// Probe field atlas formats: exactly DDGI's (doc/editor/ddgi.md "Data
+// layout"), so erhe_ddgi.glsl samples either producer.
+constexpr erhe::dataformat::Format c_field_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
+constexpr erhe::dataformat::Format c_field_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
+constexpr erhe::dataformat::Format c_field_probe_data_format = erhe::dataformat::Format::format_32_vec4_float;
+constexpr int                      c_field_border_texels     = 1;
+
 // Preview pass layout: the control block, then the previewed (raw or
 // merged) atlas, the distance texture and the preview output as storage
 // images.
@@ -127,11 +150,13 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
     const Radiance_cascades_config&          config,
+    const Ddgi_config&                       ddgi_config,
     const Producer_selection                 selection
 )
     : m_graphics_device{graphics_device}
     , m_context        {context}
     , m_config         {config}
+    , m_ddgi_config    {ddgi_config}
     , m_selection      {selection}
     , m_control_block{
         graphics_device,
@@ -151,6 +176,21 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
         "rc_visibility",
         static_cast<int>(c_control_binding_point),
         erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_reduce_block{
+        graphics_device,
+        "rc_reduce",
+        static_cast<int>(c_control_binding_point),
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_reduce_weights_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "rc_reduce_weights",
+            .binding_point = static_cast<int>(c_reduce_weights_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
     }
     , m_preview_block{
         graphics_device,
@@ -553,6 +593,104 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     make_merge_pass(m_merge_shader_stages,            m_merge_pipeline,            "0", "rc_merge");
     make_merge_pass(m_merge_visibility_shader_stages, m_merge_visibility_pipeline, "1", "rc_merge_visibility");
 
+    // Reduce: grid_counts xyz = cascade 0 probe counts, w = q0; params x =
+    // cascade 0 tiles per atlas row, y = field tiles per atlas row, z =
+    // irradiance texels, w = distance texels; weights x / y / z = offsets
+    // (in floats) of the irradiance weights, the distance weights and the
+    // cascade 0 texel solid angles in the weight buffer; limits x = r0.
+    m_reduce_offsets.grid_counts = m_reduce_block.add_uvec4("grid_counts")->get_offset_in_parent();
+    m_reduce_offsets.params      = m_reduce_block.add_uvec4("params"     )->get_offset_in_parent();
+    m_reduce_offsets.weights     = m_reduce_block.add_uvec4("weights"    )->get_offset_in_parent();
+    m_reduce_offsets.limits      = m_reduce_block.add_vec4 ("limits"     )->get_offset_in_parent();
+    m_reduce_weights_block.add_vec4("weights", Shader_resource::unsized_array);
+    const auto make_reduce_pass = [&](Reduce_pass& pass, const bool distance) {
+        std::vector<Bind_group_layout_binding> bindings{
+            {
+                .binding_point = c_control_binding_point,
+                .type          = Binding_type::uniform_buffer,
+                .stage_flags   = Shader_stage_flags::compute
+            },
+            {
+                .binding_point = c_reduce_weights_binding_point,
+                .type          = Binding_type::storage_buffer,
+                .stage_flags   = Shader_stage_flags::compute
+            },
+            {
+                .binding_point   = c_reduce_merged_binding_point,
+                .type            = Binding_type::combined_image_sampler,
+                .sampler_aspect  = Sampler_aspect::color,
+                .name            = "s_rc_merged",
+                .glsl_type       = Glsl_type::sampler_2d,
+                .is_texture_heap = false,
+                .stage_flags     = Shader_stage_flags::compute
+            },
+            {
+                .binding_point   = c_reduce_distance_binding_point,
+                .type            = Binding_type::combined_image_sampler,
+                .sampler_aspect  = Sampler_aspect::color,
+                .name            = "s_rc_distance",
+                .glsl_type       = Glsl_type::sampler_2d,
+                .is_texture_heap = false,
+                .stage_flags     = Shader_stage_flags::compute
+            },
+            {
+                .binding_point = c_reduce_atlas_binding_point,
+                .type          = Binding_type::storage_image,
+                .name          = "i_probe_atlas",
+                .glsl_type     = Glsl_type::image_2d,
+                .image_format  = distance ? "rg16f" : "rgba16f",
+                .stage_flags   = Shader_stage_flags::compute
+            }
+        };
+        // Only the irradiance variant writes the probe data, so only it
+        // references the image.
+        if (!distance) {
+            bindings.push_back(
+                Bind_group_layout_binding{
+                    .binding_point = c_reduce_probe_data_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_probe_data",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            );
+        }
+        const char* name = distance ? "rc_reduce_distance" : "rc_reduce_irradiance";
+        pass.bind_group_layout = std::make_unique<Bind_group_layout>(
+            graphics_device,
+            Bind_group_layout_create_info{
+                .bindings    = bindings,
+                .debug_label = distance ? "RC reduce distance" : "RC reduce irradiance"
+            }
+        );
+        pass.shader_stages = std::make_unique<Reloadable_shader_stages>(
+            graphics_device,
+            Shader_stages_create_info{
+                .name                = name,
+                .defines             = {
+                    { "ERHE_RC_REDUCE_GROUP_SIZE", fmt::format("{}", c_reduce_workgroup_size) },
+                    { "ERHE_RC_REDUCE_DISTANCE",   distance ? "1" : "0" }
+                },
+                .interface_blocks    = { &m_reduce_block, &m_reduce_weights_block },
+                .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_reduce.comp" } },
+                .extra_include_paths = shader_paths(),
+                .bind_group_layout   = pass.bind_group_layout.get()
+            }
+        );
+        graphics_device.get_shader_monitor().add(*pass.shader_stages);
+        pass.pipeline = std::make_unique<Compute_pipeline>(
+            graphics_device,
+            Compute_pipeline_data{
+                .name              = name,
+                .shader_stages     = &pass.shader_stages->shader_stages,
+                .bind_group_layout = pass.bind_group_layout.get()
+            }
+        );
+    };
+    make_reduce_pass(m_reduce_irradiance, false);
+    make_reduce_pass(m_reduce_distance,   true);
+
     // Atlas preview: size x, y = atlas size, z = channel; params x = radiance
     // scale, y = r0 (distance normalization).
     m_preview_size_offset   = m_preview_block.add_uvec4("size"  )->get_offset_in_parent();
@@ -617,6 +755,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     // The labels double as the Performance window plot names.
     m_pass_timings[static_cast<std::size_t>(Rc_pass::trace)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC trace");
     m_pass_timings[static_cast<std::size_t>(Rc_pass::merge)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC merge");
+    m_pass_timings[static_cast<std::size_t>(Rc_pass::reduce)].timer = std::make_unique<Gpu_timer>(graphics_device, "RC reduce");
 
     m_supported = true;
     log_startup->info("Radiance_cascades_renderer: radiance cascades available");
@@ -632,7 +771,9 @@ auto Radiance_cascades_renderer::is_supported() const -> bool
         (m_trace_upper.pipeline != nullptr) &&
         (m_merge_pipeline != nullptr) &&
         (m_merge_visibility_pipeline != nullptr) &&
-        (m_visibility_pipeline != nullptr);
+        (m_visibility_pipeline != nullptr) &&
+        (m_reduce_irradiance.pipeline != nullptr) &&
+        (m_reduce_distance.pipeline != nullptr);
 }
 
 auto Radiance_cascades_renderer::is_selected() const -> bool
@@ -663,7 +804,43 @@ auto Radiance_cascades_renderer::is_active() const -> bool
 
 auto Radiance_cascades_renderer::has_field() const -> bool
 {
-    return false;
+    return is_active() && static_cast<bool>(m_field_irradiance);
+}
+
+auto Radiance_cascades_renderer::get_forward_parameters() const -> erhe::scene_renderer::Ddgi_parameters
+{
+    erhe::scene_renderer::Ddgi_parameters parameters{};
+    if (!has_field()) {
+        return parameters;
+    }
+    // Cascade 0's grid, and the DDGI sampling settings: the field is
+    // sampled exactly like DDGI's.
+    const Radiance_cascade& cascade0 = m_layout.cascades[0];
+    parameters.grid_origin       = cascade0.grid.origin;
+    parameters.grid_spacing      = cascade0.grid.spacing;
+    parameters.grid_counts       = cascade0.grid.counts;
+    parameters.irradiance_texels = m_field_settings.irradiance_texels;
+    parameters.distance_texels   = m_field_settings.distance_texels;
+    parameters.tiles_per_row     = m_field_tiles_per_row;
+    parameters.normal_bias       = m_ddgi_config.normal_bias;
+    parameters.view_bias         = m_ddgi_config.view_bias;
+    parameters.depth_sharpness   = m_field_settings.depth_sharpness; // the value the distance atlas was reduced with
+    parameters.intensity         = m_ddgi_config.intensity;
+    return parameters;
+}
+
+auto Radiance_cascades_renderer::get_field() const -> Probe_field
+{
+    if (!has_field()) {
+        return Probe_field{};
+    }
+    return Probe_field{
+        .parameters   = get_forward_parameters(),
+        .irradiance   = m_field_irradiance,
+        .distance     = m_field_distance,
+        .probe_data   = m_field_probe_data,
+        .update_count = m_update_count
+    };
 }
 
 void Radiance_cascades_renderer::set_merge_mode(const Radiance_cascades_merge_mode mode)
@@ -770,8 +947,9 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
     };
     stats.trace            = pass_time(Rc_pass::trace);
     stats.merge            = pass_time(Rc_pass::merge);
-    stats.total.last_ms    = stats.trace.last_ms    + stats.merge.last_ms;
-    stats.total.average_ms = stats.trace.average_ms + stats.merge.average_ms;
+    stats.reduce           = pass_time(Rc_pass::reduce);
+    stats.total.last_ms    = stats.trace.last_ms    + stats.merge.last_ms    + stats.reduce.last_ms;
+    stats.total.average_ms = stats.trace.average_ms + stats.merge.average_ms + stats.reduce.average_ms;
     stats.update_count        = m_update_count;
     stats.timing_sample_count = m_timing_sample_count;
     stats.completed_sweeps    = m_completed_sweeps;
@@ -797,6 +975,7 @@ void Radiance_cascades_renderer::release_textures()
         textures.merged.reset();
     }
     release_state_textures();
+    release_field();
     m_distance_texture.reset();
     m_preview_texture.reset();
     m_cascade_byte_counts.fill(0);
@@ -863,6 +1042,8 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
     // are reallocated and recomputed before the next merge reads them.
     m_visibility_dirty = true;
 
+    allocate_field(command_buffer);
+
     // Refits happen at runtime (content moved, settings changed), so this is
     // a render-log event, not a startup one.
     const Radiance_cascade& cascade0 = m_layout.cascades[0];
@@ -879,13 +1060,25 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
 
 auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool
 {
+    const Field_settings field_settings{
+        .irradiance_texels = std::clamp(m_ddgi_config.irradiance_texels, 2, 32),
+        .distance_texels   = std::clamp(m_ddgi_config.distance_texels,   2, 64),
+        .depth_sharpness   = std::max(1.0f, m_ddgi_config.depth_sharpness)
+    };
+    const int max_texture_size = m_graphics_device.get_info().max_texture_size;
+    // The probe field atlases of cascade 0's grid must fit the texture size
+    // limit too, which bounds the cascade 0 probe budget.
+    const int field_max_probes = get_probe_field_max_probes(
+        std::max(field_settings.irradiance_texels, field_settings.distance_texels) + (2 * c_field_border_texels),
+        max_texture_size
+    );
     const Radiance_cascades_layout_settings settings{
         .probe_spacing_m      = std::max(0.01f, m_config.probe_spacing_m),
-        .max_probes_cascade0  = std::max(8,     m_config.max_probes_cascade0),
+        .max_probes_cascade0  = std::min(std::max(8, m_config.max_probes_cascade0), field_max_probes),
         .max_cascades         = std::clamp(m_config.max_cascades, 1, c_max_radiance_cascades),
         .cascade0_tile_texels = std::clamp(m_config.cascade0_tile_texels, 1, 64),
         .interval_scale       = std::max(1.0f,  m_config.interval_scale),
-        .max_texture_size     = m_graphics_device.get_info().max_texture_size
+        .max_texture_size     = max_texture_size
     };
     const float padding_m = std::max(0.0f, m_config.volume_padding_m);
 
@@ -901,6 +1094,14 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
         !m_cascade_textures[0].raw;
     const bool bounds_changed = m_volume_bounds.content_changed(bounds);
     if (!settings_changed && !bounds_changed) {
+        // The field's sampling settings live in Ddgi_config, edited from
+        // the Settings window (reflected) and MCP set_ddgi without a change
+        // notification, so the settings the field was allocated with are
+        // compared here, like the fit settings above.
+        if ((field_settings != m_field_settings) || !m_field_irradiance) {
+            m_field_settings = field_settings;
+            allocate_field(command_buffer);
+        }
         return true;
     }
 
@@ -912,9 +1113,10 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
     }
 
     m_volume_bounds.set(fit_bounds);
-    m_fit_settings  = settings;
-    m_fit_padding_m = padding_m;
-    m_layout        = layout;
+    m_fit_settings   = settings;
+    m_fit_padding_m  = padding_m;
+    m_field_settings = field_settings;
+    m_layout         = layout;
     ++m_fit_count;
     allocate_textures(command_buffer);
     return true;
@@ -966,6 +1168,122 @@ void Radiance_cascades_renderer::release_state_textures()
         m_texture_byte_count -= bytes;
         textures.state.reset();
     }
+}
+
+void Radiance_cascades_renderer::release_field()
+{
+    m_field_irradiance.reset();
+    m_field_distance.reset();
+    m_field_probe_data.reset();
+    m_reduce_weights_buffer.reset();
+    m_texture_byte_count -= m_field_byte_count;
+    m_field_byte_count          = 0;
+    m_reduce_weights_byte_count = 0;
+    m_field_tiles_per_row       = 0;
+}
+
+void Radiance_cascades_renderer::allocate_field(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    release_field();
+
+    const Radiance_cascade& cascade0        = m_layout.cascades[0];
+    const int               irradiance_tile = m_field_settings.irradiance_texels + (2 * c_field_border_texels);
+    const int               distance_tile   = m_field_settings.distance_texels   + (2 * c_field_border_texels);
+    // The DDGI atlas tiling (get_probe_field_tile()), sized by the larger
+    // tile so both atlases stay within the texture size limit.
+    m_field_tiles_per_row = get_probe_field_tiles_per_row(cascade0.grid.counts, std::max(irradiance_tile, distance_tile), m_graphics_device.get_info().max_texture_size);
+    const int tile_rows   = get_probe_field_tile_rows(cascade0.grid.counts, m_field_tiles_per_row);
+
+    const auto make_texture = [&](const char* debug_label, const erhe::dataformat::Format format, const int width, const int height) -> std::shared_ptr<Texture> {
+        std::shared_ptr<Texture> texture = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  = Image_usage_flag_bit_mask::storage      |
+                               Image_usage_flag_bit_mask::sampled      |
+                               Image_usage_flag_bit_mask::transfer_dst |
+                               Image_usage_flag_bit_mask::transfer_src,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = format,
+                .width       = width,
+                .height      = height,
+                .level_count = 1,
+                .debug_label = erhe::utility::Debug_label{debug_label}
+            }
+        );
+        m_field_byte_count +=
+            static_cast<std::size_t>(width) *
+            static_cast<std::size_t>(height) *
+            erhe::dataformat::get_format_size_bytes(format);
+        // Black irradiance, zero distance, inactive probes until the first
+        // reduce writes them.
+        command_buffer.clear_texture(*texture, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.transition_texture_layout(*texture, Image_layout::shader_read_only_optimal);
+        return texture;
+    };
+    m_field_irradiance = make_texture("RC field irradiance", c_field_irradiance_format, m_field_tiles_per_row * irradiance_tile, tile_rows * irradiance_tile);
+    m_field_distance   = make_texture("RC field distance",   c_field_distance_format,   m_field_tiles_per_row * distance_tile,   tile_rows * distance_tile  );
+    m_field_probe_data = make_texture("RC field probe data", c_field_probe_data_format, m_field_tiles_per_row,                   tile_rows                  );
+    m_texture_byte_count += m_field_byte_count;
+
+    // Reduce weights: they depend only on the tile sizes and the depth
+    // sharpness, so they are integrated here, on change, never per update.
+    // Cold path: the temporaries allocate once per layout or settings edit.
+    const int          q0 = cascade0.tile_texels;
+    std::vector<float> irradiance_weights;
+    std::vector<float> distance_weights;
+    std::vector<float> solid_angles;
+    compute_octahedral_lobe_weights(m_field_settings.irradiance_texels, q0, 1.0f, irradiance_weights);
+    compute_octahedral_lobe_weights(m_field_settings.distance_texels,   q0, m_field_settings.depth_sharpness, distance_weights);
+    compute_octahedral_texel_solid_angles(q0, solid_angles);
+    m_reduce_irradiance_weights_offset = 0;
+    m_reduce_distance_weights_offset   = static_cast<uint32_t>(irradiance_weights.size());
+    m_reduce_solid_angle_offset        = static_cast<uint32_t>(irradiance_weights.size() + distance_weights.size());
+    std::vector<float> packed;
+    packed.reserve(irradiance_weights.size() + distance_weights.size() + solid_angles.size() + 4);
+    // Transposed to [cascade 0 texel j][output texel n]: the invocations of
+    // a workgroup take consecutive output texels, so at each j they read
+    // consecutive floats.
+    const std::size_t q0_texels = static_cast<std::size_t>(q0) * static_cast<std::size_t>(q0);
+    const auto append_transposed = [&](const std::vector<float>& weights) {
+        const std::size_t output_count = weights.size() / q0_texels;
+        for (std::size_t j = 0; j < q0_texels; ++j) {
+            for (std::size_t n = 0; n < output_count; ++n) {
+                packed.push_back(weights[(n * q0_texels) + j]);
+            }
+        }
+    };
+    append_transposed(irradiance_weights);
+    append_transposed(distance_weights);
+    packed.insert(packed.end(), solid_angles.begin(), solid_angles.end());
+    // Whole vec4s: the shader reads four floats per array element.
+    while ((packed.size() % 4) != 0) {
+        packed.push_back(0.0f);
+    }
+    m_reduce_weights_byte_count = packed.size() * sizeof(float);
+    m_reduce_weights_buffer = std::make_unique<Buffer>(
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = m_reduce_weights_byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::none,
+            .usage                                  = Buffer_usage::storage,
+            .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::device_local,
+            .init_data                              = packed.data(),
+            .debug_label                            = erhe::utility::Debug_label{"RC reduce weights"}
+        }
+    );
+
+    log_render->info(
+        "Radiance_cascades_renderer: probe field {}x{}x{} probes, {} tiles per row, irradiance {} / distance {} texels, {:.1f} MB, reduce weights {} bytes",
+        cascade0.grid.counts.x, cascade0.grid.counts.y, cascade0.grid.counts.z,
+        m_field_tiles_per_row,
+        m_field_settings.irradiance_texels, m_field_settings.distance_texels,
+        static_cast<double>(m_field_byte_count) / (1024.0 * 1024.0),
+        m_reduce_weights_byte_count
+    );
 }
 
 void Radiance_cascades_renderer::record_visibility(
@@ -1267,6 +1585,83 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
     }
 }
 
+void Radiance_cascades_renderer::record_reduce(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    const Radiance_cascade& cascade0    = m_layout.cascades[0];
+    const int               probe_count = cascade0.get_probe_count();
+
+    const std::size_t byte_count = m_reduce_block.get_size_bytes();
+    Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+    {
+        std::span<std::byte> gpu_data = control_range.get_span();
+        std::memset(gpu_data.data(), 0, byte_count);
+        const glm::uvec4 grid_counts{
+            static_cast<uint32_t>(cascade0.grid.counts.x),
+            static_cast<uint32_t>(cascade0.grid.counts.y),
+            static_cast<uint32_t>(cascade0.grid.counts.z),
+            static_cast<uint32_t>(cascade0.tile_texels)
+        };
+        const glm::uvec4 params{
+            static_cast<uint32_t>(cascade0.tiles_per_row),
+            static_cast<uint32_t>(m_field_tiles_per_row),
+            static_cast<uint32_t>(m_field_settings.irradiance_texels),
+            static_cast<uint32_t>(m_field_settings.distance_texels)
+        };
+        const glm::uvec4 weights{
+            m_reduce_irradiance_weights_offset,
+            m_reduce_distance_weights_offset,
+            m_reduce_solid_angle_offset,
+            0u
+        };
+        const glm::vec4 limits{m_layout.r0, 0.0f, 0.0f, 0.0f};
+        write(gpu_data, m_reduce_offsets.grid_counts, as_span(grid_counts));
+        write(gpu_data, m_reduce_offsets.params,      as_span(params     ));
+        write(gpu_data, m_reduce_offsets.weights,     as_span(weights    ));
+        write(gpu_data, m_reduce_offsets.limits,      as_span(limits     ));
+        control_range.bytes_written(byte_count);
+        control_range.close();
+    }
+
+    // Merged cascade 0 (left shader_read_only_optimal by the merge) and the
+    // distance texture (by the trace) are sampled; each variant writes its
+    // own atlas, the irradiance variant also the probe data, so the two
+    // dispatches share no written image.
+    command_buffer.transition_texture_layout(*m_field_irradiance, Image_layout::general);
+    command_buffer.transition_texture_layout(*m_field_distance,   Image_layout::general);
+    command_buffer.transition_texture_layout(*m_field_probe_data, Image_layout::general);
+    {
+        const Scoped_gpu_timer reduce_timer{*m_pass_timings[static_cast<std::size_t>(Rc_pass::reduce)].timer, command_buffer};
+        const int groups_x = std::min(probe_count, c_reduce_dispatch_row);
+        const int groups_y = (probe_count + groups_x - 1) / groups_x;
+        const auto dispatch = [&](const Reduce_pass& pass, Texture& atlas, Texture* probe_data) {
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+            encoder.set_bind_group_layout(pass.bind_group_layout.get());
+            encoder.set_compute_pipeline(*pass.pipeline);
+            m_control_buffer->bind(encoder, control_range);
+            encoder.set_buffer(Buffer_target::storage, m_reduce_weights_buffer.get(), 0, m_reduce_weights_byte_count, c_reduce_weights_binding_point);
+            encoder.set_sampled_image(c_reduce_merged_binding_point,   *m_cascade_textures[0].merged, *m_merge_sampler);
+            encoder.set_sampled_image(c_reduce_distance_binding_point, *m_distance_texture,           *m_merge_sampler);
+            encoder.set_storage_image(c_reduce_atlas_binding_point, atlas);
+            if (probe_data != nullptr) {
+                encoder.set_storage_image(c_reduce_probe_data_binding_point, *probe_data);
+            }
+            encoder.dispatch_compute(static_cast<std::uintptr_t>(groups_x), static_cast<std::uintptr_t>(groups_y), 1);
+        };
+        dispatch(m_reduce_irradiance, *m_field_irradiance, m_field_probe_data.get());
+        dispatch(m_reduce_distance,   *m_field_distance,   nullptr);
+    }
+    control_range.release();
+
+    // The field atlases become sampled textures for the forward pass, the
+    // irradiance query and the readback.
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    command_buffer.transition_texture_layout(*m_field_irradiance, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_field_distance,   Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_field_probe_data, Image_layout::shader_read_only_optimal);
+}
+
 void Radiance_cascades_renderer::request_preview(
     const int                cascade,
     const Rc_preview_source  source,
@@ -1390,6 +1785,22 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
             offset = round_up(offset + (static_cast<std::size_t>(cascade.tiles_per_row) * static_cast<std::size_t>(cascade.tile_rows) * state_texel_bytes), c_readback_alignment);
         }
     }
+    m_readback_has_field = static_cast<bool>(m_field_irradiance);
+    if (m_readback_has_field) {
+        m_readback_field_parameters       = get_forward_parameters();
+        m_readback_field_irradiance_width = m_field_irradiance->get_width();
+        m_readback_field_distance_width   = m_field_distance->get_width();
+        m_readback_field_probe_data_width = m_field_probe_data->get_width();
+        const auto texture_bytes = [](const Texture& texture, const erhe::dataformat::Format format) -> std::size_t {
+            return static_cast<std::size_t>(texture.get_width()) * static_cast<std::size_t>(texture.get_height()) * erhe::dataformat::get_format_size_bytes(format);
+        };
+        m_readback_field_irradiance_offset = offset;
+        offset = round_up(offset + texture_bytes(*m_field_irradiance, c_field_irradiance_format), c_readback_alignment);
+        m_readback_field_distance_offset   = offset;
+        offset = round_up(offset + texture_bytes(*m_field_distance, c_field_distance_format), c_readback_alignment);
+        m_readback_field_probe_data_offset = offset;
+        offset = round_up(offset + texture_bytes(*m_field_probe_data, c_field_probe_data_format), c_readback_alignment);
+    }
     m_readback_byte_count = offset;
 
     // Allocated on request only (the MCP path), grown to the largest layout
@@ -1437,6 +1848,11 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
         for (int i = 0; i < m_layout.cascade_count; ++i) {
             copy(*m_cascade_textures[static_cast<std::size_t>(i)].state, state_texel_bytes, m_readback_state_offsets[static_cast<std::size_t>(i)]);
         }
+    }
+    if (m_readback_has_field) {
+        copy(*m_field_irradiance, erhe::dataformat::get_format_size_bytes(c_field_irradiance_format), m_readback_field_irradiance_offset);
+        copy(*m_field_distance,   erhe::dataformat::get_format_size_bytes(c_field_distance_format),   m_readback_field_distance_offset);
+        copy(*m_field_probe_data, erhe::dataformat::get_format_size_bytes(c_field_probe_data_format), m_readback_field_probe_data_offset);
     }
 
     m_readback_layout       = m_layout;
@@ -1575,6 +1991,62 @@ auto Radiance_cascades_renderer::read_radiance_texel(
     };
 }
 
+auto Radiance_cascades_renderer::readback_has_field() const -> bool
+{
+    return m_readback_has_field;
+}
+
+auto Radiance_cascades_renderer::get_readback_field_parameters() const -> const erhe::scene_renderer::Ddgi_parameters&
+{
+    return m_readback_field_parameters;
+}
+
+auto Radiance_cascades_renderer::read_field_irradiance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec3
+{
+    ERHE_VERIFY(m_readback_has_field);
+    const erhe::scene_renderer::Ddgi_parameters& parameters = m_readback_field_parameters;
+    const int         tile_size   = parameters.irradiance_texels + (2 * c_field_border_texels);
+    const glm::ivec2  atlas_texel = (get_probe_field_tile(probe, parameters.grid_counts, parameters.tiles_per_row) * tile_size) + glm::ivec2{c_field_border_texels} + texel;
+    const std::size_t texel_bytes = erhe::dataformat::get_format_size_bytes(c_field_irradiance_format);
+    const std::size_t offset      =
+        m_readback_field_irradiance_offset +
+        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(m_readback_field_irradiance_width)) + static_cast<std::size_t>(atlas_texel.x)) * texel_bytes);
+    ERHE_VERIFY((offset + texel_bytes) <= m_readback_snapshot.size());
+    std::array<uint16_t, 4> halves{};
+    std::memcpy(halves.data(), m_readback_snapshot.data() + offset, sizeof(halves));
+    return glm::vec3{glm::unpackHalf1x16(halves[0]), glm::unpackHalf1x16(halves[1]), glm::unpackHalf1x16(halves[2])};
+}
+
+auto Radiance_cascades_renderer::read_field_distance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec2
+{
+    ERHE_VERIFY(m_readback_has_field);
+    const erhe::scene_renderer::Ddgi_parameters& parameters = m_readback_field_parameters;
+    const int         tile_size   = parameters.distance_texels + (2 * c_field_border_texels);
+    const glm::ivec2  atlas_texel = (get_probe_field_tile(probe, parameters.grid_counts, parameters.tiles_per_row) * tile_size) + glm::ivec2{c_field_border_texels} + texel;
+    const std::size_t texel_bytes = erhe::dataformat::get_format_size_bytes(c_field_distance_format);
+    const std::size_t offset      =
+        m_readback_field_distance_offset +
+        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(m_readback_field_distance_width)) + static_cast<std::size_t>(atlas_texel.x)) * texel_bytes);
+    ERHE_VERIFY((offset + texel_bytes) <= m_readback_snapshot.size());
+    std::array<uint16_t, 2> halves{};
+    std::memcpy(halves.data(), m_readback_snapshot.data() + offset, sizeof(halves));
+    return glm::vec2{glm::unpackHalf1x16(halves[0]), glm::unpackHalf1x16(halves[1])};
+}
+
+auto Radiance_cascades_renderer::read_field_probe_data(const glm::ivec3& probe) const -> glm::vec4
+{
+    ERHE_VERIFY(m_readback_has_field);
+    const erhe::scene_renderer::Ddgi_parameters& parameters = m_readback_field_parameters;
+    const glm::ivec2  tile   = get_probe_field_tile(probe, parameters.grid_counts, parameters.tiles_per_row);
+    const std::size_t offset =
+        m_readback_field_probe_data_offset +
+        (((static_cast<std::size_t>(tile.y) * static_cast<std::size_t>(m_readback_field_probe_data_width)) + static_cast<std::size_t>(tile.x)) * sizeof(glm::vec4));
+    ERHE_VERIFY((offset + sizeof(glm::vec4)) <= m_readback_snapshot.size());
+    glm::vec4 value{0.0f};
+    std::memcpy(&value, m_readback_snapshot.data() + offset, sizeof(glm::vec4));
+    return value;
+}
+
 auto Radiance_cascades_renderer::readback_has_probe_states() const -> bool
 {
     return m_readback_has_states;
@@ -1660,8 +2132,10 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     material_set.unbind(command_buffer);
 
     // Every merged texel depends on raw texels of its own and every higher
-    // cascade, so each update that traced re-merges all cascades.
+    // cascade, so each update that traced re-merges all cascades, and
+    // reduces merged cascade 0 into the probe field.
     record_merge(command_buffer, ambient);
+    record_reduce(command_buffer);
 
     if (m_preview_requested) {
         m_preview_requested = false;

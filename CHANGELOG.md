@@ -45,6 +45,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Ddgi_parameters::tiles_per_row`
+  (`erhe_scene_renderer/light_buffer.hpp`), written to
+  `light_block.ddgi_texels.z`: the probe field atlases place probe
+  (x, y, z) at tile index `x + counts.x * (z + counts.z * y)` wrapped into
+  rows of `tiles_per_row` tiles (`res/shaders/erhe_ddgi_tiles.glsl`), so a
+  large grid stays within the texture size limit. `Ddgi_parameters::is_valid()`
+  requires `tiles_per_row > 0`.
 - `erhe::physics`: `Physics_joint_settings` no longer warns about acceleration
   mode drives; the mirror carries the mode.
 

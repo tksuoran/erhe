@@ -7,11 +7,8 @@ diffuse probe field, next to DDGI ([ddgi.md](ddgi.md)). The design and the
 remaining phases are in
 [../plans/radiance_cascades.md](../plans/radiance_cascades.md); this document
 describes what exists: the source selection, the cascade layout and its
-atlases, the interval trace, the merge, the developer window and the MCP
-tools. The reduce pass does not exist yet, so the renderer produces no probe
-field: while radiance cascades are the selected source, no field is bound
-and the forward pass shades non-lightmapped draws with the flat scene
-ambient term.
+atlases, the interval trace, the merge, the reduce into the probe field
+the forward pass samples, the developer window and the MCP tools.
 
 The feature requires GPU ray query (`Device_info::use_ray_query`), like DDGI;
 without it `Radiance_cascades_renderer::is_supported()` is false and its tick
@@ -43,9 +40,14 @@ selects the producer of the one probe field the forward pass samples:
 - `Editor::tick()`, after `flush_draw_lists()`, ticks radiance cascades only
   while they are selected. DDGI ticks every frame for pending reference
   irradiance queries (which do not depend on the source) and updates its
-  probes only while selected. `Editor::tick()` publishes DDGI's field to
-  `Forward_renderer::set_ddgi()` while DDGI is active and clears it
-  otherwise.
+  probes only while selected. `Editor::tick()` then publishes the selected
+  producer's field - `get_indirect_diffuse_field()`
+  (`src/editor/renderers/indirect_diffuse.{hpp,cpp}`), a `Probe_field` of
+  `Ddgi_parameters` and the three atlases from `Ddgi_renderer::get_field()`
+  or `Radiance_cascades_renderer::get_field()` - to
+  `Forward_renderer::set_ddgi()`, and clears it when there is none (source
+  `ambient`, or a producer without a field yet). That is the single
+  publishing site; the MCP irradiance query samples the same field.
 - Migration: the enum replaces `Ddgi_config::enabled` (removed in
   `Ddgi_config` v2). `Editor_settings_config` v5 added the enum and the
   `radiance_cascades` section; a migration callback registered by
@@ -77,8 +79,9 @@ section, `editor_settings.radiance_cascades`):
 defaults. The plan's third merge mode, `per_neighbour_trace`, arrives in
 plan phase 5.
 
-The field's sampling parameters (irradiance / distance texels, biases,
-intensity) are the DDGI settings, so both producers render the same way.
+The field's sampling parameters (irradiance / distance texels, depth
+sharpness, biases, intensity) are the DDGI settings (`Ddgi_config`, passed
+to the renderer's constructor), so both producers render the same way.
 
 ## Layout
 
@@ -147,6 +150,8 @@ recorded into the frame command buffer, and left in
 `2 x atlas width x atlas height x 8` bytes, plus
 `tiles_per_row x tile_rows x 4` bytes for the probe state and
 `atlas width x atlas height x 4` bytes for cascade 0's distance texture.
+The probe field atlases of "Reduce" come on top (the reported total
+`texture_bytes` includes them).
 
 ## Trace
 
@@ -316,14 +321,90 @@ count, not to the trace budget.
   traces from the lower probe to each upper interval start and removes
   the start-point parallax.
 
+## Reduce
+
+`res/editor/shaders/rc_reduce.comp`, recorded by
+`Radiance_cascades_renderer::record_reduce()` right after the merge of every
+tick that traced (doc/plans/radiance_cascades.md section 2 and section 5,
+pass 3). It writes the probe field in exactly the DDGI atlas format
+([ddgi.md](ddgi.md) "Data layout"), so the forward pass, the
+`sample_indirect_diffuse` query and the `DDGI Irradiance` debug mode sample
+it with `erhe_ddgi.glsl` unchanged.
+
+- **Grid.** The field's grid is cascade 0's: its origin, spacing and counts
+  are the `Ddgi_parameters` `get_field()` publishes, with the DDGI
+  sampling settings (irradiance / distance texels, depth sharpness, normal
+  / view bias, intensity). Probes are not relocated: the probe data offset
+  is 0.
+- **Atlases** (`allocate_field()`, on every refit and when a field sampling
+  setting changes): irradiance RGBA16F and distance RG16F, tiles of
+  `texels + 2` with the 1-texel octahedral border, and the probe data
+  RGBA32F, placed by the shared DDGI tiling (`get_probe_field_tile()`,
+  [ddgi.md](ddgi.md) "Data layout"): cascade 0 densities overflow the
+  classic one-row-per-y-layer layout (64 x 16 x 64 probes with 16-texel
+  distance tiles would be 65536 texels wide), and the wrapped rows keep
+  both sides within `max_texture_size`. The cascade 0 budget is capped so
+  the field atlases fit (`get_probe_field_max_probes()`). The field
+  sampling settings live in `Ddgi_config`, which the Settings window edits
+  through reflection and MCP `set_ddgi` without a change notification, so
+  `update_layout()` compares them with the ones the field was allocated
+  with, as it compares the fit settings.
+- **Irradiance** (variant `ERHE_RC_REDUCE_DISTANCE 0`). Every merged
+  cascade 0 texel `j` is the full-range radiance averaged over the
+  octahedral footprint of `j`, so the cosine convolution is exact per
+  footprint: the texel for direction `n` stores
+  `sum_j W_j(n) L_j / sum_j W_j(n)` with
+  `W_j(n) = integral over footprint j of max(0, n . w) dw` - the
+  cosine-weighted mean radiance (`E / pi`) DDGI's irradiance blend stores.
+  Texels whose cascade 0 ray hit a backface are skipped, as the DDGI blend
+  skips backface rays.
+- **Distance** (variant 1). The moments `(d, d^2)` of
+  `d = min(|signed distance|, r0)` of the cascade 0 texels, weighted with
+  `integral over footprint j of pow(max(0, n . w), depth_sharpness) dw`.
+  A miss stores `r0` (the interval end), so a free direction reads at
+  least `r0 >= sqrt(3) * s0`, the cell diagonal: the Chebyshev test of a
+  shading point against a probe of its cell passes unless a surface lies
+  between them within cascade 0's interval.
+- **Weights.** `W_j(n)` depends only on the tile sizes and the lobe
+  exponent, never on the probe, so it is integrated on the CPU
+  (`compute_octahedral_lobe_weights()` in
+  `src/editor/renderers/radiance_cascades_layout.{hpp,cpp}`, unit tested):
+  each cascade 0 texel is split into about `32 / q0` squares per axis of
+  the octahedral parameter, each contributing at its centre direction `w`
+  with the solid angle `dA * |w|_1^3` (the octahedral map's area element).
+  The irradiance weights, the distance weights (both transposed to
+  `[cascade 0 texel][output texel]`, so the invocations of a workgroup read
+  consecutive floats) and the cascade 0 texel solid angles are packed into
+  one read-only storage buffer, created on change only (15 KB at the
+  defaults: 6 and 14 texels, `q0` 4).
+- **Probe state** (written by the irradiance variant): inactive when more
+  than a quarter of the probe's sphere, by solid angle, is cascade 0
+  texels that hit a backface - DDGI's classification rule on cascade 0's
+  rays. It is the one rule in both merge modes: the `visibility_masked`
+  mode's inside bit (64 rays over the full range, nearest hit a backface)
+  answers a different question - whether the probe's merged intervals can
+  carry light - and does not classify the field.
+- **Shape.** One workgroup of 64 invocations per cascade 0 probe (a 2D
+  grid of workgroups, rows of 32768), striding over the tile's texels; the
+  probe's `q0^2` merged texels and signed distances are read once into
+  shared memory (tiles up to 16 x 16), then the border is filled with
+  DDGI's border copy (`res/editor/shaders/erhe_ddgi_border.glsl`). No
+  hysteresis: the raw intervals are blended over time already, and the
+  field is rewritten from merged cascade 0 every update. The two variants
+  write different images, so they need no barrier between them; the
+  atlases are left `shader_read_only_optimal`.
+- **Timing**: its own `Gpu_timer` (`RC reduce`), the `reduce` pass of
+  `get_stats()`, included in the total and the cost figures.
+
 ## Radiance Cascades window
 
 The developer window `Radiance_cascades_window`
 (`src/editor/developer/radiance_cascades_window.{hpp,cpp}`, ini label
 `radiance_cascades`) shows the source combo and, while radiance cascades are
-selected, a table with one row per cascade - probe counts, probe count,
-spacing, tile size, interval, texels, atlas size and memory - plus totals,
-the cascade 0 origin and `r0`; the trace, merge and total GPU times, the
+selected, the probe field's grid and tiling, a table with one row per
+cascade - probe counts, probe count, spacing, tile size, interval, texels,
+atlas size and memory - plus totals, the cascade 0 origin and `r0`; the
+trace, merge, reduce and total GPU times, the
 visibility pass's last time and run count, and the
 cost figures; the debug cascade mask as one checkbox per cascade plus Sky
 (checked bands contribute radiance; they edit `debug_cascade_mask`); and an
@@ -350,14 +431,17 @@ tick records it, so the copy costs nothing while the window is closed.
   unchanged) and returns the layout of the last fit plus the stored
   `config`; the renderer refits on its next tick.
 - `get_indirect_diffuse_stats` reports `source` (the selected value) and a
-  `radiance_cascades` object: `supported`, `active`, `has_field` (false until
-  the reduce pass exists), `merge_mode`, `cascade_count`, `r0`, the total `probe_count`,
+  `radiance_cascades` object: `supported`, `active`, `has_field` (the probe
+  field atlases exist), `field` (`grid_origin`, `grid_spacing`,
+  `grid_counts`, `irradiance_texels`, `distance_texels`,
+  `depth_sharpness`, `tiles_per_row`; null without a field), `merge_mode`,
+  `cascade_count`, `r0`, the total `probe_count`,
   `texels` and `texture_bytes`, `fit_count`, and `cascades`, one entry per
   cascade with `grid_origin`, `grid_spacing`, `grid_counts`, `probe_count`,
   `tile_texels`, `interval` `[start, end]` in metres, `texels`, `atlas_size`
   and `texture_bytes`, and the trace cost ("Trace"): `update_count`,
   `timing_sample_count`, `completed_sweeps`, `texels_per_update`,
-  `rays_per_update`, `gpu_ms` `{trace, merge}` and `gpu_ms_total` (their
+  `rays_per_update`, `gpu_ms` `{trace, merge, reduce}` and `gpu_ms_total` (their
   sum; each `last_ms`, `average_ms`), `timing_history_size`, `ms_per_million_rays`,
   `updates_per_full_refresh` and `full_refresh_ms`, and `visibility`
   `{last_ms, update_count}` (the visibility pass, "Merge") - the fields
@@ -381,9 +465,16 @@ tick records it, so the copy costs nothing while the window is closed.
   texel:[u,v]}]` (at most 4096): `{cascade, probe, texel, probe_position,
   direction, interval, radiance, beta, merged_radiance, merged_beta,
   probe_inside, upper_visible_mask}` (the probe's state, "Merge"),
-  cascade 0 also `signed_distance`.
-- `sample_indirect_diffuse` answers `source` `"ambient"` while radiance
-  cascades are selected: no field is bound.
+  cascade 0 also `signed_distance`. With a field the copy also holds the
+  three field atlases: `field` (the parameters they were copied with) and
+  `field_texels`, index-aligned with the optional input
+  `field_texels: [{probe:[x,y,z], texel:[u,v], atlas}]` (cascade 0 probe,
+  interior texel of the tile, `"irradiance"` or `"distance"`):
+  `{atlas, probe, texel, direction, probe_state, irradiance | moments}`.
+- `sample_indirect_diffuse` samples the radiance cascades field while it
+  is the selected source (`source` `"radiance_cascades"`, `update_count`
+  the renderer's), through the same `ddgi_sample.comp` as DDGI
+  ([ddgi.md](ddgi.md) "Irradiance queries").
 
 ## Verification
 
@@ -472,8 +563,19 @@ tick records it, so the copy costs nothing while the window is closed.
   size limit, tile placement), interval bounds, octahedral round trip and
   2x2 nesting, and the upper-probe indices and weights (for an interior probe
   the weighted upper positions reproduce the lower probe position).
-- `py -3 scripts/gi_verify.py --station all --source radiance_cascades --runs 1`
-  selects the source with `set_indirect_diffuse`, prints each station's
-  cascade layout and stores it under `radiance_cascades` in the JSON record.
-  Until the field exists the station metrics are measured as the flat ambient
-  term (`"sampled": "ambient"` in the record).
+- Reduce, same script and readback ("Reduce"; every supported station,
+  both merge modes): for 3 free interior cascade 0 probes per station, the
+  irradiance and distance field texels containing the normals +y, +x and
+  -z, and the probe state, against the reduce recomputed on the CPU from
+  the read-back merged cascade 0 texels and signed distances of the same
+  copy (the same footprint integration of the weights, backface texels
+  skipped, DDGI's classification threshold): 0 failures, worst relative
+  difference 0.09 % (the half-float store; tolerance 0.2 %).
+- `py -3 scripts/gi_verify.py --station all --source radiance_cascades
+  [--rc-merge-mode interpolate|visibility_masked]` pins `RC_SETTINGS` and
+  the field sampling settings (`DDGI_SETTINGS`) of the creation module,
+  selects the source, prints each station's cascade layout, stores it
+  under `radiance_cascades` in the JSON record, and measures the field
+  like DDGI's. The first full run against DDGI and its gates are in
+  [../plans/radiance_cascades.md](../plans/radiance_cascades.md) section
+  10, "Radiance cascades (phase 4)".

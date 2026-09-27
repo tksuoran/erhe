@@ -69,8 +69,17 @@ void Radiance_cascades_window::imgui()
         ImGui::TextUnformatted("No visible content to fit the cascades to.");
         return;
     }
-    if (!renderer->has_field()) {
-        ImGui::TextUnformatted("Trace and merge only: no reduce yet; the forward pass uses the flat ambient term.");
+    if (renderer->has_field()) {
+        // The field the forward pass samples (doc/editor/radiance_cascades.md
+        // "Reduce"): cascade 0's grid in the DDGI atlas format.
+        const erhe::scene_renderer::Ddgi_parameters field = renderer->get_forward_parameters();
+        ImGui::Text(
+            "Probe field: %d x %d x %d probes, irradiance %d / distance %d texels, %d tiles per row",
+            field.grid_counts.x, field.grid_counts.y, field.grid_counts.z,
+            field.irradiance_texels, field.distance_texels, field.tiles_per_row
+        );
+    } else {
+        ImGui::TextUnformatted("No probe field yet; the forward pass uses the flat ambient term.");
     }
 
     const Radiance_cascade& cascade0 = layout.cascades[0];
@@ -111,10 +120,10 @@ void Radiance_cascades_window::imgui()
         ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(renderer->get_texture_byte_count())));
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade, plus the cascade 0 R32F distance texture.");
+    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade, plus the cascade 0 R32F distance texture; the total includes the probe field atlases.");
 
-    // GPU cost of the trace and merge (doc/editor/radiance_cascades.md
-    // "Trace", "Merge").
+    // GPU cost of the trace, merge and reduce
+    // (doc/editor/radiance_cascades.md "Trace", "Merge", "Reduce").
     const Radiance_cascades_renderer::Stats stats = renderer->get_stats();
     if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("radiance_cascades_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
@@ -130,6 +139,7 @@ void Radiance_cascades_window::imgui()
             };
             row("trace", stats.trace);
             row("merge", stats.merge);
+            row("reduce", stats.reduce);
             row("total", stats.total);
             ImGui::EndTable();
         }

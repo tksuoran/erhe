@@ -57,6 +57,18 @@ readback (every texel carries its merged value too):
   texels, and fails only when the median exceeds APPROX_MEDIAN_BOUND or
   p90 exceeds APPROX_P90_BOUND (bounds set from the measured stations,
   doc/editor/radiance_cascades.md "Verification").
+- reduce exact algebra (doc/editor/radiance_cascades.md "Reduce"): for
+  REDUCE_PROBES cascade 0 probes of each station (free interior probes,
+  fixed picks), the probe field texels of REDUCE_NORMALS - irradiance and
+  distance moments at the texel containing each normal, and the probe data
+  state - against the reduce recomputed on the CPU from the READ-BACK
+  merged cascade 0 texels and signed distances of the same copy: lobe
+  weights integrated over each cascade 0 texel footprint exactly like
+  compute_octahedral_lobe_weights() (cosine for irradiance, backface texels
+  skipped; pow(cos, depth_sharpness) for the moments of
+  min(|distance|, r0)), and the solid-angle backface fraction against
+  DDGI's 0.25 classification threshold. Tolerance REDUCE_TOLERANCE
+  relative (floor REDUCE_FLOOR): the half-float store.
 - --mask-check (cornell by default): the merge is linear in the interval
   radiances, so the mean merged cascade 0 radiance with every band shown
   equals the sum of the means with one band shown at a time
@@ -116,6 +128,12 @@ APPROX_FLOOR_FRACTION   = 0.1     # relative error denominator floor, of the sam
 APPROX_MEDIAN_BOUND     = 0.25
 APPROX_P90_BOUND        = 1.5
 MASK_SUM_TOLERANCE      = 2.0e-3  # relative
+REDUCE_PROBES           = 3
+REDUCE_NORMALS          = ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0))
+REDUCE_TOLERANCE        = 2.0e-3  # relative: the half-float store rounds by at most 2^-11
+REDUCE_FLOOR            = 1.0e-4  # absolute floor of the relative error denominator
+OCTAHEDRAL_INTEGRATION_CELLS = 32  # c_octahedral_integration_cells (radiance_cascades_layout.hpp)
+BACKFACE_FRACTION_THRESHOLD  = 0.25  # DDGI's classification rule
 SKY_MASK_BIT            = 12      # Radiance_cascades_renderer::c_sky_mask_bit
 
 
@@ -423,11 +441,13 @@ def check_station(c, name, merge_modes):
         print(f"  {name} merge mode {merge_mode}:", flush=True)
         failures += check_merge_algebra(name, rc, texels_by_address, ambient)
         failures += check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambient)
+        failures += check_reduce(c, name, c.call("get_indirect_diffuse_stats")["radiance_cascades"], boxes)
         stats = c.call("get_indirect_diffuse_stats").get("radiance_cascades", {})
         gpu_ms = stats.get("gpu_ms", {})
         print(f"  {name} cost ({merge_mode}): {stats.get('texels')} texels, {stats.get('texels_per_update')} per update; "
               f"GPU ms average trace {gpu_ms.get('trace', {}).get('average_ms', 0.0):.3f}, "
-              f"merge {gpu_ms.get('merge', {}).get('average_ms', 0.0):.3f} ({stats.get('timing_sample_count')} samples); "
+              f"merge {gpu_ms.get('merge', {}).get('average_ms', 0.0):.3f}, "
+              f"reduce {gpu_ms.get('reduce', {}).get('average_ms', 0.0):.3f} ({stats.get('timing_sample_count')} samples); "
               f"visibility pass {stats.get('visibility', {}).get('last_ms', 0.0):.3f} ms "
               f"(runs {stats.get('visibility', {}).get('update_count')})", flush=True)
     c.mutate("set_radiance_cascades", {"merge_mode": "interpolate"})
@@ -730,6 +750,141 @@ def check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambien
               f"truth {truth:.5f}, nearest part {nearest_face_distance(texel['probe_position'], boxes):.3f} m, "
               f"hidden upper weight per cascade {' '.join(f'{w:.2f}' for w in hidden_by_probe[tuple(texel['probe'])])}")
     return 0 if ok else 1
+
+
+# --- reduce check ---------------------------------------------------------------------
+
+def octahedral_encode(d):
+    s = abs(d[0]) + abs(d[1]) + abs(d[2])
+    n = [d[0] / s, d[1] / s, d[2] / s]
+    if n[2] < 0.0:
+        return [(1.0 - abs(n[1])) * (1.0 if n[0] >= 0.0 else -1.0),
+                (1.0 - abs(n[0])) * (1.0 if n[1] >= 0.0 else -1.0)]
+    return [n[0], n[1]]
+
+
+def texel_direction(texel, tile_texels):
+    return octahedral_decode([(((texel[0] + 0.5) / tile_texels) * 2.0) - 1.0,
+                              (((texel[1] + 0.5) / tile_texels) * 2.0) - 1.0])
+
+
+def direction_texel(direction, tile_texels):
+    f = octahedral_encode(direction)
+    return [min(max(int(math.floor(((f[i] * 0.5) + 0.5) * tile_texels)), 0), tile_texels - 1) for i in range(2)]
+
+
+def texel_subdivisions(tile_texels):
+    """(texel index, direction, solid angle) of every integration square of a
+    tile, as for_each_texel_subdivision() in radiance_cascades_layout.cpp."""
+    s = max(1, OCTAHEDRAL_INTEGRATION_CELLS // max(1, tile_texels))
+    cells = tile_texels * s
+    side = 2.0 / cells
+    out = []
+    for v in range(tile_texels):
+        for u in range(tile_texels):
+            for b in range(s):
+                for a in range(s):
+                    f = [-1.0 + (((u * s) + a + 0.5) * side), -1.0 + (((v * s) + b + 0.5) * side)]
+                    w = octahedral_decode(f)
+                    l1 = abs(w[0]) + abs(w[1]) + abs(w[2])
+                    out.append(((v * tile_texels) + u, w, side * side * l1 * l1 * l1))
+    return out
+
+
+def lobe_weights(direction, tile_texels, exponent, subdivisions):
+    weights = [0.0] * (tile_texels * tile_texels)
+    for index, w, solid_angle in subdivisions:
+        cos_angle = v_dot(direction, w)
+        if cos_angle > 0.0:
+            weights[index] += (cos_angle ** exponent) * solid_angle
+    return weights
+
+
+def relative_error(measured, expected):
+    return max(abs(m - e) / max(abs(e), REDUCE_FLOOR) for m, e in zip(measured, expected))
+
+
+def check_reduce(c, name, rc, boxes):
+    cascade0 = rc["cascades"][0]
+    q = cascade0["tile_texels"]
+    r0 = rc["r0"]
+    nx, ny, nz = cascade0["grid_counts"]
+    lo, hi = interior_of(name)
+    free = []
+    for z in range(nz):
+        for y in range(ny):
+            for x in range(nx):
+                position = [cascade0["grid_origin"][i] + ([x, y, z][i] * cascade0["grid_spacing"][i]) for i in range(3)]
+                if inside_box(position, lo, hi) and not inside_any(position, boxes):
+                    free.append([x, y, z])
+    if len(free) < REDUCE_PROBES:
+        print(f"  {name} reduce: fewer than {REDUCE_PROBES} free cascade 0 probes")
+        return 1
+    probes = [free[((i + 1) * len(free)) // (REDUCE_PROBES + 1)] for i in range(REDUCE_PROBES)]
+    field = rc.get("field") or {}
+    irradiance_texels = field.get("irradiance_texels")
+    distance_texels = field.get("distance_texels")
+    if irradiance_texels is None:
+        print(f"  {name} reduce: FAIL no probe field in get_indirect_diffuse_stats")
+        return 1
+    texel_requests = [{"cascade": 0, "probe": p, "texel": [u, v]} for p in probes for v in range(q) for u in range(q)]
+    field_requests = []
+    for p in probes:
+        for normal in REDUCE_NORMALS:
+            field_requests.append({"probe": p, "texel": direction_texel(normal, irradiance_texels), "atlas": "irradiance"})
+            field_requests.append({"probe": p, "texel": direction_texel(normal, distance_texels), "atlas": "distance"})
+    result = c.call("get_radiance_cascades_texels", {"texels": texel_requests, "field_texels": field_requests})
+    depth_sharpness = result["field"]["depth_sharpness"]
+    by_address = {(tuple(t["probe"]), tuple(t["texel"])): t for t in result["texels"]}
+    subdivisions = texel_subdivisions(q)
+    solid_angles = [0.0] * (q * q)
+    for index, _, solid_angle in subdivisions:
+        solid_angles[index] += solid_angle
+
+    failures = 0
+    worst = 0.0
+    checked = 0
+    for entry in result["field_texels"]:
+        probe = tuple(entry["probe"])
+        texels = [by_address[(probe, (j % q, j // q))] for j in range(q * q)]
+        # The field texel's own direction: the centre of its output texel.
+        tile = irradiance_texels if entry["atlas"] == "irradiance" else distance_texels
+        direction = texel_direction(entry["texel"], tile)
+        if entry["atlas"] == "irradiance":
+            weights = lobe_weights(direction, q, 1.0, subdivisions)
+            total = [0.0, 0.0, 0.0]
+            weight_sum = 0.0
+            for j, texel in enumerate(texels):
+                if (weights[j] <= 0.0) or (texel["signed_distance"] < 0.0):
+                    continue
+                total = v_add(total, v_mul(texel["merged_radiance"], weights[j]))
+                weight_sum += weights[j]
+            expected = v_mul(total, 1.0 / weight_sum) if weight_sum > 1.0e-9 else [0.0, 0.0, 0.0]
+            measured = entry["irradiance"]
+        else:
+            weights = lobe_weights(direction, q, depth_sharpness, subdivisions)
+            total = [0.0, 0.0]
+            weight_sum = 0.0
+            for j, texel in enumerate(texels):
+                if weights[j] <= 0.0:
+                    continue
+                d = min(abs(texel["signed_distance"]), r0)
+                total = [total[0] + (d * weights[j]), total[1] + (d * d * weights[j])]
+                weight_sum += weights[j]
+            expected = [total[0] / weight_sum, total[1] / weight_sum] if weight_sum > 1.0e-9 else [0.0, 0.0]
+            measured = entry["moments"]
+        backface = sum(solid_angles[j] for j, texel in enumerate(texels) if texel["signed_distance"] < 0.0)
+        expected_state = 0.0 if backface > (BACKFACE_FRACTION_THRESHOLD * sum(solid_angles)) else 1.0
+        error = relative_error(measured, expected)
+        worst = max(worst, error)
+        checked += 1
+        if (error > REDUCE_TOLERANCE) or (entry["probe_state"] != expected_state):
+            failures += 1
+            print(f"      FAIL probe {list(probe)} {entry['atlas']} texel {entry['texel']}: measured {measured}, "
+                  f"expected {expected}, state {entry['probe_state']} (expected {expected_state})")
+    print(f"  {name} reduce exact algebra: {'PASS' if failures == 0 else 'FAIL'} {checked} field texels of "
+          f"{REDUCE_PROBES} probes {[list(p) for p in probes]}, worst relative difference {worst:.5f}", flush=True)
+    return failures
 
 
 def check_mask_decomposition(c, name):

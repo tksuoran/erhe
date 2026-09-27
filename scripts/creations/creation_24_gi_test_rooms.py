@@ -328,6 +328,34 @@ DDGI_SETTINGS = {
 }
 
 
+# Radiance cascades settings every station runs with: the
+# Radiance_cascades_config defaults, pinned for the same reason. The field's
+# sampling parameters (irradiance / distance texels, biases, intensity) are
+# the DDGI settings, pinned by set_radiance_cascades() through DDGI_SETTINGS.
+RC_SETTINGS = {
+    "probe_spacing_m":      0.5,
+    "volume_padding_m":     1.0,
+    "max_probes_cascade0":  65536,
+    "max_cascades":         8,
+    "cascade0_tile_texels": 4,
+    "interval_scale":       1.0,
+    "texels_per_frame":     65536,
+    "hysteresis":           0.9,
+    "debug_cascade_mask":   0,
+}
+
+
+def set_radiance_cascades(c, merge_mode="interpolate"):
+    """Pin the field sampling settings (DDGI_SETTINGS, without selecting DDGI)
+    and the radiance cascades settings (RC_SETTINGS plus merge_mode), and
+    select radiance cascades as the indirect diffuse source."""
+    c.mutate("set_ddgi", dict(DDGI_SETTINGS))
+    settings = dict(RC_SETTINGS)
+    settings["merge_mode"] = merge_mode
+    c.mutate("set_radiance_cascades", settings)
+    return set_indirect_diffuse(c, "radiance_cascades")
+
+
 def set_indirect_diffuse(c, source):
     """Select the indirect diffuse producer: "ambient", "ddgi" or
     "radiance_cascades" (doc/editor/radiance_cascades.md "Source selection")."""

@@ -38,6 +38,7 @@ namespace erhe::scene_renderer {
 }
 
 // erhe_codegen-generated config structs live in the global namespace.
+struct Ddgi_config;
 struct Radiance_cascades_config;
 enum class Radiance_cascades_merge_mode : unsigned int;
 
@@ -75,10 +76,11 @@ enum class Rc_preview_channel : unsigned int
 // The timed GPU passes of one radiance cascades update.
 enum class Rc_pass : unsigned int
 {
-    trace = 0,
-    merge = 1
+    trace  = 0,
+    merge  = 1,
+    reduce = 2
 };
-constexpr std::size_t c_rc_pass_count = 2;
+constexpr std::size_t c_rc_pass_count = 3;
 
 // World-space radiance cascades (doc/editor/radiance_cascades.md,
 // doc/plans/radiance_cascades.md): the second producer of the indirect
@@ -88,10 +90,10 @@ constexpr std::size_t c_rc_pass_count = 2;
 // (fit_radiance_cascades()), allocates each cascade's raw and merged
 // radiance atlases, and traces the raw intervals (rc_trace.comp) under a
 // per-frame texel budget, then merges every cascade with everything beyond
-// it (rc_merge.comp, top cascade down to cascade 0). The reduce pass is a
-// later phase of the plan: until it exists the renderer produces no probe
-// field (has_field() is false) and the forward pass keeps the flat ambient
-// term while this source is selected.
+// it (rc_merge.comp, top cascade down to cascade 0), and reduces merged
+// cascade 0 into the probe field atlases of the DDGI format
+// (rc_reduce.comp): the field the forward pass samples while this source
+// is selected (get_field()).
 //
 // Requires Device_info::use_ray_query; is_supported() is false otherwise and
 // tick() does nothing.
@@ -128,16 +130,17 @@ public:
         double average_ms{0.0};
     };
 
-    // Measured cost of the trace and merge (doc/plans/radiance_cascades.md
-    // section 8). GPU timings lag the recorded update by the frames in
-    // flight.
+    // Measured cost of the trace, merge and reduce
+    // (doc/plans/radiance_cascades.md section 8). GPU timings lag the
+    // recorded update by the frames in flight.
     class Stats
     {
     public:
         Pass_time trace{};
         Pass_time merge{};
-        Pass_time total{};                       // trace + merge
-        uint64_t  update_count            {0};   // ticks that dispatched the trace (and the merge)
+        Pass_time reduce{};
+        Pass_time total{};                       // trace + merge + reduce
+        uint64_t  update_count            {0};   // ticks that dispatched the trace (and the merge and reduce)
         uint64_t  timing_sample_count     {0};   // GPU timing samples taken
         uint64_t  completed_sweeps        {0};   // full passes of the cursor over all texels since the atlases were allocated
         int64_t   texels_per_update       {0};   // the budget clamped to the total texel count
@@ -177,6 +180,9 @@ public:
     // this bit masks the sky beyond the top cascade.
     static constexpr int c_sky_mask_bit = c_max_radiance_cascades;
 
+    // ddgi_config supplies the field's sampling parameters (irradiance /
+    // distance texels, depth sharpness, biases, intensity), so both
+    // producers' fields render the same way.
     Radiance_cascades_renderer(
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
@@ -185,6 +191,7 @@ public:
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
         const Radiance_cascades_config&          config,
+        const Ddgi_config&                       ddgi_config,
         Producer_selection                       selection
     );
     ~Radiance_cascades_renderer() noexcept;
@@ -198,9 +205,14 @@ public:
     void               set_selection(Producer_selection selection);
     // Selected AND supported AND a layout was fitted and allocated.
     [[nodiscard]] auto is_active   () const -> bool;
-    // The renderer writes the probe field the forward pass samples. False
-    // until the reduce pass exists (plan phase 4).
+    // Active and the probe field atlases exist: the renderer writes the
+    // field the forward pass samples.
     [[nodiscard]] auto has_field   () const -> bool;
+    // The field (get_indirect_diffuse_field()): cascade 0's grid, the
+    // sampling parameters of Ddgi_config and the three atlases rc_reduce.comp
+    // writes. Invalid unless has_field().
+    [[nodiscard]] auto get_field             () const -> Probe_field;
+    [[nodiscard]] auto get_forward_parameters() const -> erhe::scene_renderer::Ddgi_parameters;
 
     // The merge mode (Radiance_cascades_config::merge_mode). Called by the
     // change sites (Radiance Cascades window combo, MCP
@@ -245,6 +257,17 @@ public:
     [[nodiscard]] auto read_merged_texel          (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
     // Cascade 0 signed hit distance of one texel.
     [[nodiscard]] auto read_distance_texel        (const glm::ivec3& probe, const glm::ivec2& texel) const -> float;
+    // The snapshot holds the probe field atlases (irradiance, distance,
+    // probe data), copied with the parameters get_readback_field_parameters()
+    // reports.
+    [[nodiscard]] auto readback_has_field           () const -> bool;
+    [[nodiscard]] auto get_readback_field_parameters() const -> const erhe::scene_renderer::Ddgi_parameters&;
+    // Interior texel (u, v) of a probe's irradiance tile (rgb) or distance
+    // tile (mean, mean squared distance), and the probe data texel (xyz
+    // offset, w state); readback_has_field() must be true.
+    [[nodiscard]] auto read_field_irradiance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec3;
+    [[nodiscard]] auto read_field_distance_texel  (const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec2;
+    [[nodiscard]] auto read_field_probe_data      (const glm::ivec3& probe) const -> glm::vec4;
     // The snapshot holds probe states (the visibility_masked mode was active
     // at copy time).
     [[nodiscard]] auto readback_has_probe_states  () const -> bool;
@@ -264,9 +287,9 @@ public:
 
     // Refits the cascades and reallocates the atlases when the content
     // bounds or a fit setting changed, then records this frame's budgeted
-    // trace and the merge of all cascades. Editor::tick() calls it only
-    // while radiance cascades is the selected source. Must be called
-    // outside a render pass.
+    // trace, the merge of all cascades and the reduce into the probe field.
+    // Editor::tick() calls it only while radiance cascades is the selected
+    // source. Must be called outside a render pass.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
 private:
@@ -278,6 +301,10 @@ private:
     // Probe state textures of the visibility_masked merge mode.
     void               allocate_state_textures(erhe::graphics::Command_buffer& command_buffer);
     void               release_state_textures ();
+    // Probe field atlases of cascade 0's grid and the reduce weight buffer,
+    // (re)created when the layout or the field's sampling settings change.
+    void               allocate_field         (erhe::graphics::Command_buffer& command_buffer);
+    void               release_field          ();
 
     // Records the visibility pass (rc_visibility.comp): per probe of every
     // cascade, whether it is inside geometry and which of its 8 upper probes
@@ -303,6 +330,10 @@ private:
     // written by this frame's trace and the merged atlas of the cascade
     // above written by the previous dispatch.
     void record_merge(erhe::graphics::Command_buffer& command_buffer, const glm::vec3& sky_radiance);
+    // Reduces merged cascade 0 into the probe field atlases (rc_reduce.comp):
+    // the irradiance variant writes the irradiance atlas and the probe data,
+    // the distance variant the distance atlas; one workgroup per probe.
+    void record_reduce(erhe::graphics::Command_buffer& command_buffer);
     // Copies every raw and merged atlas and the distance texture into the
     // readback buffer (request_texel_readback()).
     void record_texel_readback(erhe::graphics::Command_buffer& command_buffer);
@@ -322,6 +353,9 @@ private:
     // Live reference to the editor's Radiance_cascades_config
     // (editor_settings.radiance_cascades).
     const Radiance_cascades_config& m_config;
+    // Live reference to the editor's Ddgi_config: the field's sampling
+    // parameters.
+    const Ddgi_config&              m_ddgi_config;
     Producer_selection              m_selection{Producer_selection::deselected};
     bool                            m_supported{false};
 
@@ -432,6 +466,55 @@ private:
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Items_removed_message>         m_items_removed_subscription;
 
+    // Probe field (rc_reduce.comp): the three DDGI-format atlases for
+    // cascade 0's grid, the settings they were allocated with, and the
+    // reduce weights - per output texel the lobe integral over each cascade
+    // 0 texel footprint (compute_octahedral_lobe_weights()), cosine for
+    // irradiance, pow(cos, depth_sharpness) for distance, then the cascade 0
+    // texel solid angles - the lobe tables transposed to [cascade 0 texel]
+    // [output texel], packed four floats per vec4 in one read-only
+    // storage buffer, created on change only.
+    class Field_settings
+    {
+    public:
+        int   irradiance_texels{0};
+        int   distance_texels  {0};
+        float depth_sharpness  {0.0f};
+
+        [[nodiscard]] auto operator==(const Field_settings& other) const -> bool = default;
+    };
+    Field_settings                                            m_field_settings{};
+    int                                                       m_field_tiles_per_row{0};
+    std::shared_ptr<erhe::graphics::Texture>                  m_field_irradiance;
+    std::shared_ptr<erhe::graphics::Texture>                  m_field_distance;
+    std::shared_ptr<erhe::graphics::Texture>                  m_field_probe_data;
+    std::size_t                                               m_field_byte_count{0};
+    std::unique_ptr<erhe::graphics::Buffer>                   m_reduce_weights_buffer;
+    std::size_t                                               m_reduce_weights_byte_count{0};
+    uint32_t                                                  m_reduce_irradiance_weights_offset{0}; // in floats
+    uint32_t                                                  m_reduce_distance_weights_offset  {0};
+    uint32_t                                                  m_reduce_solid_angle_offset       {0};
+    erhe::graphics::Shader_resource                           m_reduce_block;
+    erhe::graphics::Shader_resource                           m_reduce_weights_block;
+    class Reduce_offsets
+    {
+    public:
+        std::size_t grid_counts{0};
+        std::size_t params     {0};
+        std::size_t weights    {0};
+        std::size_t limits     {0};
+    };
+    Reduce_offsets                                            m_reduce_offsets{};
+    class Reduce_pass
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Bind_group_layout>        bind_group_layout;
+        std::unique_ptr<erhe::graphics::Reloadable_shader_stages> shader_stages;
+        std::unique_ptr<erhe::graphics::Compute_pipeline>         pipeline;
+    };
+    Reduce_pass                                               m_reduce_irradiance;
+    Reduce_pass                                               m_reduce_distance;
+
     // Atlas preview (rc_preview.comp): its own control block and layout,
     // the shared control ring buffer.
     erhe::graphics::Shader_resource                           m_preview_block;
@@ -475,6 +558,14 @@ private:
     std::size_t                                              m_readback_distance_offset{0};
     std::array<std::size_t, c_max_radiance_cascades>         m_readback_state_offsets{};
     bool                                                     m_readback_has_states{false};
+    bool                                                     m_readback_has_field {false};
+    erhe::scene_renderer::Ddgi_parameters                    m_readback_field_parameters{};
+    std::size_t                                              m_readback_field_irradiance_offset{0};
+    std::size_t                                              m_readback_field_distance_offset  {0};
+    std::size_t                                              m_readback_field_probe_data_offset{0};
+    int                                                      m_readback_field_irradiance_width {0};
+    int                                                      m_readback_field_distance_width   {0};
+    int                                                      m_readback_field_probe_data_width {0};
     std::size_t                                              m_readback_byte_count{0};
     std::vector<std::byte>                                   m_readback_snapshot;
     std::array<Cascade_summary, c_max_radiance_cascades>     m_readback_summaries{};

@@ -45,8 +45,23 @@ debug mode (33) make it visible.
 ## Data layout
 
 Grid: `nx * ny * nz` probes over the padded content AABB, spacing from settings,
-total clamped to `max_probes`. `probe_index = x + nx * (y + ny * z)`.
-Atlas tiling: `tiles_x = nx * nz`, `tiles_y = ny`.
+total clamped to `max_probes` and to the probes whose tiles fit the texture
+size limit (`get_probe_field_max_probes()`). `probe_index = x + nx * (y + ny * z)`.
+
+Atlas tiling, shared by every producer of the probe field and the forward
+pass (`get_probe_field_tile()` in `src/editor/renderers/probe_grid.{hpp,cpp}`,
+`ddgi_probe_tile()` in `res/shaders/erhe_ddgi_tiles.glsl`): probe
+`(x, y, z)` has the tile index `x + nx * (z + nz * y)`, wrapped into rows of
+`tiles_per_row` tiles. `tiles_per_row` is `nx * nz` - one tile row per y
+layer, tile `(x + nx * z, y)` - when both atlas sides then fit
+`Device_info::max_texture_size` with the larger (distance) tile, otherwise
+`ceil(sqrt(probe count))`, which keeps the atlas close to square; the
+probe data texture has one texel per tile. `tiles_per_row` rides in
+`Ddgi_parameters` (`light_block.ddgi_texels.z`) for the forward pass and in
+the DDGI control block (`atlas.x`) for the probe update passes. The
+octahedral border copy of the blend passes is
+`res/editor/shaders/erhe_ddgi_border.glsl`, shared with the radiance
+cascades reduce.
 
 | Resource | Format | Size | Purpose |
 |---|---|---|---|
@@ -131,9 +146,10 @@ mirroring the lightmap tile cursor.
   `Light_buffer::bind_ddgi(...)` with 1x1 black fallbacks from both
   `Forward_renderer` begin-pass sites.
 - Grid parameters ride in the existing `Light_block` (grid origin, spacing,
-  counts + rays, and a params vec4 of normal bias / view bias / depth
-  sharpness / intensity) rather than a new binding point; `Light_buffer::update()` takes a
-  `Ddgi_parameters` argument.
+  counts, texels - irradiance, distance, tiles per atlas row - and a params
+  vec4 of normal bias / view bias / depth sharpness / intensity) rather than
+  a new binding point; `Light_buffer::update()` takes a `Ddgi_parameters`
+  argument.
 - Variant gating: `X(USE_DDGI)` in `ERHE_SHADER_BOOL`
   (`src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp`), seeded
   scene-level by `Forward_renderer` like the light counts. The init-time
@@ -155,8 +171,10 @@ lifecycle:
   `App_context` in `fill_app_context()`. A part constructor may not read
   `context.editor_settings` - it is assigned after part construction.
 - Ticked from `Editor::tick()` after `flush_draw_lists()`, recording into
-  `m_app_context.current_command_buffer`, then
-  `m_forward_renderer->set_ddgi(irradiance, distance, probe_data, params)`.
+  `m_app_context.current_command_buffer`. `Editor::tick()` then publishes
+  the selected producer's field (`get_indirect_diffuse_field()`,
+  `Ddgi_renderer::get_field()` while DDGI is selected) with
+  `m_forward_renderer->set_ddgi(params, irradiance, distance, probe_data)`.
   The volume is scene-global, so it is neither a rendergraph node nor per-view.
 - `is_supported()` mirrors `Ray_trace_renderer::is_supported()`.
 - `Ddgi_renderer` is also a `Renderable`: the probe overlay
@@ -220,14 +238,17 @@ every other station 0 / 0.
 
 The MCP tool `sample_indirect_diffuse` evaluates the field at world points and
 returns linear float RGB, so verification measures the indirect term itself
-instead of an 8-bit tonemapped screenshot of it. While DDGI is active,
+instead of an 8-bit tonemapped screenshot of it. While a field is published,
 `res/editor/shaders/ddgi_sample.comp` includes `erhe_ddgi.glsl` and calls
 `ddgi_sample_irradiance` - the forward pass's function - with the forward
-pass's light block contents (`Ddgi_renderer::get_forward_parameters()`, the
-single source of the `Ddgi_parameters` `Editor::tick()` publishes, plus the
-scene ambient) and the same three atlases and sampler. Each result is exactly
-what `standard.frag` multiplies by base colour and occlusion, the configured
-`intensity` included.
+pass's light block contents (the `Probe_field` of `get_indirect_diffuse_field()`
+in `src/editor/renderers/indirect_diffuse.{hpp,cpp}`, the single source of what
+`Editor::tick()` publishes, plus the scene ambient) and the same three
+atlases and sampler. The query machinery lives in `Ddgi_renderer`, but it
+samples whichever producer is selected: DDGI's field or the radiance
+cascades field ([radiance_cascades.md](radiance_cascades.md) "Reduce").
+Each result is exactly what `standard.frag` multiplies by base colour and
+occlusion, the configured `intensity` included.
 
 - Arguments: `samples` (1 to `c_max_irradiance_query_points` = 4096 entries of
   `{position, normal}`; the normal is normalized) and an optional
@@ -235,18 +256,19 @@ what `standard.frag` multiplies by base colour and occlusion, the configured
   `standard.frag`'s `V`: `normalize(view_position - position)`, or the normal
   when `view_position` is omitted (the sample point is then biased by
   `normal_bias + view_bias` along the normal).
-- Result: `source` (`"ddgi"` or `"ambient"`), `update_count` (the field's
-  update counter when the query was recorded, the counter
-  `get_indirect_diffuse_stats` reports; 0 for `ambient`), `intensity` and
-  `intensity_included: true` (ddgi only), `view_direction` (`"normal"` or
+- Result: `source` (`"ddgi"`, `"radiance_cascades"` or `"ambient"`),
+  `update_count` (the producer's update counter when the query was recorded,
+  the counter `get_indirect_diffuse_stats` reports; 0 for `ambient`),
+  `intensity` and `intensity_included: true` (with a field), `view_direction` (`"normal"` or
   `"toward_view_position"`), `point_count`, and `samples`, index-aligned with
   the input, each `{irradiance: [r, g, b]}`.
 - With no active field the tool answers immediately with the flat scene
   ambient per sample - what the forward pass shades with then.
 - Flow: the first MCP pass hands the points to
   `Ddgi_renderer::begin_irradiance_query()` and defers the request;
-  `Editor::tick()` calls `record_irradiance_query()` right after the probe
-  update, which fills a persistent host-visible input buffer, dispatches one
+  `Editor::tick()` calls `record_irradiance_query()` with the field it just
+  published, after the producers' updates, which fills a persistent
+  host-visible input buffer, dispatches one
   thread per point into a persistent host-visible output buffer and records
   the frame index; later passes poll `poll_irradiance_query()`, which reads the
   results back once `Device::is_frame_completed()` reports that frame retired

@@ -7,15 +7,17 @@ the indirect diffuse source, waits until the field has converged and measures
 the section 10 metrics with the MCP tool `sample_indirect_diffuse` (linear
 float irradiance at the station's world sample points, doc/editor/ddgi.md
 "Irradiance queries") and the cost from `get_indirect_diffuse_stats`.
-The source is selected with the MCP tool `set_indirect_diffuse`. A source
-that produces no field yet (radiance cascades before the reduce pass,
-doc/plans/radiance_cascades.md phase 4) builds its layout - printed per
-station and stored under "radiance_cascades" in the JSON record - and is
-measured as the flat ambient term it leaves in place ("sampled": "ambient").
+The source is selected with the MCP tool `set_indirect_diffuse`. Radiance
+cascades run with the pinned RC_SETTINGS of the creation module and the
+merge mode of --rc-merge-mode; their cascade layout is printed per station
+and stored under "radiance_cascades" in the JSON record. A source that
+produces no field is measured as the flat ambient term it leaves in place
+("sampled": "ambient").
 
 Usage:
     py -3 scripts/gi_verify.py [--station NAME|all] [--source ambient|ddgi|radiance_cascades]
                                [--compare A,B] [--runs N] [--enforce]
+                               [--rc-merge-mode interpolate|visibility_masked]
                                [--screenshot-reference DIR | --screenshot-compare DIR]
                                [--screenshot-source render|window]
                                [--reuse] [--port N] [--editor PATH]
@@ -254,18 +256,17 @@ def stop_editor(c, process):
 class Field:
     """Source selection, sampling and stats for one source."""
 
-    def __init__(self, c, source, tool_names):
+    def __init__(self, c, source, tool_names, rc_merge_mode="interpolate"):
         self.c = c
         self.source = source
+        self.rc_merge_mode = rc_merge_mode
         self.tool_names = tool_names
         # group -> per-point luminance of the station's quality measurement
         # (measure_sample); cleared per station by run_station.
         self.measured = {}
         # The field sample_indirect_diffuse answers from (set by select()):
         # the source itself, or "ambient" while the source produces no field
-        # yet (radiance cascades before the reduce pass,
-        # doc/plans/radiance_cascades.md phase 4) - its metrics are then the
-        # flat ambient term's.
+        # - its metrics are then the flat ambient term's.
         self.sampled = source
 
     def available(self):
@@ -277,6 +278,8 @@ class Field:
         layout. Returns the radiance cascades stats, or None."""
         if self.source == "ddgi":
             rooms.set_ddgi(self.c, True)
+        elif self.source == "radiance_cascades":
+            rooms.set_radiance_cascades(self.c, self.rc_merge_mode)
         else:
             rooms.set_indirect_diffuse(self.c, self.source)
         self.sampled = self.source
@@ -341,7 +344,8 @@ class Field:
         if self.sampled == "ambient":
             return 0
         per_refresh = int(self.stats().get("updates_per_full_refresh", 1) or 1)
-        hysteresis = rooms.DDGI_SETTINGS["hysteresis"]
+        settings = rooms.RC_SETTINGS if (self.source == "radiance_cascades") else rooms.DDGI_SETTINGS
+        hysteresis = settings["hysteresis"]
         return max(per_refresh, int(math.ceil(1.0 / (1.0 - hysteresis))))
 
     def wait_updates(self, target, deadline_s=60.0):
@@ -735,6 +739,8 @@ def run_station(c, field, name, shot_dir, args):
     reference = field.reference(info["samples"])
     field.measured = {}
     record = {"station": name, "source": field.source, "sampled": field.sampled, "grid": info["grid"], "metrics": {}}
+    if field.source == "radiance_cascades":
+        record["rc_merge_mode"] = field.rc_merge_mode
     if rc_layout is not None:
         record["radiance_cascades"] = {k: rc_layout.get(k) for k in
                                        ("cascade_count", "r0", "probe_count", "texels", "texture_bytes", "cascades")}
@@ -858,6 +864,8 @@ def main():
     parser.add_argument("--compare", default=None, metavar="A,B", help="two sources measured back to back per station")
     parser.add_argument("--runs", type=int, default=3, help="full runs; each metric is the worst over the runs")
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
+    parser.add_argument("--rc-merge-mode", default="interpolate", choices=["interpolate", "visibility_masked"],
+                        help="radiance cascades merge mode (doc/editor/radiance_cascades.md \"Merge\")")
     parser.add_argument("--screenshot-reference", default=None, metavar="DIR")
     parser.add_argument("--screenshot-compare", default=None, metavar="DIR")
     parser.add_argument("--screenshot-source", default="render", choices=["render", "window"],
@@ -884,6 +892,8 @@ def main():
 
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     label = "_vs_".join(sources)
+    if "radiance_cascades" in sources:
+        label += "_" + args.rc_merge_mode
     shot_root = os.path.join(OUT_DIR, f"{label}_{stamp}")
 
     backup = None
@@ -901,7 +911,7 @@ def main():
             if pid != process.pid:
                 raise RuntimeError(f"port {port} is served by pid {pid}, not the launched editor {process.pid}")
         tool_names = c.client.tool_names()
-        fields = {s: Field(c, s, tool_names) for s in sources}
+        fields = {s: Field(c, s, tool_names, args.rc_merge_mode) for s in sources}
         for source, field in fields.items():
             if not field.available():
                 print(f"source {source}: not available yet (no set_indirect_diffuse MCP tool)")

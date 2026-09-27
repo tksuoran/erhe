@@ -611,7 +611,7 @@ auto Light_buffer::update(
         ? glm::uvec4{
             static_cast<uint32_t>(ddgi->irradiance_texels),
             static_cast<uint32_t>(ddgi->distance_texels),
-            0u,
+            static_cast<uint32_t>(ddgi->tiles_per_row),
             0u
         }
         : glm::uvec4{0u, 0u, 0u, 0u};

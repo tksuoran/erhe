@@ -32,6 +32,20 @@ public:
 // for an invalid box.
 [[nodiscard]] auto fit_probe_grid(const erhe::math::Aabb& bounds, float target_spacing, int max_probes) -> Probe_grid;
 
+// Probe field atlas tiling, shared by the producers of the indirect diffuse
+// probe field and res/shaders/erhe_ddgi_tiles.glsl (doc/editor/ddgi.md "Data
+// layout"): probe (x, y, z) has the tile index
+// x + counts.x * (z + counts.z * y), wrapped into rows of tiles_per_row
+// tiles. tiles_per_row = counts.x * counts.z (one tile row per y layer) when
+// both atlas sides fit max_texture_size with tiles of tile_texels, otherwise
+// ceil(sqrt(probe count)), which keeps the atlas close to square.
+[[nodiscard]] auto get_probe_field_tiles_per_row(const glm::ivec3& counts, int tile_texels, int max_texture_size) -> int;
+[[nodiscard]] auto get_probe_field_tile_rows    (const glm::ivec3& counts, int tiles_per_row) -> int;
+[[nodiscard]] auto get_probe_field_tile         (const glm::ivec3& coords, const glm::ivec3& counts, int tiles_per_row) -> glm::ivec2;
+// The largest probe count whose atlas of tiles of tile_texels fits
+// max_texture_size on both sides: the probe budget a fit must stay within.
+[[nodiscard]] auto get_probe_field_max_probes   (int tile_texels, int max_texture_size) -> int;
+
 // Why a probe volume is being refitted, in priority order: a fit setting
 // changed (refit to the content exactly), the content moved out of or far
 // inside the volume, or only a budget changed (keep the volume).

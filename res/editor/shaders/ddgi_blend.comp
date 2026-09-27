@@ -20,6 +20,9 @@
 // function of the ray index and the tick's random rotation, both of which
 // the control block carries.
 
+#include "erhe_ddgi_tiles.glsl"
+#include "erhe_ddgi_border.glsl"
+
 layout(local_size_x = ERHE_DDGI_BLEND_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 #if ERHE_DDGI_BLEND_DISTANCE
@@ -67,7 +70,7 @@ ivec3 probe_coords(uint probe_index)
 // Tile origin of a probe in the atlas, including its border.
 ivec2 probe_tile_origin(ivec3 coords, int tile_size)
 {
-    return ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y) * tile_size;
+    return ddgi_probe_tile(coords, ivec3(ddgi.grid_counts.xyz), int(ddgi.atlas.x)) * tile_size;
 }
 
 void main()
@@ -148,27 +151,6 @@ void main()
     memoryBarrierImage();
     barrier();
 
-    // Octahedral border: an edge texel mirrors the interior texel on the
-    // opposite side of that edge (the octahedral map wraps that way), and a
-    // corner texel takes the diagonally opposite interior corner.
-    for (int texel = int(gl_LocalInvocationID.x); texel < texel_count; texel += ERHE_DDGI_BLEND_GROUP_SIZE) {
-        ivec2 local = ivec2(texel % tile_size, texel / tile_size);
-        bool  x_border = (local.x == 0) || (local.x == tile_size - 1);
-        bool  y_border = (local.y == 0) || (local.y == tile_size - 1);
-        if (!x_border && !y_border) {
-            continue;
-        }
-        ivec2 source;
-        if (x_border && y_border) {
-            source = ivec2(
-                (local.x == 0) ? interior : 1,
-                (local.y == 0) ? interior : 1
-            );
-        } else if (x_border) {
-            source = ivec2((local.x == 0) ? 1 : interior, tile_size - 1 - local.y);
-        } else {
-            source = ivec2(tile_size - 1 - local.x, (local.y == 0) ? 1 : interior);
-        }
-        imageStore(i_probe_atlas, tile_origin + local, imageLoad(i_probe_atlas, tile_origin + source));
-    }
+    // Octahedral border (erhe_ddgi_border.glsl).
+    ddgi_fill_tile_border(tile_origin, interior, int(gl_LocalInvocationID.x), ERHE_DDGI_BLEND_GROUP_SIZE);
 }

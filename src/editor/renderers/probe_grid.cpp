@@ -31,6 +31,40 @@ auto Probe_grid::operator==(const Probe_grid& other) const -> bool
     return (counts == other.counts) && (origin == other.origin) && (spacing == other.spacing);
 }
 
+auto get_probe_field_tiles_per_row(const glm::ivec3& counts, const int tile_texels, const int max_texture_size) -> int
+{
+    const int64_t row_tiles = static_cast<int64_t>(counts.x) * static_cast<int64_t>(counts.z);
+    const int64_t max_tiles = std::max(1, max_texture_size / std::max(1, tile_texels));
+    if ((row_tiles <= max_tiles) && (static_cast<int64_t>(counts.y) <= max_tiles)) {
+        return static_cast<int>(std::max(int64_t{1}, row_tiles));
+    }
+    const int64_t probe_count = row_tiles * static_cast<int64_t>(counts.y);
+    int64_t       side        = static_cast<int64_t>(std::ceil(std::sqrt(static_cast<double>(probe_count))));
+    while ((side * side) < probe_count) {
+        ++side;
+    }
+    return static_cast<int>(std::min(side, max_tiles));
+}
+
+auto get_probe_field_tile_rows(const glm::ivec3& counts, const int tiles_per_row) -> int
+{
+    const int64_t probe_count = static_cast<int64_t>(counts.x) * static_cast<int64_t>(counts.y) * static_cast<int64_t>(counts.z);
+    const int64_t row         = std::max(1, tiles_per_row);
+    return static_cast<int>((probe_count + row - 1) / row);
+}
+
+auto get_probe_field_tile(const glm::ivec3& coords, const glm::ivec3& counts, const int tiles_per_row) -> glm::ivec2
+{
+    const int tile_index = coords.x + (counts.x * (coords.z + (counts.z * coords.y)));
+    return glm::ivec2{tile_index % tiles_per_row, tile_index / tiles_per_row};
+}
+
+auto get_probe_field_max_probes(const int tile_texels, const int max_texture_size) -> int
+{
+    const int64_t side = std::max(1, max_texture_size / std::max(1, tile_texels));
+    return static_cast<int>(std::min(side * side, int64_t{1} << 30));
+}
+
 auto fit_probe_grid(const erhe::math::Aabb& bounds, const float target_spacing, const int max_probes_in) -> Probe_grid
 {
     Probe_grid grid{};

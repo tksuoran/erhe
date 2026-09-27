@@ -1140,6 +1140,21 @@ namespace {
             {"average_ms", time.average_ms}
         };
     };
+    // The probe field the reduce pass writes: cascade 0's grid in the DDGI
+    // atlas format (doc/editor/radiance_cascades.md "Reduce").
+    json field = nullptr;
+    if (renderer.has_field()) {
+        const erhe::scene_renderer::Ddgi_parameters parameters = renderer.get_forward_parameters();
+        field = json{
+            {"grid_origin",       json::array({parameters.grid_origin.x,  parameters.grid_origin.y,  parameters.grid_origin.z })},
+            {"grid_spacing",      json::array({parameters.grid_spacing.x, parameters.grid_spacing.y, parameters.grid_spacing.z})},
+            {"grid_counts",       json::array({parameters.grid_counts.x,  parameters.grid_counts.y,  parameters.grid_counts.z })},
+            {"irradiance_texels", parameters.irradiance_texels},
+            {"distance_texels",   parameters.distance_texels},
+            {"depth_sharpness",   parameters.depth_sharpness},
+            {"tiles_per_row",     parameters.tiles_per_row}
+        };
+    }
     return json{
         {"supported",                renderer.is_supported()},
         {"active",                   renderer.is_active()},
@@ -1157,13 +1172,14 @@ namespace {
         {"completed_sweeps",         stats.completed_sweeps},
         {"texels_per_update",        stats.texels_per_update},
         {"rays_per_update",          stats.rays_per_update},
-        {"gpu_ms",                   json{{"trace", pass_time_json(stats.trace)}, {"merge", pass_time_json(stats.merge)}}},
+        {"gpu_ms",                   json{{"trace", pass_time_json(stats.trace)}, {"merge", pass_time_json(stats.merge)}, {"reduce", pass_time_json(stats.reduce)}}},
         {"gpu_ms_total",             pass_time_json(stats.total)},
         {"timing_history_size",      Radiance_cascades_renderer::c_timing_history_size},
         {"ms_per_million_rays",      stats.ms_per_million_rays},
         {"updates_per_full_refresh", stats.updates_per_full_refresh},
         {"full_refresh_ms",          stats.full_refresh_ms},
-        {"visibility",               json{{"last_ms", stats.visibility_last_ms}, {"update_count", stats.visibility_update_count}}}
+        {"visibility",               json{{"last_ms", stats.visibility_last_ms}, {"update_count", stats.visibility_update_count}}},
+        {"field",                    field}
     };
 }
 
@@ -1476,6 +1492,75 @@ public:
     return {};
 }
 
+// One requested probe field texel of get_radiance_cascades_texels.
+enum class Rc_field_atlas : unsigned int
+{
+    irradiance = 0,
+    distance   = 1
+};
+class Rc_field_texel_address
+{
+public:
+    Rc_field_atlas atlas{Rc_field_atlas::irradiance};
+    glm::ivec3     probe{0};
+    glm::ivec2     texel{0};
+};
+
+// Parses and range-checks the 'field_texels' argument against the field
+// parameters. Returns an error message, empty on success.
+[[nodiscard]] auto parse_rc_field_texel_addresses(
+    const json&                                  field_texels,
+    const erhe::scene_renderer::Ddgi_parameters& parameters,
+    std::vector<Rc_field_texel_address>&         out
+) -> std::string
+{
+    out.clear();
+    if (field_texels.is_null()) {
+        return {};
+    }
+    if (!field_texels.is_array()) {
+        return "'field_texels' must be an array of {probe:[x,y,z], texel:[u,v], atlas}";
+    }
+    if (field_texels.size() > 4096) {
+        return "at most 4096 field texels per call";
+    }
+    if (!parameters.is_valid()) {
+        return "no probe field (the reduce has not run yet)";
+    }
+    for (std::size_t i = 0; i < field_texels.size(); ++i) {
+        const json& entry = field_texels[i];
+        const bool ok =
+            entry.is_object() &&
+            entry.contains("probe") && entry["probe"].is_array() && (entry["probe"].size() == 3) &&
+            entry["probe"][0].is_number_integer() && entry["probe"][1].is_number_integer() && entry["probe"][2].is_number_integer() &&
+            entry.contains("texel") && entry["texel"].is_array() && (entry["texel"].size() == 2) &&
+            entry["texel"][0].is_number_integer() && entry["texel"][1].is_number_integer();
+        if (!ok) {
+            return fmt::format("field_texels[{}] needs integer 'probe' [x, y, z] and 'texel' [u, v]", i);
+        }
+        Rc_field_texel_address address{};
+        const std::string atlas = entry.value("atlas", std::string{"irradiance"});
+        if (atlas == "irradiance") {
+            address.atlas = Rc_field_atlas::irradiance;
+        } else if (atlas == "distance") {
+            address.atlas = Rc_field_atlas::distance;
+        } else {
+            return fmt::format("field_texels[{}].atlas must be \"irradiance\" or \"distance\"", i);
+        }
+        address.probe = glm::ivec3{entry["probe"][0].get<int>(), entry["probe"][1].get<int>(), entry["probe"][2].get<int>()};
+        address.texel = glm::ivec2{entry["texel"][0].get<int>(), entry["texel"][1].get<int>()};
+        if (glm::any(glm::lessThan(address.probe, glm::ivec3{0})) || glm::any(glm::greaterThanEqual(address.probe, parameters.grid_counts))) {
+            return fmt::format("field_texels[{}].probe outside the cascade 0 grid", i);
+        }
+        const int texels = (address.atlas == Rc_field_atlas::irradiance) ? parameters.irradiance_texels : parameters.distance_texels;
+        if (glm::any(glm::lessThan(address.texel, glm::ivec2{0})) || glm::any(glm::greaterThanEqual(address.texel, glm::ivec2{texels}))) {
+            return fmt::format("field_texels[{}].texel outside the {} x {} tile interior", i, texels, texels);
+        }
+        out.push_back(address);
+    }
+    return {};
+}
+
 } // anonymous namespace
 
 auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
@@ -1523,6 +1608,15 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                 }
                 cascades.push_back(std::move(entry));
             }
+            std::vector<Rc_field_texel_address> field_addresses;
+            if (renderer->readback_has_field()) {
+                const std::string field_error = parse_rc_field_texel_addresses(m_rc_field_texels_args, renderer->get_readback_field_parameters(), field_addresses);
+                if (!field_error.empty()) {
+                    return make_error_content("get_radiance_cascades_texels: the field changed before the copy: " + field_error);
+                }
+            } else if (!m_rc_field_texels_args.is_null()) {
+                return make_error_content("get_radiance_cascades_texels: no probe field was copied");
+            }
             json texels = json::array();
             for (const Rc_texel_address& address : addresses) {
                 const Radiance_cascade& cascade   = layout.cascades[static_cast<std::size_t>(address.cascade)];
@@ -1553,12 +1647,44 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                 }
                 texels.push_back(std::move(entry));
             }
-            return make_json_content(json{
+            json result{
                 {"update_count",     renderer->get_readback_update_count()},
                 {"completed_sweeps", renderer->get_readback_sweep_count()},
                 {"cascades",         std::move(cascades)},
                 {"texels",           std::move(texels)}
-            }).dump();
+            };
+            if (renderer->readback_has_field()) {
+                const erhe::scene_renderer::Ddgi_parameters& parameters = renderer->get_readback_field_parameters();
+                json field_texels = json::array();
+                for (const Rc_field_texel_address& address : field_addresses) {
+                    const bool      irradiance = (address.atlas == Rc_field_atlas::irradiance);
+                    const int       tile_texels = irradiance ? parameters.irradiance_texels : parameters.distance_texels;
+                    const glm::vec4 probe_data = renderer->read_field_probe_data(address.probe);
+                    json entry{
+                        {"atlas",       irradiance ? "irradiance" : "distance"},
+                        {"probe",       json::array({address.probe.x, address.probe.y, address.probe.z})},
+                        {"texel",       json::array({address.texel.x, address.texel.y})},
+                        {"direction",   vec3_json(get_texel_direction(address.texel, tile_texels))},
+                        {"probe_state", probe_data.w}
+                    };
+                    if (irradiance) {
+                        entry["irradiance"] = vec3_json(renderer->read_field_irradiance_texel(address.probe, address.texel));
+                    } else {
+                        const glm::vec2 moments = renderer->read_field_distance_texel(address.probe, address.texel);
+                        entry["moments"] = json::array({moments.x, moments.y});
+                    }
+                    field_texels.push_back(std::move(entry));
+                }
+                result["field"] = json{
+                    {"grid_counts",       json::array({parameters.grid_counts.x, parameters.grid_counts.y, parameters.grid_counts.z})},
+                    {"irradiance_texels", parameters.irradiance_texels},
+                    {"distance_texels",   parameters.distance_texels},
+                    {"depth_sharpness",   parameters.depth_sharpness},
+                    {"tiles_per_row",     parameters.tiles_per_row}
+                };
+                result["field_texels"] = std::move(field_texels);
+            }
+            return make_json_content(result).dump();
         }
         if ((state == Rc_readback_state::requested) || (state == Rc_readback_state::in_flight)) {
             if ((state == Rc_readback_state::requested) && !renderer->is_active()) {
@@ -1581,7 +1707,14 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
     if (!error.empty()) {
         return make_error_content("get_radiance_cascades_texels: " + error);
     }
+    const json field_texels_arg = args.contains("field_texels") ? args["field_texels"] : json{};
+    std::vector<Rc_field_texel_address> field_addresses;
+    const std::string field_error = parse_rc_field_texel_addresses(field_texels_arg, renderer->get_forward_parameters(), field_addresses);
+    if (!field_error.empty()) {
+        return make_error_content("get_radiance_cascades_texels: " + field_error);
+    }
     renderer->request_texel_readback();
+    m_rc_field_texels_args  = field_texels_arg;
     m_rc_texels_args        = texels_arg;
     m_rc_texels_request     = m_current_request;
     m_rc_texels_enqueued_at = m_current_request->enqueued_at;
@@ -1593,9 +1726,11 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
 {
     // Linear float evaluation of the indirect diffuse field at world points
     // (doc/editor/ddgi.md "Irradiance queries"): the forward pass's own
-    // ddgi_sample_irradiance(), run by Ddgi_renderer's ddgi_sample.comp and
-    // read back once the frame that recorded it has retired. The first pass
-    // queues the points and defers; later passes of the same request poll.
+    // ddgi_sample_irradiance(), run by Ddgi_renderer's ddgi_sample.comp over
+    // the selected producer's published field (get_indirect_diffuse_field(),
+    // DDGI or radiance cascades) and read back once the frame that recorded
+    // it has retired. The first pass queues the points and defers; later
+    // passes of the same request poll.
     Ddgi_renderer* renderer = m_context.ddgi_renderer;
 
     const bool continuation =
@@ -1617,10 +1752,10 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
             return make_json_content(result).dump();
         }
         if ((state == Irradiance_query_state::queued) || (state == Irradiance_query_state::in_flight)) {
-            if ((state == Irradiance_query_state::queued) && !renderer->is_active()) {
+            if ((state == Irradiance_query_state::queued) && !get_indirect_diffuse_field(m_context).is_valid()) {
                 renderer->cancel_irradiance_query();
                 m_irradiance_query_request = nullptr;
-                return make_error_content("sample_indirect_diffuse: DDGI became inactive before the query was recorded");
+                return make_error_content("sample_indirect_diffuse: the probe field went away before the query was recorded");
             }
             m_defer_current_request = true;
             return {};
@@ -1684,7 +1819,7 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
 
     // No active field: the forward pass shades with the flat scene ambient,
     // which is also what the shader returns without a volume.
-    if ((renderer == nullptr) || !renderer->is_active()) {
+    if ((renderer == nullptr) || !get_indirect_diffuse_field(m_context).is_valid()) {
         const std::shared_ptr<Scene_root> scene_root = (m_context.app_scenes != nullptr)
             ? m_context.app_scenes->get_single_scene_root()
             : std::shared_ptr<Scene_root>{};
@@ -1710,7 +1845,9 @@ auto Mcp_server::query_sample_indirect_diffuse(const json& args) -> std::string
         m_defer_current_request = true;
         return {};
     }
-    header["source"]    = "ddgi";
+    // The field's producer; the sampling parameters (intensity included)
+    // are the DDGI settings for both producers.
+    header["source"]    = (m_context.editor_settings != nullptr) ? std::string{to_string(m_context.editor_settings->indirect_diffuse_source)} : std::string{"ddgi"};
     header["intensity"] = (m_context.editor_settings != nullptr) ? m_context.editor_settings->ddgi.intensity : 1.0f;
     m_irradiance_query_header      = std::move(header);
     m_irradiance_query_request     = m_current_request;

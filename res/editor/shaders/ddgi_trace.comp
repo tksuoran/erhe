@@ -1,6 +1,7 @@
 #include "erhe_bxdf.glsl"
 #include "erhe_light.glsl"
 #include "erhe_texture.glsl"
+#include "erhe_ddgi_tiles.glsl"
 
 // DDGI probe trace (doc/ddgi-plan.md phase 3).
 //
@@ -57,11 +58,11 @@ ivec3 probe_coords(uint probe_index)
     return ivec3(x, y, z);
 }
 
-// One texel per probe in the probe data texture, laid out like the atlas
-// tiles: tile (x + counts.x * z, y).
+// One texel per probe in the probe data texture, at the probe's atlas tile
+// (erhe_ddgi_tiles.glsl).
 ivec2 probe_data_texel(ivec3 coords)
 {
-    return ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y);
+    return ddgi_probe_tile(coords, ivec3(ddgi.grid_counts.xyz), int(ddgi.atlas.x));
 }
 
 void main()

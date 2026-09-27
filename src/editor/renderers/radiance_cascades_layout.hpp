@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace editor {
 
@@ -133,5 +134,32 @@ public:
 [[nodiscard]] auto get_texel_direction(const glm::ivec2& texel, int tile_texels) -> glm::vec3;
 // Texel of a tile_texels^2 tile that contains the direction.
 [[nodiscard]] auto get_direction_texel(const glm::vec3& direction, int tile_texels) -> glm::ivec2;
+
+// Integrals over the footprints of octahedral texels, for the reduce pass
+// (doc/editor/radiance_cascades.md "Reduce"). Each texel of a
+// tile_texels^2 tile is split into get_octahedral_texel_subdivisions()^2
+// equal squares of the [-1, 1]^2 octahedral parameter; each square contributes at
+// its centre direction w with the solid angle dA * |w|_1^3 (the octahedral
+// map's area element: the unit octahedron point w / |w|_1 lies at distance
+// 1 / |w|_1 from the origin and its face is seen at the cosine
+// 1 / (sqrt(3) |w|_1), which with the face / parameter area ratio sqrt(3)
+// gives dA / |o|^3). The solid angles of a whole tile sum to 4 pi.
+// Subdivisions per texel axis: about c_octahedral_integration_cells squares
+// across the whole tile, at least 1 per texel.
+constexpr int c_octahedral_integration_cells = 32;
+[[nodiscard]] auto get_octahedral_texel_subdivisions(int tile_texels) -> int;
+
+// Solid angle of every texel of a tile_texels^2 octahedral tile, at index
+// v * tile_texels + u. Clears and fills out.
+void compute_octahedral_texel_solid_angles(int tile_texels, std::vector<float>& out);
+
+// Lobe weights of texel footprints: for each texel n of an
+// output_texels^2 tile (direction get_texel_direction(n, output_texels))
+// and each texel j of a tile_texels^2 tile, the integral over the footprint
+// of j of pow(max(0, dot(direction_n, w)), exponent) dw, at index
+// (n.y * output_texels + n.x) * tile_texels^2 + (j.y * tile_texels + j.x).
+// exponent 1 gives the cosine weights of the irradiance convolution.
+// Clears and fills out.
+void compute_octahedral_lobe_weights(int output_texels, int tile_texels, float exponent, std::vector<float>& out);
 
 } // namespace editor

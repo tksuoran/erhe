@@ -1,6 +1,8 @@
 #ifndef ERHE_DDGI_GLSL
 #define ERHE_DDGI_GLSL
 
+#include "erhe_ddgi_tiles.glsl"
+
 // DDGI irradiance sampling (doc/ddgi-plan.md phase 6).
 //
 // Reads the probe volume the Ddgi_renderer maintains: an octahedral
@@ -8,7 +10,8 @@
 // Chebyshev visibility test, and one texel per probe carrying the relocation
 // offset and the active flag. The grid itself rides in light_block
 // (ddgi_grid_origin / ddgi_grid_spacing / ddgi_counts / ddgi_texels /
-// ddgi_params), with ddgi_counts.w as the "volume exists" gate.
+// ddgi_params), with ddgi_counts.w as the "volume exists" gate and
+// ddgi_texels.z the tiles per atlas row (erhe_ddgi_tiles.glsl).
 //
 // The eight probes of the cell containing the (biased) shading point are
 // combined with three weights, following Majercik et al. 2019:
@@ -35,7 +38,7 @@ vec2 ddgi_octahedral_encode(vec3 direction)
 vec2 ddgi_probe_uv(ivec3 probe_coords, vec3 direction, int interior_texels, vec2 atlas_size)
 {
     int   tile_size   = interior_texels + 2;
-    ivec2 tile_index  = ivec2(probe_coords.x + int(light_block.ddgi_counts.x) * probe_coords.z, probe_coords.y);
+    ivec2 tile_index  = ddgi_probe_tile(probe_coords, ivec3(light_block.ddgi_counts.xyz), int(light_block.ddgi_texels.z));
     vec2  tile_origin = vec2(tile_index * tile_size);
     vec2  local       = (ddgi_octahedral_encode(direction) * 0.5 + 0.5) * float(interior_texels) + vec2(1.0);
     return (tile_origin + local) / atlas_size;
@@ -44,13 +47,13 @@ vec2 ddgi_probe_uv(ivec3 probe_coords, vec3 direction, int interior_texels, vec2
 vec3 ddgi_probe_position(ivec3 probe_coords)
 {
     vec3  base  = light_block.ddgi_grid_origin.xyz + vec3(probe_coords) * light_block.ddgi_grid_spacing.xyz;
-    ivec2 texel = ivec2(probe_coords.x + int(light_block.ddgi_counts.x) * probe_coords.z, probe_coords.y);
+    ivec2 texel = ddgi_probe_tile(probe_coords, ivec3(light_block.ddgi_counts.xyz), int(light_block.ddgi_texels.z));
     return base + texelFetch(s_ddgi_probe_data, texel, 0).xyz;
 }
 
 float ddgi_probe_state(ivec3 probe_coords)
 {
-    ivec2 texel = ivec2(probe_coords.x + int(light_block.ddgi_counts.x) * probe_coords.z, probe_coords.y);
+    ivec2 texel = ddgi_probe_tile(probe_coords, ivec3(light_block.ddgi_counts.xyz), int(light_block.ddgi_texels.z));
     return texelFetch(s_ddgi_probe_data, texel, 0).w;
 }
 

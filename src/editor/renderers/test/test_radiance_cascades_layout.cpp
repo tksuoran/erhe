@@ -6,6 +6,7 @@
 #include <cmath>
 #include <set>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -251,6 +252,95 @@ TEST(Radiance_cascades_layout, trilinear_upper_probes_interpolate_the_lower_posi
                 }
             }
         }
+    }
+}
+
+TEST(Probe_field_tiling, classic_layout_when_it_fits)
+{
+    // Small grids keep DDGI's original layout: tile (x + counts.x * z, y).
+    const glm::ivec3 counts{5, 3, 7};
+    const int        tiles_per_row = editor::get_probe_field_tiles_per_row(counts, 16, 16384);
+    EXPECT_EQ(tiles_per_row, counts.x * counts.z);
+    EXPECT_EQ(editor::get_probe_field_tile_rows(counts, tiles_per_row), counts.y);
+    for (int z = 0; z < counts.z; ++z) {
+        for (int y = 0; y < counts.y; ++y) {
+            for (int x = 0; x < counts.x; ++x) {
+                EXPECT_EQ(editor::get_probe_field_tile(glm::ivec3{x, y, z}, counts, tiles_per_row), (glm::ivec2{x + (counts.x * z), y}));
+            }
+        }
+    }
+}
+
+TEST(Probe_field_tiling, wraps_rows_within_the_texture_limit)
+{
+    // 64 x 16 x 64 probes with 16-texel tiles: the classic row would be
+    // 65536 texels wide.
+    const glm::ivec3 counts{64, 16, 64};
+    const int        tile          = 16;
+    const int        max_size      = 16384;
+    const int        tiles_per_row = editor::get_probe_field_tiles_per_row(counts, tile, max_size);
+    const int        rows          = editor::get_probe_field_tile_rows(counts, tiles_per_row);
+    EXPECT_LE(tiles_per_row * tile, max_size);
+    EXPECT_LE(rows * tile, max_size);
+    EXPECT_GE(static_cast<int64_t>(tiles_per_row) * rows, static_cast<int64_t>(counts.x) * counts.y * counts.z);
+    // Every probe gets its own tile inside the atlas.
+    std::set<std::pair<int, int>> seen;
+    for (int z = 0; z < counts.z; ++z) {
+        for (int y = 0; y < counts.y; ++y) {
+            for (int x = 0; x < counts.x; ++x) {
+                const glm::ivec2 t = editor::get_probe_field_tile(glm::ivec3{x, y, z}, counts, tiles_per_row);
+                ASSERT_LT(t.x, tiles_per_row);
+                ASSERT_LT(t.y, rows);
+                EXPECT_TRUE(seen.insert({t.x, t.y}).second);
+            }
+        }
+    }
+    EXPECT_LE(static_cast<int64_t>(counts.x) * counts.y * counts.z, static_cast<int64_t>(editor::get_probe_field_max_probes(tile, max_size)));
+}
+
+TEST(Radiance_cascades_layout, octahedral_texel_solid_angles_cover_the_sphere)
+{
+    for (const int tile_texels : {1, 2, 4, 8}) {
+        std::vector<float> solid_angles;
+        editor::compute_octahedral_texel_solid_angles(tile_texels, solid_angles);
+        ASSERT_EQ(solid_angles.size(), static_cast<std::size_t>(tile_texels * tile_texels));
+        double sum = 0.0;
+        for (const float solid_angle : solid_angles) {
+            EXPECT_GT(solid_angle, 0.0f);
+            sum += static_cast<double>(solid_angle);
+        }
+        // Midpoint rule over the octahedral parameter: within 0.5 %.
+        EXPECT_NEAR(sum, 4.0 * 3.14159265358979, 0.005 * 4.0 * 3.14159265358979) << "tile_texels " << tile_texels;
+    }
+}
+
+TEST(Radiance_cascades_layout, cosine_lobe_weights_integrate_to_pi)
+{
+    // The cosine lobe of any direction integrates to pi over the sphere, so
+    // the weights of one output texel over all tile texels sum to pi.
+    const int output_texels = 6;
+    const int tile_texels   = 4;
+    std::vector<float> weights;
+    editor::compute_octahedral_lobe_weights(output_texels, tile_texels, 1.0f, weights);
+    ASSERT_EQ(weights.size(), static_cast<std::size_t>(output_texels * output_texels * tile_texels * tile_texels));
+    for (int n = 0; n < (output_texels * output_texels); ++n) {
+        double sum = 0.0;
+        for (int j = 0; j < (tile_texels * tile_texels); ++j) {
+            const float weight = weights[static_cast<std::size_t>((n * tile_texels * tile_texels) + j)];
+            EXPECT_GE(weight, 0.0f);
+            sum += static_cast<double>(weight);
+        }
+        EXPECT_NEAR(sum, 3.14159265358979, 0.01 * 3.14159265358979) << "output texel " << n;
+    }
+    // A sharp lobe puts most of its weight on the tile texel containing its
+    // direction.
+    std::vector<float> sharp;
+    editor::compute_octahedral_lobe_weights(tile_texels, tile_texels, 50.0f, sharp);
+    for (int n = 0; n < (tile_texels * tile_texels); ++n) {
+        const auto  begin = sharp.begin() + (n * tile_texels * tile_texels);
+        const auto  end   = begin + (tile_texels * tile_texels);
+        const auto  best  = std::max_element(begin, end);
+        EXPECT_EQ(static_cast<int>(best - begin), n);
     }
 }
 

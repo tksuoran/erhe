@@ -73,7 +73,7 @@ public:
     std::size_t  ddgi_grid_origin;             // vec4 (xyz origin)
     std::size_t  ddgi_grid_spacing;            // vec4 (xyz spacing)
     std::size_t  ddgi_counts;                  // uvec4 (xyz probe counts, w enabled)
-    std::size_t  ddgi_texels;                  // uvec4 (x irradiance texels, y distance texels)
+    std::size_t  ddgi_texels;                  // uvec4 (x irradiance texels, y distance texels, z tiles per atlas row)
     std::size_t  ddgi_params;                  // vec4 (normal bias, view bias, depth sharpness, intensity)
 
     Light_struct light;
@@ -235,9 +235,11 @@ public:
     uint32_t                                              brdf_material_slot{0};
 };
 
-// The probe volume the forward pass samples. Mirrors the Ddgi_renderer's
-// fitted grid; a default-constructed instance (counts 0) means "no volume",
-// which the shader reads as DDGI off.
+// The probe volume the forward pass samples. Mirrors the fitted grid of the
+// field's producer; a default-constructed instance (counts 0) means "no
+// volume", which the shader reads as DDGI off. Probe (x, y, z) has the atlas
+// tile index x + counts.x * (z + counts.z * y), wrapped into rows of
+// tiles_per_row tiles (res/shaders/erhe_ddgi_tiles.glsl).
 class Ddgi_parameters
 {
 public:
@@ -246,6 +248,7 @@ public:
     glm::ivec3 grid_counts    {0};
     int        irradiance_texels{0};
     int        distance_texels  {0};
+    int        tiles_per_row    {0};
     float      normal_bias    {0.0f};
     float      view_bias      {0.0f};
     float      depth_sharpness{50.0f};
@@ -253,7 +256,7 @@ public:
 
     [[nodiscard]] auto is_valid() const -> bool
     {
-        return (grid_counts.x > 1) && (grid_counts.y > 1) && (grid_counts.z > 1);
+        return (grid_counts.x > 1) && (grid_counts.y > 1) && (grid_counts.z > 1) && (tiles_per_row > 0);
     }
 };
 

@@ -839,48 +839,35 @@ public:
         // (set_indirect_diffuse_source()) updates its field. DDGI ticks
         // whatever the source for pending reference irradiance queries, and
         // its tick skips the probe update unless it is selected.
-        //
-        // Radiance cascades: refit the cascades, (re)allocate their atlases
-        // and trace this frame's budget of raw intervals. It produces no
-        // probe field yet (plan phase 4), so the forward pass keeps the flat
-        // ambient term while it is selected.
-        if (
-            m_radiance_cascades_renderer &&
-            m_radiance_cascades_renderer->is_selected() &&
-            (m_app_context.current_command_buffer != nullptr)
-        ) {
-            erhe::log::set_breadcrumb("tick: radiance_cascades");
-            const std::shared_ptr<Scene_root> rc_scene_root = m_app_scenes->get_single_scene_root();
-            if (rc_scene_root) {
-                m_radiance_cascades_renderer->tick(*m_app_context.current_command_buffer, *rc_scene_root.get());
+        if (m_app_context.current_command_buffer != nullptr) {
+            const std::shared_ptr<Scene_root> field_scene_root = m_app_scenes->get_single_scene_root();
+            // Radiance cascades: refit the cascades, trace this frame's
+            // budget of raw intervals, merge, and reduce merged cascade 0
+            // into the probe field atlases.
+            if (m_radiance_cascades_renderer && m_radiance_cascades_renderer->is_selected() && field_scene_root) {
+                erhe::log::set_breadcrumb("tick: radiance_cascades");
+                m_radiance_cascades_renderer->tick(*m_app_context.current_command_buffer, *field_scene_root.get());
             }
-        }
+            // DDGI: refit the probe volume and record this frame's probe
+            // update, before the rendergraph samples the probe atlases.
+            if (m_ddgi_renderer && field_scene_root) {
+                erhe::log::set_breadcrumb("tick: ddgi");
+                m_ddgi_renderer->tick(*m_app_context.current_command_buffer, *field_scene_root.get());
+            }
 
-        // Dynamic diffuse global illumination (doc/editor/ddgi.md): refit the
-        // probe volume and record this frame's probe update into the frame
-        // command buffer, before the rendergraph samples the probe atlases.
-        if (m_ddgi_renderer && (m_app_context.current_command_buffer != nullptr)) {
-            erhe::log::set_breadcrumb("tick: ddgi");
-            const std::shared_ptr<Scene_root> ddgi_scene_root = m_app_scenes->get_single_scene_root();
-            if (ddgi_scene_root) {
-                m_ddgi_renderer->tick(*m_app_context.current_command_buffer, *ddgi_scene_root.get());
-                // A queued MCP irradiance query samples the field this
-                // frame's update just wrote (sample_indirect_diffuse).
-                m_ddgi_renderer->record_irradiance_query(*m_app_context.current_command_buffer, *ddgi_scene_root.get());
-            }
-            // Publish (or clear) the probe volume for this frame's forward
-            // passes. Clearing turns the USE_DDGI shader axis back off. DDGI
-            // is the only producer of the field so far: it is active only
-            // while selected, and every other source clears it.
-            if (m_ddgi_renderer->is_active()) {
-                m_forward_renderer->set_ddgi(
-                    m_ddgi_renderer->get_forward_parameters(),
-                    m_ddgi_renderer->get_irradiance_texture(),
-                    m_ddgi_renderer->get_distance_texture(),
-                    m_ddgi_renderer->get_probe_data_texture()
-                );
+            // Publish (or clear) the selected producer's field for this
+            // frame's forward passes - the single place that does; clearing
+            // turns the USE_DDGI shader axis back off. A queued MCP
+            // irradiance query (sample_indirect_diffuse) samples the same
+            // field, after this frame's update wrote it.
+            const Probe_field field = get_indirect_diffuse_field(m_app_context);
+            if (field.is_valid()) {
+                m_forward_renderer->set_ddgi(field.parameters, field.irradiance, field.distance, field.probe_data);
             } else {
                 m_forward_renderer->clear_ddgi();
+            }
+            if (m_ddgi_renderer && field_scene_root) {
+                m_ddgi_renderer->record_irradiance_query(*m_app_context.current_command_buffer, *field_scene_root.get(), field);
             }
         }
 
@@ -2076,6 +2063,7 @@ public:
                     *m_program_interface.get(),
                     *m_mesh_memory.get(),
                     m_editor_settings.radiance_cascades,
+                    m_editor_settings.ddgi,
                     get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::radiance_cascades)
                 );
                 m_lightmap_baker  = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());

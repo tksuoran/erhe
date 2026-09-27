@@ -753,6 +753,7 @@ private:
     const Queued_request*                            m_rc_texels_request{nullptr};
     std::chrono::steady_clock::time_point            m_rc_texels_enqueued_at{};
     nlohmann::json                                   m_rc_texels_args;
+    nlohmann::json                                   m_rc_field_texels_args;
 
     // render_scene_image: the offscreen capture chain of the pending request
     // (doc/editor/rendergraph.md "Scene image capture"), existing only while

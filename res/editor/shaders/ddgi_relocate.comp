@@ -25,6 +25,8 @@
 // back on the next tick, so relocation converges over a few updates rather
 // than jumping.
 
+#include "erhe_ddgi_tiles.glsl"
+
 layout(local_size_x = ERHE_DDGI_RELOCATE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 // Fraction of the backface hits above which a probe counts as enclosed.
@@ -73,7 +75,7 @@ void main()
     uint ray_count   = ddgi.grid_counts.w;
 
     ivec3 coords = probe_coords(probe_index);
-    ivec2 texel  = ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y);
+    ivec2 texel  = ddgi_probe_tile(coords, ivec3(ddgi.grid_counts.xyz), int(ddgi.atlas.x));
 
     uint  backface_count          = 0u;
     float nearest_front           = 1.0e30;

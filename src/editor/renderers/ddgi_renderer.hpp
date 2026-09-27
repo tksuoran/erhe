@@ -208,11 +208,16 @@ public:
     // The probe volume parameters the forward pass samples with: the fitted
     // grid plus the sampling settings. Invalid (counts 0) unless active.
     [[nodiscard]] auto get_forward_parameters      () const -> erhe::scene_renderer::Ddgi_parameters;
+    // The field DDGI publishes (get_indirect_diffuse_field()): the forward
+    // parameters and the three atlases. Invalid unless active.
+    [[nodiscard]] auto get_field                   () const -> Probe_field;
 
     // Irradiance query: evaluates ddgi_sample_irradiance() - the forward
     // pass's function, with the forward pass's parameters - at world points
     // on the GPU and reads the linear float results back
-    // (doc/editor/ddgi.md "Irradiance queries"). One query at a time:
+    // (doc/editor/ddgi.md "Irradiance queries"). It samples the published
+    // field of whichever producer is selected (get_indirect_diffuse_field()),
+    // so it serves radiance cascades too. One query at a time:
     // begin_irradiance_query() accepts the points (false when a query is
     // queued or in flight, or when there are more than
     // c_max_irradiance_query_points); record_irradiance_query() records the
@@ -225,9 +230,11 @@ public:
     // point, and the update_count of the field that was sampled.
     [[nodiscard]] auto get_irradiance_query_results     () const -> std::span<const glm::vec3>;
     [[nodiscard]] auto get_irradiance_query_update_count() const -> uint64_t;
-    // Records a queued query. Called once per frame after tick(), outside a
-    // render pass; no-op unless a query is queued and the volume is active.
-    void record_irradiance_query(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
+    // Records a queued query against field, the field Editor::tick()
+    // publishes this frame. Called once per frame after the producers'
+    // ticks, outside a render pass; no-op unless a query is queued and the
+    // field is valid.
+    void record_irradiance_query(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, const Probe_field& field);
 
     // Reference irradiance query: a Monte Carlo estimate of the irradiance
     // at world points with the exact light transport of a DDGI probe ray
@@ -383,6 +390,8 @@ private:
     int  m_irradiance_texels{0};
     int  m_distance_texels  {0};
     int  m_probes_per_update{0};
+    // Probe tiles per atlas row (get_probe_field_tiles_per_row()).
+    int  m_tiles_per_row    {0};
     // Round-robin cursor: the first probe this tick's budget updates.
     uint32_t m_probe_cursor{0};
     // Config values the current grid was fitted with. Changing any of them
@@ -445,6 +454,7 @@ private:
         std::size_t params         {0};
         std::size_t sky_radiance   {0};
         std::size_t flags          {0};
+        std::size_t atlas          {0};
     };
     Control_offsets m_control_offsets{};
 
