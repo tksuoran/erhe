@@ -8,6 +8,11 @@ probes are traced with ray queries, the results are blended into octahedral
 irradiance and distance atlases, and `res/shaders/standard.frag` samples those
 atlases in place of the flat `light_block.ambient_light` term.
 
+DDGI is active while it is the selected indirect diffuse source
+(`Editor_settings_config::indirect_diffuse_source` = `ddgi`,
+[radiance_cascades.md](radiance_cascades.md) "Source selection"); any
+other source releases its probe textures.
+
 The feature requires GPU ray query (`Device_info::use_ray_query`), exactly like
 `Ray_trace_renderer`; on backends without it every part of the renderer no-ops
 and the flat ambient term stands.
@@ -128,9 +133,11 @@ mirroring the lightmap tile cursor.
   `Ddgi_parameters` argument.
 - Variant gating: `X(USE_DDGI)` in `ERHE_SHADER_BOOL`
   (`src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp`), seeded
-  scene-level by `Forward_renderer` like the light counts. The prewarm list
-  (`src/editor/renderers/prewarm.cpp`) warms DDGI variants only while the
-  feature is enabled, so the variant space does not double when it is off.
+  scene-level by `Forward_renderer` like the light counts. The init-time
+  prewarm (`Forward_renderer::prewarm_standard_variants()`, driven by
+  `src/editor/renderers/prewarm.cpp`) leaves the axis off, so the prewarmed
+  variant space does not double; the `USE_DDGI` variants compile on demand
+  on the first frame a field is bound.
 - `standard.frag` samples the field only when the draw has no valid lightmap
   region; the analytic light loops keep running, because DDGI is indirect only.
 
@@ -169,7 +176,7 @@ Ddgi window's "GPU time" section and the MCP tool report:
 - per pass and total: the last measurement and the mean over the last
   `c_timing_history_size` (60) measurements, in milliseconds. A result lags its
   update by the frames in flight; nothing is recorded until the first result
-  arrives, and the history is cleared when DDGI is disabled.
+  arrives, and the history is cleared when another source is selected.
 - `rays_per_update`: probes per update x rays per probe, as dispatched (the
   configured ray count rounded up to the trace workgroup size).
 - `ms_per_million_rays`: total mean ms divided by millions of rays per update.
@@ -180,7 +187,9 @@ Ddgi window's "GPU time" section and the MCP tool report:
   taken), which advance while the field is being updated.
 
 The MCP tool `get_indirect_diffuse_stats` (no arguments) returns `source`
-(`"ddgi"` while DDGI is active, else `"ambient"`) and a `ddgi` object with the
+(the selected indirect diffuse source: `"ambient"`, `"ddgi"` or
+`"radiance_cascades"`), a `radiance_cascades` object
+([radiance_cascades.md](radiance_cascades.md) "MCP") and a `ddgi` object with the
 grid origin / spacing / counts, probe count, rays per probe, probes and rays per
 update, `gpu_ms` per pass and `gpu_ms_total` (`last_ms`, `average_ms`), the
 derived figures above, `texture_bytes`, and `probe_states` (below).
@@ -277,7 +286,7 @@ interpolation, visibility), never by what a ray sees.
   `ddgi_enabled`, `point_count`, and `samples` index-aligned with the input,
   each `{irradiance: [r, g, b], standard_error, sky_fraction,
   backface_fraction}`.
-- Runs whether DDGI is enabled or not; needs ray query (the tool answers
+- Runs whatever the selected source; needs ray query (the tool answers
   with an error otherwise) and one open scene with a camera (the light block
   fit needs one; the query fails with that reason otherwise).
 - Flow: `Ddgi_renderer::begin_reference_query()` takes the points;
@@ -359,7 +368,7 @@ this code because its instance records carry texcoord-2 addresses.
 
 **2. Settings and skeleton.** `Ddgi_config`
 (`src/editor/config/definitions/ddgi_config.py`, erhe_codegen, `reflect=True`,
-shown in the Settings window): `enabled`, `probe_spacing_m`, `volume_padding_m`,
+shown in the Settings window): `probe_spacing_m`, `volume_padding_m`,
 `max_probes`, `rays_per_probe`, `irradiance_texels`, `distance_texels`,
 `hysteresis`, `depth_sharpness`, `normal_bias`, `view_bias`, `intensity`,
 `probes_per_frame`, `relocation_enabled`, `classification_enabled`,
@@ -399,7 +408,7 @@ mode and the MCP `set_ddgi` tool.
 ## Verification
 
 1. Headless verify loop: build `build_vs2026_vulkan_headless`, launch, then
-   `py -3 scripts/mcp_call.py set_ddgi {"enabled":true,"show_window":true}`,
+   `py -3 scripts/mcp_call.py set_indirect_diffuse {"source":"ddgi","show_window":true}`,
    `get_async_status`, `capture_screenshot`. Compare a Sponza / Bistro
    screenshot with DDGI off versus on: bounce colour on shadowed walls, no
    light through closed geometry.
@@ -407,7 +416,7 @@ mode and the MCP `set_ddgi` tool.
    compiles and links.
 3. Vulkan validation stays at zero errors - watch the image layout transitions
    between the trace and blend dispatches.
-4. Regression: with DDGI disabled the frame matches the non-DDGI output, and a
+4. Regression: with the `ambient` source the frame matches the non-DDGI output, and a
    lightmap-baked scene looks unchanged with DDGI on.
 5. Performance: `py -3 scripts/mcp_call.py get_indirect_diffuse_stats` (and
    the Ddgi window's "GPU time" section) report the per-pass GPU cost;

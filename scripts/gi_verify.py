@@ -7,6 +7,11 @@ the indirect diffuse source, waits until the field has converged and measures
 the section 10 metrics with the MCP tool `sample_indirect_diffuse` (linear
 float irradiance at the station's world sample points, doc/editor/ddgi.md
 "Irradiance queries") and the cost from `get_indirect_diffuse_stats`.
+The source is selected with the MCP tool `set_indirect_diffuse`. A source
+that produces no field yet (radiance cascades before the reduce pass,
+doc/plans/radiance_cascades.md phase 4) builds its layout - printed per
+station and stored under "radiance_cascades" in the JSON record - and is
+measured as the flat ambient term it leaves in place ("sampled": "ambient").
 
 Usage:
     py -3 scripts/gi_verify.py [--station NAME|all] [--source ambient|ddgi|radiance_cascades]
@@ -256,19 +261,38 @@ class Field:
         # group -> per-point luminance of the station's quality measurement
         # (measure_sample); cleared per station by run_station.
         self.measured = {}
+        # The field sample_indirect_diffuse answers from (set by select()):
+        # the source itself, or "ambient" while the source produces no field
+        # yet (radiance cascades before the reduce pass,
+        # doc/plans/radiance_cascades.md phase 4) - its metrics are then the
+        # flat ambient term's.
+        self.sampled = source
 
     def available(self):
-        if self.source == "radiance_cascades":
-            return "set_indirect_diffuse" in self.tool_names
-        return True
+        return "set_indirect_diffuse" in self.tool_names
 
     def select(self):
+        """Select this source (set_indirect_diffuse; DDGI with the pinned
+        DDGI_SETTINGS) and, for radiance cascades, wait for the fitted
+        layout. Returns the radiance cascades stats, or None."""
         if self.source == "ddgi":
             rooms.set_ddgi(self.c, True)
-        elif self.source == "ambient":
-            rooms.set_ddgi(self.c, False)
         else:
-            self.c.mutate("set_indirect_diffuse", {"source": self.source})
+            rooms.set_indirect_diffuse(self.c, self.source)
+        self.sampled = self.source
+        if self.source != "radiance_cascades":
+            return None
+        deadline = time.time() + 30.0
+        while True:
+            rc = self.c.call("get_indirect_diffuse_stats").get("radiance_cascades", {})
+            if rc.get("active") and rc.get("cascade_count", 0) > 0:
+                break
+            if time.time() > deadline:
+                raise RuntimeError(f"radiance_cascades did not become active: {rc}")
+            time.sleep(0.1)
+        if not rc.get("has_field"):
+            self.sampled = "ambient"
+        return rc
 
     def stats(self):
         stats = self.c.call("get_indirect_diffuse_stats")
@@ -304,8 +328,8 @@ class Field:
             index.append((name, len(flat), len(points)))
             flat += points
         result = self.c.call("sample_indirect_diffuse", {"samples": flat})
-        if result.get("source") != self.source:
-            raise RuntimeError(f"sample_indirect_diffuse answered from {result.get('source')!r}, expected {self.source!r}")
+        if result.get("source") != self.sampled:
+            raise RuntimeError(f"sample_indirect_diffuse answered from {result.get('source')!r}, expected {self.sampled!r}")
         values = [s["irradiance"] for s in result["samples"]]
         rgb = {name: values[start:start + count] for name, start, count in index}
         lum = {name: [luminance(v) for v in rgb[name]] for name in rgb}
@@ -314,7 +338,7 @@ class Field:
     def relax_updates(self):
         """Updates between convergence checks: one full refresh, and at
         least the hysteresis time constant 1 / (1 - h)."""
-        if self.source == "ambient":
+        if self.sampled == "ambient":
             return 0
         per_refresh = int(self.stats().get("updates_per_full_refresh", 1) or 1)
         hysteresis = rooms.DDGI_SETTINGS["hysteresis"]
@@ -346,7 +370,7 @@ def sample_averaged(field, groups, count):
     taken = 0
     while taken < count:
         update, lum, rgb = field.sample(groups)
-        if (update == last) and (field.source != "ambient"):
+        if (update == last) and (field.sampled != "ambient"):
             field.wait_updates(update + 1)
             continue
         if lum_sum is None:
@@ -375,7 +399,7 @@ def wait_converged(field, groups):
     group has converged once its change is indistinguishable from its
     noise). Groups dimmer than DIM_GROUP_FRACTION of the brightest group
     use that level for the 0.5 %. Returns the updates it took."""
-    if field.source == "ambient":
+    if field.sampled == "ambient":
         return 0
     relax = field.relax_updates()
     start = field.update_count()
@@ -474,7 +498,7 @@ def measure_cornell(field, info, metrics, noise=True):
 def measure_noise(field, groups, prefix="noise"):
     """Per-point std / mean of the luminance over NOISE_SAMPLES distinct field
     updates with the scene static."""
-    if field.source == "ambient":
+    if field.sampled == "ambient":
         return {f"{prefix}_mean_rel_std": 0.0, f"{prefix}_max_rel_std": 0.0, f"{prefix}_update_span": 0}
     series = []
     counts = []
@@ -535,9 +559,9 @@ def measure_dynamic(c, field, info, metrics):
     for event_name, event in rooms.STATIONS["dynamic"]["events"].items():
         names = rooms.STATIONS["dynamic"]["event_groups"][event_name]
         groups = {n: info["samples"][n] for n in names}
-        before = field.update_count() if field.source != "ambient" else 0
+        before = field.update_count() if field.sampled != "ambient" else 0
         event(c, info)
-        if field.source == "ambient":
+        if field.sampled == "ambient":
             c.settle()
             metrics[f"{event_name}_updates_to_settle"] = 0
             continue
@@ -687,15 +711,33 @@ def capture_views(c, info, source, shot_dir, args, results):
 
 # --- one station, one source ------------------------------------------------------------
 
+def print_rc_layout(station, rc):
+    """The fitted radiance cascades layout, one line per cascade."""
+    print(f"{station}: radiance cascades, {rc['cascade_count']} cascades, r0 {rc['r0']:.3f} m, "
+          f"{rc['probe_count']} probes, {rc['texels']} texels, {rc['texture_bytes'] / (1024 * 1024):.2f} MB")
+    for cascade in rc["cascades"]:
+        counts = "x".join(str(n) for n in cascade["grid_counts"])
+        spacing = " ".join(f"{v:.3f}" for v in cascade["grid_spacing"])
+        start, end = cascade["interval"]
+        print(f"  cascade {cascade['index']}: {counts} = {cascade['probe_count']} probes, spacing {spacing} m, "
+              f"q {cascade['tile_texels']}, interval [{start:.3f}, {end:.3f}] m, {cascade['texels']} texels, "
+              f"{cascade['texture_bytes'] / (1024 * 1024):.2f} MB")
+
+
 def run_station(c, field, name, shot_dir, args):
     started = time.time()
     info = rooms.build_station(c, name, ddgi=(field.source == "ddgi"))
-    field.select()
+    rc_layout = field.select()
+    if rc_layout is not None:
+        print_rc_layout(name, rc_layout)
     c.settle()
     # Ground truth for this build; independent of the source and its state.
     reference = field.reference(info["samples"])
     field.measured = {}
-    record = {"station": name, "source": field.source, "grid": info["grid"], "metrics": {}}
+    record = {"station": name, "source": field.source, "sampled": field.sampled, "grid": info["grid"], "metrics": {}}
+    if rc_layout is not None:
+        record["radiance_cascades"] = {k: rc_layout.get(k) for k in
+                                       ("cascade_count", "r0", "probe_count", "texels", "texture_bytes", "cascades")}
     if name == "probe_offset_sweep":
         record["walls"] = info["layout"]["walls"]
         record["pillar"] = info["layout"]["pillar"]

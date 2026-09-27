@@ -273,12 +273,17 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    shares the consumer (Chebyshev visibility, probe state); what DDGI still
    gets wrong is discretization, described in
    [../editor/ddgi.md](../editor/ddgi.md) "Accuracy".
-1. **Selection and skeleton.** `Indirect_diffuse_source` with the DDGI config
-   migration; `Radiance_cascades_config`; the renderer with grid / cascade
-   fit and texture allocation; a developer `Radiance_cascades_window` reporting
-   per-cascade probe counts, tile size, interval, texels and memory; MCP tools.
-   Also a C++ unit test of the pure math: cascade fit, interval bounds,
-   octahedral 2x2 nesting, trilinear upper-probe indices and weights.
+1. **Selection and skeleton** - built, described in
+   [../editor/radiance_cascades.md](../editor/radiance_cascades.md): the
+   `Indirect_diffuse_source` selection with the `Ddgi_config::enabled`
+   migration, `Radiance_cascades_config` (the fields phase 1 uses; the trace,
+   merge and debug fields of section 4 arrive with their phases), the cascade
+   fit and atlas allocation, the Radiance Cascades window, the MCP tools
+   `set_indirect_diffuse` / `set_radiance_cascades` and the
+   `radiance_cascades` stats object, and the `editor_renderer_tests` unit
+   tests of the layout math. `scripts/gi_verify.py --source
+   radiance_cascades` builds and reports the layout per station and measures
+   the flat ambient term until phase 4 binds a field.
 2. **Trace.** `rc_trace.comp` with the texel budget and hysteresis; the window
    previews raw atlases per cascade; the pass is timed.
 3. **Merge.** `rc_merge.comp`, `interpolate` mode; preview merged atlases;

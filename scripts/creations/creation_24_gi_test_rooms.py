@@ -328,10 +328,17 @@ DDGI_SETTINGS = {
 }
 
 
+def set_indirect_diffuse(c, source):
+    """Select the indirect diffuse producer: "ambient", "ddgi" or
+    "radiance_cascades" (doc/editor/radiance_cascades.md "Source selection")."""
+    return c.mutate("set_indirect_diffuse", {"source": source})
+
+
 def set_ddgi(c, enabled):
-    args = dict(DDGI_SETTINGS)
-    args["enabled"] = bool(enabled)
-    return c.mutate("set_ddgi", args)
+    """Pin the DDGI settings (DDGI_SETTINGS) and select DDGI (enabled) or the
+    flat ambient term as the indirect diffuse source."""
+    c.mutate("set_ddgi", dict(DDGI_SETTINGS))
+    return set_indirect_diffuse(c, "ddgi" if enabled else "ambient")
 
 
 def read_grid(c, deadline_s=30.0):

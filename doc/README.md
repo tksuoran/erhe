@@ -248,6 +248,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/post_processing.md](editor/post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
 - [editor/properties_window.md](editor/properties_window.md) (stable): Properties window single registered-property row path
+- [editor/radiance_cascades.md](editor/radiance_cascades.md) (experimental): Radiance cascades: indirect diffuse source selection, cascade layout and atlases, window and MCP tools
 - [editor/raytrace.md](editor/raytrace.md) (experimental): GPU ray-query raytracing
 - [editor/raytrace_materials.md](editor/raytrace_materials.md) (mostly stable): Material-aware ray-traced rendering: textures, glass, light sampling
 - [editor/reloadable_asset_loads.md](editor/reloadable_asset_loads.md) (mostly stable): Undone glTF imports drop their payload and re-read on redo
