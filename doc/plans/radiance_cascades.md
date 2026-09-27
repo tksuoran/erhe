@@ -68,7 +68,7 @@ fits what exists:
   multi-view XR path and off-screen light, with no per-viewport cost.
 
 The screen-space layouts (Path of Exile 2 flatland cascades, screen-space
-probes with world-space intervals) are follow-ups in section 9; erhe's forward
+probes with world-space intervals) are follow-ups in section 11; erhe's forward
 renderer has no depth / normal prepass to place probes on today.
 
 ## 2. Output: the DDGI probe field format
@@ -122,7 +122,7 @@ merge filters by hand). Tile placement wraps `probe_index` into rows so both
 atlas sides stay below `Device_info::max_texture_size`; DDGI's
 `tiles_x = nx * nz` rule overflows at cascade 0 densities.
 
-Sizing example, a 20 x 10 x 20 m scene, `s0 = 0.5 m`, `q0 = 4`: 32000 cascade 0
+Sizing example, a 20 x 10 x 20 m volume, `s0 = 0.5 m`, `q0 = 4`: 32000 cascade 0
 probes, 512 K texels; all cascades raw + merged about 16 MB, about 1 M interval
 rays for a full refresh. The Radiance cascades window reports the real numbers.
 
@@ -195,11 +195,81 @@ Merge-quality option `merge_mode`:
   messages on `App_message_bus` (light, transform, material, content), shared
   with the DDGI "change-driven hysteresis reset" item.
 
-## 7. Phases
+## 7. Test scene: `creation_24_gi_test_rooms`
+
+Every GI measurement runs on a dedicated scene built by the creation tooling
+(`scripts/creations/creation_24_gi_test_rooms.py`, on `common.py`; see the
+`erhe-creations` skill), so the measurements need no external asset. The
+scene is a test asset in the `creation_23_joint_constraint_test` pattern: the
+module exports a `STATIONS` table that `scripts/gi_verify.py` imports, and a
+`build_station(creation, name)` function.
+
+Each station is built as **its own scene**, because the probe volume is fitted
+to the content of the single scene root; one station per scene keeps each
+volume small, keeps the cascade 0 spacing fine, and makes each station's probe
+grid predictable. Every station entry carries: the builder, one or more
+measurement views (camera eye / target) and, per view, named screen-space
+rectangles with the statistic to take over them. All rooms are closed boxes
+(floor, four walls, ceiling) built from thick parts, plain white (albedo 0.8)
+unless stated, so light can reach a surface outside the direct light only
+through the indirect term under test. Scene ambient is black in every station
+except `courtyard`, so the flat ambient term cannot mask a result.
+
+| Station | Content | Measures |
+|---|---|---|
+| `leak_pair` | Two 4 x 3 x 4 m rooms sharing one 0.1 m wall; point light in room A only. | Room B mean luminance relative to room A: light leaking through a wall thinner than the probe spacing. |
+| `probe_offset_sweep` | Three copies of `leak_pair` side by side. After the build the script reads the fitted grid (origin, spacing) over MCP and moves each shared wall so its centre plane sits 0.0, 0.25 and 0.5 probe spacings from the nearest probe plane. Plus a 0.6 m high crawl space under a raised floor and a 0.3 m square pillar centred on a probe. | Leak ratio per offset; dark splotches next to the pillar and in the crawl space. Exercises probe placement directly: probes inside walls, probes on wall planes, cells thinner than the spacing. |
+| `cornell` | 3 x 3 x 3 m room, left wall red, right wall green, spot light aimed at the floor. | Red / green ratio of the floor strip next to each coloured wall. |
+| `emissive_only` | Closed room, no analytic light, emissive panels of 1.0, 0.25 and 0.05 m side on one wall. | Floor luminance in front of each panel (small sources are where the penumbra hypothesis breaks down); temporal noise. |
+| `corridor` | 1.5 x 2.5 x 24 m corridor, spot light on the end wall at one end. | Floor luminance profile along the centre line: monotonic falloff, no steps at cascade interval boundaries. Far-field transport through the upper cascades. |
+| `courtyard` | Walled 8 x 8 m yard, open top, directional light, non-black ambient as sky. | Shadowed wall luminance: sky radiance through escaping rays and the top cascade merge. |
+| `dynamic` | `cornell` plus scripted events: the light moves 1 m, then a 1 x 2 m door part slides open into a dark side room. | Frames until mean luminance is within 5 % of its settled value after each event. |
+
+The same stations serve DDGI: phase 0 runs them against DDGI before any RC
+code exists, and every later comparison is RC versus DDGI on the same station,
+same machine, same run.
+
+## 8. Performance measurement
+
+The target hardware includes integrated GPUs, and no cost figure is assumed in
+advance. Costs are measured, recorded and compared:
+
+- **Compute GPU timing.** `erhe::graphics::Gpu_timer` brackets a `Render_pass`
+  only, and the DDGI compute dispatches are not timed. Phase 0 adds a
+  compute-scoped timer (timestamps around a range of compute dispatches in one
+  command buffer; Vulkan, plus the OpenGL and Metal implementations next to the
+  existing timer backends) and times the DDGI trace, blend and relocate passes.
+  This is a public API change of `erhe::graphics`, so it adds a `CHANGELOG.md`
+  line.
+- **Reporting.** Per-pass GPU milliseconds (last frame and a 60-frame average)
+  in the DDGI and Radiance cascades windows, and from an MCP stats query
+  `get_indirect_diffuse_stats`: source, grid origin / spacing / counts,
+  cascades, texels or rays per frame, per-pass GPU ms, texture memory.
+- **Cost model.** Both renderers amortize through a per-frame budget
+  (`texels_per_frame`, `probes_per_frame`), so per-frame cost is a knob. The
+  stats also report cost per million rays (interval rays for RC, probe rays for
+  DDGI) and the full-refresh time (every texel or probe traced once), which is
+  what compares the two.
+- **Budget.** Phase 0 measures DDGI at its defaults on every station and
+  records the numbers. The RC budget is: at RC defaults, per-frame GPU time
+  <= DDGI's per-frame GPU time on the same station, and full-refresh time
+  <= DDGI's. Phase 5 chooses the RC defaults (`texels_per_frame`, `q0`, `s0`)
+  to meet it. Absolute numbers depend on the machine and go to
+  `memory-bank/local/`, not into this document.
+
+## 9. Phases
 
 Each phase is one commit (or a small series), builds the editor, `src/example`,
 `src/hello_swap`, `src/hextiles`, and keeps Vulkan validation clean.
 
+0. **Test scene and DDGI baseline.** `creation_24_gi_test_rooms.py` with all
+   stations; the compute GPU timer and DDGI pass timings;
+   `get_indirect_diffuse_stats`; `scripts/gi_verify.py` measuring the stations
+   for the current source. Run it against DDGI and record the baseline
+   (quality numbers and timings). Probe-placement defects that
+   `probe_offset_sweep` shows in DDGI become items in [ddgi.md](ddgi.md) and
+   are fixed there first, because RC shares the consumer (Chebyshev
+   visibility, probe state).
 1. **Selection and skeleton.** `Indirect_diffuse_source` with the DDGI config
    migration; `Radiance_cascades_config`; the renderer with grid / cascade
    fit and texture allocation; a developer `Radiance_cascades_window` reporting
@@ -207,45 +277,51 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    Also a C++ unit test of the pure math: cascade fit, interval bounds,
    octahedral 2x2 nesting, trilinear upper-probe indices and weights.
 2. **Trace.** `rc_trace.comp` with the texel budget and hysteresis; the window
-   previews raw atlases per cascade.
+   previews raw atlases per cascade; the pass is timed.
 3. **Merge.** `rc_merge.comp`, `interpolate` mode; preview merged atlases;
    `debug_cascade_mask` zeroes chosen cascades' radiance (beta kept) to show
    each interval band as in the paper's figure 3.
 4. **Reduce and render.** `rc_reduce.comp`; the editor binds the RC field
    through `set_ddgi` when the source is `radiance_cascades`. First visible
-   result.
-5. **Temporal and multi-bounce.** Direction jitter, `multi_bounce`,
-   change-driven hysteresis reset.
+   result and first full `gi_verify.py` run for RC.
+5. **Temporal, multi-bounce, defaults.** Direction jitter, `multi_bounce`,
+   change-driven hysteresis reset; RC defaults chosen against the section 8
+   budget.
 6. **Debug.** Probe overlay for a chosen cascade (CPU-phase debug lines only,
-   see the DDGI traps), GPU timings per pass in the window.
-7. **`per_neighbour_trace` merge mode.**
+   see the DDGI traps).
+7. **`per_neighbour_trace` merge mode**, its cost reported separately.
 
-## 8. Verification
+## 10. Verification
 
-Acceptance numbers, checked by a committed `scripts/radiance_cascades_verify.py`
-on the headless Vulkan build (MCP scene building, `capture_screenshot`, pixel
-statistics over fixed screen rectangles), worst value over three runs:
+`scripts/gi_verify.py` builds each station in the headless Vulkan editor, waits
+until the field stats are stable, captures the station views and computes the
+statistics over the station rectangles. Each acceptance number is the worst
+value over three runs. `--source ambient|ddgi|radiance_cascades` selects the
+producer; `--compare` runs DDGI and RC back to back and prints a table.
 
-1. **Disabled regression** - source `ambient`: screenshot identical to the
+1. **Disabled regression** - source `ambient`: screenshots identical to the
    pre-change build. Source `ddgi`: identical to the pre-change DDGI output.
-2. **Leak test** - two closed rooms sharing a 0.1 m wall, a point light in
-   room A. Room B mean luminance <= 1 % of room A with RC, and not above DDGI's
-   value at default settings.
-3. **Bounce present** - a white room with one red wall lit by a spot light:
-   the floor next to the red wall has red / green ratio >= 1.2 with RC, ~1.0
-   with `ambient`.
-4. **Convergence** - after moving the light, frames until room mean luminance
-   is within 5 % of its settled value: RC at most half of DDGI's.
-5. **Noise** - with the light static, per-pixel luminance standard deviation
-   over 30 frames on a flat wall: RC below DDGI.
-6. **Budget** - default settings on Sponza: RC GPU time per frame (window
-   timings) <= 1.5 ms, the lightmap baker's budget.
-7. **Validation** - Vulkan validation on for one run of the script: zero
-   errors.
-8. OpenGL and Metal builds compile and run with the source forced to
-   `ambient` (no ray query there).
+2. **Leak** - `leak_pair` room B mean luminance <= 1 % of room A with RC; on
+   `probe_offset_sweep` the worst offset <= 2 % and not above DDGI's worst.
+3. **Placement** - `probe_offset_sweep` pillar and crawl-space rectangles have
+   no pixel darker than 25 % of the rectangle median.
+4. **Bounce** - `cornell` floor strip next to the red wall red / green >= 1.2,
+   next to the green wall green / red >= 1.2; about 1.0 with `ambient`.
+5. **Small emitters** - `emissive_only` floor in front of the 1.0 m and 0.25 m
+   panels brighter than the room median; the 0.05 m panel result is recorded,
+   not gated (it probes the documented limit).
+6. **Far field** - `corridor` profile monotonic; largest second difference
+   below 2 % of the profile maximum.
+7. **Convergence** - `dynamic`: frames to settle after each event, RC at most
+   half of DDGI's.
+8. **Noise** - static `cornell`, per-pixel luminance standard deviation over 30
+   frames on the back wall: RC below DDGI.
+9. **Cost** - the section 8 budget, against the phase 0 baseline.
+10. **Validation** - Vulkan validation on for one run: zero errors.
+11. OpenGL and Metal builds compile and run with the source forced to
+    `ambient` (no ray query there).
 
-## 9. Follow-ups (not in the phases)
+## 11. Follow-ups (not in the phases)
 
 - **Screen-space probes with world-space intervals** (paper 4.5): probes on the
   depth buffer at `2^i` pixel spacing, bilateral spatial interpolation, same
