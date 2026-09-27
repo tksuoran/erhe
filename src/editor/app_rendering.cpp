@@ -485,6 +485,11 @@ App_rendering::App_rendering(
         { &m_pipeline_passes.outline }
     );
 
+    // Editor guides, not scene content: a Render_content::scene_only render
+    // (MCP render_scene_image) leaves these passes out.
+    selection_outline->data.kind = Composition_pass_kind::editor_aid;
+    ghost_edge_lines ->data.kind = Composition_pass_kind::editor_aid;
+
     // This gets overridden in Composition_pass::render()
     // TODO Figure out a good way to route the settings
 
@@ -525,6 +530,7 @@ App_rendering::App_rendering(
         },
         { &m_pipeline_passes.grid }
     );
+    m_grid_composition_pass->data.kind = Composition_pass_kind::editor_aid;
 
     auto translucent_content_fill_not_selected = make_composition_pass(
         "Content fill translucent not selected",
@@ -558,6 +564,7 @@ App_rendering::App_rendering(
             &m_pipeline_passes.brush_front
         }
     );
+    brush->data.kind = Composition_pass_kind::editor_aid;
 
     // Solid bone style: the pickable bone proxies rendered as N.V shaded
     // shapes (Rig.display_shape: octahedral, stick, box), using the stencil-assisted multi-pass method of the tool
@@ -582,7 +589,7 @@ App_rendering::App_rendering(
     // leave their stencil tags behind in bits 0..6, and the edge-line pipelines
     // draw only where the stencil is 0 there. The selection bit (7) is preserved
     // by the write masks.
-    make_composition_pass(
+    const std::shared_ptr<Composition_pass> bone_solid = make_composition_pass(
         "Bone solid (N.V)",
         Composition_pass_data{
             .mesh_layers                  {Mesh_layer_id::bone},
@@ -637,6 +644,7 @@ App_rendering::App_rendering(
             &m_pipeline_passes.bone6_hidden_color     // require_stencil_tag_depth_hidden_and_blend
         }
     );
+    bone_solid->data.kind = Composition_pass_kind::editor_aid;
 
     // Rendertarget meshes (the hotbar quad and any other rendertarget-mesh UI)
     // render in their own pass that ignores camera exposure and is marked as an

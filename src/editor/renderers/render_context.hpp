@@ -28,6 +28,15 @@ class App_context;
 class Scene_view;
 class Viewport_scene_view;
 
+// Which composition passes a render draws. scene_only leaves out the passes
+// marked Composition_pass_kind::editor_aid (grid, selection outline, ghost
+// edge lines, brush preview, solid bones): the offscreen scene image render
+// (MCP render_scene_image, scene/scene_image_capture.hpp) uses it.
+enum class Render_content : unsigned int {
+    scene_and_editor_aids = 0,
+    scene_only
+};
+
 class Render_context
 {
 public:
@@ -46,6 +55,7 @@ public:
     erhe::math::Viewport                    viewport           {0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug      shader_debug       {erhe::scene_renderer::Shader_debug::none};
     std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
+    Render_content                          content            {Render_content::scene_and_editor_aids};
 
 };
 

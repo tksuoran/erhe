@@ -655,6 +655,28 @@ curl -X POST http://127.0.0.1:3743/mcp \
 `annotate_limit`), which draws numbered rectangles over the recorded items and
 returns the number -> item table.
 
+## Image Tools
+
+Two tools write images; choose by what is being verified.
+
+- `render_scene_image` renders a scene offscreen through an explicit camera
+  (`camera`: `eye`, `target`, `up`, `fov_y_degrees`, `near`, `far`,
+  `exposure`, `shadow_range`; or `camera_node`: a scene camera's name or id)
+  at an explicit `width` x `height` into a render target owned by the request.
+  The image is independent of viewport windows and the ImGui layout, and
+  editor overlays (grid, gizmos, selection outline, hover, debug
+  visualizations) are never drawn. `output`: `png` (tonemapped, what a
+  viewport shows) or `linear` (HDR scene color as `.pfm`, with luminance
+  statistics in the reply). Options: `scene`, `path`, `shader_debug`,
+  `msaa_samples`. Use it for scene-content verification: rendering changes,
+  lighting, GI, A/B and reference comparisons. Design:
+  `doc/editor/rendergraph.md` "Scene image capture".
+- `capture_screenshot` captures the whole editor window as presented,
+  ImGui included. Use it for UI verification (windows, widgets, gizmos,
+  hover and selection feedback) and with `annotate_imgui_items`.
+
+Both span the frames they need and cannot run inside `batch`.
+
 ## Notes
 
 - `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count`

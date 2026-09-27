@@ -210,13 +210,20 @@ auto Post_processing_node::update_size() -> bool
 
         // Upsample texture + render pass: only for levels before the last.
         if (!is_last_level) {
+            // Level 0 is the post-processed image (get_producer_output_texture);
+            // it is also a copy source, for the MCP render_scene_image readback
+            // (scene/scene_image_capture.hpp).
+            const uint64_t level0_usage = (level == 0)
+                ? static_cast<uint64_t>(erhe::graphics::Image_usage_flag_bit_mask::transfer_src)
+                : uint64_t{0};
             std::shared_ptr<erhe::graphics::Texture> upsample_level_texture = std::make_shared<erhe::graphics::Texture>(
                 m_graphics_device,
                 erhe::graphics::Texture_create_info{
                     .device       = m_graphics_device,
                     .usage_mask   =
                         erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-                        erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                        level0_usage,
                     .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = erhe::dataformat::Format::format_16_vec4_float,
                     .use_mipmaps  = false,

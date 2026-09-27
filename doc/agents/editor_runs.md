@@ -159,7 +159,13 @@ swapchain format; otherwise the tool errors. The macOS Metal build has the
 same windowed path. It captures the editor's own frame, so occlusion by other
 windows does not matter.
 
-`capture_screenshot` is the screenshot path in every build. Never use
+For scene content alone, `render_scene_image` renders the scene offscreen
+through an explicit camera at an explicit size, independent of the ImGui
+layout and without editor overlays (`doc/agents/mcp_server_usage.md` "Image
+Tools"); prefer it whenever the check is about what the scene looks like, and
+`capture_screenshot` whenever it is about the editor UI.
+
+`capture_screenshot` is the editor-window screenshot path in every build. Never use
 `screencapture` or other system capture tools on macOS (they trigger the
 endpoint security agent). OS-level window capture on Windows
 (`py -3 scripts/capture_window.py`; PrintWindow by default, `--foreground`

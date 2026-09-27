@@ -12,7 +12,68 @@ Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow ma
 
 - **`Post_processing`** -- Manages the post-processing pipeline (bloom with downsample/upsample passes and tonemapping). Creates shader programs and render pipeline states. Factory method `create_node()` creates `Post_processing_node` instances.
 
-- **`Post_processing_node`** -- A `Rendergraph_node` that applies bloom and tonemapping to a rendered scene texture. Manages downsample/upsample texture pyramids with configurable mip levels. Connected between `Viewport_scene_view` (producer) and `Viewport_window` (consumer).
+- **`Post_processing_node`** -- A `Rendergraph_node` that applies bloom and tonemapping to a rendered scene texture. Manages downsample/upsample texture pyramids with configurable mip levels. Connected between `Viewport_scene_view` (producer) and `Viewport_window` (consumer). The level 0 upsample texture (the post-processed image, `get_producer_output_texture()`) also carries transfer-source usage, so it can be read back.
+
+- **`Scene_image_capture`**, **`Scene_image_view`**, **`Scene_image_readback_node`** (`src/editor/scene/scene_image_capture.hpp`) -- the offscreen scene render behind the MCP tool `render_scene_image`; see "Scene image capture" below.
+
+## Scene image capture
+
+`render_scene_image` renders a scene through an explicit camera into render
+targets owned by the request, so the image does not depend on any
+`Viewport_window` or ImGui window existing, being visible, focused, hovered or
+sized. Agents verify scene content with it and keep `capture_screenshot` for
+the editor UI.
+
+- Chain: `Scene_image_capture` builds `Shadow_render_node` ->
+  `Scene_image_view` -> `Post_processing_node` -> `Scene_image_readback_node`
+  in the rendergraph, the same nodes and the same wiring `Scene_views`
+  gives a viewport, minus the overlay node and the ImGui host consumer.
+  Under `--no-post-processing` the post-processing node is left out and the
+  png is the HDR scene color, as viewports then show it.
+- `Scene_image_view` is a window-less sibling of `Viewport_scene_view`
+  (`Scene_view` + `Texture_rendergraph_node`, HDR `format_16_vec4_float`
+  color, `d32_sfloat_s8_uint` depth, the requested MSAA sample count). Its
+  `execute_rendergraph_node()` ensures the atmosphere LUTs and calls
+  `App_rendering::render_viewport_main(context, false)` with
+  `Render_context::content = Render_content::scene_only`: no ID pass, no tools,
+  no renderables, no debug renderer or text, no overlay passes, and
+  `Composer::render()` skips the composition passes marked
+  `Composition_pass_kind::editor_aid` (grid, selection outline, ghost edge
+  lines, brush preview, solid bones). Its viewport config is the default one
+  a new viewport starts from (`Scene_views::get_viewport_config_data()`)
+  with edge lines, solid wireframe, centroids and corner points off and the
+  selected style equal to the unselected one. Nothing about the view persists
+  (no settings store). The shadow fit gets its aspect ratio from
+  `Scene_view::get_camera_viewport()`, which it overrides.
+- Explicit camera (`camera`): a standalone `erhe::scene::Camera` (perspective,
+  vertical fov) owned by the view, placed with `erhe::math::create_look_at`,
+  with the given exposure and shadow range. `camera_node` uses a scene camera
+  as is.
+- Lifetime: the `Mcp_server` holds the one `Scene_image_capture` of the
+  pending request. The first MCP pass builds the chain and defers the
+  request; the next `Rendergraph::execute()` runs the chain, and
+  `Scene_image_readback_node` copies the chosen texture (the post-processed
+  image for png, the view's resolved HDR color for linear) into a host-visible
+  buffer, records the frame index and disables all four nodes; later passes
+  poll `Device::is_frame_completed()`, convert the half floats, write the file
+  and destroy the capture, which unregisters the nodes and hands the shadow
+  node back through `App_rendering::destroy_shadow_node()`. Nothing is cached
+  between requests, so the tool costs nothing per frame when unused. When the
+  server drops the request (expired), it clears the capture's request and
+  `Mcp_server::release_abandoned_scene_image_capture()` destroys the capture
+  right away, or, while its copy is still in flight, on the first MCP pass
+  after that frame retires. `batch` refuses the tool before any sub-call runs,
+  so no chain is built for a call that cannot defer. A second request waits
+  (defers) while another request's capture is pending.
+- Files: png is the post-processed image sRGB-encoded on the CPU (IEC
+  61966-2-1, what the sRGB swapchain does; measured within 1 level of the
+  viewport's own pixels). linear is a portable float map (`.pfm`: `PF`
+  header, width height, scale `-1.0` = little-endian, RGB float32, rows
+  bottom to top) of the scene color before post-processing, camera exposure
+  applied; the reply adds min / max / mean Rec. 709 luminance.
+- Determinism: with a static field (ambient) repeated renders are pixel
+  identical; with DDGI the field's per-update random rays make them differ by
+  at most one 8-bit level while it is converged.
 
 ## Public API / Integration Points
 

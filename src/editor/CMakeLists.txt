@@ -592,6 +592,8 @@ erhe_target_sources_grouped(
     scene/draw_list_scene_dependencies.hpp
     scene/item_lookup.cpp
     scene/item_lookup.hpp
+    scene/scene_image_capture.cpp
+    scene/scene_image_capture.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
     scene/scene_settings_resolve.cpp

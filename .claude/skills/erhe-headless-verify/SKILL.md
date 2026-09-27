@@ -1,6 +1,6 @@
 ---
 name: erhe-headless-verify
-description: Verify editor behavior end-to-end without a display -- build the headless Vulkan editor, launch it, wait for its embedded MCP server, drive it with scripts/mcp_call.py (scene queries and mutations, geometry graph tools, undo/redo, capture_screenshot), read the screenshot PNG to SEE the result, then clean up. Use this whenever a change needs runtime verification and no interactive UI is required or no live display is available -- "does the mesh render", "does save/load round-trip", "does undo restore state", "what does the viewport look like now". This is the standard verification loop for editor changes on Windows; the same MCP loop (including capture_screenshot, windowed since 2026-08-08) also works against the windowed build, but the windowed build aborts at startup when the display is off/asleep.
+description: Verify editor behavior end-to-end without a display -- build the headless Vulkan editor, launch it, wait for its embedded MCP server, drive it with scripts/mcp_call.py (scene queries and mutations, geometry graph tools, undo/redo, render_scene_image for scene content, capture_screenshot for the UI), read the PNG to SEE the result, then clean up. Use this whenever a change needs runtime verification and no interactive UI is required or no live display is available -- "does the mesh render", "does save/load round-trip", "does undo restore state", "what does the viewport look like now". This is the standard verification loop for editor changes on Windows; the same MCP loop (including capture_screenshot, windowed since 2026-08-08) also works against the windowed build, but the windowed build aborts at startup when the display is off/asleep.
 ---
 
 # erhe headless verification (headless Vulkan build + in-editor MCP)
@@ -59,6 +59,7 @@ Remember `$p.Id` for cleanup.
 ```bash
 py -3 scripts/mcp_call.py --list                          # discover tools (--list <substring> filters)
 py -3 scripts/mcp_call.py list_scenes
+py -3 scripts/mcp_call.py render_scene_image b64:<base64-of-{"camera":{"eye":[0,2,5],"target":[0,0,0]}}>  # -> logs/render_scene_image.png
 py -3 scripts/mcp_call.py capture_screenshot              # -> logs/mcp_screenshot.png
 py -3 scripts/mcp_call.py get_scene_nodes b64:<base64-of-{"scene_name":"Default Scene"}>
 ```
@@ -83,8 +84,17 @@ py -3 scripts/mcp_call.py get_scene_nodes b64:<base64-of-{"scene_name":"Default 
   (65 checks; exit 0 = pass). Its incremental section needs
   `config/editor/logging.json` `"editor.graph_editor": "trace"` before launch
   -- revert before committing. Clean up `res/editor/graphs/smoke_*.json` after.
-- After `capture_screenshot`, `Read` `logs/mcp_screenshot.png` to actually see
-  the frame. A useful trick to identify an object visually: select it and
+- Pick the image tool by what is verified. Scene content (rendering, lighting,
+  GI, materials, A/B comparisons): `render_scene_image` renders the scene
+  offscreen through an explicit camera (`camera` {eye, target, fov_y_degrees,
+  ...} or `camera_node`) at an explicit `width` x `height`; no ImGui window,
+  viewport size or overlay (grid, gizmo, selection outline) affects it, and
+  `output: "linear"` gives HDR floats (`.pfm`) plus luminance stats. Editor UI
+  (windows, widgets, gizmos, hover / selection feedback): `capture_screenshot`
+  of the whole editor window. Details: `doc/agents/mcp_server_usage.md`
+  "Image Tools". Neither can run inside `batch`.
+- After `render_scene_image` / `capture_screenshot`, `Read` the PNG to actually
+  see the frame. A useful trick to identify an object visually: select it and
   `transform_selection` it, then re-screenshot and diff by eye.
 - Missing capability? Add a new MCP tool (handler + dispatch entry in
   `src/editor/mcp/mcp_server*.{hpp,cpp}`, schema in

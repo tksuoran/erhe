@@ -7,6 +7,7 @@
 #include "tools/debug_visualizations.hpp"
 
 #include "erhe_math/math_util.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -144,6 +145,10 @@ public:
     [[nodiscard]] virtual auto get_light_projections () const -> const erhe::scene_renderer::Light_projections*;
     [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
+    // The viewport get_camera()'s projection is evaluated with (its aspect
+    // ratio shapes the view frustum the shadow fit covers). Empty for a view
+    // without one - the headset, whose perspective_xr camera ignores it.
+    [[nodiscard]] virtual auto get_camera_viewport() const -> erhe::math::Viewport;
 
     // The stable name this view persists its settings under ("Default Viewport",
     // "Headset", ...); empty for views that do not persist (previews). Used to

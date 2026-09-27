@@ -1,6 +1,7 @@
 #include "renderers/composer.hpp"
 #include "editor_log.hpp"
 #include "renderers/composition_pass.hpp"
+#include "renderers/render_context.hpp"
 
 #include "erhe_profile/profile.hpp"
 
@@ -51,6 +52,12 @@ void Composer::render(const Render_context& context, const bool include_content,
     for (const auto& composition_pass : composition_passes) {
         const bool is_overlay = composition_pass->data.overlay;
         if (is_overlay ? !include_overlay : !include_content) {
+            continue;
+        }
+        if (
+            (context.content == Render_content::scene_only) &&
+            (composition_pass->data.kind == Composition_pass_kind::editor_aid)
+        ) {
             continue;
         }
         // log_composer->trace("  rp: {}", composition_pass->describe());

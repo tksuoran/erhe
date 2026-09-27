@@ -385,6 +385,11 @@ auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entr
     return &m_hover_entries.at(nearest_slot.value());
 }
 
+auto Scene_view::get_camera_viewport() const -> erhe::math::Viewport
+{
+    return erhe::math::Viewport{};
+}
+
 auto Scene_view::as_viewport_scene_view() -> Viewport_scene_view*
 {
     return nullptr;

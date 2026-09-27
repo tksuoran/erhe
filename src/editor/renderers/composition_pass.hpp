@@ -26,6 +26,13 @@ namespace editor {
 class Render_context;
 class Scene_root;
 
+// editor_aid passes draw editor guides rather than scene content; a render
+// with Render_content::scene_only skips them (Composer::render).
+enum class Composition_pass_kind : unsigned int {
+    scene_content = 0,
+    editor_aid
+};
+
 class Composition_pass_data
 {
 public:
@@ -87,6 +94,7 @@ public:
     // get_render_style / is_primitive_mode_enabled, which gate on the pass's own
     // primitive_mode.
     std::function<bool(const Render_context& context)>                     is_enabled{};
+    Composition_pass_kind                                                  kind{Composition_pass_kind::scene_content};
 };
 
 // Why a pass did or did not draw on its last render() call. Recorded so the

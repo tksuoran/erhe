@@ -491,10 +491,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // fit, and no shadow render passes are issued.
     const bool preset_shadows_enabled = (m_context.app_settings == nullptr) || m_context.app_settings->graphics.current_graphics_preset.shadow_enable;
     if (!preset_shadows_enabled || (m_scene_view.get_config().shadow_mode != Shadow_mode::shadow_maps)) {
-        const Viewport_scene_view* viewport_scene_view_for_lights = m_scene_view.as_viewport_scene_view();
-        const erhe::math::Viewport light_view_camera_viewport = (viewport_scene_view_for_lights != nullptr)
-            ? viewport_scene_view_for_lights->get_projection_viewport()
-            : erhe::math::Viewport{};
+        const erhe::math::Viewport light_view_camera_viewport = m_scene_view.get_camera_viewport();
         m_light_projections.apply(
             light_set,
             camera.get(),
@@ -554,15 +551,13 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     }
 
     // The tight frustum fit needs the main camera viewport for the view
-    // frustum aspect ratio; only Viewport_scene_view has one. The headset has
-    // no viewport, but its root camera is driven as perspective_xr (from the
+    // frustum aspect ratio (Scene_view::get_camera_viewport(): a viewport
+    // window's or an offscreen scene image's size). The headset has no
+    // viewport, but its root camera is driven as perspective_xr (from the
     // combined stereo eye frustum, see Headset_view::update_root_camera_projection),
     // and perspective_xr derives the frustum from explicit fov sides and ignores
     // the aspect ratio - so the empty viewport here is harmless for that path.
-    const Viewport_scene_view* viewport_scene_view = m_scene_view.as_viewport_scene_view();
-    const erhe::math::Viewport view_camera_viewport = (viewport_scene_view != nullptr)
-        ? viewport_scene_view->get_projection_viewport()
-        : erhe::math::Viewport{};
+    const erhe::math::Viewport view_camera_viewport = m_scene_view.get_camera_viewport();
 
     // Diagnostics: the tight shadow fit derives its view frustum from this
     // camera + viewport. For the headset there is no
@@ -586,7 +581,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             m_dbg_last_projection_type = static_cast<int>(type);
             log_render->info(
                 "Shadow fit: view={} camera='{}' projection={} fov[L{:.1f} R{:.1f} U{:.1f} D{:.1f}]deg fov_y={:.1f}deg viewport={}x{} aspect={:.3f} shadow_range={:.2f} tight_fit={}",
-                (viewport_scene_view != nullptr) ? "viewport" : "headset/other",
+                (m_scene_view.as_viewport_scene_view() != nullptr) ? "viewport" : ((view_camera_viewport.width > 0) ? "offscreen" : "headset/other"),
                 camera->get_name(),
                 (projection != nullptr) ? erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(type)] : "none",
                 (projection != nullptr) ? glm::degrees(projection->fov_left ) : 0.0f,

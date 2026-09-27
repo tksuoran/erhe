@@ -4000,6 +4000,58 @@
     "name": "capture_screenshot"
   },
   {
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug; for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the image. See doc/editor/rendergraph.md 'Scene image capture'.",
+    "inputSchema": {
+      "properties": {
+        "scene": {
+          "description": "Scene name. Default: the single open scene (an error when several are open).",
+          "type": "string"
+        },
+        "camera": {
+          "description": "Explicit camera: {eye: [x,y,z], target: [x,y,z], up: [x,y,z] (default [0,1,0]), fov_y_degrees (default 60), near (default 0.03), far (default 200), exposure (default 1), shadow_range (default 22, the shadow fit radius)}. Perspective, vertical fov; the aspect ratio is width / height. Give exactly one of camera and camera_node.",
+          "type": "object"
+        },
+        "camera_node": {
+          "description": "An existing camera of the scene, by name (string) or id (integer): its pose, projection, exposure and shadow range are used. Give exactly one of camera and camera_node.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "width": {
+          "description": "Image width in pixels, 1..8192 (default 1280)",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Image height in pixels, 1..8192 (default 720)",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Output file; parent directories are created. Default logs/render_scene_image.png (png) or logs/render_scene_image.pfm (linear).",
+          "type": "string"
+        },
+        "output": {
+          "description": "'png' (default): the post-processed (bloom + tonemapped) image, sRGB-encoded 8-bit RGBA - what a viewport shows. 'linear': the linear HDR scene color before post-processing (camera exposure applied), written as a portable float map (.pfm: 'PF' header, RGB float32 little-endian, rows bottom to top).",
+          "enum": [
+            "png",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "shader_debug": {
+          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none",
+          "type": "integer"
+        },
+        "msaa_samples": {
+          "description": "MSAA sample count of the render target (default: the current graphics preset's, what viewports use)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "render_scene_image"
+  },
+  {
     "description": "Request an in-application RenderDoc frame capture of the next OpenXR headset frame. Requires RenderDoc to be attached to the running app (on Quest: launch it from RenderDoc Meta Fork so the capture layer is injected) and an active headset view. An OpenXR app never presents a swapchain image, so RenderDoc cannot delimit frames on its own - this brackets the multiview render explicitly. The .rdc is written on the device and collected by the RenderDoc host; see doc/quest-renderdoc-capture.md.",
     "inputSchema": {
       "properties": {},

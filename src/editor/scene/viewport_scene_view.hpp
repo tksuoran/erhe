@@ -111,6 +111,7 @@ public:
     auto get_projection_scale     (float view_distance) const -> float                                        override;
     auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*               override;
     auto get_shadow_render_node    () const -> Shadow_render_node*                          override;
+    auto get_camera_viewport       () const -> erhe::math::Viewport                         override { return m_projection_viewport; }
     auto as_viewport_scene_view    () -> Viewport_scene_view*                               override;
     auto as_viewport_scene_view    () const -> const Viewport_scene_view*                   override;
     auto get_closest_point_on_line (glm::vec3 P0, glm::vec3 P1) -> std::optional<glm::vec3> override;

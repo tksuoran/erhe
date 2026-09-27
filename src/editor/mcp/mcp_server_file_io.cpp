@@ -8,6 +8,7 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "graphics/thumbnails.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
@@ -17,6 +18,7 @@
 #include "parsers/gltf_extensions_export.hpp"
 #include "parsers/physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
+#include "scene/scene_image_capture.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -37,8 +39,10 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_string.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #if defined(ERHE_USD_LIBRARY_LIGHTUSD)
 #include "erhe_usd/usd.hpp"
 #endif
@@ -46,9 +50,15 @@
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
+#include <limits>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -971,5 +981,299 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+
+namespace {
+
+[[nodiscard]] auto parse_json_vec3(const json& value) -> std::optional<glm::vec3>
+{
+    if (!value.is_array() || (value.size() != 3)) {
+        return std::nullopt;
+    }
+    glm::vec3 result{0.0f};
+    for (std::size_t i = 0; i < 3; ++i) {
+        if (!value[i].is_number()) {
+            return std::nullopt;
+        }
+        const float component = value[i].get<float>();
+        if (!std::isfinite(component)) {
+            return std::nullopt;
+        }
+        result[static_cast<glm::vec3::length_type>(i)] = component;
+    }
+    return result;
+}
+
+// IEC 61966-2-1 encode of one linear channel, clamped to [0, 1], to 8 bits:
+// what the sRGB swapchain format does to a viewport's post-processed color.
+[[nodiscard]] auto srgb_encode_8(const float linear) -> std::byte
+{
+    const float c = std::clamp(std::isfinite(linear) ? linear : 0.0f, 0.0f, 1.0f);
+    const float s = (c <= 0.0031308f) ? (12.92f * c) : ((1.055f * std::pow(c, 1.0f / 2.4f)) - 0.055f);
+    return static_cast<std::byte>(static_cast<unsigned int>(std::lround(s * 255.0f)));
+}
+
+// Portable float map ("PF": RGB float32, little-endian as the negative scale
+// says, rows bottom to top per the format).
+[[nodiscard]] auto write_pfm(const std::filesystem::path& path, const int width, const int height, const std::span<const glm::vec4> pixels) -> bool
+{
+    std::ofstream file{path, std::ios::binary | std::ios::trunc};
+    if (!file) {
+        return false;
+    }
+    const std::string header = fmt::format("PF\n{} {}\n-1.0\n", width, height);
+    file.write(header.data(), static_cast<std::streamsize>(header.size()));
+    std::vector<float> row(static_cast<std::size_t>(width) * 3);
+    for (int y = height - 1; y >= 0; --y) {
+        for (int x = 0; x < width; ++x) {
+            const glm::vec4& p = pixels[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width)) + static_cast<std::size_t>(x)];
+            row[(static_cast<std::size_t>(x) * 3) + 0] = p.r;
+            row[(static_cast<std::size_t>(x) * 3) + 1] = p.g;
+            row[(static_cast<std::size_t>(x) * 3) + 2] = p.b;
+        }
+        file.write(reinterpret_cast<const char*>(row.data()), static_cast<std::streamsize>(row.size() * sizeof(float)));
+    }
+    return static_cast<bool>(file);
+}
+
+} // anonymous namespace
+
+void Mcp_server::release_abandoned_scene_image_capture()
+{
+    if (!m_scene_image_capture || (m_scene_image_request != nullptr)) {
+        return;
+    }
+    // A copy recorded into a frame still in flight writes the readback
+    // buffer; the chain's textures and buffer go only after it retires. Not
+    // yet rendered (rendering), completed or failed: nothing references them.
+    if (m_scene_image_capture->poll() == Scene_image_capture_state::in_flight) {
+        return;
+    }
+    m_scene_image_capture.reset();
+    log_mcp->info("MCP server: released the capture of an abandoned render_scene_image request");
+}
+
+// Offscreen render of a scene through an explicit camera into a temporary
+// render target owned by the request (doc/editor/rendergraph.md "Scene image
+// capture"): independent of viewport windows and the ImGui layout. The first
+// pass builds the capture chain and defers; the rendergraph runs it on the
+// next frame; later passes poll until the recorded frame has retired, write
+// the file and tear the chain down.
+auto Mcp_server::action_render_scene_image(const json& args) -> std::string
+{
+    const bool continuation =
+        m_scene_image_capture &&
+        (m_scene_image_request == m_current_request) &&
+        (m_scene_image_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Scene_image_capture_state state = m_scene_image_capture->poll();
+        if ((state == Scene_image_capture_state::rendering) || (state == Scene_image_capture_state::in_flight)) {
+            m_defer_current_request = true;
+            return {};
+        }
+        m_scene_image_request = nullptr;
+        if (state == Scene_image_capture_state::failed) {
+            const std::string error = m_scene_image_capture->get_error();
+            m_scene_image_capture.reset();
+            return make_error_content("render_scene_image: " + error);
+        }
+
+        const int                        width  = m_scene_image_capture->get_width();
+        const int                        height = m_scene_image_capture->get_height();
+        const std::span<const glm::vec4> pixels = m_scene_image_capture->get_pixels();
+        const std::filesystem::path      path{m_scene_image_header.value("path", std::string{})};
+        json result = m_scene_image_header;
+        if (path.has_parent_path()) {
+            std::error_code ec;
+            std::filesystem::create_directories(path.parent_path(), ec);
+        }
+        bool written = false;
+        if (m_scene_image_capture->get_output() == Scene_image_output::png) {
+            std::vector<std::byte> bytes(pixels.size() * 4);
+            for (std::size_t i = 0; i < pixels.size(); ++i) {
+                bytes[(i * 4) + 0] = srgb_encode_8(pixels[i].r);
+                bytes[(i * 4) + 1] = srgb_encode_8(pixels[i].g);
+                bytes[(i * 4) + 2] = srgb_encode_8(pixels[i].b);
+                bytes[(i * 4) + 3] = std::byte{0xffu};
+            }
+            std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+            written = writer->write_png(path, width, height, width * 4, erhe::dataformat::Format::format_8_vec4_srgb, bytes);
+        } else {
+            written = write_pfm(path, width, height, pixels);
+            float  min_luminance = std::numeric_limits<float>::max();
+            float  max_luminance = std::numeric_limits<float>::lowest();
+            double sum_luminance = 0.0;
+            for (const glm::vec4& p : pixels) {
+                const float luminance = (0.2126f * p.r) + (0.7152f * p.g) + (0.0722f * p.b);
+                min_luminance = std::min(min_luminance, luminance);
+                max_luminance = std::max(max_luminance, luminance);
+                sum_luminance += static_cast<double>(luminance);
+            }
+            result["min_luminance"]  = min_luminance;
+            result["max_luminance"]  = max_luminance;
+            result["mean_luminance"] = pixels.empty() ? 0.0 : (sum_luminance / static_cast<double>(pixels.size()));
+        }
+        m_scene_image_capture.reset();
+        if (!written) {
+            return make_error_content("render_scene_image: failed to write '" + path.string() + "'");
+        }
+        return make_json_content(result).dump();
+    }
+
+    // The capture of a dropped request whose copy is still in flight (see
+    // release_abandoned_scene_image_capture()): one capture at a time, so wait
+    // for it to retire.
+    if (m_scene_image_capture) {
+        release_abandoned_scene_image_capture();
+        if (m_scene_image_capture) {
+            m_defer_current_request = true;
+            return {};
+        }
+    }
+
+    if ((m_context.graphics_device == nullptr) || (m_context.rendergraph == nullptr) || (m_context.app_scenes == nullptr) || (m_context.scene_views == nullptr)) {
+        return make_error_content("render_scene_image: rendering is not available");
+    }
+
+    // Scene: by name, else the single open scene.
+    std::shared_ptr<Scene_root> scene_root{};
+    const std::string scene_name = args.value("scene", std::string{});
+    if (!scene_name.empty()) {
+        for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+            if (candidate->get_name() == scene_name) {
+                scene_root = candidate;
+                break;
+            }
+        }
+        if (!scene_root) {
+            return make_error_content("render_scene_image: scene not found: " + scene_name);
+        }
+    } else {
+        scene_root = m_context.app_scenes->get_single_scene_root();
+        if (!scene_root) {
+            return make_error_content("render_scene_image: 'scene' is required unless exactly one scene is open");
+        }
+    }
+
+    // Size, output, options.
+    constexpr int c_max_size = 8192;
+    const int width  = args.value("width",  1280);
+    const int height = args.value("height", 720);
+    if ((width < 1) || (height < 1) || (width > c_max_size) || (height > c_max_size)) {
+        return make_error_content(fmt::format("render_scene_image: width and height must be in [1, {}]", c_max_size));
+    }
+    const std::string output_name = args.value("output", std::string{"png"});
+    Scene_image_output output = Scene_image_output::png;
+    if (output_name == "linear") {
+        output = Scene_image_output::linear;
+    } else if (output_name != "png") {
+        return make_error_content("render_scene_image: 'output' must be \"png\" or \"linear\"");
+    }
+    const std::string path = args.value(
+        "path",
+        std::string{(output == Scene_image_output::png) ? "logs/render_scene_image.png" : "logs/render_scene_image.pfm"}
+    );
+    const int shader_debug_value = args.value("shader_debug", 0);
+    if ((shader_debug_value < 0) || (shader_debug_value >= static_cast<int>(std::size(erhe::scene_renderer::c_shader_debug_strings)))) {
+        return make_error_content("render_scene_image: 'shader_debug' is out of range");
+    }
+    const int preset_msaa  = (m_context.app_settings != nullptr) ? m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count : 0;
+    const int msaa_samples = args.value("msaa_samples", preset_msaa);
+    if ((msaa_samples < 0) || (msaa_samples > 16)) {
+        return make_error_content("render_scene_image: 'msaa_samples' must be in [0, 16]");
+    }
+
+    // Camera: an existing scene camera, or an explicit pose + projection.
+    std::shared_ptr<erhe::scene::Camera> camera{};
+    json camera_json{};
+    const bool has_camera_node = args.contains("camera_node");
+    const bool has_camera      = args.contains("camera");
+    if (has_camera_node == has_camera) {
+        return make_error_content("render_scene_image: give exactly one of 'camera' {eye, target, ...} and 'camera_node' (camera name or id)");
+    }
+    if (has_camera_node) {
+        const json& selector = args["camera_node"];
+        for (const std::shared_ptr<erhe::scene::Camera>& candidate : scene_root->get_scene().get_cameras()) {
+            const bool match = selector.is_number_integer()
+                ? (candidate->get_id() == selector.get<std::size_t>())
+                : (selector.is_string() && (candidate->get_name() == selector.get<std::string>()));
+            if (match) {
+                camera = candidate;
+                break;
+            }
+        }
+        if (!camera) {
+            return make_error_content("render_scene_image: camera not found in scene: " + selector.dump());
+        }
+        camera_json = json{{"source", "camera_node"}, {"name", camera->get_name()}, {"id", camera->get_id()}};
+    } else {
+        const json& camera_args = args["camera"];
+        if (!camera_args.is_object()) {
+            return make_error_content("render_scene_image: 'camera' must be an object {eye, target, up, fov_y_degrees, near, far, exposure, shadow_range}");
+        }
+        const std::optional<glm::vec3> eye    = parse_json_vec3(camera_args.value("eye",    json{}));
+        const std::optional<glm::vec3> target = parse_json_vec3(camera_args.value("target", json{}));
+        const std::optional<glm::vec3> up     = camera_args.contains("up") ? parse_json_vec3(camera_args["up"]) : std::optional<glm::vec3>{glm::vec3{0.0f, 1.0f, 0.0f}};
+        if (!eye.has_value() || !target.has_value() || !up.has_value()) {
+            return make_error_content("render_scene_image: camera 'eye' and 'target' (and 'up' when given) must be finite [x, y, z]");
+        }
+        if (glm::length(target.value() - eye.value()) < 1.0e-6f) {
+            return make_error_content("render_scene_image: camera 'eye' and 'target' coincide");
+        }
+        const float fov_y_degrees = camera_args.value("fov_y_degrees", 60.0f);
+        const float z_near        = camera_args.value("near", 0.03f);
+        const float z_far         = camera_args.value("far", 200.0f);
+        const float exposure      = camera_args.value("exposure", 1.0f);
+        const float shadow_range  = camera_args.value("shadow_range", 22.0f);
+        if (!(fov_y_degrees > 0.0f) || !(fov_y_degrees < 180.0f) || !(z_near > 0.0f) || !(z_far > z_near) || !(shadow_range > 0.0f)) {
+            return make_error_content("render_scene_image: need 0 < fov_y_degrees < 180, 0 < near < far and shadow_range > 0");
+        }
+        camera = std::make_shared<erhe::scene::Camera>("render_scene_image camera");
+        camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+        camera->set_fov_y             (glm::radians(fov_y_degrees));
+        camera->set_perspective_z_near(z_near);
+        camera->set_perspective_z_far (z_far);
+        camera->set_exposure          (exposure);
+        camera->set_shadow_range      (shadow_range);
+        camera->set_parent_from_node  (erhe::math::create_look_at(eye.value(), target.value(), up.value()));
+        camera_json = json{
+            {"source",        "explicit"},
+            {"eye",           json::array({eye->x, eye->y, eye->z})},
+            {"target",        json::array({target->x, target->y, target->z})},
+            {"up",            json::array({up->x, up->y, up->z})},
+            {"fov_y_degrees", fov_y_degrees},
+            {"near",          z_near},
+            {"far",           z_far},
+            {"exposure",      exposure},
+            {"shadow_range",  shadow_range}
+        };
+    }
+
+    m_scene_image_capture = std::make_unique<Scene_image_capture>(
+        m_context,
+        Scene_image_capture_create_info{
+            .scene_root        = scene_root,
+            .camera            = camera,
+            .width             = width,
+            .height            = height,
+            .msaa_sample_count = msaa_samples,
+            .output            = output,
+            .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value)
+        }
+    );
+    m_scene_image_header = json{
+        {"path",         path},
+        {"width",        width},
+        {"height",       height},
+        {"output",       output_name},
+        {"scene",        scene_root->get_name()},
+        {"camera",       camera_json},
+        {"msaa_samples", msaa_samples},
+        {"shader_debug", shader_debug_value}
+    };
+    m_scene_image_request     = m_current_request;
+    m_scene_image_enqueued_at = m_current_request->enqueued_at;
+    m_defer_current_request   = true;
+    return {};
+}
 
 } // namespace editor

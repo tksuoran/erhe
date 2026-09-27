@@ -52,6 +52,7 @@ namespace editor {
 class App_context;
 class Brush;
 enum class Transform_drag_kind : unsigned int;
+class Scene_image_capture;
 class Scene_root;
 class Viewport_scene_view;
 // Builds the event list of one input gesture (src/editor/mcp/mcp_server_ui.cpp).
@@ -341,6 +342,10 @@ private:
     auto action_set_joint_constraint_visualization(const nlohmann::json& args) -> std::string;
     auto query_joint_constraint_state             (const nlohmann::json& args) -> std::string;
     auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;
+    auto action_render_scene_image           (const nlohmann::json& args) -> std::string;
+    // Destroys the capture of a render_scene_image request that was dropped
+    // (expired), once no recorded GPU copy of it is still in flight.
+    void release_abandoned_scene_image_capture();
     auto action_request_renderdoc_capture    (const nlohmann::json& args) -> std::string;
     auto action_push_shader_debug             (const nlohmann::json& args) -> std::string;
     auto action_pop_shader_debug              (const nlohmann::json& args) -> std::string;
@@ -730,6 +735,19 @@ private:
     const Queued_request*                            m_irradiance_query_request{nullptr};
     std::chrono::steady_clock::time_point            m_irradiance_query_enqueued_at{};
     nlohmann::json                                   m_irradiance_query_header;
+
+    // render_scene_image: the offscreen capture chain of the pending request
+    // (doc/editor/rendergraph.md "Scene image capture"), existing only while
+    // that request defers until its readback completes (main thread only).
+    // Same request identification as the irradiance query above; the header
+    // holds the result fields decided on the first pass. When the request is
+    // dropped (expired) m_scene_image_request is cleared and the capture is
+    // released by release_abandoned_scene_image_capture() as soon as its
+    // recorded copy has retired. batch refuses the tool up front.
+    std::unique_ptr<Scene_image_capture>             m_scene_image_capture;
+    const Queued_request*                            m_scene_image_request{nullptr};
+    std::chrono::steady_clock::time_point            m_scene_image_enqueued_at{};
+    nlohmann::json                                   m_scene_image_header;
 };
 
 } // namespace editor
