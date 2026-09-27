@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check the radiance cascades raw texels against an analytic ground truth.
+"""Check the radiance cascades raw and merged texels against an analytic
+ground truth.
 
 doc/editor/radiance_cascades.md "Verification": builds GI test stations of
 scripts/creations/creation_24_gi_test_rooms.py (STATIONS / build_station)
@@ -29,11 +30,41 @@ vs back) within SKIP_MARGIN of the hit - coincident faces of touching parts,
 such as the floor top under a wall bottom, where the GPU may commit either
 face. Skipped texels are counted in the output.
 
-Supported stations: cornell, emissive_only, courtyard (the ones whose parts
-are exactly room() boxes, panels and analytic lights).
+Merged checks (doc/editor/radiance_cascades.md "Merge"), from the same
+readback (every texel carries its merged value too):
+
+- exact algebra: every merged texel of every cascade against the merge
+  recomputed on the CPU from the READ-BACK raw texel and the read-back
+  merged texels of the cascade above - the 8 upper probes of
+  get_upper_probes() (trilinear 0.25 / 0.75 weights, indices clamped to the
+  upper grid), each the average of the 2x2 child texels; the top cascade
+  merges with the sky (the scene ambient). Tolerance MERGE_ALGEBRA_TOLERANCE
+  relative (floor MERGE_ALGEBRA_FLOOR): only the final half-float rounding
+  differs. This verifies the shader's arithmetic, not the approximation.
+- approximation: for APPROX_SAMPLES cascade 0 texels (probes outside every
+  part, fixed seed), the ground truth is the average over the texel's
+  octahedral footprint - APPROX_SUBDIVISIONS^2 sub-directions uniform in
+  the octahedral parameter, the measure the 2x2 child averages of the merge
+  use - of the full-range radiance from the probe centre (closest hit over
+  [0, inf), shaded as above; the sky on escape; 0 on a backface). The
+  merge interpolates the upper intervals from upper probes that sit
+  elsewhere (parallax), so this is an error distribution, not a 0.5 %
+  check: relative luminance error |merged - truth| / max(truth, 1 % of the
+  sample's mean truth); the script prints median, p90 and max and the worst
+  texels, and fails only when the median exceeds APPROX_MEDIAN_BOUND or
+  p90 exceeds APPROX_P90_BOUND (bounds set from the measured stations,
+  doc/editor/radiance_cascades.md "Verification").
+- --mask-check (cornell by default): the merge is linear in the interval
+  radiances, so the mean merged cascade 0 radiance with every band shown
+  equals the sum of the means with one band shown at a time
+  (debug_cascade_mask = everything but that band; the bands are the
+  cascades and the sky), within MASK_SUM_TOLERANCE relative.
+
+Supported stations: cornell, emissive_only, courtyard, leak_pair, corridor
+(the ones whose parts are exactly room() boxes, panels and analytic lights).
 
 Usage:
-    py -3 scripts/rc_texel_verify.py [--station NAME ...] [--reuse] [--port N] [--editor PATH]
+    py -3 scripts/rc_texel_verify.py [--station NAME ...] [--mask-check NAME ...] [--reuse] [--port N] [--editor PATH]
 
 Without --reuse the script launches the headless editor
 (build_vs2026_vulkan_headless) like gi_verify.py, backs up the editor config
@@ -44,6 +75,7 @@ every checked texel passes, 1 otherwise.
 import argparse
 import math
 import os
+import random
 import sys
 import time
 
@@ -61,7 +93,22 @@ DISTANCE_TOLERANCE = 1.0e-3  # metres
 SKIP_MARGIN        = 1.0e-4  # metres
 SWEEPS             = 2
 MAX_TEXELS_PER_CALL = 4096
-SUPPORTED = ("cornell", "emissive_only", "courtyard")
+SUPPORTED = ("cornell", "emissive_only", "courtyard", "leak_pair", "corridor")
+
+MERGE_ALGEBRA_TOLERANCE = 2.0e-3  # relative: the half-float store rounds by at most 2^-11
+MERGE_ALGEBRA_FLOOR     = 1.0e-4  # absolute floor of the relative error denominator
+APPROX_SAMPLES          = 400     # cascade 0 texels per station
+APPROX_SUBDIVISIONS     = 8       # sub-directions per texel axis of the ground truth
+APPROX_SEED             = 1
+APPROX_FLOOR_FRACTION   = 0.1     # relative error denominator floor, of the sample mean truth
+# Loose bounds, about twice the worst station measured when the merge was
+# written (median 0.13, p90 0.86; doc/editor/radiance_cascades.md
+# "Verification"): they catch a broken merge (wrong child texels or upper
+# probes read as errors of order 1 on most texels), not the parallax error.
+APPROX_MEDIAN_BOUND     = 0.25
+APPROX_P90_BOUND        = 1.5
+MASK_SUM_TOLERANCE      = 2.0e-3  # relative
+SKY_MASK_BIT            = 12      # Radiance_cascades_renderer::c_sky_mask_bit
 
 
 # --- vector helpers -------------------------------------------------------------
@@ -149,6 +196,21 @@ def describe_station(name):
                              [x - 0.5 * side, rooms.EMISSIVE_Y - 0.5 * side, lo[2]],
                              [x + 0.5 * side, rooms.EMISSIVE_Y + 0.5 * side, lo[2] + 0.02], glow))
         return boxes, [], [0.0, 0.0, 0.0]
+    if name == "leak_pair":
+        lo = [-rooms.PAIR_HALF_X, 0.0, -0.5 * rooms.PAIR_DEPTH]
+        hi = [rooms.PAIR_HALF_X, rooms.ROOM_H, 0.5 * rooms.PAIR_DEPTH]
+        boxes = room_boxes(lo, hi, white)
+        boxes.append(Box("Shared Wall", [-0.5 * rooms.SHARED_T, 0.0, lo[2]],
+                         [0.5 * rooms.SHARED_T, rooms.ROOM_H, hi[2]], white["default"]))
+        lights = [{"type": "point", "position": [-2.05, 2.2, 0.0], "radiance": [rooms.PAIR_LIGHT_I] * 3,
+                   "range": 12.0}]
+        return boxes, lights, [0.0, 0.0, 0.0]
+    if name == "corridor":
+        lo = [-rooms.CORRIDOR_HALF_W, 0.0, 0.0]
+        hi = [rooms.CORRIDOR_HALF_W, rooms.CORRIDOR_H, rooms.CORRIDOR_LEN]
+        boxes = room_boxes(lo, hi, white)
+        lights = [spot_light(rooms.CORRIDOR_LIGHT, [0.0, 1.4, 0.0], rooms.CORRIDOR_LIGHT_I, 90.0, 70.0, 10.0)]
+        return boxes, lights, [0.0, 0.0, 0.0]
     if name == "courtyard":
         h = rooms.COURTYARD_HALF
         boxes = room_boxes([-h, 0.0, -h], [h, rooms.COURTYARD_H, h], white, skip=("Ceiling",))
@@ -233,6 +295,17 @@ def shade(position, normal, direction, material, lights, ambient, boxes):
             if (v_dot(normal, L) <= 0.0) or occluded(offset_position, v_add(position, v_mul(L, 1000.0)), boxes):
                 continue
             attenuation = 1.0
+        elif light["type"] == "point":
+            to_light = v_sub(light["position"], position)
+            distance = math.sqrt(v_dot(to_light, to_light))
+            L = v_mul(to_light, 1.0 / distance)
+            if v_dot(normal, L) <= 0.0:
+                continue
+            k = distance / light["range"]
+            window = min(1.0, max(0.0, 1.0 - (k ** 4)))
+            attenuation = window * window / ((distance * distance) + 1.0)
+            if occluded(offset_position, light["position"], boxes):
+                continue
         else:
             to_light = v_sub(light["position"], position)
             distance = math.sqrt(v_dot(to_light, to_light))
@@ -296,9 +369,12 @@ def check_station(c, name):
     boxes, lights, ambient = describe_station(name)
     rooms.build_station(c, name, ddgi=False)
     rooms.set_indirect_diffuse(c, "radiance_cascades")
+    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0})
     c.settle()
     rc = wait_sweeps(c, SWEEPS)
     failures = 0
+    # (cascade, probe, texel) -> read-back texel, for the merged checks
+    texels_by_address = {}
     for cascade in rc["cascades"]:
         index = cascade["index"]
         q = cascade["tile_texels"]
@@ -312,6 +388,7 @@ def check_station(c, name):
         for start in range(0, len(requests), MAX_TEXELS_PER_CALL):
             result = c.call("get_radiance_cascades_texels", {"texels": requests[start:start + MAX_TEXELS_PER_CALL]})
             for texel in result["texels"]:
+                texels_by_address[(index, tuple(texel["probe"]), tuple(texel["texel"]))] = texel
                 expected = reference_texel(texel, boxes, lights, ambient)
                 if expected["skip"]:
                     counts["skipped"] += 1
@@ -346,12 +423,286 @@ def check_station(c, name):
               f"radiance {counts['radiance']} (worst relative {worst_radiance:.5f})", flush=True)
         for line in examples:
             print(line)
+    failures += check_merge_algebra(name, rc, texels_by_address, ambient)
+    failures += check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambient)
+    stats = c.call("get_indirect_diffuse_stats").get("radiance_cascades", {})
+    gpu_ms = stats.get("gpu_ms", {})
+    print(f"  {name} cost: {stats.get('texels')} texels, {stats.get('texels_per_update')} per update; GPU ms average "
+          f"trace {gpu_ms.get('trace', {}).get('average_ms', 0.0):.3f}, merge {gpu_ms.get('merge', {}).get('average_ms', 0.0):.3f} "
+          f"({stats.get('timing_sample_count')} samples)", flush=True)
     return failures
+
+
+# --- merged checks -------------------------------------------------------------------
+
+def upper_probe_axis(lower_index, upper_count):
+    """get_upper_probe_axis() of radiance_cascades_layout.cpp."""
+    last = max(0, upper_count - 1)
+    if lower_index % 2 == 0:
+        m = lower_index // 2
+        return [min(max(m - 1, 0), last), min(max(m, 0), last)], [0.25, 0.75]
+    m = (lower_index - 1) // 2
+    return [min(max(m, 0), last), min(max(m + 1, 0), last)], [0.75, 0.25]
+
+
+def expected_merge(index, texel, rc, texels_by_address, ambient):
+    """rc_merge.comp on the read-back raw / upper merged texels (mask 0)."""
+    raw = texel["radiance"] + [texel["beta"]]
+    if index == len(rc["cascades"]) - 1:
+        upper = list(ambient) + [1.0]
+    else:
+        upper_counts = rc["cascades"][index + 1]["grid_counts"]
+        axes = [upper_probe_axis(texel["probe"][a], upper_counts[a]) for a in range(3)]
+        u, v = texel["texel"]
+        upper = [0.0, 0.0, 0.0, 0.0]
+        for k in range(2):
+            for j in range(2):
+                for i in range(2):
+                    weight = axes[0][1][i] * axes[1][1][j] * axes[2][1][k]
+                    probe = (axes[0][0][i], axes[1][0][j], axes[2][0][k])
+                    for du, dv in ((0, 0), (1, 0), (0, 1), (1, 1)):
+                        child = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
+                        value = child["merged_radiance"] + [child["merged_beta"]]
+                        for ch in range(4):
+                            upper[ch] += weight * 0.25 * value[ch]
+    return [raw[ch] + (raw[3] * upper[ch]) for ch in range(3)] + [raw[3] * upper[3]]
+
+
+def check_merge_algebra(name, rc, texels_by_address, ambient):
+    failures = 0
+    for cascade in rc["cascades"]:
+        index = cascade["index"]
+        checked = 0
+        bad = 0
+        worst = 0.0
+        examples = []
+        for (c_index, probe, uv), texel in texels_by_address.items():
+            if c_index != index:
+                continue
+            expected = expected_merge(index, texel, rc, texels_by_address, ambient)
+            measured = texel["merged_radiance"] + [texel["merged_beta"]]
+            error = max(abs(measured[ch] - expected[ch]) / max(abs(expected[ch]), MERGE_ALGEBRA_FLOOR)
+                        for ch in range(4))
+            checked += 1
+            worst = max(worst, error)
+            if error > MERGE_ALGEBRA_TOLERANCE:
+                bad += 1
+                if len(examples) < 5:
+                    examples.append(f"      probe {list(probe)} texel {list(uv)}: merged {measured} expected {expected}")
+        failures += bad
+        print(f"  {name} cascade {index} merge algebra: {'PASS' if bad == 0 else 'FAIL'} checked {checked}, "
+              f"failures {bad} (worst relative {worst:.5f})", flush=True)
+        for line in examples:
+            print(line)
+    return failures
+
+
+def luminance(rgb):
+    return (0.2126 * rgb[0]) + (0.7152 * rgb[1]) + (0.0722 * rgb[2])
+
+
+def full_range_radiance(origin, direction, boxes, lights, ambient):
+    hit = closest_hit(origin, direction, 0.0, math.inf, boxes)
+    if hit is None:
+        return list(ambient)
+    t, normal, side, box = hit
+    if side == "back":
+        return [0.0, 0.0, 0.0]
+    position = v_add(origin, v_mul(direction, t))
+    return shade(position, normal, direction, box.material, lights, ambient, boxes)
+
+
+def octahedral_decode(f):
+    n = [f[0], f[1], 1.0 - abs(f[0]) - abs(f[1])]
+    t = max(-n[2], 0.0)
+    n[0] += -t if n[0] > 0.0 else t
+    n[1] += -t if n[1] > 0.0 else t
+    return v_norm(n)
+
+
+def interior_of(name):
+    """(lo, hi) of the rooms' free interior: the space the field serves."""
+    if name == "cornell":
+        h = rooms.CORNELL_HALF
+        return [-h, 0.0, -h], [h, 3.0, h]
+    if name == "emissive_only":
+        h = rooms.EMISSIVE_HALF
+        return [-h, 0.0, -h], [h, 3.0, h]
+    if name == "courtyard":
+        h = rooms.COURTYARD_HALF
+        return [-h, 0.0, -h], [h, rooms.COURTYARD_H, h]
+    if name == "leak_pair":
+        return [-rooms.PAIR_HALF_X, 0.0, -0.5 * rooms.PAIR_DEPTH], [rooms.PAIR_HALF_X, rooms.ROOM_H, 0.5 * rooms.PAIR_DEPTH]
+    if name == "corridor":
+        return [-rooms.CORRIDOR_HALF_W, 0.0, 0.0], [rooms.CORRIDOR_HALF_W, rooms.CORRIDOR_H, rooms.CORRIDOR_LEN]
+    raise ValueError(name)
+
+
+def inside_box(point, lo, hi):
+    return all(lo[i] < point[i] < hi[i] for i in range(3))
+
+
+def inside_any(point, boxes):
+    return any(all(box.lo[i] <= point[i] <= box.hi[i] for i in range(3)) for box in boxes)
+
+
+def nearest_face_distance(point, boxes):
+    """Distance from a free point to the nearest part (for the worst-texel report)."""
+    best = math.inf
+    for box in boxes:
+        d = [max(box.lo[i] - point[i], 0.0, point[i] - box.hi[i]) for i in range(3)]
+        best = min(best, math.sqrt(v_dot(d, d)))
+    return best
+
+
+def hidden_upper_weight(position, rc, boxes):
+    """Per cascade 1 .. N-1, the trilinear weight of the 8 cascade probes
+    around `position` that the position cannot see (the segment to the
+    upper probe crosses a part, or the upper probe is inside one). The
+    merge interpolates those probes' intervals, so where this is > 0 the
+    merged texel carries light from the other side of a wall (or misses
+    light an occluded upper probe does not see)."""
+    result = []
+    for cascade in rc["cascades"][1:]:
+        origin = cascade["grid_origin"]
+        spacing = cascade["grid_spacing"]
+        counts = cascade["grid_counts"]
+        axes = []
+        for a in range(3):
+            g = (position[a] - origin[a]) / spacing[a]
+            i0 = min(max(int(math.floor(g)), 0), counts[a] - 1)
+            i1 = min(i0 + 1, counts[a] - 1)
+            f = min(max(g - i0, 0.0), 1.0)
+            axes.append(((i0, 1.0 - f), (i1, f)))
+        hidden = 0.0
+        for ix, wx in axes[0]:
+            for iy, wy in axes[1]:
+                for iz, wz in axes[2]:
+                    weight = wx * wy * wz
+                    if weight <= 0.0:
+                        continue
+                    upper = [origin[0] + ix * spacing[0], origin[1] + iy * spacing[1], origin[2] + iz * spacing[2]]
+                    delta = v_sub(upper, position)
+                    length = math.sqrt(v_dot(delta, delta))
+                    blocked = inside_any(upper, boxes) or ((length > 1.0e-6) and (
+                        closest_hit(position, v_mul(delta, 1.0 / length), 0.0, length, boxes) is not None))
+                    if blocked:
+                        hidden += weight
+        result.append(hidden)
+    return result
+
+
+def distribution(values):
+    values = sorted(values)
+    if not values:
+        return "-"
+    return (f"n {len(values)}, median {values[len(values) // 2]:.4f}, "
+            f"p90 {values[min(len(values) - 1, int(0.9 * len(values)))]:.4f}, max {values[-1]:.4f}")
+
+
+def check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambient):
+    q = rc["cascades"][0]["tile_texels"]
+    n = APPROX_SUBDIVISIONS
+    lo, hi = interior_of(name)
+    candidates = [texel for (index, _, _), texel in texels_by_address.items()
+                  if (index == 0) and inside_box(texel["probe_position"], lo, hi)
+                  and not inside_any(texel["probe_position"], boxes)]
+    candidates.sort(key=lambda texel: (tuple(texel["probe"]), tuple(texel["texel"])))
+    sample = random.Random(APPROX_SEED).sample(candidates, min(APPROX_SAMPLES, len(candidates)))
+    rows = []
+    for texel in sample:
+        u, v = texel["texel"]
+        truth = [0.0, 0.0, 0.0]
+        for sv in range(n):
+            for su in range(n):
+                f = [(((u + ((su + 0.5) / n)) / q) * 2.0) - 1.0, (((v + ((sv + 0.5) / n)) / q) * 2.0) - 1.0]
+                radiance = full_range_radiance(texel["probe_position"], octahedral_decode(f), boxes, lights, ambient)
+                truth = v_add(truth, radiance)
+        truth = v_mul(truth, 1.0 / (n * n))
+        rows.append((texel, luminance(truth), luminance(texel["merged_radiance"])))
+    hidden_by_probe = {}
+    for texel, _, _ in rows:
+        key = tuple(texel["probe"])
+        if key not in hidden_by_probe:
+            hidden_by_probe[key] = hidden_upper_weight(texel["probe_position"], rc, boxes)
+    mean_truth = sum(row[1] for row in rows) / max(1, len(rows))
+    floor = max(APPROX_FLOOR_FRACTION * mean_truth, 1.0e-6)
+    errors = sorted((((abs(merged - truth) / max(truth, floor)), texel, truth, merged) for texel, truth, merged in rows),
+                    key=lambda row: row[0])
+    if not errors:
+        print(f"  {name} merge approximation: no sample texels")
+        return 0
+    values = [e[0] for e in errors]
+    median = values[len(values) // 2]
+    p90 = values[min(len(values) - 1, int(0.9 * len(values)))]
+    mean_signed = sum((merged - truth) for _, _, truth, merged in errors) / (len(errors) * max(mean_truth, 1.0e-9))
+    ok = (median <= APPROX_MEDIAN_BOUND) and (p90 <= APPROX_P90_BOUND)
+    print(f"  {name} merge approximation: {'PASS' if ok else 'FAIL'} {len(values)} cascade 0 texels, "
+          f"{n}x{n} sub-directions: relative error median {median:.4f}, p90 {p90:.4f}, max {values[-1]:.4f}; "
+          f"mean truth {mean_truth:.5f}, mean bias {mean_signed:+.4f} "
+          f"(bounds median {APPROX_MEDIAN_BOUND}, p90 {APPROX_P90_BOUND})", flush=True)
+    # Split by the cascade 1 stencil (the nearest upper field), and the mean
+    # hidden weight per cascade over the sample.
+    visible = [e[0] for e in errors if hidden_by_probe[tuple(e[1]["probe"])][0] == 0.0]
+    occluded_upper = [e[0] for e in errors if hidden_by_probe[tuple(e[1]["probe"])][0] > 0.0]
+    cascade_count = len(rc["cascades"])
+    mean_hidden = [sum(hidden_by_probe[tuple(e[1]["probe"])][k] for e in errors) / len(errors)
+                   for k in range(cascade_count - 1)]
+    print(f"      cascade 1 upper probes all visible: {distribution(visible)}")
+    print(f"      cascade 1 upper probe hidden:       {distribution(occluded_upper)}")
+    print(f"      mean hidden upper weight, cascades 1..{cascade_count - 1}: "
+          f"{' '.join(f'{w:.2f}' for w in mean_hidden)}")
+    for error, texel, truth, merged in errors[-3:]:
+        print(f"      worst {error:.3f}: probe {texel['probe']} at {[round(x, 3) for x in texel['probe_position']]} "
+              f"texel {texel['texel']} dir {[round(x, 3) for x in texel['direction']]}: merged {merged:.5f} "
+              f"truth {truth:.5f}, nearest part {nearest_face_distance(texel['probe_position'], boxes):.3f} m, "
+              f"hidden upper weight per cascade {' '.join(f'{w:.2f}' for w in hidden_by_probe[tuple(texel['probe'])])}")
+    return 0 if ok else 1
+
+
+def check_mask_decomposition(c, name):
+    """Mean merged cascade 0 radiance: all bands shown == sum over single bands."""
+    _, _, ambient = describe_station(name)
+    rooms.build_station(c, name, ddgi=False)
+    rooms.set_indirect_diffuse(c, "radiance_cascades")
+    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0})
+    c.settle()
+    rc = wait_sweeps(c, SWEEPS)
+    count = rc["cascade_count"]
+    everything = ((1 << count) - 1) | (1 << SKY_MASK_BIT)
+
+    def mean_merged(mask):
+        c.mutate("set_radiance_cascades", {"debug_cascade_mask": mask})
+        summary = c.call("get_radiance_cascades_texels", {"texels": []})["cascades"][0]
+        return summary["mean_merged_radiance"]
+
+    try:
+        full = mean_merged(0)
+        bands = [(f"cascade {i}", 1 << i) for i in range(count)] + [("sky", 1 << SKY_MASK_BIT)]
+        total = [0.0, 0.0, 0.0]
+        parts = []
+        for label, bit in bands:
+            value = mean_merged(everything & ~bit)
+            parts.append((label, value))
+            total = v_add(total, value)
+        none = mean_merged(everything)
+    finally:
+        c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0})
+    error = max(abs(total[i] - full[i]) / max(abs(full[i]), 1.0e-6) for i in range(3))
+    ok = (error <= MASK_SUM_TOLERANCE) and (max(abs(x) for x in none) <= 1.0e-6)
+    print(f"  {name} mask decomposition: {'PASS' if ok else 'FAIL'} mean merged cascade 0 luminance, all bands "
+          f"{luminance(full):.6f}, sum of single bands {luminance(total):.6f} (worst channel relative {error:.5f}), "
+          f"all masked {luminance(none):.2e}", flush=True)
+    for label, value in parts:
+        print(f"      {label:10s} {luminance(value):.6f} ({100.0 * luminance(value) / max(luminance(full), 1.0e-12):5.1f} %)")
+    return 0 if ok else 1
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--station", nargs="+", default=list(SUPPORTED), choices=SUPPORTED)
+    parser.add_argument("--mask-check", nargs="*", default=["cornell"], choices=SUPPORTED,
+                        help="stations for the debug_cascade_mask decomposition check (none: skip)")
     parser.add_argument("--reuse", action="store_true", help="drive the editor already running on --port")
     parser.add_argument("--port", type=int, default=3743)
     parser.add_argument("--editor", default=gi_verify.DEFAULT_EDITOR)
@@ -376,6 +727,8 @@ def main():
         try:
             for name in args.station:
                 failures += check_station(c, name)
+            for name in args.mask_check:
+                failures += check_mask_decomposition(c, name)
             c.close_all_scenes()
         finally:
             rooms.set_headlight(c, headlight)

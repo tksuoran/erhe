@@ -36,6 +36,7 @@ erhe_target_sources_grouped(
     res/editor/shaders/ddgi_sample.comp
     res/editor/shaders/ddgi_reference.comp
     res/editor/shaders/erhe_ddgi_ray.glsl
+    res/editor/shaders/rc_merge.comp
     res/editor/shaders/rc_preview.comp
     res/editor/shaders/rc_trace.comp
     res/editor/shaders/brdf_slice.frag

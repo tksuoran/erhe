@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
+#include "config/generated/radiance_cascades_config.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "windows/config_ui.hpp"
@@ -14,6 +15,7 @@
 #include <imgui/imgui.h>
 
 #include <algorithm>
+#include <string>
 
 namespace editor {
 
@@ -67,7 +69,7 @@ void Radiance_cascades_window::imgui()
         return;
     }
     if (!renderer->has_field()) {
-        ImGui::TextUnformatted("Trace only: no merge / reduce yet; the forward pass uses the flat ambient term.");
+        ImGui::TextUnformatted("Trace and merge only: no reduce yet; the forward pass uses the flat ambient term.");
     }
 
     const Radiance_cascade& cascade0 = layout.cascades[0];
@@ -110,7 +112,8 @@ void Radiance_cascades_window::imgui()
     }
     ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade, plus the cascade 0 R32F distance texture.");
 
-    // GPU cost of the trace (doc/editor/radiance_cascades.md "Trace").
+    // GPU cost of the trace and merge (doc/editor/radiance_cascades.md
+    // "Trace", "Merge").
     const Radiance_cascades_renderer::Stats stats = renderer->get_stats();
     if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("radiance_cascades_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
@@ -118,10 +121,15 @@ void Radiance_cascades_window::imgui()
             ImGui::TableSetupColumn("Last ms");
             ImGui::TableSetupColumn("Avg ms");
             ImGui::TableHeadersRow();
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("trace");
-            ImGui::TableSetColumnIndex(1); ImGui::Text("%.3f", stats.trace.last_ms);
-            ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", stats.trace.average_ms);
+            const auto row = [](const char* label, const Radiance_cascades_renderer::Pass_time& time) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(label);
+                ImGui::TableSetColumnIndex(1); ImGui::Text("%.3f", time.last_ms);
+                ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", time.average_ms);
+            };
+            row("trace", stats.trace);
+            row("merge", stats.merge);
+            row("total", stats.total);
             ImGui::EndTable();
         }
         ImGui::Text("Texels (rays) per update: %lld", static_cast<long long>(stats.texels_per_update));
@@ -130,13 +138,43 @@ void Radiance_cascades_window::imgui()
         ImGui::Text("Updates: %llu, full sweeps: %llu", static_cast<unsigned long long>(stats.update_count), static_cast<unsigned long long>(stats.completed_sweeps));
     }
 
-    // Atlas preview. The raw atlases carry beta in alpha, which the image
+    // Debug cascade mask (doc/editor/radiance_cascades.md "Merge"): a
+    // masked cascade keeps its transparency but contributes no radiance, so
+    // the merged atlases show the unmasked interval bands only. The
+    // renderer reads the setting on its next tick.
+    if (ImGui::CollapsingHeader("Debug cascade mask")) {
+        int& mask = m_context.editor_settings->radiance_cascades.debug_cascade_mask;
+        ImGui::TextUnformatted("Checked bands contribute radiance to the merge.");
+        for (int i = 0; i <= layout.cascade_count; ++i) {
+            const bool is_sky = (i == layout.cascade_count);
+            const int  bit    = is_sky ? Radiance_cascades_renderer::c_sky_mask_bit : i;
+            bool       shown  = ((mask & (1 << bit)) == 0);
+            const std::string label = is_sky ? std::string{"Sky"} : ("Cascade " + std::to_string(i));
+            if (i > 0) {
+                ImGui::SameLine();
+            }
+            if (ImGui::Checkbox(label.c_str(), &shown)) {
+                mask = shown ? (mask & ~(1 << bit)) : (mask | (1 << bit));
+            }
+        }
+        if ((mask != 0) && ImGui::Button("Show all")) {
+            mask = 0;
+        }
+    }
+
+    // Atlas preview. The atlases carry beta in alpha, which the image
     // widget would use as opacity, so the renderer writes an opaque copy of
-    // the chosen cascade and channel (rc_preview.comp). Requested each frame
-    // the preview is shown; the copy lags the request by one frame.
+    // the chosen cascade, atlas and channel (rc_preview.comp). Requested
+    // each frame the preview is shown; the copy lags the request by one
+    // frame.
     if (ImGui::CollapsingHeader("Atlas preview", ImGuiTreeNodeFlags_DefaultOpen)) {
         m_preview_cascade = std::clamp(m_preview_cascade, 0, layout.cascade_count - 1);
         ImGui::SliderInt("Cascade", &m_preview_cascade, 0, layout.cascade_count - 1);
+        int preview_source = static_cast<int>(m_preview_source);
+        const char* const source_names[] = { "Raw", "Merged" };
+        if (ImGui::Combo("Atlas", &preview_source, source_names, IM_ARRAYSIZE(source_names))) {
+            m_preview_source = static_cast<Rc_preview_source>(preview_source);
+        }
         int channel = static_cast<int>(m_preview_channel);
         const char* const channel_names[] = { "Radiance", "Beta", "Distance (cascade 0)" };
         if (ImGui::Combo("Channel", &channel, channel_names, IM_ARRAYSIZE(channel_names))) {
@@ -146,7 +184,7 @@ void Radiance_cascades_window::imgui()
             ImGui::SliderFloat("Radiance scale", &m_preview_radiance_scale, 0.1f, 100.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         }
         const int preview_cascade = (m_preview_channel == Rc_preview_channel::distance) ? 0 : m_preview_cascade;
-        renderer->request_preview(preview_cascade, m_preview_channel, m_preview_radiance_scale);
+        renderer->request_preview(preview_cascade, m_preview_source, m_preview_channel, m_preview_radiance_scale);
 
         const std::shared_ptr<erhe::graphics::Texture>& texture = renderer->get_preview_texture();
         if (texture) {

@@ -1111,7 +1111,7 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
 
 namespace {
 
-// The radiance cascades layout, memory and trace cost
+// The radiance cascades layout, memory and trace / merge cost
 // (doc/editor/radiance_cascades.md "MCP").
 [[nodiscard]] auto radiance_cascades_stats_json(const Radiance_cascades_renderer& renderer) -> json
 {
@@ -1133,9 +1133,11 @@ namespace {
         });
     }
     const Radiance_cascades_renderer::Stats stats = renderer.get_stats();
-    const json trace_time{
-        {"last_ms",    stats.trace.last_ms},
-        {"average_ms", stats.trace.average_ms}
+    const auto pass_time_json = [](const Radiance_cascades_renderer::Pass_time& time) -> json {
+        return json{
+            {"last_ms",    time.last_ms},
+            {"average_ms", time.average_ms}
+        };
     };
     return json{
         {"supported",                renderer.is_supported()},
@@ -1153,8 +1155,8 @@ namespace {
         {"completed_sweeps",         stats.completed_sweeps},
         {"texels_per_update",        stats.texels_per_update},
         {"rays_per_update",          stats.rays_per_update},
-        {"gpu_ms",                   json{{"trace", trace_time}}},
-        {"gpu_ms_total",             trace_time},
+        {"gpu_ms",                   json{{"trace", pass_time_json(stats.trace)}, {"merge", pass_time_json(stats.merge)}}},
+        {"gpu_ms_total",             pass_time_json(stats.total)},
         {"timing_history_size",      Radiance_cascades_renderer::c_timing_history_size},
         {"ms_per_million_rays",      stats.ms_per_million_rays},
         {"updates_per_full_refresh", stats.updates_per_full_refresh},
@@ -1245,6 +1247,9 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
         if (args.contains("hysteresis")) {
             config.hysteresis = std::clamp(args.value("hysteresis", 0.9f), 0.0f, 0.999f);
         }
+        if (args.contains("debug_cascade_mask")) {
+            config.debug_cascade_mask = std::clamp(args.value("debug_cascade_mask", 0), 0, (1 << (Radiance_cascades_renderer::c_sky_mask_bit + 1)) - 1);
+        }
     }
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
@@ -1260,7 +1265,8 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"cascade0_tile_texels", config.cascade0_tile_texels},
             {"interval_scale",       config.interval_scale},
             {"texels_per_frame",     config.texels_per_frame},
-            {"hysteresis",           config.hysteresis}
+            {"hysteresis",           config.hysteresis},
+            {"debug_cascade_mask",   config.debug_cascade_mask}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }
@@ -1461,9 +1467,10 @@ public:
 
 auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
 {
-    // Raw radiance interval texels and per-cascade summaries
-    // (doc/editor/radiance_cascades.md "MCP"): a copy of every raw atlas is
-    // requested after the next trace and read back once its frame retired.
+    // Raw and merged radiance interval texels and per-cascade summaries
+    // (doc/editor/radiance_cascades.md "MCP"): a copy of every raw and
+    // merged atlas is requested after the next trace and merge and read
+    // back once its frame retired.
     // Nothing is copied unless this tool asks. Same deferral flow as
     // sample_indirect_diffuse.
     Radiance_cascades_renderer* renderer = m_context.radiance_cascades_renderer;
@@ -1489,7 +1496,9 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                     {"index",             i},
                     {"texel_count",       summary.texel_count},
                     {"mean_radiance",     vec3_json(summary.mean_radiance)},
-                    {"beta_one_fraction", summary.beta_one_fraction}
+                    {"beta_one_fraction", summary.beta_one_fraction},
+                    {"mean_merged_radiance", vec3_json(summary.mean_merged_radiance)},
+                    {"mean_merged_beta",     summary.mean_merged_beta}
                 };
                 if (i == 0) {
                     entry["backface_fraction"]    = summary.backface_fraction;
@@ -1500,7 +1509,8 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
             json texels = json::array();
             for (const Rc_texel_address& address : addresses) {
                 const Radiance_cascade& cascade   = layout.cascades[static_cast<std::size_t>(address.cascade)];
-                const glm::vec4         value     = renderer->read_raw_texel(address.cascade, address.probe, address.texel);
+                const glm::vec4         value     = renderer->read_raw_texel   (address.cascade, address.probe, address.texel);
+                const glm::vec4         merged    = renderer->read_merged_texel(address.cascade, address.probe, address.texel);
                 const glm::vec3         position  = cascade.grid.origin + (glm::vec3{address.probe} * cascade.grid.spacing);
                 const glm::vec3         direction = get_texel_direction(address.texel, cascade.tile_texels);
                 json entry{
@@ -1511,7 +1521,9 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                     {"direction",      vec3_json(direction)},
                     {"interval",       json::array({cascade.interval_start, cascade.interval_end})},
                     {"radiance",       vec3_json(glm::vec3{value})},
-                    {"beta",           value.a}
+                    {"beta",           value.a},
+                    {"merged_radiance", vec3_json(glm::vec3{merged})},
+                    {"merged_beta",     merged.a}
                 };
                 if (address.cascade == 0) {
                     entry["signed_distance"] = renderer->read_distance_texel(address.probe, address.texel);

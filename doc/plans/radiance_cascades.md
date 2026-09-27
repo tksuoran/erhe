@@ -290,9 +290,14 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    cascade 0 signed distance texture, the raw atlas preview, the timed pass
    and its cost in `get_indirect_diffuse_stats`, and the
    `get_radiance_cascades_texels` readback.
-3. **Merge.** `rc_merge.comp`, `interpolate` mode; preview merged atlases;
-   `debug_cascade_mask` zeroes chosen cascades' radiance (beta kept) to show
-   each interval band as in the paper's figure 3.
+3. **Merge** - built, described in
+   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) "Merge":
+   `rc_merge.comp` (the `interpolate` merge; the `merge_mode` setting
+   arrives with its second mode in phase 7), the merged atlas preview,
+   `debug_cascade_mask` (a masked cascade keeps its beta and contributes no
+   radiance, bit 12 masks the sky), the timed pass, merged texels in
+   `get_radiance_cascades_texels`, and the merged checks of
+   `scripts/rc_texel_verify.py`.
 4. **Reduce and render.** `rc_reduce.comp`; the editor binds the RC field
    through `set_ddgi` when the source is `radiance_cascades`. First visible
    result and first full `gi_verify.py` run for RC.

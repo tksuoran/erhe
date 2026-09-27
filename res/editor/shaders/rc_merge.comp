@@ -1,0 +1,114 @@
+// Radiance cascades merge (doc/editor/radiance_cascades.md "Merge",
+// doc/plans/radiance_cascades.md section 5 pass 2).
+//
+// One dispatch per cascade, from the top cascade down to cascade 0, one
+// thread per atlas texel (texels of the unused tiles of a partly filled
+// last atlas row return at once). Each texel is one direction interval
+// [t_i, t_{i+1}] of one probe (rgb radiance, a transparency beta) and is
+// merged with everything beyond it (paper 2.3.1):
+//
+//   merged.rgb = raw.rgb + raw.a * upper.rgb
+//   merged.a   = raw.a * upper.a
+//
+// - Top cascade (flag c_flag_top): upper = (sky radiance, 1), the scene
+//   ambient the trace misses of DDGI use; nothing lies beyond it.
+// - Lower cascades: upper is the merged atlas of cascade i + 1 interpolated
+//   to this probe - the 8 upper probes of get_upper_probes()
+//   (src/editor/renderers/radiance_cascades_layout.cpp), trilinear weights
+//   0.25 / 0.75 per axis, indices clamped to the upper grid (clamp to edge:
+//   a lower probe outside the upper probes' span takes the edge probe) -
+//   and at each upper probe the average of the 2x2 child texels
+//   (2u .. 2u+1, 2v .. 2v+1) of the octahedral tile that nest in this texel.
+// - Debug cascade mask (flag c_flag_mask_radiance): the cascade's own
+//   radiance is zeroed, its beta kept, so the merged atlases show only the
+//   unmasked interval bands. A masked sky arrives as a zero sky radiance.
+//
+// Bindings: the raw atlas of this cascade and the merged atlas of the
+// cascade above are sampled (read-only, texelFetch); the merged atlas of
+// this cascade is the only storage image, and the only write.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// rc_merge.params.y flags
+const uint c_flag_top           = 1u; // top cascade: merge with the sky
+const uint c_flag_mask_radiance = 2u; // debug_cascade_mask: zero this cascade's radiance
+
+// One axis of the trilinear interpolation to the upper cascade: lower probe
+// k sits at upper grid coordinate k / 2 - 1 / 4 (get_upper_probe_axis()).
+void rc_upper_axis(int lower_index, int upper_count, out ivec2 index, out vec2 weight)
+{
+    int last = max(0, upper_count - 1);
+    if ((lower_index % 2) == 0) {
+        int m  = lower_index / 2;
+        index  = ivec2(clamp(m - 1, 0, last), clamp(m, 0, last));
+        weight = vec2(0.25, 0.75);
+    } else {
+        int m  = (lower_index - 1) / 2;
+        index  = ivec2(clamp(m, 0, last), clamp(m + 1, 0, last));
+        weight = vec2(0.75, 0.25);
+    }
+}
+
+void main()
+{
+    ivec2 atlas_texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 atlas_size  = ivec2(rc_merge.params.zw);
+    if ((atlas_texel.x >= atlas_size.x) || (atlas_texel.y >= atlas_size.y)) {
+        return;
+    }
+
+    int   q             = int(rc_merge.grid_counts.w);
+    ivec3 counts        = ivec3(rc_merge.grid_counts.xyz);
+    int   tiles_per_row = int(rc_merge.params.x);
+    ivec2 tile          = atlas_texel / q;
+    int   probe_index   = (tile.y * tiles_per_row) + tile.x;
+    if (probe_index >= (counts.x * counts.y * counts.z)) {
+        return; // unused tile of a partly filled last row
+    }
+    ivec2 uv = atlas_texel - (tile * q);
+
+    vec4 raw   = texelFetch(s_rc_raw, atlas_texel, 0);
+    uint flags = rc_merge.params.y;
+    vec3 own   = ((flags & c_flag_mask_radiance) != 0u) ? vec3(0.0) : raw.rgb;
+
+    vec4 upper;
+    if ((flags & c_flag_top) != 0u) {
+        upper = vec4(rc_merge.sky.rgb, 1.0);
+    } else {
+        ivec3 coords = ivec3(
+            probe_index % counts.x,
+            (probe_index / counts.x) % counts.y,
+            probe_index / (counts.x * counts.y)
+        );
+        ivec3 upper_counts        = ivec3(rc_merge.upper_counts.xyz);
+        int   upper_tiles_per_row = int(rc_merge.upper_counts.w);
+        int   upper_q             = 2 * q;
+        ivec2 child               = 2 * uv;
+
+        ivec2 ix; vec2 wx;
+        ivec2 iy; vec2 wy;
+        ivec2 iz; vec2 wz;
+        rc_upper_axis(coords.x, upper_counts.x, ix, wx);
+        rc_upper_axis(coords.y, upper_counts.y, iy, wy);
+        rc_upper_axis(coords.z, upper_counts.z, iz, wz);
+
+        upper = vec4(0.0);
+        for (int k = 0; k < 2; ++k) {
+            for (int j = 0; j < 2; ++j) {
+                for (int i = 0; i < 2; ++i) {
+                    int   upper_index = ix[i] + (upper_counts.x * (iy[j] + (upper_counts.y * iz[k])));
+                    ivec2 origin      = ivec2(upper_index % upper_tiles_per_row, upper_index / upper_tiles_per_row) * upper_q;
+                    ivec2 base        = origin + child;
+                    vec4  children    =
+                        texelFetch(s_rc_upper, base + ivec2(0, 0), 0) +
+                        texelFetch(s_rc_upper, base + ivec2(1, 0), 0) +
+                        texelFetch(s_rc_upper, base + ivec2(0, 1), 0) +
+                        texelFetch(s_rc_upper, base + ivec2(1, 1), 0);
+                    upper += (wx[i] * wy[j] * wz[k]) * (0.25 * children);
+                }
+            }
+        }
+    }
+
+    imageStore(i_rc_merged, atlas_texel, vec4(own + (raw.a * upper.rgb), raw.a * upper.a));
+}

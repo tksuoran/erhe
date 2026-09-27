@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Radiance_cascades_config",
     reflect=True,
-    version=2,
+    version=3,
     short_desc="Radiance Cascades",
     long_desc="World-space radiance cascades (doc/editor/radiance_cascades.md): a second producer of the indirect diffuse probe field, selected with the Indirect Diffuse source. Cascade 0 is a probe grid fitted to the padded content bounding box; every next cascade has probes at the centres of 2x2x2 blocks of the one below, doubled octahedral resolution and a doubled radiance interval. The field's sampling parameters (irradiance / distance texels, biases, intensity) are the DDGI settings. Requires GPU ray query support.",
     developer=False,
@@ -113,6 +113,20 @@ struct("Radiance_cascades_config",
             ui_max="0.999f",
             hard_min="0.0f",
             hard_max="0.999f"
+        ),
+        field(
+            "debug_cascade_mask",
+            Int,
+            added_in=3,
+            default="0",
+            short_desc="Debug cascade mask",
+            long_desc="Debug view of the interval bands: bit i set zeroes cascade i's radiance in the merge while its transparency is kept, so the merged atlases show only the unmasked bands (bit 12 masks the sky beyond the top cascade). 0 merges everything. Edited with the Radiance Cascades window's checkboxes.",
+            visible=False,
+            developer=True,
+            ui_min="0",
+            ui_max="8191",
+            hard_min="0",
+            hard_max="8191"
         ),
     ],
 )

@@ -24,6 +24,7 @@ namespace erhe::graphics {
     class Gpu_timer;
     class Reloadable_shader_stages;
     class Ring_buffer_client;
+    class Sampler;
     class Texture;
 }
 namespace erhe::scene_renderer {
@@ -52,13 +53,28 @@ enum class Rc_readback_state : unsigned int
     complete  = 3  // snapshot readable
 };
 
+// Which atlas of a cascade the Radiance Cascades window preview shows.
+enum class Rc_preview_source : unsigned int
+{
+    raw    = 0, // the traced intervals
+    merged = 1  // the intervals merged with everything beyond them
+};
+
 // What the Radiance Cascades window preview shows of an atlas.
 enum class Rc_preview_channel : unsigned int
 {
-    radiance = 0, // raw rgb radiance
-    beta     = 1, // raw transparency as grey
+    radiance = 0, // rgb radiance
+    beta     = 1, // transparency as grey
     distance = 2  // cascade 0 signed hit distance (green front face, red backface)
 };
+
+// The timed GPU passes of one radiance cascades update.
+enum class Rc_pass : unsigned int
+{
+    trace = 0,
+    merge = 1
+};
+constexpr std::size_t c_rc_pass_count = 2;
 
 // World-space radiance cascades (doc/editor/radiance_cascades.md,
 // doc/plans/radiance_cascades.md): the second producer of the indirect
@@ -67,8 +83,9 @@ enum class Rc_preview_channel : unsigned int
 // Fits the cascades to the padded content bounding box
 // (fit_radiance_cascades()), allocates each cascade's raw and merged
 // radiance atlases, and traces the raw intervals (rc_trace.comp) under a
-// per-frame texel budget. The merge and reduce passes are later phases of
-// the plan: until the reduce pass exists the renderer produces no probe
+// per-frame texel budget, then merges every cascade with everything beyond
+// it (rc_merge.comp, top cascade down to cascade 0). The reduce pass is a
+// later phase of the plan: until it exists the renderer produces no probe
 // field (has_field() is false) and the forward pass keeps the flat ambient
 // term while this source is selected.
 //
@@ -87,7 +104,7 @@ public:
         std::shared_ptr<erhe::graphics::Texture> merged;
     };
 
-    // GPU time of the trace: the most recent measurement and the mean over
+    // GPU time of one pass: the most recent measurement and the mean over
     // the last c_timing_history_size measurements, in milliseconds.
     class Pass_time
     {
@@ -96,30 +113,35 @@ public:
         double average_ms{0.0};
     };
 
-    // Measured cost of the trace (doc/plans/radiance_cascades.md section
-    // 8). GPU timings lag the recorded update by the frames in flight.
+    // Measured cost of the trace and merge (doc/plans/radiance_cascades.md
+    // section 8). GPU timings lag the recorded update by the frames in
+    // flight.
     class Stats
     {
     public:
         Pass_time trace{};
-        uint64_t  update_count            {0};   // ticks that dispatched the trace
+        Pass_time merge{};
+        Pass_time total{};                       // trace + merge
+        uint64_t  update_count            {0};   // ticks that dispatched the trace (and the merge)
         uint64_t  timing_sample_count     {0};   // GPU timing samples taken
         uint64_t  completed_sweeps        {0};   // full passes of the cursor over all texels since the atlases were allocated
         int64_t   texels_per_update       {0};   // the budget clamped to the total texel count
         int64_t   rays_per_update         {0};   // one interval ray per texel
         int64_t   updates_per_full_refresh{0};   // ticks until every texel is traced once
-        double    ms_per_million_rays     {0.0}; // trace.average_ms per 1e6 rays_per_update
-        double    full_refresh_ms         {0.0}; // updates_per_full_refresh x trace.average_ms
+        double    ms_per_million_rays     {0.0}; // total.average_ms per 1e6 rays_per_update
+        double    full_refresh_ms         {0.0}; // updates_per_full_refresh x total.average_ms
     };
 
-    // Per-cascade summary of a raw texel readback (the probe texels only,
-    // not the unused tiles of a partly filled last atlas row).
+    // Per-cascade summary of a texel readback (the probe texels only, not
+    // the unused tiles of a partly filled last atlas row).
     class Cascade_summary
     {
     public:
         int64_t   texel_count         {0};
-        glm::vec3 mean_radiance       {0.0f};
-        float     beta_one_fraction   {0.0f}; // texels with beta > 0.5 (the interval is mostly empty)
+        glm::vec3 mean_radiance       {0.0f}; // raw
+        float     beta_one_fraction   {0.0f}; // raw texels with beta > 0.5 (the interval is mostly empty)
+        glm::vec3 mean_merged_radiance{0.0f}; // merged
+        float     mean_merged_beta    {0.0f}; // merged transparency: the fraction of the ray that escapes the top cascade
         // Cascade 0 only: texels whose last trace hit a backface, and the
         // probes with at least one such texel.
         float     backface_fraction   {0.0f};
@@ -127,6 +149,10 @@ public:
     };
 
     static constexpr std::size_t c_timing_history_size = 60;
+
+    // Radiance_cascades_config::debug_cascade_mask: bit i masks cascade i,
+    // this bit masks the sky beyond the top cascade.
+    static constexpr int c_sky_mask_bit = c_max_radiance_cascades;
 
     Radiance_cascades_renderer(
         erhe::graphics::Device&                  graphics_device,
@@ -165,10 +191,11 @@ public:
     [[nodiscard]] auto get_fit_count                () const -> uint64_t;
     [[nodiscard]] auto get_stats                    () const -> Stats;
 
-    // Raw texel readback (MCP get_radiance_cascades_texels,
+    // Texel readback (MCP get_radiance_cascades_texels,
     // doc/editor/radiance_cascades.md "MCP"). request_texel_readback() asks
-    // for a copy of every raw atlas and the cascade 0 distance texture after
-    // the next trace (no-op while one is in flight); poll_texel_readback()
+    // for a copy of every raw and merged atlas and the cascade 0 distance
+    // texture after the next trace and merge (no-op while one is in
+    // flight); poll_texel_readback()
     // takes the copy into a CPU snapshot once its frame retired. Nothing is
     // copied unless requested.
     void               request_texel_readback     ();
@@ -182,22 +209,26 @@ public:
     // rgb radiance, a beta of one raw texel; probe coordinates and tile
     // texel must be inside the snapshot layout.
     [[nodiscard]] auto read_raw_texel             (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
+    // rgb merged radiance, a merged transparency of one texel.
+    [[nodiscard]] auto read_merged_texel          (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
     // Cascade 0 signed hit distance of one texel.
     [[nodiscard]] auto read_distance_texel        (const glm::ivec3& probe, const glm::ivec2& texel) const -> float;
 
-    // Atlas preview for the Radiance Cascades window. The raw atlases carry
+    // Atlas preview for the Radiance Cascades window. The atlases carry
     // beta in alpha, which the ImGui image widget would use as opacity, so
     // the window shows an opaque copy (rc_preview.comp) instead.
-    // request_preview() asks for one to be recorded after the next trace;
-    // the window calls it each frame it shows the preview, so the copy is
-    // only made while someone looks at it.
-    void               request_preview    (int cascade, Rc_preview_channel channel, float radiance_scale);
+    // request_preview() asks for one to be recorded after the next trace
+    // and merge; the window calls it each frame it shows the preview, so
+    // the copy is only made while someone looks at it. The distance channel
+    // always shows cascade 0.
+    void               request_preview    (int cascade, Rc_preview_source source, Rc_preview_channel channel, float radiance_scale);
     [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
 
     // Refits the cascades and reallocates the atlases when the content
     // bounds or a fit setting changed, then records this frame's budgeted
-    // trace. Editor::tick() calls it only while radiance cascades is the
-    // selected source. Must be called outside a render pass.
+    // trace and the merge of all cascades. Editor::tick() calls it only
+    // while radiance cascades is the selected source. Must be called
+    // outside a render pass.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
 private:
@@ -215,15 +246,24 @@ private:
         const erhe::graphics::Ring_buffer_range& light_range,
         erhe::scene_renderer::Material_set&      material_set
     );
-    // Copies every raw atlas and the distance texture into the readback
-    // buffer (request_texel_readback()).
+    // Merges every cascade with everything beyond it (rc_merge.comp): one
+    // dispatch per cascade, top cascade first, each reading the raw atlas
+    // written by this frame's trace and the merged atlas of the cascade
+    // above written by the previous dispatch.
+    void record_merge(erhe::graphics::Command_buffer& command_buffer, const glm::vec3& sky_radiance);
+    // Copies every raw and merged atlas and the distance texture into the
+    // readback buffer (request_texel_readback()).
     void record_texel_readback(erhe::graphics::Command_buffer& command_buffer);
+    // One RGBA16F texel of the snapshot atlas copied at atlas_offset.
+    [[nodiscard]] auto read_radiance_texel(std::size_t atlas_offset, int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
 
     // Writes the requested opaque atlas preview (request_preview()).
     void record_preview(erhe::graphics::Command_buffer& command_buffer);
 
-    void sample_trace_timing();
-    void clear_trace_timing ();
+    // Takes each pass timer's latest result into its history. Called once
+    // per update, before the update records its own timestamps.
+    void sample_pass_timings();
+    void clear_pass_timings ();
 
     erhe::graphics::Device&         m_graphics_device;
     App_context&                    m_context;
@@ -289,6 +329,25 @@ private:
     };
     Control_offsets m_control_offsets{};
 
+    // Merge (rc_merge.comp): its own control block and layout, the shared
+    // control ring buffer. The raw atlas and the upper merged atlas are
+    // sampled (texelFetch, nearest sampler), the merged atlas written is the
+    // only storage image.
+    erhe::graphics::Shader_resource                           m_merge_block;
+    class Merge_offsets
+    {
+    public:
+        std::size_t grid_counts {0};
+        std::size_t upper_counts{0};
+        std::size_t params      {0};
+        std::size_t sky         {0};
+    };
+    Merge_offsets                                             m_merge_offsets{};
+    std::unique_ptr<erhe::graphics::Sampler>                  m_merge_sampler;
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_merge_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_pipeline;
+
     // Atlas preview (rc_preview.comp): its own control block and layout,
     // the shared control ring buffer.
     erhe::graphics::Shader_resource                           m_preview_block;
@@ -300,20 +359,26 @@ private:
     std::shared_ptr<erhe::graphics::Texture>                  m_preview_texture;
     bool                                                      m_preview_requested     {false};
     int                                                       m_preview_cascade       {0};
+    Rc_preview_source                                         m_preview_source        {Rc_preview_source::raw};
     Rc_preview_channel                                        m_preview_channel       {Rc_preview_channel::radiance};
     float                                                     m_preview_radiance_scale{1.0f};
 
-    // Trace timing: one timer around all of a tick's trace dispatches, and a
-    // fixed ring of its recent results.
-    std::unique_ptr<erhe::graphics::Gpu_timer>  m_trace_timer;
-    std::array<uint64_t, c_timing_history_size> m_timing_history_ns{};
-    std::size_t                                 m_timing_history_count{0};
-    std::size_t                                 m_timing_history_next {0};
-    uint64_t                                    m_timing_last_ns      {0};
-    uint64_t                                    m_update_count        {0};
-    uint64_t                                    m_timing_sample_count {0};
+    // Pass timing: one timer around all of a tick's dispatches of a pass
+    // (Rc_pass), and a fixed ring of its recent results.
+    class Pass_timing
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Gpu_timer>  timer;
+        std::array<uint64_t, c_timing_history_size> history_ns{};
+        std::size_t                                 history_count{0};
+        std::size_t                                 history_next {0};
+        uint64_t                                    last_ns      {0};
+    };
+    std::array<Pass_timing, c_rc_pass_count> m_pass_timings;
+    uint64_t                                 m_update_count       {0};
+    uint64_t                                 m_timing_sample_count{0};
 
-    // Raw texel readback. The buffer is (re)allocated on request only; the
+    // Texel readback. The buffer is (re)allocated on request only; the
     // snapshot vectors are filled on the MCP path, never per frame.
     std::unique_ptr<erhe::graphics::Buffer>                  m_readback_buffer;
     Rc_readback_state                                        m_readback_state      {Rc_readback_state::idle};
@@ -322,6 +387,7 @@ private:
     uint64_t                                                 m_readback_sweep_count{0};
     Radiance_cascades_layout                                 m_readback_layout{};
     std::array<std::size_t, c_max_radiance_cascades>         m_readback_raw_offsets{};
+    std::array<std::size_t, c_max_radiance_cascades>         m_readback_merged_offsets{};
     std::size_t                                              m_readback_distance_offset{0};
     std::size_t                                              m_readback_byte_count{0};
     std::vector<std::byte>                                   m_readback_snapshot;
