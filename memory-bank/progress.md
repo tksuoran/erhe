@@ -11,5 +11,7 @@
 
 [TASK::radiance-cascades]{started-2026-09-27;via-harness;doc/plans/radiance_cascades.md}
 ✓phase-0a::66c7e3233{Gpu_timer(Device&)+Scoped_gpu_timer;DDGI-4-pass-timings;get_indirect_diffuse_stats;default-scene-DDGI~0.3ms/update~8-9ms/Mray;GL-timer-not-compiled(no-GL-tree);Metal-timer-stub-reads-0}
-⚡phase-0b::creation_24_gi_test_rooms{coder-running}
+✓phase-0b::a7c1beb62{creation_24_gi_test_rooms;7-stations-own-scene;viewport-fraction-rects-raycast-checked;DDGI-findings:pillar-faces-black(probe-in-pillar)+crawl-space-black+corridor-probes-outside-walls+weak-cornell-bleed~1.05}
+⚡phase-0c1::sample_indirect_diffuse-MCP{linear-field-eval-at-world-points;screenshots-8bit-quantize-leaks;coder-running}
+?phase-0c2::gi_verify.py+DDGI-baseline
 ?phase-0b..0d->phases-1..7
