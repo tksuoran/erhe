@@ -243,6 +243,25 @@ creations up beyond single showcase scenes.
 
 ## The creations
 
+### 24 - GI Test Rooms
+
+A test asset for the indirect diffuse producers (DDGI and, next, radiance
+cascades), specified in [../plans/radiance_cascades.md](../plans/radiance_cascades.md)
+section 7. Seven stations - `leak_pair`, `probe_offset_sweep`, `cornell`,
+`emissive_only`, `corridor`, `courtyard` and `dynamic` - each built as its own
+scene, because the DDGI probe volume is fitted to the single scene root's
+content. Every room is a closed box of thick white parts with black ambient
+(except the courtyard), so a surface outside the direct light is lit only by the
+indirect term under test. The script's `STATIONS` table carries each station's
+measurement views and screen-space rectangles (fractions of the viewport, each
+naming its surface and statistic); `build_station()` returns the views for the
+realized layout, because `probe_offset_sweep` reads the fitted probe grid over
+MCP and then moves its shared walls to 0.0 / 0.25 / 0.5 probe spacings from the
+nearest probe plane and centres a pillar on a probe. `check_rects()` raycasts
+every rectangle through the live camera to prove it lies on its surface, and the
+`dynamic` station exposes its events (move the light, slide the door open) as
+functions. `scripts/gi_verify.py` imports all of it.
+
 ### 23 - Joint Constraint Test
 
 ![Joint Constraint Test](../images/creations/23_joint_constraint_test.png)

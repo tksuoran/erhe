@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` ... `creation_23_joint_constraint_test` (henge,
+`creation_1_conway_cathedral` ... `creation_24_gi_test_rooms` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
@@ -46,7 +46,11 @@ skin test boxes = three boxes as one rigid-skinned mesh on a three-bone
 chain, built with the `create_skin` MCP tool and exported as a test asset,
 joint constraint test = one physics joint station / IK-limited chain per
 constraint kind, a test asset whose STATIONS / IK_CASES tables an automated
-verify script imports - see physics_rigs.md "Test assets").
+verify script imports - see physics_rigs.md "Test assets",
+gi test rooms = seven one-scene-each GI stations (closed white rooms, black
+ambient, headlight off) whose STATIONS table of views + raycast-verified
+viewport-fraction rectangles scripts/gi_verify.py imports; rectangles are
+fractions of the VIEWPORT, since capture_screenshot grabs the whole window).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
