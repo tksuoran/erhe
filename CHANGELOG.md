@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Gpu_timer(Device&, const char* label)`,
+  `Gpu_timer::begin()` / `end()` and `Scoped_gpu_timer`
+  (`erhe_graphics/gpu_timer.hpp`): a GPU timer for an explicit range of one
+  command buffer, such as a range of compute dispatches, next to the
+  `Render_pass`-bound form. `Gpu_timer_impl` backends take a `Device&` instead
+  of a `Render_pass&`.
 - `erhe::geometry`: `Geometry::has_connectivity()` and
   `Geometry::has_edge_connectivity()` (`erhe_geometry/geometry.hpp`): whether
   the corner / edge connectivity tables are built for the current element

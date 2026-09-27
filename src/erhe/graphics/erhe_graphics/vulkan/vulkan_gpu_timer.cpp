@@ -4,13 +4,11 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/render_pass.hpp"
 
 namespace erhe::graphics {
 
-Gpu_timer_impl::Gpu_timer_impl(Render_pass& render_pass, const char* label)
-    : m_render_pass{&render_pass}
-    , m_device_impl{&render_pass.get_device().get_impl()}
+Gpu_timer_impl::Gpu_timer_impl(Device& device, const char* label)
+    : m_device_impl{&device.get_impl()}
     , m_label      {label}
 {
     if (m_device_impl != nullptr) {

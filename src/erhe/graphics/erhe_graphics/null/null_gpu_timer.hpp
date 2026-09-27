@@ -6,12 +6,12 @@
 namespace erhe::graphics {
 
 class Command_buffer;
-class Render_pass;
+class Device;
 
 class Gpu_timer_impl
 {
 public:
-    Gpu_timer_impl(Render_pass& render_pass, const char* label);
+    Gpu_timer_impl(Device& device, const char* label);
     ~Gpu_timer_impl() noexcept;
 
     Gpu_timer_impl(const Gpu_timer_impl&) = delete;
@@ -26,7 +26,6 @@ public:
     void write_end_timestamp  (Command_buffer& command_buffer);
 
 private:
-    Render_pass* m_render_pass{nullptr};
     const char*  m_label      {nullptr};
 };
 

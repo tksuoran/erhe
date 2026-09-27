@@ -65,6 +65,33 @@ void Ddgi_window::imgui()
     ImGui::Text("Octahedral: %d irradiance / %d distance texels", renderer->get_irradiance_texels(), renderer->get_distance_texels());
     ImGui::Text("Probe textures: %.1f MB",   static_cast<double>(renderer->get_texture_byte_count()) / (1024.0 * 1024.0));
 
+    // GPU cost of the probe update (doc/editor/ddgi.md "Performance").
+    const Ddgi_renderer::Stats stats = renderer->get_stats();
+    if (ImGui::CollapsingHeader("GPU time", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("ddgi_gpu_time", 3, ImGuiTableFlags_SizingFixedFit)) {
+            ImGui::TableSetupColumn("Pass");
+            ImGui::TableSetupColumn("Last ms");
+            ImGui::TableSetupColumn("Avg ms");
+            ImGui::TableHeadersRow();
+            const auto row = [](const char* label, const Ddgi_renderer::Pass_time& pass_time) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(label);
+                ImGui::TableSetColumnIndex(1); ImGui::Text("%.3f", pass_time.last_ms);
+                ImGui::TableSetColumnIndex(2); ImGui::Text("%.3f", pass_time.average_ms);
+            };
+            for (std::size_t i = 0; i < c_ddgi_pass_count; ++i) {
+                row(c_str(static_cast<Ddgi_pass>(i)), stats.passes[i]);
+            }
+            row("total", stats.total);
+            ImGui::EndTable();
+        }
+        ImGui::Text("Probes per update: %d",       renderer->get_probes_per_update());
+        ImGui::Text("Rays per update: %lld",       static_cast<long long>(stats.rays_per_update));
+        ImGui::Text("Cost: %.3f ms per million rays", stats.ms_per_million_rays);
+        ImGui::Text("Full refresh: %d updates, %.2f ms", stats.updates_per_full_refresh, stats.full_refresh_ms);
+        ImGui::Text("Updates: %llu",               static_cast<unsigned long long>(stats.update_count));
+    }
+
     const auto preview = [this](const char* label, const std::shared_ptr<erhe::graphics::Texture>& texture) {
         if (!texture) {
             return;

@@ -1,5 +1,7 @@
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_gpu_timer.hpp"
@@ -27,14 +29,23 @@ std::vector<Gpu_timer*> s_facade_timers;
 } // anonymous namespace
 
 Gpu_timer::Gpu_timer(Render_pass& render_pass, const char* label)
-    : m_render_pass{&render_pass}
-    , m_impl       {std::make_unique<Gpu_timer_impl>(render_pass, label)}
+    : m_binding    {Binding::render_pass}
+    , m_render_pass{&render_pass}
+    , m_impl       {std::make_unique<Gpu_timer_impl>(render_pass.get_device(), label)}
 {
     {
         const std::lock_guard<std::mutex> lock{s_facade_mutex};
         s_facade_timers.push_back(this);
     }
     render_pass.register_gpu_timer(this);
+}
+
+Gpu_timer::Gpu_timer(Device& device, const char* label)
+    : m_binding{Binding::explicit_range}
+    , m_impl   {std::make_unique<Gpu_timer_impl>(device, label)}
+{
+    const std::lock_guard<std::mutex> lock{s_facade_mutex};
+    s_facade_timers.push_back(this);
 }
 
 Gpu_timer::~Gpu_timer() noexcept
@@ -47,6 +58,18 @@ Gpu_timer::~Gpu_timer() noexcept
         std::remove(s_facade_timers.begin(), s_facade_timers.end(), this),
         s_facade_timers.end()
     );
+}
+
+void Gpu_timer::begin(Command_buffer& command_buffer)
+{
+    ERHE_VERIFY(m_binding == Binding::explicit_range);
+    m_impl->write_begin_timestamp(command_buffer);
+}
+
+void Gpu_timer::end(Command_buffer& command_buffer)
+{
+    ERHE_VERIFY(m_binding == Binding::explicit_range);
+    m_impl->write_end_timestamp(command_buffer);
 }
 
 void Gpu_timer::write_begin_timestamp(Command_buffer& command_buffer)
@@ -84,6 +107,18 @@ auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
 {
     const std::lock_guard<std::mutex> lock{s_facade_mutex};
     return s_facade_timers;
+}
+
+Scoped_gpu_timer::Scoped_gpu_timer(Gpu_timer& timer, Command_buffer& command_buffer)
+    : m_timer         {timer}
+    , m_command_buffer{command_buffer}
+{
+    m_timer.begin(m_command_buffer);
+}
+
+Scoped_gpu_timer::~Scoped_gpu_timer() noexcept
+{
+    m_timer.end(m_command_buffer);
 }
 
 } // namespace erhe::graphics

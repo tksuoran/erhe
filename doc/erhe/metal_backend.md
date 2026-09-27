@@ -48,7 +48,7 @@ All Metal-specific code lives in `src/erhe/graphics/erhe_graphics/metal/`:
 | `metal_helpers.cpp/hpp` | Enum conversion utilities |
 | `metal_debug.cpp` | Debug labels |
 | `metal_scoped_debug_group.cpp/hpp` | Scoped debug groups (pushDebugGroup/popDebugGroup) |
-| `metal_gpu_timer.cpp/hpp` | GPU timing queries |
+| `metal_gpu_timer.cpp/hpp` | `Gpu_timer` backend; not implemented, every timer reads 0 |
 | `metal_surface.hpp/mm` | CAMetalLayer integration with SDL |
 | `metal_swapchain.cpp/hpp` | Swapchain with app-managed depth texture |
 | `metal_implementation.mm` | metal-cpp implementation defines |

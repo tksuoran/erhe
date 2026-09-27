@@ -786,6 +786,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "clear_item_style",               &Mcp_server::action_clear_item_style              },
         { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
         { "set_ddgi",                       &Mcp_server::action_set_ddgi                      },
+        { "get_indirect_diffuse_stats",     &Mcp_server::query_indirect_diffuse_stats         },
     };
     return c_tool_dispatch;
 }
@@ -1056,6 +1057,55 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         result["intensity"]         = config.intensity;
         result["debug_draw_probes"] = config.debug_draw_probes;
     }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
+{
+    // Measured cost of the indirect diffuse field (doc/editor/ddgi.md
+    // "Performance", doc/plans/radiance_cascades.md section 8). Read-only;
+    // takes no arguments.
+    static_cast<void>(args);
+    Ddgi_renderer* renderer = m_context.ddgi_renderer;
+    const bool     ddgi     = (renderer != nullptr) && renderer->is_active();
+    json result{
+        {"source", ddgi ? "ddgi" : "ambient"}
+    };
+    if (renderer == nullptr) {
+        return make_json_content(result).dump();
+    }
+    const Ddgi_renderer::Grid&  grid  = renderer->get_grid();
+    const Ddgi_renderer::Stats stats = renderer->get_stats();
+    const auto pass_time_json = [](const Ddgi_renderer::Pass_time& pass_time) -> json {
+        return json{
+            {"last_ms",    pass_time.last_ms},
+            {"average_ms", pass_time.average_ms}
+        };
+    };
+    json passes = json::object();
+    for (std::size_t i = 0; i < c_ddgi_pass_count; ++i) {
+        passes[c_str(static_cast<Ddgi_pass>(i))] = pass_time_json(stats.passes[i]);
+    }
+    result["ddgi"] = json{
+        {"supported",                renderer->is_supported()},
+        {"active",                   renderer->is_active()},
+        {"grid_origin",              json::array({grid.origin.x,  grid.origin.y,  grid.origin.z })},
+        {"grid_spacing",             json::array({grid.spacing.x, grid.spacing.y, grid.spacing.z})},
+        {"grid_counts",              json::array({grid.counts.x,  grid.counts.y,  grid.counts.z })},
+        {"probe_count",              grid.get_probe_count()},
+        {"rays_per_probe",           renderer->get_rays_per_probe()},
+        {"probes_per_update",        renderer->get_probes_per_update()},
+        {"rays_per_update",          stats.rays_per_update},
+        {"gpu_ms",                   passes},
+        {"gpu_ms_total",             pass_time_json(stats.total)},
+        {"timing_history_size",      Ddgi_renderer::c_timing_history_size},
+        {"ms_per_million_rays",      stats.ms_per_million_rays},
+        {"updates_per_full_refresh", stats.updates_per_full_refresh},
+        {"full_refresh_ms",          stats.full_refresh_ms},
+        {"texture_bytes",            renderer->get_texture_byte_count()},
+        {"update_count",             stats.update_count},
+        {"timing_sample_count",      stats.timing_sample_count}
+    };
     return make_json_content(result).dump();
 }
 

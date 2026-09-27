@@ -9,6 +9,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -20,6 +21,7 @@ namespace erhe::graphics {
     class Command_buffer;
     class Compute_pipeline;
     class Device;
+    class Gpu_timer;
     class Reloadable_shader_stages;
     class Ring_buffer_client;
     class Texture;
@@ -41,6 +43,18 @@ namespace editor {
 class App_context;
 class Render_context;
 class Scene_root;
+
+// The GPU passes of one DDGI update, each timed separately.
+enum class Ddgi_pass : unsigned int
+{
+    trace            = 0,
+    blend_irradiance = 1,
+    blend_distance   = 2,
+    relocate         = 3
+};
+constexpr std::size_t c_ddgi_pass_count = 4;
+
+[[nodiscard]] auto c_str(Ddgi_pass pass) -> const char*;
 
 // Dynamic diffuse global illumination (doc/editor/ddgi.md).
 //
@@ -74,6 +88,33 @@ public:
         [[nodiscard]] auto operator!=(const Grid& other) const -> bool { return !(*this == other); }
     };
 
+    // GPU time of one pass: the most recent measurement and the mean over
+    // the last c_timing_history_size measurements, in milliseconds.
+    class Pass_time
+    {
+    public:
+        double last_ms   {0.0};
+        double average_ms{0.0};
+    };
+
+    // Measured cost of the probe updates (doc/plans/radiance_cascades.md
+    // section 8). GPU timings lag the recorded update by the frames in
+    // flight.
+    class Stats
+    {
+    public:
+        std::array<Pass_time, c_ddgi_pass_count> passes{};
+        Pass_time   total{};                      // sum of the passes
+        uint64_t    update_count            {0};  // ticks that dispatched the probe update
+        uint64_t    timing_sample_count     {0};  // GPU timing samples taken (all passes at once)
+        int64_t     rays_per_update         {0};  // probes_per_update x rays_per_probe, as dispatched
+        int         updates_per_full_refresh{0};  // ticks until every probe is traced once
+        double      ms_per_million_rays     {0.0}; // total.average_ms per 1e6 rays_per_update
+        double      full_refresh_ms         {0.0}; // updates_per_full_refresh x total.average_ms
+    };
+
+    static constexpr std::size_t c_timing_history_size = 60;
+
     Ddgi_renderer(
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
@@ -103,6 +144,7 @@ public:
     // many ticks one full sweep of the grid therefore takes.
     [[nodiscard]] auto get_probes_per_update       () const -> int;
     [[nodiscard]] auto get_instance_count          () const -> std::size_t;
+    [[nodiscard]] auto get_stats                   () const -> Stats;
 
     // Refits the grid, reallocates the probe textures when needed, and
     // records this tick's probe trace into the command buffer. Must be
@@ -159,6 +201,22 @@ private:
     // overlay sees the previous frame's probes - fine for a debug aid, and
     // it costs no stall.
     void copy_probe_data_for_debug(erhe::graphics::Command_buffer& command_buffer);
+
+    // Per-pass GPU timer plus a fixed ring of its recent results.
+    class Pass_timing
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Gpu_timer>     timer;
+        std::array<uint64_t, c_timing_history_size>    history_ns{};
+        std::size_t                                    history_count{0};
+        std::size_t                                    history_next {0};
+        uint64_t                                       last_ns      {0};
+    };
+
+    // Takes each pass timer's latest result into its history. Called once per
+    // update, before the update records its own timestamps.
+    void sample_pass_timings();
+    void clear_pass_timings ();
 
     // A uniformly distributed random rotation for this tick's ray set.
     [[nodiscard]] auto next_random_rotation() -> glm::vec4;
@@ -248,6 +306,10 @@ private:
     // w state), refreshed while the probe overlay is enabled.
     std::unique_ptr<erhe::graphics::Buffer> m_probe_readback_buffer;
     bool                                    m_probe_readback_valid{false};
+
+    std::array<Pass_timing, c_ddgi_pass_count> m_pass_timings;
+    uint64_t                                   m_update_count       {0};
+    uint64_t                                   m_timing_sample_count{0};
 };
 
 } // namespace editor

@@ -510,6 +510,7 @@ private:
     auto action_animation_delete_key          (const nlohmann::json& args) -> std::string;
     auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;
     auto action_set_ddgi                      (const nlohmann::json& args) -> std::string;
+    auto query_indirect_diffuse_stats         (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

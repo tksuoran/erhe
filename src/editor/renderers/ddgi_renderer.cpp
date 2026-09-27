@@ -16,6 +16,7 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
@@ -100,6 +101,17 @@ constexpr erhe::dataformat::Format c_ray_data_format   = erhe::dataformat::Forma
 }
 
 } // anonymous namespace
+
+auto c_str(const Ddgi_pass pass) -> const char*
+{
+    switch (pass) {
+        case Ddgi_pass::trace:            return "trace";
+        case Ddgi_pass::blend_irradiance: return "blend_irradiance";
+        case Ddgi_pass::blend_distance:   return "blend_distance";
+        case Ddgi_pass::relocate:         return "relocate";
+        default:                          return "?";
+    }
+}
 
 auto Ddgi_renderer::Grid::operator==(const Grid& other) const -> bool
 {
@@ -353,6 +365,12 @@ Ddgi_renderer::Ddgi_renderer(
         }
     );
 
+    // Labels double as the Performance window plot names.
+    m_pass_timings[static_cast<std::size_t>(Ddgi_pass::trace           )].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI trace");
+    m_pass_timings[static_cast<std::size_t>(Ddgi_pass::blend_irradiance)].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI blend irradiance");
+    m_pass_timings[static_cast<std::size_t>(Ddgi_pass::blend_distance  )].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI blend distance");
+    m_pass_timings[static_cast<std::size_t>(Ddgi_pass::relocate        )].timer = std::make_unique<Gpu_timer>(graphics_device, "DDGI relocate");
+
     m_supported = true;
     log_startup->info("Ddgi_renderer: DDGI available");
 }
@@ -491,6 +509,73 @@ auto Ddgi_renderer::get_probes_per_update() const -> int
 auto Ddgi_renderer::get_instance_count() const -> std::size_t
 {
     return m_scene_tlas ? m_scene_tlas->get_instance_count() : 0;
+}
+
+void Ddgi_renderer::sample_pass_timings()
+{
+    // A timer's result is the latest completed measurement of an earlier
+    // update; all of them read 0 until the first one has completed. A single
+    // pass may legitimately measure 0: the timestamps are taken after all
+    // earlier work completes, so a pass that overlaps its predecessor and
+    // finishes first is charged nothing (doc/editor/ddgi.md "Performance").
+    std::array<uint64_t, c_ddgi_pass_count> results_ns{};
+    uint64_t                                sum_ns = 0;
+    for (std::size_t i = 0; i < c_ddgi_pass_count; ++i) {
+        results_ns[i] = m_pass_timings[i].timer->last_result();
+        sum_ns += results_ns[i];
+    }
+    if (sum_ns == 0) {
+        return;
+    }
+    for (std::size_t i = 0; i < c_ddgi_pass_count; ++i) {
+        Pass_timing&   pass_timing = m_pass_timings[i];
+        const uint64_t ns          = results_ns[i];
+        pass_timing.last_ns = ns;
+        pass_timing.history_ns[pass_timing.history_next] = ns;
+        pass_timing.history_next  = (pass_timing.history_next + 1) % c_timing_history_size;
+        pass_timing.history_count = std::min(pass_timing.history_count + 1, c_timing_history_size);
+    }
+    ++m_timing_sample_count;
+}
+
+void Ddgi_renderer::clear_pass_timings()
+{
+    for (Pass_timing& pass_timing : m_pass_timings) {
+        pass_timing.history_count = 0;
+        pass_timing.history_next  = 0;
+        pass_timing.last_ns       = 0;
+    }
+}
+
+auto Ddgi_renderer::get_stats() const -> Stats
+{
+    Stats stats{};
+    for (std::size_t i = 0; i < c_ddgi_pass_count; ++i) {
+        const Pass_timing& pass_timing = m_pass_timings[i];
+        uint64_t sum_ns = 0;
+        for (std::size_t j = 0; j < pass_timing.history_count; ++j) {
+            sum_ns += pass_timing.history_ns[j];
+        }
+        Pass_time& pass_time = stats.passes[i];
+        pass_time.last_ms    = static_cast<double>(pass_timing.last_ns) * 1.0e-6;
+        pass_time.average_ms = (pass_timing.history_count > 0)
+            ? (static_cast<double>(sum_ns) * 1.0e-6) / static_cast<double>(pass_timing.history_count)
+            : 0.0;
+        stats.total.last_ms    += pass_time.last_ms;
+        stats.total.average_ms += pass_time.average_ms;
+    }
+    stats.update_count        = m_update_count;
+    stats.timing_sample_count = m_timing_sample_count;
+    stats.rays_per_update     = static_cast<int64_t>(m_probes_per_update) * static_cast<int64_t>(m_rays_per_probe);
+    const int probe_count = m_grid.get_probe_count();
+    stats.updates_per_full_refresh = (m_probes_per_update > 0)
+        ? ((probe_count + m_probes_per_update - 1) / m_probes_per_update)
+        : 0;
+    stats.ms_per_million_rays = (stats.rays_per_update > 0)
+        ? (stats.total.average_ms * 1.0e6) / static_cast<double>(stats.rays_per_update)
+        : 0.0;
+    stats.full_refresh_ms = static_cast<double>(stats.updates_per_full_refresh) * stats.total.average_ms;
+    return stats;
 }
 
 auto Ddgi_renderer::compute_volume_bounds(Scene_root& scene_root) const -> erhe::math::Aabb
@@ -918,6 +1003,7 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
             m_texture_byte_count = 0;
             m_grid          = Grid{};
             m_volume_bounds = erhe::math::Aabb{};
+            clear_pass_timings();
         }
         return;
     }
@@ -973,9 +1059,17 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     Ring_buffer_range light_range    = m_light_buffer->update(m_light_projections.get(), m_sky_radiance);
     Ring_buffer_range control_range  = update_control_buffer();
 
+    sample_pass_timings();
+    ++m_update_count;
+
+    const auto pass_timer = [this](const Ddgi_pass pass) -> Gpu_timer& {
+        return *m_pass_timings[static_cast<std::size_t>(pass)].timer;
+    };
+
     command_buffer.transition_texture_layout(*m_ray_data_texture,   Image_layout::general);
     command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::general);
     {
+        const Scoped_gpu_timer trace_timer{pass_timer(Ddgi_pass::trace), command_buffer};
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_trace_bind_group_layout.get());
         encoder.set_compute_pipeline(*m_trace_pipeline);
@@ -1002,7 +1096,8 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::general);
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
-        const auto blend = [&](const Blend_pass& pass, const std::shared_ptr<Texture>& atlas) {
+        const auto blend = [&](const Blend_pass& pass, const std::shared_ptr<Texture>& atlas, const Ddgi_pass timed_pass) {
+            const Scoped_gpu_timer blend_timer{pass_timer(timed_pass), command_buffer};
             encoder.set_bind_group_layout(pass.bind_group_layout.get());
             encoder.set_compute_pipeline(*pass.pipeline);
             m_control_buffer->bind(encoder, control_range);
@@ -1010,12 +1105,13 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
             encoder.set_storage_image(c_blend_atlas_binding_point,    *atlas);
             encoder.dispatch_compute(static_cast<std::uintptr_t>(m_probes_per_update), 1, 1);
         };
-        blend(m_blend_irradiance, m_irradiance_texture);
-        blend(m_blend_distance,   m_distance_texture  );
+        blend(m_blend_irradiance, m_irradiance_texture, Ddgi_pass::blend_irradiance);
+        blend(m_blend_distance,   m_distance_texture,   Ddgi_pass::blend_distance  );
 
         // Relocation / classification reads the same ray data, and writes
         // only the probe data texture the blend passes never touch, so it
         // needs no barrier against them.
+        const Scoped_gpu_timer relocate_timer{pass_timer(Ddgi_pass::relocate), command_buffer};
         encoder.set_bind_group_layout(m_relocate_bind_group_layout.get());
         encoder.set_compute_pipeline(*m_relocate_pipeline);
         m_control_buffer->bind(encoder, control_range);

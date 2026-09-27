@@ -4114,6 +4114,14 @@
     "name": "set_ddgi"
   },
   {
+    "description": "Report the measured cost of the indirect diffuse field (doc/editor/ddgi.md \"Performance\"). Returns 'source' (\"ddgi\" while DDGI is active, else \"ambient\") and a 'ddgi' object: grid origin / spacing / counts, probe count, rays per probe, probes and rays per update, per-pass GPU milliseconds (trace, blend_irradiance, blend_distance, relocate; last and mean over the last timing_history_size samples) and their total, ms per million rays (total mean / rays per update), updates and ms per full refresh (every probe traced once), probe texture bytes, and the update_count / timing_sample_count counters that advance while the field is being updated. GPU timings lag the update by the frames in flight and read 0 until the first measurement completes. Read-only; takes no arguments.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_indirect_diffuse_stats"
+  },
+  {
     "description": "Activate dynamic rigid bodies (bodies enter the world deactivated). Scoped since 2026-08-09: node_ids wakes exactly those nodes' bodies, node_id/node_name wakes the SUBTREE under that node (union when combined); no filter wakes the whole scene. Scope iterative re-settles (--only rebuilds) so already-settled structures elsewhere stay asleep.",
     "inputSchema": {
       "properties": {

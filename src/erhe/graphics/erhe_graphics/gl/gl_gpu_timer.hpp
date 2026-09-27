@@ -13,7 +13,6 @@ namespace erhe::graphics {
 
 class Command_buffer;
 class Device;
-class Render_pass;
 
 // OpenGL GPU timer backend. Each timer owns a small ring buffer of
 // GL_TIME_ELAPSED queries. write_begin_timestamp issues glBeginQuery into the
@@ -22,7 +21,9 @@ class Render_pass;
 // (driven from Gl_device::end_frame) and stored as m_last_result.
 //
 // Constraint: GL allows only one GL_TIME_ELAPSED query active at a time, so
-// only one Gpu_timer per Render_pass scope is supported.
+// only one Gpu_timer per Render_pass scope is supported, and explicit-range
+// timers (Gpu_timer::begin / end) must not nest with each other or with a
+// timed render pass.
 //
 // Main-thread-only by design: query objects are per-context (unshared), the
 // per-timer state is a ring of queries no per-context slot can represent,
@@ -31,7 +32,7 @@ class Render_pass;
 class Gpu_timer_impl
 {
 public:
-    Gpu_timer_impl(Render_pass& render_pass, const char* label);
+    Gpu_timer_impl(Device& device, const char* label);
     ~Gpu_timer_impl() noexcept;
 
     Gpu_timer_impl(const Gpu_timer_impl&) = delete;
@@ -65,7 +66,6 @@ private:
     static std::vector<Gpu_timer_impl*>               s_all_gpu_timers;
     static std::size_t                                s_index;
 
-    Render_pass*               m_render_pass{nullptr};
     Device*                    m_device     {nullptr};
     std::array<Query, s_count> m_queries;
     uint64_t                   m_last_result{0};

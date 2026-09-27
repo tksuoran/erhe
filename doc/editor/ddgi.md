@@ -122,6 +122,38 @@ lifecycle:
   (`debug_draw_probes`) draws probe spheres coloured from a periodic probe-data
   readback.
 
+## Performance
+
+Each update times its four GPU passes separately with explicit-range
+`erhe::graphics::Gpu_timer`s (`Scoped_gpu_timer` around the dispatches): `trace`,
+`blend_irradiance`, `blend_distance` and `relocate`. The timers also appear in
+the Performance window as `DDGI trace`, `DDGI blend irradiance`, ... The
+timestamps are taken after all earlier work completes, so the passes partition
+the update's wall time: `relocate` runs concurrently with the blends (no barrier
+between them) and usually reads close to 0, and the total is exact.
+
+`Ddgi_renderer::get_stats()` is the single source of the derived figures the
+Ddgi window's "GPU time" section and the MCP tool report:
+
+- per pass and total: the last measurement and the mean over the last
+  `c_timing_history_size` (60) measurements, in milliseconds. A result lags its
+  update by the frames in flight; nothing is recorded until the first result
+  arrives, and the history is cleared when DDGI is disabled.
+- `rays_per_update`: probes per update x rays per probe, as dispatched (the
+  configured ray count rounded up to the trace workgroup size).
+- `ms_per_million_rays`: total mean ms divided by millions of rays per update.
+- `updates_per_full_refresh` = ceil(probe count / probes per update), and
+  `full_refresh_ms` = that x total mean ms: the GPU time to trace every probe
+  once.
+- `update_count` (updates dispatched) and `timing_sample_count` (timing samples
+  taken), which advance while the field is being updated.
+
+The MCP tool `get_indirect_diffuse_stats` (no arguments) returns `source`
+(`"ddgi"` while DDGI is active, else `"ambient"`) and a `ddgi` object with the
+grid origin / spacing / counts, probe count, rays per probe, probes and rays per
+update, `gpu_ms` per pass and `gpu_ms_total` (`last_ms`, `average_ms`), the
+derived figures above, and `texture_bytes`.
+
 ## Phases
 
 The renderer is built out of these parts; the labels are cited from source
@@ -184,7 +216,8 @@ mode and the MCP `set_ddgi` tool.
    between the trace and blend dispatches.
 4. Regression: with DDGI disabled the frame matches the non-DDGI output, and a
    lightmap-baked scene looks unchanged with DDGI on.
-5. Performance: the per-frame DDGI cost is reported in the Ddgi window; the
+5. Performance: `py -3 scripts/mcp_call.py get_indirect_diffuse_stats` (and
+   the Ddgi window's "GPU time" section) report the per-pass GPU cost; the
    lightmap baker's ~1.5 ms/frame budget is the benchmark to stay under.
 
 ## Future work

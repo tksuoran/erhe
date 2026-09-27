@@ -1,13 +1,12 @@
 #include "erhe_graphics/metal/metal_gpu_timer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/render_pass.hpp"
 
 namespace erhe::graphics {
 
-Gpu_timer_impl::Gpu_timer_impl(Render_pass& render_pass, const char* label)
-    : m_render_pass{&render_pass}
-    , m_label      {label}
+Gpu_timer_impl::Gpu_timer_impl(Device& device, const char* label)
+    : m_label{label}
 {
+    static_cast<void>(device);
 }
 
 Gpu_timer_impl::~Gpu_timer_impl() noexcept

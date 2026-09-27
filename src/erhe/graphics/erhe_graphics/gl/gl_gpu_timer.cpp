@@ -5,9 +5,9 @@
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_context_index.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -29,9 +29,8 @@ ERHE_PROFILE_MUTEX(std::mutex, Gpu_timer_impl::s_mutex);
 std::vector<Gpu_timer_impl*>   Gpu_timer_impl::s_all_gpu_timers;
 std::size_t                    Gpu_timer_impl::s_index{0};
 
-Gpu_timer_impl::Gpu_timer_impl(Render_pass& render_pass, const char* label)
-    : m_render_pass{&render_pass}
-    , m_device     {&render_pass.get_device()}
+Gpu_timer_impl::Gpu_timer_impl(Device& device, const char* label)
+    : m_device     {&device}
     , m_label      {label}
 {
 #if defined(ERHE_USE_TIME_QUERY)

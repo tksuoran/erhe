@@ -483,7 +483,8 @@ issues `vkCmdDispatch`.
 **GPU timers** (`vulkan_gpu_timer.cpp`). A single device `VkQueryPool` sized for
 `s_max_gpu_timers (128) * 2 * frames_in_flight` timestamps. Each `Gpu_timer_impl`
 claims a slot; `write_begin_timestamp` / `write_end_timestamp` record
-`vkCmdWriteTimestamp`. The per-slice reset is recorded by the first
+`vkCmdWriteTimestamp` at `VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT`, from the render
+pass hooks or from `Gpu_timer::begin` / `end` for an explicit range. The per-slice reset is recorded by the first
 `Command_buffer::begin` of each frame, and results are read in `wait_frame` after
 the timeline-semaphore wait guarantees the slice has completed. GPU timers are
 disabled when the queue reports `timestampValidBits == 0`.

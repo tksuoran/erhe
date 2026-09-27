@@ -23,6 +23,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Render_pipeline` / `Base_render_pipeline` -- Compiled pipeline objects. `create_render_pipeline()` builds one up-front; `Base_render_pipeline` defers creation to first use and caches variants keyed by `(shader_stages, vertex_input, vertex_format, render-pass format)`.
 - `Render_pass` -- Framebuffer configuration with color/depth/stencil attachments and load/store actions. Attachment descriptors carry `usage_before` / `usage_after` so backends can derive image layout transitions and subpass dependencies without per-texture layout tracking.
 - `Render_command_encoder` -- Records draw commands: set pipeline, bind buffers, bind sampled images via `set_sampled_image()`, draw primitives (including multi-draw indirect).
+- `Gpu_timer` -- GPU wall-clock timer; `last_result()` returns the latest completed measurement in nanoseconds, one or two frames after it was recorded, and `all_gpu_timers()` lists every live timer (the Performance window plots them). Constructed with a `Render_pass`, it times that pass from `Render_pass::start_render_pass` to `end_render_pass`. Constructed with a `Device`, it times an explicit range of one `Command_buffer` that the caller brackets with `begin()` / `end()` or the RAII `Scoped_gpu_timer` -- the form used around compute dispatches. The timestamps are taken after all previously recorded work completes, so consecutive ranges partition the wall time: a range whose work overlaps its predecessor's and finishes first reads close to 0, and the sum of consecutive ranges is exact. Explicit ranges must not nest (OpenGL runs one `GL_TIME_ELAPSED` query at a time). Vulkan and OpenGL measure; the Metal and null backends read 0.
 - `Ring_buffer` -- Circular GPU buffer for streaming per-frame data with fence-based synchronization.
 - `Shader_monitor` -- Watches shader source files and hot-reloads programs when files change.
 - `Shader_source_cache` -- Text of shader source files by path, owned by the `Device` (`get_shader_source_cache()`). `Glsl_file_loader` reads every source and include through it, `preload(directory)` fills it for a whole shader directory before the first program is built (`Program_interface` does this for its `shader_paths`), and `Shader_monitor` erases the entry of a changed file before it rebuilds the stages that use it.
@@ -39,6 +40,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Shader_stages(device, prototype)` -- Create shader program from compiled prototype.
 - `Texture_heap(device, fallback_texture, fallback_sampler, bind_group_layout)` -- Create a material-texture heap bound to a layout.
 - `Scoped_render_pass(render_pass)` -- RAII render pass begin/end.
+- `Gpu_timer(render_pass, label)` / `Gpu_timer(device, label)` + `Scoped_gpu_timer(timer, command_buffer)` -- GPU timing of a render pass or of an explicit command buffer range.
 - `Render_command_encoder::set_render_pipeline()` / `set_bind_group_layout()` / `set_sampled_image(binding_point, texture, sampler)` / `draw_indexed_primitives()` -- Issue draw calls.
 
 ## Frame lifecycle
