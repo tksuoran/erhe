@@ -1,0 +1,137 @@
+#pragma once
+
+#include "renderers/probe_grid.hpp"
+
+#include "erhe_math/aabb.hpp"
+
+#include <glm/glm.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+
+namespace editor {
+
+// The pure layout math of world-space radiance cascades
+// (doc/editor/radiance_cascades.md, doc/plans/radiance_cascades.md sections
+// 1 and 3): cascade fit, interval bounds, atlas tiling, octahedral texel
+// nesting and the trilinear upper-probe weights of the merge. No graphics
+// or scene dependency, so it is unit tested directly
+// (src/editor/renderers/test/).
+
+// Upper bound on the cascade count. Each cascade has 1/8 of the probes of
+// the one below it, so even a 4096^3 cascade 0 is covered by 12 cascades.
+constexpr int c_max_radiance_cascades = 12;
+
+class Radiance_cascades_layout_settings
+{
+public:
+    float probe_spacing_m     {0.5f};    // cascade 0 target spacing s0
+    int   max_probes_cascade0 {65536};   // cascade 0 probe budget; s0 grows until it fits
+    int   max_cascades        {8};       // clamped to [1, c_max_radiance_cascades]
+    int   cascade0_tile_texels{4};       // q0: octahedral tile side of cascade 0
+    float interval_scale      {1.0f};    // r0 = interval_scale * sqrt(3) * s0, >= 1
+    int   max_texture_size    {16384};   // Device_info::max_texture_size
+
+    [[nodiscard]] auto operator==(const Radiance_cascades_layout_settings& other) const -> bool = default;
+};
+
+// One cascade: its probe grid, octahedral tile and radiance interval, and
+// where its probe tiles sit in the cascade's 2D atlas.
+class Radiance_cascade
+{
+public:
+    Probe_grid grid;                 // probe i sits at grid.origin + coords * grid.spacing
+    int        tile_texels   {0};    // q_i = q0 * 2^i
+    float      interval_start{0.0f}; // t_i, metres from the probe
+    float      interval_end  {0.0f}; // t_{i+1}
+    int        tiles_per_row {0};    // probe tiles per atlas row
+    int        tile_rows     {0};
+
+    [[nodiscard]] auto get_probe_count         () const -> int;
+    [[nodiscard]] auto get_atlas_width         () const -> int;
+    [[nodiscard]] auto get_atlas_height        () const -> int;
+    // Texels carrying probe directions: probes x q_i^2 (the atlas can have
+    // a partly filled last row).
+    [[nodiscard]] auto get_texel_count         () const -> int64_t;
+    // Texels of the allocated atlas: width x height.
+    [[nodiscard]] auto get_atlas_texel_count   () const -> int64_t;
+    // Top-left atlas texel of a probe's tile: probe_index wrapped into rows.
+    [[nodiscard]] auto get_tile_origin         (int probe_index) const -> glm::ivec2;
+};
+
+class Radiance_cascades_layout
+{
+public:
+    std::array<Radiance_cascade, c_max_radiance_cascades> cascades{};
+    int   cascade_count{0};
+    float r0           {0.0f}; // cascade 0 interval length
+
+    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto get_cascades        () const -> std::span<const Radiance_cascade>;
+    [[nodiscard]] auto get_total_texels    () const -> int64_t; // sum of get_texel_count()
+    [[nodiscard]] auto get_total_probes    () const -> int64_t;
+    [[nodiscard]] auto operator==          (const Radiance_cascades_layout& other) const -> bool;
+    [[nodiscard]] auto operator!=          (const Radiance_cascades_layout& other) const -> bool { return !(*this == other); }
+};
+
+// Interval [start, end] of cascade i: [r0 * (2^i - 1), r0 * (2^(i+1) - 1)].
+// Adjacent cascades share their boundary, cascade 0 starts at the probe.
+[[nodiscard]] auto get_radiance_interval(float r0, int cascade) -> glm::vec2;
+
+// The grid of the cascade above: probes at the centres of 2x2x2 blocks of
+// lower probes - spacing doubled, origin moved by half a lower spacing,
+// counts ceil(lower / 2) per axis (an odd lower count gives the last upper
+// probe a block that is half outside the lower grid).
+[[nodiscard]] auto get_upper_grid(const Probe_grid& lower) -> Probe_grid;
+
+// Fits all cascades to the padded content box (see
+// doc/plans/radiance_cascades.md section 3): cascade 0 is fitted like DDGI
+// (fit_probe_grid() with the cascade 0 budget), each next cascade from
+// get_upper_grid(), until the top cascade has at most 2 probes on its
+// longest axis or max_cascades is reached. The atlas of every cascade must
+// stay within max_texture_size on both sides; when it would not, the
+// cascade 0 budget is lowered (which grows s0) and the fit repeated.
+// Invalid (cascade_count 0) for an invalid box.
+[[nodiscard]] auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascades_layout_settings& settings) -> Radiance_cascades_layout;
+
+// One axis of the trilinear interpolation from a lower cascade probe to the
+// upper cascade: the two upper probe indices (clamped to the upper grid)
+// and their weights. Lower probe k sits at upper grid coordinate
+// k / 2 - 1 / 4, so the weights are always 0.25 and 0.75.
+class Upper_probe_axis
+{
+public:
+    std::array<int,   2> index {};
+    std::array<float, 2> weight{};
+};
+[[nodiscard]] auto get_upper_probe_axis(int lower_index, int upper_count) -> Upper_probe_axis;
+
+// The 8 upper cascade probes a lower probe merges with, and their
+// trilinear weights (products of the per-axis weights; they sum to 1).
+// Indices are clamped at the upper grid's edges, so an edge probe can list
+// the same upper probe twice.
+class Upper_probes
+{
+public:
+    std::array<glm::ivec3, 8> coords {};
+    std::array<float,      8> weights{};
+};
+[[nodiscard]] auto get_upper_probes(const glm::ivec3& lower_coords, const glm::ivec3& upper_counts) -> Upper_probes;
+
+// Octahedral texel nesting: cascade i texel (u, v) covers the cascade i + 1
+// texels (2u .. 2u+1, 2v .. 2v+1) of the same octahedral tile layout.
+[[nodiscard]] auto get_child_texels(const glm::ivec2& texel) -> std::array<glm::ivec2, 4>;
+[[nodiscard]] auto get_parent_texel(const glm::ivec2& child_texel) -> glm::ivec2;
+
+// Octahedral mapping (Cigolle et al. 2014), the convention of
+// res/shaders/erhe_ddgi.glsl: unit direction <-> [-1, 1]^2.
+[[nodiscard]] auto octahedral_encode(const glm::vec3& direction) -> glm::vec2;
+[[nodiscard]] auto octahedral_decode(const glm::vec2& f) -> glm::vec3;
+// Direction through the centre of texel (u, v) of a tile_texels^2 tile.
+[[nodiscard]] auto get_texel_direction(const glm::ivec2& texel, int tile_texels) -> glm::vec3;
+// Texel of a tile_texels^2 tile that contains the direction.
+[[nodiscard]] auto get_direction_texel(const glm::vec3& direction, int tile_texels) -> glm::ivec2;
+
+} // namespace editor

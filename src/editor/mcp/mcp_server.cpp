@@ -8,10 +8,14 @@
 #include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/ddgi_config.hpp"
+#include "config/generated/indirect_diffuse_source.hpp"
+#include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/ddgi_renderer.hpp"
+#include "renderers/indirect_diffuse.hpp"
+#include "renderers/radiance_cascades_renderer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "scene/scene_image_capture.hpp"
 #include "scene/scene_root.hpp"
@@ -805,6 +809,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "clear_item_style",               &Mcp_server::action_clear_item_style              },
         { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
         { "set_ddgi",                       &Mcp_server::action_set_ddgi                      },
+        { "set_indirect_diffuse",           &Mcp_server::action_set_indirect_diffuse          },
+        { "set_radiance_cascades",          &Mcp_server::action_set_radiance_cascades         },
         { "get_indirect_diffuse_stats",     &Mcp_server::query_indirect_diffuse_stats         },
         { "sample_indirect_diffuse",        &Mcp_server::query_sample_indirect_diffuse        },
         { "reference_indirect_diffuse",     &Mcp_server::query_reference_indirect_diffuse     },
@@ -1033,8 +1039,16 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
     }
     if (m_context.editor_settings != nullptr) {
         Ddgi_config& config = m_context.editor_settings->ddgi;
+        // 'enabled' is shorthand for the source selection
+        // (set_indirect_diffuse): true selects DDGI, false returns a DDGI
+        // selection to ambient and leaves any other source alone.
         if (args.contains("enabled")) {
-            config.enabled = args.value("enabled", false);
+            const Indirect_diffuse_source source = m_context.editor_settings->indirect_diffuse_source;
+            if (args.value("enabled", false)) {
+                set_indirect_diffuse_source(m_context, Indirect_diffuse_source::ddgi);
+            } else if (source == Indirect_diffuse_source::ddgi) {
+                set_indirect_diffuse_source(m_context, Indirect_diffuse_source::ambient);
+            }
         }
         if (args.contains("probe_spacing_m")) {
             config.probe_spacing_m = std::clamp(args.value("probe_spacing_m", 1.5f), 0.01f, 64.0f);
@@ -1080,10 +1094,157 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
     };
     if (m_context.editor_settings != nullptr) {
         const Ddgi_config& config = m_context.editor_settings->ddgi;
-        result["enabled"]    = config.enabled;
+        result["enabled"]    = (m_context.editor_settings->indirect_diffuse_source == Indirect_diffuse_source::ddgi);
         result["hysteresis"] = config.hysteresis;
         result["intensity"]         = config.intensity;
         result["debug_draw_probes"] = config.debug_draw_probes;
+    }
+    return make_json_content(result).dump();
+}
+
+namespace {
+
+// The radiance cascades layout and memory (doc/editor/radiance_cascades.md
+// "MCP"). The cost fields read 0 until the trace pass exists (plan phase 2).
+[[nodiscard]] auto radiance_cascades_stats_json(const Radiance_cascades_renderer& renderer) -> json
+{
+    const Radiance_cascades_layout& layout = renderer.get_layout();
+    json cascades = json::array();
+    for (int i = 0; i < layout.cascade_count; ++i) {
+        const Radiance_cascade& cascade = layout.cascades[static_cast<std::size_t>(i)];
+        cascades.push_back(json{
+            {"index",         i},
+            {"grid_origin",   json::array({cascade.grid.origin.x,  cascade.grid.origin.y,  cascade.grid.origin.z })},
+            {"grid_spacing",  json::array({cascade.grid.spacing.x, cascade.grid.spacing.y, cascade.grid.spacing.z})},
+            {"grid_counts",   json::array({cascade.grid.counts.x,  cascade.grid.counts.y,  cascade.grid.counts.z })},
+            {"probe_count",   cascade.get_probe_count()},
+            {"tile_texels",   cascade.tile_texels},
+            {"interval",      json::array({cascade.interval_start, cascade.interval_end})},
+            {"texels",        cascade.get_texel_count()},
+            {"atlas_size",    json::array({cascade.get_atlas_width(), cascade.get_atlas_height()})},
+            {"texture_bytes", renderer.get_cascade_texture_byte_count(i)}
+        });
+    }
+    const json zero_time{
+        {"last_ms",    0.0},
+        {"average_ms", 0.0}
+    };
+    return json{
+        {"supported",                renderer.is_supported()},
+        {"active",                   renderer.is_active()},
+        {"has_field",                renderer.has_field()},
+        {"cascade_count",            layout.cascade_count},
+        {"r0",                       layout.r0},
+        {"probe_count",              layout.get_total_probes()},
+        {"texels",                   layout.get_total_texels()},
+        {"texture_bytes",            renderer.get_texture_byte_count()},
+        {"fit_count",                renderer.get_fit_count()},
+        {"cascades",                 cascades},
+        {"update_count",             0},
+        {"timing_sample_count",      0},
+        {"texels_per_update",        0},
+        {"rays_per_update",          0},
+        {"gpu_ms",                   json::object()},
+        {"gpu_ms_total",             zero_time},
+        {"ms_per_million_rays",      0.0},
+        {"updates_per_full_refresh", 0},
+        {"full_refresh_ms",          0.0}
+    };
+}
+
+void show_window_by_ini_label(App_context& context, const std::string_view ini_label)
+{
+    if (context.imgui_windows == nullptr) {
+        return;
+    }
+    for (erhe::imgui::Imgui_window* window : context.imgui_windows->get_windows()) {
+        if (window->get_ini_label() == ini_label) {
+            window->show_window();
+        }
+    }
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_set_indirect_diffuse(const json& args) -> std::string
+{
+    // Select the producer of the indirect diffuse field
+    // (doc/editor/radiance_cascades.md "Source selection"), the MCP
+    // counterpart of the Settings window's Indirect Diffuse combo.
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("set_indirect_diffuse: editor settings not available");
+    }
+    if (args.contains("source")) {
+        const json& value = args["source"];
+        Indirect_diffuse_source parsed{};
+        if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+            return make_error_content("set_indirect_diffuse: 'source' must be one of \"ambient\", \"ddgi\", \"radiance_cascades\"");
+        }
+        set_indirect_diffuse_source(m_context, parsed);
+    }
+    const Indirect_diffuse_source source = m_context.editor_settings->indirect_diffuse_source;
+    if (args.value("show_window", false)) {
+        if (source == Indirect_diffuse_source::ddgi) {
+            show_window_by_ini_label(m_context, "ddgi");
+        } else if (source == Indirect_diffuse_source::radiance_cascades) {
+            show_window_by_ini_label(m_context, "radiance_cascades");
+        }
+    }
+    const Ddgi_renderer*              ddgi = m_context.ddgi_renderer;
+    const Radiance_cascades_renderer* rc   = m_context.radiance_cascades_renderer;
+    return make_json_content(json{
+        {"source",                      std::string{to_string(source)}},
+        {"ddgi_supported",              (ddgi != nullptr) && ddgi->is_supported()},
+        {"radiance_cascades_supported", (rc   != nullptr) && rc->is_supported()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
+{
+    // Tune radiance cascades without the ImGui widgets
+    // (doc/editor/radiance_cascades.md "MCP"). The renderer refits on its
+    // next tick; the result reports the layout of the last fit, so read
+    // get_indirect_diffuse_stats a frame later for the new one.
+    Radiance_cascades_renderer* renderer = m_context.radiance_cascades_renderer;
+    if (renderer == nullptr) {
+        return make_error_content("Radiance cascades renderer not available");
+    }
+    if (m_context.editor_settings != nullptr) {
+        Radiance_cascades_config& config = m_context.editor_settings->radiance_cascades;
+        if (args.contains("probe_spacing_m")) {
+            config.probe_spacing_m = std::clamp(args.value("probe_spacing_m", 0.5f), 0.01f, 64.0f);
+        }
+        if (args.contains("volume_padding_m")) {
+            config.volume_padding_m = std::max(0.0f, args.value("volume_padding_m", 1.0f));
+        }
+        if (args.contains("max_probes_cascade0")) {
+            config.max_probes_cascade0 = std::clamp(args.value("max_probes_cascade0", 65536), 8, 1048576);
+        }
+        if (args.contains("max_cascades")) {
+            config.max_cascades = std::clamp(args.value("max_cascades", 8), 1, c_max_radiance_cascades);
+        }
+        if (args.contains("cascade0_tile_texels")) {
+            config.cascade0_tile_texels = std::clamp(args.value("cascade0_tile_texels", 4), 1, 64);
+        }
+        if (args.contains("interval_scale")) {
+            config.interval_scale = std::clamp(args.value("interval_scale", 1.0f), 1.0f, 64.0f);
+        }
+    }
+    if (args.value("show_window", false)) {
+        show_window_by_ini_label(m_context, "radiance_cascades");
+    }
+    json result = radiance_cascades_stats_json(*renderer);
+    if (m_context.editor_settings != nullptr) {
+        const Radiance_cascades_config& config = m_context.editor_settings->radiance_cascades;
+        result["config"] = json{
+            {"probe_spacing_m",      config.probe_spacing_m},
+            {"volume_padding_m",     config.volume_padding_m},
+            {"max_probes_cascade0",  config.max_probes_cascade0},
+            {"max_cascades",         config.max_cascades},
+            {"cascade0_tile_texels", config.cascade0_tile_texels},
+            {"interval_scale",       config.interval_scale}
+        };
+        result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }
     return make_json_content(result).dump();
 }
@@ -1095,10 +1256,15 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
     // probe relocation / classification state ("Probe state"). Read-only;
     // optional 'probes' selects probes whose offset and state to return.
     Ddgi_renderer* renderer = m_context.ddgi_renderer;
-    const bool     ddgi     = (renderer != nullptr) && renderer->is_active();
+    const Indirect_diffuse_source source = (m_context.editor_settings != nullptr)
+        ? m_context.editor_settings->indirect_diffuse_source
+        : Indirect_diffuse_source::ambient;
     json result{
-        {"source", ddgi ? "ddgi" : "ambient"}
+        {"source", std::string{to_string(source)}}
     };
+    if (m_context.radiance_cascades_renderer != nullptr) {
+        result["radiance_cascades"] = radiance_cascades_stats_json(*m_context.radiance_cascades_renderer);
+    }
     if (renderer == nullptr) {
         return make_json_content(result).dump();
     }

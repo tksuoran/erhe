@@ -1,6 +1,8 @@
 #pragma once
 
 #include "renderable.hpp"
+#include "renderers/indirect_diffuse.hpp"
+#include "renderers/probe_grid.hpp"
 #include "renderers/scene_tlas.hpp"
 
 #include "erhe_graphics/sampler.hpp"
@@ -121,21 +123,10 @@ public:
 class Ddgi_renderer : public Renderable
 {
 public:
-    // The fitted probe grid. spacing is per axis: the padded box extent
-    // divided by (counts - 1), so the first and last probe planes sit
-    // exactly on the box faces.
-    class Grid
-    {
-    public:
-        glm::vec3  origin {0.0f};              // world position of probe (0,0,0)
-        glm::vec3  spacing{1.0f};              // world distance between adjacent probes, per axis
-        glm::ivec3 counts {0};                 // probes per axis
-
-        [[nodiscard]] auto get_probe_count() const -> int { return counts.x * counts.y * counts.z; }
-        [[nodiscard]] auto is_valid       () const -> bool { return (counts.x > 1) && (counts.y > 1) && (counts.z > 1); }
-        [[nodiscard]] auto operator==(const Grid& other) const -> bool;
-        [[nodiscard]] auto operator!=(const Grid& other) const -> bool { return !(*this == other); }
-    };
+    // The fitted probe grid (fit_probe_grid()). spacing is per axis: the
+    // padded box extent divided by (counts - 1), so the first and last probe
+    // planes sit exactly on the box faces.
+    using Grid = Probe_grid;
 
     // GPU time of one pass: the most recent measurement and the mean over
     // the last c_timing_history_size measurements, in milliseconds.
@@ -181,13 +172,21 @@ public:
         App_context&                             context,
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
-        const Ddgi_config&                       config
+        const Ddgi_config&                       config,
+        Producer_selection                       selection
     );
     ~Ddgi_renderer() noexcept;
 
     [[nodiscard]] auto is_supported() const -> bool;
-    // Configured on AND supported AND a usable grid was fitted.
+    // Selected as the indirect diffuse source AND supported AND a usable
+    // grid was fitted.
     [[nodiscard]] auto is_active   () const -> bool;
+    // DDGI is the selected indirect diffuse source.
+    [[nodiscard]] auto is_selected () const -> bool;
+    // Called by set_indirect_diffuse_source() only. Deselecting releases the
+    // probe textures, the grid and the pass timings; selecting leaves the
+    // refit to the next tick.
+    void               set_selection(Producer_selection selection);
 
     [[nodiscard]] auto get_grid                    () const -> const Grid&;
     [[nodiscard]] auto get_irradiance_texture      () const -> const std::shared_ptr<erhe::graphics::Texture>&;
@@ -272,8 +271,10 @@ public:
     [[nodiscard]] auto get_probe_states           () const -> std::span<const glm::vec4>;
 
     // Refits the grid, reallocates the probe textures when needed, and
-    // records this tick's probe trace into the command buffer. Must be
-    // called outside a render pass. No-op unless supported and enabled.
+    // records this tick's probe update into the command buffer while DDGI
+    // is the selected source, plus the next chunk of a pending reference
+    // query whatever the source. Must be called outside a render pass. No-op
+    // unless supported.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
     // Implements Renderable: the probe overlay (volume box + one wire
@@ -292,14 +293,6 @@ private:
         std::unique_ptr<erhe::graphics::Reloadable_shader_stages> shader_stages;
         std::unique_ptr<erhe::graphics::Compute_pipeline>         pipeline;
     };
-
-    // Union of the visible content meshes' world bounds, grown by
-    // volume_padding_m. Invalid when the scene has no visible content.
-    [[nodiscard]] auto compute_volume_bounds(Scene_root& scene_root) const -> erhe::math::Aabb;
-
-    // Fits a grid to the given box, honouring probe_spacing_m and scaling
-    // the spacing up until the probe count fits max_probes.
-    [[nodiscard]] auto fit_grid(const erhe::math::Aabb& bounds) const -> Grid;
 
     // (Re)creates the probe textures for the current grid + texel settings.
     void allocate_textures(erhe::graphics::Command_buffer& command_buffer);
@@ -382,6 +375,7 @@ private:
     App_context&            m_context;
     // Live reference to the editor's Ddgi_config (editor_settings.ddgi).
     const Ddgi_config&      m_config;
+    Producer_selection      m_selection{Producer_selection::deselected};
     bool                    m_supported{false};
 
     Grid m_grid{};
@@ -404,11 +398,8 @@ private:
     std::shared_ptr<erhe::graphics::Texture> m_ray_data_texture;
     std::size_t                              m_texture_byte_count{0};
 
-    // The padded box the current grid was fitted to. The grid is only
-    // refitted when the scene's content leaves this box or shrinks well
-    // inside it - refitting on every content transform would reallocate the
-    // probe textures (and throw away their converged contents) every frame.
-    erhe::math::Aabb m_volume_bounds{};
+    // The padded box the current grid was fitted to, and the refit rule.
+    Probe_volume_bounds m_volume_bounds{};
 
     // Radiance a probe ray gets when it escapes the scene. Scene ambient for
     // now; the atmosphere LUTs are a later refinement.

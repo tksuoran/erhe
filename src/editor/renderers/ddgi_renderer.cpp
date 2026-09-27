@@ -5,6 +5,7 @@
 #include "config/generated/ddgi_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "renderers/content_bounds.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 
@@ -144,22 +145,19 @@ auto c_str(const Ddgi_pass pass) -> const char*
     }
 }
 
-auto Ddgi_renderer::Grid::operator==(const Grid& other) const -> bool
-{
-    return (counts == other.counts) && (origin == other.origin) && (spacing == other.spacing);
-}
-
 Ddgi_renderer::Ddgi_renderer(
     erhe::graphics::Device&                  graphics_device,
     erhe::graphics::Command_buffer&          init_command_buffer,
     App_context&                             context,
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
-    const Ddgi_config&                       config
+    const Ddgi_config&                       config,
+    const Producer_selection                 selection
 )
     : m_graphics_device{graphics_device}
     , m_context        {context}
     , m_config         {config}
+    , m_selection      {selection}
     , m_control_block{
         graphics_device,
         "ddgi",
@@ -1127,9 +1125,40 @@ auto Ddgi_renderer::is_supported() const -> bool
     return m_supported && (m_trace_pipeline != nullptr);
 }
 
+auto Ddgi_renderer::is_selected() const -> bool
+{
+    return m_selection == Producer_selection::selected;
+}
+
+void Ddgi_renderer::set_selection(const Producer_selection selection)
+{
+    if (selection == m_selection) {
+        return;
+    }
+    m_selection = selection;
+    if (selection == Producer_selection::deselected) {
+        // Release the probe memory while another source is selected; the
+        // textures are cheap to recreate and the grid is refitted anyway.
+        // A frame still in flight keeps its textures alive through the
+        // shared pointers the forward pass resources hold.
+        m_irradiance_texture.reset();
+        m_distance_texture  .reset();
+        m_probe_data_texture.reset();
+        m_ray_data_texture  .reset();
+        m_texture_byte_count = 0;
+        m_grid = Grid{};
+        m_volume_bounds.reset();
+        m_probe_readback_valid  = false;
+        m_probe_state_requested = false;
+        m_probe_state_in_flight = false;
+        m_probe_state_valid     = false;
+        clear_pass_timings();
+    }
+}
+
 auto Ddgi_renderer::is_active() const -> bool
 {
-    return is_supported() && m_config.enabled && m_grid.is_valid() && m_irradiance_texture;
+    return is_supported() && is_selected() && m_grid.is_valid() && m_irradiance_texture;
 }
 
 auto Ddgi_renderer::get_grid() const -> const Grid&
@@ -1254,83 +1283,6 @@ auto Ddgi_renderer::get_stats() const -> Stats
     return stats;
 }
 
-auto Ddgi_renderer::compute_volume_bounds(Scene_root& scene_root) const -> erhe::math::Aabb
-{
-    erhe::math::Aabb bounds{};
-
-    const erhe::scene::Mesh_layer* content_layer = scene_root.layers().content();
-    if (content_layer == nullptr) {
-        return bounds;
-    }
-
-    // Union of the visible content meshes' world bounds. Skinned meshes are
-    // included: they do not go into the acceleration structure, but they are
-    // lit by the volume, so the volume has to cover them.
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
-        if (!mesh || !mesh->is_visible() || !mesh->is_active()) {
-            continue;
-        }
-        const erhe::math::Aabb mesh_bounds = mesh->get_aabb_world();
-        if (!mesh_bounds.is_valid()) {
-            continue;
-        }
-        bounds.include(mesh_bounds);
-    }
-    if (!bounds.is_valid()) {
-        return bounds;
-    }
-
-    const float padding = std::max(0.0f, m_config.volume_padding_m);
-    bounds.min -= glm::vec3{padding};
-    bounds.max += glm::vec3{padding};
-    return bounds;
-}
-
-auto Ddgi_renderer::fit_grid(const erhe::math::Aabb& bounds) const -> Grid
-{
-    Grid grid{};
-    if (!bounds.is_valid()) {
-        return grid;
-    }
-    const glm::vec3 min    = bounds.min;
-    const glm::vec3 extent = glm::max(bounds.max - bounds.min, glm::vec3{1.0e-3f});
-
-    // Probe counts from the target spacing; at least 2 per axis so the
-    // trilinear interpolation always has a cell to interpolate inside. If
-    // the result exceeds the probe budget, grow the spacing and retry - the
-    // budget is a hard memory bound, the spacing is a target.
-    const int max_probes = std::max(8, m_config.max_probes);
-    float     spacing    = std::max(0.01f, m_config.probe_spacing_m);
-    glm::ivec3 counts{0};
-    for (;;) {
-        counts = glm::ivec3{
-            std::max(2, static_cast<int>(std::ceil(extent.x / spacing)) + 1),
-            std::max(2, static_cast<int>(std::ceil(extent.y / spacing)) + 1),
-            std::max(2, static_cast<int>(std::ceil(extent.z / spacing)) + 1)
-        };
-        const int64_t probe_count =
-            static_cast<int64_t>(counts.x) *
-            static_cast<int64_t>(counts.y) *
-            static_cast<int64_t>(counts.z);
-        if (probe_count <= static_cast<int64_t>(max_probes)) {
-            break;
-        }
-        // Cube root of the overshoot is the spacing factor that would land
-        // exactly on the budget; the 1.05 keeps the loop from stalling on
-        // rounding. Both counts are >= 2, so this terminates.
-        const double overshoot = static_cast<double>(probe_count) / static_cast<double>(max_probes);
-        spacing *= static_cast<float>(std::cbrt(overshoot)) * 1.05f;
-        if ((counts.x == 2) && (counts.y == 2) && (counts.z == 2)) {
-            break; // Cannot get any coarser.
-        }
-    }
-
-    grid.counts  = counts;
-    grid.origin  = min;
-    grid.spacing = extent / glm::vec3{counts - glm::ivec3{1}};
-    return grid;
-}
-
 void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_buffer)
 {
     using namespace erhe::graphics;
@@ -1437,7 +1389,7 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     const float fit_padding_m     = std::max(0.0f,  m_config.volume_padding_m);
     const int   fit_max_probes    = std::max(8,     m_config.max_probes);
 
-    const erhe::math::Aabb bounds = compute_volume_bounds(scene_root);
+    const erhe::math::Aabb bounds = compute_padded_content_bounds(scene_root, fit_padding_m);
     if (!bounds.is_valid()) {
         return false;
     }
@@ -1456,13 +1408,7 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
         (fit_max_probes    != m_fit_max_probes   ) ||
         !m_irradiance_texture ||
         !m_grid.is_valid();
-    const bool have_volume = m_volume_bounds.is_valid();
-    const bool outside     = have_volume && (
-        glm::any(glm::lessThan   (bounds.min, m_volume_bounds.min)) ||
-        glm::any(glm::greaterThan(bounds.max, m_volume_bounds.max))
-    );
-    const bool much_smaller   = have_volume && (bounds.volume() < (0.5f * m_volume_bounds.volume()));
-    const bool bounds_changed = !have_volume || outside || much_smaller;
+    const bool bounds_changed = m_volume_bounds.content_changed(bounds);
     // The budget only sizes the ray data texture, so it can change without
     // a refit - but it does need the textures reallocated.
     const bool budget_changed = m_grid.is_valid() && (std::min(probes_per_update, m_grid.get_probe_count()) != m_probes_per_update);
@@ -1473,23 +1419,20 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
 
     // A settings change refits to the current content exactly - the fit
     // parameters (spacing, padding, budget) are what changed, so the old
-    // volume carries no information worth keeping. A pure bounds change
-    // grows the box instead: a mesh that just left it takes it along, and
-    // keeping the old extent stops a mesh oscillating across the boundary
-    // from retriggering a refit every other frame. A large shrink refits to
-    // the content, so the volume can also get smaller again.
-    erhe::math::Aabb fit_bounds = bounds;
-    if (!settings_changed && have_volume && outside && !much_smaller) {
-        fit_bounds.include(m_volume_bounds);
-    } else if (!settings_changed && !bounds_changed && have_volume) {
-        fit_bounds = m_volume_bounds; // budget-only change: keep the volume
-    }
-    const Grid grid = fit_grid(fit_bounds);
+    // volume carries no information worth keeping. A content change grows
+    // or shrinks the volume (Probe_volume_bounds::get_fit_bounds()); a
+    // budget-only change keeps it.
+    const Volume_refit_cause cause =
+        settings_changed ? Volume_refit_cause::settings :
+        bounds_changed   ? Volume_refit_cause::content  :
+                           Volume_refit_cause::budget;
+    const erhe::math::Aabb fit_bounds = m_volume_bounds.get_fit_bounds(bounds, cause);
+    const Grid grid = fit_probe_grid(fit_bounds, fit_spacing_m, fit_max_probes);
     if (!grid.is_valid()) {
         return false;
     }
 
-    m_volume_bounds     = fit_bounds;
+    m_volume_bounds.set(fit_bounds);
     m_fit_spacing_m     = fit_spacing_m;
     m_fit_padding_m     = fit_padding_m;
     m_fit_max_probes    = fit_max_probes;
@@ -1739,25 +1682,11 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     if (!is_supported()) {
         return;
     }
-    if (!m_config.enabled) {
-        // Release the probe memory while the feature is off; the textures
-        // are cheap to recreate and the grid is refitted anyway.
-        if (m_irradiance_texture) {
-            m_irradiance_texture.reset();
-            m_distance_texture  .reset();
-            m_probe_data_texture.reset();
-            m_ray_data_texture  .reset();
-            m_texture_byte_count = 0;
-            m_grid          = Grid{};
-            m_volume_bounds = erhe::math::Aabb{};
-            clear_pass_timings();
-        }
-    }
     // Two consumers of this frame's trace inputs (TLAS, lights, materials):
     // the probe update, and a pending reference irradiance query - which
-    // runs whether DDGI is enabled or not. Building the inputs once serves
-    // both, and costs nothing while neither needs them.
-    const bool update_field    = m_config.enabled && update_volume(command_buffer, scene_root);
+    // runs whatever the source. Building the inputs once serves both, and
+    // costs nothing while neither needs them.
+    const bool update_field    = is_selected() && update_volume(command_buffer, scene_root);
     const bool trace_reference = reference_needs_dispatch();
     if (!update_field && !trace_reference) {
         return;

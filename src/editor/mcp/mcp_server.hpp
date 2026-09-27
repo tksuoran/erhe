@@ -515,6 +515,8 @@ private:
     auto action_animation_delete_key          (const nlohmann::json& args) -> std::string;
     auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;
     auto action_set_ddgi                      (const nlohmann::json& args) -> std::string;
+    auto action_set_indirect_diffuse          (const nlohmann::json& args) -> std::string;
+    auto action_set_radiance_cascades         (const nlohmann::json& args) -> std::string;
     auto query_indirect_diffuse_stats         (const nlohmann::json& args) -> std::string;
     auto query_sample_indirect_diffuse        (const nlohmann::json& args) -> std::string;
     auto query_reference_indirect_diffuse     (const nlohmann::json& args) -> std::string;

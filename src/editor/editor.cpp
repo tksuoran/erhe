@@ -11,6 +11,8 @@
 #include "config/generated/make_mesh_args.hpp"
 #include "config/generated/make_mesh_args_serialization.hpp"
 #include "config/generated/ddgi_config.hpp"
+#include "config/generated/indirect_diffuse_source.hpp"
+#include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "crash_handler.hpp"
@@ -60,6 +62,7 @@
 #include "developer/layers_window.hpp"
 #include "developer/post_processing_window.hpp"
 #include "developer/ddgi_window.hpp"
+#include "developer/radiance_cascades_window.hpp"
 #include "developer/ray_trace_window.hpp"
 #include "developer/rendergraph_window.hpp"
 #include "developer/selection_window.hpp"
@@ -95,6 +98,8 @@
 #include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
 #include "renderers/ddgi_renderer.hpp"
+#include "renderers/indirect_diffuse.hpp"
+#include "renderers/radiance_cascades_renderer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -829,6 +834,27 @@ public:
             }
         }
 
+        // Indirect diffuse field producers (doc/editor/ddgi.md,
+        // doc/editor/radiance_cascades.md): only the selected producer
+        // (set_indirect_diffuse_source()) updates its field. DDGI ticks
+        // whatever the source for pending reference irradiance queries, and
+        // its tick skips the probe update unless it is selected.
+        //
+        // Radiance cascades: refit the cascades and (re)allocate their
+        // atlases. It produces no probe field yet (plan phase 4), so the
+        // forward pass keeps the flat ambient term while it is selected.
+        if (
+            m_radiance_cascades_renderer &&
+            m_radiance_cascades_renderer->is_selected() &&
+            (m_app_context.current_command_buffer != nullptr)
+        ) {
+            erhe::log::set_breadcrumb("tick: radiance_cascades");
+            const std::shared_ptr<Scene_root> rc_scene_root = m_app_scenes->get_single_scene_root();
+            if (rc_scene_root) {
+                m_radiance_cascades_renderer->tick(*m_app_context.current_command_buffer, *rc_scene_root.get());
+            }
+        }
+
         // Dynamic diffuse global illumination (doc/editor/ddgi.md): refit the
         // probe volume and record this frame's probe update into the frame
         // command buffer, before the rendergraph samples the probe atlases.
@@ -842,7 +868,9 @@ public:
                 m_ddgi_renderer->record_irradiance_query(*m_app_context.current_command_buffer, *ddgi_scene_root.get());
             }
             // Publish (or clear) the probe volume for this frame's forward
-            // passes. Clearing turns the USE_DDGI shader axis back off.
+            // passes. Clearing turns the USE_DDGI shader axis back off. DDGI
+            // is the only producer of the field so far: it is active only
+            // while selected, and every other source clears it.
             if (m_ddgi_renderer->is_active()) {
                 m_forward_renderer->set_ddgi(
                     m_ddgi_renderer->get_forward_parameters(),
@@ -2036,7 +2064,13 @@ public:
                     m_app_context,
                     *m_program_interface.get(),
                     *m_mesh_memory.get(),
-                    m_editor_settings.ddgi
+                    m_editor_settings.ddgi,
+                    get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::ddgi)
+                );
+                m_radiance_cascades_renderer = std::make_unique<Radiance_cascades_renderer>(
+                    *m_graphics_device.get(),
+                    m_editor_settings.radiance_cascades,
+                    get_producer_selection(m_editor_settings.indirect_diffuse_source, Indirect_diffuse_source::radiance_cascades)
                 );
                 m_lightmap_baker  = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
                 m_lightmap_report = std::make_unique<Lightmap_report>();
@@ -2106,6 +2140,7 @@ public:
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_ray_trace_window       = std::make_unique<Ray_trace_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_ddgi_window            = std::make_unique<Ddgi_window                     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_radiance_cascades_window = std::make_unique<Radiance_cascades_window      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_geometry_spreadsheet_window = std::make_unique<Geometry_spreadsheet_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -2996,6 +3031,7 @@ public:
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
         m_app_context.ddgi_renderer            = m_ddgi_renderer         .get();
+        m_app_context.radiance_cascades_renderer = m_radiance_cascades_renderer.get();
         // Probe overlay (debug_draw_probes): a Renderable, drawn with the
         // other scene-view overlays.
         if (m_app_rendering && m_ddgi_renderer) {
@@ -4151,6 +4187,7 @@ public:
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
     std::unique_ptr<Ray_trace_renderer              >        m_ray_trace_renderer;
     std::unique_ptr<Ddgi_renderer                   >        m_ddgi_renderer;
+    std::unique_ptr<Radiance_cascades_renderer      >        m_radiance_cascades_renderer;
     std::unique_ptr<Lightmap_baker                  >        m_lightmap_baker;
     std::unique_ptr<Lightmap_report                 >        m_lightmap_report;
     std::unique_ptr<Lightmap_streamer               >        m_lightmap_streamer;
@@ -4192,6 +4229,7 @@ public:
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
     std::unique_ptr<Ray_trace_window                >        m_ray_trace_window;
     std::unique_ptr<Ddgi_window                     >        m_ddgi_window;
+    std::unique_ptr<Radiance_cascades_window        >        m_radiance_cascades_window;
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Geometry_spreadsheet_window     >        m_geometry_spreadsheet_window;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;

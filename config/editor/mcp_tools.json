@@ -4121,11 +4121,11 @@
     "name": "set_ray_trace"
   },
   {
-    "description": "Enable/disable and tune dynamic diffuse global illumination (doc/ddgi-plan.md): a scene-wide probe volume is auto-fitted to the content bounding box, traced with ray queries and blended into octahedral irradiance / distance atlases that replace the flat ambient term for non-lightmapped draws. Returns the fitted grid (probe counts, spacing, origin), the derived ray/texel counts and the probe texture memory. Requires a device with ray query support.",
+    "description": "Tune dynamic diffuse global illumination (doc/editor/ddgi.md): a scene-wide probe volume is auto-fitted to the content bounding box, traced with ray queries and blended into octahedral irradiance / distance atlases that replace the flat ambient term for non-lightmapped draws while DDGI is the selected indirect diffuse source (set_indirect_diffuse). Returns the fitted grid (probe counts, spacing, origin), the derived ray/texel counts, the probe texture memory and 'enabled' (DDGI is the selected source). Requires a device with ray query support.",
     "inputSchema": {
       "properties": {
         "enabled": {
-          "description": "Enable (true) or disable (false) DDGI; omit to leave unchanged",
+          "description": "Shorthand for the source selection: true selects DDGI as the indirect diffuse source, false returns a DDGI selection to ambient (any other source is left alone); omit to leave unchanged",
           "type": "boolean"
         },
         "probe_spacing_m": {
@@ -4166,7 +4166,66 @@
     "name": "set_ddgi"
   },
   {
-    "description": "Report the measured cost of the indirect diffuse field (doc/editor/ddgi.md \"Performance\"). Returns 'source' (\"ddgi\" while DDGI is active, else \"ambient\") and a 'ddgi' object: grid origin / spacing / counts, probe count, rays per probe, probes and rays per update, per-pass GPU milliseconds (trace, blend_irradiance, blend_distance, relocate; last and mean over the last timing_history_size samples) and their total, ms per million rays (total mean / rays per update), updates and ms per full refresh (every probe traced once), probe texture bytes, and the update_count / timing_sample_count counters that advance while the field is being updated. GPU timings lag the update by the frames in flight and read 0 until the first measurement completes. Also 'probe_states' (doc/editor/ddgi.md \"Probe state\"): every call requests a copy of the probe relocation / classification data after the next probe update, and the object reports the most recent copy that has retired - update_count (field updates when copied), active, inactive, relocated (|offset| > 1 mm) and max_offset_over_spacing - or null until the first copy retires (call again a few frames later). With 'probes' it also returns 'probe_data', index-aligned: {coords, offset:[x,y,z] (world units), state (1 active, 0 inactive)} from the same copy. Read-only.",
+    "description": "Select the producer of the indirect diffuse field (doc/editor/radiance_cascades.md \"Source selection\"): \"ambient\" (the flat scene ambient term), \"ddgi\" (doc/editor/ddgi.md) or \"radiance_cascades\" (doc/editor/radiance_cascades.md). Only the selected producer does GPU work; the others release their textures. Radiance cascades fit their layout and allocate their atlases but produce no field yet, so the forward pass keeps the flat ambient term while they are selected. Returns 'source' and whether each producer is supported (both need GPU ray query).",
+    "inputSchema": {
+      "properties": {
+        "source": {
+          "description": "\"ambient\", \"ddgi\" or \"radiance_cascades\"; omit to leave unchanged",
+          "enum": [
+            "ambient",
+            "ddgi",
+            "radiance_cascades"
+          ],
+          "type": "string"
+        },
+        "show_window": {
+          "description": "Also show the selected producer's developer window (DDGI or Radiance Cascades; default false)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_indirect_diffuse"
+  },
+  {
+    "description": "Tune radiance cascades (doc/editor/radiance_cascades.md): cascade 0 is a probe grid fitted to the padded content bounding box, each next cascade has probes at the centres of 2x2x2 blocks of the one below, a doubled octahedral tile and a doubled radiance interval. Takes effect while radiance_cascades is the selected source (set_indirect_diffuse); the renderer refits on its next frame, and the result reports the layout of the last fit (same object as get_indirect_diffuse_stats 'radiance_cascades') plus the stored 'config' and 'source'. Requires a device with ray query support.",
+    "inputSchema": {
+      "properties": {
+        "probe_spacing_m": {
+          "description": "Cascade 0 target probe spacing s0 in meters, [0.01, 64]; omit to leave unchanged",
+          "type": "number"
+        },
+        "volume_padding_m": {
+          "description": "Padding added around the content bounding box before fitting, in meters; omit to leave unchanged",
+          "type": "number"
+        },
+        "max_probes_cascade0": {
+          "description": "Upper bound on the cascade 0 probe count, [8, 1048576]; the spacing is grown until the grid fits; omit to leave unchanged",
+          "type": "integer"
+        },
+        "max_cascades": {
+          "description": "Upper bound on the cascade count, [1, 12]; omit to leave unchanged",
+          "type": "integer"
+        },
+        "cascade0_tile_texels": {
+          "description": "Octahedral tile side q0 of cascade 0 (cascade i: q0 x 2^i), [1, 64]; omit to leave unchanged",
+          "type": "integer"
+        },
+        "interval_scale": {
+          "description": "r0 = interval_scale x sqrt(3) x s0, [1, 64]; omit to leave unchanged",
+          "type": "number"
+        },
+        "show_window": {
+          "description": "Also show the Radiance Cascades window (default false)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_radiance_cascades"
+  },
+  {
+    "description": "Report the measured cost of the indirect diffuse field (doc/editor/ddgi.md \"Performance\"). Returns 'source' (the selected indirect diffuse source: \"ambient\", \"ddgi\" or \"radiance_cascades\"), a 'radiance_cascades' object (doc/editor/radiance_cascades.md \"MCP\": supported, active, has_field, cascade_count, r0, total probe_count / texels / texture_bytes, fit_count and per cascade 'cascades' [{index, grid_origin, grid_spacing, grid_counts, probe_count, tile_texels, interval [start, end] in metres, texels, atlas_size, texture_bytes}], plus the cost fields of the ddgi object, which read 0 until the radiance cascades trace pass exists) and a 'ddgi' object: grid origin / spacing / counts, probe count, rays per probe, probes and rays per update, per-pass GPU milliseconds (trace, blend_irradiance, blend_distance, relocate; last and mean over the last timing_history_size samples) and their total, ms per million rays (total mean / rays per update), updates and ms per full refresh (every probe traced once), probe texture bytes, and the update_count / timing_sample_count counters that advance while the field is being updated. GPU timings lag the update by the frames in flight and read 0 until the first measurement completes. Also 'probe_states' (doc/editor/ddgi.md \"Probe state\"): every call requests a copy of the probe relocation / classification data after the next probe update, and the object reports the most recent copy that has retired - update_count (field updates when copied), active, inactive, relocated (|offset| > 1 mm) and max_offset_over_spacing - or null until the first copy retires (call again a few frames later). With 'probes' it also returns 'probe_data', index-aligned: {coords, offset:[x,y,z] (world units), state (1 active, 0 inactive)} from the same copy. Read-only.",
     "inputSchema": {
       "properties": {
         "probes": {

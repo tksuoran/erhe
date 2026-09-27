@@ -1,9 +1,11 @@
 #include "developer/ddgi_window.hpp"
 
 #include "app_context.hpp"
-#include "config/generated/ddgi_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/indirect_diffuse_source.hpp"
 #include "renderers/ddgi_renderer.hpp"
+#include "renderers/indirect_diffuse.hpp"
+#include "windows/config_ui.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -43,12 +45,14 @@ void Ddgi_window::imgui()
     }
 
     // The full knob set is reflection-rendered in the Settings window's DDGI
-    // section; only the master switch is repeated here so the diagnostics
-    // and the toggle sit together.
-    Ddgi_config& config = m_context.editor_settings->ddgi;
-    ImGui::Checkbox("Enabled", &config.enabled);
-    if (!config.enabled) {
-        ImGui::TextUnformatted("Enable to fit a probe volume to the scene content.");
+    // section; only the source selection is repeated here so the
+    // diagnostics and the switch sit together.
+    Indirect_diffuse_source source = m_context.editor_settings->indirect_diffuse_source;
+    if (imgui_enum_combo("Indirect Diffuse", source)) {
+        set_indirect_diffuse_source(m_context, source);
+    }
+    if (!renderer->is_selected()) {
+        ImGui::TextUnformatted("Select DDGI as the indirect diffuse source to fit a probe volume to the scene content.");
         return;
     }
 

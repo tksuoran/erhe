@@ -6,6 +6,7 @@
 #include "app_settings.hpp"
 #include "editor_settings_store.hpp"
 #include "scene/scene_root.hpp"
+#include "renderers/indirect_diffuse.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "windows/config_ui.hpp"
 #include "windows/input_bindings_window.hpp"
@@ -14,11 +15,13 @@
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/content_edge_lines_config_serialization.hpp"
 #include "config/generated/ddgi_config_serialization.hpp"
+#include "config/generated/radiance_cascades_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
+#include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
@@ -642,7 +645,18 @@ void Settings_window::imgui()
         // with the hand-grouped layout (Shadow Fit / Selection / Annotations)
         // rather than the flat reflection list.
         Debug_visualizations::style_imgui(*this, m_context, settings.debug_visualizations_style);
+        // The indirect diffuse producer (doc/editor/radiance_cascades.md
+        // "Source selection"), then each producer's settings.
+        push_group("Indirect Diffuse", ImGuiTreeNodeFlags_Framed);
+        add_entry("Source", [&settings, this](){
+            Indirect_diffuse_source source = settings.indirect_diffuse_source;
+            if (imgui_enum_combo("##", source)) {
+                set_indirect_diffuse_source(m_context, source);
+            }
+        }, "Producer of the indirect diffuse light for non-lightmapped draws: the flat scene ambient term, DDGI, or radiance cascades (both need GPU ray query support).");
+        pop_group();
         add_config_section(settings.ddgi);
+        add_config_section(settings.radiance_cascades);
         add_config_section(settings.developer);
         add_config_section(settings.grid);
         add_config_section(settings.headset);

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=4,
+    version=5,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -54,6 +54,7 @@ struct("Editor_settings_config",
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
+        field("radiance_cascades",    StructRef("Radiance_cascades_config"), added_in=5),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         field("inventory",            StructRef("Inventory_config"),       added_in=1, removed_in=4),
         # glTF import/open performance options (doc/editor/async_asset_loading.md).
@@ -126,6 +127,20 @@ struct("Editor_settings_config",
             default="Mesh_transform_mode::move",
             short_desc="Mesh Transform Mode",
             long_desc="When transforming a mesh component selection with the gizmo, whether to move the selected components or extrude them (duplicate the selection boundary and bridge it with new faces) before moving.",
+            visible=True,
+            developer=False
+        ),
+        # The producer of the indirect diffuse probe field
+        # (doc/editor/radiance_cascades.md "Source selection"). Replaces
+        # Ddgi_config::enabled; Editor_settings_store migrates a pre-v5 file
+        # (ddgi.enabled = true -> ddgi, else ambient).
+        field(
+            "indirect_diffuse_source",
+            EnumRef("Indirect_diffuse_source"),
+            added_in=5,
+            default="Indirect_diffuse_source::ambient",
+            short_desc="Indirect Diffuse",
+            long_desc="Producer of the indirect diffuse light for non-lightmapped draws: the flat scene ambient term, DDGI, or radiance cascades. DDGI and radiance cascades need GPU ray query support.",
             visible=True,
             developer=False
         ),

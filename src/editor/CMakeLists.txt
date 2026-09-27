@@ -180,6 +180,8 @@ erhe_target_sources_grouped(
     developer/composer_window.hpp
     developer/ddgi_window.cpp
     developer/ddgi_window.hpp
+    developer/radiance_cascades_window.cpp
+    developer/radiance_cascades_window.hpp
     developer/depth_visualization_window.cpp
     developer/depth_visualization_window.hpp
     developer/icon_browser.cpp
@@ -499,6 +501,16 @@ erhe_target_sources_grouped(
     renderers/lightmap_tile_io.hpp
     renderers/ddgi_renderer.cpp
     renderers/ddgi_renderer.hpp
+    renderers/content_bounds.cpp
+    renderers/content_bounds.hpp
+    renderers/indirect_diffuse.cpp
+    renderers/indirect_diffuse.hpp
+    renderers/probe_grid.cpp
+    renderers/probe_grid.hpp
+    renderers/radiance_cascades_layout.cpp
+    renderers/radiance_cascades_layout.hpp
+    renderers/radiance_cascades_renderer.cpp
+    renderers/radiance_cascades_renderer.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
     renderers/scene_tlas.cpp
@@ -921,6 +933,11 @@ set(_config_sources
     ${_config_out}/ddgi_config.hpp
     ${_config_out}/ddgi_config_serialization.hpp
     ${_config_out}/ddgi_config.cpp
+    ${_config_out}/radiance_cascades_config.hpp
+    ${_config_out}/radiance_cascades_config_serialization.hpp
+    ${_config_out}/radiance_cascades_config.cpp
+    ${_config_out}/indirect_diffuse_source.hpp
+    ${_config_out}/indirect_diffuse_source.cpp
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp
@@ -1312,6 +1329,7 @@ if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(brushes/test)
     add_subdirectory(mcp/test)
+    add_subdirectory(renderers/test)
     add_subdirectory(rig/test)
     add_subdirectory(transform/test)
 endif ()

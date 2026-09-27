@@ -7,6 +7,7 @@
 #include <imgui/imgui.h>
 
 #include <span>
+#include <cstdint>
 #include <string>
 #include <type_traits>
 
@@ -16,6 +17,42 @@ namespace editor {
 // by the Settings window and the Properties window (issue #240). Defined in
 // config_ui.cpp.
 void imgui_field(void* base, const erhe::codegen::Field_info& field);
+
+// Renders a codegen enum value as a combo of its reflected values (the
+// short_desc labels, the value names as fallback), like imgui_field() does
+// for an enum_ref field. For an enum held outside a reflected struct (e.g.
+// Editor_settings_config::indirect_diffuse_source). Returns true when the
+// value was changed.
+template <typename E>
+auto imgui_enum_combo(const char* label, E& value) -> bool
+{
+    const erhe::codegen::Enum_info& enum_info = get_enum_info(static_cast<const E*>(nullptr));
+    const auto value_label = [](const erhe::codegen::Enum_value_info& v) -> const char* {
+        return ((v.short_desc != nullptr) && (v.short_desc[0] != '\0')) ? v.short_desc : v.name;
+    };
+    const int64_t current = static_cast<int64_t>(value);
+    const char*   preview = "(unknown)";
+    for (const erhe::codegen::Enum_value_info& v : enum_info.values) {
+        if (v.value == current) {
+            preview = value_label(v);
+        }
+    }
+    bool changed = false;
+    if (ImGui::BeginCombo(label, preview)) {
+        for (const erhe::codegen::Enum_value_info& v : enum_info.values) {
+            const bool selected = (v.value == current);
+            if (ImGui::Selectable(value_label(v), selected) && !selected) {
+                value   = static_cast<E>(v.value);
+                changed = true;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
 
 // Renders a reflected config struct as a Property_editor group of entries.
 // Nested struct_ref fields are skipped here (they are rendered by explicit

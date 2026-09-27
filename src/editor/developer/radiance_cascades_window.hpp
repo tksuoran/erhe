@@ -11,15 +11,15 @@ namespace editor {
 
 class App_context;
 
-// Developer window for dynamic diffuse global illumination
-// (doc/editor/ddgi.md): the indirect diffuse source selection, the fitted probe grid's stats, and
-// previews of the probe atlases. The knobs themselves live in the editor
-// settings (Settings window, DDGI section) - this window is the diagnostic
-// view of what the renderer made of them.
-class Ddgi_window : public erhe::imgui::Imgui_window
+// Developer window for radiance cascades (doc/editor/radiance_cascades.md):
+// the indirect diffuse source selection and the fitted cascade layout - per
+// cascade probe counts, spacing, octahedral tile size, radiance interval,
+// texels and atlas memory, plus totals. The knobs themselves live in the
+// editor settings (Settings window, Radiance Cascades section).
+class Radiance_cascades_window : public erhe::imgui::Imgui_window
 {
 public:
-    Ddgi_window(
+    Radiance_cascades_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 app_context

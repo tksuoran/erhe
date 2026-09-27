@@ -114,6 +114,7 @@ class Lightmap_texture_window;
 class Lightmap_window;
 class Ray_trace_renderer;
 class Ddgi_renderer;
+class Radiance_cascades_renderer;
 class Rendergraph_window;
 class Rotate_tool;
 class Scale_tool;
@@ -310,6 +311,7 @@ public:
     Programs*                          programs             {nullptr};
     Ray_trace_renderer*                ray_trace_renderer   {nullptr};
     Ddgi_renderer*                     ddgi_renderer        {nullptr};
+    Radiance_cascades_renderer*        radiance_cascades_renderer{nullptr};
     Lightmap_baker*                    lightmap_baker       {nullptr};
     // World-space mesh partitioner: uniquifies + tile-clips lightmapped
     // meshes into per-tile piece meshes ("Lightmap Pieces" group).

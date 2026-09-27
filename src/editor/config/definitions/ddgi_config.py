@@ -2,9 +2,9 @@ from erhe_codegen import *
 
 struct("Ddgi_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="DDGI",
-    long_desc="Dynamic diffuse global illumination (doc/editor/ddgi.md). A single scene-wide probe volume is auto-fitted to the content bounding box; probes are traced with ray queries, blended into octahedral irradiance and distance atlases, and sampled by the forward shader in place of the flat ambient term. Requires GPU ray query support; the feature stays off on backends without it.",
+    long_desc="Dynamic diffuse global illumination (doc/editor/ddgi.md). A single scene-wide probe volume is auto-fitted to the content bounding box; probes are traced with ray queries, blended into octahedral irradiance and distance atlases, and sampled by the forward shader in place of the flat ambient term. Active while the Indirect Diffuse source is DDGI. Requires GPU ray query support; the feature stays off on backends without it.",
     developer=False,
     fields=[
         field(
@@ -12,8 +12,9 @@ struct("Ddgi_config",
             Bool,
             added_in=1,
             default="false",
+            removed_in=2,
             short_desc="Enabled",
-            long_desc="Master switch. Off restores the flat ambient term for every non-lightmapped draw and skips all DDGI GPU work.",
+            long_desc="Removed in v2: the Indirect Diffuse source (Editor_settings_config.indirect_diffuse_source) selects DDGI; the Editor_settings_config v5 migration maps enabled = true to 'ddgi'.",
             visible=True,
             developer=False
         ),
