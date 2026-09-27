@@ -1,6 +1,6 @@
 # Radiance cascades
 
-Status: proposed
+Status: in progress
 
 World-space radiance cascades as a second producer of the runtime indirect
 diffuse probe field, next to DDGI ([../editor/ddgi.md](../editor/ddgi.md)).

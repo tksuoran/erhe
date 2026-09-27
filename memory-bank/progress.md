@@ -8,3 +8,7 @@
 ?left::stiffness+Phase-1-feel-questions{need-user-hands-on}->Phase-3
 ?user-interactive-deferred{ik_settings-slice;pole-picker+angle-rows;live-drag-with-pole;Move-tool-Effector-Orientation-combo;chain/root/pole-visualization-during-drag}
 ⚡interactive-pass{doc/plans/rigging/interactive_test_pass.md;0-8-AUTOMATED-2026-09-25{scripts/ik_interactive_pass_verify.py;65/66-pass};decisions->options{ik_drag_options.md-section-3;50aa400cb+a9078a35c+ab2c9edb1;pass-70/71};F7-fixed-546a8cb75;pass-71/71;left=stiffness->Phase-3}
+
+[TASK::radiance-cascades]{started-2026-09-27;via-harness;doc/plans/radiance_cascades.md}
+?phase-0a::compute-Gpu_timer+DDGI-timings+get_indirect_diffuse_stats{coder-running}
+?phase-0b..0d->phases-1..7
