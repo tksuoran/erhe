@@ -8,6 +8,8 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
+#include <cstddef>
+
 namespace erhe::primitive { class Buffer_info; }
 
 namespace editor {
@@ -47,6 +49,7 @@ private:
         std::shared_ptr<erhe::scene::Mesh> mesh;
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> before_parent;
+        std::size_t                        before_index_in_parent{0}; // recorded when execute removes the node
         // The node's physics state as the merge found it, restored by undo
         // (doc/erhe/property_system.md section 4.26).
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;

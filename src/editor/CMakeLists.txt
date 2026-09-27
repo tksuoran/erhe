@@ -393,6 +393,8 @@ erhe_target_sources_grouped(
     operations/merge_operation.hpp
     operations/merge_static_subtree_operation.cpp
     operations/merge_static_subtree_operation.hpp
+    operations/mesh_primitive_swap.cpp
+    operations/mesh_primitive_swap.hpp
     operations/mesh_operation.cpp
     operations/mesh_operation.hpp
     operations/move_mesh_vertices_operation.cpp

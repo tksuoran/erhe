@@ -8,6 +8,7 @@
 #include "config/generated/mesh_transform_mode.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/fork_geometry_operation.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "operations/move_mesh_vertices_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -1064,10 +1065,6 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
     if (!mesh) {
         return;
     }
-    erhe::scene::Node* node = mesh.get();
-    if (node == nullptr) {
-        return;
-    }
     const std::vector<erhe::scene::Mesh_primitive>& current_primitives = mesh->get_primitives();
     if ((group.primitive_index >= current_primitives.size()) || !current_primitives[group.primitive_index].primitive) {
         return;
@@ -1095,15 +1092,11 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
     group.fork_after.primitive = fork_primitive;
     group.fork_after.material  = shared_mesh_primitive.material;
 
-    // Swap the mesh's primitive to the fork via the node re-parent dance (no physics
-    // change - the fork is a position-identical copy).
+    // Swap the mesh's primitive to the fork in place (no physics change - the
+    // fork is a position-identical copy).
     std::vector<erhe::scene::Mesh_primitive> new_primitives = current_primitives;
     new_primitives[group.primitive_index] = group.fork_after;
-    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
-    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-    mesh->set_primitives(new_primitives);
-    node->set_parent(parent);
+    swap_mesh_primitives(mesh, new_primitives);
 
     // Transfer the drag's optimization hold to the fork: release the object
     // begin() bracketed, bracket the swapped-in one (dropping its freshly
@@ -1136,10 +1129,6 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
 {
     const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
     if (!mesh) {
-        return;
-    }
-    erhe::scene::Node* node = mesh.get();
-    if (node == nullptr) {
         return;
     }
     const std::vector<erhe::scene::Mesh_primitive>& current_primitives = mesh->get_primitives();
@@ -1183,15 +1172,10 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     group.extrude_after.primitive = extrude_primitive;
     group.extrude_after.material  = original_mesh_primitive.material;
 
-    // Swap the mesh's primitive to the extruded copy via the node re-parent dance
-    // (hold node_shared so set_parent(nullptr) cannot drop the node mid-swap).
+    // Swap the mesh's primitive to the extruded copy in place.
     std::vector<erhe::scene::Mesh_primitive> new_primitives = current_primitives;
     new_primitives[group.primitive_index] = group.extrude_after;
-    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
-    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-    mesh->set_primitives(new_primitives);
-    node->set_parent(parent);
+    swap_mesh_primitives(mesh, new_primitives);
 
     // Transfer the drag's optimization hold to the extruded copy - same
     // reasoning as fork_group() above.

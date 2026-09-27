@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 
 #include "erhe_item/item_host.hpp"
 #include "erhe_profile/profile.hpp"
@@ -53,15 +54,9 @@ void Fork_geometry_operation::apply(App_context& context, const erhe::scene::Mes
     }
     new_primitives[m_parameters.primitive_index] = mesh_primitive;
 
-    // Re-attach raytrace via the node re-parent dance Mesh_operation uses. No
-    // physics rebuild: forking is a position-identical copy, so the convex hull is
-    // unchanged and the existing Node_physics stays valid.
-    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
-    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-
-    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-    m_parameters.mesh->set_primitives(new_primitives);
-    node->set_parent(parent);
+    // No physics rebuild: forking is a position-identical copy, so the convex
+    // hull is unchanged and the existing Node_physics stays valid.
+    swap_mesh_primitives(m_parameters.mesh, new_primitives);
 
     // Announce the geometry change (eager prune for the component-selection store;
     // its entries for both the shared and forked Geometry are re-evaluated lazily

@@ -8,6 +8,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "operations/mesh_operation.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -17,6 +18,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <iterator>
 #include <memory>
 #include <sstream>
 
@@ -198,27 +200,16 @@ void Merge_operation::execute(App_context& context)
     ERHE_VERIFY(m_sources.front().mesh);
 
     bool first_entry = true;
-    for (const auto& entry : m_sources) {
+    for (Entry& entry : m_sources) {
         ERHE_VERIFY(entry.node != nullptr);
         erhe::scene::Node* node = entry.node.get();
 
-        auto& mesh = entry.mesh;
-
         if (first_entry) {
-            // TODO Improve physics RAII and remove this workaround
-            std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
-
-            // This keeps node alive while we modify it
-            std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-
-            node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-
             // For first mesh: Replace mesh primitives
-            mesh->set_primitives(m_first_mesh_primitives_after);
+            swap_mesh_primitives(entry.mesh, m_first_mesh_primitives_after);
 
             first_entry = false;
 
-            node->set_parent(parent);
             Mesh_operation::Entry::Version combined_version{};
             combined_version.collision_shape = m_combined_collision_shape;
             combined_version.motion_mode     = m_combined_collision_shape
@@ -226,6 +217,9 @@ void Merge_operation::execute(App_context& context)
                 : erhe::physics::Motion_mode::e_none;
             Mesh_operation::restore_physics(*node, combined_version);
         } else {
+            // Recorded at removal, so undo (which re-attaches in reverse
+            // removal order) restores the exact sibling order.
+            entry.before_index_in_parent = node->get_index_in_parent();
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
     }
@@ -261,32 +255,21 @@ void Merge_operation::undo(App_context& context)
     scene.sanity_check();
 #endif
 
-    bool first_entry = true;
-    for (const auto& entry : m_sources) {
-        auto& mesh = entry.mesh;
+    // Reverse of the execute order: each removed source goes back at the
+    // sibling position it had when it was removed.
+    for (auto i = m_sources.rbegin(), end = m_sources.rend(); i != end; ++i) {
+        const Entry&       entry = *i;
+        erhe::scene::Node* node  = entry.node.get();
 
-        erhe::scene::Node* node = entry.node.get();
+        if (i == std::prev(end)) {
+            swap_mesh_primitives(entry.mesh, m_first_mesh_primitives_before);
 
-        if (first_entry) {
-            // TODO Improve physics RAII and remove this workaround
-            std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
-
-            // This keeps node alive while we modify it
-            std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-
-            node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-
-            first_entry = false;
-
-            mesh->set_primitives(m_first_mesh_primitives_before);
-
-            node->set_parent(parent);
             Mesh_operation::Entry::Version before_version{};
             before_version.collision_shape = entry.collision_shape;
             before_version.motion_mode     = entry.motion_mode;
             Mesh_operation::restore_physics(*node, before_version);
         } else {
-            node->set_parent(entry.before_parent);
+            node->set_parent(entry.before_parent, entry.before_index_in_parent);
         }
     }
     // Announce the geometry restore. The component-selection store re-binds the

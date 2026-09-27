@@ -3,8 +3,8 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "operations/move_mesh_vertices_operation.hpp"
-#include "scene/scene_root.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -13,7 +13,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -311,46 +310,9 @@ void Set_geometry_attribute_operation::apply(App_context& context, const std::ve
     const bool raytrace_ok   = new_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
 
-    // Collect-then-rebuild: the re-parent dance below mutates the scene's
-    // mesh-layer vectors.
-    auto* const                                     scene_root = static_cast<Scene_root*>(item_host);
-    erhe::scene::Scene&                             scene      = scene_root->get_scene();
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> referers;
-    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene.get_mesh_layers()) {
-        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
-            if (!mesh) {
-                continue;
-            }
-            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-                const std::shared_ptr<erhe::primitive::Primitive>& primitive = mesh_primitive.primitive;
-                if (primitive && primitive->render_shape && (primitive->render_shape->get_geometry_const() == m_parameters.geometry)) {
-                    referers.push_back(mesh);
-                    break;
-                }
-            }
-        }
-    }
-
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : referers) {
-        erhe::scene::Node* mesh_node = mesh.get();
-        std::vector<erhe::scene::Mesh_primitive> new_primitives = mesh->get_primitives();
-        for (erhe::scene::Mesh_primitive& mesh_primitive : new_primitives) {
-            if (mesh_primitive.primitive && mesh_primitive.primitive->render_shape &&
-                (mesh_primitive.primitive->render_shape->get_geometry_const() == m_parameters.geometry)) {
-                mesh_primitive.primitive = new_primitive;
-            }
-        }
-        // Re-attach raytrace via the node re-parent dance. No physics rebuild:
-        // positions are unchanged (position edits are Move_mesh_vertices_operation).
-        std::shared_ptr<erhe::Hierarchy> parent = mesh_node->get_parent().lock();
-        mesh_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-        mesh->set_primitives(new_primitives);
-        mesh_node->set_parent(parent);
-
-        context.app_message_bus->mesh_geometry_changed.send_message(
-            Mesh_geometry_changed_message{.mesh = mesh}
-        );
-    }
+    // No physics rebuild: positions are unchanged (position edits are
+    // Move_mesh_vertices_operation).
+    share_rebuilt_primitive(context, m_parameters.mesh, m_parameters.geometry.get(), new_primitive);
 
     scene_lock.unlock();
     if (background_optimize) {

@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "app_settings.hpp"
 #include "items.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
@@ -77,20 +78,8 @@ void Mesh_operation::execute(App_context& context)
     log_operations->trace("Op Execute Begin {}", describe());
 
     for (const auto& entry : m_entries) {
-        auto* node = entry.scene_mesh.get();
-
-        // TODO Improve physics RAII and remove this workaround
-        std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
-
-        // This keeps node alive while we modify it
-        std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-
-        node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-
-        entry.scene_mesh->set_primitives(entry.after.primitives);
-
-        node->set_parent(parent);
-        restore_physics(*node, entry.after);
+        swap_mesh_primitives(entry.scene_mesh, entry.after.primitives);
+        restore_physics(*entry.scene_mesh, entry.after);
     }
 
     log_operations->trace("Op Execute End {}", describe());
@@ -144,20 +133,8 @@ void Mesh_operation::undo(App_context& context)
     log_operations->trace("Op Undo Begin {}", describe());
 
     for (const auto& entry : m_entries) {
-        auto* node = entry.scene_mesh.get();
-
-        // TODO Improve physics RAII and remove this workaround
-        std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
-
-        // This keeps node alive while we modify it
-        std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-
-        node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-
-        entry.scene_mesh->set_primitives(entry.before.primitives);
-
-        node->set_parent(parent);
-        restore_physics(*node, entry.before);
+        swap_mesh_primitives(entry.scene_mesh, entry.before.primitives);
+        restore_physics(*entry.scene_mesh, entry.before);
     }
 
     log_operations->trace("Op Undo End {}", describe());

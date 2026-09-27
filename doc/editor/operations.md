@@ -38,6 +38,36 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 - **`Operations`** window -- ImGui window providing buttons for all geometry operations.
 
+## Primitive swaps keep the node in place
+
+An operation that replaces a mesh's primitives leaves the mesh node where it
+is in the scene tree: same parent, same position among its siblings, so a
+geometry edit neither reorders the Scene Hierarchy nor changes the order a
+saved scene records.
+
+- The swap goes through `swap_mesh_primitives()`
+  (`operations/mesh_primitive_swap.hpp`): `Mesh::set_primitives()` inside the
+  `Scene_root::begin_mesh_rt_update()` / `end_mesh_rt_update()` brackets,
+  which move the mesh's raytrace instances from the old primitives to the new
+  ones. The node stays attached throughout.
+- Physics follows separately: `Mesh_operation::restore_physics()` sets the
+  node's collision shape and motion mode directly
+  (`Node_physics_system::set_collision_shape` recreates the body).
+- The in-place vertex edits (`Move_mesh_vertices_operation`,
+  `Paint_colors_operation`, `Paint_weights_operation`,
+  `Set_geometry_attribute_operation`) share their rebuilt `Primitive` through
+  `share_rebuilt_primitive()`: every mesh of the scene that references the
+  Geometry gets it, keeping its own material, then its optional per-mesh
+  step (the physics rebuild of a vertex move) and a
+  `Mesh_geometry_changed_message`.
+- `Merge_operation` records each removed source's sibling index when it
+  removes it and undo re-inserts the sources in reverse removal order at
+  those indices.
+
+`scripts/geometry_edit_node_order_verify.py` checks the sibling order after
+Catmull-Clark, attribute and position edits, vertex-selection transforms
+(including the fork of shared geometry) and merge, each with its undo.
+
 ## Threading and re-entrancy
 
 `Operation_stack` is main-thread-only and takes no lock around execution.
@@ -93,7 +123,3 @@ Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `it
 - erhe::scene, erhe::geometry, erhe::primitive, erhe::physics
 - erhe::commands (for undo/redo key bindings)
 - editor: App_context, Mesh_memory
-
-## Future work
-
-- [plans/geometry_edit_node_order.md](../plans/geometry_edit_node_order.md) - primitive-swapping operations keep the node position among its siblings.
