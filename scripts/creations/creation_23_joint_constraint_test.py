@@ -25,7 +25,8 @@ Two rows:
     rigidly skinned column of three boxes, with the Ik.* limits of its
     middle bone set per case: twist only, symmetric / asymmetric swing,
     one swing axis, an elbow hinge made of locks, fully locked, all three
-    axes, and a pose outside its limits.
+    axes, and a pose outside its limits. Each chain ends in a bone tip
+    node carrying a small box, so the tip is easy to pick and IK drag.
 
 Saved with save_scene (the erhe-authored glTF carries the Ik.* values on
 ERHE_node and the joint prims on ERHE_physics_joint) to
@@ -146,6 +147,7 @@ CHAIN_SPACING = 1.0
 CHAIN_Z       = 1.5
 BONE_LENGTH   = 0.4
 BONE_WIDTH    = 0.08
+TIP_SIZE      = 0.1
 
 
 def limit_triplet(x=None, y=None, z=None):
@@ -268,7 +270,7 @@ def build_station(c, index, station, materials, root):
         c.mutate("set_item_property", {"item_id": int(joint["joint_id"]), "property": "active", "value": "false"})
 
 
-def build_chain(c, index, case, material, root):
+def build_chain(c, index, case, material, tip_material, root):
     x = chain_x(index)
     group = c.group(ik_mesh_name(case) + " rig", [x, 0.0, CHAIN_Z], parent_node_id=root)
     bones = []
@@ -285,11 +287,14 @@ def build_chain(c, index, case, material, root):
     c.skin(ik_mesh_name(case), list(zip(boxes, bones)), parent_node_id=group, material=material)
     c.settle()
 
-    # A bone tip node at the end of the last bone, as Hierarchy > Add Bone Tip
-    # Nodes makes it: a plain node named "<bone> tip" at the leaf bone's
-    # Rig.tail - here the top of its box. Dragged with IK it is the end of the
-    # chain, so the last bone aims at it and turns too.
-    c.anchor(ik_tip_name(case), bones[2], [x, 3.0 * BONE_LENGTH, CHAIN_Z])
+    # A bone tip node at the end of the last bone, named "<bone> tip" at the
+    # leaf bone's Rig.tail - here the top of its box - as Hierarchy > Add Bone
+    # Tip Nodes names it. Dragged with IK it is the end of the chain, so the
+    # last bone aims at it and turns too. Unlike Add Bone Tip Nodes it
+    # carries a small box mesh of its own, so a click in the viewport selects
+    # the tip.
+    box_node(c, ik_tip_name(case), [x, 3.0 * BONE_LENGTH, CHAIN_Z],
+             [TIP_SIZE, TIP_SIZE, TIP_SIZE], tip_material, bones[2])
 
     middle = bones[1]
     # IK Lock on the limited bone: an IK drag of bone_2 then stops the chain
@@ -360,6 +365,7 @@ def main():
             "post":  c.ensure_material("constraint test post",  base_color=[0.35, 0.36, 0.38], roughness=0.6, metallic=0.0),
             "bob":   c.ensure_material("constraint test bob",   base_color=[0.85, 0.45, 0.12], roughness=0.45, metallic=0.0),
             "ik":    c.ensure_material("constraint test bone",  base_color=[0.30, 0.55, 0.85], roughness=0.4, metallic=0.0),
+            "tip":   c.ensure_material("constraint test tip",   base_color=[0.95, 0.80, 0.20], roughness=0.4, metallic=0.0),
             "floor": c.ensure_material("constraint test floor", base_color=[0.55, 0.55, 0.52], roughness=0.9, metallic=0.0),
         }
         # Top face 1 cm below the grid plane (y = 0), so the two do not
@@ -375,7 +381,7 @@ def main():
 
         ik_root = c.group("IK limits", [0.0, 0.0, CHAIN_Z])
         for index, case in enumerate(IK_CASES):
-            build_chain(c, index, case, materials["ik"], ik_root)
+            build_chain(c, index, case, materials["ik"], materials["tip"], ik_root)
         c.settle()
 
         c.place_camera(*SHOTS[0][1:])
