@@ -19,19 +19,34 @@
 //   a lower probe outside the upper probes' span takes the edge probe) -
 //   and at each upper probe the average of the 2x2 child texels
 //   (2u .. 2u+1, 2v .. 2v+1) of the octahedral tile that nest in this texel.
+//   Merge mode interpolate (ERHE_RC_MERGE_VISIBILITY 0): all 8 upper probes
+//   with their trilinear weights. Merge mode visibility_masked
+//   (ERHE_RC_MERGE_VISIBILITY 1): an upper probe takes part only when this
+//   probe's state (rc_visibility.comp) marks the segment to it
+//   unobstructed and the upper probe's state does not mark it inside
+//   geometry; the weights of the usable probes are renormalized. With no
+//   usable upper probe, upper is (0, 0): nothing beyond the interval is
+//   known, and the merged texel keeps its own interval only
+//   (doc/editor/radiance_cascades.md "Merge").
 // - Debug cascade mask (flag c_flag_mask_radiance): the cascade's own
 //   radiance is zeroed, its beta kept, so the merged atlases show only the
 //   unmasked interval bands. A masked sky arrives as a zero sky radiance.
 //
-// Bindings: the raw atlas of this cascade and the merged atlas of the
-// cascade above are sampled (read-only, texelFetch); the merged atlas of
-// this cascade is the only storage image, and the only write.
+// Bindings: the raw atlas and probe state of this cascade and the merged
+// atlas and probe state of the cascade above are sampled (read-only,
+// texelFetch; the interpolate variant does not read the states); the
+// merged atlas of this cascade is the only storage image, and the only
+// write. Probe states are integer-valued floats, one texel per probe at
+// its tile coordinates.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 // rc_merge.params.y flags
 const uint c_flag_top           = 1u; // top cascade: merge with the sky
 const uint c_flag_mask_radiance = 2u; // debug_cascade_mask: zero this cascade's radiance
+
+// Probe state bits (Radiance_cascades_renderer::c_state_*)
+const uint c_state_inside = 256u;
 
 // One axis of the trilinear interpolation to the upper cascade: lower probe
 // k sits at upper grid coordinate k / 2 - 1 / 4 (get_upper_probe_axis()).
@@ -92,22 +107,39 @@ void main()
         rc_upper_axis(coords.y, upper_counts.y, iy, wy);
         rc_upper_axis(coords.z, upper_counts.z, iz, wz);
 
-        upper = vec4(0.0);
+#if ERHE_RC_MERGE_VISIBILITY
+        uint lower_state = uint(texelFetch(s_rc_state, tile, 0).r + 0.5);
+#endif
+
+        vec4  sum        = vec4(0.0);
+        float weight_sum = 0.0;
         for (int k = 0; k < 2; ++k) {
             for (int j = 0; j < 2; ++j) {
                 for (int i = 0; i < 2; ++i) {
                     int   upper_index = ix[i] + (upper_counts.x * (iy[j] + (upper_counts.y * iz[k])));
-                    ivec2 origin      = ivec2(upper_index % upper_tiles_per_row, upper_index / upper_tiles_per_row) * upper_q;
-                    ivec2 base        = origin + child;
-                    vec4  children    =
+                    ivec2 upper_tile  = ivec2(upper_index % upper_tiles_per_row, upper_index / upper_tiles_per_row);
+#if ERHE_RC_MERGE_VISIBILITY
+                    uint  upper_state = uint(texelFetch(s_rc_upper_state, upper_tile, 0).r + 0.5);
+                    bool  visible     = ((lower_state >> uint(i + (2 * j) + (4 * k))) & 1u) != 0u;
+                    if (!visible || ((upper_state & c_state_inside) != 0u)) {
+                        continue;
+                    }
+#endif
+                    ivec2 base     = (upper_tile * upper_q) + child;
+                    vec4  children =
                         texelFetch(s_rc_upper, base + ivec2(0, 0), 0) +
                         texelFetch(s_rc_upper, base + ivec2(1, 0), 0) +
                         texelFetch(s_rc_upper, base + ivec2(0, 1), 0) +
                         texelFetch(s_rc_upper, base + ivec2(1, 1), 0);
-                    upper += (wx[i] * wy[j] * wz[k]) * (0.25 * children);
+                    float weight = wx[i] * wy[j] * wz[k];
+                    sum        += weight * (0.25 * children);
+                    weight_sum += weight;
                 }
             }
         }
+        // interpolate: the weights sum to exactly 1 (products of 0.25 and
+        // 0.75), so the division is exact.
+        upper = (weight_sum > 0.0) ? (sum / weight_sum) : vec4(0.0);
     }
 
     imageStore(i_rc_merged, atlas_texel, vec4(own + (raw.a * upper.rgb), raw.a * upper.a));

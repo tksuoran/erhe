@@ -1,0 +1,118 @@
+#include "erhe_bxdf.glsl"
+#include "erhe_light.glsl"
+#include "erhe_texture.glsl"
+
+// Radiance cascades probe visibility (doc/editor/radiance_cascades.md
+// "Merge"). One dispatch per cascade, one thread per probe; depends only on
+// the scene geometry and the cascade layout, so it runs when either changed.
+//
+// Writes the probe's state texel (tile coordinates: probe_index wrapped into
+// rows of tiles_per_row), an integer-valued float:
+//  - bit 8: the probe is inside geometry - the DDGI classification rule
+//    (ddgi_relocate.comp): more than a quarter of c_classify_rays fixed
+//    directions (spherical Fibonacci) hit a backface over
+//    [0, rc_visibility.grid_origin.w], and the nearest hit is a backface,
+//  - bits 0 - 7: the segment from the probe to upper probe n is
+//    unobstructed (no hit, front or back, over its length); n = i + 2 j +
+//    4 k over the x / y / z pairs of rc_upper_axis(), the order of
+//    get_upper_probes() and rc_merge.comp. 0 for the top cascade.
+//
+// Hits and backfaces come from the shared hit path (erhe_ray_hit.glsl
+// trace_closest_from()), so a backface here is a backface of the trace.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
+
+#include "erhe_ray_hit.glsl"
+
+const uint  c_classify_rays             = 64u;
+const float c_backface_ratio_threshold  = 0.25; // as ddgi_relocate.comp
+const uint  c_state_inside              = 256u;
+
+// One axis of the trilinear interpolation to the upper cascade: lower probe
+// k sits at upper grid coordinate k / 2 - 1 / 4 (get_upper_probe_axis()).
+ivec2 rc_upper_axis(int lower_index, int upper_count)
+{
+    int last = max(0, upper_count - 1);
+    if ((lower_index % 2) == 0) {
+        int m = lower_index / 2;
+        return ivec2(clamp(m - 1, 0, last), clamp(m, 0, last));
+    }
+    int m = (lower_index - 1) / 2;
+    return ivec2(clamp(m, 0, last), clamp(m + 1, 0, last));
+}
+
+vec3 spherical_fibonacci(uint i, uint n)
+{
+    const float golden_angle = 2.39996322972865332;
+    float z   = 1.0 - ((2.0 * (float(i) + 0.5)) / float(n));
+    float r   = sqrt(max(0.0, 1.0 - (z * z)));
+    float phi = golden_angle * float(i);
+    return vec3(r * cos(phi), r * sin(phi), z);
+}
+
+void main()
+{
+    ivec3 counts      = ivec3(rc_visibility.grid_counts.xyz);
+    int   probe_count = counts.x * counts.y * counts.z;
+    int   probe_index = int(gl_GlobalInvocationID.x);
+    if (probe_index >= probe_count) {
+        return;
+    }
+    ivec3 coords = ivec3(
+        probe_index % counts.x,
+        (probe_index / counts.x) % counts.y,
+        probe_index / (counts.x * counts.y)
+    );
+    vec3 position = rc_visibility.grid_origin.xyz + (vec3(coords) * rc_visibility.grid_spacing.xyz);
+
+    // Inside geometry
+    float t_max          = rc_visibility.grid_origin.w;
+    uint  backface_count = 0u;
+    float nearest_front  = 3.0e38;
+    float nearest_back   = 3.0e38;
+    for (uint i = 0u; i < c_classify_rays; ++i) {
+        Hit_surface surface;
+        if (trace_closest_from(position, spherical_fibonacci(i, c_classify_rays), 0.0, t_max, surface)) {
+            if (surface.backface) {
+                ++backface_count;
+                nearest_back = min(nearest_back, surface.hit_t);
+            } else {
+                nearest_front = min(nearest_front, surface.hit_t);
+            }
+        }
+    }
+    float backface_ratio = float(backface_count) / float(c_classify_rays);
+    bool  inside         = (backface_ratio > c_backface_ratio_threshold) && (nearest_back < nearest_front);
+    uint  state          = inside ? c_state_inside : 0u;
+
+    // Segments to the 8 upper probes
+    if (rc_visibility.upper_counts.w != 0u) {
+        ivec3 upper_counts = ivec3(rc_visibility.upper_counts.xyz);
+        ivec2 ix = rc_upper_axis(coords.x, upper_counts.x);
+        ivec2 iy = rc_upper_axis(coords.y, upper_counts.y);
+        ivec2 iz = rc_upper_axis(coords.z, upper_counts.z);
+        for (int k = 0; k < 2; ++k) {
+            for (int j = 0; j < 2; ++j) {
+                for (int i = 0; i < 2; ++i) {
+                    vec3  upper  = rc_visibility.upper_origin.xyz + (vec3(ix[i], iy[j], iz[k]) * rc_visibility.upper_spacing.xyz);
+                    vec3  delta  = upper - position;
+                    float length_ = length(delta);
+                    bool  visible = true;
+                    if (length_ > 1.0e-5) {
+                        Hit_surface surface;
+                        visible = !trace_closest_from(position, delta / length_, 0.0, length_, surface);
+                    }
+                    if (visible) {
+                        state |= (1u << uint(i + (2 * j) + (4 * k)));
+                    }
+                }
+            }
+        }
+    }
+
+    uint  tiles_per_row = rc_visibility.grid_counts.w;
+    ivec2 tile          = ivec2(probe_index % int(tiles_per_row), probe_index / int(tiles_per_row));
+    imageStore(i_rc_state, tile, vec4(float(state), 0.0, 0.0, 0.0));
+}

@@ -1,11 +1,13 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/probe_grid.hpp"
 #include "renderers/radiance_cascades_layout.hpp"
 #include "renderers/scene_tlas.hpp"
 
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
@@ -37,10 +39,12 @@ namespace erhe::scene_renderer {
 
 // erhe_codegen-generated config structs live in the global namespace.
 struct Radiance_cascades_config;
+enum class Radiance_cascades_merge_mode : unsigned int;
 
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Scene_root;
 
 // State of the request-driven raw texel readback
@@ -97,12 +101,23 @@ public:
     // The two atlases of one cascade (RGBA16F, rgb radiance, a transparency
     // beta; storage + sampled). raw holds the traced intervals, merged the
     // raw intervals merged with everything beyond them.
+    // state is one texel per probe (tile coordinates: probe_index wrapped
+    // into rows of tiles_per_row), R32F holding an integer-valued float,
+    // the probe state of the visibility pass (c_state_* bits); allocated
+    // only in the visibility_masked merge mode.
     class Cascade_textures
     {
     public:
         std::shared_ptr<erhe::graphics::Texture> raw;
         std::shared_ptr<erhe::graphics::Texture> merged;
+        std::shared_ptr<erhe::graphics::Texture> state;
     };
+
+    // Probe state bits (rc_visibility.comp, rc_merge.comp): bits 0 - 7 = the
+    // segment from the probe to upper probe n of get_upper_probes() order is
+    // unobstructed, bit 8 = the probe is inside geometry.
+    static constexpr uint32_t c_state_upper_visible_mask = 0xffu;
+    static constexpr uint32_t c_state_inside             = 0x100u;
 
     // GPU time of one pass: the most recent measurement and the mean over
     // the last c_timing_history_size measurements, in milliseconds.
@@ -130,6 +145,10 @@ public:
         int64_t   updates_per_full_refresh{0};   // ticks until every texel is traced once
         double    ms_per_million_rays     {0.0}; // total.average_ms per 1e6 rays_per_update
         double    full_refresh_ms         {0.0}; // updates_per_full_refresh x total.average_ms
+        // Visibility pass: runs only when the layout or the scene geometry
+        // changed, so it has no per-frame mean; the last measurement.
+        double    visibility_last_ms      {0.0};
+        uint64_t  visibility_update_count {0};   // visibility pass runs since construction
     };
 
     // Per-cascade summary of a texel readback (the probe texels only, not
@@ -146,6 +165,10 @@ public:
         // probes with at least one such texel.
         float     backface_fraction   {0.0f};
         int       backface_probe_count{0};
+        // Visibility pass: probes inside geometry, and the mean fraction of
+        // the 8 upper probes whose segment from the probe is unobstructed.
+        int       inside_probe_count  {0};
+        float     upper_visible_fraction{0.0f};
     };
 
     static constexpr std::size_t c_timing_history_size = 60;
@@ -158,6 +181,7 @@ public:
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
         App_context&                             context,
+        App_message_bus&                         app_message_bus,
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
         const Radiance_cascades_config&          config,
@@ -177,6 +201,14 @@ public:
     // The renderer writes the probe field the forward pass samples. False
     // until the reduce pass exists (plan phase 4).
     [[nodiscard]] auto has_field   () const -> bool;
+
+    // The merge mode (Radiance_cascades_config::merge_mode). Called by the
+    // change sites (Radiance Cascades window combo, MCP
+    // set_radiance_cascades) after they store the setting; the constructor
+    // takes the loaded setting. visibility_masked allocates and computes
+    // the probe states on the next tick, interpolate releases them.
+    void               set_merge_mode(Radiance_cascades_merge_mode mode);
+    [[nodiscard]] auto get_merge_mode() const -> Radiance_cascades_merge_mode;
 
     [[nodiscard]] auto get_layout                   () const -> const Radiance_cascades_layout&;
     [[nodiscard]] auto get_cascade_textures         (int cascade) const -> const Cascade_textures&;
@@ -213,6 +245,12 @@ public:
     [[nodiscard]] auto read_merged_texel          (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
     // Cascade 0 signed hit distance of one texel.
     [[nodiscard]] auto read_distance_texel        (const glm::ivec3& probe, const glm::ivec2& texel) const -> float;
+    // The snapshot holds probe states (the visibility_masked mode was active
+    // at copy time).
+    [[nodiscard]] auto readback_has_probe_states  () const -> bool;
+    // Probe state (c_state_* bits) of one probe; readback_has_probe_states()
+    // must be true.
+    [[nodiscard]] auto read_probe_state           (int cascade, const glm::ivec3& probe) const -> uint32_t;
 
     // Atlas preview for the Radiance Cascades window. The atlases carry
     // beta in alpha, which the ImGui image widget would use as opacity, so
@@ -237,6 +275,20 @@ private:
     [[nodiscard]] auto update_layout    (erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool;
     void               allocate_textures(erhe::graphics::Command_buffer& command_buffer);
     void               release_textures ();
+    // Probe state textures of the visibility_masked merge mode.
+    void               allocate_state_textures(erhe::graphics::Command_buffer& command_buffer);
+    void               release_state_textures ();
+
+    // Records the visibility pass (rc_visibility.comp): per probe of every
+    // cascade, whether it is inside geometry and which of its 8 upper probes
+    // it can see. Geometry and layout only, so it runs when either changed
+    // (m_visibility_dirty), not per frame.
+    void record_visibility(
+        erhe::graphics::Command_buffer&          command_buffer,
+        const Scene_tlas::Frame&                 tlas_frame,
+        const erhe::graphics::Ring_buffer_range& light_range,
+        erhe::scene_renderer::Material_set&      material_set
+    );
 
     // Records the budgeted trace dispatches: the texel cursor walks the
     // cascades in order, one dispatch per contiguous run of one cascade.
@@ -346,7 +398,39 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>                  m_merge_sampler;
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_merge_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_shader_stages;
+    // rc_merge.comp variants: interpolate (ERHE_RC_MERGE_VISIBILITY 0) and
+    // visibility_masked (1).
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_merge_visibility_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_pipeline;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_merge_visibility_pipeline;
+    Radiance_cascades_merge_mode                              m_merge_mode;
+
+    // Visibility pass (rc_visibility.comp): the trace's buffers and TLAS,
+    // the cascade's state texture as the only storage image. Dirty after
+    // every allocation and on the scene geometry change messages.
+    erhe::graphics::Shader_resource                           m_visibility_block;
+    class Visibility_offsets
+    {
+    public:
+        std::size_t grid_origin  {0};
+        std::size_t grid_spacing {0};
+        std::size_t grid_counts  {0};
+        std::size_t upper_origin {0};
+        std::size_t upper_spacing{0};
+        std::size_t upper_counts {0};
+    };
+    Visibility_offsets                                        m_visibility_offsets{};
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_visibility_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_visibility_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_visibility_pipeline;
+    uint32_t                                                  m_state_binding_point{0};
+    std::unique_ptr<erhe::graphics::Gpu_timer>                m_visibility_timer;
+    uint64_t                                                  m_visibility_last_ns     {0};
+    uint64_t                                                  m_visibility_update_count{0};
+    bool                                                      m_visibility_dirty       {true};
+    erhe::message_bus::Subscription<Node_touched_message>          m_node_touched_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>         m_items_removed_subscription;
 
     // Atlas preview (rc_preview.comp): its own control block and layout,
     // the shared control ring buffer.
@@ -389,6 +473,8 @@ private:
     std::array<std::size_t, c_max_radiance_cascades>         m_readback_raw_offsets{};
     std::array<std::size_t, c_max_radiance_cascades>         m_readback_merged_offsets{};
     std::size_t                                              m_readback_distance_offset{0};
+    std::array<std::size_t, c_max_radiance_cascades>         m_readback_state_offsets{};
+    bool                                                     m_readback_has_states{false};
     std::size_t                                              m_readback_byte_count{0};
     std::vector<std::byte>                                   m_readback_snapshot;
     std::array<Cascade_summary, c_max_radiance_cascades>     m_readback_summaries{};

@@ -1,7 +1,9 @@
 #include "renderers/radiance_cascades_renderer.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
+#include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
 #include "renderers/trace_lights.hpp"
@@ -36,6 +38,7 @@
 #include <glm/gtc/packing.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -59,14 +62,21 @@ constexpr erhe::dataformat::Format c_distance_format = erhe::dataformat::Format:
 constexpr unsigned int c_control_binding_point         = 2;
 constexpr unsigned int c_instance_record_binding_point = 3;
 
-// Merge pass layout: the control block, the raw atlas of the cascade and
-// the merged atlas of the cascade above as combined image samplers (user
-// points 0 / 1; Vulkan offsets samplers past the highest buffer binding,
-// 2, so they land at 3 / 4), and the merged atlas written as the storage
-// image at raw binding point 5.
-constexpr unsigned int c_merge_raw_binding_point    = 0;
-constexpr unsigned int c_merge_upper_binding_point  = 1;
-constexpr unsigned int c_merge_output_binding_point = 5;
+// Merge pass layout: the control block, then as combined image samplers
+// the raw atlas and probe state of the cascade and the merged atlas and
+// probe state of the cascade above (user points 0 - 3; Vulkan offsets
+// samplers past the highest buffer binding, 2, so they land at 3 - 6), and
+// the merged atlas written as the storage image at raw binding point 7.
+constexpr unsigned int c_merge_raw_binding_point         = 0;
+constexpr unsigned int c_merge_upper_binding_point       = 1;
+constexpr unsigned int c_merge_state_binding_point       = 2;
+constexpr unsigned int c_merge_upper_state_binding_point = 3;
+constexpr unsigned int c_merge_output_binding_point      = 7;
+
+// Probe state texture (Cascade_textures::state): an integer-valued float
+// per probe.
+constexpr erhe::dataformat::Format c_state_format = erhe::dataformat::Format::format_32_scalar_float;
+constexpr int                      c_visibility_workgroup_size = 64; // rc_visibility.comp local size
 constexpr int          c_merge_workgroup_size       = 8; // rc_merge.comp local size, both axes
 
 // rc_merge.comp params.y flags
@@ -113,6 +123,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     erhe::graphics::Device&                  graphics_device,
     erhe::graphics::Command_buffer&          init_command_buffer,
     App_context&                             context,
+    App_message_bus&                         app_message_bus,
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
     const Radiance_cascades_config&          config,
@@ -131,6 +142,13 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     , m_merge_block{
         graphics_device,
         "rc_merge",
+        static_cast<int>(c_control_binding_point),
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_merge_mode{config.merge_mode}
+    , m_visibility_block{
+        graphics_device,
+        "rc_visibility",
         static_cast<int>(c_control_binding_point),
         erhe::graphics::Shader_resource::Type::uniform_block
     }
@@ -306,6 +324,114 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     make_trace_pass(m_trace_cascade0, "1", "rc_trace_cascade0");
     make_trace_pass(m_trace_upper,    "0", "rc_trace");
 
+    // Visibility pass: the trace's buffers and TLAS (the shared hit path
+    // references the material and light blocks), and the cascade's probe
+    // state as the only storage image. Control block: grid_origin xyz, w =
+    // classification ray length; grid_spacing xyz; grid_counts xyz, w =
+    // tiles per atlas row; upper_origin / upper_spacing xyz; upper_counts
+    // xyz, w = 1 when an upper cascade exists.
+    m_visibility_offsets.grid_origin   = m_visibility_block.add_vec4 ("grid_origin"  )->get_offset_in_parent();
+    m_visibility_offsets.grid_spacing  = m_visibility_block.add_vec4 ("grid_spacing" )->get_offset_in_parent();
+    m_visibility_offsets.grid_counts   = m_visibility_block.add_uvec4("grid_counts"  )->get_offset_in_parent();
+    m_visibility_offsets.upper_origin  = m_visibility_block.add_vec4 ("upper_origin" )->get_offset_in_parent();
+    m_visibility_offsets.upper_spacing = m_visibility_block.add_vec4 ("upper_spacing")->get_offset_in_parent();
+    m_visibility_offsets.upper_counts  = m_visibility_block.add_uvec4("upper_counts" )->get_offset_in_parent();
+    m_state_binding_point = c_instance_record_binding_point + 2;
+    m_visibility_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = material_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.material_interface.material_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = light_buffer_binding_point,
+                    .type          = to_binding_type(program_interface.light_interface.light_block),
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_instance_record_binding_point,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_tlas_binding_point,
+                    .type          = Binding_type::acceleration_structure,
+                    .name          = "s_tlas",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = m_state_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_rc_state",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "r32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = "RC visibility",
+            .uses_texture_heap = true
+        }
+    );
+    m_visibility_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = "rc_visibility",
+            .defines             = {
+                { "ERHE_TLAS_BINDING",          fmt::format("{}", m_tlas_binding_point) },
+                { "ERHE_RT_NORMAL_OFFSET",      fmt::format("{}", normal   .attribute->offset / 4) },
+                { "ERHE_RT_TANGENT_OFFSET",     fmt::format("{}", tangent  .attribute->offset / 4) },
+                { "ERHE_RT_TEXCOORD0_OFFSET",   fmt::format("{}", texcoord0.attribute->offset / 4) },
+                { "ERHE_RT_COLOR0_OFFSET",      fmt::format("{}", color0   .attribute->offset / 4) },
+                { "ERHE_RT_HAS_POSITION_FETCH", use_position_fetch ? "1" : "0" }
+            },
+            .extensions          = extensions,
+            .struct_types        = {
+                &program_interface.material_interface.material_struct,
+                &program_interface.light_interface.light_struct,
+                &m_scene_tlas->get_instance_struct()
+            },
+            .interface_blocks    = {
+                &program_interface.material_interface.material_block,
+                &program_interface.light_interface.light_block,
+                &m_visibility_block,
+                &m_scene_tlas->get_instance_block()
+            },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_visibility.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = m_visibility_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_visibility_shader_stages);
+    m_visibility_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "rc_visibility",
+            .shader_stages     = &m_visibility_shader_stages->shader_stages,
+            .bind_group_layout = m_visibility_bind_group_layout.get()
+        }
+    );
+    m_visibility_timer = std::make_unique<Gpu_timer>(graphics_device, "RC visibility");
+
+    // The visibility depends on the scene geometry: recompute it when an
+    // edit changes a transform or a mesh's geometry, or removes content.
+    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
+        [this](Node_touched_message&) { m_visibility_dirty = true; }
+    );
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message&) { m_visibility_dirty = true; }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message&) { m_visibility_dirty = true; }
+    );
+
     m_light_buffer = std::make_unique<erhe::scene_renderer::Light_buffer>(
         graphics_device,
         init_command_buffer,
@@ -365,6 +491,24 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .stage_flags     = Shader_stage_flags::compute
                 },
                 {
+                    .binding_point   = c_merge_state_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_rc_state",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = c_merge_upper_state_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_rc_upper_state",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
                     .binding_point = c_merge_output_binding_point,
                     .type          = Binding_type::storage_image,
                     .name          = "i_rc_merged",
@@ -377,25 +521,37 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
             .uses_texture_heap = false
         }
     );
-    m_merge_shader_stages = std::make_unique<Reloadable_shader_stages>(
-        graphics_device,
-        Shader_stages_create_info{
-            .name                = "rc_merge",
-            .interface_blocks    = { &m_merge_block },
-            .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_merge.comp" } },
-            .extra_include_paths = shader_paths(),
-            .bind_group_layout   = m_merge_bind_group_layout.get()
-        }
-    );
-    graphics_device.get_shader_monitor().add(*m_merge_shader_stages);
-    m_merge_pipeline = std::make_unique<Compute_pipeline>(
-        graphics_device,
-        Compute_pipeline_data{
-            .name              = "rc_merge",
-            .shader_stages     = &m_merge_shader_stages->shader_stages,
-            .bind_group_layout = m_merge_bind_group_layout.get()
-        }
-    );
+    // Two variants, one per merge mode; the interpolate variant does not
+    // reference the probe state samplers.
+    const auto make_merge_pass = [&](
+        std::unique_ptr<Reloadable_shader_stages>& stages,
+        std::unique_ptr<Compute_pipeline>&         pipeline,
+        const char*                                visibility_define,
+        const char*                                name
+    ) {
+        stages = std::make_unique<Reloadable_shader_stages>(
+            graphics_device,
+            Shader_stages_create_info{
+                .name                = name,
+                .defines             = { { "ERHE_RC_MERGE_VISIBILITY", visibility_define } },
+                .interface_blocks    = { &m_merge_block },
+                .shaders             = { { Shader_type::compute_shader, editor_shaders / "rc_merge.comp" } },
+                .extra_include_paths = shader_paths(),
+                .bind_group_layout   = m_merge_bind_group_layout.get()
+            }
+        );
+        graphics_device.get_shader_monitor().add(*stages);
+        pipeline = std::make_unique<Compute_pipeline>(
+            graphics_device,
+            Compute_pipeline_data{
+                .name              = name,
+                .shader_stages     = &stages->shader_stages,
+                .bind_group_layout = m_merge_bind_group_layout.get()
+            }
+        );
+    };
+    make_merge_pass(m_merge_shader_stages,            m_merge_pipeline,            "0", "rc_merge");
+    make_merge_pass(m_merge_visibility_shader_stages, m_merge_visibility_pipeline, "1", "rc_merge_visibility");
 
     // Atlas preview: size x, y = atlas size, z = channel; params x = radiance
     // scale, y = r0 (distance normalization).
@@ -474,7 +630,9 @@ auto Radiance_cascades_renderer::is_supported() const -> bool
         m_supported &&
         (m_trace_cascade0.pipeline != nullptr) &&
         (m_trace_upper.pipeline != nullptr) &&
-        (m_merge_pipeline != nullptr);
+        (m_merge_pipeline != nullptr) &&
+        (m_merge_visibility_pipeline != nullptr) &&
+        (m_visibility_pipeline != nullptr);
 }
 
 auto Radiance_cascades_renderer::is_selected() const -> bool
@@ -506,6 +664,25 @@ auto Radiance_cascades_renderer::is_active() const -> bool
 auto Radiance_cascades_renderer::has_field() const -> bool
 {
     return false;
+}
+
+void Radiance_cascades_renderer::set_merge_mode(const Radiance_cascades_merge_mode mode)
+{
+    if (mode == m_merge_mode) {
+        return;
+    }
+    m_merge_mode = mode;
+    if (mode == Radiance_cascades_merge_mode::visibility_masked) {
+        // Allocated and computed on the next tick (needs its command buffer).
+        m_visibility_dirty = true;
+    } else {
+        release_state_textures();
+    }
+}
+
+auto Radiance_cascades_renderer::get_merge_mode() const -> Radiance_cascades_merge_mode
+{
+    return m_merge_mode;
 }
 
 auto Radiance_cascades_renderer::get_layout() const -> const Radiance_cascades_layout&
@@ -608,6 +785,8 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
         ? (stats.total.average_ms * 1.0e6) / static_cast<double>(stats.rays_per_update)
         : 0.0;
     stats.full_refresh_ms = static_cast<double>(stats.updates_per_full_refresh) * stats.total.average_ms;
+    stats.visibility_last_ms      = static_cast<double>(m_visibility_last_ns) * 1.0e-6;
+    stats.visibility_update_count = m_visibility_update_count;
     return stats;
 }
 
@@ -617,6 +796,7 @@ void Radiance_cascades_renderer::release_textures()
         textures.raw.reset();
         textures.merged.reset();
     }
+    release_state_textures();
     m_distance_texture.reset();
     m_preview_texture.reset();
     m_cascade_byte_counts.fill(0);
@@ -679,6 +859,10 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
         m_texture_byte_count     += bytes;
     }
 
+    // New probe positions: in the visibility_masked mode the probe states
+    // are reallocated and recomputed before the next merge reads them.
+    m_visibility_dirty = true;
+
     // Refits happen at runtime (content moved, settings changed), so this is
     // a render-log event, not a startup one.
     const Radiance_cascade& cascade0 = m_layout.cascades[0];
@@ -734,6 +918,135 @@ auto Radiance_cascades_renderer::update_layout(erhe::graphics::Command_buffer& c
     ++m_fit_count;
     allocate_textures(command_buffer);
     return true;
+}
+
+void Radiance_cascades_renderer::allocate_state_textures(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    release_state_textures();
+    const std::size_t state_texel_bytes = erhe::dataformat::get_format_size_bytes(c_state_format);
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        const Radiance_cascade& cascade = m_layout.cascades[static_cast<std::size_t>(i)];
+        std::shared_ptr<Texture> texture = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  = Image_usage_flag_bit_mask::storage      |
+                               Image_usage_flag_bit_mask::sampled      |
+                               Image_usage_flag_bit_mask::transfer_dst |
+                               Image_usage_flag_bit_mask::transfer_src,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = c_state_format,
+                .width       = cascade.tiles_per_row,
+                .height      = cascade.tile_rows,
+                .level_count = 1,
+                .debug_label = erhe::utility::Debug_label{fmt::format("RC cascade {} probe state", i)}
+            }
+        );
+        command_buffer.clear_texture(*texture, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.transition_texture_layout(*texture, Image_layout::shader_read_only_optimal);
+        m_cascade_textures[static_cast<std::size_t>(i)].state = texture;
+        const std::size_t bytes = static_cast<std::size_t>(cascade.tiles_per_row) * static_cast<std::size_t>(cascade.tile_rows) * state_texel_bytes;
+        m_cascade_byte_counts[static_cast<std::size_t>(i)] += bytes;
+        m_texture_byte_count += bytes;
+    }
+}
+
+void Radiance_cascades_renderer::release_state_textures()
+{
+    const std::size_t state_texel_bytes = erhe::dataformat::get_format_size_bytes(c_state_format);
+    for (int i = 0; i < c_max_radiance_cascades; ++i) {
+        Cascade_textures& textures = m_cascade_textures[static_cast<std::size_t>(i)];
+        if (!textures.state) {
+            continue;
+        }
+        const std::size_t bytes = static_cast<std::size_t>(textures.state->get_width()) * static_cast<std::size_t>(textures.state->get_height()) * state_texel_bytes;
+        m_cascade_byte_counts[static_cast<std::size_t>(i)] -= bytes;
+        m_texture_byte_count -= bytes;
+        textures.state.reset();
+    }
+}
+
+void Radiance_cascades_renderer::record_visibility(
+    erhe::graphics::Command_buffer&          command_buffer,
+    const Scene_tlas::Frame&                 tlas_frame,
+    const erhe::graphics::Ring_buffer_range& light_range,
+    erhe::scene_renderer::Material_set&      material_set
+)
+{
+    using namespace erhe::graphics;
+
+    // Classification rays reach across the whole volume: the top cascade's
+    // interval end exceeds the volume diagonal.
+    const float classify_t_max = m_layout.cascades[static_cast<std::size_t>(m_layout.cascade_count - 1)].interval_end;
+
+    const Scoped_gpu_timer visibility_timer{*m_visibility_timer, command_buffer};
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        const std::size_t       index    = static_cast<std::size_t>(i);
+        const Radiance_cascade& cascade  = m_layout.cascades[index];
+        const bool              is_top   = (i == (m_layout.cascade_count - 1));
+        const Radiance_cascade& upper    = is_top ? cascade : m_layout.cascades[index + 1];
+        Texture&                state    = *m_cascade_textures[index].state;
+
+        const std::size_t byte_count = m_visibility_block.get_size_bytes();
+        Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
+        {
+            std::span<std::byte> gpu_data = control_range.get_span();
+            std::memset(gpu_data.data(), 0, byte_count);
+            const glm::vec4  grid_origin  {cascade.grid.origin,  classify_t_max};
+            const glm::vec4  grid_spacing {cascade.grid.spacing, 0.0f};
+            const glm::uvec4 grid_counts{
+                static_cast<uint32_t>(cascade.grid.counts.x),
+                static_cast<uint32_t>(cascade.grid.counts.y),
+                static_cast<uint32_t>(cascade.grid.counts.z),
+                static_cast<uint32_t>(cascade.tiles_per_row)
+            };
+            const glm::vec4  upper_origin {upper.grid.origin,  0.0f};
+            const glm::vec4  upper_spacing{upper.grid.spacing, 0.0f};
+            const glm::uvec4 upper_counts{
+                static_cast<uint32_t>(upper.grid.counts.x),
+                static_cast<uint32_t>(upper.grid.counts.y),
+                static_cast<uint32_t>(upper.grid.counts.z),
+                is_top ? 0u : 1u
+            };
+            write(gpu_data, m_visibility_offsets.grid_origin,   as_span(grid_origin  ));
+            write(gpu_data, m_visibility_offsets.grid_spacing,  as_span(grid_spacing ));
+            write(gpu_data, m_visibility_offsets.grid_counts,   as_span(grid_counts  ));
+            write(gpu_data, m_visibility_offsets.upper_origin,  as_span(upper_origin ));
+            write(gpu_data, m_visibility_offsets.upper_spacing, as_span(upper_spacing));
+            write(gpu_data, m_visibility_offsets.upper_counts,  as_span(upper_counts ));
+            control_range.bytes_written(byte_count);
+            control_range.close();
+        }
+
+        // Each dispatch writes only its own cascade's state texture.
+        command_buffer.transition_texture_layout(state, Image_layout::general);
+        {
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+            encoder.set_bind_group_layout(m_visibility_bind_group_layout.get());
+            encoder.set_compute_pipeline(*m_visibility_pipeline);
+            m_light_buffer->bind_light_buffer(encoder, light_range);
+            m_scene_tlas->bind_instance_records(encoder, tlas_frame);
+            encoder.set_acceleration_structure(m_tlas_binding_point, *tlas_frame.acceleration_structure);
+            m_control_buffer->bind(encoder, control_range);
+            encoder.set_storage_image(m_state_binding_point, state);
+            material_set.bind(encoder);
+            encoder.dispatch_compute(
+                static_cast<std::uintptr_t>((cascade.get_probe_count() + c_visibility_workgroup_size - 1) / c_visibility_workgroup_size),
+                1,
+                1
+            );
+        }
+        control_range.release();
+    }
+    // The states become sampled textures for the merge.
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    for (int i = 0; i < m_layout.cascade_count; ++i) {
+        command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].state, Image_layout::shader_read_only_optimal);
+    }
+    m_visibility_dirty = false;
+    ++m_visibility_update_count;
 }
 
 void Radiance_cascades_renderer::record_trace(
@@ -883,6 +1196,11 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
         Texture&                raw     = *m_cascade_textures[index].raw;
         Texture&                merged  = *m_cascade_textures[index].merged;
         const Texture&          upper_merged = is_top ? raw : *m_cascade_textures[index + 1].merged;
+        // The interpolate variant does not reference the state samplers;
+        // the raw atlas stands in for them.
+        const bool              visibility   = (m_merge_mode == Radiance_cascades_merge_mode::visibility_masked);
+        const Texture&          state        = visibility ? *m_cascade_textures[index].state : raw;
+        const Texture&          upper_state  = (visibility && !is_top) ? *m_cascade_textures[index + 1].state : state;
 
         uint32_t flags = 0u;
         if (is_top) {
@@ -930,10 +1248,12 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
         {
             Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             encoder.set_bind_group_layout(m_merge_bind_group_layout.get());
-            encoder.set_compute_pipeline(*m_merge_pipeline);
+            encoder.set_compute_pipeline(visibility ? *m_merge_visibility_pipeline : *m_merge_pipeline);
             m_control_buffer->bind(encoder, control_range);
             encoder.set_sampled_image(c_merge_raw_binding_point,   raw,          *m_merge_sampler);
             encoder.set_sampled_image(c_merge_upper_binding_point, upper_merged, *m_merge_sampler);
+            encoder.set_sampled_image(c_merge_state_binding_point,       state,       *m_merge_sampler);
+            encoder.set_sampled_image(c_merge_upper_state_binding_point, upper_state, *m_merge_sampler);
             encoder.set_storage_image(c_merge_output_binding_point, merged);
             encoder.dispatch_compute(
                 static_cast<std::uintptr_t>((width  + c_merge_workgroup_size - 1) / c_merge_workgroup_size),
@@ -1061,6 +1381,15 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
     }
     m_readback_distance_offset = offset;
     offset = round_up(offset + (static_cast<std::size_t>(m_layout.cascades[0].get_atlas_texel_count()) * distance_texel_bytes), c_readback_alignment);
+    const std::size_t state_texel_bytes = erhe::dataformat::get_format_size_bytes(c_state_format);
+    m_readback_has_states = static_cast<bool>(m_cascade_textures[0].state);
+    if (m_readback_has_states) {
+        for (int i = 0; i < m_layout.cascade_count; ++i) {
+            const Radiance_cascade& cascade = m_layout.cascades[static_cast<std::size_t>(i)];
+            m_readback_state_offsets[static_cast<std::size_t>(i)] = offset;
+            offset = round_up(offset + (static_cast<std::size_t>(cascade.tiles_per_row) * static_cast<std::size_t>(cascade.tile_rows) * state_texel_bytes), c_readback_alignment);
+        }
+    }
     m_readback_byte_count = offset;
 
     // Allocated on request only (the MCP path), grown to the largest layout
@@ -1104,6 +1433,11 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
         copy(*m_cascade_textures[static_cast<std::size_t>(i)].merged, radiance_texel_bytes, m_readback_merged_offsets[static_cast<std::size_t>(i)]);
     }
     copy(*m_distance_texture, distance_texel_bytes, m_readback_distance_offset);
+    if (m_readback_has_states) {
+        for (int i = 0; i < m_layout.cascade_count; ++i) {
+            copy(*m_cascade_textures[static_cast<std::size_t>(i)].state, state_texel_bytes, m_readback_state_offsets[static_cast<std::size_t>(i)]);
+        }
+    }
 
     m_readback_layout       = m_layout;
     m_readback_frame        = m_graphics_device.get_frame_index();
@@ -1131,6 +1465,7 @@ auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
         glm::dvec3              radiance_sum{0.0};
         glm::dvec3              merged_radiance_sum{0.0};
         double                  merged_beta_sum{0.0};
+        int64_t                 visible_upper_count{0};
         int64_t                 beta_one_count = 0;
         int64_t                 backface_count = 0;
         for (int z = 0; z < cascade.grid.counts.z; ++z) {
@@ -1156,6 +1491,13 @@ auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
                     if (probe_has_backface) {
                         ++summary.backface_probe_count;
                     }
+                    const uint32_t state = m_readback_has_states ? read_probe_state(i, glm::ivec3{x, y, z}) : 0u;
+                    if ((state & c_state_inside) != 0u) {
+                        ++summary.inside_probe_count;
+                    }
+                    if (i < (m_readback_layout.cascade_count - 1)) {
+                        visible_upper_count += static_cast<int64_t>(std::popcount(state & c_state_upper_visible_mask));
+                    }
                 }
             }
         }
@@ -1165,6 +1507,9 @@ auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
         summary.beta_one_fraction = static_cast<float>(static_cast<double>(beta_one_count) / texel_count);
         summary.mean_merged_radiance = glm::vec3{merged_radiance_sum / texel_count};
         summary.mean_merged_beta     = static_cast<float>(merged_beta_sum / texel_count);
+        summary.upper_visible_fraction = static_cast<float>(
+            static_cast<double>(visible_upper_count) / std::max(1.0, 8.0 * static_cast<double>(cascade.get_probe_count()))
+        );
         summary.backface_fraction = static_cast<float>(static_cast<double>(backface_count) / texel_count);
         m_readback_summaries[static_cast<std::size_t>(i)] = summary;
     }
@@ -1230,6 +1575,24 @@ auto Radiance_cascades_renderer::read_radiance_texel(
     };
 }
 
+auto Radiance_cascades_renderer::readback_has_probe_states() const -> bool
+{
+    return m_readback_has_states;
+}
+
+auto Radiance_cascades_renderer::read_probe_state(const int cascade_index, const glm::ivec3& probe) const -> uint32_t
+{
+    ERHE_VERIFY(m_readback_has_states);
+    ERHE_VERIFY((cascade_index >= 0) && (cascade_index < m_readback_layout.cascade_count));
+    const Radiance_cascade& cascade     = m_readback_layout.cascades[static_cast<std::size_t>(cascade_index)];
+    const int               probe_index = probe.x + (cascade.grid.counts.x * (probe.y + (cascade.grid.counts.y * probe.z)));
+    const std::size_t       offset      = m_readback_state_offsets[static_cast<std::size_t>(cascade_index)] + (static_cast<std::size_t>(probe_index) * sizeof(float));
+    ERHE_VERIFY((offset + sizeof(float)) <= m_readback_snapshot.size());
+    float state = 0.0f;
+    std::memcpy(&state, m_readback_snapshot.data() + offset, sizeof(float));
+    return static_cast<uint32_t>(state + 0.5f);
+}
+
 auto Radiance_cascades_renderer::read_distance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> float
 {
     const Radiance_cascade& cascade     = m_readback_layout.cascades[0];
@@ -1274,7 +1637,22 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     Ring_buffer_range light_range = m_light_buffer->update(m_light_projections.get(), ambient);
 
     sample_pass_timings();
+    const uint64_t visibility_ns = m_visibility_timer->last_result();
+    if (visibility_ns != 0) {
+        m_visibility_last_ns = visibility_ns;
+    }
     ++m_update_count;
+    if (m_merge_mode == Radiance_cascades_merge_mode::visibility_masked) {
+        // After a refit or a switch into this mode the state textures are
+        // missing; they are (re)allocated here, where a command buffer is.
+        if (!m_cascade_textures[0].state) {
+            allocate_state_textures(command_buffer);
+            m_visibility_dirty = true;
+        }
+        if (m_visibility_dirty) {
+            record_visibility(command_buffer, tlas_frame, light_range, material_set);
+        }
+    }
     record_trace(command_buffer, tlas_frame, light_range, material_set);
 
     light_range.release();

@@ -166,7 +166,8 @@ textures.
    cascade: `merged = raw.rgb + raw.a * sky(dir)` with the scene ambient as sky
    (the atmosphere-LUT sky is the shared DDGI follow-up). Lower cascades: 2x2
    child average from each of the 8 upper probes, trilinear weights,
-   `merged = raw.rgb + raw.a * upper`.
+   `merged = raw.rgb + raw.a * upper`, with the upper weights of the
+   selected `merge_mode` (below).
 3. **`rc_reduce.comp`** - one workgroup per cascade 0 probe, writing the three
    DDGI atlases of section 2, borders included (the `ddgi_blend.comp` border
    copy is reused).
@@ -174,11 +175,22 @@ textures.
 The merge and reduce passes run whenever a trace dispatch ran; they touch
 about `2 * M0` texels, far below the trace cost.
 
-Merge-quality option `merge_mode`:
+Merge-quality option `merge_mode`, three modes; the default is chosen after
+phase 4 from the surface-level `gi_verify.py` accuracy:
 
-- `interpolate` (default) - the merge above. Upper intervals start at the
-  upper probe, not at the lower probe, so parallax across one upper spacing
-  can show as ringing near high-contrast emitters.
+- `interpolate` (default for now) - trilinear weights over the 8 upper
+  probes. Upper intervals start at the upper probe, not at the lower probe
+  (start-point parallax), so parallax across one upper spacing can show as
+  ringing near high-contrast emitters, and an upper interval can start on
+  the other side of a wall (the `leak_pair` leak measured in
+  doc/editor/radiance_cascades.md "Verification").
+- `visibility_masked` - a visibility pass (`rc_visibility.comp`, run on
+  layout refit and scene geometry change, not per frame) records per probe
+  whether it is inside geometry and which of its 8 upper probes it can
+  see, and the merge renormalizes the trilinear weights over the usable
+  upper probes (`upper = (0, 0)` when none is). Reduces the leak, but
+  darkens closed rooms: coarse probes outside a room carry part of its far
+  field through intervals that start back inside it.
 - `per_neighbour_trace` - the community "bilinear fix": cascade `i` traces
   eight intervals per texel, one from its probe to the interval start of each
   upper neighbour, and merges each with that neighbour before the trilinear
@@ -253,7 +265,7 @@ advance. Costs are measured, recorded and compared:
 - **Budget.** Phase 0 measures DDGI at its defaults on every station and
   records the numbers. The RC budget is: at RC defaults, per-frame GPU time
   <= DDGI's per-frame GPU time on the same station, and full-refresh time
-  <= DDGI's. Phase 5 chooses the RC defaults (`texels_per_frame`, `q0`, `s0`)
+  <= DDGI's. Phase 6 chooses the RC defaults (`texels_per_frame`, `q0`, `s0`)
   to meet it. Absolute numbers depend on the machine and go to
   `memory-bank/local/`, not into this document.
 
@@ -292,21 +304,24 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    `get_radiance_cascades_texels` readback.
 3. **Merge** - built, described in
    [../editor/radiance_cascades.md](../editor/radiance_cascades.md) "Merge":
-   `rc_merge.comp` (the `interpolate` merge; the `merge_mode` setting
-   arrives with its second mode in phase 7), the merged atlas preview,
+   `rc_merge.comp` with the `interpolate` and `visibility_masked` merge
+   modes (`rc_visibility.comp`, probe state textures), the merged atlas
+   preview,
    `debug_cascade_mask` (a masked cascade keeps its beta and contributes no
    radiance, bit 12 masks the sky), the timed pass, merged texels in
    `get_radiance_cascades_texels`, and the merged checks of
-   `scripts/rc_texel_verify.py`.
+   `scripts/rc_texel_verify.py` for both modes.
 4. **Reduce and render.** `rc_reduce.comp`; the editor binds the RC field
    through `set_ddgi` when the source is `radiance_cascades`. First visible
    result and first full `gi_verify.py` run for RC.
-5. **Temporal, multi-bounce, defaults.** Direction jitter, `multi_bounce`,
+5. **`per_neighbour_trace` merge mode**, its cost reported separately.
+   Directly after phase 4: it is the fix for the start-point parallax leak
+   phase 3 measured, and the merge-mode default is chosen with it.
+6. **Temporal, multi-bounce, defaults.** Direction jitter, `multi_bounce`,
    change-driven hysteresis reset; RC defaults chosen against the section 8
    budget.
-6. **Debug.** Probe overlay for a chosen cascade (CPU-phase debug lines only,
+7. **Debug.** Probe overlay for a chosen cascade (CPU-phase debug lines only,
    see the DDGI traps).
-7. **`per_neighbour_trace` merge mode**, its cost reported separately.
 
 ## 10. Verification
 

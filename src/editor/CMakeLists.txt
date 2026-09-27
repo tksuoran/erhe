@@ -39,6 +39,7 @@ erhe_target_sources_grouped(
     res/editor/shaders/rc_merge.comp
     res/editor/shaders/rc_preview.comp
     res/editor/shaders/rc_trace.comp
+    res/editor/shaders/rc_visibility.comp
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
     res/editor/shaders/brush.frag
@@ -943,6 +944,8 @@ set(_config_sources
     ${_config_out}/radiance_cascades_config.cpp
     ${_config_out}/indirect_diffuse_source.hpp
     ${_config_out}/indirect_diffuse_source.cpp
+    ${_config_out}/radiance_cascades_merge_mode.hpp
+    ${_config_out}/radiance_cascades_merge_mode.cpp
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp

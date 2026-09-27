@@ -10,6 +10,7 @@
 #include "config/generated/ddgi_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
+#include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
@@ -1143,6 +1144,7 @@ namespace {
         {"supported",                renderer.is_supported()},
         {"active",                   renderer.is_active()},
         {"has_field",                renderer.has_field()},
+        {"merge_mode",               std::string{to_string(renderer.get_merge_mode())}},
         {"cascade_count",            layout.cascade_count},
         {"r0",                       layout.r0},
         {"probe_count",              layout.get_total_probes()},
@@ -1160,7 +1162,8 @@ namespace {
         {"timing_history_size",      Radiance_cascades_renderer::c_timing_history_size},
         {"ms_per_million_rays",      stats.ms_per_million_rays},
         {"updates_per_full_refresh", stats.updates_per_full_refresh},
-        {"full_refresh_ms",          stats.full_refresh_ms}
+        {"full_refresh_ms",          stats.full_refresh_ms},
+        {"visibility",               json{{"last_ms", stats.visibility_last_ms}, {"update_count", stats.visibility_update_count}}}
     };
 }
 
@@ -1247,6 +1250,15 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
         if (args.contains("hysteresis")) {
             config.hysteresis = std::clamp(args.value("hysteresis", 0.9f), 0.0f, 0.999f);
         }
+        if (args.contains("merge_mode")) {
+            const json& value = args["merge_mode"];
+            Radiance_cascades_merge_mode parsed{};
+            if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+                return make_error_content("set_radiance_cascades: 'merge_mode' must be \"interpolate\" or \"visibility_masked\"");
+            }
+            config.merge_mode = parsed;
+            renderer->set_merge_mode(parsed);
+        }
         if (args.contains("debug_cascade_mask")) {
             config.debug_cascade_mask = std::clamp(args.value("debug_cascade_mask", 0), 0, (1 << (Radiance_cascades_renderer::c_sky_mask_bit + 1)) - 1);
         }
@@ -1266,7 +1278,8 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"interval_scale",       config.interval_scale},
             {"texels_per_frame",     config.texels_per_frame},
             {"hysteresis",           config.hysteresis},
-            {"debug_cascade_mask",   config.debug_cascade_mask}
+            {"debug_cascade_mask",   config.debug_cascade_mask},
+            {"merge_mode",           std::string{to_string(config.merge_mode)}}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }
@@ -1500,6 +1513,10 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                     {"mean_merged_radiance", vec3_json(summary.mean_merged_radiance)},
                     {"mean_merged_beta",     summary.mean_merged_beta}
                 };
+                if (renderer->readback_has_probe_states()) {
+                    entry["inside_probe_count"]     = summary.inside_probe_count;
+                    entry["upper_visible_fraction"] = summary.upper_visible_fraction;
+                }
                 if (i == 0) {
                     entry["backface_fraction"]    = summary.backface_fraction;
                     entry["backface_probe_count"] = summary.backface_probe_count;
@@ -1511,6 +1528,7 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                 const Radiance_cascade& cascade   = layout.cascades[static_cast<std::size_t>(address.cascade)];
                 const glm::vec4         value     = renderer->read_raw_texel   (address.cascade, address.probe, address.texel);
                 const glm::vec4         merged    = renderer->read_merged_texel(address.cascade, address.probe, address.texel);
+
                 const glm::vec3         position  = cascade.grid.origin + (glm::vec3{address.probe} * cascade.grid.spacing);
                 const glm::vec3         direction = get_texel_direction(address.texel, cascade.tile_texels);
                 json entry{
@@ -1525,6 +1543,11 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                     {"merged_radiance", vec3_json(glm::vec3{merged})},
                     {"merged_beta",     merged.a}
                 };
+                if (renderer->readback_has_probe_states()) {
+                    const uint32_t probe_state = renderer->read_probe_state(address.cascade, address.probe);
+                    entry["probe_inside"]       = (probe_state & Radiance_cascades_renderer::c_state_inside) != 0u;
+                    entry["upper_visible_mask"] = probe_state & Radiance_cascades_renderer::c_state_upper_visible_mask;
+                }
                 if (address.cascade == 0) {
                     entry["signed_distance"] = renderer->read_distance_texel(address.probe, address.texel);
                 }

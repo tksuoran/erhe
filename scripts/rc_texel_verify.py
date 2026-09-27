@@ -37,8 +37,11 @@ readback (every texel carries its merged value too):
   recomputed on the CPU from the READ-BACK raw texel and the read-back
   merged texels of the cascade above - the 8 upper probes of
   get_upper_probes() (trilinear 0.25 / 0.75 weights, indices clamped to the
-  upper grid), each the average of the 2x2 child texels; the top cascade
-  merges with the sky (the scene ambient). Tolerance MERGE_ALGEBRA_TOLERANCE
+  upper grid), each the average of the 2x2 child texels, restricted to the
+  upper probes the read-back probe states mark usable (segment
+  unobstructed, upper probe not inside geometry) with the weights
+  renormalized, (0, 0) when none is; the top cascade merges with the sky
+  (the scene ambient). Tolerance MERGE_ALGEBRA_TOLERANCE
   relative (floor MERGE_ALGEBRA_FLOOR): only the final half-float rounding
   differs. This verifies the shader's arithmetic, not the approximation.
 - approximation: for APPROX_SAMPLES cascade 0 texels (probes outside every
@@ -64,7 +67,11 @@ Supported stations: cornell, emissive_only, courtyard, leak_pair, corridor
 (the ones whose parts are exactly room() boxes, panels and analytic lights).
 
 Usage:
-    py -3 scripts/rc_texel_verify.py [--station NAME ...] [--mask-check NAME ...] [--reuse] [--port N] [--editor PATH]
+    py -3 scripts/rc_texel_verify.py [--station NAME ...] [--merge-mode MODE ...] [--mask-check NAME ...]
+                                     [--reuse] [--port N] [--editor PATH]
+
+The merged checks run for each --merge-mode (default: interpolate and
+visibility_masked), on the same station build; the raw checks once.
 
 Without --reuse the script launches the headless editor
 (build_vs2026_vulkan_headless) like gi_verify.py, backs up the editor config
@@ -94,6 +101,7 @@ SKIP_MARGIN        = 1.0e-4  # metres
 SWEEPS             = 2
 MAX_TEXELS_PER_CALL = 4096
 SUPPORTED = ("cornell", "emissive_only", "courtyard", "leak_pair", "corridor")
+MERGE_MODES = ("interpolate", "visibility_masked")
 
 MERGE_ALGEBRA_TOLERANCE = 2.0e-3  # relative: the half-float store rounds by at most 2^-11
 MERGE_ALGEBRA_FLOOR     = 1.0e-4  # absolute floor of the relative error denominator
@@ -365,15 +373,21 @@ def wait_sweeps(c, count, deadline_s=180.0):
         time.sleep(0.2)
 
 
-def check_station(c, name):
-    boxes, lights, ambient = describe_station(name)
-    rooms.build_station(c, name, ddgi=False)
-    rooms.set_indirect_diffuse(c, "radiance_cascades")
-    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0})
-    c.settle()
-    rc = wait_sweeps(c, SWEEPS)
-    failures = 0
-    # (cascade, probe, texel) -> read-back texel, for the merged checks
+def wait_updates(c, count, deadline_s=60.0):
+    """Wait until the renderer has run `count` more updates (trace + merge)."""
+    start = c.call("get_indirect_diffuse_stats")["radiance_cascades"]["update_count"]
+    deadline = time.time() + deadline_s
+    while True:
+        rc = c.call("get_indirect_diffuse_stats")["radiance_cascades"]
+        if rc["update_count"] >= start + count:
+            return rc
+        if time.time() > deadline:
+            raise RuntimeError("radiance cascades stopped updating")
+        time.sleep(0.1)
+
+
+def read_all_texels(c, rc):
+    """(cascade, probe, texel) -> read-back texel, every texel of every cascade."""
     texels_by_address = {}
     for cascade in rc["cascades"]:
         index = cascade["index"]
@@ -382,40 +396,79 @@ def check_station(c, name):
         requests = [{"cascade": index, "probe": [x, y, z], "texel": [u, v]}
                     for z in range(nz) for y in range(ny) for x in range(nx)
                     for v in range(q) for u in range(q)]
-        counts = {"checked": 0, "skipped": 0, "kind": 0, "distance": 0, "radiance": 0}
-        worst_radiance = 0.0
-        examples = []
         for start in range(0, len(requests), MAX_TEXELS_PER_CALL):
             result = c.call("get_radiance_cascades_texels", {"texels": requests[start:start + MAX_TEXELS_PER_CALL]})
             for texel in result["texels"]:
                 texels_by_address[(index, tuple(texel["probe"]), tuple(texel["texel"]))] = texel
-                expected = reference_texel(texel, boxes, lights, ambient)
-                if expected["skip"]:
-                    counts["skipped"] += 1
-                    continue
-                counts["checked"] += 1
-                problem = None
-                measured_miss = texel["beta"] > 0.5
-                if measured_miss != (expected["kind"] == "miss"):
-                    counts["kind"] += 1
-                    problem = "hit/miss"
-                elif (index == 0) and ((texel["signed_distance"] < 0.0) != (expected["kind"] == "back")):
-                    counts["kind"] += 1
-                    problem = "backface"
-                elif (index == 0) and (abs(texel["signed_distance"] - expected["distance"]) > DISTANCE_TOLERANCE):
-                    counts["distance"] += 1
-                    problem = "distance"
-                else:
-                    error = max(abs(texel["radiance"][i] - expected["radiance"][i]) / max(abs(expected["radiance"][i]), RADIANCE_FLOOR)
-                                for i in range(3))
-                    worst_radiance = max(worst_radiance, error)
-                    if error > RADIANCE_TOLERANCE:
-                        counts["radiance"] += 1
-                        problem = f"radiance error {error:.4f}"
-                if (problem is not None) and (len(examples) < 5):
-                    examples.append(f"      {problem}: probe {texel['probe']} texel {texel['texel']} measured "
-                                    f"{texel['radiance']} beta {texel['beta']} d {texel.get('signed_distance')}; "
-                                    f"expected {expected['kind']} {expected['radiance']} d {expected['distance']:.4f}")
+    return texels_by_address
+
+
+def check_station(c, name, merge_modes):
+    boxes, lights, ambient = describe_station(name)
+    rooms.build_station(c, name, ddgi=False)
+    rooms.set_indirect_diffuse(c, "radiance_cascades")
+    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0, "merge_mode": merge_modes[0]})
+    c.settle()
+    rc = wait_sweeps(c, SWEEPS)
+    failures = 0
+    for mode_index, merge_mode in enumerate(merge_modes):
+        if mode_index > 0:
+            # The merge re-runs every update; the visibility pass (if any)
+            # runs on the first update after the switch.
+            c.mutate("set_radiance_cascades", {"merge_mode": merge_mode})
+            rc = wait_updates(c, 3)
+        texels_by_address = read_all_texels(c, rc)
+        if mode_index == 0:
+            failures += check_raw(name, rc, texels_by_address, boxes, lights, ambient)
+        print(f"  {name} merge mode {merge_mode}:", flush=True)
+        failures += check_merge_algebra(name, rc, texels_by_address, ambient)
+        failures += check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambient)
+        stats = c.call("get_indirect_diffuse_stats").get("radiance_cascades", {})
+        gpu_ms = stats.get("gpu_ms", {})
+        print(f"  {name} cost ({merge_mode}): {stats.get('texels')} texels, {stats.get('texels_per_update')} per update; "
+              f"GPU ms average trace {gpu_ms.get('trace', {}).get('average_ms', 0.0):.3f}, "
+              f"merge {gpu_ms.get('merge', {}).get('average_ms', 0.0):.3f} ({stats.get('timing_sample_count')} samples); "
+              f"visibility pass {stats.get('visibility', {}).get('last_ms', 0.0):.3f} ms "
+              f"(runs {stats.get('visibility', {}).get('update_count')})", flush=True)
+    c.mutate("set_radiance_cascades", {"merge_mode": "interpolate"})
+    return failures
+
+
+def check_raw(name, rc, texels_by_address, boxes, lights, ambient):
+    failures = 0
+    for cascade in rc["cascades"]:
+        index = cascade["index"]
+        counts = {"checked": 0, "skipped": 0, "kind": 0, "distance": 0, "radiance": 0}
+        worst_radiance = 0.0
+        examples = []
+        for texel in (t for (i, _, _), t in texels_by_address.items() if i == index):
+            expected = reference_texel(texel, boxes, lights, ambient)
+            if expected["skip"]:
+                counts["skipped"] += 1
+                continue
+            counts["checked"] += 1
+            problem = None
+            measured_miss = texel["beta"] > 0.5
+            if measured_miss != (expected["kind"] == "miss"):
+                counts["kind"] += 1
+                problem = "hit/miss"
+            elif (index == 0) and ((texel["signed_distance"] < 0.0) != (expected["kind"] == "back")):
+                counts["kind"] += 1
+                problem = "backface"
+            elif (index == 0) and (abs(texel["signed_distance"] - expected["distance"]) > DISTANCE_TOLERANCE):
+                counts["distance"] += 1
+                problem = "distance"
+            else:
+                error = max(abs(texel["radiance"][i] - expected["radiance"][i]) / max(abs(expected["radiance"][i]), RADIANCE_FLOOR)
+                            for i in range(3))
+                worst_radiance = max(worst_radiance, error)
+                if error > RADIANCE_TOLERANCE:
+                    counts["radiance"] += 1
+                    problem = f"radiance error {error:.4f}"
+            if (problem is not None) and (len(examples) < 5):
+                examples.append(f"      {problem}: probe {texel['probe']} texel {texel['texel']} measured "
+                                f"{texel['radiance']} beta {texel['beta']} d {texel.get('signed_distance')}; "
+                                f"expected {expected['kind']} {expected['radiance']} d {expected['distance']:.4f}")
         bad = counts["kind"] + counts["distance"] + counts["radiance"]
         failures += bad
         print(f"  {name} cascade {index}: {'PASS' if bad == 0 else 'FAIL'} checked {counts['checked']}, "
@@ -423,13 +476,6 @@ def check_station(c, name):
               f"radiance {counts['radiance']} (worst relative {worst_radiance:.5f})", flush=True)
         for line in examples:
             print(line)
-    failures += check_merge_algebra(name, rc, texels_by_address, ambient)
-    failures += check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambient)
-    stats = c.call("get_indirect_diffuse_stats").get("radiance_cascades", {})
-    gpu_ms = stats.get("gpu_ms", {})
-    print(f"  {name} cost: {stats.get('texels')} texels, {stats.get('texels_per_update')} per update; GPU ms average "
-          f"trace {gpu_ms.get('trace', {}).get('average_ms', 0.0):.3f}, merge {gpu_ms.get('merge', {}).get('average_ms', 0.0):.3f} "
-          f"({stats.get('timing_sample_count')} samples)", flush=True)
     return failures
 
 
@@ -446,7 +492,12 @@ def upper_probe_axis(lower_index, upper_count):
 
 
 def expected_merge(index, texel, rc, texels_by_address, ambient):
-    """rc_merge.comp on the read-back raw / upper merged texels (mask 0)."""
+    """rc_merge.comp on the read-back raw / upper merged texels (mask 0).
+    visibility_masked (the texels carry probe states): upper probes whose
+    segment is blocked (the lower texel's upper_visible_mask) or that are
+    inside geometry (the upper texel's probe_inside) are skipped and the
+    remaining weights renormalized; with none left, upper is (0, 0).
+    interpolate: all 8 with their trilinear weights."""
     raw = texel["radiance"] + [texel["beta"]]
     if index == len(rc["cascades"]) - 1:
         upper = list(ambient) + [1.0]
@@ -455,16 +506,27 @@ def expected_merge(index, texel, rc, texels_by_address, ambient):
         axes = [upper_probe_axis(texel["probe"][a], upper_counts[a]) for a in range(3)]
         u, v = texel["texel"]
         upper = [0.0, 0.0, 0.0, 0.0]
+        weight_sum = 0.0
         for k in range(2):
             for j in range(2):
                 for i in range(2):
                     weight = axes[0][1][i] * axes[1][1][j] * axes[2][1][k]
                     probe = (axes[0][0][i], axes[1][0][j], axes[2][0][k])
+                    if "upper_visible_mask" in texel:  # visibility_masked
+                        visible = (texel["upper_visible_mask"] >> (i + (2 * j) + (4 * k))) & 1
+                        usable = visible and not texels_by_address[(index + 1, probe, (0, 0))]["probe_inside"]
+                    else:  # interpolate
+                        usable = True
+                    if usable:
+                        weight_sum += weight
+                    if not usable:
+                        continue
                     for du, dv in ((0, 0), (1, 0), (0, 1), (1, 1)):
                         child = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
                         value = child["merged_radiance"] + [child["merged_beta"]]
                         for ch in range(4):
                             upper[ch] += weight * 0.25 * value[ch]
+        upper = [x / weight_sum for x in upper] if weight_sum > 0.0 else [0.0, 0.0, 0.0, 0.0]
     return [raw[ch] + (raw[3] * upper[ch]) for ch in range(3)] + [raw[3] * upper[3]]
 
 
@@ -652,6 +714,16 @@ def check_merge_approximation(name, rc, texels_by_address, boxes, lights, ambien
     print(f"      cascade 1 upper probe hidden:       {distribution(occluded_upper)}")
     print(f"      mean hidden upper weight, cascades 1..{cascade_count - 1}: "
           f"{' '.join(f'{w:.2f}' for w in mean_hidden)}")
+    if name == "leak_pair":
+        # Room B (x > shared wall) has no light: whatever it reads is leaked.
+        room_b = [e for e in errors if e[1]["probe_position"][0] > 0.5 * rooms.SHARED_T]
+        if room_b:
+            mean_b_truth = sum(e[2] for e in room_b) / len(room_b)
+            mean_b_merged = sum(e[3] for e in room_b) / len(room_b)
+            worst_b = sorted(room_b, key=lambda e: e[3] - e[2])[-3:]
+            print(f"      room B: {len(room_b)} texels, mean truth {mean_b_truth:.5f}, mean merged {mean_b_merged:.5f} "
+                  f"(room A mean truth {mean_truth:.5f}); largest merged - truth: "
+                  + ", ".join(f"{e[3] - e[2]:.4f} at probe {e[1]['probe']} texel {e[1]['texel']}" for e in worst_b))
     for error, texel, truth, merged in errors[-3:]:
         print(f"      worst {error:.3f}: probe {texel['probe']} at {[round(x, 3) for x in texel['probe_position']]} "
               f"texel {texel['texel']} dir {[round(x, 3) for x in texel['direction']]}: merged {merged:.5f} "
@@ -701,6 +773,8 @@ def check_mask_decomposition(c, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--station", nargs="+", default=list(SUPPORTED), choices=SUPPORTED)
+    parser.add_argument("--merge-mode", nargs="+", default=list(MERGE_MODES), choices=MERGE_MODES,
+                        help="merge modes whose merged checks run (default: both)")
     parser.add_argument("--mask-check", nargs="*", default=["cornell"], choices=SUPPORTED,
                         help="stations for the debug_cascade_mask decomposition check (none: skip)")
     parser.add_argument("--reuse", action="store_true", help="drive the editor already running on --port")
@@ -726,7 +800,7 @@ def main():
         failures = 0
         try:
             for name in args.station:
-                failures += check_station(c, name)
+                failures += check_station(c, name, args.merge_mode)
             for name in args.mask_check:
                 failures += check_mask_decomposition(c, name)
             c.close_all_scenes()

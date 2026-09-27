@@ -4,6 +4,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
+#include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "windows/config_ui.hpp"
@@ -132,10 +133,25 @@ void Radiance_cascades_window::imgui()
             row("total", stats.total);
             ImGui::EndTable();
         }
+        ImGui::Text(
+            "Visibility (on layout / geometry change): %.3f ms, %llu runs",
+            stats.visibility_last_ms,
+            static_cast<unsigned long long>(stats.visibility_update_count)
+        );
         ImGui::Text("Texels (rays) per update: %lld", static_cast<long long>(stats.texels_per_update));
         ImGui::Text("Cost: %.3f ms per million rays", stats.ms_per_million_rays);
         ImGui::Text("Full refresh: %lld updates, %.2f ms", static_cast<long long>(stats.updates_per_full_refresh), stats.full_refresh_ms);
         ImGui::Text("Updates: %llu, full sweeps: %llu", static_cast<unsigned long long>(stats.update_count), static_cast<unsigned long long>(stats.completed_sweeps));
+    }
+
+    // Merge mode (doc/editor/radiance_cascades.md "Merge"): the combo is
+    // the change site; it stores the setting and tells the renderer.
+    {
+        Radiance_cascades_merge_mode mode = m_context.editor_settings->radiance_cascades.merge_mode;
+        if (imgui_enum_combo("Merge mode", mode)) {
+            m_context.editor_settings->radiance_cascades.merge_mode = mode;
+            renderer->set_merge_mode(mode);
+        }
     }
 
     // Debug cascade mask (doc/editor/radiance_cascades.md "Merge"): a

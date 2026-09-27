@@ -2072,6 +2072,7 @@ public:
                     *m_graphics_device.get(),
                     *m_app_context.current_command_buffer,
                     m_app_context,
+                    *m_app_message_bus.get(),
                     *m_program_interface.get(),
                     *m_mesh_memory.get(),
                     m_editor_settings.radiance_cascades,
