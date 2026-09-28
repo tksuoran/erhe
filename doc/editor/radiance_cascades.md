@@ -71,13 +71,14 @@ section, `editor_settings.radiance_cascades`):
 | `interval_scale` | 1.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
 | `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
 | `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced |
+| `direction_jitter` | `none` | `Radiance_cascades_direction_jitter`: `none` traces the texel centre direction, `footprint` a new random point of the texel footprint per trace ("Trace") |
 | `merge_mode` | `per_neighbour_trace` | `Radiance_cascades_merge_mode`: `interpolate`, `visibility_masked` or `per_neighbour_trace` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is the mode that passed the most `gi_verify.py` gates (doc/plans/radiance_cascades.md section 10, "Merge mode default") |
 | `debug_cascade_mask` | 0 | debug bitmask of the merge ("Merge"): bit `i` zeroes cascade `i`'s radiance, bit 12 the sky; not in the Settings window, edited with the Radiance Cascades window's checkboxes |
 
 `Radiance_cascades_config` v2 added `texels_per_frame` and `hysteresis`, v3
-`debug_cascade_mask`, v4 `merge_mode`; an older file reads them as the
-defaults. `per_neighbour_trace` is a later enum value of the same v4
-field, so a v4 file reads any of the three modes.
+`debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter`; an older
+file reads them as the defaults. `per_neighbour_trace` is a later enum
+value of the same v4 field, so a v4 file reads any of the three modes.
 
 The field's sampling parameters (irradiance / distance texels, depth
 sharpness, biases, intensity) are the DDGI settings (`Ddgi_config`, passed
@@ -210,6 +211,16 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   octahedral decode of the texel centre (`get_texel_direction()`, the same
   convention as `erhe_ddgi.glsl`), over the cascade's interval
   `[t_i, t_{i+1}]`: `ray query` with `tmin = t_i`, `tmax = t_{i+1}`.
+- **Direction jitter** (`direction_jitter` `footprint`): the ray instead
+  follows a random point of the texel's footprint in the octahedral
+  parameter, a hash of the texel's global index and a per-update seed
+  (control block `run`), new every time the texel is traced, in every
+  cascade; the hysteresis blend averages the traces into the footprint
+  mean. Without it every trace samples the same centre direction, which
+  aliases whatever a texel's footprint holds besides it - a small emitter,
+  a sunlit patch, a wall edge (measured in
+  [../plans/radiance_cascades.md](../plans/radiance_cascades.md) section
+  10, "Phase 6").
 - **Transport** is DDGI's (`ddgi_trace_ray_segment()` in
   `res/editor/shaders/erhe_ddgi_ray.glsl`, whose `[0, t_max]` form is the
   DDGI probe and reference ray): a front face hit carries `shade_surface()`
@@ -231,8 +242,8 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   `u_n` of the merge stencil (`get_upper_probes()`, shared by the
   shaders through `erhe_rc_upper.glsl`) the segment from the END of the
   texel's interval, `p + t_{i+1} d`, to `u_n`'s interval start
-  `u_n + t_{i+1} d` (`d` the texel's direction; the segment vector is
-  `u_n - p`) is a visibility
+  `u_n + t_{i+1} d` (`d` the direction the raw trace used this update,
+  jittered with it; the segment vector is `u_n - p`) is a visibility
   test: `segment_free()` (`res/shaders/erhe_ray_hit.glsl`), a ray query
   that ends at the first hit of any face and fetches nothing, 1 when the
   segment is free. The 8 visibilities are blended into the texel's 2 x 1
@@ -250,7 +261,11 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   (same texel address as the raw atlas): x the mean distance `d`, y the
   mean `d^2` (`d` the hit distance, front or back face, or `r0` on a miss)
   along the texel's CENTRE direction, and z the backface fraction of the
-  raw traces.
+  raw traces. With direction jitter the centre distance comes from an extra
+  unshaded ray (`trace_closest_from()`): the Chebyshev test needs the
+  distance along one direction, and the spread of a jittered footprint
+  (wall hits mixed with grazing misses) would widen the variance and let
+  light through thin walls.
 - **Trace inputs** are built as for DDGI: the scene root's forward
   `Material_set`, a `Light_buffer` with projections fitted by
   `fit_trace_light_projections()` (`src/editor/renderers/trace_lights.{hpp,cpp}`,
@@ -525,7 +540,8 @@ tick records it, so the copy costs nothing while the window is closed.
   shorthand: true selects DDGI, false returns a DDGI selection to ambient.
 - `set_radiance_cascades {probe_spacing_m, volume_padding_m,
   max_probes_cascade0, max_cascades, cascade0_tile_texels, interval_scale,
-  texels_per_frame, hysteresis, merge_mode, debug_cascade_mask, show_window}` writes the settings (explicit arguments, omitted ones
+  texels_per_frame, hysteresis, merge_mode, debug_cascade_mask,
+  direction_jitter, show_window}` writes the settings (explicit arguments, omitted ones
   unchanged) and returns the layout of the last fit plus the stored
   `config`; the renderer refits on its next tick.
 - `get_indirect_diffuse_stats` reports `source` (the selected value) and a

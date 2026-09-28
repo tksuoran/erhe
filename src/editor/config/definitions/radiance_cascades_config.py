@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Radiance_cascades_config",
     reflect=True,
-    version=4,
+    version=5,
     short_desc="Radiance Cascades",
     long_desc="World-space radiance cascades (doc/editor/radiance_cascades.md): a second producer of the indirect diffuse probe field, selected with the Indirect Diffuse source. Cascade 0 is a probe grid fitted to the padded content bounding box; every next cascade has probes at the centres of 2x2x2 blocks of the one below, doubled octahedral resolution and a doubled radiance interval. The field's sampling parameters (irradiance / distance texels, biases, intensity) are the DDGI settings. Requires GPU ray query support.",
     developer=False,
@@ -123,6 +123,16 @@ struct("Radiance_cascades_config",
             long_desc="How a cascade merges with the cascade above: interpolate blends the 8 surrounding upper probes trilinearly; visibility_masked skips the upper probes the probe cannot see or that sit inside geometry (a visibility pass runs when the layout or the scene geometry changes); per_neighbour_trace traces, per texel, a connecting segment from the probe's interval start to each upper probe's interval start and merges each with that upper probe (up to 8 more rays per texel of every cascade but the top one). Edited with the Radiance Cascades window's combo.",
             visible=False,
             developer=True
+        ),
+        field(
+            "direction_jitter",
+            EnumRef("Radiance_cascades_direction_jitter"),
+            added_in=5,
+            default="Radiance_cascades_direction_jitter::none",
+            short_desc="Direction jitter",
+            long_desc="Where a raw texel's ray points: none traces the octahedral texel centre every time; footprint traces a new random point of the texel footprint every time the texel is traced, and the hysteresis blend averages the traces into the footprint mean (all cascades, and the per_neighbour_trace connecting segments along the same direction).",
+            visible=True,
+            developer=False
         ),
         field(
             "debug_cascade_mask",

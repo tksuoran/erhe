@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "config/generated/ddgi_config.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
+#include "config/generated/radiance_cascades_direction_jitter.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
@@ -244,6 +245,9 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_control_offsets.upper_origin  = m_control_block.add_vec4 ("upper_origin" )->get_offset_in_parent();
     m_control_offsets.upper_spacing = m_control_block.add_vec4 ("upper_spacing")->get_offset_in_parent();
     m_control_offsets.upper_counts  = m_control_block.add_uvec4("upper_counts" )->get_offset_in_parent();
+    // x = the run's first texel in the global order of all cascades, y =
+    // the update's jitter seed, z = Radiance_cascades_direction_jitter
+    m_control_offsets.run           = m_control_block.add_uvec4("run"          )->get_offset_in_parent();
 
     // Stream-1 attribute offsets (in uints) for the shared hit path's manual
     // vertex fetch, derived from the Mesh_memory vertex format exactly as
@@ -1515,6 +1519,11 @@ void Radiance_cascades_renderer::record_trace(
     m_texels_per_update = std::clamp(static_cast<int64_t>(m_config.texels_per_frame), int64_t{1}, total_texels);
     const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
 
+    // One jitter seed per update: every texel gets a new footprint point
+    // each time it is traced (rc_trace.comp).
+    const uint32_t jitter_seed = static_cast<uint32_t>(m_random_engine());
+    const uint32_t jitter_mode = static_cast<uint32_t>(m_config.direction_jitter);
+
     for (int i = 0; i < m_layout.cascade_count; ++i) {
         command_buffer.transition_texture_layout(*m_cascade_textures[static_cast<std::size_t>(i)].raw, Image_layout::general);
     }
@@ -1552,12 +1561,19 @@ void Radiance_cascades_renderer::record_trace(
             // First sweep since the allocation: every texel is new, and its
             // history is the allocation clear, not a trace.
             const uint32_t flags = (m_completed_sweeps > 0) ? c_flag_blend : 0u;
-            m_trace_runs.push_back(
+            // The run's place in the global texel order keys the jitter hash.
+            const Trace_run& run = m_trace_runs.emplace_back(
                 Trace_run{
                     .cascade       = cascade_index,
                     .first_texel   = first_texel,
                     .count         = count,
                     .flags         = flags,
+                    .run           = glm::uvec4{
+                        static_cast<uint32_t>(m_texel_cursor),
+                        jitter_seed,
+                        jitter_mode,
+                        0u
+                    },
                     .needs_barrier = needs_barrier
                 }
             );
@@ -1587,6 +1603,7 @@ void Radiance_cascades_renderer::record_trace(
                 write(gpu_data, m_control_offsets.grid_counts,  as_span(grid_counts ));
                 write(gpu_data, m_control_offsets.dispatch,     as_span(dispatch    ));
                 write(gpu_data, m_control_offsets.params,       as_span(params      ));
+                write(gpu_data, m_control_offsets.run,          as_span(run.run     ));
                 control_range.bytes_written(byte_count);
                 control_range.close();
             }
@@ -1656,9 +1673,11 @@ void Radiance_cascades_renderer::record_neighbour_trace(
         const Scoped_gpu_timer neighbour_timer{*m_pass_timings[static_cast<std::size_t>(Rc_pass::neighbour_trace)].timer, command_buffer};
 
         // The runs of this frame's raw trace (record_trace()), with the same
-        // first-fill flags and the same barrier rule: a second run of a
-        // cascade in one frame is ordered after the first. The top cascade
-        // has no upper cascade and no neighbour atlas.
+        // first-fill flags, the same jitter (so the connecting segments start
+        // at the end of the very ray the raw trace traced) and the same
+        // barrier rule: a second run of a cascade in one frame is ordered
+        // after the first. The top cascade has no upper cascade and no
+        // neighbour atlas.
         for (const Trace_run& run : m_trace_runs) {
             if ((run.cascade + 1) >= m_layout.cascade_count) {
                 continue;
@@ -1706,6 +1725,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
                 write(gpu_data, m_control_offsets.upper_origin,  as_span(upper_origin ));
                 write(gpu_data, m_control_offsets.upper_spacing, as_span(upper_spacing));
                 write(gpu_data, m_control_offsets.upper_counts,  as_span(upper_counts ));
+                write(gpu_data, m_control_offsets.run,           as_span(run.run      ));
                 control_range.bytes_written(byte_count);
                 control_range.close();
             }

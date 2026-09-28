@@ -341,6 +341,7 @@ RC_SETTINGS = {
     "interval_scale":       1.0,
     "texels_per_frame":     65536,
     "hysteresis":           0.9,
+    "direction_jitter":     "none",
     "debug_cascade_mask":   0,
 }
 

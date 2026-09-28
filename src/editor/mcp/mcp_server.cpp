@@ -10,6 +10,7 @@
 #include "config/generated/ddgi_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
+#include "config/generated/radiance_cascades_direction_jitter.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "editor_log.hpp"
@@ -1284,6 +1285,14 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
         if (args.contains("debug_cascade_mask")) {
             config.debug_cascade_mask = std::clamp(args.value("debug_cascade_mask", 0), 0, (1 << (Radiance_cascades_renderer::c_sky_mask_bit + 1)) - 1);
         }
+        if (args.contains("direction_jitter")) {
+            const json& value = args["direction_jitter"];
+            Radiance_cascades_direction_jitter parsed{};
+            if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+                return make_error_content("set_radiance_cascades: 'direction_jitter' must be \"none\" or \"footprint\"");
+            }
+            config.direction_jitter = parsed;
+        }
     }
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
@@ -1301,7 +1310,8 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"texels_per_frame",     config.texels_per_frame},
             {"hysteresis",           config.hysteresis},
             {"debug_cascade_mask",   config.debug_cascade_mask},
-            {"merge_mode",           std::string{to_string(config.merge_mode)}}
+            {"merge_mode",           std::string{to_string(config.merge_mode)}},
+            {"direction_jitter",     std::string{to_string(config.direction_jitter)}}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }

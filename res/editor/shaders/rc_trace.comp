@@ -11,7 +11,11 @@
 // probe_index = x + counts.x * (y + counts.y * z). One thread per texel.
 //
 // Each texel is one direction of one probe: the octahedral decode of the
-// texel centre. The ray covers only the cascade's radiance interval
+// texel centre, or with direction jitter (rc_trace.run.z = 1) of a random
+// point of the texel's footprint in the octahedral parameter, new every
+// time the texel is traced (a hash of the texel and the update's seed,
+// rc_trace.run.y), so the hysteresis blend averages the traces into the
+// footprint mean. The ray covers only the cascade's radiance interval
 // [t_i, t_{i+1}] from the probe centre, and its result is a radiance
 // interval (rgb radiance, a transparency beta):
 //  - front face hit: the shared DDGI ray transport (erhe_ddgi_ray.glsl,
@@ -25,7 +29,8 @@
 // hit distance statistics into the cascade 0 distance texture (RGBA32F,
 // same texel layout as the raw atlas) with the same hysteresis:
 // x = mean distance d, y = mean d^2 along the texel's centre direction
-// (d = the hit distance, front or back face, or t_{1} = r0 on a miss), and
+// (d = the hit distance, front or back face, or t_{1} = r0 on a miss; with
+// direction jitter an extra unshaded ray along the centre direction), and
 // z = the backface fraction of the raw traces. The upper cascade variant
 // does not reference the distance texture, so its dispatches are no writes
 // of it.
@@ -36,7 +41,8 @@
 // upper probes u_n of this probe (erhe_rc_upper.glsl, the merge's
 // stencil) the segment from the END of this texel's interval,
 // p + t_{i+1} d, to u_n's interval start u_n + t_{i+1} d (d the texel's
-// direction; the segment vector is u_n - p for every direction). The
+// direction of this update, jittered like the raw ray; the segment vector
+// is u_n - p for every direction). The
 // segment is a visibility test, not a radiance interval: 1 when nothing
 // lies on it, 0 when anything does (segment_free()). The raw interval
 // itself stays the ray along d, so the merge never bends the texel's
@@ -62,6 +68,20 @@ layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
 
 // rc_trace.dispatch.w flags
 const uint c_flag_blend = 1u; // blend with the texel's history
+
+// rc_trace.run.z direction jitter modes (Radiance_cascades_direction_jitter)
+const uint c_jitter_footprint = 1u;
+
+// Integer hash (low bias, "lowbias32"): the per-texel, per-update jitter.
+uint rc_hash(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
 
 // Octahedral decode, [-1, 1]^2 -> unit direction. Same convention as
 // octahedral_decode() in src/editor/renderers/radiance_cascades_layout.cpp
@@ -104,8 +124,17 @@ void main()
         int(((probe_index / tiles_per_row) * q) + uv.y)
     );
 
+    // The texel's index in the global order of all cascades, which the
+    // jitter hash is keyed on.
+    uint  global_texel   = rc_trace.run.x + slot;
+    vec2  offset         = vec2(0.5);
+    if (rc_trace.run.z == c_jitter_footprint) {
+        uint h0 = rc_hash(global_texel + (rc_trace.run.y * 0x9e3779b9u));
+        uint h1 = rc_hash(h0 ^ 0x85ebca6bu);
+        offset  = vec2(float(h0 >> 8), float(h1 >> 8)) * (1.0 / 16777216.0);
+    }
     vec3  probe_position = rc_trace.grid_origin.xyz + (vec3(coords) * rc_trace.grid_spacing.xyz);
-    vec2  f              = (((vec2(uv) + vec2(0.5)) / float(q)) * 2.0) - vec2(1.0);
+    vec2  f              = (((vec2(uv) + offset) / float(q)) * 2.0) - vec2(1.0);
     vec3  direction      = rc_octahedral_decode(f);
     float t_start        = rc_trace.grid_origin.w;
     float t_end          = rc_trace.grid_spacing.w;
@@ -120,7 +149,7 @@ void main()
     rc_upper_axis(int(coords.y), int(counts.y), upper_counts.y, iy, wy);
     rc_upper_axis(int(coords.z), int(counts.z), upper_counts.z, iz, wz);
     // The segments leave the end of the very ray the raw trace traced this
-    // update.
+    // update (the jittered direction with direction jitter).
     vec3 segment_start = probe_position + (t_end * direction);
     vec4 visibility[2] = vec4[2](vec4(0.0), vec4(0.0));
     for (int k = 0; k < 2; ++k) {
@@ -158,9 +187,19 @@ void main()
     imageStore(i_rc_raw, atlas_texel, traced);
 
 #if ERHE_RC_TRACE_WRITE_DISTANCE
-    // The distance moments feed the Chebyshev visibility test; the
-    // backface fraction weights the texel in the reduce.
+    // The distance moments feed the Chebyshev visibility test, which needs
+    // the distance along one direction, not the spread over a whole texel
+    // footprint (a jittered footprint mixes wall hits with grazing misses,
+    // and the variance lets light through thin walls). So they come from
+    // the texel's centre direction: the raw ray itself without jitter, an
+    // extra unshaded centre ray with it. The backface fraction is the raw
+    // traces' own (the reduce normalizes their radiance with it).
     float centre_distance = hit ? abs(ray.a) : t_end;
+    if (rc_trace.run.z == c_jitter_footprint) {
+        vec3        centre_direction = rc_octahedral_decode((((vec2(uv) + vec2(0.5)) / float(q)) * 2.0) - vec2(1.0));
+        Hit_surface centre_surface;
+        centre_distance = trace_closest_from(probe_position, centre_direction, t_start, t_end, centre_surface) ? centre_surface.hit_t : t_end;
+    }
     vec4 statistics = vec4(centre_distance, centre_distance * centre_distance, (hit && (ray.a < 0.0)) ? 1.0 : 0.0, 0.0);
     if (hysteresis > 0.0) {
         statistics = mix(statistics, imageLoad(i_rc_distance, atlas_texel), hysteresis);

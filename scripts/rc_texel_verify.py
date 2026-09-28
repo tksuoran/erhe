@@ -100,6 +100,8 @@ readback (every texel carries its merged value too):
 
 Supported stations: cornell, emissive_only, courtyard, leak_pair, corridor
 (the ones whose parts are exactly room() boxes, panels and analytic lights).
+Every check runs with direction jitter none (pinned by the script): the
+exact checks compare the texel-centre direction's trace.
 
 Usage:
     py -3 scripts/rc_texel_verify.py [--station NAME ...] [--merge-mode MODE ...] [--mask-check NAME ...]
@@ -472,7 +474,8 @@ def check_station(c, name, merge_modes):
     boxes, lights, ambient = describe_station(name)
     rooms.build_station(c, name, ddgi=False)
     rooms.set_indirect_diffuse(c, "radiance_cascades")
-    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0, "merge_mode": merge_modes[0]})
+    c.mutate("set_radiance_cascades", {"debug_cascade_mask": 0, "merge_mode": merge_modes[0],
+                                       "direction_jitter": "none"})
     c.settle()
     rc = wait_sweeps(c, SWEEPS)
     failures = 0

@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <random>
 #include <vector>
 
 namespace erhe::graphics {
@@ -445,11 +446,12 @@ private:
     class Trace_run
     {
     public:
-        int      cascade      {0};
-        int64_t  first_texel  {0};
-        int64_t  count        {0};
-        uint32_t flags        {0};     // rc_trace.comp dispatch.w flags of the run
-        bool     needs_barrier{false}; // a run of the same cascade precedes it this frame
+        int        cascade      {0};
+        int64_t    first_texel  {0};
+        int64_t    count        {0};
+        uint32_t   flags        {0};     // rc_trace.comp dispatch.w flags of the run
+        glm::uvec4 run          {0u};    // rc_trace.run: global first texel, jitter seed, jitter mode
+        bool       needs_barrier{false}; // a run of the same cascade precedes it this frame
     };
     std::vector<Trace_run>                                    m_trace_runs;
     std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
@@ -471,8 +473,11 @@ private:
         std::size_t upper_origin {0};
         std::size_t upper_spacing{0};
         std::size_t upper_counts {0};
+        std::size_t run          {0};
     };
     Control_offsets m_control_offsets{};
+    // Per-update direction jitter seed (Radiance_cascades_direction_jitter).
+    std::mt19937                                              m_random_engine{0x5eed5eedu};
 
     // Merge (rc_merge.comp): its own control block and layout, the shared
     // control ring buffer. The raw atlas and the upper merged atlas are

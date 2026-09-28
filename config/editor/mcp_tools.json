@@ -4231,6 +4231,10 @@
           "description": "Debug bitmask, [0, 8191]: bit i zeroes cascade i's radiance in the merge (its transparency is kept), bit 12 zeroes the sky beyond the top cascade; 0 merges everything; omit to leave unchanged",
           "type": "integer"
         },
+        "direction_jitter": {
+          "description": "\"none\" (every trace of a raw texel follows its octahedral texel centre) or \"footprint\" (a new random point of the texel footprint per trace, averaged by the hysteresis blend; all cascades and the per_neighbour_trace connecting segments); omit to leave unchanged",
+          "type": "string"
+        },
         "show_window": {
           "description": "Also show the Radiance Cascades window (default false)",
           "type": "boolean"
