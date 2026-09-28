@@ -5,6 +5,7 @@
 #include "renderers/probe_grid.hpp"
 #include "renderers/radiance_cascades_layout.hpp"
 #include "renderers/scene_tlas.hpp"
+#include "renderable.hpp"
 
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -43,6 +44,7 @@ namespace erhe::scene_renderer {
 struct Ddgi_config;
 struct Radiance_cascades_config;
 enum class Radiance_cascades_merge_mode : unsigned int;
+enum class Radiance_cascades_probe_overlay : unsigned int;
 
 namespace editor {
 
@@ -85,6 +87,15 @@ enum class Rc_pass : unsigned int
 };
 constexpr std::size_t c_rc_pass_count = 4;
 
+// State of one probe in the probe overlay
+// (Radiance_cascades_config::debug_draw_probes).
+enum class Rc_probe_overlay_state : unsigned int
+{
+    unclassified = 0, // no classification copied for this cascade (upper cascades outside visibility_masked)
+    active       = 1,
+    inside       = 2  // inside geometry: cascade 0 classification, or the visibility_masked inside bit
+};
+
 // World-space radiance cascades (doc/editor/radiance_cascades.md,
 // doc/plans/radiance_cascades.md): the second producer of the indirect
 // diffuse probe field, next to Ddgi_renderer.
@@ -100,7 +111,10 @@ constexpr std::size_t c_rc_pass_count = 4;
 //
 // Requires Device_info::use_ray_query; is_supported() is false otherwise and
 // tick() does nothing.
-class Radiance_cascades_renderer
+//
+// Also a Renderable: the probe overlay (Radiance_cascades_config::
+// debug_draw_probes) draws the probes of one cascade in the viewports.
+class Radiance_cascades_renderer : public Renderable
 {
 public:
     // The two atlases of one cascade (RGBA16F, rgb radiance, a transparency
@@ -169,6 +183,21 @@ public:
         double    visibility_last_ms      {0.0};
         uint64_t  visibility_update_count {0};   // visibility pass runs since construction
         uint64_t  history_reset_count     {0};   // temporal history resets (allocations and change messages)
+        uint64_t  probe_overlay_readback_count{0}; // probe overlay copies recorded (only while the overlay is on)
+    };
+
+    // The probe overlay's most recent retired copy: which cascade it shows
+    // and how its probes classified.
+    class Probe_overlay_summary
+    {
+    public:
+        int      cascade     {-1}; // -1: no copy retired since the overlay was enabled or the layout changed
+        int      probe_count {0};
+        int      active      {0};
+        int      inside      {0};
+        int      unclassified{0};
+        bool     irradiance  {false}; // the copy holds the merged irradiance toward +Y
+        uint64_t update_count{0};     // updates when copied
     };
 
     // Per-cascade summary of a texel readback (the probe texels only, not
@@ -320,6 +349,14 @@ public:
     // source. Must be called outside a render pass.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
+    // Implements Renderable: the probe overlay (doc/editor/radiance_cascades.md
+    // "Probe overlay"). Draws, in the CPU phase only, the volume box and one
+    // wire sphere per probe of the chosen cascade coloured by its state from
+    // the last retired overlay copy, plus with state_and_irradiance a short
+    // line toward +Y coloured by the probe's merged irradiance toward +Y.
+    void render(const Render_context& context) override;
+    [[nodiscard]] auto get_probe_overlay_summary() const -> const Probe_overlay_summary&;
+
 private:
     // Refits + reallocates when needed. Returns false when there is no
     // usable volume this tick.
@@ -376,6 +413,13 @@ private:
     // Copies every raw and merged atlas and the distance texture into the
     // readback buffer (request_texel_readback()).
     void record_texel_readback(erhe::graphics::Command_buffer& command_buffer);
+    // Probe overlay: copies the chosen cascade's probe states (cascade 0:
+    // the field probe data, visibility_masked: the state texture) and, with
+    // state_and_irradiance, its merged atlas into the overlay buffer;
+    // poll_probe_overlay() turns a retired copy into m_overlay_probes.
+    // Returns true when a copy was recorded.
+    [[nodiscard]] auto record_probe_overlay_readback(erhe::graphics::Command_buffer& command_buffer, Radiance_cascades_probe_overlay mode) -> bool;
+    void poll_probe_overlay           ();
     // One RGBA16F texel of the snapshot atlas copied at atlas_offset.
     [[nodiscard]] auto read_radiance_texel(std::size_t atlas_offset, int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
 
@@ -656,6 +700,49 @@ private:
     std::size_t                                              m_readback_byte_count{0};
     std::vector<std::byte>                                   m_readback_snapshot;
     std::array<Cascade_summary, c_max_radiance_cascades>     m_readback_summaries{};
+
+    // Probe overlay (debug_draw_probes). One copy in flight at a time, at
+    // most one per c_probe_overlay_interval_frames, recorded only while the
+    // overlay is on; the buffer is released when it is turned off.
+    class Probe_overlay_copy
+    {
+    public:
+        int              cascade           {0};
+        Radiance_cascade layout_cascade    {};
+        bool             has_state         {false}; // visibility_masked state texture
+        bool             has_probe_data    {false}; // cascade 0: field probe data (classification)
+        bool             has_merged        {false}; // state_and_irradiance: the merged atlas
+        std::size_t      state_offset      {0};
+        std::size_t      probe_data_offset {0};
+        std::size_t      merged_offset     {0};
+        int              merged_block      {1};     // cascade 0 merged atlas: c_merged_cascade0_block per axis
+        int              probe_data_width  {0};
+        int              field_tiles_per_row{0};
+        std::size_t      byte_count        {0};
+        uint64_t         update_count      {0};
+    };
+    class Probe_overlay_probe
+    {
+    public:
+        Rc_probe_overlay_state state     {Rc_probe_overlay_state::unclassified};
+        glm::vec3              irradiance{0.0f}; // cosine-weighted mean merged radiance toward +Y
+    };
+    std::unique_ptr<erhe::graphics::Buffer>                  m_overlay_buffer;
+    bool                                                     m_overlay_in_flight{false};
+    uint64_t                                                 m_overlay_frame    {0};
+    uint64_t                                                 m_overlay_next_frame{0};
+    uint64_t                                                 m_overlay_readback_count{0};
+    Probe_overlay_copy                                       m_overlay_copy{};
+    // Result of the last retired copy; drawn while its grid is the chosen
+    // cascade's current grid.
+    Probe_grid                                               m_overlay_grid{};
+    float                                                    m_overlay_irradiance_max{0.0f};
+    Probe_overlay_summary                                    m_overlay_summary{};
+    std::vector<Probe_overlay_probe>                         m_overlay_probes;       // cleared per retired copy, capacity kept
+    // Per texel of a tile of m_overlay_weights_tile_texels: max(0, direction.y)
+    // x solid angle, recomputed only when the tile side changes.
+    std::vector<float>                                       m_overlay_weights;
+    int                                                      m_overlay_weights_tile_texels{0};
 };
 
 } // namespace editor

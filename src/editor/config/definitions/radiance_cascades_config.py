@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Radiance_cascades_config",
     reflect=True,
-    version=5,
+    version=6,
     short_desc="Radiance Cascades",
     long_desc="World-space radiance cascades (doc/editor/radiance_cascades.md): a second producer of the indirect diffuse probe field, selected with the Indirect Diffuse source. Cascade 0 is a probe grid fitted to the padded content bounding box; every next cascade has probes at the centres of 2x2x2 blocks of the one below, doubled octahedral resolution and a doubled radiance interval. The field's sampling parameters (irradiance / distance texels, biases, intensity) are the DDGI settings. Requires GPU ray query support.",
     developer=False,
@@ -157,6 +157,30 @@ struct("Radiance_cascades_config",
             ui_max="8191",
             hard_min="0",
             hard_max="8191"
+        ),
+        field(
+            "debug_draw_probes",
+            EnumRef("Radiance_cascades_probe_overlay"),
+            added_in=6,
+            default="Radiance_cascades_probe_overlay::none",
+            short_desc="Draw probes",
+            long_desc="Debug overlay of the probes of one cascade (debug_draw_cascade) in the viewports: a wire sphere per probe coloured by its state (active, inside geometry, or unclassified), optionally with a short line toward +Y coloured by the probe's merged irradiance toward +Y. The data is copied back from the GPU periodically, only while the overlay is on. Edited with the Radiance Cascades window.",
+            visible=False,
+            developer=True
+        ),
+        field(
+            "debug_draw_cascade",
+            Int,
+            added_in=6,
+            default="0",
+            short_desc="Draw probes cascade",
+            long_desc="Cascade whose probes the probe overlay draws; clamped to the fitted cascade count. Edited with the Radiance Cascades window.",
+            visible=False,
+            developer=True,
+            ui_min="0",
+            ui_max="11",
+            hard_min="0",
+            hard_max="11"
         ),
     ],
 )

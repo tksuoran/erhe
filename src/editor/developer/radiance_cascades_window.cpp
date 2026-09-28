@@ -5,6 +5,7 @@
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
+#include "config/generated/radiance_cascades_probe_overlay.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "windows/config_ui.hpp"
@@ -191,6 +192,30 @@ void Radiance_cascades_window::imgui()
         }
         if ((mask != 0) && ImGui::Button("Show all")) {
             mask = 0;
+        }
+    }
+
+    // Probe overlay (doc/editor/radiance_cascades.md "Probe overlay"): the
+    // renderer draws it in the viewports and reads both settings on its next
+    // tick; it copies probe data back only while the overlay is on.
+    if (ImGui::CollapsingHeader("Probe overlay")) {
+        Radiance_cascades_config& config = m_context.editor_settings->radiance_cascades;
+        imgui_enum_combo("Draw probes", config.debug_draw_probes);
+        config.debug_draw_cascade = std::clamp(config.debug_draw_cascade, 0, std::max(0, layout.cascade_count - 1));
+        ImGui::SliderInt("Overlay cascade", &config.debug_draw_cascade, 0, std::max(0, layout.cascade_count - 1));
+        ImGui::TextUnformatted("Green active, red inside geometry (cascade 0: field classification; visibility_masked: inside bit), grey unclassified.");
+        ImGui::TextUnformatted("Irradiance: the line toward +Y, normalized by the brightest probe.");
+        const Radiance_cascades_renderer::Probe_overlay_summary& overlay = renderer->get_probe_overlay_summary();
+        if (overlay.cascade >= 0) {
+            ImGui::Text(
+                "Cascade %d: %d probes, %d active, %d inside, %d unclassified (copied at update %llu)",
+                overlay.cascade,
+                overlay.probe_count,
+                overlay.active,
+                overlay.inside,
+                overlay.unclassified,
+                static_cast<unsigned long long>(overlay.update_count)
+            );
         }
     }
 

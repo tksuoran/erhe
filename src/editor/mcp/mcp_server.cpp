@@ -12,6 +12,7 @@
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_direction_jitter.hpp"
+#include "config/generated/radiance_cascades_probe_overlay.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "editor_log.hpp"
@@ -1145,6 +1146,19 @@ namespace {
         });
     }
     const Radiance_cascades_renderer::Stats stats = renderer.get_stats();
+    // The probe overlay's last retired copy (doc/editor/radiance_cascades.md
+    // "Probe overlay"); readback_count stays put while the overlay is off.
+    const Radiance_cascades_renderer::Probe_overlay_summary& overlay = renderer.get_probe_overlay_summary();
+    const json probe_overlay = json{
+        {"readback_count", stats.probe_overlay_readback_count},
+        {"cascade",        overlay.cascade},
+        {"probe_count",    overlay.probe_count},
+        {"active",         overlay.active},
+        {"inside",         overlay.inside},
+        {"unclassified",   overlay.unclassified},
+        {"irradiance",     overlay.irradiance},
+        {"update_count",   overlay.update_count}
+    };
     const auto pass_time_json = [](const Radiance_cascades_renderer::Pass_time& time) -> json {
         return json{
             {"last_ms",    time.last_ms},
@@ -1197,6 +1211,7 @@ namespace {
         {"full_refresh_ms",          stats.full_refresh_ms},
         {"visibility",               json{{"last_ms", stats.visibility_last_ms}, {"update_count", stats.visibility_update_count}}},
         {"history_reset_count",      stats.history_reset_count},
+        {"probe_overlay",            probe_overlay},
         {"field",                    field}
     };
 }
@@ -1312,6 +1327,17 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             }
             config.bounces = parsed;
         }
+        if (args.contains("debug_draw_probes")) {
+            const json& value = args["debug_draw_probes"];
+            Radiance_cascades_probe_overlay parsed{};
+            if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+                return make_error_content("set_radiance_cascades: 'debug_draw_probes' must be \"none\", \"state\" or \"state_and_irradiance\"");
+            }
+            config.debug_draw_probes = parsed;
+        }
+        if (args.contains("debug_draw_cascade")) {
+            config.debug_draw_cascade = std::clamp(args.value("debug_draw_cascade", 0), 0, c_max_radiance_cascades - 1);
+        }
     }
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
@@ -1331,7 +1357,9 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"debug_cascade_mask",   config.debug_cascade_mask},
             {"merge_mode",           std::string{to_string(config.merge_mode)}},
             {"direction_jitter",     std::string{to_string(config.direction_jitter)}},
-            {"bounces",              std::string{to_string(config.bounces)}}
+            {"bounces",              std::string{to_string(config.bounces)}},
+            {"debug_draw_probes",    std::string{to_string(config.debug_draw_probes)}},
+            {"debug_draw_cascade",   config.debug_draw_cascade}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }

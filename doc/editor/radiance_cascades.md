@@ -3,12 +3,13 @@
 Stability: experimental
 
 World-space radiance cascades are the second producer of the runtime indirect
-diffuse probe field, next to DDGI ([ddgi.md](ddgi.md)). The design and the
-remaining phases are in
+diffuse probe field, next to DDGI ([ddgi.md](ddgi.md)). The design, its
+measurements and the remaining work are in
 [../plans/radiance_cascades.md](../plans/radiance_cascades.md); this document
 describes what exists: the source selection, the cascade layout and its
 atlases, the interval trace, the merge, the reduce into the probe field
-the forward pass samples, the developer window and the MCP tools.
+the forward pass samples, the probe overlay, the developer window and the
+MCP tools.
 
 The feature requires GPU ray query (`Device_info::use_ray_query`), like DDGI;
 without it `Radiance_cascades_renderer::is_supported()` is false and its tick
@@ -75,9 +76,12 @@ section, `editor_settings.radiance_cascades`):
 | `bounces` | `single` | `Indirect_diffuse_bounces` (shared with DDGI): `single`, or `multi` - hits also sample the previous field ("Trace") |
 | `merge_mode` | `per_neighbour_trace` | `Radiance_cascades_merge_mode`: `interpolate`, `visibility_masked` or `per_neighbour_trace` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is the mode that passed the most `gi_verify.py` gates (doc/plans/radiance_cascades.md section 10, "Merge mode default") |
 | `debug_cascade_mask` | 0 | debug bitmask of the merge ("Merge"): bit `i` zeroes cascade `i`'s radiance, bit 12 the sky; not in the Settings window, edited with the Radiance Cascades window's checkboxes |
+| `debug_draw_probes` | `none` | `Radiance_cascades_probe_overlay`: `none`, `state` or `state_and_irradiance` ("Probe overlay"); not in the Settings window, edited with the Radiance Cascades window and MCP `set_radiance_cascades` |
+| `debug_draw_cascade` | 0 | the cascade the probe overlay draws, clamped to the fitted cascade count; edited like `debug_draw_probes` |
 
 `Radiance_cascades_config` v2 added `texels_per_frame` and `hysteresis`, v3
-`debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter` and `bounces`;
+`debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter` and `bounces`,
+v6 `debug_draw_probes` and `debug_draw_cascade`;
 an older file reads them as the defaults. `per_neighbour_trace` is a later
 enum value of the same v4 field, so a v4 file reads any of the three modes.
 The defaults of `probe_spacing_m`, `cascade0_tile_texels`,
@@ -535,6 +539,41 @@ it with `erhe_ddgi.glsl` unchanged.
 - **Timing**: its own `Gpu_timer` (`RC reduce`), the `reduce` pass of
   `get_stats()`, included in the total and the cost figures.
 
+## Probe overlay
+
+`Radiance_cascades_renderer` is a `Renderable`, registered with
+`App_rendering` next to `Ddgi_renderer` in `editor.cpp`: while radiance
+cascades are active and `debug_draw_probes` is not `none`, `render()`
+draws into every viewport the box of cascade `debug_draw_cascade`'s probes
+and one wire sphere per probe of it (radius 0.06 of its smallest spacing),
+in the CPU phase only ([ddgi.md](ddgi.md) "Traps"). It is an editor aid:
+`render_scene_image` does not draw renderables, so only
+`capture_screenshot` (and the windows) show it.
+
+- **State colour**: green active, red inside geometry, grey unclassified.
+  Cascade 0 is classified by the field probe data (the reduce's
+  classification, "Reduce"); any cascade by the inside bit of its probe
+  state texture in the `visibility_masked` merge mode ("Merge"); a probe
+  counts as inside when either says so. The upper cascades of the other
+  merge modes have no classification and draw grey.
+- **Irradiance** (`state_and_irradiance`): a short thick line from each
+  probe toward +Y in the colour of its merged irradiance toward +Y - the
+  mean of the cascade's merged tile (cascade 0: its child resolution
+  tile) weighted with `max(0, w.y)` times each texel's solid angle, the
+  cosine-weighted mean radiance the irradiance atlas stores - normalized
+  by the brightest channel over the cascade's probes of the copy, so the
+  lines show relative brightness and colour bleeding.
+- **Readback**: the tick records a copy of what the chosen mode needs -
+  the cascade's probe state texture, cascade 0's field probe data, and
+  with `state_and_irradiance` the cascade's merged atlas - into one
+  host-visible buffer after the reduce, at most one copy in flight and
+  at most one every 10 frames (`c_probe_overlay_interval_frames`), and
+  reduces a retired copy on the CPU into a per-probe list (capacity kept).
+  A copy is drawn only while its grid is the chosen cascade's current
+  grid, so after a refit or a cascade change the probes draw grey until the
+  next copy retires. With `none` nothing is copied and the buffer is
+  released; `probe_overlay.readback_count` of the MCP stats stays put.
+
 ## Radiance Cascades window
 
 The developer window `Radiance_cascades_window`
@@ -551,7 +590,8 @@ atlas preview of a chosen cascade, atlas (raw or merged) and channel
 (radiance with a scale, beta, or cascade 0 distance statistics - green
 front face, red backface (backface fraction above one half), brightness
 the mean distance / `r0`); cascade 0's merged atlas shows its child
-resolution.
+resolution; and the probe overlay's mode and cascade with the counts of
+the last copy ("Probe overlay").
 
 The atlases carry beta in alpha, which the ImGui image widget would use as
 opacity (every hit texel would vanish), so the preview is an opaque copy
@@ -569,7 +609,8 @@ tick records it, so the copy costs nothing while the window is closed.
 - `set_radiance_cascades {probe_spacing_m, volume_padding_m,
   max_probes_cascade0, max_cascades, cascade0_tile_texels, interval_scale,
   texels_per_frame, hysteresis, merge_mode, debug_cascade_mask,
-  direction_jitter, bounces, show_window}` writes the settings (explicit arguments, omitted ones
+  direction_jitter, bounces, debug_draw_probes, debug_draw_cascade,
+  show_window}` writes the settings (explicit arguments, omitted ones
   unchanged) and returns the layout of the last fit plus the stored
   `config`; the renderer refits on its next tick.
 - `get_indirect_diffuse_stats` reports `source` (the selected value) and a
@@ -587,8 +628,11 @@ tick records it, so the copy costs nothing while the window is closed.
   `{trace, neighbour_trace, merge, reduce}` and `gpu_ms_total` (their
   sum; each `last_ms`, `average_ms`), `timing_history_size`, `ms_per_million_rays`,
   `updates_per_full_refresh` and `full_refresh_ms`, `visibility`
-  `{last_ms, update_count}` (the visibility pass, "Merge") and
-  `history_reset_count` - the fields
+  `{last_ms, update_count}` (the visibility pass, "Merge"),
+  `history_reset_count` and `probe_overlay` `{readback_count, cascade,
+  probe_count, active, inside, unclassified, irradiance, update_count}`
+  (the last retired overlay copy, `cascade` -1 without one; "Probe
+  overlay") - the fields
   `scripts/gi_verify.py` reads for both sources.
 - `get_radiance_cascades_texels {texels}` reads raw and merged texels back,
   on request only: it asks `Radiance_cascades_renderer::request_texel_readback()`
@@ -702,6 +746,14 @@ All checks below ran at the defaults of "Settings" (`s0` 1.5 m, `q0` 8,
   a `cornell` `rc_texel_verify.py` run through all three merge modes and
   the mask check report no validation error and no warning naming the
   indirect diffuse resources.
+- Probe overlay: on `cornell` and `probe_offset_sweep`, 60 updates with
+  the overlay off record no copy; `state` on cascade 0 classifies 125 / 125
+  `cornell` probes active and 47 of 600 `probe_offset_sweep` probes inside, cascade 1 draws
+  grey outside `visibility_masked` and classifies there (`probe_offset_sweep`
+  2 of 96 inside); `state_and_irradiance` shows red lines at the red wall,
+  green at the green wall and white over the lit floor of `cornell`
+  (`capture_screenshot`); `render_scene_image` of the same view shows no
+  overlay; Vulkan validation reports no error through all modes.
 - `editor_renderer_tests`: cascade fit (cascade 0 counts and spacing, nesting
   of the upper grids, cascade count and `max_cascades`, probe budget, atlas
   size limit, tile placement, the neighbour atlas block and cascade 0's

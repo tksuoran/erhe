@@ -7,8 +7,10 @@
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_direction_jitter.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
+#include "config/generated/radiance_cascades_probe_overlay.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
+#include "renderers/render_context.hpp"
 #include "renderers/trace_lights.hpp"
 #include "scene/scene_root.hpp"
 
@@ -28,6 +30,8 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
@@ -141,6 +145,11 @@ constexpr int64_t c_max_texels_per_dispatch = int64_t{65535} * c_trace_workgroup
 // Readback buffer offsets are rounded up to this (a multiple of every texel
 // size and of every nonCoherentAtomSize the Vulkan spec allows).
 constexpr std::size_t c_readback_alignment = 256;
+
+// Probe overlay: frames between two overlay copies (the copy of a large
+// cascade's merged atlas and its CPU reduction are not free, and the
+// overlay is a debug aid that need not follow every update).
+constexpr uint64_t c_probe_overlay_interval_frames = 10;
 
 [[nodiscard]] auto round_up(const std::size_t value, const std::size_t multiple) -> std::size_t
 {
@@ -1088,6 +1097,7 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
     stats.visibility_last_ms      = static_cast<double>(m_visibility_last_ns) * 1.0e-6;
     stats.visibility_update_count = m_visibility_update_count;
     stats.history_reset_count     = m_history.get_reset_count();
+    stats.probe_overlay_readback_count = m_overlay_readback_count;
     return stats;
 }
 
@@ -2499,6 +2509,19 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     if (!is_supported() || !is_selected()) {
         return;
     }
+    // Probe overlay: take a retired copy; when the overlay is off, release
+    // its buffer once no copy is in flight (nothing is copied while off).
+    poll_probe_overlay();
+    const Radiance_cascades_probe_overlay overlay_mode = m_config.debug_draw_probes;
+    if (
+        (overlay_mode == Radiance_cascades_probe_overlay::none) &&
+        !m_overlay_in_flight &&
+        (m_overlay_buffer || (m_overlay_summary.cascade >= 0))
+    ) {
+        m_overlay_buffer.reset();
+        m_overlay_summary = Probe_overlay_summary{};
+        m_overlay_probes.clear();
+    }
     if (!update_layout(command_buffer, scene_root)) {
         return;
     }
@@ -2570,10 +2593,316 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
         m_preview_requested = false;
         record_preview(command_buffer);
     }
+    bool recorded_readback = false;
     if (m_readback_state == Rc_readback_state::requested) {
         record_texel_readback(command_buffer);
+        recorded_readback = true;
+    }
+    if (
+        (overlay_mode != Radiance_cascades_probe_overlay::none) &&
+        !m_overlay_in_flight &&
+        (m_graphics_device.get_frame_index() >= m_overlay_next_frame)
+    ) {
+        recorded_readback = record_probe_overlay_readback(command_buffer, overlay_mode) || recorded_readback;
+    }
+    if (recorded_readback) {
         // Transfer writes -> host reads once the frame's fence has signalled.
         command_buffer.memory_barrier(Memory_barrier_mask::client_mapped_buffer_barrier_bit);
+    }
+}
+
+auto Radiance_cascades_renderer::record_probe_overlay_readback(
+    erhe::graphics::Command_buffer&       command_buffer,
+    const Radiance_cascades_probe_overlay mode
+) -> bool
+{
+    using namespace erhe::graphics;
+
+    const int               cascade_index = std::clamp(m_config.debug_draw_cascade, 0, m_layout.cascade_count - 1);
+    const Radiance_cascade& cascade       = m_layout.cascades[static_cast<std::size_t>(cascade_index)];
+    const Cascade_textures& textures      = m_cascade_textures[static_cast<std::size_t>(cascade_index)];
+    m_overlay_next_frame = m_graphics_device.get_frame_index() + c_probe_overlay_interval_frames;
+
+    // Layout of the copy: the cascade's probe state texture (visibility_masked
+    // mode), the field probe data (cascade 0: the reduce's classification),
+    // the cascade's merged atlas (state_and_irradiance), each at an aligned
+    // offset, tightly packed rows.
+    Probe_overlay_copy copy{};
+    copy.cascade        = cascade_index;
+    copy.layout_cascade = cascade;
+    copy.update_count   = m_update_count;
+    copy.has_state      = static_cast<bool>(textures.state);
+    copy.has_probe_data = (cascade_index == 0) && static_cast<bool>(m_field_probe_data);
+    copy.has_merged     = (mode == Radiance_cascades_probe_overlay::state_and_irradiance) && static_cast<bool>(textures.merged);
+    copy.merged_block   = (cascade_index == 0) ? c_merged_cascade0_block : 1;
+    const auto texture_bytes = [](const Texture& texture, const erhe::dataformat::Format format) -> std::size_t {
+        return static_cast<std::size_t>(texture.get_width()) * static_cast<std::size_t>(texture.get_height()) * erhe::dataformat::get_format_size_bytes(format);
+    };
+    std::size_t offset = 0;
+    if (copy.has_state) {
+        copy.state_offset = offset;
+        offset = round_up(offset + texture_bytes(*textures.state, c_state_format), c_readback_alignment);
+    }
+    if (copy.has_probe_data) {
+        copy.probe_data_offset   = offset;
+        copy.probe_data_width    = m_field_probe_data->get_width();
+        copy.field_tiles_per_row = m_field_tiles_per_row;
+        offset = round_up(offset + texture_bytes(*m_field_probe_data, c_field_probe_data_format), c_readback_alignment);
+    }
+    if (copy.has_merged) {
+        copy.merged_offset = offset;
+        offset = round_up(offset + texture_bytes(*textures.merged, c_radiance_format), c_readback_alignment);
+    }
+    copy.byte_count = offset;
+    if (copy.byte_count == 0) {
+        // Nothing to classify or reduce (an upper cascade outside the
+        // visibility_masked mode, state only): the overlay draws the
+        // positions, unclassified.
+        m_overlay_grid           = cascade.grid;
+        m_overlay_irradiance_max = 0.0f;
+        m_overlay_summary        = Probe_overlay_summary{
+            .cascade      = cascade_index,
+            .probe_count  = cascade.get_probe_count(),
+            .unclassified = cascade.get_probe_count(),
+            .update_count = m_update_count
+        };
+        m_overlay_probes.clear();
+        m_overlay_probes.resize(static_cast<std::size_t>(cascade.get_probe_count()));
+        return false;
+    }
+
+    // Grown to the largest copy asked for while the overlay is on; released
+    // when it is turned off (tick()).
+    if (!m_overlay_buffer || (m_overlay_buffer->get_capacity_byte_count() < copy.byte_count)) {
+        m_overlay_buffer = std::make_unique<Buffer>(
+            m_graphics_device,
+            Buffer_create_info{
+                .capacity_byte_count                    = copy.byte_count,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"RC probe overlay readback"}
+            }
+        );
+    }
+    // copy_from_texture() moves each image from its tracked layout to
+    // transfer_src and back, as record_texel_readback() relies on.
+    const auto copy_texture = [&](Texture& texture, const std::size_t texel_bytes, const std::size_t destination_offset) {
+        const int         width         = texture.get_width();
+        const int         height        = texture.get_height();
+        const std::size_t bytes_per_row = static_cast<std::size_t>(width) * texel_bytes;
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            &texture,
+            0,                             // source_slice
+            0,                             // source_level
+            glm::ivec3{0, 0, 0},           // source_origin
+            glm::ivec3{width, height, 1},  // source_size
+            m_overlay_buffer.get(),        // destination_buffer
+            static_cast<std::uintptr_t>(destination_offset),
+            static_cast<std::uintptr_t>(bytes_per_row),
+            static_cast<std::uintptr_t>(bytes_per_row * static_cast<std::size_t>(height))
+        );
+    };
+    if (copy.has_state) {
+        copy_texture(*textures.state, erhe::dataformat::get_format_size_bytes(c_state_format), copy.state_offset);
+    }
+    if (copy.has_probe_data) {
+        copy_texture(*m_field_probe_data, erhe::dataformat::get_format_size_bytes(c_field_probe_data_format), copy.probe_data_offset);
+    }
+    if (copy.has_merged) {
+        copy_texture(*textures.merged, erhe::dataformat::get_format_size_bytes(c_radiance_format), copy.merged_offset);
+    }
+    m_overlay_copy      = copy;
+    m_overlay_in_flight = true;
+    m_overlay_frame     = m_graphics_device.get_frame_index();
+    ++m_overlay_readback_count;
+    return true;
+}
+
+void Radiance_cascades_renderer::poll_probe_overlay()
+{
+    if (!m_overlay_in_flight || !m_graphics_device.is_frame_completed(m_overlay_frame)) {
+        return;
+    }
+    m_overlay_in_flight = false;
+    if (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::none) {
+        return; // turned off while the copy was in flight
+    }
+
+    const Probe_overlay_copy&  copy    = m_overlay_copy;
+    const Radiance_cascade&    cascade = copy.layout_cascade;
+    const std::span<std::byte> mapped  = m_overlay_buffer->map_bytes(0, copy.byte_count);
+    m_overlay_buffer->invalidate(0, copy.byte_count);
+    const std::byte* const data = mapped.data();
+
+    // Cosine weights toward +Y of the merged tile's texels: max(0, w.y) x
+    // the texel's solid angle, so the weighted mean is the cosine-weighted
+    // mean radiance (E / pi, what the irradiance atlas stores) for a +Y
+    // normal. They depend only on the tile side.
+    const int merged_tile_texels = cascade.tile_texels * copy.merged_block;
+    if (copy.has_merged && (m_overlay_weights_tile_texels != merged_tile_texels)) {
+        compute_octahedral_texel_solid_angles(merged_tile_texels, m_overlay_weights);
+        for (int v = 0; v < merged_tile_texels; ++v) {
+            for (int u = 0; u < merged_tile_texels; ++u) {
+                const std::size_t index = (static_cast<std::size_t>(v) * static_cast<std::size_t>(merged_tile_texels)) + static_cast<std::size_t>(u);
+                m_overlay_weights[index] *= std::max(0.0f, get_texel_direction(glm::ivec2{u, v}, merged_tile_texels).y);
+            }
+        }
+        m_overlay_weights_tile_texels = merged_tile_texels;
+    }
+
+    Probe_overlay_summary summary{
+        .cascade      = copy.cascade,
+        .probe_count  = cascade.get_probe_count(),
+        .irradiance   = copy.has_merged,
+        .update_count = copy.update_count
+    };
+    m_overlay_probes.clear();
+    m_overlay_irradiance_max = 0.0f;
+    const std::size_t radiance_texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
+    const std::size_t merged_atlas_width   = static_cast<std::size_t>(cascade.get_atlas_width()) * static_cast<std::size_t>(copy.merged_block);
+    for (int z = 0; z < cascade.grid.counts.z; ++z) {
+        for (int y = 0; y < cascade.grid.counts.y; ++y) {
+            for (int x = 0; x < cascade.grid.counts.x; ++x) {
+                const glm::ivec3    coords      = glm::ivec3{x, y, z};
+                const int           probe_index = x + (cascade.grid.counts.x * (y + (cascade.grid.counts.y * z)));
+                Probe_overlay_probe probe{};
+                if (copy.has_probe_data || copy.has_state) {
+                    probe.state = Rc_probe_overlay_state::active;
+                }
+                if (copy.has_probe_data) {
+                    // Probe data w: 1 active, 0 inactive (the reduce's
+                    // classification of the field, "Reduce").
+                    const glm::ivec2  tile         = get_probe_field_tile(coords, cascade.grid.counts, copy.field_tiles_per_row);
+                    const std::size_t texel_offset = copy.probe_data_offset +
+                        (((static_cast<std::size_t>(tile.y) * static_cast<std::size_t>(copy.probe_data_width)) + static_cast<std::size_t>(tile.x)) * sizeof(glm::vec4));
+                    glm::vec4 probe_data{0.0f};
+                    std::memcpy(&probe_data, data + texel_offset, sizeof(glm::vec4));
+                    if (probe_data.w < 0.5f) {
+                        probe.state = Rc_probe_overlay_state::inside;
+                    }
+                }
+                if (copy.has_state) {
+                    // One integer-valued float per probe at its probe index
+                    // (rc_visibility.comp).
+                    float state = 0.0f;
+                    std::memcpy(&state, data + copy.state_offset + (static_cast<std::size_t>(probe_index) * sizeof(float)), sizeof(float));
+                    if ((static_cast<uint32_t>(state + 0.5f) & c_state_inside) != 0u) {
+                        probe.state = Rc_probe_overlay_state::inside;
+                    }
+                }
+                if (copy.has_merged) {
+                    const glm::ivec2 tile_origin = cascade.get_tile_origin(probe_index) * copy.merged_block;
+                    glm::vec3 sum{0.0f};
+                    float     weight_sum = 0.0f;
+                    for (int v = 0; v < merged_tile_texels; ++v) {
+                        for (int u = 0; u < merged_tile_texels; ++u) {
+                            const float weight = m_overlay_weights[(static_cast<std::size_t>(v) * static_cast<std::size_t>(merged_tile_texels)) + static_cast<std::size_t>(u)];
+                            if (weight <= 0.0f) {
+                                continue;
+                            }
+                            const std::size_t texel_offset = copy.merged_offset +
+                                (((static_cast<std::size_t>(tile_origin.y + v) * merged_atlas_width) + static_cast<std::size_t>(tile_origin.x + u)) * radiance_texel_bytes);
+                            std::array<uint16_t, 4> halves{};
+                            std::memcpy(halves.data(), data + texel_offset, sizeof(halves));
+                            sum += weight * glm::vec3{glm::unpackHalf1x16(halves[0]), glm::unpackHalf1x16(halves[1]), glm::unpackHalf1x16(halves[2])};
+                            weight_sum += weight;
+                        }
+                    }
+                    probe.irradiance = (weight_sum > 0.0f) ? (sum / weight_sum) : glm::vec3{0.0f};
+                    m_overlay_irradiance_max = std::max(m_overlay_irradiance_max, std::max(probe.irradiance.r, std::max(probe.irradiance.g, probe.irradiance.b)));
+                }
+                switch (probe.state) {
+                    case Rc_probe_overlay_state::active:       ++summary.active;       break;
+                    case Rc_probe_overlay_state::inside:       ++summary.inside;       break;
+                    case Rc_probe_overlay_state::unclassified: ++summary.unclassified; break;
+                }
+                m_overlay_probes.push_back(probe);
+            }
+        }
+    }
+    m_overlay_buffer->unmap();
+    m_overlay_grid    = cascade.grid;
+    m_overlay_summary = summary;
+}
+
+auto Radiance_cascades_renderer::get_probe_overlay_summary() const -> const Probe_overlay_summary&
+{
+    return m_overlay_summary;
+}
+
+void Radiance_cascades_renderer::render(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!is_active() || (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::none)) {
+        return;
+    }
+    // CPU phase only (doc/editor/ddgi.md "Traps"): lines submitted in the
+    // encoder phase miss the debug renderer's compute dispatch.
+    if (context.encoder != nullptr) {
+        return;
+    }
+
+    const int         cascade_index = std::clamp(m_config.debug_draw_cascade, 0, m_layout.cascade_count - 1);
+    const Probe_grid& grid          = m_layout.cascades[static_cast<std::size_t>(cascade_index)].grid;
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+
+    // Volume box of the cascade's probes.
+    const glm::vec3 volume_max = grid.origin + (grid.spacing * glm::vec3{grid.counts - glm::ivec3{1}});
+    line_renderer.add_cube(glm::mat4{1.0f}, glm::vec4{0.3f, 0.6f, 1.0f, 1.0f}, grid.origin, volume_max);
+
+    // The last retired copy is drawn only while it describes this grid; a
+    // refit or another cascade shows unclassified positions until the next
+    // copy retires.
+    const bool has_copy =
+        (m_overlay_summary.cascade == cascade_index) &&
+        (m_overlay_grid == grid) &&
+        (m_overlay_probes.size() == static_cast<std::size_t>(grid.get_probe_count()));
+    const bool draw_irradiance =
+        has_copy &&
+        m_overlay_summary.irradiance &&
+        (m_config.debug_draw_probes == Radiance_cascades_probe_overlay::state_and_irradiance);
+    const float min_spacing      = std::min(grid.spacing.x, std::min(grid.spacing.y, grid.spacing.z));
+    const float radius           = 0.06f * min_spacing;
+    const float irradiance_scale = (m_overlay_irradiance_max > 0.0f) ? (1.0f / m_overlay_irradiance_max) : 0.0f;
+    for (int z = 0; z < grid.counts.z; ++z) {
+        for (int y = 0; y < grid.counts.y; ++y) {
+            for (int x = 0; x < grid.counts.x; ++x) {
+                const glm::vec3 position    = grid.origin + (grid.spacing * glm::vec3{x, y, z});
+                const int       probe_index = x + (grid.counts.x * (y + (grid.counts.y * z)));
+                const Rc_probe_overlay_state state = has_copy
+                    ? m_overlay_probes[static_cast<std::size_t>(probe_index)].state
+                    : Rc_probe_overlay_state::unclassified;
+                const glm::vec4 color =
+                    (state == Rc_probe_overlay_state::active) ? glm::vec4{0.2f, 1.0f, 0.4f, 1.0f} :
+                    (state == Rc_probe_overlay_state::inside) ? glm::vec4{1.0f, 0.2f, 0.2f, 1.0f} :
+                                                                glm::vec4{0.7f, 0.7f, 0.7f, 1.0f};
+                line_renderer.add_sphere(
+                    erhe::scene::Transform{},
+                    color,
+                    color,
+                    2.0f,
+                    1.0f,
+                    position,
+                    radius,
+                    nullptr,
+                    8
+                );
+                if (draw_irradiance) {
+                    // A short thick line toward +Y in the probe's irradiance
+                    // toward +Y, normalized by the brightest probe of the copy.
+                    const glm::vec3 irradiance = m_overlay_probes[static_cast<std::size_t>(probe_index)].irradiance * irradiance_scale;
+                    const glm::vec4 patch_color{glm::clamp(irradiance, glm::vec3{0.0f}, glm::vec3{1.0f}), 1.0f};
+                    line_renderer.add_line(
+                        patch_color, 8.0f, position + glm::vec3{0.0f, radius, 0.0f},
+                        patch_color, 8.0f, position + glm::vec3{0.0f, 4.0f * radius, 0.0f}
+                    );
+                }
+            }
+        }
     }
 }
 
