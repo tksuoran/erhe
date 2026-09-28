@@ -708,13 +708,22 @@ erhe also goes beyond the article:
   skipped for D32_SFLOAT -- so it matches the actual shadow map format.
 - A complementary caster-side rasterizer depth bias (constant + slope) exists
   (`shadow_depth_bias_constant` / `_slope`, applied in `shadow_renderer.cpp` via
-  `set_depth_bias`) but defaults to 0. Both values are signed toward the light
+  `set_depth_bias`). Its field default is 0; the Medium and High presets set
+  `shadow_depth_bias_slope` -1, Low and OpenXR 0, every preset constant 0.
+  The receiver's minimum bias ("Minimum bias") does not cover every
+  near-head-on spot receiver: at slope 0 the hard filter at 2048 texels, and
+  `pcf_4x4` at 512, read acne on the `cube_seams` floor below the spot (N . L
+  about 1, gate G1 of
+  [plans/shadow_robustness.md](../plans/shadow_robustness.md)), which slope
+  -1 removes. The presets themselves read the same gates at slope 0 and -1,
+  with the same contact gap (G3). Both values are signed toward the light
   under either depth convention: negative moves the stored caster depth away
   from the light. `Shadow_renderer::render()` passes them to the device as is
   for reverse-Z (the light side is the larger depth) and negated for forward-Z
   (the light side is the smaller depth), so one preset value means the same
   bias in both conventions. The article criticizes rasterizer slope
-  bias as an over-estimate, so erhe relies on RPDB by default.
+  bias as an over-estimate, so erhe relies on RPDB, with the preset slope
+  bias only as the backstop above.
 
 ### The distance / fwidth alternative
 

@@ -135,7 +135,19 @@ The bias, in the order it is built:
   T8 passes. Core matrix: spot `cornell`, directional `head_on_floor` and all
   forward-Z head-on cells pass; `head_on_floor` `--poses full` passes for Low,
   Medium and High (directional and spot); `contact_blocks` G3 / G5 on Low and
-  Medium are unchanged. The G1 / G2 pixels left after D1 (directional
+  Medium are unchanged. The rasterizer slope bias -1 of Medium and High
+  still has a role: `--config Low,Medium,High` fails and passes the same
+  cells at slope 0 as with the committed values (only D6 point cells fail),
+  with the same G3 (Medium 0.12 / 0.08, High 0.18 / 0.23 texels,
+  directional / spot), but the core matrix at slope 0 adds spot `cube_seams`
+  G1 on `Medium/shadow_filter=hard` (5761 pixels, 2.5 %) and
+  `Medium/resolution=512` (187): moire acne on the floor below the spot,
+  where the floor is head-on to the light ray (N . L about 1) and the spot
+  axis is tilted 34 degrees, so the D1 bound falls short of the hard and
+  low-resolution paths' stored / reference difference there; slope -1
+  removes it (and `Medium/shadow_filter=pcf_6x6` directional
+  `contact_blocks` G6 1). The presets keep slope -1 until D1 covers these.
+  The G1 / G2 pixels left after D1 (directional
   `grazing_fan` floor next to the 88 degree tile's shadow tip, and the 512
   resolution cells) are ideal-filter results: at every one of them the
   analytic occlusion of each tap's texel-centre ray reproduces the measured
