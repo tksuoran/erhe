@@ -98,10 +98,12 @@ Correctness defects that precede any bias work:
 
 The bias, in the order it is built:
 
-- **D4 The 2.0 bias scale.** The unexplained `2.0 *` factor in every RPDB
-  slope term is derived or removed first, measured on `grazing_fan` per tile
-  angle with no D1 floor, because it scales every term the later items build
-  on.
+- **D4 The 2.0 bias scale.** Landed: the factor is removed; every tap is
+  offset to its own fetched texel's centre with scale 1 plus the caster vertex
+  snap term (shadows.md "What erhe implements (RPDB)"). `grazing_fan` tiles
+  read no acne for every filter and wide bias mode; the head-on receivers
+  (directional `head_on_floor`, `grazing_fan` floor, spot `head_on_floor` 150
+  pixels at Medium, and the T7 head-on cases) stay for D2 / D3 and D1.
 - **D2 / D3 Plane-derived depth gradient.** `dz_dUV` is computed from the
   receiver plane instead of the screen-space Jacobian: the plane (N, d) of the
   receiver, N the geometric normal (`normalize(cross(dFdx(p), dFdy(p)))` of the

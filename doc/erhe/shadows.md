@@ -392,8 +392,8 @@ and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
 ## Bias technique: RPDB reference, and the distance/fwidth alternative
 
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from
-https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (the shader cites it at
-`res/shaders/erhe_light.glsl:84`). This section records how the implementation
+https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (cited in
+`sample_light_visibility()`, `res/shaders/erhe_light.glsl`). This section records how the implementation
 maps onto that reference, where it goes beyond it, and the alternative
 "bias-free" technique exposed as the `distance` shadow technique. The known
 deltas from the reference are listed in
@@ -403,18 +403,65 @@ deltas from the reference are listed in
 
 `sample_light_visibility()` recovers the receiver's light-space depth gradient
 `dz/dUV` by inverting the 2x2 screen-space Jacobian of the light texture
-coordinates (`erhe_light.glsl:97-105`), then offsets the comparison reference
-toward the texel the shadow map actually stored:
+coordinates, then offsets the comparison reference of every tap to the depth
+the receiver plane has at that tap's texel centre.
 
-- Hard (`ERHE_SHADOW_FILTER == 0`): a single slope bias toward the texel center,
-  a direction-aware precision snap, then the hardware comparison sampler
-  (`:112-126`).
-- 2x2 (`== 2`): one `textureGather`, the same center-relative slope bias per
-  corner, bilinearly weighted (`:127-176`).
-- Wide KxK (`>= 4`): `(K/2)^2` gathers; the `ERHE_SHADOW_BIAS` axis picks either
-  `receiver_plane` (signed per-tap `dot(texel_uv_offset, dz_dUV)`, independent of
-  kernel size so the contact shadow stays attached) or the legacy one-sided
-  `slope_scaled` bias (`:177-234`).
+The offsets follow from one identity. For a planar receiver, depth in light
+texture space is an affine function of (u, v) on the plane (a projective map
+takes planes to planes, so this holds for spot lights as well as
+orthographic directional ones), and the finite-difference Jacobian of an
+affine function is exact. The depth the caster pass stored at a texel centre
+`c` of that same plane therefore differs from the reference `z` at the sample
+point `s` by exactly `dot(c - s, dz/dUV)`, and each tap needs exactly that
+offset - with a scale factor of 1. What remains are two error sources:
+
+- **Texel selection.** `c` must be the centre of the texel the hardware
+  actually fetches. The hardware rounds texel coordinates to its sub-texel
+  precision (8 bits) before selecting texels, so a coordinate within 1/512
+  texel below a boundary selects the next texel. The shader reproduces the
+  selection with `floor(t + 1/512)` and measures the offset from the
+  unrounded `t` (`texel_offset_nearest` for the nearest fetch,
+  `gather_fraction` for `textureGather`, whose texel centres sit at integer
+  `t = uv * resolution - 0.5`). The four gather components are the texels at
+  (0, 1), (1, 1), (1, 0), (0, 0) of the selected 2x2 set, so a tap's offset is
+  `(gather_texel + corner - gather_fraction) / resolution`, `gather_texel` the
+  whole-texel offset of its gather in a KxK kernel.
+- **Caster vertex snap.** The rasterizer snaps the caster's vertices to its
+  sub-pixel grid (`subPixelPrecisionBits`, 8 on current devices) before it
+  interpolates depth. The stored plane is the caster plane displaced by the
+  barycentric blend of the vertex displacements, at most one sub-texel step
+  `2^-8` along each map axis, so its depth at a texel centre is off by at most
+  `2^-8 * (|dz/du| + |dz/dv|) / resolution`. `snap_bias` moves every
+  reference toward the light by that bound. Measured on `grazing_fan` with the
+  Low preset (hard filter, no rasterizer slope bias): half the bound
+  (`2^-9`, the round-to-nearest case) passes G1, a quarter fails it.
+
+Per path:
+
+- Hard (`ERHE_SHADOW_FILTER == 0`): one-sided offset to the fetched texel's
+  centre (toward the light only - a centre farther from the light already
+  compares lit), plus `snap_bias`, a direction-aware precision snap, then the
+  hardware comparison sampler.
+- 2x2 (`== 2`): one `textureGather`; each of the four references gets the
+  one-sided offset to its own texel centre plus `snap_bias`; the results are
+  bilinearly weighted by `gather_fraction`.
+- Wide KxK (`>= 4`): `(K/2)^2` gathers; the `ERHE_SHADOW_BIAS` axis picks
+  either `receiver_plane` (signed per-tap `dot(texel_uv_offset, dz/dUV)` plus
+  `snap_bias`: the reference is the receiver plane's depth at the tap, with no
+  net bias, so the contact shadow stays attached for any kernel size) or the
+  legacy one-sided `slope_scaled` offset plus `snap_bias`.
+
+The RPDB article's code uses the signed offset for its single tap and
+`min(0, ...)` (one-sided) for its 2x2 gather, with no scale factor; erhe
+formerly scaled every slope term by 2.0. That factor compensated two defects
+that the offsets above remove: the wide paths assumed the sample point sits on
+a texel corner (tap offsets of +-0.5 texel), up to half a texel off, and the
+snap error was unaccounted for. With the exact offsets and `snap_bias`, the
+`grazing_fan` tiles (0 to 88 degrees) read no acne for every filter and both
+wide bias modes, for directional and spot lights. The tie that remains is the
+receiver whose `dz/dUV` is zero or noise - the head-on receiver of
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1 -
+whose bias cannot come from the gradient at all.
 
 This matches the article's core idea: a signed receiver-plane gradient extended
 to PCF with a per-texel bias. The hard and 2x2 paths always use their own fixed

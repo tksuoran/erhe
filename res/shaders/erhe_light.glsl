@@ -112,8 +112,12 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     //  - HLSL code has been converted to GLSL
     //  - clip_depth_direction: -1.0 for reverse Z, 1.0 for forward Z
     //      - bias and comparisons are adjusted accordingly
-    //  - For reasons I do not fully yet understand, I had to scale the bias
-    //      - Code uses 2.0 at the moment, but smaller values seem to also work.
+    //  - The slope terms carry no scale factor: for a planar receiver the
+    //    stored depth of a texel differs from the reference at the sample point
+    //    by exactly dot(texel_center_uv - sample_uv, dz_dUV), so each tap is
+    //    offset to its own texel centre, located from the texel set the
+    //    hardware selects, plus the caster vertex snap term (snap_bias below);
+    //    see doc/erhe/shadows.md "Bias technique".
 
     float cdd = camera.cameras[c_view_index].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
@@ -161,6 +165,33 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     }
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
 
+    // Texel geometry of the sample point, in texels. The hardware rounds
+    // texel coordinates to its sub-texel precision (subTexelPrecisionBits,
+    // typically 8) before it picks texels, so a coordinate within 1/512 texel
+    // below a texel boundary picks the texel above it; the + 1.0 / 512.0 inside
+    // floor() reproduces that selection
+    // (https://www.reedbeta.com/blog/texture-gathers-and-coordinate-precision/).
+    // The offsets below are measured from the unrounded coordinate, so they
+    // are the exact distances to the centres of the texels actually fetched.
+    //  - texel_offset_nearest: sample point -> centre of the texel a nearest
+    //    fetch reads (texel centres at integer + 0.5).
+    //  - gather_fraction: position of the sample point relative to the
+    //    lower-left texel centre of the 2x2 set textureGather() reads
+    //    (texel centres at integers); in [-1/512, 1 + 1/512).
+    vec2 sample_texel           = position_in_light_texture.xy * shadowmap_resolution;
+    vec2 texel_offset_nearest   = floor(sample_texel + 1.0 / 512.0) + 0.5 - sample_texel;
+    vec2 gather_texel_position  = sample_texel - 0.5;
+    vec2 gather_fraction        = gather_texel_position - floor(gather_texel_position + 1.0 / 512.0);
+
+    // Caster vertex snap. The rasterizer snaps the caster's vertices to its
+    // sub-pixel grid (subPixelPrecisionBits, typically 8) before it
+    // interpolates depth, so the stored plane is the caster plane displaced by
+    // at most one sub-texel step along each map axis, and its depth at a texel
+    // centre differs by at most (|dz/du| + |dz/dv|) * step. Every reference
+    // moves by that much toward the light.
+    const float caster_snap_texels = 1.0 / 256.0;
+    float snap_bias = (-cdd) * caster_snap_texels * dot(abs(dz_dUV), 1.0 / shadowmap_resolution);
+
     // Shadow filtering method selected at compile time via the
     // ERHE_SHADOW_FILTER variant axis (set from the graphics preset's
     // Shadow_filter_mode; see shader_key.hpp / forward_renderer.cpp). The
@@ -168,11 +199,11 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
 #   if ERHE_SHADOW_FILTER == ERHE_SHADOW_FILTER_HARD
     {
         // Single hardware depth comparison with nearest filter -- hard 0/1 edges.
-        vec2  distanceToTexelCenterUV = vec2(0.5) - fract(position_in_light_texture.xy * shadowmap_resolution);
-        distanceToTexelCenterUV      *= 1.0 / shadowmap_resolution;
-        // Direction-aware slope bias: reverse-Z keeps positive, forward-Z keeps negative
-        float slopeBias    = (-cdd) * max(0.0, (-cdd) * dot(distanceToTexelCenterUV, dz_dUV));
-        float D_ref_       = position_in_light_texture.z + 2.0 * slopeBias;
+        // One-sided slope bias to the fetched texel's centre (toward the
+        // light only: a texel centre farther from the light already compares
+        // lit). Direction-aware: reverse-Z keeps positive, forward-Z keeps negative.
+        float slopeBias    = (-cdd) * max(0.0, (-cdd) * dot(texel_offset_nearest / shadowmap_resolution, dz_dUV));
+        float D_ref_       = position_in_light_texture.z + slopeBias + snap_bias;
         // Direction-aware rounding: reverse-Z uses ceil (toward near=1),
         // forward-Z uses floor (toward near=0). Snap the reference to the shadow
         // depth format's quantization grid so it matches the hardware comparison
@@ -197,31 +228,20 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     {
         // 2x2 PCF: a single textureGather() with bilinear weighting of the
         // four comparison results, for a smooth sub-texel-accurate edge.
-        // Note: adding 1/512 to make sure fract() and textureGather() work on the same set of texels
-        // See: https://www.reedbeta.com/blog/texture-gathers-and-coordinate-precision/
-        vec2 fracCoords = fract(position_in_light_texture.xy * shadowmap_resolution - 0.5 + 1.0 / 512.0);
-
-        // Sample the shadow atlas using textureGather.
-        // Equivalent to HLSL's Gather, returns four depth samples.
         vec4 shadowDepths = textureGather(s_shadow_no_compare, vec3(position_in_light_texture.xy, array_layer));
 
-        // The four samples that would contribute to filtering are placed into xyzw
-        // in counter-clockwise order starting from the lower-left sample.
-        // Offsets correspond to deltas at (-,+),(+,+),(+,-),(-,-)
-        const vec2 offsets[4] = vec2[4](
-            vec2(-1.0,  1.0),
-            vec2( 1.0,  1.0),
-            vec2( 1.0, -1.0),
-            vec2(-1.0, -1.0)
-        );
-
+        // textureGather() returns the four texels in counter-clockwise order
+        // starting from the upper-left: (0, 1), (1, 1), (1, 0), (0, 0) relative
+        // to the lower-left texel of the set. Each reference is offset by the
+        // one-sided slope bias to its own texel centre (direction-aware:
+        // reverse-Z biases positive, forward-Z biases negative).
+        const vec2 corners[4] = vec2[4](vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.0), vec2(0.0, 0.0));
         vec4 surfaceZ = vec4(0.0);
-
-        // Apply biases (direction-aware: reverse-Z biases positive, forward-Z biases negative)
-        surfaceZ[0] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[0] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
-        surfaceZ[1] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[1] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
-        surfaceZ[2] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[2] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x,       fracCoords.y), dz_dUV));
-        surfaceZ[3] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[3] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x,       fracCoords.y), dz_dUV));
+        for (int t = 0; t < 4; ++t) {
+            vec2 texel_uv_offset = (corners[t] - gather_fraction) / shadowmap_resolution;
+            surfaceZ[t] = (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV)) + snap_bias;
+        }
+        vec2 fracCoords = clamp(gather_fraction, 0.0, 1.0);
 
         // Clamp into the shadow map depth range so receivers outside the
         // fitted range compare correctly (see comment above).
@@ -252,46 +272,39 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
         // compile-time constants so the loops unroll.
         const int  K       = ERHE_SHADOW_FILTER;
         const int  gathers = K / 2;
-        // CCW texel offsets of the four components textureGather() returns,
-        // matching the GL order (top-left, top-right, bottom-right, bottom-left).
-        const vec2 sub[4]  = vec2[4](vec2(-0.5, 0.5), vec2(0.5, 0.5), vec2(0.5, -0.5), vec2(-0.5, -0.5));
-
-#       if ERHE_SHADOW_BIAS == ERHE_SHADOW_BIAS_RECEIVER_PLANE
-        // The ONLY additive bias: a small slope bias toward the texel center,
-        // identical to the hard / 2x2 paths and independent of the kernel
-        // radius. Keeping it kernel-size-independent is what stops wide
-        // kernels from peter-panning (an offset-scaled bias would detach the
-        // contact shadow as K grows).
-        vec2  distance_to_texel_center = (vec2(0.5) - fract(position_in_light_texture.xy * shadowmap_resolution)) / shadowmap_resolution;
-        float center_bias = 2.0 * (-cdd) * max(0.0, (-cdd) * dot(distance_to_texel_center, dz_dUV));
-        float base_ref    = position_in_light_texture.z + center_bias;
-#       endif
+        // Texel positions of the four components textureGather() returns,
+        // relative to the lower-left texel of its 2x2 set, in the GL order
+        // (top-left, top-right, bottom-right, bottom-left).
+        const vec2 corners[4] = vec2[4](vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.0), vec2(0.0, 0.0));
 
         float visibility = 0.0;
         for (int gj = 0; gj < gathers; ++gj) {
             for (int gi = 0; gi < gathers; ++gi) {
                 // Gather centers tile the KxK block, spaced 2 texels apart and
-                // centered on the sample point.
+                // centered on the sample point. The spacing is whole texels, so
+                // every gather selects its set with the gather_fraction of the
+                // sample point.
                 vec2 gather_texel = (vec2(float(gi), float(gj)) - float(gathers - 1) * 0.5) * 2.0;
                 vec2 guv          = position_in_light_texture.xy + gather_texel / shadowmap_resolution;
                 vec4 depths       = textureGather(s_shadow_no_compare, vec3(guv, array_layer));
                 for (int t = 0; t < 4; ++t) {
-                    vec2 texel_uv_offset = (gather_texel + sub[t]) / shadowmap_resolution;
+                    // Sample point -> centre of this tap's texel.
+                    vec2 texel_uv_offset = (gather_texel + corners[t] - gather_fraction) / shadowmap_resolution;
 #       if ERHE_SHADOW_BIAS == ERHE_SHADOW_BIAS_RECEIVER_PLANE
                     // Receiver-plane depth bias: follow the receiver's depth
-                    // gradient (signed, in depth space) to this texel so the
-                    // reference tracks the surface plane. Unlike an
-                    // offset-scaled one-sided bias it adds no net bias, so the
-                    // contact shadow stays attached no matter how wide the
-                    // kernel is.
-                    float ref = clamp(base_ref + dot(texel_uv_offset, dz_dUV), 0.0, 1.0);
+                    // gradient (signed, in depth space) to this texel's centre,
+                    // so the reference is the receiver plane's depth there.
+                    // Unlike an offset-scaled one-sided bias it adds no net
+                    // bias, so the contact shadow stays attached no matter how
+                    // wide the kernel is.
+                    float ref = clamp(position_in_light_texture.z + dot(texel_uv_offset, dz_dUV) + snap_bias, 0.0, 1.0);
 #       else // ERHE_SHADOW_BIAS_SLOPE_SCALED
                     // Previous method: a one-sided slope bias scaled by the
                     // tap's offset from the sample. The bias grows with the
                     // kernel radius, which detaches the contact shadow
                     // (peter-panning) on wide kernels.
-                    float bias = 2.0 * (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV));
-                    float ref  = clamp(position_in_light_texture.z + bias, 0.0, 1.0);
+                    float bias = (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV));
+                    float ref  = clamp(position_in_light_texture.z + bias + snap_bias, 0.0, 1.0);
 #       endif
                     // Non-strict, direction-aware comparison to match the
                     // gequal / lequal hardware sampler.
