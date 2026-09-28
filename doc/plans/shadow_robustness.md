@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is phases 5 to 8.
+the current gate table. The remaining work is phases 6 to 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -157,11 +157,34 @@ The bias, in the order it is built:
   meshes and removes the tie structurally; single-sided geometry needs
   `cull_back`. With D1 in place the bias passes R1 in all three modes, and the
   preset default is chosen from the matrix: G2 / G4 (cull_front leaks, section
-  9) against G1 / G3. The decision names the codegen default in
-  `graphics_preset_entry.py`, the three shipped presets and the shadows.md
-  statement, which today disagree (codegen and shadows.md say `cull_front`,
-  the presets use `cull_back`). Midpoint and second-depth maps need an extra
-  depth layer per light and are outside this plan.
+  9) against G1 / G3. Midpoint and second-depth maps need an extra depth layer
+  per light and are outside this plan. Landed: `cull_back` is the default -
+  the codegen default in `graphics_preset_entry.py`,
+  `Shadow_renderer::Render_parameters::cull_mode`, the editor fallbacks and
+  shadows.md "Shadow pass mechanics"; the three shipped presets already used
+  it. Measured with the phase 4 code (`--config` Low, Medium, High and the
+  two Medium cull rows, short sweep, 3 re-runs): `cull_back` and `cull_none`
+  pass every directional and spot gate, with identical numbers in every cell
+  (Medium G3 0.12 / 0.08 texels directional / spot, G5 0.34 / 0.94): on
+  closed meshes `cull_none` stores the same nearest front surface and
+  rasterizes twice the faces. `cull_front` fails G2 / G4 structurally (the
+  section 9 row). Its failures were traced tap by tap: an ideal-filter model
+  (per tap the texel-centre ray, the receiver plane point on it, and the
+  nearest box exit as the stored back face) reproduces the measured
+  visibility within one tap for at least 99.4 % of the failing pixels of
+  every traced image at `shadow_depth_bias_slope` 0 (e.g. `contact_blocks` cube
+  6148 / 6168 directional, 12239 / 12248 spot; `thin_walls` 10 cm 382 / 384;
+  `cube_seams` ceiling 1597 / 1599). Every failing pixel lies 0 to 4.4 texels
+  from a box it touches, and its lit taps read either a tie with a back face
+  coplanar with the receiver (the bottom of a caster resting on the floor,
+  of a wall on the floor, the roof underside at a wall) or a back face behind
+  the receiver plane (the tap's plane point inside the touching box):
+  inherent to storing back faces at contacts. Medium's rasterizer slope bias
+  -1, meant for `cull_back`, moves the stored back faces away from the light
+  and widens the leak: with slope 0 `cull_front` passes G3 (0.27 / 0.72) and
+  G4 shrinks to 5 .. 12 pixels (directional) and 36 .. 417 (spot), but G2
+  still fails (`contact_blocks` 6168 / 12541, `cube_seams` 1599 / 74,
+  `spot_cones` 2 / 98) and G4 at 2 cm and up still fails.
 - **D6 Point-light bias.** The cube pass always rasterizes both faces
   (`cull_none`), so the lit face is always stored and the tie is structural:
   the D1 formula applies with the cube texel's world footprint
@@ -312,8 +335,6 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
-  place; update the codegen default, the presets and shadows.md together.
 - **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
   `contact_blocks` point rows to green.
 - **Phase 7 - coverage.** D7 (spot distance technique), R7 origin runs, the
@@ -328,18 +349,21 @@ section 9 rewritten to the new gate table.
 `py -3 scripts/shadow_verify.py --matrix core --save-images failing` on the
 current code: 16 configs (Low, Medium, High and the one-axis variations
 around Medium; a requested `shadow_depth_bits` of 24 resolves to D32_SFLOAT
-on this device, axis 32), `--poses short`, `--runs 1`; 5827 renders, 33.4 min
+on this device, axis 32), `--poses short`, `--runs 1`, failing cells re-run
+3 times (every listed cell failed all 3 re-runs); 10069 renders, 51.5 min
 wall on the Debug headless Vulkan editor, AMD iGPU. Directional and spot pass
 every gate in every `cull_back` and `cull_none` cell of the depth technique,
-including 16-bit, forward-Z, 512 and 2048. Cells not listed pass every gate
+including forward-Z, 512 and 2048, except one 16-bit pixel (listed). Cells
+not listed pass every gate
 that applies to them. Values are the worst over poses and views: failing
 pixel count and share of the gated pixels (G1, G2), texels (G3, G5 as
 mean / worst), pixels (G4 per wall, G6).
 
 | Config | Failing cells |
 |---|---|
-| Medium/shadow_cull_mode=cull_front (D5) | G4 on every `thin_walls` wall (directional 2 cm: 1219 .. 20 cm: 600, spot 2 cm: 1443 .. 20 cm: 3851); `contact_blocks` G2 9417 (1.9 %) / 15952 (3.2 %), G3 1.61 / 2.25, G5 worst 8 (no edge found), directional G6 4; `cube_seams` G2 1679 / 107; `spot_cones` G2 105 / 490 (33 %) |
-| Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 885 (dir) / 699 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), G2 20 / 59, spot G1 20, spot G5 0.24 / 3.75, directional G6 18; spot `thin_walls` G1 142, `cube_seams` G2 2, `spot_cones` G1 1 |
+| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 1115, 2 cm: 882 .. 20 cm: 598, spot 2 cm: 1920 .. 20 cm: 4360); `contact_blocks` G2 8983 (1.8 %) / 15915 (3.2 %), G3 2.28 / 2.25, G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1683 / 113; `spot_cones` G2 210 / 490 (33 %) |
+| Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 898 (dir) / 676 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), G2 20 / 89, G1 1 / 15, G5 0.29 / 3.25 (dir) and 0.24 / 3.75 (spot), directional G6 17; directional `thin_walls` G2 1, spot `thin_walls` G1 139, spot `cube_seams` G2 2, spot `spot_cones` G1 1 |
+| Medium/shadow_depth_bits=16 | spot `contact_blocks` G2 1 pixel (`contact_post` view, poses 2 to 4): 0.37 texel from the post's contact line, visibility 1 / 16. The lit tap's stored entry face is 13.0 mm nearer than its receiver plane point (the next tap 18.2 mm), inside the 16-bit caster and receiver bias at 4.1 m: one UNORM quantum of the D1 format term (about 6.4 mm), the stored value's rounding (up to half a quantum) and Medium's rasterizer slope bias -1 on the post's 64 degree side face (about 5 mm). A contact gap G3 allows (the cell's G3 is 0.08 texel), counted by G2 because the band covers the analytic shadow boundary, not the contact line |
 | every config, point (D6) | `contact_blocks` G2 337, G3 4.75, G5 0.15 / 3.25 (High and 2048: G2 2538, G3 9.5, G5 0.40 / 6.5; Low and 512: G2 3, G3 2.5, G5 2.75); `thin_walls` G2 1 (High and 2048: G2 2, G4 2 cm: 21002, 5 cm: 5519, 1 cm: 32581); `cube_seams` G2 4 (High and 2048: 10); Low and 512 `grazing_fan` G1 44 |
 
 `py -3 scripts/shadow_verify.py --matrix pairwise` on the current code: 17

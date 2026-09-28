@@ -218,7 +218,7 @@ void prewarm_all(
         // runtime compiles the other modes' pipelines once, on demand.
         const erhe::scene_renderer::Shadow_cull_mode shadow_cull_mode = (context.app_settings != nullptr)
             ? static_cast<erhe::scene_renderer::Shadow_cull_mode>(context.app_settings->graphics.current_graphics_preset.shadow_cull_mode)
-            : erhe::scene_renderer::Shadow_cull_mode::cull_front;
+            : erhe::scene_renderer::Shadow_cull_mode::cull_back;
 
         if (shadow_nodes.empty()) {
             context.shadow_renderer->prewarm_pipelines({}, shadow_mesh_spans, shadow_cull_mode);

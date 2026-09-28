@@ -244,10 +244,25 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   per-box clipping happen inside the fit, not here (the gather is
   light-independent; the cull is not).
 - **Cull mode** - the active graphics preset's `Shadow_cull_mode` selects the
-  caster pipeline: `cull_front` (default) writes only back faces, which reduces
-  peter-panning for closed meshes (open / single-sided meshes do not cast from
-  their front side); `cull_back` writes only front faces, letting single-sided
-  geometry cast from the side facing the light; `cull_none` writes both sides.
+  caster pipeline. `cull_back` (the default, and every shipped preset) writes
+  only front faces: a lit receiver's own face is in the map, a tie the
+  receiver's minimum bias resolves ("Minimum bias"), and single-sided geometry
+  casts from the side facing the light. `cull_front` writes only back faces,
+  which leaks light wherever a caster touches a receiver: the caster's back
+  face meets the receiver at the contact line (a wall's far face at a
+  wall-floor or wall-wall join) or is coplanar with it (the bottom face of a
+  box resting on a floor), so a filter tap whose texel-centre ray lands on the
+  receiver plane there, or inside the touching box, reads a tie or a stored
+  surface behind the reference, and reads lit. Within the filter reach plus
+  the depth gap the bias covers, a receiver inside a closed hut or behind a
+  resting caster is partly lit (G2 / G4 of
+  [plans/shadow_robustness.md](../plans/shadow_robustness.md)). This is
+  inherent to storing back faces, not a bias defect; closing it needs a second
+  depth layer (midpoint or second-depth maps). A negative rasterizer slope
+  bias (`shadow_depth_bias_slope`, set for `cull_back`) moves the stored back
+  faces farther from the light and widens the leak. `cull_none` writes both
+  sides; on closed meshes it stores the same nearest (front) surface as
+  `cull_back`, rasterizing twice the faces.
   `Shadow_renderer` pre-builds one pipeline per cull mode (`m_pipelines[]`).
   Mirrored (negative-determinant) buckets use the front-face-flipped pipeline
   variant; see "Mirrored (negative-determinant) geometry" in

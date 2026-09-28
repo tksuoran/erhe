@@ -1,10 +1,14 @@
 from erhe_codegen import *
 
 # Face culling used while rendering shadow casters into the shadow map.
-# Front culling (the default) keeps only back faces, which reduces
-# peter-panning on closed meshes; back culling keeps front faces, letting
-# single-sided geometry cast shadows from the side facing the light; none
-# rasterizes both sides at the cost of more self-shadowing acne. Selects the
+# Back culling (the default) keeps front faces: the lit face of a receiver
+# is in the map and the receiver's minimum bias resolves that tie, and
+# single-sided geometry casts shadows from the side facing the light. Front
+# culling keeps only back faces, which leak light where a caster touches a
+# receiver (its back face meets or is coplanar with the receiver at the
+# contact). None rasterizes both sides; on closed meshes it stores what back
+# culling stores, rasterizing twice the faces (doc/erhe/shadows.md "Shadow
+# pass mechanics"). Selects the
 # Shadow_renderer caster pipeline; keep in sync with Shadow_cull_mode in
 # src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.hpp.
 enum("Shadow_cull_mode",

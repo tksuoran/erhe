@@ -85,9 +85,11 @@ Shadow_renderer::Shadow_renderer(
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
 {
     // Build one shadow caster pipeline per Shadow_cull_mode, plus a depth-clamp
-    // sibling for each. Cull front (only back faces write depth) reduces
-    // peter-panning on closed meshes; cull back lets single-sided geometry cast
-    // shadows from the lit side; cull none rasterizes both sides. Light
+    // sibling for each. Cull back (the default; front faces write depth) lets
+    // single-sided geometry cast shadows from the lit side; cull front (back
+    // faces only) leaks light where a caster touches a receiver, its back
+    // face meeting the receiver at the contact; cull none rasterizes both
+    // sides (the Shadow_cull_mode comment in shadow_renderer.hpp). Light
     // projections use the same device coordinate conventions as viewport
     // passes, so the same y-flip winding compensation applies. Depth bias is
     // enabled so the magnitudes (App_settings preset) can be applied per pass
@@ -188,8 +190,8 @@ void Shadow_renderer::draw_shadow_casters(
             continue;
         }
         // Mirrored (negative determinant) buckets get the front-face-flipped
-        // variant so front-face culling removes the side facing the light, same
-        // as for non-mirrored casters.
+        // variant so the active cull mode removes the same side (relative to
+        // the light) as for non-mirrored casters.
         erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
             render_pass.get_descriptor(),
             color_blend,

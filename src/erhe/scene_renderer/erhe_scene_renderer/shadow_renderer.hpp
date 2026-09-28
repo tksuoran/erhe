@@ -54,10 +54,15 @@ class Settings;
 class Shader_variant_cache;
 
 // Face culling used while rasterizing shadow casters into the shadow map.
-// cull_front (the default) keeps only back faces -- reduces peter-panning on
-// closed meshes; cull_back keeps front faces -- lets single-sided geometry
-// cast shadows from the side facing the light; cull_none rasterizes both
-// sides. The values index Shadow_renderer's per-cull-mode caster pipelines, so
+// cull_back (the default) keeps front faces: the lit face of a receiver is
+// in the map, the receiver's minimum bias resolves that tie, and
+// single-sided geometry casts from the side facing the light. cull_front
+// keeps only back faces: where a caster touches a receiver (a box resting
+// on a floor, a wall on a floor) its back face meets or is coplanar with
+// the receiver, so the shadow leaks at the contact (doc/erhe/shadows.md
+// "Shadow pass mechanics"). cull_none rasterizes both sides; on closed
+// meshes it stores what cull_back stores at twice the rasterized faces.
+// The values index Shadow_renderer's per-cull-mode caster pipelines, so
 // keep them contiguous from 0 and in sync with the editor's Shadow_cull_mode
 // codegen enum (src/editor/config/definitions/shadow_cull_mode.py).
 enum class Shadow_cull_mode : unsigned int
@@ -151,9 +156,8 @@ public:
         float                                                              shadow_bias_origin_scale{1.0f};
 
         // Face culling for the shadow caster pass; selects one of the
-        // per-cull-mode pipelines. Defaults to cull_front (back faces only),
-        // the historical behavior.
-        Shadow_cull_mode                                                   cull_mode{Shadow_cull_mode::cull_front};
+        // per-cull-mode pipelines. Defaults to cull_back (front faces only).
+        Shadow_cull_mode                                                   cull_mode{Shadow_cull_mode::cull_back};
 
         // Shadow_technique_mode::distance support. When use_distance is true the
         // caster runs a fragment shader (VARIANT_SHADOW_DISTANCE) that writes the

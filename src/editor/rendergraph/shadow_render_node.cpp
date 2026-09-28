@@ -610,12 +610,12 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
 
     // Hardware (rasterizer) depth bias and face culling for the shadow caster
     // pass, from the active graphics preset (depth bias 0 = off, cull mode
-    // defaults to front-face culling).
+    // defaults to back-face culling).
     float depth_bias_constant = 0.0f;
     float depth_bias_slope    = 0.0f;
     float bias_texel_scale    = 1.0f;
     float bias_origin_scale   = 1.0f;
-    erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_front;
+    erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_back;
     bool  use_distance        = false;
     float distance_bias_coeff = 0.0f;
     // The forward pass samples these maps with the preset's filter, whose

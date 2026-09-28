@@ -67,6 +67,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Shadow_renderer::Render_parameters::cull_mode`
+  defaults to `Shadow_cull_mode::cull_back` (was `cull_front`, which leaks
+  light where a caster touches a receiver; `doc/erhe/shadows.md` "Shadow pass
+  mechanics").
 - `erhe::scene_renderer`: the receiver's minimum shadow bias
   (`doc/erhe/shadows.md` "Minimum bias"). `Shadow_renderer::Render_parameters`
   gains `shadow_bias_texel_scale` / `shadow_bias_origin_scale` (default 1),

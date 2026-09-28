@@ -23,7 +23,7 @@ struct("Graphics_preset_entry",
         # and rasterizer interpolation terms.
         field("shadow_bias_texel_scale",    Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Texel Scale"),
         field("shadow_bias_origin_scale",   Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Origin Scale"),
-        field("shadow_cull_mode",           EnumRef("Shadow_cull_mode"), added_in=1, default="Shadow_cull_mode::cull_front",      short_desc="Shadow Cull Mode"),
+        field("shadow_cull_mode",           EnumRef("Shadow_cull_mode"), added_in=1, default="Shadow_cull_mode::cull_back",       short_desc="Shadow Cull Mode"),
         field("shadow_technique",           EnumRef("Shadow_technique_mode"), added_in=1, default="Shadow_technique_mode::depth", short_desc="Shadow Technique"),
         # Point lights cast omnidirectional shadows into an R32F cube-map array
         # (one cube / 6 faces per shadow-casting point light). These bound that
