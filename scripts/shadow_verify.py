@@ -173,7 +173,10 @@ LIGHT_TYPES = ["directional", "spot", "point"]
 
 PRESET_FIELDS = ["shadow_filter", "shadow_bias", "shadow_technique", "shadow_cull_mode", "shadow_depth_bits",
                  "shadow_resolution", "point_shadow_resolution", "shadow_depth_bias_constant",
-                 "shadow_depth_bias_slope"]
+                 "shadow_depth_bias_slope", "shadow_bias_texel_scale", "shadow_bias_origin_scale"]
+# Values of the preset fields a graphics_presets.json entry may leave out
+# (fields added after the shipped presets were written).
+PRESET_FIELD_DEFAULTS = {"shadow_bias_texel_scale": 1.0, "shadow_bias_origin_scale": 1.0}
 FILTERS = ["hard", "pcf_2x2", "pcf_4x4", "pcf_6x6"]
 WIDE_FILTERS = ["pcf_4x4", "pcf_6x6"]
 FILTER_RADIUS = {"hard": 0.5, "pcf_2x2": 1.0, "pcf_4x4": 2.0, "pcf_6x6": 3.0}
@@ -301,7 +304,7 @@ def load_presets():
 
 
 def base_config(name, preset):
-    fields = {k: preset[k] for k in PRESET_FIELDS}
+    fields = {k: preset.get(k, PRESET_FIELD_DEFAULTS[k]) if k in PRESET_FIELD_DEFAULTS else preset[k] for k in PRESET_FIELDS}
     fields["use_draw_lists"] = True
     return {"name": name, "fields": fields, "forward_z": False, "note": ""}
 

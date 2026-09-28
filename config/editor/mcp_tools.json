@@ -8886,6 +8886,14 @@
           "description": "Rasterizer slope-scaled depth bias of the shadow pass",
           "type": "number"
         },
+        "shadow_bias_texel_scale": {
+          "description": "Scale (>= 0, 1 = the derived bound) of the receiver minimum shadow bias term for the receiver normal error times the filter tap reach",
+          "type": "number"
+        },
+        "shadow_bias_origin_scale": {
+          "description": "Scale (>= 0, 1 = the derived bound) of the receiver minimum shadow bias terms for fp32 projection, world position and rasterizer depth interpolation rounding",
+          "type": "number"
+        },
         "point_shadow_resolution": {
           "description": "Point light shadow cube face resolution in texels (clamped to 4096 and the device limit)",
           "type": "integer"

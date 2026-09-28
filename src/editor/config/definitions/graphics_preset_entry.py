@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=2,
+    version=3,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -16,6 +16,13 @@ struct("Graphics_preset_entry",
         field("shadow_bias",                EnumRef("Shadow_bias_mode"),   added_in=1, default="Shadow_bias_mode::receiver_plane", short_desc="Shadow Bias"),
         field("shadow_depth_bias_constant", Float,                       added_in=1, default="0.0f", short_desc="Shadow Depth Bias (constant)"),
         field("shadow_depth_bias_slope",    Float,                       added_in=1, default="0.0f", short_desc="Shadow Depth Bias (slope)"),
+        # Scales of the receiver's minimum shadow bias (v3; doc/erhe/shadows.md
+        # "Minimum bias"), dimensionless, 1 = the derived bound, applied to the
+        # hard, 2x2 and wide filters alike. texel scales the receiver normal
+        # error x filter tap reach term, origin the fp32 projection, position
+        # and rasterizer interpolation terms.
+        field("shadow_bias_texel_scale",    Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Texel Scale"),
+        field("shadow_bias_origin_scale",   Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Origin Scale"),
         field("shadow_cull_mode",           EnumRef("Shadow_cull_mode"), added_in=1, default="Shadow_cull_mode::cull_front",      short_desc="Shadow Cull Mode"),
         field("shadow_technique",           EnumRef("Shadow_technique_mode"), added_in=1, default="Shadow_technique_mode::depth", short_desc="Shadow Technique"),
         # Point lights cast omnidirectional shadows into an R32F cube-map array

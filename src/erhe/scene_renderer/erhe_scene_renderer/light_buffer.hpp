@@ -69,6 +69,12 @@ public:
 
     std::size_t  ambient_light;                // vec4
 
+    // Scales of the receiver's minimum shadow bias (doc/erhe/shadows.md
+    // "Minimum bias"): x = shadow_bias_texel_scale (the gradient term),
+    // y = shadow_bias_origin_scale (the fp32 projection, position and raster
+    // terms). From Light_projections.
+    std::size_t  shadow_bias_scales;           // vec2
+
     // Dynamic diffuse global illumination (doc/editor/ddgi.md phase 6). The
     // probe volume rides in this block rather than a binding point of its
     // own: it is small, and every shader that reads the lights also wants
@@ -228,6 +234,13 @@ public:
     erhe::scene::Shadow_fit_scratch fit_scratch;
 
     //Variant_counts                                        counts{};
+
+    // Scales of the receiver's minimum shadow bias (doc/erhe/shadows.md
+    // "Minimum bias"), set by Shadow_renderer::render() from its
+    // Render_parameters and written to light_block.shadow_bias_scales by
+    // Light_buffer::update(). 1 is the derived bound.
+    float                                                 shadow_bias_texel_scale {1.0f};
+    float                                                 shadow_bias_origin_scale{1.0f};
 
     // TODO A bit hacky injection of these parameters..
     float                                                 brdf_phi         {0.0f};

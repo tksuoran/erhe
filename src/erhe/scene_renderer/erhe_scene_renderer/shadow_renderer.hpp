@@ -136,6 +136,14 @@ public:
         float                                                              depth_bias_constant{0.0f};
         float                                                              depth_bias_slope{0.0f};
 
+        // Scales of the receiver-side minimum bias (doc/erhe/shadows.md
+        // "Minimum bias"): texel scales the normal error x tap reach term,
+        // origin the fp32 projection / position / raster terms; 1 is the
+        // derived bound. Stored into light_projections for the passes that
+        // sample this shadow map.
+        float                                                              shadow_bias_texel_scale{1.0f};
+        float                                                              shadow_bias_origin_scale{1.0f};
+
         // Face culling for the shadow caster pass; selects one of the
         // per-cull-mode pipelines. Defaults to cull_front (back faces only),
         // the historical behavior.

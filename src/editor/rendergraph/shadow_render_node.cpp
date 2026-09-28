@@ -613,6 +613,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // defaults to front-face culling).
     float depth_bias_constant = 0.0f;
     float depth_bias_slope    = 0.0f;
+    float bias_texel_scale    = 1.0f;
+    float bias_origin_scale   = 1.0f;
     erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_front;
     bool  use_distance        = false;
     float distance_bias_coeff = 0.0f;
@@ -620,6 +622,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
         depth_bias_constant = preset.shadow_depth_bias_constant;
         depth_bias_slope    = preset.shadow_depth_bias_slope;
+        bias_texel_scale    = preset.shadow_bias_texel_scale;
+        bias_origin_scale   = preset.shadow_bias_origin_scale;
         cull_mode           = static_cast<erhe::scene_renderer::Shadow_cull_mode>(preset.shadow_cull_mode);
         use_distance        = (preset.shadow_technique == Shadow_technique_mode::distance) && static_cast<bool>(m_distance_texture);
         // fwidth bias coefficient = cdd * (1 + pcfRadius). cdd is -1 for reverse-Z
@@ -677,6 +681,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .fit_settings          = &m_fit_settings,
             .depth_bias_constant   = depth_bias_constant,
             .depth_bias_slope      = depth_bias_slope,
+            .shadow_bias_texel_scale  = bias_texel_scale,
+            .shadow_bias_origin_scale = bias_origin_scale,
             .cull_mode             = cull_mode,
             .distance_texture      = use_distance ? m_distance_texture : std::shared_ptr<erhe::graphics::Texture>{},
             .use_distance          = use_distance,

@@ -11,14 +11,19 @@
 //  - Shadow_head_on_plane: the forward pass with Shader_debug::shadow_visibility
 //    over the plane.
 //
-// Both require visibility 1 everywhere. They fail on the current bias and are
-// disabled until plan phase 4 lands the bias floor (D1 to D4). The controls
-// next to them pass today and show that the harness sees both outcomes:
+// Both require visibility 1 everywhere, with no rasterizer bias: the
+// receiver's minimum bias (doc/erhe/shadows.md "Minimum bias", plan D1) must
+// exceed the stored / reference rounding of every pose, filter and format.
+// The k range -4 .. +4 is the plan's Shadow_tie requirement: the bias covers
+// the tie itself plus 4 ulps of reference error in either direction. The
+// derived bound is 15 to 95 ulps of the reference depth on these poses (the
+// first failing k measured with a wider sweep) against at most about 5 ulps of
+// measured stored / reference difference, so the range sits well inside it.
+// The controls next to them show that the harness sees both outcomes:
 //
 //  - At the exact pose (identity station frame, where every matrix is exact
 //    and the tie is decided at k = 0), a rasterizer constant bias of -4 (the
-//    plan's section 1 evidence) makes the plane read lit. Under the rotated
-//    poses -4 is not enough, which is what the disabled cases record.
+//    plan's section 1 evidence) makes the plane read lit.
 //  - A caster box above the plane reads 0 in the interior of its analytic
 //    shadow at every pose, so an "always 1" sampler cannot pass the cases
 //    above; at the exact pose the plane well outside that shadow reads 1.
@@ -190,28 +195,26 @@ protected:
     }
 };
 
-// Enabled by plan phase 4 (doc/plans/shadow_robustness.md D1 to D4).
-TEST_P(Shadow_light_gpu_test, DISABLED_shadow_tie_head_on_plane_reads_lit)
+TEST_P(Shadow_light_gpu_test, shadow_tie_head_on_plane_reads_lit)
 {
     check_tie(all_poses(), 0.0f);
 }
 
-// Enabled by plan phase 4 (doc/plans/shadow_robustness.md D1 to D4).
-TEST_P(Shadow_light_gpu_test, DISABLED_shadow_head_on_plane_reads_lit)
+TEST_P(Shadow_light_gpu_test, shadow_head_on_plane_reads_lit)
 {
     check_head_on_plane(all_poses(), 0.0f);
 }
 
 // Control: at the exact pose the rasterizer constant bias moves the stored
-// plane away from the light by more than the reference offsets, so the tie
-// harness reads lit (without it, every k < 0 fails there).
+// plane away from the light by more than the reference offsets (it was the
+// only thing that kept k < 0 lit before the receiver's minimum bias), so the
+// tie harness reads lit with the caster-side bias on top of the receiver's.
 TEST_P(Shadow_light_gpu_test, shadow_tie_exact_pose_with_rasterizer_bias_reads_lit)
 {
     check_tie(exact_pose(), c_control_depth_bias_constant);
 }
 
-// Control: the same through the forward shadow_visibility pass (without the
-// bias the 16-bit map fails there).
+// Control: the same through the forward shadow_visibility pass.
 TEST_P(Shadow_light_gpu_test, shadow_head_on_plane_exact_pose_with_rasterizer_bias_reads_lit)
 {
     check_head_on_plane(exact_pose(), c_control_depth_bias_constant);

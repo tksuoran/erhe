@@ -5412,10 +5412,10 @@ constexpr int         c_shadow_image_size        = 768;
 
 // The set_graphics_preset fields a shadow measurement pins (the verify
 // script's PRESET_FIELDS plus use_draw_lists).
-constexpr std::array<const char*, 10> c_shadow_preset_fields{
+constexpr std::array<const char*, 12> c_shadow_preset_fields{
     "shadow_filter", "shadow_bias", "shadow_technique", "shadow_cull_mode", "shadow_depth_bits",
     "shadow_resolution", "point_shadow_resolution", "shadow_depth_bias_constant", "shadow_depth_bias_slope",
-    "use_draw_lists"
+    "shadow_bias_texel_scale", "shadow_bias_origin_scale", "use_draw_lists"
 };
 
 // Light node rotation shining straight down (-Y): lights shine down their -Z.
@@ -5471,6 +5471,8 @@ void pin_medium_shadow_preset(Mcp_client& client, const float shadow_depth_bias_
         {"point_shadow_resolution",    1024},
         {"shadow_depth_bias_constant", shadow_depth_bias_constant},
         {"shadow_depth_bias_slope",    -1.0f},
+        {"shadow_bias_texel_scale",    1.0f},
+        {"shadow_bias_origin_scale",   1.0f},
         {"use_draw_lists",             true}
     };
     Mcp_client::Tool_result result = client.call_tool("set_graphics_preset", args);
@@ -5771,11 +5773,10 @@ constexpr std::size_t c_min_gated_pixels = 100000;
 
 } // anonymous namespace
 
-// Plan phase 4 (the bias work, D1 to D4) makes these pass; until then the
-// head-on tie leaves bands of visibility 0 on every measured floor
-// (doc/plans/shadow_robustness.md sections 1 and 9). Run with
-// --gtest_also_run_disabled_tests to see the failing pixel counts.
-TEST_F(Mcp_test, DISABLED_shadow_head_on_receivers_have_no_acne)
+// The head-on tie of doc/plans/shadow_robustness.md section 1, with no
+// rasterizer bias: the receiver's minimum bias (doc/erhe/shadows.md
+// "Minimum bias", plan D1) alone keeps every measured floor lit.
+TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne)
 {
     Mcp_client&                            client = Mcp_env::get().client();
     const Shadow_session_state_guard       guard{client};
@@ -5791,8 +5792,8 @@ TEST_F(Mcp_test, DISABLED_shadow_head_on_receivers_have_no_acne)
 
 // Control: the same measurement with a rasterizer constant depth bias of -4
 // (plan section 1: an ulp-scaled floor for D32_SFLOAT that removes the tie at
-// these axis-aligned poses) reads no acne, so the pipeline the disabled case
-// relies on - scene load, light pose, shadow-mapped mode 30 render, world
+// these axis-aligned poses) on top of the receiver's minimum bias reads no
+// acne, so the pipeline the case above relies on - scene load, light pose, shadow-mapped mode 30 render, world
 // position render, floor classification - finds lit floor and measures it.
 TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne_with_constant_depth_bias)
 {

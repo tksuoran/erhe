@@ -116,25 +116,31 @@ The bias, in the order it is built:
   rounding of the matrix composition, identical for every filter, plus the
   gradient's fp32 noise on the wide `receiver_plane` path) and the T7 16-bit
   cases.
-- **D1 Derived minimum bias.** Every receiver gets a depth bias of at least
-  `bias = (dz / dworld) * (k_texel * texel_world + k_origin * |P| * 2^-23) +
-  q_format`, where `dz / dworld` is the light projection's depth derivative at
-  the receiver (reverse-Z perspective: near / z^2; orthographic: constant),
-  `texel_world` the shadow texel's world size at the receiver, `|P|` the
-  receiver's distance from the origin (the fp32 error of `v_position` and of
-  the composed `texture_from_world`), and `q_format` one quantum of the
-  map's actual format (D0) at the reference depth: `2^-bits` for UNORM,
-  the float step `ulp(z_ref)` for float (negligible near 0 under reverse-Z,
-  2^-24 near 1.0 under forward-Z). The
-  coefficients `k_texel` and `k_origin` are derived from the filter footprint
-  and the matrix composition, stated with their derivation in shadows.md, and
-  exposed as preset fields `shadow_bias_texel_scale` and
-  `shadow_bias_origin_scale` (dimensionless, default 1) that apply to the
-  hard, 2x2 and wide paths alike - orthogonal to the wide-only
-  `Shadow_bias_mode` axis. The receiver-side floor is used rather than the
-  rasterizer constant bias because the rasterizer unit depends on each
-  primitive's depth extent and on the format; `shadow_depth_bias_constant`
-  stays as the caster-side control.
+- **D1 Derived minimum bias.** Landed: every tap reference moves toward the
+  light by the sum of derived error bounds, in texture depth units -
+  projection (two fp32 evaluations of `(T_z . P) / (T_w . P)`, gamma_4 times
+  the row magnitudes at `P`, plus the divide), position (the receiver
+  point's rounding `sqrt(3) gamma_4 |P|` over `|c h.w|`), raster (`4u |z|`),
+  gradient (the normal's error bound from the derivative rounding times the
+  filter's tap reach, through `D_u`, `D_v`, `D`) and format (one UNORM
+  quantum on the gather paths, one float ulp) - with the terms, their
+  derivation and the undetermined-plane rule in shadows.md "Minimum bias" and
+  "Undetermined receiver plane". The plan's single `|P| 2^-23` and texel terms
+  became these separate bounds. Preset fields `shadow_bias_texel_scale`
+  (gradient term) and `shadow_bias_origin_scale` (projection, position,
+  raster), default 1, apply to the hard, 2x2 and wide paths alike;
+  `shadow_depth_bias_constant` stays the caster-side control. T7's head-on
+  cases pass at every pose, filter, bias mode and format (D16, D32) for
+  k = -4 .. +4 (the bound is 15 to 95 ulps against at most about 5 measured),
+  T8 passes. Core matrix: spot `cornell`, directional `head_on_floor` and all
+  forward-Z head-on cells pass; `head_on_floor` `--poses full` passes for Low,
+  Medium and High (directional and spot); `contact_blocks` G3 / G5 on Low and
+  Medium are unchanged. Left, identical with and without D1 (not ties):
+  directional `grazing_fan` G1 1 pixel on Medium and most of its variations
+  (spot 1 on pcf_6x6), and the 512 resolution cells (`grazing_fan` 61 / 7,
+  spot `contact_blocks` G1 763, spot `thin_walls` G1 1 / G2 2, spot
+  `cube_seams` 4, directional `spot_cones` 1); the distance technique cells
+  (D7) and cull_front cells (D5).
 - **D5 Cull mode default.** `cull_back` stores every lit front face, so the
   head-on tie is the common case; `cull_front` stores back faces of closed
   meshes and removes the tie structurally; single-sided geometry needs
@@ -258,17 +264,17 @@ Every gate is the worst value over all poses and runs:
   docstring); `--enforce` exits non-zero on a FAIL. It gains `--extra-light`
   (section 4) and the G7 timing in phase 8.
 - **T7 Library GPU tests** in `erhe_scene_renderer_gpu_tests` (ctest label
-  `gpu`): [shadows.md](../erhe/shadows.md) "Shadow sampling GPU tests". The
-  two head-on cases (`Shadow_tie` and `Shadow_head_on_plane`) are
-  `DISABLED_` until phase 4 enables them. The process-wide test device has
+  `gpu`): [shadows.md](../erhe/shadows.md) "Shadow sampling GPU tests",
+  including the two head-on cases (`Shadow_tie` and `Shadow_head_on_plane`)
+  with no rasterizer bias. The process-wide test device has
   one depth convention (reverse-Z on Vulkan), so forward-Z runs of these
   cases need the GPU test environment to create a forward-Z device. These
   run under a software Vulkan once [graphics_tests.md](graphics_tests.md)
   brings `gpu` tests to CI.
-- **T8 MCP regression case.** `Mcp_test.DISABLED_shadow_head_on_receivers_have_no_acne`
+- **T8 MCP regression case.** `Mcp_test.shadow_head_on_receivers_have_no_acne`
   (label `editor`) asserts G1 on mode 30 renders of `shadow_head_on_floor.glb`
   (spot at 4.711 m, directional straight down) and `gi_cornell.glb` at its
-  saved pose, with Medium's shadow fields pinned; phase 4 enables it. The
+  saved pose, with Medium's shadow fields pinned and no rasterizer bias. The
   control `shadow_head_on_receivers_have_no_acne_with_constant_depth_bias`
   runs the same measurement with rasterizer constant bias -4 and passes.
 

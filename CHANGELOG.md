@@ -58,6 +58,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: the receiver's minimum shadow bias
+  (`doc/erhe/shadows.md` "Minimum bias"). `Shadow_renderer::Render_parameters`
+  gains `shadow_bias_texel_scale` / `shadow_bias_origin_scale` (default 1),
+  which `Shadow_renderer::render()` stores into the same-named
+  `Light_projections` fields; `Light_buffer::update()` writes them to
+  `Light_block::shadow_bias_scales` (`light_block.shadow_bias_scales` in
+  GLSL). In `res/shaders/erhe_light.glsl`, `get_receiver_geometric_normal()`
+  returns `vec4` (unit normal, error bound in radians; 0 when the plane is
+  undetermined) and `sample_light_visibility()` takes that `vec4` in place of
+  the `vec3` normal.
 - `erhe::scene_renderer`: `Shadow_renderer::Render_parameters::depth_bias_constant`
   / `depth_bias_slope` are signed toward the light under either depth
   convention (negative moves the stored caster depth away from the light);

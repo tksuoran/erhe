@@ -385,6 +385,20 @@ void Settings_window::imgui()
                 on_graphics_preset_edited();
             }
         });
+        // Receiver minimum bias scales (doc/erhe/shadows.md "Minimum bias");
+        // 1 is the derived bound.
+        add_entry("Shadow Bias Texel Scale", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_bias_texel_scale, 0.01f, 0.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Shadow Bias Origin Scale", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_bias_origin_scale, 0.01f, 0.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
+        });
         add_entry("Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };

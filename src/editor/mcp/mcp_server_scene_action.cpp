@@ -202,6 +202,19 @@ auto read_float_argument(const json& args, const char* key, float& out) -> std::
     return {};
 }
 
+auto read_non_negative_float_argument(const json& args, const char* key, float& out) -> std::string
+{
+    if (!args.contains(key)) {
+        return {};
+    }
+    const json& value = args[key];
+    if (!value.is_number() || (value.get<float>() < 0.0f)) {
+        return fmt::format("{} must be a number >= 0", key);
+    }
+    out = value.get<float>();
+    return {};
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
@@ -236,7 +249,9 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_int_argument  (args, "shadow_depth_bits",       1, preset.shadow_depth_bits))          &&
         check(read_int_argument  (args, "point_shadow_resolution", 1, preset.point_shadow_resolution))    &&
         check(read_float_argument(args, "shadow_depth_bias_constant", preset.shadow_depth_bias_constant)) &&
-        check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope));
+        check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope))    &&
+        check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
+        check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale));
     if (!args_ok) {
         return make_error_content(error);
     }
@@ -283,6 +298,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"shadow_resolution",          in_effect.shadow_resolution},
         {"shadow_depth_bias_constant", in_effect.shadow_depth_bias_constant},
         {"shadow_depth_bias_slope",    in_effect.shadow_depth_bias_slope},
+        {"shadow_bias_texel_scale",    in_effect.shadow_bias_texel_scale},
+        {"shadow_bias_origin_scale",   in_effect.shadow_bias_origin_scale},
         {"point_shadow_resolution",    in_effect.point_shadow_resolution},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();

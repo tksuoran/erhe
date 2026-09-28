@@ -61,6 +61,21 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
     return 0.0;
 }
 
+// Unit roundoff of fp32 (round to nearest): a rounded operation returns
+// x * (1 + d) with |d| <= 2^-24. The receiver's minimum shadow bias (D1,
+// doc/erhe/shadows.md "Minimum bias") is built from bounds in these units.
+const float erhe_fp32_unit_roundoff = 1.0 / 16777216.0;
+
+// Bound on the rounding error of an fp32 world position, as a vector length.
+// Each component is a four-term fp32 sum (a matrix row times a homogeneous
+// vertex, or the barycentric interpolation of three vertices plus its
+// normalization), so its error is at most gamma_4 = 4u times the sum of the
+// magnitudes it adds up; the receiver's own distance from the origin stands in
+// for that sum. The three component bounds combine to sqrt(3) * 4u * |p|.
+float get_world_position_rounding(vec3 world_position) {
+    return (sqrt(3.0) * 4.0 * erhe_fp32_unit_roundoff) * length(world_position);
+}
+
 #if defined(ERHE_FRAGMENT_SHADER)
 // Geometric normal of the receiver plane from the screen-space derivatives of
 // the world position: exact for a planar triangle (both derivatives lie in its
@@ -68,15 +83,40 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
 // orientation follows the screen-space winding and is not meaningful;
 // sample_light_visibility() accepts either. Call it in uniform control flow
 // (before any per-light branch) so the quad's helper lanes take part.
-vec3 get_receiver_geometric_normal(vec3 world_position) {
-    return normalize(cross(ERHE_DFDX(world_position), ERHE_DFDY(world_position)));
+//
+// Returns xyz = the unit normal, w = a bound on its error in radians. Each
+// derivative is the difference of two rounded positions, so it carries at
+// most e = 2 * get_world_position_rounding(); the cross product then moves by
+// at most e * (|dp_dx| + |dp_dy| + e), and the unit normal tilts by at most
+// that over |dp_dx x dp_dy|. The bound grows as the pixel footprint shrinks
+// toward the position's fp32 resolution.
+//
+// Undetermined plane: when the derivatives do not span a plane (their cross
+// product is exactly zero - the quad's rounded positions are equal or
+// collinear, which needs a pixel footprint at or below the fp32 resolution of
+// the position) there is no receiver plane to take. The function then returns
+// vec4(0.0); sample_light_visibility() treats the receiver as head-on to the
+// light and covers every plane R1 admits (doc/erhe/shadows.md "Undetermined
+// receiver plane").
+vec4 get_receiver_geometric_normal(vec3 world_position) {
+    vec3  dp_dx    = ERHE_DFDX(world_position);
+    vec3  dp_dy    = ERHE_DFDY(world_position);
+    vec3  n        = cross(dp_dx, dp_dy);
+    float n_length = length(n);
+    if (!(n_length > 0.0)) {
+        return vec4(0.0);
+    }
+    float derivative_error = 2.0 * get_world_position_rounding(world_position);
+    float normal_error     = (derivative_error * (length(dp_dx) + length(dp_dy) + derivative_error)) / n_length;
+    return vec4(n / n_length, normal_error);
 }
 #endif
 
-// position: receiver world position (w = 1). receiver_normal: unit geometric
-// normal of the receiver plane in world space, either orientation (see
-// get_receiver_geometric_normal()); only the depth technique reads it.
-float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_normal) {
+// position: receiver world position (w = 1). receiver_plane: xyz = unit
+// geometric normal of the receiver plane in world space, either orientation,
+// or 0 when undetermined; w = the normal's error bound in radians (see
+// get_receiver_geometric_normal()). Only the depth technique reads it.
+float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_plane) {
 #if defined(ERHE_SHADOW_MAPS)
     if (light_block.shadow_texture_compare.x == max_u32) {
         return 1.0;
@@ -96,6 +136,7 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
     float array_layer                           = float(light.shadow_index_packed.x);
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
     vec3  position_in_light_texture             = position_in_light_texture_homogeneous.xyz / position_in_light_texture_homogeneous.w;
+    float reference_depth                       = position_in_light_texture.z; // before the test offset below
 #if defined(ERHE_SHADOW_TEST_REFERENCE_DEPTH_ULPS)
     // Test-only entry point, never defined by production shaders: offsets the
     // reference depth by a signed number of float ulps before any bias, so the
@@ -186,17 +227,35 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
     // limit N . L = 0.05 the plane is tilted about its line through P, on
     // the side it already faces, to exactly N . L = 0.05, which clamps
     // |dz_dUV| to the slope at that limit and keeps c away from 0.
+    //
+    // D_u, D_v and D are the world directions along which u, v and z change
+    // at P (columns of world_from_texture applied at P, up to the common
+    // positive scale h.w); the minimum bias below reads them too.
     mat4  world_from_texture  = light.world_from_texture;
-    vec3  depth_axis_in_world = normalize(world_from_texture[2].xyz - position.xyz * world_from_texture[2].w);
-    float receiver_cos        = dot(receiver_normal, depth_axis_in_world);
+    vec3  receiver_point      = position.xyz;
+    vec3  D_u                 = world_from_texture[0].xyz - receiver_point * world_from_texture[0].w;
+    vec3  D_v                 = world_from_texture[1].xyz - receiver_point * world_from_texture[1].w;
+    vec3  D                   = world_from_texture[2].xyz - receiver_point * world_from_texture[2].w;
+    float D_length            = length(D);
+    vec3  depth_axis_in_world = D / D_length;
     const float grazing_cos   = 0.05;
-    vec3  plane_normal        = receiver_normal;
-    if (abs(receiver_cos) < grazing_cos) {
+    const float grazing_tan   = sqrt(1.0 - (grazing_cos * grazing_cos)) / grazing_cos;
+    vec3  receiver_normal     = receiver_plane.xyz;
+    float normal_error        = receiver_plane.w;
+    float receiver_cos        = dot(receiver_normal, depth_axis_in_world);
+    // The plane is determined when get_receiver_geometric_normal() found one
+    // and its error bound tilts it by less than half of its own |N . L| (the
+    // clamped one), so the first-order gradient error bound below holds with
+    // at least half of c left. Otherwise the receiver is taken head-on to the
+    // light (doc/erhe/shadows.md "Undetermined receiver plane").
+    bool  plane_determined    = (dot(receiver_normal, receiver_normal) > 0.0) && (normal_error < (0.5 * max(abs(receiver_cos), grazing_cos)));
+    vec3  plane_normal        = plane_determined ? receiver_normal : depth_axis_in_world;
+    if (plane_determined && (abs(receiver_cos) < grazing_cos)) {
         vec3  tangent_direction = normalize(receiver_normal - (receiver_cos * depth_axis_in_world));
         float side              = (receiver_cos < 0.0) ? -1.0 : 1.0;
         plane_normal = (side * grazing_cos) * depth_axis_in_world + sqrt(1.0 - (grazing_cos * grazing_cos)) * tangent_direction;
     }
-    vec4 plane_in_texture = transpose(world_from_texture) * vec4(plane_normal, -dot(plane_normal, position.xyz));
+    vec4 plane_in_texture = transpose(world_from_texture) * vec4(plane_normal, -dot(plane_normal, receiver_point));
     vec2 dz_dUV           = -plane_in_texture.xy / plane_in_texture.z;
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
 
@@ -227,6 +286,69 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
     const float caster_snap_texels = 1.0 / 256.0;
     float snap_bias = (-cdd) * caster_snap_texels * dot(abs(dz_dUV), 1.0 / shadowmap_resolution);
 
+    // Minimum bias (D1; derivation in doc/erhe/shadows.md "Minimum bias").
+    // The offsets above are exact for the receiver plane in real arithmetic;
+    // what is left is where the stored and the reference depth of the same
+    // surface come from different fp32 evaluations. Each term bounds one error
+    // source in texture depth units, and their sum moves every reference
+    // toward the light:
+    //  - projection: z = (T_z . p) / (T_w . p) evaluated in fp32, once for
+    //    the reference at P and once per caster vertex in the shadow pass
+    //    (the same rows of the same matrix; the caster vertices are
+    //    evaluated at P as their stand-in): a four-term dot product per row
+    //    (gamma_4, plus one rounding of the composed depth row), the divide.
+    //  - position: the rounding of the receiver point itself moves it off
+    //    the plane by up to get_world_position_rounding(); at fixed (u, v)
+    //    that is a depth offset of that distance over |c * h.w|.
+    //  - raster: the rasterizer's fp32 interpolation of the vertex depths at
+    //    the texel centre and the viewport transform, 4u |z|.
+    //  - gradient: the normal's error bound tilts the plane about P, which
+    //    moves the plane depth at a tap by up to
+    //    normal_error * (|o_u| |D_u| + |o_v| |D_v| + |dz_dUV . o| |D|) / (|c| - normal_error |D|)
+    //    for the tap offset o (uv units), bounded by the filter's reach.
+    //  - format: one quantum of the stored depth (D0): 1 / (2^bits - 1) for
+    //    UNORM, one float ulp of z for a float map. The hard path's UNORM
+    //    reference is rounded up onto the stored grid below instead.
+    // light_block.shadow_bias_scales: x scales the gradient term
+    // (shadow_bias_texel_scale), y the projection + position + raster terms
+    // (shadow_bias_origin_scale); 1 is the derived bound.
+    const float u = erhe_fp32_unit_roundoff;
+#   if ERHE_SHADOW_FILTER == ERHE_SHADOW_FILTER_HARD
+    const float tap_reach_texels = 0.5;
+#   elif ERHE_SHADOW_FILTER == 2
+    const float tap_reach_texels = 1.0;
+#   else
+    const float tap_reach_texels = 0.5 * float(ERHE_SHADOW_FILTER);
+#   endif
+    mat4  texture_from_world = light.texture_from_world;
+    vec4  abs_receiver_point = vec4(abs(receiver_point), 1.0);
+    float row_z_magnitude    = dot(abs(vec4(texture_from_world[0].z, texture_from_world[1].z, texture_from_world[2].z, texture_from_world[3].z)), abs_receiver_point);
+    float row_w_magnitude    = dot(abs(vec4(texture_from_world[0].w, texture_from_world[1].w, texture_from_world[2].w, texture_from_world[3].w)), abs_receiver_point);
+    float h_w                = abs(position_in_light_texture_homogeneous.w);
+    float abs_z              = abs(reference_depth);
+    float projection_error   = 2.0 * (((((5.0 * u) * row_z_magnitude) + ((4.0 * u) * abs_z * row_w_magnitude)) / h_w) + (u * abs_z));
+    float plane_c            = plane_determined ? abs(plane_in_texture.z) : (grazing_cos * D_length);
+    float position_error     = get_world_position_rounding(receiver_point) / (plane_c * h_w);
+    float raster_error       = (4.0 * u) * abs_z;
+    vec2  tap_reach_uv       = (tap_reach_texels + (1.0 / 512.0) + caster_snap_texels) / shadowmap_resolution;
+    float tap_reach_lateral  = (tap_reach_uv.x * length(D_u)) + (tap_reach_uv.y * length(D_v));
+    float gradient_error     = plane_determined
+        ? ((normal_error * (tap_reach_lateral + (dot(abs(dz_dUV), tap_reach_uv) * D_length))) / (abs(plane_in_texture.z) - (normal_error * D_length)))
+        : ((grazing_tan * tap_reach_lateral) / D_length);
+#   if (ERHE_SHADOW_DEPTH_BITS >= 16) && (ERHE_SHADOW_DEPTH_BITS < 32)
+#       if ERHE_SHADOW_FILTER == ERHE_SHADOW_FILTER_HARD
+    const float format_error = 0.0;
+#       else
+    const float format_error = 1.0 / (exp2(float(ERHE_SHADOW_DEPTH_BITS)) - 1.0);
+#       endif
+#   else
+    float format_error = (2.0 * u) * abs_z;
+#   endif
+    vec2  bias_scales  = light_block.shadow_bias_scales;
+    float minimum_bias = (bias_scales.x * gradient_error) + (bias_scales.y * (projection_error + position_error + raster_error)) + format_error;
+    // Added to every tap reference, like snap_bias.
+    float tap_bias     = snap_bias + ((-cdd) * minimum_bias);
+
     // Shadow filtering method selected at compile time via the
     // ERHE_SHADOW_FILTER variant axis (set from the graphics preset's
     // Shadow_filter_mode; see shader_key.hpp / forward_renderer.cpp). The
@@ -238,7 +360,7 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
         // light only: a texel centre farther from the light already compares
         // lit). Direction-aware: reverse-Z keeps positive, forward-Z keeps negative.
         float slopeBias    = (-cdd) * max(0.0, (-cdd) * dot(texel_offset_nearest / shadowmap_resolution, dz_dUV));
-        float D_ref_       = position_in_light_texture.z + slopeBias + snap_bias;
+        float D_ref_       = position_in_light_texture.z + slopeBias + tap_bias;
         // Direction-aware rounding: reverse-Z uses ceil (toward near=1),
         // forward-Z uses floor (toward near=0). Snap the reference to the shadow
         // depth format's quantization grid so it matches the hardware comparison
@@ -274,7 +396,7 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
         vec4 surfaceZ = vec4(0.0);
         for (int t = 0; t < 4; ++t) {
             vec2 texel_uv_offset = (corners[t] - gather_fraction) / shadowmap_resolution;
-            surfaceZ[t] = (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV)) + snap_bias;
+            surfaceZ[t] = (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV)) + tap_bias;
         }
         vec2 fracCoords = clamp(gather_fraction, 0.0, 1.0);
 
@@ -332,14 +454,14 @@ float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_nor
                     // Unlike an offset-scaled one-sided bias it adds no net
                     // bias, so the contact shadow stays attached no matter how
                     // wide the kernel is.
-                    float ref = clamp(position_in_light_texture.z + dot(texel_uv_offset, dz_dUV) + snap_bias, 0.0, 1.0);
+                    float ref = clamp(position_in_light_texture.z + dot(texel_uv_offset, dz_dUV) + tap_bias, 0.0, 1.0);
 #       else // ERHE_SHADOW_BIAS_SLOPE_SCALED
                     // Previous method: a one-sided slope bias scaled by the
                     // tap's offset from the sample. The bias grows with the
                     // kernel radius, which detaches the contact shadow
                     // (peter-panning) on wide kernels.
                     float bias = (-cdd) * max(0.0, (-cdd) * dot(texel_uv_offset, dz_dUV));
-                    float ref  = clamp(position_in_light_texture.z + bias + snap_bias, 0.0, 1.0);
+                    float ref  = clamp(position_in_light_texture.z + bias + tap_bias, 0.0, 1.0);
 #       endif
                     // Non-strict, direction-aware comparison to match the
                     // gequal / lequal hardware sampler.

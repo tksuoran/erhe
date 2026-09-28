@@ -43,6 +43,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .brdf_phi_incident_phi     = light_block.add_vec2 ("brdf_phi_incident_phi"    )->get_offset_in_parent(),
         .shadow_debug_light_index  = light_block.add_uint ("shadow_debug_light_index" )->get_offset_in_parent(),
         .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
+        .shadow_bias_scales        = light_block.add_vec2 ("shadow_bias_scales"       )->get_offset_in_parent(),
 
         .ddgi_grid_origin          = light_block.add_vec4 ("ddgi_grid_origin"         )->get_offset_in_parent(),
         .ddgi_grid_spacing         = light_block.add_vec4 ("ddgi_grid_spacing"        )->get_offset_in_parent(),
@@ -577,6 +578,9 @@ auto Light_buffer::update(
 
     const glm::vec2 brdf_phi_incident_phi = (light_projections != nullptr) ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const uint32_t  brdf_material         = (light_projections != nullptr) ? light_projections->brdf_material_slot : 0u;
+    const glm::vec2 shadow_bias_scales    = (light_projections != nullptr)
+        ? glm::vec2{light_projections->shadow_bias_texel_scale, light_projections->shadow_bias_origin_scale}
+        : glm::vec2{1.0f, 1.0f};
 
     // Late write to begin of buffer to full in light counts
     write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
@@ -596,6 +600,7 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.shadow_debug_light_index,  as_span(shadow_debug_light_index));
 
     write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
+    write(light_gpu_data, common_offset + offsets.shadow_bias_scales,        as_span(shadow_bias_scales)     );
 
     // DDGI probe volume (doc/editor/ddgi.md phase 6). ddgi_counts.w is the
     // gate the fragment shader reads: 0 = no volume, keep the flat ambient.

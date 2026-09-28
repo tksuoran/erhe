@@ -379,10 +379,11 @@ and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
 `Shadow_bias_mode`), with `cull_back`:
 
 - `shadow_tie_head_on_plane_reads_lit` and `shadow_head_on_plane_reads_lit`
-  require visibility 1 on the head-on plane for every offset / pixel. They
-  fail on the current bias (the head-on tie of
-  [plans/shadow_robustness.md](../plans/shadow_robustness.md) section 1) and
-  are `DISABLED_` until its phase 4.
+  require visibility 1 on the head-on plane for every offset / pixel with no
+  rasterizer bias (the head-on tie of
+  [plans/shadow_robustness.md](../plans/shadow_robustness.md) section 1):
+  the minimum bias ("Minimum bias" below) alone separates the tie, with
+  4 ulps of reference offset to spare in either direction.
 - `shadow_tie_exact_pose_with_rasterizer_bias_reads_lit` and
   `shadow_head_on_plane_exact_pose_with_rasterizer_bias_reads_lit`: at the
   identity pose a rasterizer constant bias of -4 makes the plane read 1.
@@ -453,14 +454,14 @@ light ray through `P`. So `|c| / |D|` is `|N . L|`. Two degenerate cases:
   `L`. That clamps `|dz/dUV|` to the slope at the grazing limit in the
   direction the receiver actually tilts, and keeps `c` bounded away from 0.
 
-The remaining error of the gradient is the fp32 rounding of the interpolated
-world position: each derivative carries up to about one ulp of `|p|`, so the
-normal tilts by about `ulp(|p|) / pixel_world_size`. On a head-on receiver
-(exact gradient 0) this leaves a gradient of that order, which the per-tap
-offsets of the wide `receiver_plane` path multiply by up to `K / 2` texels;
-the minimum bias of D1 in
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) is what
-absorbs it.
+The remaining error of the gradient is the fp32 rounding of the world
+position: each derivative carries a few ulps of `|p|`, so the normal tilts by
+about `ulp(|p|) / pixel_world_size`. On a head-on receiver (exact gradient 0)
+this leaves a gradient of that order, which the per-tap offsets of the wide
+`receiver_plane` path multiply by up to `K / 2` texels.
+`get_receiver_geometric_normal()` therefore returns a bound on that tilt next
+to the normal (`vec4`: xyz the unit normal, w the bound in radians), and the
+gradient term of the minimum bias (below) covers it.
 
 #### Tap offsets
 
@@ -496,16 +497,17 @@ Per path:
 
 - Hard (`ERHE_SHADOW_FILTER == 0`): one-sided offset to the fetched texel's
   centre (toward the light only - a centre farther from the light already
-  compares lit), plus `snap_bias`, a direction-aware precision snap, then the
-  hardware comparison sampler.
+  compares lit), plus `snap_bias` and the minimum bias, a direction-aware
+  precision snap, then the hardware comparison sampler.
 - 2x2 (`== 2`): one `textureGather`; each of the four references gets the
-  one-sided offset to its own texel centre plus `snap_bias`; the results are
-  bilinearly weighted by `gather_fraction`.
+  one-sided offset to its own texel centre plus `snap_bias` and the minimum
+  bias; the results are bilinearly weighted by `gather_fraction`.
 - Wide KxK (`>= 4`): `(K/2)^2` gathers; the `ERHE_SHADOW_BIAS` axis picks
   either `receiver_plane` (signed per-tap `dot(texel_uv_offset, dz/dUV)` plus
-  `snap_bias`: the reference is the receiver plane's depth at the tap, with no
-  net bias, so the contact shadow stays attached for any kernel size) or the
-  legacy one-sided `slope_scaled` offset plus `snap_bias`.
+  `snap_bias` and the minimum bias: the reference is the receiver plane's
+  depth at the tap, with no slope-scaled net bias, so the contact shadow stays
+  attached for any kernel size) or the legacy one-sided `slope_scaled` offset
+  plus `snap_bias` and the minimum bias.
 
 The RPDB article's code uses the signed offset for its single tap and
 `min(0, ...)` (one-sided) for its 2x2 gather, with no scale factor; erhe
@@ -514,12 +516,120 @@ that the offsets above remove: the wide paths assumed the sample point sits on
 a texel corner (tap offsets of +-0.5 texel), up to half a texel off, and the
 snap error was unaccounted for. With the exact offsets and `snap_bias`, the
 `grazing_fan` tiles (0 to 88 degrees) read no acne for every filter and both
-wide bias modes, for directional and spot lights. The tie that remains is the
-head-on receiver of
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1,
-whose exact gradient is 0: its bias cannot come from the gradient at all,
-and what is left there is the reference / stored depth rounding of the matrix
-composition and the gradient rounding above.
+wide bias modes, for directional and spot lights. On the head-on receiver of
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1 the
+exact gradient is 0, so no bias can come from the gradient there; the
+minimum bias below is what separates that tie.
+
+#### Minimum bias
+
+The tap offsets are exact for the receiver plane in real arithmetic. Where the
+stored depth and the reference come from the same surface - a lit face stored
+under `cull_back` or `cull_none`, most visibly the head-on receiver - the
+comparison is a tie that fp32 rounding decides. Every tap reference therefore
+also moves toward the light by a minimum bias: the sum of bounds on the error
+sources, in texture depth units, computed per fragment in
+`sample_light_visibility()`. Notation: `u = 2^-24` the fp32 unit roundoff,
+`gamma_n = n u` (first order), `T = texture_from_world` with depth row `T_z`
+and w row `T_w`, `h = T (P, 1)`, `z = h.z / h.w`, `|x|` elementwise absolute
+values, `D_u`, `D_v`, `D` the columns 0, 1, 2 of `world_from_texture`
+applied at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and
+`c` the depth coefficient of the receiver plane in texture space.
+
+- **Projection.** The reference is `(T_z . P) / (T_w . P)`. The shadow pass
+  evaluates the stored depth of each caster vertex from the same rows (for a
+  [0, 1] depth range the z and w rows of `texture_from_world` are the
+  entries of the light's `clip_from_world`; for [-1, 1] the composed depth
+  row carries one rounding more) and divides. A four-term fp32 dot product is
+  off by at most `gamma_4` times the sum of the magnitudes it adds,
+  `S_z = |T_z| . (|P|, 1)` and `S_w = |T_w| . (|P|, 1)`, and the divide adds
+  `u |z|`, so one evaluation is off by at most
+  `E = (5u S_z + 4u |z| S_w) / |h.w| + u |z|`. The reference and the stored
+  depth are two evaluations: `2 E`. The row magnitudes carry the light's
+  position and the projection's scale, `|P|` the receiver's distance from the
+  origin. The caster vertices are evaluated at `P`, as their stand-in.
+- **Position.** Both passes compute the caster's vertices as the same fp32
+  `world_from_node * vertex` (`standard.vert`), so the vertex rounding moves
+  the stored plane and the receiver's plane together. What differs is the
+  receiver point: `v_position` is interpolated from those vertices in fp32
+  (the T7 tie pass computes it from a matrix), which puts it off the plane by
+  at most `get_world_position_rounding(P) = sqrt(3) gamma_4 |P|` (each
+  component is a four-term sum; `|P|` stands in for the magnitudes summed).
+  At fixed (u, v), an offset `eta` along the unit plane normal changes the
+  depth by `eta / (c h.w)`, since the texture-space plane evaluates to `eta`
+  at `h`: `E_position = sqrt(3) 4u |P| / (|c| |h.w|)`, with `|c| >= 0.05 |D|`
+  after the grazing clamp.
+- **Raster.** The rasterizer interpolates the vertex depths at the texel
+  centre in fp32 and applies the viewport transform: `4u |z|`, `z` standing
+  in for the vertex depths.
+- **Gradient.** `get_receiver_geometric_normal()` bounds the error of its
+  normal: each world-position derivative is the difference of two rounded
+  positions, off by at most `e = 2 sqrt(3) gamma_4 |P|`, so the cross
+  product moves by at most `e (|dp/dx| + |dp/dy| + e)` and the unit normal
+  tilts by at most `theta`, that over `|dp/dx x dp/dy|`. The texture-space
+  plane is linear in the normal, `(a, b, c) = (N . D_u, N . D_v, N . D)`, so
+  a tilt `dN` with `|dN| <= theta` moves the plane depth
+  `z - (a o_u + b o_v) / c` at a tap offset `o` (uv units) by at most
+  `theta (|o_u| |D_u| + |o_v| |D_v| + |dz/dUV . o| |D|) / (|c| - theta |D|)`.
+  The tap reach bounds `|o|` per map axis: 1/2 texel for `hard`, 1 for
+  `pcf_2x2`, K/2 for `pcf_KxK`, each plus the 1/512 texel selection margin
+  and the 1/256 caster snap step (`snap_bias` also reads the gradient). This
+  is the term that keeps the head-on receiver's wide `receiver_plane` taps
+  from reading the gradient's rounding noise as slope.
+- **Format.** The map stores the depth rounded to its format (D0): at most
+  one quantum `1 / (2^bits - 1)` for UNORM, whatever the rounding mode, and
+  one float ulp of `z`, at most `2u |z|`, for a float map (negligible near 0
+  under reverse-Z, about `2^-24` near 1.0 under forward-Z). The hard path's
+  UNORM reference is rounded up onto the stored grid instead (the precision
+  snap), which covers the quantum without adding it.
+
+The minimum bias is
+
+    shadow_bias_texel_scale * gradient
+      + shadow_bias_origin_scale * (2 E + position + raster)
+      + format
+
+added toward the light (`(-cdd)` sign) to every tap reference of the hard,
+2x2 and wide paths alike, orthogonal to the wide-only `ERHE_SHADOW_BIAS`
+axis; the tap offsets and `snap_bias` stay as they are. The two scales are
+graphics preset fields (dimensionless, default 1 = the derived bound;
+Settings window rows "Shadow Bias Texel Scale" / "Shadow Bias Origin Scale",
+`set_graphics_preset`), carried by `Shadow_renderer::Render_parameters` into
+`Light_projections` and written to `light_block.shadow_bias_scales`
+(x texel, y origin). The receiver-side bound is used rather than the
+rasterizer constant bias because the rasterizer's unit depends on each
+primitive's depth extent and on the format; `shadow_depth_bias_constant`
+stays as the caster-side control.
+
+Magnitude. On the T7 station (receivers within about 5 m of the origin, a
+D32 map) the bound is 15 to 95 float ulps of the reference depth over the
+poses and filters, against at most about 5 ulps of measured stored /
+reference difference. In world units that is micrometres, so the
+`contact_blocks` contact gap (G3) and edge placement (G5) read the same with
+and without it on Low and Medium. It grows linearly with `|P|`: at 10 km
+from the origin the position term alone is about 4 mm along the receiver
+normal.
+
+#### Undetermined receiver plane
+
+The receiver plane is undetermined when the world-position derivatives do not
+span a plane (their cross product is exactly 0: the quad's rounded positions
+are equal or collinear, which needs a pixel footprint at or below the fp32
+resolution of `P`; `get_receiver_geometric_normal()` then returns
+`vec4(0.0)`), or when the normal's error bound reaches half the receiver's own
+`|N . L|` (taken at least at the 0.05 grazing limit), beyond which the
+first-order gradient bound does not hold. `sample_light_visibility()` then
+takes the receiver head-on to the light, `N = D / |D|` (the light ray at
+`P`), for the gradient and the tap offsets, and makes the bias cover every
+plane R1 admits:
+
+- Gradient term. In the homogeneous plane equation a plane tilted from the
+  head-on normal by `alpha` has normal `N + tan(alpha) T`, `T` a unit vector
+  perpendicular to `D`, which leaves `c = N . D` unchanged, so the plane
+  depth at a tap moves by at most
+  `tan(alpha) (|o_u| |D_u| + |o_v| |D_v|) / |D|`. `tan(alpha)` is taken at
+  the grazing limit, `sqrt(1 - 0.05^2) / 0.05 = 19.97`.
+- Position term. `|c|` is taken at the grazing limit, `0.05 |D|`.
 
 This matches the article's core idea: a signed receiver-plane gradient extended
 to PCF with a per-texel bias. The hard and 2x2 paths always use their own fixed

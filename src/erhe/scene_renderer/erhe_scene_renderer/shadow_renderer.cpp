@@ -360,6 +360,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // bind_shadow_samplers then binds the fallback cube.
     parameters.light_projections.shadow_cube_texture = parameters.point_cube_texture;
 
+    // The receiver-side minimum bias scales go with the shadow maps they bias.
+    parameters.light_projections.shadow_bias_texel_scale  = parameters.shadow_bias_texel_scale;
+    parameters.light_projections.shadow_bias_origin_scale = parameters.shadow_bias_origin_scale;
+
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
         erhe::utility::Debug_label{"Shadow_renderer::render()"}

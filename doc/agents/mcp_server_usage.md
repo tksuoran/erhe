@@ -455,8 +455,10 @@ for the rest of the editor run: `shadow_filter`, `shadow_bias`,
 bit count, as in `graphics_presets.json`: any positive value, resolved by
 `choose_shadow_depth_format()` to the nearest supported depth format,
 preferring more bits), `shadow_resolution`, `point_shadow_resolution`,
-`shadow_depth_bias_constant`, `shadow_depth_bias_slope`, `use_draw_lists`.
-Omitted arguments keep their values, so `{}` queries. The edited preset goes
+`shadow_depth_bias_constant`, `shadow_depth_bias_slope`,
+`shadow_bias_texel_scale`, `shadow_bias_origin_scale` (the minimum bias scales
+of [shadows.md](../erhe/shadows.md) "Minimum bias", numbers >= 0),
+`use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes
 through `Graphics_settings::apply_preset()`, the same apply as a Settings
 window preset edit (limits clamp; the shadow maps are reconfigured on the next
 frame, logged as `Reconfiguring N shadow render node(s) from preset ...`). The

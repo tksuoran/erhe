@@ -333,9 +333,10 @@ void main()
 
     vec3 V = normalize(view_position_in_world - v_position.xyz);
 
-    // Receiver plane for the shadow depth bias (sample_light_visibility()),
-    // taken here in uniform control flow, ahead of the per-light branches.
-    vec3 shadow_receiver_normal = get_receiver_geometric_normal(v_position.xyz);
+    // Receiver plane for the shadow depth bias (sample_light_visibility()):
+    // geometric normal and its error bound, taken here in uniform control
+    // flow, ahead of the per-light branches.
+    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_position.xyz);
 
 #  ifdef ERHE_USE_VERTEX_VARYING_TANGENT
     vec3 T = normalize(v_T);
@@ -612,7 +613,7 @@ void main()
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
-                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, shadow_receiver_normal);
+                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, shadow_receiver_plane);
                 color += intensity * BXDF_CALL(L);
             }
         }
@@ -642,7 +643,7 @@ void main()
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-                float light_visibility  = sample_light_visibility(v_position, light_index, shadow_receiver_normal);
+                float light_visibility  = sample_light_visibility(v_position, light_index, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
@@ -969,12 +970,12 @@ void main()
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
             if (dbg_light_index < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)) {
-                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_normal);
+                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED)))) {
-                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_normal);
+                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
