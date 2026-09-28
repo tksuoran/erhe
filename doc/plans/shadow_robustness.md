@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is the phase 4 full matrix run
+the current gate table. The remaining work is the phase 4 pairwise matrix run
 and phases 5 to 8.
 
 ## 1. Evidence: the head-on tie
@@ -217,8 +217,16 @@ and `--runs 1`; a failing cell is re-run three times before it counts. A phase
 exit additionally runs `head_on_floor` with the full sweep (425 poses: 200
 heights in 1 mm steps, 200 over 0.5 to 10 m, a 5 x 5 lateral grid) for the
 three presets, because the short sweep can miss the tie at a given pose. The
-**full matrix** is the product of the axes with the short sweep; it runs at
-the end of phase 4 and phase 8.
+**pairwise matrix** (`--matrix pairwise`) is every committed preset plus an
+all-pairs covering array over the axes other than light type (`shadow_depth_bits`
+requested as 16, 24 and 32; `point_shadow_resolution` equal to
+`shadow_resolution`), each config measuring all three light types, with the
+short pose sweep, `--runs 1` and the same re-run rule: every pair of values of
+any two axes is in at least one config, so a failure that needs two settings
+together shows up. `shadow_bias` only applies to wide filters, so its pairs
+are covered by wide-filter configs. The product of the axes is 864 configs,
+about 30 hours at the core matrix's rate, which is not a usable gate; the
+covering array is 14 configs. It runs at the end of phase 4 and phase 8.
 
 ## 6. Measurement and gates
 
@@ -297,12 +305,22 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 4 - full matrix.** D4, D2 / D3 and D1 have landed and the core
+- **Phase 4 - pairwise matrix.** D4, D2 / D3 and D1 have landed and the core
   matrix holds the exit (section 9): G1 to G5 pass for directional and spot
   in every `cull_back` and `cull_none` depth-technique cell, T7's head-on
   cases and T8 are enabled and pass, `head_on_floor` passes the full sweep.
-  What remains is the full matrix run (864 configs, about 30 hours at the
-  core matrix's rate on the development iGPU).
+  The pairwise matrix (section 5; 17 configs, 11485 renders, 66.9 min wall)
+  fails outside D5 / D6 / D7 in one cell: `pcf_6x6` at 512 texels
+  (`pw14`, `cube_seams`, directional, pose 0, view `corner`), G2 1 pixel at
+  visibility 0.167, the same under `receiver_plane` and `slope_scaled`. The
+  pixel's sample point lies 3.4 texels inside the map's u edge, so the
+  kernel's leftmost tap column (offset -2.9 texels) reads texel column 0, the
+  pass's empty scissor border ([shadows.md](../erhe/shadows.md) "One texel
+  empty border"), which compares lit; the other 30 taps see the caster with
+  0.03 to 0.06 depth margin. What remains is deciding whether the directional
+  fit pads the map by the filter radius or the verify exclusion widens from
+  the one-texel border to filter radius plus one texel, and re-running the
+  pairwise matrix.
 - **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
   place; update the codegen default, the presets and shadows.md together.
 - **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
@@ -311,7 +329,8 @@ section 9 rewritten to the new gate table.
   `--extra-light` variant.
 - **Phase 8 - cost and documentation.** G7; rewrite shadows.md "Shadow
   sampling" and "Bias technique" for the landed design, add the verify recipe
-  to `doc/testing.md`, and delete this plan's finished items.
+  to `doc/testing.md`, run the pairwise matrix, and delete this plan's
+  finished items.
 
 ## 9. Gate table
 

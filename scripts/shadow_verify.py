@@ -11,11 +11,11 @@ PASS / FAIL table, writes logs/shadow_verify/<timestamp>.json and exits
 non-zero on a FAIL with --enforce.
 
 Usage:
-    py -3 scripts/shadow_verify.py [--matrix core|full] [--poses full|short]
+    py -3 scripts/shadow_verify.py [--matrix core|pairwise|full] [--poses full|short]
                                    [--station NAME[,NAME]] [--light TYPE[,TYPE]]
                                    [--config NAME[,NAME]] [--around PRESET|all]
                                    [--set KEY=VALUE ...] [--root-offset X ...]
-                                   [--runs N] [--enforce] [--no-g6]
+                                   [--runs N] [--rerun-failing N] [--enforce] [--no-g6]
                                    [--save-images none|failing|all] [--workers N]
                                    [--list-configs] [--reuse] [--port N] [--editor PATH]
 
@@ -124,10 +124,26 @@ value set_graphics_preset reports are printed per config and recorded in the
 JSON as "shadow_map_format" / "shadow_depth_bits_axis"), shadow_cull_mode,
 forward-Z (a second editor launched with ERHE_FORCE_DISABLE_REVERSE_DEPTH=1;
 skipped with --reuse), use_draw_lists, shadow_resolution and
-point_shadow_resolution (both 512, both 2048). --matrix full is the product of
-the axes. The distance technique covers directional and spot lights only (the
+point_shadow_resolution (both 512, both 2048). --matrix pairwise adds a
+deterministic all-pairs covering array over the section 5 axes around the
+--around preset (shadow_filter, shadow_bias, shadow_technique,
+shadow_depth_bits 16 / 24 / 32, shadow_cull_mode, depth convention,
+use_draw_lists, shadow_resolution = point_shadow_resolution 512 / 2048):
+every pair of values of any two axes is in at least one config, built
+greedily (each step takes the first row of the product that covers the most
+uncovered pairs) and asserted complete before the run. shadow_bias only
+applies to wide filters, so its pairs are required with the wide filters
+only and the other filters' configs carry the preset's bias (shown as "-"
+in the config name). --matrix full is the product of the axes (864
+configs, about 30 hours): listed for completeness, not a gate. Light type
+is a per-cell dimension of every matrix. The distance technique covers directional and spot lights only (the
 point light path samples its distance cube for both techniques); point x
 distance cells are reported as unsupported.
+
+Re-runs (section 5): after the --runs, every cell with a FAIL verdict is
+re-run --rerun-failing times (default 3) before it counts; its gates are the
+worst over all runs and the table's rerun column gives in how many of the
+re-runs it failed again.
 
 Poses: --poses short (default) = the module's "short" sweep (5 poses per
 station and light type), full = section 5's sweep. head_on_floor directional
@@ -370,6 +386,101 @@ def full_matrix(base):
     return out
 
 
+# The section 5 axes of the pairwise and full matrices (light type is a
+# per-cell dimension: every config measures all three).
+PAIRWISE_AXES = [
+    ("shadow_filter", FILTERS),
+    ("shadow_bias", ["receiver_plane", "slope_scaled"]),
+    ("shadow_technique", ["depth", "distance"]),
+    ("shadow_depth_bits", [16, 24, 32]),
+    ("shadow_cull_mode", ["cull_front", "cull_back", "cull_none"]),
+    ("forward_z", [False, True]),
+    ("use_draw_lists", [True, False]),
+    ("resolution", [512, 2048]),
+]
+BIAS_AXIS = 1
+
+
+def pairwise_required_pairs():
+    """Every pair of values of two axes, except shadow_bias with a filter that
+    is not wide (the bias only applies to wide filters; its pairs with the
+    other axes are therefore covered by wide-filter configs)."""
+    required = set()
+    for (i, (_, values_i)), (j, (_, values_j)) in itertools.combinations(enumerate(PAIRWISE_AXES), 2):
+        for a in values_i:
+            for b in values_j:
+                if (i == 0) and (j == BIAS_AXIS) and (a not in WIDE_FILTERS):
+                    continue
+                required.add(((i, a), (j, b)))
+    return required
+
+
+def pairwise_covered(row):
+    """The pairs a row (tuple of values, None for an irrelevant bias) covers."""
+    out = set()
+    for i, j in itertools.combinations(range(len(row)), 2):
+        if (row[i] is None) or (row[j] is None):
+            continue
+        out.add(((i, row[i]), (j, row[j])))
+    return out
+
+
+def pairwise_rows():
+    """Deterministic greedy all-pairs covering array: every step takes the
+    first row of the full product (in axis value order) that covers the most
+    still-uncovered pairs. Rows with a filter that is not wide carry no bias
+    (None). Returns (rows, required pairs)."""
+    required = pairwise_required_pairs()
+    candidates = []
+    seen = set()
+    for row in itertools.product(*[values for _, values in PAIRWISE_AXES]):
+        if row[0] not in WIDE_FILTERS:
+            row = row[:BIAS_AXIS] + (None,) + row[BIAS_AXIS + 1:]
+        if row in seen:
+            continue
+        seen.add(row)
+        candidates.append((row, pairwise_covered(row) & required))
+    uncovered = set(required)
+    rows = []
+    while uncovered:
+        best_row = None
+        best_gain = 0
+        for row, covers in candidates:
+            gain = len(covers & uncovered)
+            if gain > best_gain:
+                best_row, best_gain = row, gain
+        rows.append(best_row)
+        uncovered -= pairwise_covered(best_row)
+    return rows, required
+
+
+def pairwise_check(rows, required):
+    """Coverage self-check: every required pair is in some row."""
+    covered = set()
+    for row in rows:
+        covered |= pairwise_covered(row)
+    missing = required - covered
+    assert not missing, f"pairwise matrix misses {len(missing)} pairs, e.g. {sorted(missing, key=str)[:5]}"
+    return len(required)
+
+
+def pairwise_matrix(base):
+    rows, required = pairwise_rows()
+    pair_count = pairwise_check(rows, required)
+    print(f"pairwise: {len(rows)} configs cover all {pair_count} value pairs of {len(PAIRWISE_AXES)} axes "
+          f"(full product: {len(full_matrix(base))} configs)", flush=True)
+    out = []
+    for index, (filt, bias, tech, bits, cull, fz, dl, res) in enumerate(rows):
+        bias_value = base["fields"]["shadow_bias"] if bias is None else bias
+        fields = dict(base["fields"], shadow_filter=filt, shadow_bias=bias_value, shadow_technique=tech,
+                      shadow_depth_bits=bits, shadow_cull_mode=cull, use_draw_lists=dl,
+                      shadow_resolution=res, point_shadow_resolution=res)
+        name = (f"pw{index + 1:02d}/{filt}/{bias if bias is not None else '-'}/{tech}/d{bits}/{cull}/"
+                f"{'fz' if fz else 'rz'}/{'dl' if dl else 'nodl'}/r{res}")
+        out.append({"name": name, "fields": fields, "forward_z": fz, "note": ""})
+    return out
+
+
 def build_matrix(args):
     presets = load_presets()
     bases = [base_config(name, p) for name, p in presets.items()]
@@ -380,6 +491,9 @@ def build_matrix(args):
             raise SystemExit(f"--around {args.around!r}: no such preset ({', '.join(presets)})")
         for base in around:
             configs += core_variations(base)
+    elif args.matrix == "pairwise":
+        medium = next((b for b in bases if b["name"] == args.around), bases[0])
+        configs += pairwise_matrix(medium)
     else:
         medium = next((b for b in bases if b["name"] == args.around), bases[0])
         configs += full_matrix(medium)
@@ -1438,9 +1552,16 @@ def verdicts(cell):
 TABLE_WIDTHS = {"G1": 20, "G2": 20, "G3": 12, "G4": 40, "G5": 18, "G6": 10}
 
 
+def rerun_text(cell):
+    """'failed / re-runs' of a failing cell's section 5 re-runs, '-' without."""
+    if not cell.get("reruns"):
+        return "-"
+    return f"{cell.get('reruns_failed', 0)}/{cell['reruns']}"
+
+
 def print_table(cells, order):
     header = f"{'config':34s} {'light':11s} {'station':15s}" + "".join(
-        f" {g:>{TABLE_WIDTHS[g]}s}" for g in GATES[:-1]) + "  G7"
+        f" {g:>{TABLE_WIDTHS[g]}s}" for g in GATES[:-1]) + "  rerun  G7"
     print(header)
     print("-" * len(header))
     failures = 0
@@ -1449,7 +1570,8 @@ def print_table(cells, order):
         v = verdicts(cell)
         failures += sum(1 for g in GATES if v[g].startswith("FAIL"))
         print(f"{cell['config'][:34]:34s} {cell['light']:11s} {cell['station']:15s}"
-              + "".join(f" {v[g]:>{TABLE_WIDTHS[g]}s}" for g in GATES[:-1]) + f"  {v['G7']}")
+              + "".join(f" {v[g]:>{TABLE_WIDTHS[g]}s}" for g in GATES[:-1])
+              + f"  {rerun_text(cell):>5s}  {v['G7']}")
     return failures
 
 
@@ -1496,22 +1618,35 @@ def select(names, pattern, what):
     return out
 
 
-def measure_editor(session, pool, configs, args, cells, order, overrides, run_index, runs, image_dir, pending_images):
-    """All stations x configs x lights x poses x views on one editor."""
+def measure_editor(session, pool, configs, args, cells, order, overrides, run_index, runs, image_dir, pending_images,
+                   only_keys=None):
+    """All stations x configs x lights x poses x views on one editor; with
+    only_keys, only those cells (the failing-cell re-runs)."""
     stations = select(list(rooms.STATIONS), args.station, "station")
     lights = select(LIGHT_TYPES, args.light, "light")
     offsets = [[float(v), 0.0, 0.0] for v in args.root_offset]
     pending = []
+
+    def wanted(name, light_type, station):
+        return (only_keys is None) or (cell_key(name, light_type, station) in only_keys)
+
     for offset in offsets:
+        suffix = f"@{offset[0]:g}m" if offset[0] else ""
         for station in stations:
+            if not any(wanted(cfg["name"] + suffix, lt, station) for cfg in configs for lt in lights):
+                continue
             station_info = rooms.STATIONS[station]
             session.load_station(station, offset)
             views = station_views(station)
             for config in configs:
+                if not any(wanted(config["name"] + suffix, lt, station) for lt in lights):
+                    continue
                 session.apply_config(config, overrides)
                 fields = dict(config["fields"], **overrides)
                 for light_type in lights:
-                    name = config["name"] + (f"@{offset[0]:g}m" if offset[0] else "")
+                    name = config["name"] + suffix
+                    if not wanted(name, light_type, station):
+                        continue
                     key = cell_key(name, light_type, station)
                     technique = fields["shadow_technique"]
                     resolution = fields["point_shadow_resolution"] if light_type == "point" else fields["shadow_resolution"]
@@ -1633,7 +1768,8 @@ def g6_jobs(session, pool, station, view, offset, pose, radius, key, light_name,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--matrix", default="core", choices=["core", "full"])
+    parser.add_argument("--matrix", default="core", choices=["core", "pairwise", "full"],
+                        help="core (default), pairwise (all-pairs covering array) or full (the product; not a gate)")
     parser.add_argument("--poses", default=None, choices=["full", "short"],
                         help="pose sweep (default: short; the core matrix with full poses does not fit an hour)")
     parser.add_argument("--around", default="Medium", help="preset the core variations are made around, or 'all'")
@@ -1645,13 +1781,15 @@ def main():
     parser.add_argument("--root-offset", nargs="*", type=float, default=[0.0], metavar="X",
                         help="station root x offsets in metres (R7: 1000 10000)")
     parser.add_argument("--runs", type=int, default=1, help="full runs; every gate is the worst over the runs")
+    parser.add_argument("--rerun-failing", type=int, default=3, metavar="N",
+                        help="re-run every failing cell N times after the runs (section 5; default 3)")
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
     parser.add_argument("--no-g6", action="store_true", help="skip the G6 camera translation renders")
     parser.add_argument("--save-images", default="none", choices=["none", "failing", "all"],
                         help="failing: the worst visibility image per failing cell; all: every analyzed image (debug)")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) // 2),
                         help="analysis processes (default: half the CPUs; more slows the editor's renders)")
-    parser.add_argument("--list-configs", action="store_true", help="print the matrix and exit (needs an editor)")
+    parser.add_argument("--list-configs", action="store_true", help="print the matrix and exit")
     parser.add_argument("--reuse", action="store_true", help="drive the editor already running on --port")
     parser.add_argument("--port", type=int, default=3771, help="MCP port (preferred port of a launched editor)")
     parser.add_argument("--editor", default=DEFAULT_EDITOR)
@@ -1665,13 +1803,30 @@ def main():
 
     from common import Creation  # noqa: E402 - after sys.path
 
+    all_configs = build_matrix(args)
+    names = [cfg["name"] for cfg in all_configs]
+    selected = set(select(names, args.config, "config"))
+    all_configs = [cfg for cfg in all_configs if cfg["name"] in selected]
+    skipped = []
+    if args.reuse:
+        for cfg in all_configs:
+            if cfg["forward_z"]:
+                skipped.append(f"{cfg['name']}: forward-Z needs a launched editor (--reuse)")
+    print(f"{len(all_configs)} configs:", flush=True)
+    for cfg in all_configs:
+        print(f"  {cfg['name']}  (shadow_depth_bits {cfg['fields']['shadow_depth_bits']})"
+              + (f"  ({cfg['note']})" if cfg["note"] else ""))
+    for line in skipped:
+        print(f"  skipped: {line}")
+    if args.list_configs:
+        return 0
+
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(OUT_DIR, stamp)
     os.makedirs(run_dir, exist_ok=True)
     backup = None if args.reuse else Config_backup()
     cells = {}
     order = []
-    skipped = []
     pending_images = {}
     wall_started = time.time()
     render_seconds = []
@@ -1680,9 +1835,8 @@ def main():
     try:
         with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as pool:
             phases = [False] if args.reuse else [False, True]
-            all_configs = None
             for forward_z in phases:
-                if (all_configs is not None) and not any(cfg["forward_z"] == forward_z for cfg in all_configs):
+                if not any(cfg["forward_z"] == forward_z for cfg in all_configs):
                     continue
                 process = None
                 c = None
@@ -1698,31 +1852,33 @@ def main():
                     if process is not None and info.get("pid") != process.pid:
                         raise RuntimeError(f"port {port} is served by pid {info.get('pid')}, not {process.pid}")
                     session = Session(c, run_dir, forward_z)
-                    if all_configs is None:
-                        all_configs = build_matrix(args)
-                        names = [cfg["name"] for cfg in all_configs]
-                        selected = set(select(names, args.config, "config"))
-                        all_configs = [cfg for cfg in all_configs if cfg["name"] in selected]
-                        if args.reuse:
-                            for cfg in all_configs:
-                                if cfg["forward_z"]:
-                                    skipped.append(f"{cfg['name']}: forward-Z needs a launched editor (--reuse)")
-                        print(f"{len(all_configs)} configs:", flush=True)
-                        for cfg in all_configs:
-                            print(f"  {cfg['name']}  (shadow_depth_bits {cfg['fields']['shadow_depth_bits']})"
-                                  + (f"  ({cfg['note']})" if cfg["note"] else ""))
-                        for line in skipped:
-                            print(f"  skipped: {line}")
-                        if args.list_configs:
-                            return 0
                     configs = [cfg for cfg in all_configs if cfg["forward_z"] == forward_z]
                     configs_used += [cfg for cfg in configs]
                     if not configs:
                         continue
                     session.environment()
+                    total_runs = args.runs + args.rerun_failing
                     for run_index in range(args.runs):
                         measure_editor(session, pool, configs, args, cells, order, overrides, run_index,
-                                       args.runs, run_dir, pending_images)
+                                       total_runs, run_dir, pending_images)
+                    # Section 5: a failing cell is re-run --rerun-failing times
+                    # before it counts; its gates stay the worst over all runs
+                    # and the table reports in how many re-runs it failed again.
+                    phase_names = {cfg["name"] for cfg in configs}
+                    failing = {key for key in order
+                               if (cells[key]["config"].split("@")[0] in phase_names)
+                               and any(v.startswith("FAIL") for v in verdicts(cells[key]).values())}
+                    if failing and (args.rerun_failing > 0):
+                        print(f"re-running {len(failing)} failing cell(s) {args.rerun_failing} times", flush=True)
+                        for key in failing:
+                            cells[key]["reruns"] = args.rerun_failing
+                        for rerun in range(args.rerun_failing):
+                            measure_editor(session, pool, configs, args, cells, order, overrides,
+                                           args.runs + rerun, total_runs, run_dir, pending_images,
+                                           only_keys=failing)
+                        for key in failing:
+                            runs_failed = {f["run"] for f in cells[key]["failures"] if f.get("run", 0) >= args.runs}
+                            cells[key]["reruns_failed"] = len(runs_failed)
                     render_seconds += session.render_seconds
                     c.close_all_scenes()
                 finally:
@@ -1750,6 +1906,7 @@ def main():
     json_path = os.path.join(OUT_DIR, f"{stamp}.json")
     record = {
         "matrix": args.matrix, "poses": args.poses, "around": args.around, "runs": args.runs,
+        "rerun_failing": args.rerun_failing,
         "overrides": overrides, "root_offsets": args.root_offset, "skipped": skipped,
         "configs": configs_used, "cells": [dict(cells[k], verdicts=verdicts(cells[k])) for k in order],
         "wall_seconds": round(wall, 1), "renders": len(render_seconds),
