@@ -72,13 +72,14 @@ section, `editor_settings.radiance_cascades`):
 | `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
 | `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced (less during a history reset, "Trace") |
 | `direction_jitter` | `none` | `Radiance_cascades_direction_jitter`: `none` traces the texel centre direction, `footprint` a new random point of the texel footprint per trace ("Trace") |
+| `bounces` | `single` | `Indirect_diffuse_bounces` (shared with DDGI): `single`, or `multi` - hits also sample the previous field ("Trace") |
 | `merge_mode` | `per_neighbour_trace` | `Radiance_cascades_merge_mode`: `interpolate`, `visibility_masked` or `per_neighbour_trace` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is the mode that passed the most `gi_verify.py` gates (doc/plans/radiance_cascades.md section 10, "Merge mode default") |
 | `debug_cascade_mask` | 0 | debug bitmask of the merge ("Merge"): bit `i` zeroes cascade `i`'s radiance, bit 12 the sky; not in the Settings window, edited with the Radiance Cascades window's checkboxes |
 
 `Radiance_cascades_config` v2 added `texels_per_frame` and `hysteresis`, v3
-`debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter`; an older
-file reads them as the defaults. `per_neighbour_trace` is a later enum
-value of the same v4 field, so a v4 file reads any of the three modes.
+`debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter` and `bounces`;
+an older file reads them as the defaults. `per_neighbour_trace` is a later
+enum value of the same v4 field, so a v4 file reads any of the three modes.
 
 The field's sampling parameters (irradiance / distance texels, depth
 sharpness, biases, intensity) are the DDGI settings (`Ddgi_config`, passed
@@ -275,6 +276,14 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   distance along one direction, and the spread of a jittered footprint
   (wall hits mixed with grazing misses) would widen the variance and let
   light through thin walls.
+- **Bounces** (`bounces`). Every trace variant is compiled with
+  `ERHE_RT_INDIRECT_FIELD` and binds the probe field atlases as samplers
+  (user binding points 4 - 6, Vulkan 8 - 10). With `multi` the trace's
+  light block carries this producer's field - the previous update's reduce
+  output, intensity 1 - and `shade_surface()` takes a hit's ambient term
+  from `ddgi_sample_irradiance()`, so light bounces once more per update;
+  with `single` the light block carries no field and hits take the flat
+  scene ambient ([ddgi.md](ddgi.md) "Bounces").
 - **Trace inputs** are built as for DDGI: the scene root's forward
   `Material_set`, a `Light_buffer` with projections fitted by
   `fit_trace_light_projections()` (`src/editor/renderers/trace_lights.{hpp,cpp}`,
@@ -283,7 +292,8 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   follow DDGI's trace layout: material 0, light 1, control 2, instance
   records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`rgba32f`),
   neighbour atlas 7 (`rgba16f`; the raw variants bind their raw atlas
-  there, unreferenced); the texture heap is set 1.
+  there, unreferenced), the field samplers (user 4 - 6); the texture heap
+  is set 1.
 - **Timing.** One explicit-range `Gpu_timer` per pass
   (`Scoped_gpu_timer`, plot names `RC trace`, `RC neighbour trace` and
   `RC merge`) brackets all of
@@ -551,7 +561,7 @@ tick records it, so the copy costs nothing while the window is closed.
 - `set_radiance_cascades {probe_spacing_m, volume_padding_m,
   max_probes_cascade0, max_cascades, cascade0_tile_texels, interval_scale,
   texels_per_frame, hysteresis, merge_mode, debug_cascade_mask,
-  direction_jitter, show_window}` writes the settings (explicit arguments, omitted ones
+  direction_jitter, bounces, show_window}` writes the settings (explicit arguments, omitted ones
   unchanged) and returns the layout of the last fit plus the stored
   `config`; the renderer refits on its next tick.
 - `get_indirect_diffuse_stats` reports `source` (the selected value) and a

@@ -472,6 +472,11 @@ private:
     erhe::message_bus::Subscription<Mesh_geometry_changed_message>  m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Items_removed_message>          m_items_removed_subscription;
     erhe::message_bus::Subscription<Scene_lighting_changed_message> m_scene_lighting_changed_subscription;
+    // The probe trace samples the previous field at hits (bounces multi):
+    // user binding points of the irradiance and distance atlas samplers.
+    uint32_t                                                        m_trace_irradiance_binding_point{0};
+    uint32_t                                                        m_trace_distance_binding_point  {0};
+
     std::mt19937 m_random_engine{0x0DD91u};
 
     // Host-visible mirror of the probe data texture (xyz relocation offset,

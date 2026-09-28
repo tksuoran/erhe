@@ -22,12 +22,13 @@ and the flat ambient term stands.
 | Question | Answer |
 |---|---|
 | Volume authoring | One scene-wide volume, auto-fitted to the padded content AABB. |
-| Feature set | Octahedral irradiance and distance / Chebyshev visibility, temporal hysteresis with a change-driven history reset, probe relocation, probe classification, border texels. |
+| Feature set | Octahedral irradiance and distance / Chebyshev visibility, temporal hysteresis with a change-driven history reset, probe relocation, probe classification, border texels, optional multiple bounces. |
 | Lightmap interaction | Mutually exclusive per draw: a lightmapped primitive keeps its baked term (and its analytic-light gate); every other draw gets DDGI in place of the flat ambient. |
 | Backend | Ray query only. |
 
-Probes see direct light plus one implicit bounce through whatever the ray hits;
-the field is not fed back into the trace. Rays that escape the scene take the
+Probes see direct light plus one implicit bounce through whatever the ray hits
+(`bounces` single, the default), or with `bounces` multi also the previous
+field at the hit ("Bounces"). Rays that escape the scene take the
 scene ambient as sky radiance. On an open scene lit mostly by ambient the DDGI
 term is therefore close to the flat ambient it replaces, and the difference
 shows in enclosed geometry; the intensity knob and the `DDGI Irradiance` shader
@@ -163,6 +164,32 @@ radiance cascades raw texels) resets the history instead:
   is applied at the next update, at its cursor; any number of requests
   before it make one reset.
 - **Stats.** `get_indirect_diffuse_stats` reports `history_reset_count`.
+
+## Bounces
+
+`Ddgi_config::bounces` (`Indirect_diffuse_bounces`, codegen enum shared with
+radiance cascades): `single` (default) shades a probe ray's hit with its
+direct lights and the scene ambient; `multi` also feeds the field back:
+`shade_surface()` (`res/shaders/erhe_ray_hit.glsl`, compiled with
+`ERHE_RT_INDIRECT_FIELD` into the probe trace) takes the hit's ambient term
+from `ddgi_sample_irradiance()` at the hit - the forward pass's indirect
+term - so light bounces once more every update and the field converges to
+the infinite-bounce solution.
+
+- The trace samples the previous update's atlases: the irradiance and
+  distance atlases are bound to the trace as samplers, the probe data is
+  read through the trace's own storage image (`erhe_ddgi.glsl`
+  `ERHE_DDGI_PROBE_DATA_IMAGE`).
+- The light block of the trace carries the field only for `multi`, with
+  intensity 1: the feedback is the physical irradiance, and `intensity`
+  stays a display multiplier the forward pass applies once (folded into
+  each bounce, intensity x albedo above 1 would diverge). With `single` the
+  light block carries no field, and `ddgi_sample_irradiance()` returns the
+  flat ambient - the same shader.
+- The reference irradiance (`ddgi_reference.comp`) is compiled without the
+  define: it stays single bounce, the ground truth of
+  `scripts/gi_verify.py`, which therefore pins `single` for its accuracy
+  numbers and measures `multi` separately (`--bounces multi`).
 
 ## Runtime sampling
 
@@ -435,6 +462,7 @@ this code because its instance records carry texcoord-2 addresses.
 shown in the Settings window): `probe_spacing_m`, `volume_padding_m`,
 `max_probes`, `rays_per_probe`, `irradiance_texels`, `distance_texels`,
 `hysteresis`, `depth_sharpness`, `normal_bias`, `view_bias`, `intensity`,
+`bounces` (v3),
 `probes_per_frame`, `relocation_enabled`, `classification_enabled`,
 `debug_draw_probes`. Plus the grid fit and texture allocation in
 `Ddgi_renderer`, the developer `Ddgi_window`
@@ -494,7 +522,7 @@ mode and the MCP `set_ddgi` tool.
 
 ## Future work
 
-- [plans/ddgi.md](../plans/ddgi.md) - infinite bounces, sky radiance from the
+- [plans/ddgi.md](../plans/ddgi.md) - sky radiance from the
   atmosphere LUTs, authored and cascaded volumes, the non-ray-query fallback.
 - [plans/radiance_cascades.md](../plans/radiance_cascades.md) - radiance
   cascades as a second producer of this probe field.

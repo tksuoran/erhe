@@ -12,11 +12,6 @@ the `sky_atmosphere` LUTs instead (the `sky_sample_*` helpers in
 `lightmap_baker.cpp` already do this for the lightmap gather), so an atmosphere
 sky lights the probe field.
 
-## Infinite bounces
-
-Sample the previous frame's irradiance field at ray hits, so the field feeds
-back into the trace and light bounces more than once.
-
 ## Authored and cascaded volumes
 
 Node-attached volumes, cascaded / camera-scrolling volumes and per-scene volume

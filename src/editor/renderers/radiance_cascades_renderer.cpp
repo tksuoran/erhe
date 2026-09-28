@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "config/generated/ddgi_config.hpp"
+#include "config/generated/indirect_diffuse_bounces.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_direction_jitter.hpp"
 #include "config/generated/radiance_cascades_merge_mode.hpp"
@@ -64,6 +65,14 @@ constexpr erhe::dataformat::Format c_distance_format = erhe::dataformat::Format:
 // not offset past the buffer bindings).
 constexpr unsigned int c_control_binding_point         = 2;
 constexpr unsigned int c_instance_record_binding_point = 3;
+
+// Trace pass: the previous probe field as combined image samplers (bounces
+// multi), user points 4 - 6; Vulkan offsets samplers past the highest
+// buffer binding, 3, so they land at 8 - 10, after the acceleration
+// structure (4) and the storage images (5 - 7).
+constexpr unsigned int c_trace_field_irradiance_binding_point = 4;
+constexpr unsigned int c_trace_field_distance_binding_point   = 5;
+constexpr unsigned int c_trace_field_probe_data_binding_point = 6;
 
 // Merge pass layout: the control block, then as combined image samplers
 // the raw atlas and probe state of the cascade, the merged atlas and probe
@@ -271,6 +280,10 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_raw_binding_point      = c_instance_record_binding_point + 2;
     m_distance_binding_point = c_instance_record_binding_point + 3;
     m_neighbours_binding_point = c_instance_record_binding_point + 4;
+    m_field_irradiance_binding_point = c_trace_field_irradiance_binding_point;
+    m_field_distance_binding_point   = c_trace_field_distance_binding_point;
+    m_field_probe_data_binding_point = c_trace_field_probe_data_binding_point;
+    m_field_sampler                  = &program_interface.light_interface.ddgi_sampler;
     m_trace_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
@@ -324,6 +337,37 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .glsl_type     = Glsl_type::image_2d,
                     .image_format  = "rgba16f",
                     .stage_flags   = Shader_stage_flags::compute
+                },
+                // The previous probe field (erhe_ray_hit.glsl
+                // ERHE_RT_INDIRECT_FIELD): sampled at hits when bounces is
+                // multi, unreferenced at run time otherwise (the light block
+                // then carries no field).
+                {
+                    .binding_point   = m_field_irradiance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_irradiance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = m_field_distance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_distance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = m_field_probe_data_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_probe_data",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
                 }
             },
             .debug_label       = "RC trace",
@@ -361,7 +405,8 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" },
                     { "ERHE_RC_TRACE_GROUP_SIZE",     fmt::format("{}", c_trace_workgroup_size) },
                     { "ERHE_RC_TRACE_WRITE_DISTANCE", write_distance_define },
-                    { "ERHE_RC_TRACE_NEIGHBOURS",     neighbours_define }
+                    { "ERHE_RC_TRACE_NEIGHBOURS",     neighbours_define },
+                    { "ERHE_RT_INDIRECT_FIELD",       "1" }
                 },
                 .extensions          = extensions,
                 .struct_types        = {
@@ -1649,6 +1694,7 @@ void Radiance_cascades_renderer::record_trace(
                 encoder.set_storage_image(m_distance_binding_point, *m_distance_texture);
                 // Not referenced by the raw variants; the raw atlas stands in.
                 encoder.set_storage_image(m_neighbours_binding_point, *m_cascade_textures[static_cast<std::size_t>(cascade_index)].raw);
+                bind_trace_field(encoder);
                 material_set.bind(encoder);
                 encoder.dispatch_compute(
                     static_cast<std::uintptr_t>((count + c_trace_workgroup_size - 1) / c_trace_workgroup_size),
@@ -1774,6 +1820,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
                 encoder.set_storage_image(m_raw_binding_point,        *m_cascade_textures[index].raw);
                 encoder.set_storage_image(m_distance_binding_point,   *m_distance_texture);
                 encoder.set_storage_image(m_neighbours_binding_point, *m_cascade_textures[index].neighbours);
+                bind_trace_field(encoder);
                 material_set.bind(encoder);
                 encoder.dispatch_compute(
                     static_cast<std::uintptr_t>((run.count + c_trace_workgroup_size - 1) / c_trace_workgroup_size),
@@ -2439,6 +2486,16 @@ auto Radiance_cascades_renderer::read_distance_statistics(const glm::ivec3& prob
     return statistics;
 }
 
+void Radiance_cascades_renderer::bind_trace_field(erhe::graphics::Compute_command_encoder& encoder)
+{
+    // Every trace variant declares the field samplers (erhe_ray_hit.glsl
+    // ERHE_RT_INDIRECT_FIELD); the light block decides whether a hit
+    // samples them (bounces multi) or the flat ambient.
+    encoder.set_sampled_image(m_field_irradiance_binding_point, *m_field_irradiance, *m_field_sampler);
+    encoder.set_sampled_image(m_field_distance_binding_point,   *m_field_distance,   *m_field_sampler);
+    encoder.set_sampled_image(m_field_probe_data_binding_point, *m_field_probe_data, *m_field_sampler);
+}
+
 void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)
 {
     using namespace erhe::graphics;
@@ -2466,7 +2523,23 @@ void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_bu
     const glm::vec3   ambient     = scene_root.get_scene().get_ambient_light();
     Scene_tlas::Frame tlas_frame  = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
     ERHE_VERIFY(tlas_frame.is_valid());
-    Ring_buffer_range light_range = m_light_buffer->update(m_light_projections.get(), ambient);
+    // Bounces multi: the light block carries this producer's field (written
+    // by the previous update's reduce), and shade_surface() takes a hit's
+    // ambient term from it (erhe_ray_hit.glsl ERHE_RT_INDIRECT_FIELD).
+    // Single: no field in the light block, the flat ambient.
+    // The feedback is the physical irradiance: intensity is a display
+    // multiplier the forward pass applies once, and folded into every
+    // bounce it would scale the gain per bounce (intensity x albedo > 1
+    // diverges).
+    erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
+    field_parameters.intensity = 1.0f;
+    const bool multi_bounce = (m_config.bounces == Indirect_diffuse_bounces::multi) && has_field();
+    Ring_buffer_range light_range = m_light_buffer->update(
+        m_light_projections.get(),
+        ambient,
+        0u,
+        multi_bounce ? &field_parameters : nullptr
+    );
 
     sample_pass_timings();
     const uint64_t visibility_ns = m_visibility_timer->last_result();

@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Ddgi_config",
     reflect=True,
-    version=2,
+    version=3,
     short_desc="DDGI",
     long_desc="Dynamic diffuse global illumination (doc/editor/ddgi.md). A single scene-wide probe volume is auto-fitted to the content bounding box; probes are traced with ray queries, blended into octahedral irradiance and distance atlases, and sampled by the forward shader in place of the flat ambient term. Active while the Indirect Diffuse source is DDGI. Requires GPU ray query support; the feature stays off on backends without it.",
     developer=False,
@@ -192,6 +192,16 @@ struct("Ddgi_config",
             default="true",
             short_desc="Probe classification",
             long_desc="Mark probes that see mostly backfaces (i.e. are enclosed in geometry) inactive, so they are skipped by both the update and the interpolation. Saves trace cost and stops enclosed probes from contributing.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "bounces",
+            EnumRef("Indirect_diffuse_bounces"),
+            added_in=3,
+            default="Indirect_diffuse_bounces::single",
+            short_desc="Bounces",
+            long_desc="single shades a probe ray's hit with its direct light and the scene ambient; multi also samples the previous DDGI field at the hit (the forward pass's indirect term), so the field converges to the infinite-bounce solution over updates.",
             visible=True,
             developer=False
         ),

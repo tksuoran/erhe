@@ -135,6 +135,16 @@ struct("Radiance_cascades_config",
             developer=False
         ),
         field(
+            "bounces",
+            EnumRef("Indirect_diffuse_bounces"),
+            added_in=5,
+            default="Indirect_diffuse_bounces::single",
+            short_desc="Bounces",
+            long_desc="single shades a traced hit with its direct light and the scene ambient; multi also samples this producer's previous probe field at the hit (the forward pass's indirect term), so the field converges to the infinite-bounce solution over updates.",
+            visible=True,
+            developer=False
+        ),
+        field(
             "debug_cascade_mask",
             Int,
             added_in=3,

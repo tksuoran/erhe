@@ -13,6 +13,22 @@
 //  - the ERHE_RT_* stream-1 attribute offsets and ERHE_RT_HAS_POSITION_FETCH,
 //  - the GL_EXT_ray_query / GL_EXT_buffer_reference extensions,
 //  - the erhe_bxdf.glsl / erhe_light.glsl / erhe_texture.glsl includes.
+//
+// ERHE_RT_INDIRECT_FIELD (defined by the indirect diffuse probe traces,
+// rc_trace.comp and ddgi_trace.comp): shade_surface() takes a hit's
+// ambient term from the probe field the light block describes -
+// ddgi_sample_irradiance(), the forward pass's indirect term - instead of
+// the flat scene ambient, so a field fed back into its own trace bounces
+// light once more every update (Ddgi_config::bounces,
+// Radiance_cascades_config::bounces; doc/editor/ddgi.md "Bounces"). The
+// includer binds s_ddgi_irradiance and s_ddgi_distance (and
+// s_ddgi_probe_data, or defines ERHE_DDGI_PROBE_DATA_IMAGE, see
+// erhe_ddgi.glsl). With no field in the light block (ddgi_counts.w 0)
+// ddgi_sample_irradiance() returns the flat ambient, so single bounce is
+// the same shader with the field left out of the light block.
+#if defined(ERHE_RT_INDIRECT_FIELD)
+#include "erhe_ddgi.glsl"
+#endif
 
 
 // Raw uint view of a mesh memory pool, reached via the per-instance buffer
@@ -345,7 +361,11 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     roughness_x = max(roughness_x * mr_roughness, 1e-4);
     roughness_y = max(roughness_y * mr_roughness, 1e-4);
 
+#if defined(ERHE_RT_INDIRECT_FIELD)
+    vec3 color = ddgi_sample_irradiance(surface.position, N, V) * base_color;
+#else
     vec3 color = light_block.ambient_light.rgb * base_color;
+#endif
     color += m.emissive.rgb;
 
     uint light_offset = 0u;

@@ -8,6 +8,7 @@
 #include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/ddgi_config.hpp"
+#include "config/generated/indirect_diffuse_bounces.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "config/generated/radiance_cascades_config.hpp"
 #include "config/generated/radiance_cascades_direction_jitter.hpp"
@@ -1080,6 +1081,14 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         if (args.contains("debug_draw_probes")) {
             config.debug_draw_probes = args.value("debug_draw_probes", false);
         }
+        if (args.contains("bounces")) {
+            const json& value = args["bounces"];
+            Indirect_diffuse_bounces parsed{};
+            if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+                return make_error_content("set_ddgi: 'bounces' must be \"single\" or \"multi\"");
+            }
+            config.bounces = parsed;
+        }
     }
     if (args.value("show_window", false) && (m_context.imgui_windows != nullptr)) {
         for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
@@ -1107,6 +1116,7 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         result["hysteresis"] = config.hysteresis;
         result["intensity"]         = config.intensity;
         result["debug_draw_probes"] = config.debug_draw_probes;
+        result["bounces"]           = std::string{to_string(config.bounces)};
     }
     return make_json_content(result).dump();
 }
@@ -1294,6 +1304,14 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             }
             config.direction_jitter = parsed;
         }
+        if (args.contains("bounces")) {
+            const json& value = args["bounces"];
+            Indirect_diffuse_bounces parsed{};
+            if (!value.is_string() || !from_string(value.get<std::string>(), parsed)) {
+                return make_error_content("set_radiance_cascades: 'bounces' must be \"single\" or \"multi\"");
+            }
+            config.bounces = parsed;
+        }
     }
     if (args.value("show_window", false)) {
         show_window_by_ini_label(m_context, "radiance_cascades");
@@ -1312,7 +1330,8 @@ auto Mcp_server::action_set_radiance_cascades(const json& args) -> std::string
             {"hysteresis",           config.hysteresis},
             {"debug_cascade_mask",   config.debug_cascade_mask},
             {"merge_mode",           std::string{to_string(config.merge_mode)}},
-            {"direction_jitter",     std::string{to_string(config.direction_jitter)}}
+            {"direction_jitter",     std::string{to_string(config.direction_jitter)}},
+            {"bounces",              std::string{to_string(config.bounces)}}
         };
         result["source"] = std::string{to_string(m_context.editor_settings->indirect_diffuse_source)};
     }

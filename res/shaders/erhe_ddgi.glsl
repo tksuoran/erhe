@@ -44,17 +44,30 @@ vec2 ddgi_probe_uv(ivec3 probe_coords, vec3 direction, int interior_texels, vec2
     return (tile_origin + local) / atlas_size;
 }
 
+// The probe data texel (xyz relocation offset, w state). A pass that has
+// the probe data bound as a storage image instead of the sampler (the DDGI
+// probe trace, which samples its own field for multiple bounces) defines
+// ERHE_DDGI_PROBE_DATA_IMAGE as that image's name.
+vec4 ddgi_probe_data(ivec2 texel)
+{
+#if defined(ERHE_DDGI_PROBE_DATA_IMAGE)
+    return imageLoad(ERHE_DDGI_PROBE_DATA_IMAGE, texel);
+#else
+    return texelFetch(s_ddgi_probe_data, texel, 0);
+#endif
+}
+
 vec3 ddgi_probe_position(ivec3 probe_coords)
 {
     vec3  base  = light_block.ddgi_grid_origin.xyz + vec3(probe_coords) * light_block.ddgi_grid_spacing.xyz;
     ivec2 texel = ddgi_probe_tile(probe_coords, ivec3(light_block.ddgi_counts.xyz), int(light_block.ddgi_texels.z));
-    return base + texelFetch(s_ddgi_probe_data, texel, 0).xyz;
+    return base + ddgi_probe_data(texel).xyz;
 }
 
 float ddgi_probe_state(ivec3 probe_coords)
 {
     ivec2 texel = ddgi_probe_tile(probe_coords, ivec3(light_block.ddgi_counts.xyz), int(light_block.ddgi_texels.z));
-    return texelFetch(s_ddgi_probe_data, texel, 0).w;
+    return ddgi_probe_data(texel).w;
 }
 
 // Indirect diffuse irradiance arriving at (world_position, normal), already

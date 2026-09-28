@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "config/generated/ddgi_config.hpp"
+#include "config/generated/indirect_diffuse_bounces.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/content_bounds.hpp"
@@ -64,6 +65,14 @@ constexpr int c_border_texels = 1;
 // free (light_control / primitive slots of the raster layout, unused here).
 constexpr unsigned int c_control_binding_point         = 2;
 constexpr unsigned int c_instance_record_binding_point = 3;
+
+// Probe trace: its own irradiance and distance atlases as combined image
+// samplers (bounces multi, erhe_ray_hit.glsl ERHE_RT_INDIRECT_FIELD; the
+// probe data is read through the trace's storage image). Vulkan offsets the
+// samplers past the highest buffer binding (3), so user 4 / 5 land at 8 / 9,
+// after the acceleration structure (4) and the storage images (5, 6).
+constexpr unsigned int c_trace_irradiance_binding_point = 4;
+constexpr unsigned int c_trace_distance_binding_point   = 5;
 
 // Blend pass layout: the control UBO plus the two storage images. Raw
 // bindings are not offset past the buffer bindings, and there are no
@@ -294,6 +303,8 @@ Ddgi_renderer::Ddgi_renderer(
     m_tlas_binding_point       = c_instance_record_binding_point + 1;
     m_ray_data_binding_point   = c_instance_record_binding_point + 2;
     m_probe_data_binding_point = c_instance_record_binding_point + 3;
+    m_trace_irradiance_binding_point = c_trace_irradiance_binding_point;
+    m_trace_distance_binding_point   = c_trace_distance_binding_point;
     m_trace_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
@@ -339,6 +350,27 @@ Ddgi_renderer::Ddgi_renderer(
                     .glsl_type     = Glsl_type::image_2d,
                     .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
+                },
+                // The previous field (erhe_ray_hit.glsl ERHE_RT_INDIRECT_FIELD):
+                // sampled at hits when bounces is multi; the light block
+                // carries no field otherwise.
+                {
+                    .binding_point   = m_trace_irradiance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_irradiance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point   = m_trace_distance_binding_point,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_ddgi_distance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
                 }
             },
             .debug_label       = "DDGI trace",
@@ -372,6 +404,10 @@ Ddgi_renderer::Ddgi_renderer(
             .defines             = [&]() {
                 std::vector<std::pair<std::string, std::string>> defines = ray_hit_defines;
                 defines.emplace_back("ERHE_DDGI_TRACE_GROUP_SIZE", fmt::format("{}", c_trace_workgroup_size));
+                // Bounces multi: hits sample the previous field; its probe
+                // data is the trace's own storage image.
+                defines.emplace_back("ERHE_RT_INDIRECT_FIELD",      "1");
+                defines.emplace_back("ERHE_DDGI_PROBE_DATA_IMAGE",  "i_probe_data");
                 return defines;
             }(),
             .extensions          = ray_hit_extensions,
@@ -1773,7 +1809,24 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
 
     Scene_tlas::Frame tlas_frame     = m_scene_tlas->update(command_buffer, *scene_root.layers().content(), &material_set);
     ERHE_VERIFY(tlas_frame.is_valid());
-    Ring_buffer_range light_range    = m_light_buffer->update(m_light_projections.get(), m_sky_radiance);
+    // Bounces multi: the light block carries this producer's field (the
+    // previous update's atlases), and shade_surface() takes a probe ray
+    // hit's ambient term from it (erhe_ray_hit.glsl ERHE_RT_INDIRECT_FIELD).
+    // The reference query shares the light block and ignores the field (it
+    // is compiled without the define: single bounce, the ground truth).
+    // The feedback is the physical irradiance: intensity is a display
+    // multiplier the forward pass applies once, and folded into every
+    // bounce it would scale the gain per bounce (intensity x albedo > 1
+    // diverges).
+    erhe::scene_renderer::Ddgi_parameters field_parameters = get_forward_parameters();
+    field_parameters.intensity = 1.0f;
+    const bool multi_bounce = update_field && (m_config.bounces == Indirect_diffuse_bounces::multi);
+    Ring_buffer_range light_range    = m_light_buffer->update(
+        m_light_projections.get(),
+        m_sky_radiance,
+        0u,
+        multi_bounce ? &field_parameters : nullptr
+    );
 
     if (trace_reference) {
         // Outside the probe update's timers, so the pass timings stay the
@@ -1812,6 +1865,8 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         encoder.set_acceleration_structure(m_tlas_binding_point, *tlas_frame.acceleration_structure);
         encoder.set_storage_image(m_ray_data_binding_point,   *m_ray_data_texture);
         encoder.set_storage_image(m_probe_data_binding_point, *m_probe_data_texture);
+        encoder.set_sampled_image(m_trace_irradiance_binding_point, *m_irradiance_texture, *m_ddgi_sampler);
+        encoder.set_sampled_image(m_trace_distance_binding_point,   *m_distance_texture,   *m_ddgi_sampler);
         material_set.bind(encoder);
         encoder.dispatch_compute(
             static_cast<std::uintptr_t>((m_rays_per_probe + c_trace_workgroup_size - 1) / c_trace_workgroup_size),

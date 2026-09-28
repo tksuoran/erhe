@@ -18,9 +18,19 @@ Usage:
     py -3 scripts/gi_verify.py [--station NAME|all] [--source ambient|ddgi|radiance_cascades]
                                [--compare A,B] [--runs N] [--enforce]
                                [--rc-merge-mode interpolate|visibility_masked|per_neighbour_trace]
+                               [--rc-set KEY=VALUE ...] [--ddgi-set KEY=VALUE ...]
+                               [--bounces single|multi]
                                [--screenshot-reference DIR | --screenshot-compare DIR]
                                [--screenshot-source render|window]
                                [--reuse] [--port N] [--editor PATH]
+
+Radiance cascades run with RC_SETTINGS, DDGI with DDGI_SETTINGS; --rc-set /
+--ddgi-set override single settings (a defaults sweep point, e.g.
+--rc-set probe_spacing_m=1.0 cascade0_tile_texels=8). Both pin single
+bounce, because the ground truth (reference_indirect_diffuse) is single
+bounce: the accuracy numbers are only meaningful for it. --bounces multi
+runs both producers with multiple bounces instead - a brightness / visual
+measurement; its reference errors measure the added bounces, not accuracy.
 
 Every metric is the WORST value over --runs full runs. Output: a table on
 stdout and logs/gi_verify/<source>_<timestamp>.json (<a>_vs_<b> with
@@ -256,10 +266,13 @@ def stop_editor(c, process):
 class Field:
     """Source selection, sampling and stats for one source."""
 
-    def __init__(self, c, source, tool_names, rc_merge_mode="per_neighbour_trace"):
+    def __init__(self, c, source, tool_names, rc_merge_mode="per_neighbour_trace", rc_overrides=None,
+                 ddgi_overrides=None):
         self.c = c
         self.source = source
         self.rc_merge_mode = rc_merge_mode
+        self.rc_overrides = dict(rc_overrides or {})
+        self.ddgi_overrides = dict(ddgi_overrides or {})
         self.tool_names = tool_names
         # group -> per-point luminance of the station's quality measurement
         # (measure_sample); cleared per station by run_station.
@@ -277,9 +290,9 @@ class Field:
         DDGI_SETTINGS) and, for radiance cascades, wait for the fitted
         layout. Returns the radiance cascades stats, or None."""
         if self.source == "ddgi":
-            rooms.set_ddgi(self.c, True)
+            rooms.set_ddgi(self.c, True, self.ddgi_overrides)
         elif self.source == "radiance_cascades":
-            rooms.set_radiance_cascades(self.c, self.rc_merge_mode)
+            rooms.set_radiance_cascades(self.c, self.rc_merge_mode, self.rc_overrides, self.ddgi_overrides)
         else:
             rooms.set_indirect_diffuse(self.c, self.source)
         self.sampled = self.source
@@ -344,7 +357,10 @@ class Field:
         if self.sampled == "ambient":
             return 0
         per_refresh = int(self.stats().get("updates_per_full_refresh", 1) or 1)
-        settings = rooms.RC_SETTINGS if (self.source == "radiance_cascades") else rooms.DDGI_SETTINGS
+        if self.source == "radiance_cascades":
+            settings = dict(rooms.RC_SETTINGS, **self.rc_overrides)
+        else:
+            settings = dict(rooms.DDGI_SETTINGS, **self.ddgi_overrides)
         hysteresis = settings["hysteresis"]
         return max(per_refresh, int(math.ceil(1.0 / (1.0 - hysteresis))))
 
@@ -860,6 +876,24 @@ def print_table(sources, worst):
     return failures
 
 
+def parse_overrides(items):
+    """["key=value", ...] -> {key: value}, numbers parsed."""
+    out = {}
+    for item in items:
+        key, _, value = item.partition("=")
+        if not key or not _:
+            raise SystemExit(f"override {item!r} is not KEY=VALUE")
+        for kind in (int, float):
+            try:
+                out[key] = kind(value)
+                break
+            except ValueError:
+                continue
+        else:
+            out[key] = value
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--station", default="all", help="station name or 'all' (" + ", ".join(rooms.STATIONS) + ")")
@@ -869,6 +903,12 @@ def main():
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
     parser.add_argument("--rc-merge-mode", default="per_neighbour_trace", choices=["interpolate", "visibility_masked", "per_neighbour_trace"],
                         help="radiance cascades merge mode (doc/editor/radiance_cascades.md \"Merge\")")
+    parser.add_argument("--rc-set", nargs="*", default=[], metavar="KEY=VALUE",
+                        help="override RC_SETTINGS entries (numbers are parsed, other values stay strings)")
+    parser.add_argument("--ddgi-set", nargs="*", default=[], metavar="KEY=VALUE",
+                        help="override DDGI_SETTINGS entries")
+    parser.add_argument("--bounces", default="single", choices=["single", "multi"],
+                        help="bounces of both producers (default single: the reference is single bounce)")
     parser.add_argument("--screenshot-reference", default=None, metavar="DIR")
     parser.add_argument("--screenshot-compare", default=None, metavar="DIR")
     parser.add_argument("--screenshot-source", default="render", choices=["render", "window"],
@@ -893,10 +933,17 @@ def main():
     if args.compare and len(sources) != 2:
         raise SystemExit("--compare takes exactly two sources, e.g. --compare ddgi,radiance_cascades")
 
+    rc_overrides = parse_overrides(args.rc_set)
+    ddgi_overrides = parse_overrides(args.ddgi_set)
+    rc_overrides.setdefault("bounces", args.bounces)
+    ddgi_overrides.setdefault("bounces", args.bounces)
+
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     label = "_vs_".join(sources)
     if "radiance_cascades" in sources:
         label += "_" + args.rc_merge_mode
+    if args.bounces == "multi":
+        label += "_multi_bounce"
     shot_root = os.path.join(OUT_DIR, f"{label}_{stamp}")
 
     backup = None
@@ -914,7 +961,7 @@ def main():
             if pid != process.pid:
                 raise RuntimeError(f"port {port} is served by pid {pid}, not the launched editor {process.pid}")
         tool_names = c.client.tool_names()
-        fields = {s: Field(c, s, tool_names, args.rc_merge_mode) for s in sources}
+        fields = {s: Field(c, s, tool_names, args.rc_merge_mode, rc_overrides, ddgi_overrides) for s in sources}
         for source, field in fields.items():
             if not field.available():
                 print(f"source {source}: not available yet (no set_indirect_diffuse MCP tool)")
@@ -948,6 +995,7 @@ def main():
         json_path = os.path.join(OUT_DIR, f"{label}_{stamp}.json")
         with open(json_path, "w", encoding="utf-8") as handle:
             json.dump({"sources": sources, "stations": stations, "runs": args.runs,
+                       "rc_overrides": rc_overrides, "ddgi_overrides": ddgi_overrides,
                        "worst": worst, "per_run": runs, "gates": GATES,
                        "server": c.call("get_server_info")}, handle, indent=1)
         print(f"\nwrote {os.path.relpath(json_path, REPO_ROOT)}; screenshots under {os.path.relpath(shot_root, REPO_ROOT)}")

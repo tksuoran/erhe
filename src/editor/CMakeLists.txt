@@ -951,6 +951,8 @@ set(_config_sources
     ${_config_out}/radiance_cascades_merge_mode.cpp
     ${_config_out}/radiance_cascades_direction_jitter.hpp
     ${_config_out}/radiance_cascades_direction_jitter.cpp
+    ${_config_out}/indirect_diffuse_bounces.hpp
+    ${_config_out}/indirect_diffuse_bounces.cpp
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp

@@ -317,6 +317,9 @@ def white_materials(c):
 # DDGI settings every station runs with: the Ddgi_config defaults, pinned so
 # a user's edited editor_settings.json cannot change the fitted grid or the
 # measured brightness. The probe overlay would draw into every measurement.
+# Single bounce: the ground truth (reference_indirect_diffuse) is single
+# bounce, so the accuracy measurements pin it (gi_verify.py --bounces multi
+# measures the multi-bounce field separately).
 DDGI_SETTINGS = {
     "probe_spacing_m":   1.5,
     "volume_padding_m":  1.0,
@@ -325,6 +328,7 @@ DDGI_SETTINGS = {
     "hysteresis":        0.97,
     "intensity":         1.0,
     "debug_draw_probes": False,
+    "bounces":           "single",
 }
 
 
@@ -342,17 +346,20 @@ RC_SETTINGS = {
     "texels_per_frame":     65536,
     "hysteresis":           0.9,
     "direction_jitter":     "none",
+    "bounces":              "single",
     "debug_cascade_mask":   0,
 }
 
 
-def set_radiance_cascades(c, merge_mode="per_neighbour_trace"):
+def set_radiance_cascades(c, merge_mode="per_neighbour_trace", overrides=None, ddgi_overrides=None):
     """Pin the field sampling settings (DDGI_SETTINGS, without selecting DDGI)
-    and the radiance cascades settings (RC_SETTINGS plus merge_mode), and
-    select radiance cascades as the indirect diffuse source."""
-    c.mutate("set_ddgi", dict(DDGI_SETTINGS))
+    and the radiance cascades settings (RC_SETTINGS plus merge_mode, then
+    overrides, e.g. a sweep point), and select radiance cascades as the
+    indirect diffuse source."""
+    c.mutate("set_ddgi", dict(DDGI_SETTINGS, **(ddgi_overrides or {})))
     settings = dict(RC_SETTINGS)
     settings["merge_mode"] = merge_mode
+    settings.update(overrides or {})
     c.mutate("set_radiance_cascades", settings)
     return set_indirect_diffuse(c, "radiance_cascades")
 
@@ -363,10 +370,10 @@ def set_indirect_diffuse(c, source):
     return c.mutate("set_indirect_diffuse", {"source": source})
 
 
-def set_ddgi(c, enabled):
-    """Pin the DDGI settings (DDGI_SETTINGS) and select DDGI (enabled) or the
-    flat ambient term as the indirect diffuse source."""
-    c.mutate("set_ddgi", dict(DDGI_SETTINGS))
+def set_ddgi(c, enabled, overrides=None):
+    """Pin the DDGI settings (DDGI_SETTINGS, then overrides) and select DDGI
+    (enabled) or the flat ambient term as the indirect diffuse source."""
+    c.mutate("set_ddgi", dict(DDGI_SETTINGS, **(overrides or {})))
     return set_indirect_diffuse(c, "ddgi" if enabled else "ambient")
 
 

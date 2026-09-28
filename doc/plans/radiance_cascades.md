@@ -134,7 +134,7 @@ rays for a full refresh. The Radiance cascades window reports the real numbers.
   erhe_codegen, `reflect=True`): `probe_spacing_m` (s0), `max_probes_cascade0`,
   `max_cascades`, `cascade0_tile_texels` (q0, default 4), `interval_scale`
   (default 1.0), `volume_padding_m`, `hysteresis`, `texels_per_frame`,
-  `direction_jitter`, `multi_bounce`, `merge_mode`, `debug_cascade_mask`,
+  `direction_jitter`, `bounces`, `merge_mode`, `debug_cascade_mask`,
   `debug_draw_probes`, `debug_draw_cascade`. Irradiance texels, distance texels,
   depth sharpness, normal / view bias and intensity are the field's sampling
   parameters and are read from `Ddgi_config` so both producers render the same
@@ -157,13 +157,14 @@ textures.
 
 1. **`res/editor/shaders/rc_trace.comp`** - one thread per raw texel of a
    texel range (the `texels_per_frame` budget walks a cursor over all cascades,
-   cascade 0 first). Direction = octahedral decode of the texel centre, jittered
-   inside the texel footprint by a per-frame random offset when
-   `direction_jitter` is on. Ray query over `[t_i, t_{i+1}]` from the probe
-   centre. Hit: shade with `erhe_ray_hit.glsl` (lights, traced shadow rays,
-   emission), beta 0. Backface hit: radiance 0, beta 0, and for cascade 0 the
-   negative distance for classification. Miss: radiance 0, beta 1. Blend into
-   raw with `hysteresis`.
+   cascade 0 first). Direction = octahedral decode of the texel centre, or
+   of a per-update random point of the texel footprint when
+   `direction_jitter` is `footprint`. Ray query over `[t_i, t_{i+1}]` from
+   the probe centre. Hit: shade with `erhe_ray_hit.glsl` (lights, traced
+   shadow rays, emission, with `bounces` multi the previous field), beta 0.
+   Backface hit: radiance 0, beta 0, and for cascade 0 the backface
+   statistics for classification. Miss: radiance 0, beta 1. Blend into raw
+   with the texel's history hysteresis (section 6).
 2. **`rc_merge.comp`** - one dispatch per cascade, `N - 1` down to 0. Top
    cascade: `merged = raw.rgb + raw.a * sky(dir)` with the scene ambient as sky
    (the atmosphere-LUT sky is the shared DDGI follow-up). Lower cascades: 2x2
@@ -215,10 +216,16 @@ Merge-quality option `merge_mode`, three modes; the default,
 
 ## 6. Multi-bounce and change response
 
-- `multi_bounce`: the trace samples the previous frame's field at the hit
-  point (`ddgi_sample_irradiance`) and adds albedo times irradiance; the field
-  converges to infinite bounces over frames. The same code serves the DDGI
-  infinite-bounce follow-up in [ddgi.md](ddgi.md).
+Built in phase 6, shared by both producers
+([../editor/ddgi.md](../editor/ddgi.md) "History reset", "Bounces"):
+
+- `bounces` (`Indirect_diffuse_bounces`, in `Ddgi_config` and
+  `Radiance_cascades_config`): `multi` makes `shade_surface()` take a hit's
+  ambient term from the producer's previous field
+  (`ddgi_sample_irradiance()`, intensity 1), so the field converges to
+  infinite bounces over updates; `single` (default) keeps the flat ambient.
+  The reference irradiance stays single bounce, so accuracy is measured
+  with `single`.
 - The trace is a continuous integrator like DDGI's, not per-frame syncing of
   derived state. `Temporal_history` resets the history of both producers
   on the change messages on `App_message_bus` - node transforms of content

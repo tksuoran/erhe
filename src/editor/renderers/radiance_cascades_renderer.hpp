@@ -22,6 +22,7 @@ namespace erhe::graphics {
     class Bind_group_layout;
     class Buffer;
     class Command_buffer;
+    class Compute_command_encoder;
     class Compute_pipeline;
     class Device;
     class Gpu_timer;
@@ -378,6 +379,10 @@ private:
     // One RGBA16F texel of the snapshot atlas copied at atlas_offset.
     [[nodiscard]] auto read_radiance_texel(std::size_t atlas_offset, int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
 
+    // Binds the previous probe field to a trace dispatch (the field
+    // samplers every trace variant declares).
+    void bind_trace_field(erhe::graphics::Compute_command_encoder& encoder);
+
     // Writes the requested opaque atlas preview (request_preview()).
     void record_preview(erhe::graphics::Command_buffer& command_buffer);
 
@@ -479,6 +484,13 @@ private:
         std::size_t run          {0};
     };
     Control_offsets m_control_offsets{};
+    // The field's sampler (Light_interface::ddgi_sampler): the trace samples
+    // the previous field at hits when bounces is multi.
+    const erhe::graphics::Sampler*                            m_field_sampler{nullptr};
+    uint32_t                                                  m_field_irradiance_binding_point{0};
+    uint32_t                                                  m_field_distance_binding_point  {0};
+    uint32_t                                                  m_field_probe_data_binding_point{0};
+
     // Temporal history of the raw texels (and the neighbour visibilities):
     // reset on every allocation and by the change messages
     // (doc/editor/ddgi.md "History reset").

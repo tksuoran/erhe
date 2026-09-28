@@ -4159,6 +4159,10 @@
         "debug_draw_probes": {
           "description": "Draw a wire sphere at every probe (green active, red classified-inactive) plus the volume box; omit to leave unchanged",
           "type": "boolean"
+        },
+        "bounces": {
+          "description": "\"single\" (a probe ray's hit is shaded with direct light and the scene ambient) or \"multi\" (also with the previous DDGI field sampled at the hit, converging to infinite bounces; doc/editor/ddgi.md \"Bounces\"); omit to leave unchanged",
+          "type": "string"
         }
       },
       "type": "object"
@@ -4233,6 +4237,10 @@
         },
         "direction_jitter": {
           "description": "\"none\" (every trace of a raw texel follows its octahedral texel centre) or \"footprint\" (a new random point of the texel footprint per trace, averaged by the hysteresis blend; all cascades and the per_neighbour_trace connecting segments); omit to leave unchanged",
+          "type": "string"
+        },
+        "bounces": {
+          "description": "\"single\" (a traced hit is shaded with direct light and the scene ambient) or \"multi\" (also with the previous radiance cascades field sampled at the hit, converging to infinite bounces; doc/editor/ddgi.md \"Bounces\"); omit to leave unchanged",
           "type": "string"
         },
         "show_window": {
