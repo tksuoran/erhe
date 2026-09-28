@@ -328,7 +328,7 @@ https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (the shader cites it at
 maps onto that reference, where it goes beyond it, and the alternative
 "bias-free" technique exposed as the `distance` shadow technique. The known
 deltas from the reference are listed in
-[`plans/shadows.md`](../plans/shadows.md).
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md).
 
 ### What erhe implements (RPDB)
 
@@ -540,5 +540,5 @@ the per-face coordinate flip, is in
 
 ## Future work
 
-- [plans/shadows.md](../plans/shadows.md) - bias deltas from the RPDB reference,
-  remaining fit and point-shadow performance candidates.
+- [plans/shadow_robustness.md](../plans/shadow_robustness.md) - bias hardening, shadow test scenes and automated shadow verification.
+- [plans/shadows.md](../plans/shadows.md) - remaining fit and point-shadow performance candidates.

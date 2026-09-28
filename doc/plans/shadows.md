@@ -7,25 +7,10 @@ Extends [../shadows.md](../erhe/shadows.md) (the shadow pipeline),
 optimizations) and [../point_light_shadows.md](../erhe/point_light_shadows.md) (the
 cube path). Decide each item from a Tracy capture rather than in advance.
 
-## Receiver-plane bias deltas versus the reference
+## Bias
 
-erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method of
-https://renderdiagrams.org/2024/12/18/shadowmap-bias/ , cited in
-`res/shaders/erhe_light.glsl`. Four things differ from that reference:
-
-- **Unexplained 2.0 bias scale.** The `2.0 *` factor in the bias terms has no
-  counterpart in the article. It most likely compensates a half-texel versus
-  full-texel footprint or a sign subtlety; pin it down instead of leaving it as
-  a fudge factor.
-- **Surface normal unused.** `sample_light_visibility(..., float N_dot_L)`
-  receives the geometric term but the bias path never uses it. The article notes
-  that a geometric slope from the surface normal is more robust than `ddx` /
-  `ddy` at discontinuities, and the normal is available.
-- **Degenerate Jacobian untreated.** When `detJ == 0` (grazing and silhouette
-  texels) `dz_dUV` stays zero, so there is no bias exactly where acne is worst.
-- **`ddx` / `ddy` across geometry edges** are unreliable for both methods (a 2x2
-  quad straddling two surfaces); erhe applies no mitigation. This is a shared
-  RPDB limitation.
+Shadow bias work, including the deltas from the RPDB reference, is planned in
+[shadow_robustness.md](shadow_robustness.md).
 
 ## Cap the receiver silhouette plane count
 
