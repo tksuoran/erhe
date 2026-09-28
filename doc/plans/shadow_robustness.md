@@ -1,54 +1,61 @@
 # Shadow robustness
 
-Status: proposed
+Status: in progress
 
 Hardens the directional, spot and point shadow paths against self-shadowing,
-leaks and precision ties, and adds the dedicated test scenes and automated
-checks that hold them there. The shadow pipeline itself is described in
+leaks and precision ties, and holds them there with dedicated test scenes and
+automated checks. The shadow pipeline itself is described in
 [`shadows.md`](../erhe/shadows.md) and
 [`point_light_shadows.md`](../erhe/point_light_shadows.md); this plan owns all
 receiver-side and caster-side shadow bias work, including the deltas from the
 RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
+The tooling (T1 to T6) and the test stations (section 4) exist; section 9 is
+the current gate table. The remaining work is phases 2 to 8.
+
 ## 1. Evidence: the head-on tie
 
-The defect that motivates the plan, measured in a RenderDoc capture of
-`res/editor/assets/gi_test_rooms/gi_cornell.glb` (Vulkan, AMD iGPU, Medium
-preset: `pcf_4x4`, `receiver_plane`, `depth`, D32 shadow map, reverse-Z):
+Reproduction: `res/editor/assets/gi_test_rooms/gi_cornell.glb`, spot light at
+(0, 2.9, 0) aimed straight down, Medium preset (`pcf_4x4`, `receiver_plane`,
+`depth`, requested 24 depth bits, device format D32_SFLOAT), reverse-Z,
+Vulkan on an AMD iGPU.
 
-- The spot light sits at (0, 2.9, 0) and points straight down, so the floor is
-  exactly perpendicular to the light axis. A band of the floor renders black
-  (ambient 0, DDGI off, so black = shadow visibility 0). The band moves when
-  the light moves, and vanishes when the light becomes a point light.
-- At a pixel in the band the shadow map stores 0.0104947509 and the shader's
-  reference depth is 0.0104947500 - one float ulp nearer the far plane - so the
-  non-strict reverse-Z comparison fails. RenderDoc's shader debugger replays
-  the same pixel as lit: the verdict is decided by last-bit rounding.
-- Every bias term is zero for this receiver. All three committed presets use
-  `shadow_cull_mode: cull_back`, so the lit floor face itself is in the shadow
-  map; `shadow_depth_bias_constant` is 0; the rasterizer slope bias and the
-  receiver-plane bias both scale with the light-space depth gradient `dz_dUV`,
-  which is exactly 0 on a surface facing the light head-on.
-- Setting "Shadow Depth Bias (constant)" to -4 removes the band live.
-- Point lights are immune because `sample_point_light_visibility()` applies a
-  world-space bias of `max(0.05, 0.02 * distance)`; that bias has its own
-  contact-gap cost (R3).
+- The floor is exactly perpendicular to the light axis. A band of it reads
+  shadow visibility 0; the band follows the light pose.
+- In the band the shadow map stores 0.0104947509 and the reference depth is
+  0.0104947500, one float ulp nearer the far plane, so the non-strict
+  reverse-Z comparison fails. RenderDoc's shader debugger evaluates the same
+  pixel as lit: last-bit rounding decides the verdict.
+- For this receiver every bias term of the float PCF path is zero: all three
+  committed presets use `cull_back`, so the lit floor face is in the map;
+  `shadow_depth_bias_constant` is 0; the rasterizer slope bias and the
+  receiver-plane bias scale with the light-space depth gradient `dz_dUV`,
+  which is 0 for a head-on receiver. (The hard path's UNORM snap is a nonzero
+  term, but only for 16 and 24 bit maps.)
+- A rasterizer constant bias of -4 removes the band. For a float depth format
+  Vulkan scales that bias by `2^(e - 23)`, `e` the largest exponent of the
+  primitive's depth range: it is an ulp-scaled floor, which confirms the tie.
+- Point lights compare radial distance with a world-space bias of
+  `max(0.05, 0.02 * distance)`; that bias is what makes them leak through thin
+  walls and detach contact shadows (section 9).
 
-The general lesson the plan is built on: any receiver whose stored depth and
-reference depth are computed from the same surface is a tie, and a tie must be
-resolved by a bias that is nonzero for every orientation, not only for sloped
-ones.
+The standing rule the plan is built on: wherever the stored depth and the
+reference depth come from the same surface, the comparison is a tie, and a tie
+is resolved by a bias that is nonzero for every receiver orientation and is
+derived from the error sources, not by a tuned constant.
 
 ## 2. Requirements
 
 Each requirement holds for every supported configuration in the test matrix
-(section 5) and is checked by a gate in section 6.
+(section 5) and is checked by a gate in section 6. The scope is opaque, rigid
+casters; alpha-tested casters (the depth-only caster variant has no alpha
+discard), skinned casters and spot casters inside the fixed 0.04 m spot near
+plane are outside it.
 
 - **R1 No self-shadowing.** A receiver point whose segment to the light is
   unobstructed has visibility 1, for every receiver orientation from head-on
-  (`N . L = 1`, `dz_dUV = 0`) to grazing (`N . L = 0.05`), and for every light
-  pose.
+  (`N . L = 1`) to grazing (`N . L = 0.05`), and for every light pose.
 - **R2 Occlusion.** A receiver point whose segment to the light passes through
   a caster, farther than the filter footprint from the caster's shadow
   silhouette, has visibility 0.
@@ -59,77 +66,124 @@ Each requirement holds for every supported configuration in the test matrix
   and wall-wall joins.
 - **R5 Edge placement.** A hard shadow edge lies within a bounded distance of
   the analytic edge (G5).
-- **R6 Pose independence.** R1 to R5 hold at every pose of a fine light pose
+- **R6 Pose independence.** R1 to R5 hold at every pose of the light pose
   sweep; no verdict depends on where last-bit rounding falls.
 - **R7 Origin independence.** R1 to R5 hold with the whole station translated
-  1 km and 10 km from the origin.
+  1 km and 10 km from the origin. The fp32 world position and matrix
+  composition carry about 0.6 mm of error at 10 km against 2 to 4 mm shadow
+  texels; the origin term of D1 is what absorbs it.
 - **R8 Temporal stability.** For a static scene, a sub-texel camera
   translation changes directional shadow visibility only inside the edge band.
+  Spot and point maps do not depend on the camera, so for them G6 detects only
+  tie flicker.
 - **R9 Cost.** The forward pass time with the hardened bias stays within the
   budget of G7.
+- **R10 Both depth conventions and every depth format.** R1 to R5 hold for
+  reverse-Z and forward-Z, and for every depth format the device offers.
 
-## 3. Bias design
+## 3. Design
 
-- **D1 Nonzero bias for every orientation.** The receiver-side bias gets a
-  term that does not vanish with `dz_dUV`. Two defensible forms are built and
-  compared, both selectable through `Shadow_bias_mode`:
-  - `normal_offset`: offset the receiver's world position along its geometric
-    normal before projecting into light space, scaled by the shadow texel's
-    world-space size at that point and by `(1 - N . L)` plus a floor. Handles
-    head-on ties and grazing acne with one mechanism and is the common
-    production choice.
-  - `depth_floor`: keep the receiver-plane bias and add a constant depth-space
-    floor of a few quanta of the stored format at the reference depth (UNORM
-    quantum for D16 / D24, ulp-scaled for D32F).
-  The matrix (section 5) and the gates choose the preset defaults; the loser
-  stays as an option only if it wins on some axis.
-- **D2 Use the surface normal.** `sample_light_visibility()` receives
-  `N_dot_L` and ignores it. The geometric slope from the normal feeds D1 and
-  replaces the screen-space Jacobian where the Jacobian is unreliable (D3).
-- **D3 Degenerate and discontinuous derivatives.** When `detJ` is near zero
-  (grazing, silhouette texels) or the 2x2 quad straddles two surfaces,
-  `dz_dUV` comes from the normal (D2) instead of `ddx` / `ddy`.
-- **D4 The 2.0 bias scale.** The unexplained `2.0 *` factor in the RPDB bias
-  terms (absent from the reference article) is derived or removed; the gates
-  decide.
-- **D5 Cull mode defaults.** `cull_back` puts every lit front face in the map,
-  which makes the head-on tie the common case; `cull_front` stores back faces
-  of closed meshes; single-sided geometry needs `cull_back`. The bias passes
-  R1 in all three cull modes, and the preset default is then chosen from the
-  matrix numbers (R3 contact gap versus R4 leaks).
-- **D6 Point-light bias.** The constant `max(0.05, 0.02 * distance)` becomes a
-  bias derived from the cube texel's world footprint
-  (`2 * distance * tan(45 deg) / point_shadow_resolution`) plus the D1 normal
-  offset, so the contact gap scales with resolution instead of being a fixed
-  5 cm.
-- **D7 Distance technique coverage.** The matrix states which light types the
-  `distance` technique supports; supported combinations meet the same gates,
-  unsupported combinations are rejected by the preset UI.
+Correctness defects that precede any bias work:
+
+- **D0 Depth format of the shader variant.** The `SHADOW_DEPTH_BITS` variant
+  axis is derived from the shadow texture's actual format (depth bits plus
+  whether it is floating point), taken from the texture the shadow node
+  created, not from the preset's requested bits. Today
+  `Shadow_render_node::reconfigure()` stores the requested bits and the
+  composition and prewarm paths pass the preset value, so Medium (requests 24,
+  device gives D32_SFLOAT) compiles the UNORM 24-bit snap for a float map.
+- **D8 Forward-Z comparison.** With `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1`,
+  directional and spot shadows read 0 or 0.25 on lit surfaces (section 9).
+  The forward-Z path of the comparison sampler, the clear value, the bias
+  sign and the reference clamp are made consistent with the reverse-Z path;
+  the gates hold for both conventions (R10).
+
+The bias, in the order it is built:
+
+- **D4 The 2.0 bias scale.** The unexplained `2.0 *` factor in every RPDB
+  slope term is derived or removed first, measured on `grazing_fan` per tile
+  angle with no D1 floor, because it scales every term the later items build
+  on.
+- **D2 / D3 Plane-derived depth gradient.** `dz_dUV` is computed from the
+  receiver plane instead of the screen-space Jacobian: the plane (N, d) of the
+  receiver, N the geometric normal (`normalize(cross(dFdx(p), dFdy(p)))` of the
+  world position, which is exact for planar triangles and independent of
+  smooth vertex normals), is transformed by the inverse transpose of
+  `texture_from_world` to texture space (a, b, c, e), and
+  `dz/du = -a / c`, `dz/dv = -b / c` - exact for planes and projectively
+  correct for spot lights. Two degenerate cases get explicit rules: a receiver
+  edge-on to the camera no longer loses its bias (the Jacobian path's
+  `detJ -> 0` leaves `dz_dUV = 0`), and a receiver edge-on to the light
+  (`c -> 0`) clamps `|dz_dUV|` to the slope at the R1 grazing limit
+  `N . L = 0.05`. `N_dot_L`, passed to `sample_light_visibility()` today and
+  unused, is replaced by the plane.
+- **D1 Derived minimum bias.** Every receiver gets a depth bias of at least
+  `bias = (dz / dworld) * (k_texel * texel_world + k_origin * |P| * 2^-23) +
+  q_format`, where `dz / dworld` is the light projection's depth derivative at
+  the receiver (reverse-Z perspective: near / z^2; orthographic: constant),
+  `texel_world` the shadow texel's world size at the receiver, `|P|` the
+  receiver's distance from the origin (the fp32 error of `v_position` and of
+  the composed `texture_from_world`), and `q_format` one quantum of the
+  map's actual format (D0): `2^-bits` for UNORM, 0 for float. The
+  coefficients `k_texel` and `k_origin` are derived from the filter footprint
+  and the matrix composition, stated with their derivation in shadows.md, and
+  exposed as preset fields `shadow_bias_texel_scale` and
+  `shadow_bias_origin_scale` (dimensionless, default 1) that apply to the
+  hard, 2x2 and wide paths alike - orthogonal to the wide-only
+  `Shadow_bias_mode` axis. The receiver-side floor is used rather than the
+  rasterizer constant bias because the rasterizer unit depends on each
+  primitive's depth extent and on the format; `shadow_depth_bias_constant`
+  stays as the caster-side control.
+- **D5 Cull mode default.** `cull_back` stores every lit front face, so the
+  head-on tie is the common case; `cull_front` stores back faces of closed
+  meshes and removes the tie structurally; single-sided geometry needs
+  `cull_back`. With D1 in place the bias passes R1 in all three modes, and the
+  preset default is chosen from the matrix: G2 / G4 (cull_front leaks, section
+  9) against G1 / G3. The decision names the codegen default in
+  `graphics_preset_entry.py`, the three shipped presets and the shadows.md
+  statement, which today disagree (codegen and shadows.md say `cull_front`,
+  the presets use `cull_back`). Midpoint and second-depth maps need an extra
+  depth layer per light and are outside this plan.
+- **D6 Point-light bias.** The cube pass always rasterizes both faces
+  (`cull_none`), so the lit face is always stored and the tie is structural:
+  the D1 formula applies with the cube texel's world footprint
+  `2 * distance * tan(45 deg) / point_shadow_resolution` (the face-centre
+  upper bound; corners are smaller by `cos^2`) in place of the fixed
+  `max(0.05, 0.02 * distance)`, on the radial distance the cube stores.
+- **D7 Distance technique for spot lights.** The `distance` technique extends
+  to spot lights by storing the radial distance from the light, with the same
+  fwidth caster bias; directional keeps its linear light-space depth, point
+  lights keep their own cube path. The preset UI offers `distance` for
+  directional and spot.
 
 ## 4. Test scenes
 
-Built by a new `scripts/creations/creation_25_shadow_test_rooms.py` in the
-pattern of `creation_24_gi_test_rooms.py` (stations, views as data,
-`--save-assets` writes `res/editor/assets/shadow_test_rooms/shadow_<station>.glb`
-and joins the `.gitignore` allow-list). Every station holds exactly one
-shadow-casting light, white Lambertian materials, ambient 0, and is built only
-from boxes and planes, so ground truth is analytic (section 6). The light type
-and pose are set per measurement with `edit_light`, so one station serves all
-three light types.
+`scripts/creations/creation_25_shadow_test_rooms.py` builds the stations and
+saves them as `res/editor/assets/shadow_test_rooms/shadow_<station>.glb`
+(doc/agents/creations.md "25 - Shadow Test Rooms"). Every station holds one
+shadow-casting light "Shadow Light" under a single root node, white Lambertian
+materials and ambient 0, and is built only from boxes, so ground truth is
+analytic (section 6). The module exports every box, the default light pose per
+type, the views, the pose sweeps and the contact / wall regions as data for
+`shadow_verify.py`. The light type and pose are set per measurement, so one
+station serves all three light types.
 
 | Station | Content | Requirements exercised |
 |---|---|---|
-| `head_on_floor` | Large floor, light on the axis above it | R1 at `dz_dUV = 0`, R6 (pose sweep) |
-| `grazing_fan` | Tiles at 0, 15, 30, 45, 60, 75, 85, 88 degrees to the light axis | R1 across orientations, D3 |
-| `contact_blocks` | Cube, 1 cm plate, tall thin post resting on the floor | R2, R3, R5 |
-| `thin_walls` | Walls 1, 2, 5, 10, 20 cm thick, closed corners, light on one side | R4 |
-| `depth_range` | Receiver below `fit_to_casters` far plane, caster near the near plane | R1, R2 at the clamp paths of shadows.md "Receivers outside the fitted depth range" |
-| `cube_seams` | Point light in a ring room, casters straddling cube face boundaries | R1, R2 for the point cube |
-| `spot_cones` | One spot aimed at a floor with outer angles 5, 45 and 80 degrees | R1, R5 across projection widths |
-| `cornell` | `gi_cornell.glb` at its saved light pose | the section 1 case as a regression |
+| `head_on_floor` | Large floor, light on the axis above it | R1 at `dz_dUV = 0`, R6 |
+| `grazing_fan` | Tiles at 0, 15, 30, 45, 60, 75, 85, 88 degrees to the light axis | R1 across orientations, D2 / D3, D4 |
+| `contact_blocks` | Cube, 1 cm plate, thin post resting on the floor | R2, R3, R5 |
+| `thin_walls` | Closed huts with 1, 2, 5, 10, 20 cm walls, viewed from inside | R4 |
+| `depth_range` | Non-casting floor beyond the fitted far plane, caster near the light | R1, R2 at the clamp paths of shadows.md "Receivers outside the fitted depth range" |
+| `cube_seams` | Point light in a closed room, casters on cube face boundaries | R1, R2 for the point cube |
+| `spot_cones` | Spot aimed at a floor, 5, 45 and 80 degree cones | R1, R5 across projection widths |
+| `cornell` | `gi_cornell.glb` at its saved light pose | the section 1 case |
 
-R7 runs `head_on_floor` and `contact_blocks` with the station root translated
-by 1 km and 10 km.
+Two measurement variants reuse the stations: R7 translates the root of
+`head_on_floor` and `contact_blocks` by 1 km and 10 km, and the
+`--extra-light` variant adds a non-shadow directional light ahead of the
+shadow light in the light buckets, which exercises the
+`shadow_index_packed.x` layer indirection of `sample_light_visibility()`.
 
 ## 5. Test matrix
 
@@ -137,94 +191,86 @@ The axes and their values:
 
 - light type: directional, spot, point
 - `shadow_filter`: hard, pcf_2x2, pcf_4x4, pcf_6x6
-- `shadow_bias`: receiver_plane, slope_scaled (wide filters), plus the D1 modes
-- `shadow_technique`: depth, distance (where D7 supports it)
-- `shadow_depth_bits`: 16, 24, 32
+- `shadow_bias`: receiver_plane, slope_scaled (wide filters)
+- `shadow_technique`: depth, distance (directional and spot, D7)
+- `shadow_depth_bits`: each depth size the device offers (16 and 32 on the
+  development iGPU)
 - `shadow_cull_mode`: cull_front, cull_back, cull_none
 - depth convention: reverse-Z, forward-Z
 - `use_draw_lists`: on, off
 - `shadow_resolution` / `point_shadow_resolution`: 512 and 2048
 
-The **core matrix** is every committed preset plus a one-axis-at-a-time
-variation around it (the sum of the axis sizes, not their product); it runs
-every station with the full light pose sweep. The **full matrix** is the
-product, run with a short pose sweep. The pose sweep for `head_on_floor` moves
-the light height over 200 steps of 1 mm and 200 steps spread over 0.5 to 10 m,
-and offsets it laterally over a 5 x 5 grid; other stations use 25 poses.
+The **core matrix** is every committed preset plus one-axis-at-a-time
+variations around Medium, run with the short pose sweep (5 poses per station)
+and `--runs 1`; a failing cell is re-run three times before it counts. A phase
+exit additionally runs `head_on_floor` with the full sweep (425 poses: 200
+heights in 1 mm steps, 200 over 0.5 to 10 m, a 5 x 5 lateral grid) for the
+three presets, because the short sweep can miss the tie at a given pose. The
+**full matrix** is the product of the axes with the short sweep; it runs at
+the end of phase 4 and phase 8.
 
 ## 6. Measurement and gates
 
-Ground truth: the script knows every box and plane of the station. For each
-image pixel it takes the receiver world position (T2), casts the segment to
-the light against the station's boxes (slab test), and classifies the pixel as
-`lit`, `shadowed`, or `edge band` - within the filter footprint plus one texel
-of the analytic shadow boundary, measured in shadow-map texels through the
-light's texture matrix (T3). Edge-band pixels are excluded from G1 and G2 and
-are what G5 measures.
+Ground truth: `shadow_verify.py` renders the receiver world position (mode 36,
+fp32) and the per-light visibility (mode 30) with MSAA off, so each pixel has
+one surface. It casts each pixel's segment to the light against the station's
+boxes (slab test, own box excluded) and classifies the pixel `lit`,
+`shadowed`, or `edge band` - within the filter footprint plus one texel of the
+analytic shadow boundary in shadow-map texel space (T3 matrices), found by
+sampling the footprint corners in the receiver plane and dilating in image
+space. Pixels on no box, facing away or past the grazing limit
+(`N . L < 0.05`), outside the spot cone, the map border or the light range
+are excluded. Edge-band pixels are excluded from G1 and G2 and are what G5
+measures.
 
-Every gate is evaluated as the worst value over all poses and over `--runs`
-full runs (default 3):
+Every gate is the worst value over all poses and runs:
 
-- **G1 Acne:** shadowed pixels among `lit` pixels = 0.
-- **G2 Occlusion:** lit pixels among `shadowed` pixels = 0.
+- **G1 Acne:** `lit` pixels with visibility < 0.999 = 0.
+- **G2 Occlusion:** `shadowed` pixels with visibility > 0.001 = 0.
 - **G3 Contact gap:** distance from a resting caster's footprint edge to the
-  first fully shadowed receiver pixel <= 1.5 shadow texels (depth technique)
+  receiver's 0.5-visibility crossing <= 1.5 shadow texels (depth technique)
   and <= 2.5 texels (distance technique, whose fwidth bias is an L1 bound).
-- **G4 Leaks:** walls of 2 cm and thicker at 2048 resolution: lit pixels
-  behind the wall = 0. Thinner walls are reported, not gated.
+- **G4 Leaks:** walls of 2 cm and thicker at map resolution >= 2048: lit
+  pixels inside the hut = 0. Thinner walls are reported, not gated.
 - **G5 Edge placement:** mean signed offset of the measured 0.5-visibility
   edge from the analytic edge <= 1 texel; worst <= filter radius + 1 texel.
-- **G6 Stability:** eight camera translations of 1/8 texel: pixels whose
-  visibility changes outside the edge band = 0.
+- **G6 Stability:** eight camera translations of 1/8 of the shadow texel's
+  world size at the view target, along camera right and up: pixels outside
+  the edge band whose visibility changes = 0.
 - **G7 Cost:** forward pass GPU time on the `cornell` and `contact_blocks`
-  views within 3 percent of the pre-change baseline measured by the same
-  script on the same machine; absolute numbers go to `memory-bank/local/`.
+  views, median of at least 5 runs, within 10 percent of the median before the
+  change on the same machine; absolute numbers go to `memory-bank/local/`.
 
 ## 7. Tooling
 
-- **T1 `set_graphics_preset` MCP tool.** Sets any shadow field of the current
-  graphics preset by explicit argument (`shadow_filter`, `shadow_bias`,
-  `shadow_technique`, `shadow_depth_bits`, `shadow_resolution`,
-  `shadow_cull_mode`, `shadow_depth_bias_constant`, `shadow_depth_bias_slope`,
-  `point_shadow_resolution`, the D1 parameters) plus `use_draw_lists`,
-  session-only in the manner of `set_graphics_settings`, and returns the values
-  in effect. The tool goes through the same change site as the Settings
-  window's `on_graphics_preset_edited()`.
-- **T2 World-position shader debug mode.** A new `Shader_debug` value writes
-  `v_position.xyz` to the linear output, read back with `render_scene_image`
-  `output: "linear"` (PFM) as the per-pixel receiver position.
-- **T3 Shadow projection in the render result.** `render_scene_image` returns,
-  for the shadow pass it rendered, each shadow light's type,
-  `texture_from_world`, map resolution and layer, so texel-space distances are
-  computed from the matrices actually used (the directional fit is
-  per-camera).
-- **T4 Per-light shadow visibility.** `shadow_visibility` (mode 30) reads the
-  light selected by a `shadow_debug_light_index` field in the light block
-  instead of the first shadow-mapped light, and covers point lights through
-  `sample_point_light_visibility()`. `render_scene_image` takes the index as an
-  argument.
-- **T5 Forward-Z without editing config.** An environment override for
-  `force_disable_reverse_depth` (read where `erhe_graphics.json` is applied), so
-  the verify script launches a forward-Z editor without rewriting a config
-  file.
-- **T6 `scripts/shadow_verify.py`.** In the pattern of `scripts/gi_verify.py`:
-  launches or reuses the headless editor, loads each station asset, walks the
-  matrix and pose sweep through T1 and `edit_light`, renders mode 30 and T2
-  views with `render_scene_image`, applies section 6, prints a PASS / FAIL
-  table, writes `logs/shadow_verify/<timestamp>.json`, and exits non-zero on a
-  FAIL with `--enforce`. `--matrix core|full`, `--station`, `--light`,
-  `--runs`, `--reuse`, `--port`.
+- **T1** `set_graphics_preset` (MCP): sets the shadow fields of the preset in
+  effect and `use_draw_lists` for the session. D1 adds its two fields here.
+- **T2** `Shader_debug::world_position` (36): the receiver world position.
+- **T3** `render_scene_image` returns `shadow_lights` / `shadow_maps` from its
+  own shadow pass, captures fp32 with `color_format: "rgba32f"`, and marks
+  uncovered pixels NaN in linear debug renders.
+- **T4** `Shader_debug::shadow_visibility` (30) shows the light named by
+  `render_scene_image`'s `shadow_debug_light`, for all three light types.
+- **T5** `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1|0` selects the depth convention
+  without editing `erhe_graphics.json`.
+- **T6** `scripts/shadow_verify.py` runs section 5 and 6 (usage in its
+  docstring); `--enforce` exits non-zero on a FAIL. It gains `--extra-light`
+  (section 4) and the G7 timing in phase 8.
 - **T7 Library GPU tests** in `erhe_scene_renderer_gpu_tests` (ctest label
-  `gpu`), in the pattern of `test_content_line_width_gpu.cpp`:
-  - `Shadow_tie`: a compute shader includes `erhe_light.glsl`, builds the
-    stored depth by rasterizing a head-on plane through `Shadow_renderer`,
-    evaluates `sample_light_visibility()` for receiver points on that plane
-    with the reference perturbed by -4 to +4 ulps, and requires visibility 1
-    everywhere. Runs per filter, bias and depth format.
+  `gpu`), in the pattern of `test_content_line_width_gpu.cpp`, built on a
+  test fixture that sets up what the shadow and forward passes need beyond
+  the `Device` (`Program_interface`, `Shader_variant_cache`, `Mesh_memory`,
+  `Light_set`, `Material_set`):
+  - `Shadow_tie`: `Shadow_renderer` rasterizes a head-on plane into the map;
+    a fullscreen fragment pass that includes `erhe_light.glsl` evaluates
+    `sample_light_visibility()` at receiver points on that plane with the
+    reference depth perturbed by -4 to +4 ulps (fragment stage, because the
+    sampling uses screen-space derivatives); every result is 1. Runs per
+    filter, bias and depth format.
   - `Shadow_head_on_plane`: `Shadow_renderer` plus `Forward_renderer` with
     `Shader_debug::shadow_visibility` on a plane under a spot and a
     directional light; every pixel reads 1.
-  These are the part that runs under a software Vulkan once
+  These run under a software Vulkan once
   [graphics_tests.md](graphics_tests.md) brings `gpu` tests to CI.
 - **T8 MCP regression case.** One `Mcp_test` case in `mcp_server_tests`
   (label `editor`) loads `shadow_head_on_floor.glb` and the `cornell` pose and
@@ -232,28 +278,27 @@ full runs (default 3):
 
 ## 8. Phases
 
-Each phase ends with its verification run and one commit per logical change.
+Each phase ends with the core matrix, one commit per logical change, and
+section 9 rewritten to the new gate table.
 
-- **Phase 0 - tooling.** T1 to T5. Verified by reproducing section 1 over MCP:
-  `gi_cornell.glb`, the saved light pose, Medium preset, mode 30 render shows
-  the band; constant bias -4 through T1 removes it.
-- **Phase 1 - scenes and baseline.** Section 4 stations and assets, T6 with
-  the section 6 gates. Run the core matrix on the current code and record the
-  baseline table (which gates fail where) in section 9 of this plan.
-- **Phase 2 - library tests.** T7 and T8; both fail on the current code for
-  the head-on cases, which confirms they detect the defect.
-- **Phase 3 - D1 to D3.** Both D1 modes, the normal-based slope and the
-  degenerate-Jacobian fallback. Core matrix, then full matrix; choose the
-  defaults from G1 to G5 and G7.
-- **Phase 4 - D4 and D5.** Resolve the 2.0 factor; re-decide the preset cull
-  mode from the matrix.
-- **Phase 5 - point lights (D6).** `cube_seams` and the point rows of the
-  matrix to green.
-- **Phase 6 - distance technique (D7)** and R7 origin independence.
-- **Phase 7 - documentation.** Rewrite shadows.md "Shadow sampling" and "Bias
-  technique" in the present tense for the landed design, add the verify recipe
-  to `doc/testing.md`, list the station assets in `doc/agents/creations.md`,
-  and delete this plan's finished items.
+- **Phase 2 - correctness defects.** D0, then D8. Exit: the depth-bits and
+  forward-Z rows of section 9 match their reverse-Z / 32-bit counterparts
+  apart from the bias failures D1 addresses.
+- **Phase 3 - library and MCP tests.** T7 and T8; both fail on the head-on
+  cases before phase 4, which confirms they detect the tie.
+- **Phase 4 - bias.** D4, then D2 / D3, then D1, each measured on its own.
+  Exit: G1 to G5 pass for directional and spot in every `cull_back` and
+  `cull_none` cell, T7 and T8 pass, `head_on_floor` full sweep passes, then
+  the full matrix.
+- **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
+  place; update the codegen default, the presets and shadows.md together.
+- **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
+  `contact_blocks` point rows to green.
+- **Phase 7 - coverage.** D7 (spot distance technique), R7 origin runs, the
+  `--extra-light` variant.
+- **Phase 8 - cost and documentation.** G7; rewrite shadows.md "Shadow
+  sampling" and "Bias technique" for the landed design, add the verify recipe
+  to `doc/testing.md`, and delete this plan's finished items.
 
 ## 9. Baseline
 

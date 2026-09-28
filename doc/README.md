@@ -367,7 +367,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (proposed): Rigging Phase 3 - skeleton editing and posing basics requirements
-- [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow bias hardening, shadow test scenes and automated shadow verification
+- [plans/shadow_robustness.md](plans/shadow_robustness.md) (in progress): Shadow bias hardening, shadow test scenes and automated shadow verification
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
 - [plans/spirv_cache.md](plans/spirv_cache.md) (proposed): SPIR-V cache robustness
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog

@@ -34,3 +34,14 @@
 ?remaining::doc/plans/radiance_cascades.md-"Remaining-work"{failing-gates;32-ray-per-child;c0-relocation;change-driven-refit;graph-bake-reset}
 ?follow-up::change-driven-refit-both-producers{doc/plans/ddgi.md}
 ?phase-0b..0d->phases-1..7
+
+[TASK::shadow-robustness]{started-2026-09-28;via-harness;doc/plans/shadow_robustness.md}
+✓plan::34f193768
+✓T1+T5::0455be972{set_graphics_preset-session-only;ERHE_FORCE_DISABLE_REVERSE_DEPTH;device-depth-bits-16|32-only}
+✓T2+T4::b5ca7f85b{Shader_debug::world_position=36;mode30-per-light-incl-point;render_scene_image.shadow_debug_light;repro:pcf_4x4-19.6%-floor-shadowed,bias-4->0,hard-0-at-that-pose}
+✓T3::85c75bf78{shadow_lights+shadow_maps;rgba32f-err-2e-6@0|8e-5@1km|1.8e-3@10km;NaN-background-marker}
+✓PHASE-0-DONE
+✓phase-1a::b8e73afe4{creation_25;7-stations+cornell;point-leaks-1-5cm-huts}
+✓phase-1b::257cff784{shadow_verify.py;core-15-configs-short-poses-35min;baseline-in-plan-sec9}
+✓fable-review->plan-revised{D0-depth-bits-variant-from-actual-format;D8-forward-Z-broken;D1-derived-bias{texel+origin+format-quantum};D2/D3-plane-gradient;order-D4->D2/D3->D1->D5}
+?next::phase-2{D0-then-D8}
