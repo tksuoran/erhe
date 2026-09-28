@@ -12,9 +12,11 @@
 //    contribute their shortened distance, which is what stops light
 //    leaking through walls a probe sits behind.
 //
-// The result is blended into the existing texel with the configured
-// hysteresis, and the tile's 1-texel border is then filled from the
-// interior so bilinear taps inside a tile never reach a neighbouring probe.
+// The result is blended into the existing texel with the probe's
+// hysteresis (the configured one, or less during a temporal history reset,
+// erhe_temporal_history.glsl), and the tile's 1-texel border is then
+// filled from the interior so bilinear taps inside a tile never reach a
+// neighbouring probe.
 //
 // Ray directions are recomputed here rather than stored: they are a pure
 // function of the ray index and the tick's random rotation, both of which
@@ -22,6 +24,7 @@
 
 #include "erhe_ddgi_tiles.glsl"
 #include "erhe_ddgi_border.glsl"
+#include "erhe_temporal_history.glsl"
 
 layout(local_size_x = ERHE_DDGI_BLEND_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
@@ -88,7 +91,11 @@ void main()
     int texel_count = tile_size * tile_size;
     ivec2 tile_origin = probe_tile_origin(probe_coords(probe_index), tile_size);
 
-    float hysteresis   = ddgi.params.x;
+    // The probe's hysteresis from the temporal history (doc/editor/ddgi.md
+    // "History reset"): its first update after an allocation or a change
+    // replaces the stale value, the following ones form the running mean
+    // until it reaches the configured hysteresis.
+    float hysteresis   = temporal_history_hysteresis(ddgi.history, probe_index, probe_slot, ddgi.params.x);
     float max_distance = ddgi.params.z;
 
     // Interior texels: accumulate this tick's rays into the texel's cone.

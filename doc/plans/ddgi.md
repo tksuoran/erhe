@@ -17,12 +17,6 @@ sky lights the probe field.
 Sample the previous frame's irradiance field at ray hits, so the field feeds
 back into the trace and light bounces more than once.
 
-## Change-driven hysteresis reset
-
-Light and geometry edits converge through the hysteresis blend alone. Reset
-hysteresis for a few frames when the scene changes, driven by a hash over light
-state and content transforms (the same tiering idea as `Lightmap_baker`).
-
 ## Authored and cascaded volumes
 
 Node-attached volumes, cascaded / camera-scrolling volumes and per-scene volume

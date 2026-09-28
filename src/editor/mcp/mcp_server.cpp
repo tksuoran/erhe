@@ -1186,6 +1186,7 @@ namespace {
         {"updates_per_full_refresh", stats.updates_per_full_refresh},
         {"full_refresh_ms",          stats.full_refresh_ms},
         {"visibility",               json{{"last_ms", stats.visibility_last_ms}, {"update_count", stats.visibility_update_count}}},
+        {"history_reset_count",      stats.history_reset_count},
         {"field",                    field}
     };
 }
@@ -1367,7 +1368,8 @@ auto Mcp_server::query_indirect_diffuse_stats(const json& args) -> std::string
         {"full_refresh_ms",          stats.full_refresh_ms},
         {"texture_bytes",            renderer->get_texture_byte_count()},
         {"update_count",             stats.update_count},
-        {"timing_sample_count",      stats.timing_sample_count}
+        {"timing_sample_count",      stats.timing_sample_count},
+        {"history_reset_count",      stats.history_reset_count}
     };
 
     // Probe state: report the last retired copy, and ask for a fresh one.

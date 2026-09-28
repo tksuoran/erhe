@@ -70,7 +70,7 @@ section, `editor_settings.radiance_cascades`):
 | `cascade0_tile_texels` | 4 | `q0`, the cascade 0 octahedral tile side |
 | `interval_scale` | 1.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
 | `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
-| `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced |
+| `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced (less during a history reset, "Trace") |
 | `direction_jitter` | `none` | `Radiance_cascades_direction_jitter`: `none` traces the texel centre direction, `footprint` a new random point of the texel footprint per trace ("Trace") |
 | `merge_mode` | `per_neighbour_trace` | `Radiance_cascades_merge_mode`: `interpolate`, `visibility_masked` or `per_neighbour_trace` ("Merge"); not in the Settings window, edited with the Radiance Cascades window's combo and MCP `set_radiance_cascades`. The default is the mode that passed the most `gi_verify.py` gates (doc/plans/radiance_cascades.md section 10, "Merge mode default") |
 | `debug_cascade_mask` | 0 | debug bitmask of the merge ("Merge"): bit `i` zeroes cascade `i`'s radiance, bit 12 the sky; not in the Settings window, edited with the Radiance Cascades window's checkboxes |
@@ -228,13 +228,22 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   emission), beta 0; a backface hit carries radiance 0, beta 0; a miss
   carries radiance 0, beta 1 - the merge pass adds what lies beyond the
   interval.
-- **Hysteresis.** The result is blended into the raw atlas as
-  `mix(traced, history, hysteresis)`. **First fill:** until the cursor has
-  wrapped once after an allocation (`completed_sweeps` 0) every traced texel
-  is new and its history is the allocation clear, so those runs are written
-  unblended. Without direction jitter a static scene is exact after the
-  first sweep; the hysteresis matters once jitter or scene changes arrive
-  (plan phase 6).
+- **Hysteresis and history reset.** The result is blended into the raw
+  atlas as `mix(traced, history, h)`, with the texel's `h` from the
+  temporal history (`Temporal_history`,
+  `src/editor/renderers/indirect_diffuse.{hpp,cpp}`, and
+  `res/editor/shaders/erhe_temporal_history.glsl`, shared with DDGI;
+  [ddgi.md](ddgi.md) "History reset"): after a reset the k-th trace of a
+  texel is blended with `min(hysteresis, k / (k + 1))`, so its first trace
+  replaces the history and the next ones form the running mean until it
+  reaches `hysteresis`. Every allocation resets (the first fill: the
+  history is the allocation clear), and so do the change messages - a
+  node transform of content or lights, a geometry edit, a removal,
+  `Scene_lighting_changed_message` - at the next update, at the cursor.
+  Without direction jitter a static scene is exact after one full sweep
+  after a reset. The control block carries the reset state per run
+  (`history`), and the run's first texel in the global order (`run.x`),
+  which is the texel index the history counts with.
 - **Connecting segments** (merge mode `per_neighbour_trace` only): after
   the raw runs, the same runs are traced again with the neighbour variant
   (`ERHE_RC_TRACE_NEIGHBOURS 1`, `record_neighbour_trace()`), for every
@@ -247,7 +256,7 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   test: `segment_free()` (`res/shaders/erhe_ray_hit.glsl`), a ray query
   that ends at the first hit of any face and fetches nothing, 1 when the
   segment is free. The 8 visibilities are blended into the texel's 2 x 1
-  block of the neighbour atlas with the texel's hysteresis and first-fill rule. Upper
+  block of the neighbour atlas with the texel's history hysteresis. Upper
   probes of weight 0 (odd lower counts) are not traced and store 0. The
   variant writes only the neighbour atlas. **Budget**: `texels_per_frame`
   counts texels, as in the other modes, so a texel below the top cascade
@@ -288,8 +297,9 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   sweep), `ms_per_million_rays` (total mean per million rays),
   `updates_per_full_refresh` = ceil(total texels / texels per update) and
   `full_refresh_ms` (updates x total mean), `update_count`,
-  `timing_sample_count` and `completed_sweeps`. The history is cleared when
-  another source or another merge mode is selected.
+  `timing_sample_count`, `completed_sweeps` and `history_reset_count`
+  (temporal history resets). The timing history is cleared when another
+  source or another merge mode is selected.
 
 ## Merge
 
@@ -558,8 +568,9 @@ tick records it, so the copy costs nothing while the window is closed.
   `rays_per_update`, `neighbour_rays_per_update`, `gpu_ms`
   `{trace, neighbour_trace, merge, reduce}` and `gpu_ms_total` (their
   sum; each `last_ms`, `average_ms`), `timing_history_size`, `ms_per_million_rays`,
-  `updates_per_full_refresh` and `full_refresh_ms`, and `visibility`
-  `{last_ms, update_count}` (the visibility pass, "Merge") - the fields
+  `updates_per_full_refresh` and `full_refresh_ms`, `visibility`
+  `{last_ms, update_count}` (the visibility pass, "Merge") and
+  `history_reset_count` - the fields
   `scripts/gi_verify.py` reads for both sources.
 - `get_radiance_cascades_texels {texels}` reads raw and merged texels back,
   on request only: it asks `Radiance_cascades_renderer::request_texel_readback()`

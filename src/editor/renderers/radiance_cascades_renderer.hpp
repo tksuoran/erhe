@@ -167,6 +167,7 @@ public:
         // changed, so it has no per-frame mean; the last measurement.
         double    visibility_last_ms      {0.0};
         uint64_t  visibility_update_count {0};   // visibility pass runs since construction
+        uint64_t  history_reset_count     {0};   // temporal history resets (allocations and change messages)
     };
 
     // Per-cascade summary of a texel readback (the probe texels only, not
@@ -415,8 +416,9 @@ private:
     uint64_t                                                 m_fit_count{0};
 
     // Trace cursor: the next texel in the global order (cascade 0 first).
-    // A sweep completes when it wraps; during the first sweep after an
-    // allocation every traced texel is new, so it is written unblended.
+    // A sweep completes when it wraps. The blend of each traced texel
+    // follows m_history (an allocation resets it: the first sweep after it
+    // is written unblended).
     int64_t  m_texel_cursor    {0};
     uint64_t m_completed_sweeps{0};
     int64_t  m_texels_per_update{0};
@@ -449,7 +451,7 @@ private:
         int        cascade      {0};
         int64_t    first_texel  {0};
         int64_t    count        {0};
-        uint32_t   flags        {0};     // rc_trace.comp dispatch.w flags of the run
+        glm::uvec4 history      {0u};    // rc_trace.history of the run (Temporal_history::get_shader_parameters())
         glm::uvec4 run          {0u};    // rc_trace.run: global first texel, jitter seed, jitter mode
         bool       needs_barrier{false}; // a run of the same cascade precedes it this frame
     };
@@ -473,9 +475,15 @@ private:
         std::size_t upper_origin {0};
         std::size_t upper_spacing{0};
         std::size_t upper_counts {0};
+        std::size_t history      {0};
         std::size_t run          {0};
     };
     Control_offsets m_control_offsets{};
+    // Temporal history of the raw texels (and the neighbour visibilities):
+    // reset on every allocation and by the change messages
+    // (doc/editor/ddgi.md "History reset").
+    Temporal_history                                          m_history{};
+    erhe::message_bus::Subscription<Scene_lighting_changed_message> m_scene_lighting_changed_subscription;
     // Per-update direction jitter seed (Radiance_cascades_direction_jitter).
     std::mt19937                                              m_random_engine{0x5eed5eedu};
 

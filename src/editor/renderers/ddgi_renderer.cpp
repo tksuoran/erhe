@@ -1,6 +1,7 @@
 #include "renderers/ddgi_renderer.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "config/generated/ddgi_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -148,6 +149,7 @@ Ddgi_renderer::Ddgi_renderer(
     erhe::graphics::Device&                  graphics_device,
     erhe::graphics::Command_buffer&          init_command_buffer,
     App_context&                             context,
+    App_message_bus&                         app_message_bus,
     erhe::scene_renderer::Program_interface& program_interface,
     erhe::scene_renderer::Mesh_memory&       mesh_memory,
     const Ddgi_config&                       config,
@@ -242,6 +244,30 @@ Ddgi_renderer::Ddgi_renderer(
     m_control_offsets.flags           = m_control_block.add_uvec4("flags"          )->get_offset_in_parent();
     // x = tiles per atlas row (get_probe_field_tiles_per_row())
     m_control_offsets.atlas           = m_control_block.add_uvec4("atlas"          )->get_offset_in_parent();
+    // Temporal history of the update (Temporal_history::get_shader_parameters(),
+    // erhe_temporal_history.glsl): the blend's per-probe hysteresis.
+    m_control_offsets.history         = m_control_block.add_uvec4("history"        )->get_offset_in_parent();
+
+    // A change of the light transport resets the probes' temporal history
+    // (doc/editor/ddgi.md "History reset"): content or light transforms,
+    // geometry edits, removals, and Scene_lighting_changed_message (content
+    // or lights added or removed, light and material edits).
+    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
+        [this](Node_touched_message& message) {
+            if ((message.node != nullptr) && node_affects_indirect_lighting(*message.node)) {
+                m_history.request_reset();
+            }
+        }
+    );
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message&) { m_history.request_reset(); }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message&) { m_history.request_reset(); }
+    );
+    m_scene_lighting_changed_subscription = app_message_bus.scene_lighting_changed.subscribe(
+        [this](Scene_lighting_changed_message&) { m_history.request_reset(); }
+    );
 
     // Stream-1 attribute offsets (in uints) for the shared hit path's manual
     // vertex fetch, derived from the Mesh_memory vertex format so they stay
@@ -1286,6 +1312,7 @@ auto Ddgi_renderer::get_stats() const -> Stats
     }
     stats.update_count        = m_update_count;
     stats.timing_sample_count = m_timing_sample_count;
+    stats.history_reset_count = m_history.get_reset_count();
     stats.rays_per_update     = static_cast<int64_t>(m_probes_per_update) * static_cast<int64_t>(m_rays_per_probe);
     const int probe_count = m_grid.get_probe_count();
     stats.updates_per_full_refresh = (m_probes_per_update > 0)
@@ -1465,6 +1492,8 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     m_probes_per_update = std::min(probes_per_update, grid.get_probe_count());
     m_probe_cursor      = 0;
     allocate_textures(command_buffer);
+    // Every probe is new: its first trace replaces the allocation clear.
+    m_history.reset(grid.get_probe_count(), m_probe_cursor);
     return true;
 }
 
@@ -1694,6 +1723,8 @@ auto Ddgi_renderer::update_control_buffer() -> erhe::graphics::Ring_buffer_range
     write(gpu_data, m_control_offsets.flags,           as_span(flags          ));
     const glm::uvec4 atlas{static_cast<uint32_t>(m_tiles_per_row), 0u, 0u, 0u};
     write(gpu_data, m_control_offsets.atlas,           as_span(atlas          ));
+    const glm::uvec4 history = m_history.get_shader_parameters(0);
+    write(gpu_data, m_control_offsets.history,         as_span(history        ));
     range.bytes_written(byte_count);
     range.close();
     return range;
@@ -1756,6 +1787,9 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         return;
     }
 
+    // A change message since the last update starts the probes' temporal
+    // history over at the cursor.
+    m_history.begin_update(m_grid.get_probe_count(), static_cast<int64_t>(m_probe_cursor));
     Ring_buffer_range control_range  = update_control_buffer();
 
     sample_pass_timings();
@@ -1845,6 +1879,8 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         m_probe_state_frame             = m_graphics_device.get_frame_index();
         m_probe_state_copy_update_count = m_update_count;
     }
+
+    m_history.end_update(m_probes_per_update, m_config.hysteresis);
 
     // Advance the round-robin cursor for the next tick.
     const uint32_t probe_count = static_cast<uint32_t>(m_grid.get_probe_count());

@@ -22,7 +22,7 @@ and the flat ambient term stands.
 | Question | Answer |
 |---|---|
 | Volume authoring | One scene-wide volume, auto-fitted to the padded content AABB. |
-| Feature set | Octahedral irradiance and distance / Chebyshev visibility, temporal hysteresis, probe relocation, probe classification, border texels. |
+| Feature set | Octahedral irradiance and distance / Chebyshev visibility, temporal hysteresis with a change-driven history reset, probe relocation, probe classification, border texels. |
 | Lightmap interaction | Mutually exclusive per draw: a lightmapped primitive keeps its baked term (and its analytic-light gate); every other draw gets DDGI in place of the flat ambient. |
 | Backend | Ray query only. |
 
@@ -96,7 +96,8 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
    on-face probe to the correct side.
 2. **`ddgi_blend.comp`, irradiance variant** - one workgroup per probe,
    striding over the tile's texels. Cosine-weighted accumulation of the
-   probe's rays, hysteresis blend against the existing texel, then the
+   probe's rays, hysteresis blend against the existing texel (the probe's
+   hysteresis from the temporal history, "History reset"), then the
    border-texel copy in the same dispatch.
 3. **`ddgi_blend.comp`, distance variant** (`ERHE_DDGI_BLEND_DISTANCE`) - same
    shape, with `pow(max(0, cos), depth_sharpness)` weighting of distance and
@@ -124,6 +125,44 @@ ping-pong is needed and a `memory_barrier` between passes suffices.
 
 Budgeting: a round-robin probe cursor with a `probes_per_frame` budget,
 mirroring the lightmap tile cursor.
+
+## History reset
+
+The probes are a round-robin temporal integrator: each update traces the
+next `probes_per_frame` probes and blends their new values into the atlases
+with `hysteresis`. A scene change would otherwise fade in over about
+`1 / (1 - hysteresis)` updates per probe. `Temporal_history`
+(`src/editor/renderers/indirect_diffuse.{hpp,cpp}`, shared with the
+radiance cascades raw texels) resets the history instead:
+
+- **Rule.** After a reset, the k-th update of a probe (k = 0, 1, ...) is
+  blended with `h_k = min(hysteresis, k / (k + 1))`: the first update
+  replaces the stale value, the next ones form the equal-weight running
+  mean of every update since the reset - the minimum-variance estimate of
+  the new state from the rays traced so far - until that weight reaches the
+  configured hysteresis and the exponential blend takes over. So a reset
+  costs no extra work, never shows a stale value after the first refresh,
+  and never shows more noise than the running mean of the updates since the
+  change. A fixed number of unblended updates would show one update's full
+  Monte Carlo noise; a hysteresis of 0 for one refresh, the same.
+- **Shader side.** `res/editor/shaders/erhe_temporal_history.glsl`: the
+  control block carries the probe the reset started at, the probes updated
+  since, the probe count and an active flag; each probe's k follows from its
+  index and its slot in the dispatch. Once every probe has reached the
+  configured hysteresis the flag clears and the blend uses it directly.
+- **When.** Every allocation (refit) resets, so a new grid starts with its
+  first update instead of fading in from black. So do the change messages
+  on `App_message_bus`, which the renderer subscribes to (no polling):
+  `Node_touched_message` for a node whose subtree holds a content-layer mesh
+  or a light (`node_affects_indirect_lighting()`; a camera or tool node
+  does not reset), `Mesh_geometry_changed_message`, `Items_removed_message`
+  and `Scene_lighting_changed_message` - queued by `Scene_root` when a
+  content-layer mesh or a light is registered or unregistered and when a
+  light's properties change (`Scene_root::on_light_changed()`), and by
+  `App_context::on_item_property_changed()` for a material edit. A request
+  is applied at the next update, at its cursor; any number of requests
+  before it make one reset.
+- **Stats.** `get_indirect_diffuse_stats` reports `history_reset_count`.
 
 ## Runtime sampling
 

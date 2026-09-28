@@ -129,9 +129,6 @@ constexpr int     c_trace_workgroup_size = 64;
 // maxComputeWorkGroupCount[0] (65535) workgroups.
 constexpr int64_t c_max_texels_per_dispatch = int64_t{65535} * c_trace_workgroup_size;
 
-// rc_trace.comp dispatch.w flags.
-constexpr uint32_t c_flag_blend = 1u;
-
 // Readback buffer offsets are rounded up to this (a multiple of every texel
 // size and of every nonCoherentAtomSize the Vulkan spec allows).
 constexpr std::size_t c_readback_alignment = 256;
@@ -236,7 +233,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     // xyz = probe counts, w = octahedral tile side q_i
     m_control_offsets.grid_counts  = m_control_block.add_uvec4("grid_counts" )->get_offset_in_parent();
     // x = first texel of the run, y = texel count, z = tiles per atlas row,
-    // w = flags (c_flag_blend)
+    // w unused
     m_control_offsets.dispatch     = m_control_block.add_uvec4("dispatch"    )->get_offset_in_parent();
     // x = hysteresis
     m_control_offsets.params       = m_control_block.add_vec4 ("params"      )->get_offset_in_parent();
@@ -245,6 +242,9 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
     m_control_offsets.upper_origin  = m_control_block.add_vec4 ("upper_origin" )->get_offset_in_parent();
     m_control_offsets.upper_spacing = m_control_block.add_vec4 ("upper_spacing")->get_offset_in_parent();
     m_control_offsets.upper_counts  = m_control_block.add_uvec4("upper_counts" )->get_offset_in_parent();
+    // Temporal history of the run (Temporal_history::get_shader_parameters(),
+    // erhe_temporal_history.glsl).
+    m_control_offsets.history       = m_control_block.add_uvec4("history"      )->get_offset_in_parent();
     // x = the run's first texel in the global order of all cascades, y =
     // the update's jitter seed, z = Radiance_cascades_direction_jitter
     m_control_offsets.run           = m_control_block.add_uvec4("run"          )->get_offset_in_parent();
@@ -492,14 +492,32 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
 
     // The visibility depends on the scene geometry: recompute it when an
     // edit changes a transform or a mesh's geometry, or removes content.
+    // The same edits, and every other change of the light transport
+    // (Scene_lighting_changed_message: content or lights added or removed,
+    // light and material edits), reset the temporal history of the traced
+    // texels (doc/editor/ddgi.md "History reset").
     m_node_touched_subscription = app_message_bus.node_touched.subscribe(
-        [this](Node_touched_message&) { m_visibility_dirty = true; }
+        [this](Node_touched_message& message) {
+            m_visibility_dirty = true;
+            if ((message.node != nullptr) && node_affects_indirect_lighting(*message.node)) {
+                m_history.request_reset();
+            }
+        }
     );
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
-        [this](Mesh_geometry_changed_message&) { m_visibility_dirty = true; }
+        [this](Mesh_geometry_changed_message&) {
+            m_visibility_dirty = true;
+            m_history.request_reset();
+        }
     );
     m_items_removed_subscription = app_message_bus.items_removed.subscribe(
-        [this](Items_removed_message&) { m_visibility_dirty = true; }
+        [this](Items_removed_message&) {
+            m_visibility_dirty = true;
+            m_history.request_reset();
+        }
+    );
+    m_scene_lighting_changed_subscription = app_message_bus.scene_lighting_changed.subscribe(
+        [this](Scene_lighting_changed_message&) { m_history.request_reset(); }
     );
 
     m_light_buffer = std::make_unique<erhe::scene_renderer::Light_buffer>(
@@ -1028,6 +1046,7 @@ auto Radiance_cascades_renderer::get_stats() const -> Stats
     stats.full_refresh_ms = static_cast<double>(stats.updates_per_full_refresh) * stats.total.average_ms;
     stats.visibility_last_ms      = static_cast<double>(m_visibility_last_ns) * 1.0e-6;
     stats.visibility_update_count = m_visibility_update_count;
+    stats.history_reset_count     = m_history.get_reset_count();
     return stats;
 }
 
@@ -1150,6 +1169,10 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
     // New probe positions: in the visibility_masked mode the probe states
     // are reallocated and recomputed before the next merge reads them.
     m_visibility_dirty = true;
+
+    // Every texel is new: its history is the allocation clear, so its first
+    // trace is written unblended (the first fill).
+    m_history.reset(m_layout.get_total_texels(), m_texel_cursor);
 
     allocate_field(command_buffer);
 
@@ -1519,6 +1542,9 @@ void Radiance_cascades_renderer::record_trace(
     m_texels_per_update = std::clamp(static_cast<int64_t>(m_config.texels_per_frame), int64_t{1}, total_texels);
     const float hysteresis = std::clamp(m_config.hysteresis, 0.0f, 0.999f);
 
+    // A change message since the last update starts the temporal history
+    // over at the cursor (doc/editor/ddgi.md "History reset").
+    m_history.begin_update(total_texels, m_texel_cursor);
     // One jitter seed per update: every texel gets a new footprint point
     // each time it is traced (rc_trace.comp).
     const uint32_t jitter_seed = static_cast<uint32_t>(m_random_engine());
@@ -1542,6 +1568,7 @@ void Radiance_cascades_renderer::record_trace(
         // images and need none.
         std::array<bool, c_max_radiance_cascades> dispatched{};
         int64_t remaining = m_texels_per_update;
+        int64_t traced    = 0; // texels of this update before the run
         m_trace_runs.clear();
         while (remaining > 0) {
             int cascade_index = m_layout.cascade_count - 1;
@@ -1558,16 +1585,15 @@ void Radiance_cascades_renderer::record_trace(
             }
             dispatched[static_cast<std::size_t>(cascade_index)] = true;
 
-            // First sweep since the allocation: every texel is new, and its
-            // history is the allocation clear, not a trace.
-            const uint32_t flags = (m_completed_sweeps > 0) ? c_flag_blend : 0u;
-            // The run's place in the global texel order keys the jitter hash.
+            // The run's temporal history (first fill after an allocation,
+            // running mean after a reset) and its place in the global
+            // texel order, which keys the history and the jitter hash.
             const Trace_run& run = m_trace_runs.emplace_back(
                 Trace_run{
                     .cascade       = cascade_index,
                     .first_texel   = first_texel,
                     .count         = count,
-                    .flags         = flags,
+                    .history       = m_history.get_shader_parameters(traced),
                     .run           = glm::uvec4{
                         static_cast<uint32_t>(m_texel_cursor),
                         jitter_seed,
@@ -1595,7 +1621,7 @@ void Radiance_cascades_renderer::record_trace(
                     static_cast<uint32_t>(first_texel),
                     static_cast<uint32_t>(count),
                     static_cast<uint32_t>(cascade.tiles_per_row),
-                    flags
+                    0u
                 };
                 const glm::vec4 params{hysteresis, 0.0f, 0.0f, 0.0f};
                 write(gpu_data, m_control_offsets.grid_origin,  as_span(grid_origin ));
@@ -1603,6 +1629,7 @@ void Radiance_cascades_renderer::record_trace(
                 write(gpu_data, m_control_offsets.grid_counts,  as_span(grid_counts ));
                 write(gpu_data, m_control_offsets.dispatch,     as_span(dispatch    ));
                 write(gpu_data, m_control_offsets.params,       as_span(params      ));
+                write(gpu_data, m_control_offsets.history,      as_span(run.history ));
                 write(gpu_data, m_control_offsets.run,          as_span(run.run     ));
                 control_range.bytes_written(byte_count);
                 control_range.close();
@@ -1632,6 +1659,7 @@ void Radiance_cascades_renderer::record_trace(
             control_range.release();
 
             remaining      -= count;
+            traced         += count;
             m_texel_cursor += count;
             if (m_texel_cursor >= total_texels) {
                 m_texel_cursor = 0;
@@ -1639,6 +1667,8 @@ void Radiance_cascades_renderer::record_trace(
             }
         }
     }
+
+    m_history.end_update(m_texels_per_update, hysteresis);
 
     // Merge mode per_neighbour_trace: the connecting segments of the same
     // runs, while the raw atlases and the distance texture (bound, not
@@ -1673,7 +1703,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
         const Scoped_gpu_timer neighbour_timer{*m_pass_timings[static_cast<std::size_t>(Rc_pass::neighbour_trace)].timer, command_buffer};
 
         // The runs of this frame's raw trace (record_trace()), with the same
-        // first-fill flags, the same jitter (so the connecting segments start
+        // temporal history, the same jitter (so the connecting segments start
         // at the end of the very ray the raw trace traced) and the same
         // barrier rule: a second run of a cascade in one frame is ordered
         // after the first. The top cascade has no upper cascade and no
@@ -1706,7 +1736,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
                     static_cast<uint32_t>(run.first_texel),
                     static_cast<uint32_t>(run.count),
                     static_cast<uint32_t>(cascade.tiles_per_row),
-                    run.flags
+                    0u
                 };
                 const glm::vec4  params       {hysteresis, 0.0f, 0.0f, 0.0f};
                 const glm::vec4  upper_origin {upper.grid.origin,  0.0f};
@@ -1725,6 +1755,7 @@ void Radiance_cascades_renderer::record_neighbour_trace(
                 write(gpu_data, m_control_offsets.upper_origin,  as_span(upper_origin ));
                 write(gpu_data, m_control_offsets.upper_spacing, as_span(upper_spacing));
                 write(gpu_data, m_control_offsets.upper_counts,  as_span(upper_counts ));
+                write(gpu_data, m_control_offsets.history,       as_span(run.history  ));
                 write(gpu_data, m_control_offsets.run,           as_span(run.run      ));
                 control_range.bytes_written(byte_count);
                 control_range.close();

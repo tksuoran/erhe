@@ -1666,6 +1666,11 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
+    // Content meshes are what the indirect diffuse producers trace.
+    if (mesh->layer_id == layers().content()->id) {
+        notify_lighting_changed();
+    }
+
     // Make sure the materials this scene DEFINES are listed. A material this
     // scene defines (is_asset_definition: this scene's container record is
     // its defining container) is placed under the Materials scope; any other
@@ -1772,6 +1777,10 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_scene->unregister_mesh(mesh);
     }
 
+    if (mesh->layer_id == layers().content()->id) {
+        notify_lighting_changed();
+    }
+
     // TODO reference count? Remove materials from material library
     // auto& material_library = get_content_library()->materials;
     // material_library.remove(m_material);
@@ -1835,6 +1844,7 @@ void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light
         m_scene->register_light(light);
     }
     m_light_set.invalidate();
+    notify_lighting_changed();
 }
 
 void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& light)
@@ -1843,6 +1853,7 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
         m_scene->unregister_light(light);
     }
     m_light_set.invalidate();
+    notify_lighting_changed();
 }
 
 // Light hook: any thread, mark stale only (Scene_host contract).
@@ -1850,6 +1861,14 @@ void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& lig
 {
     static_cast<void>(light);
     m_light_set.invalidate();
+    notify_lighting_changed();
+}
+
+void Scene_root::notify_lighting_changed()
+{
+    if (m_app_message_bus != nullptr) {
+        m_app_message_bus->scene_lighting_changed.queue_message(Scene_lighting_changed_message{.scene_root = this});
+    }
 }
 
 auto Scene_root::get_light_set() -> erhe::scene_renderer::Light_set&

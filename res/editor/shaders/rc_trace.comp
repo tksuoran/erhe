@@ -22,8 +22,11 @@
 //    shade_surface() with traced shadow rays), beta 0,
 //  - backface hit: radiance 0, beta 0,
 //  - miss: radiance 0, beta 1 - the merge pass adds what lies beyond.
-// The result is blended into the raw atlas with the hysteresis unless the
-// texel is being traced for the first time since its atlas was allocated.
+// The result is blended into the raw atlas with the texel's hysteresis
+// from the temporal history (erhe_temporal_history.glsl, rc_trace.history):
+// the first trace after an allocation or a history reset replaces the
+// texel, the following ones form the running mean until it reaches the
+// configured hysteresis.
 //
 // The cascade 0 variant (ERHE_RC_TRACE_WRITE_DISTANCE 1) also blends the
 // hit distance statistics into the cascade 0 distance texture (RGBA32F,
@@ -66,8 +69,7 @@ layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
 #include "erhe_ddgi_ray.glsl"
 #include "erhe_rc_upper.glsl"
 
-// rc_trace.dispatch.w flags
-const uint c_flag_blend = 1u; // blend with the texel's history
+#include "erhe_temporal_history.glsl"
 
 // rc_trace.run.z direction jitter modes (Radiance_cascades_direction_jitter)
 const uint c_jitter_footprint = 1u;
@@ -125,7 +127,7 @@ void main()
     );
 
     // The texel's index in the global order of all cascades, which the
-    // jitter hash is keyed on.
+    // temporal history and the jitter hash are keyed on.
     uint  global_texel   = rc_trace.run.x + slot;
     vec2  offset         = vec2(0.5);
     if (rc_trace.run.z == c_jitter_footprint) {
@@ -138,7 +140,7 @@ void main()
     vec3  direction      = rc_octahedral_decode(f);
     float t_start        = rc_trace.grid_origin.w;
     float t_end          = rc_trace.grid_spacing.w;
-    float hysteresis     = ((rc_trace.dispatch.w & c_flag_blend) != 0u) ? rc_trace.params.x : 0.0;
+    float hysteresis     = temporal_history_hysteresis(rc_trace.history, global_texel, slot, rc_trace.params.x);
 
 #if ERHE_RC_TRACE_NEIGHBOURS
     ivec3 upper_counts = ivec3(rc_trace.upper_counts.xyz);

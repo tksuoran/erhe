@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "renderable.hpp"
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/probe_grid.hpp"
@@ -8,6 +9,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <glm/glm.hpp>
@@ -49,6 +51,7 @@ struct Ddgi_config;
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Render_context;
 class Scene_root;
 
@@ -151,6 +154,7 @@ public:
         int         updates_per_full_refresh{0};  // ticks until every probe is traced once
         double      ms_per_million_rays     {0.0}; // total.average_ms per 1e6 rays_per_update
         double      full_refresh_ms         {0.0}; // updates_per_full_refresh x total.average_ms
+        uint64_t    history_reset_count     {0};  // temporal history resets (allocations and change messages)
     };
 
     static constexpr std::size_t c_timing_history_size = 60;
@@ -170,6 +174,7 @@ public:
         erhe::graphics::Device&                  graphics_device,
         erhe::graphics::Command_buffer&          init_command_buffer,
         App_context&                             context,
+        App_message_bus&                         app_message_bus,
         erhe::scene_renderer::Program_interface& program_interface,
         erhe::scene_renderer::Mesh_memory&       mesh_memory,
         const Ddgi_config&                       config,
@@ -455,9 +460,18 @@ private:
         std::size_t sky_radiance   {0};
         std::size_t flags          {0};
         std::size_t atlas          {0};
+        std::size_t history        {0};
     };
     Control_offsets m_control_offsets{};
 
+    // Temporal history of the probes (the blend hysteresis): reset on every
+    // allocation and by the change messages (doc/editor/ddgi.md "History
+    // reset").
+    Temporal_history                                                m_history{};
+    erhe::message_bus::Subscription<Node_touched_message>           m_node_touched_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message>  m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>          m_items_removed_subscription;
+    erhe::message_bus::Subscription<Scene_lighting_changed_message> m_scene_lighting_changed_subscription;
     std::mt19937 m_random_engine{0x0DD91u};
 
     // Host-visible mirror of the probe data texture (xyz relocation offset,

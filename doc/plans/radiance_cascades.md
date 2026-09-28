@@ -220,9 +220,12 @@ Merge-quality option `merge_mode`, three modes; the default,
   converges to infinite bounces over frames. The same code serves the DDGI
   infinite-bounce follow-up in [ddgi.md](ddgi.md).
 - The trace is a continuous integrator like DDGI's, not per-frame syncing of
-  derived state. Hysteresis reset on edits is driven by the existing change
-  messages on `App_message_bus` (light, transform, material, content), shared
-  with the DDGI "change-driven hysteresis reset" item.
+  derived state. `Temporal_history` resets the history of both producers
+  on the change messages on `App_message_bus` - node transforms of content
+  or lights, geometry edits, removals, and `Scene_lighting_changed_message`
+  (content or lights added or removed, light and material edits) - and on
+  every allocation: the k-th trace of an item after a reset is blended with
+  `min(hysteresis, k / (k + 1))`.
 
 ## 7. Test scene: `creation_24_gi_test_rooms`
 

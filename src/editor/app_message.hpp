@@ -106,6 +106,20 @@ struct Mesh_geometry_changed_message
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
+// A light transport input of a scene changed outside a node transform: a
+// content-layer mesh or a light entered or left the scene, a light's
+// properties changed, or a material's properties changed. Queued, because
+// the Scene_host hooks that send it (Scene_root::register_mesh() and
+// friends, Scene_root::on_light_changed()) may run on any thread; delivered
+// on the main thread by App_message_bus::update(). The indirect diffuse
+// producers (Ddgi_renderer, Radiance_cascades_renderer) reset their
+// temporal history on it (doc/editor/ddgi.md "History reset").
+class Scene_lighting_changed_message
+{
+public:
+    const Scene_root* scene_root{nullptr};
+};
+
 // Published when a scene_root is first created and registered -- by the
 // scene.create startup command, or by loading a scene file. Global editor tools
 // that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build
