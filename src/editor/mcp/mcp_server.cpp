@@ -659,6 +659,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "copy_library_item",              &Mcp_server::action_copy_library_item             },
         { "set_scene_settings",             &Mcp_server::action_set_scene_settings            },
         { "set_graphics_settings",          &Mcp_server::action_set_graphics_settings         },
+        { "set_graphics_preset",            &Mcp_server::action_set_graphics_preset           },
         { "select_variant",                 &Mcp_server::action_select_variant                },
         { "save_scene",                     &Mcp_server::action_save_scene                    },
         { "load_scene",                     &Mcp_server::action_load_scene                    },

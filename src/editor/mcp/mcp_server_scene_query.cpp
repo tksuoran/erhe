@@ -328,16 +328,17 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
 
 auto Mcp_server::action_set_draw_lists_enabled(const json& args) -> std::string
 {
-    if (m_context.editor_settings == nullptr) {
+    if (m_context.app_settings == nullptr) {
         return make_error_content("Editor settings not available");
     }
     if (!args.contains("enabled") || !args["enabled"].is_boolean()) {
         return make_error_content("enabled (boolean) is required");
     }
-    const bool enabled = args["enabled"].get<bool>();
-    m_context.editor_settings->use_draw_lists = enabled;
+    // Session-only: the stored Editor_settings_config::use_draw_lists (and
+    // so editor_settings.json) is left alone.
+    m_context.app_settings->use_draw_lists_session_override = args["enabled"].get<bool>();
     return make_json_content({
-        {"use_draw_lists", m_context.editor_settings->use_draw_lists}
+        {"use_draw_lists", m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }
 

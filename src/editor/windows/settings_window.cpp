@@ -598,8 +598,15 @@ void Settings_window::imgui()
                 ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "forced off (--no-post-processing)");
             }
         }, "Enable Post Processing. Takes effect on next viewport creation.");
-        add_entry("Draw Lists", [&settings](){
-            ImGui::Checkbox("##", &settings.use_draw_lists);
+        add_entry("Draw Lists", [&settings, this](){
+            // Shows the value in effect; an edit makes the stored value
+            // authoritative again (clears an MCP session-only override).
+            App_settings& app_settings = *m_context.app_settings;
+            bool use_draw_lists = app_settings.get_use_draw_lists();
+            if (ImGui::Checkbox("##", &use_draw_lists)) {
+                settings.use_draw_lists = use_draw_lists;
+                app_settings.use_draw_lists_session_override.reset();
+            }
         }, "Render content fill and shadow maps through persistent per-scene draw lists (doc/erhe/draw_list_renderer.md). Off = classic per-pass bucketing.");
         add_entry("Exclude Unlit Primitives", [&settings](){
             ImGui::Checkbox("##", &settings.exclude_unlit_primitives);

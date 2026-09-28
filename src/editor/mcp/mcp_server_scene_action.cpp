@@ -8,12 +8,17 @@
 #include "app_settings.hpp"
 #include "brushes/brush.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/shadow_bias_mode.hpp"
+#include "config/generated/shadow_cull_mode.hpp"
+#include "config/generated/shadow_filter_mode.hpp"
+#include "config/generated/shadow_technique_mode.hpp"
 #include "content_library/content_library.hpp"
 #include "create/create_box.hpp"
 #include "create/create_capsule.hpp"
 #include "create/create_cone.hpp"
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
+#include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "items.hpp"
@@ -52,6 +57,8 @@
 #include "transform/ik_drag.hpp"
 #include "transform/transform_tool.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/shapes/convex_hull.hpp"
@@ -135,6 +142,152 @@ auto Mcp_server::action_set_graphics_settings(const json& args) -> std::string
         {"headlight_when_unlit", graphics.headlight_when_unlit},
         {"sky_enabled",          graphics.sky_enabled},
         {"grid_visible",         graphics.grid_visible}
+    }).dump();
+}
+
+namespace {
+
+// Reads an optional enum-valued argument by its enum value name. Returns an
+// error message (empty on success or when the argument is absent).
+template <typename T>
+auto read_enum_argument(const json& args, const char* key, T& out) -> std::string
+{
+    if (!args.contains(key)) {
+        return {};
+    }
+    const json& value = args[key];
+    const erhe::codegen::Enum_info& enum_info = get_enum_info(static_cast<const T*>(nullptr));
+    std::string valid_names;
+    for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+        if (!valid_names.empty()) {
+            valid_names += ", ";
+        }
+        valid_names += value_info.name;
+    }
+    if (!value.is_string()) {
+        return fmt::format("{} must be a string, one of: {}", key, valid_names);
+    }
+    const std::string name = value.get<std::string>();
+    if (!from_string(name, out)) {
+        return fmt::format("{}: unknown value '{}', expected one of: {}", key, name, valid_names);
+    }
+    return {};
+}
+
+auto read_int_argument(const json& args, const char* key, const int min_value, int& out) -> std::string
+{
+    if (!args.contains(key)) {
+        return {};
+    }
+    const json& value = args[key];
+    if (!value.is_number_integer() || (value.get<int>() < min_value)) {
+        return fmt::format("{} must be an integer >= {}", key, min_value);
+    }
+    out = value.get<int>();
+    return {};
+}
+
+auto read_float_argument(const json& args, const char* key, float& out) -> std::string
+{
+    if (!args.contains(key)) {
+        return {};
+    }
+    const json& value = args[key];
+    if (!value.is_number()) {
+        return fmt::format("{} must be a number", key);
+    }
+    out = value.get<float>();
+    return {};
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
+{
+    if ((m_context.app_settings == nullptr) || (m_context.app_message_bus == nullptr)) {
+        return make_error_content("Editor settings are not available");
+    }
+    Graphics_settings& graphics = m_context.app_settings->graphics;
+
+    // Session-only: edit a copy of the preset in effect and apply it through
+    // Graphics_settings::apply_preset(), the shared core of the Settings
+    // window's on_graphics_preset_edited() path (limits clamp, change
+    // broadcast -> shadow map reconfigure). Unlike that path this neither
+    // edits the stored preset list nor marks it dirty, so
+    // graphics_presets.json is not written. Every argument is validated
+    // before anything is applied.
+    Graphics_preset_entry preset = graphics.current_graphics_preset;
+    std::string error;
+    const auto check = [&error](std::string message) -> bool {
+        if (message.empty()) {
+            return true;
+        }
+        error = std::move(message);
+        return false;
+    };
+    const bool args_ok =
+        check(read_enum_argument (args, "shadow_filter",              preset.shadow_filter))              &&
+        check(read_enum_argument (args, "shadow_bias",                preset.shadow_bias))                &&
+        check(read_enum_argument (args, "shadow_technique",           preset.shadow_technique))           &&
+        check(read_enum_argument (args, "shadow_cull_mode",           preset.shadow_cull_mode))           &&
+        check(read_int_argument  (args, "shadow_resolution",       1, preset.shadow_resolution))          &&
+        check(read_int_argument  (args, "shadow_depth_bits",       1, preset.shadow_depth_bits))          &&
+        check(read_int_argument  (args, "point_shadow_resolution", 1, preset.point_shadow_resolution))    &&
+        check(read_float_argument(args, "shadow_depth_bias_constant", preset.shadow_depth_bias_constant)) &&
+        check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope));
+    if (!args_ok) {
+        return make_error_content(error);
+    }
+    if (args.contains("shadow_depth_bits") && (m_context.graphics_device != nullptr)) {
+        // Same choice set as the Settings window "Shadow Depth Bits" combo.
+        std::set<int> depth_sizes;
+        for (const erhe::dataformat::Format format : m_context.graphics_device->get_supported_depth_stencil_formats()) {
+            depth_sizes.insert(static_cast<int>(erhe::dataformat::get_depth_size_bits(format)));
+        }
+        if (!depth_sizes.contains(preset.shadow_depth_bits)) {
+            std::string supported;
+            for (const int bits : depth_sizes) {
+                if (!supported.empty()) {
+                    supported += ", ";
+                }
+                supported += std::to_string(bits);
+            }
+            return make_error_content(
+                fmt::format("shadow_depth_bits {} is not supported by the device; supported: {}", preset.shadow_depth_bits, supported)
+            );
+        }
+    }
+    std::optional<bool> use_draw_lists;
+    if (args.contains("use_draw_lists")) {
+        const json& value = args["use_draw_lists"];
+        if (!value.is_boolean()) {
+            return make_error_content("use_draw_lists must be a boolean");
+        }
+        use_draw_lists = value.get<bool>();
+    }
+
+    graphics.apply_limits(preset);
+    graphics.apply_preset(preset, *m_context.app_message_bus);
+    if (use_draw_lists.has_value()) {
+        // Session-only as well: Editor_settings_config::use_draw_lists (and so
+        // editor_settings.json) is left alone.
+        m_context.app_settings->use_draw_lists_session_override = use_draw_lists;
+    }
+
+    const Graphics_preset_entry& in_effect = graphics.current_graphics_preset;
+    return make_json_content({
+        {"preset_name",                in_effect.name},
+        {"shadow_enable",              in_effect.shadow_enable},
+        {"shadow_filter",              std::string{to_string(in_effect.shadow_filter)}},
+        {"shadow_bias",                std::string{to_string(in_effect.shadow_bias)}},
+        {"shadow_technique",           std::string{to_string(in_effect.shadow_technique)}},
+        {"shadow_cull_mode",           std::string{to_string(in_effect.shadow_cull_mode)}},
+        {"shadow_depth_bits",          in_effect.shadow_depth_bits},
+        {"shadow_resolution",          in_effect.shadow_resolution},
+        {"shadow_depth_bias_constant", in_effect.shadow_depth_bias_constant},
+        {"shadow_depth_bias_slope",    in_effect.shadow_depth_bias_slope},
+        {"point_shadow_resolution",    in_effect.point_shadow_resolution},
+        {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }
 

@@ -9,6 +9,7 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
+#include <optional>
 #include <string>
 
 namespace erhe::window { class Context_window; }
@@ -46,6 +47,15 @@ public:
     // react. Called from the change site (Settings window preset edits);
     // replaces the former per-frame auto-apply.
     void apply_active_preset          (App_message_bus& app_message_bus);
+
+    // The shared core of apply_active_preset(): makes graphics_preset the
+    // preset in effect (current_graphics_preset) and broadcasts a
+    // Graphics_settings_message when it actually changed. Called directly
+    // with a modified copy of current_graphics_preset by the session-only
+    // MCP set_graphics_preset tool, which leaves the stored preset list
+    // (graphics_presets.json) alone; the next Settings window preset edit
+    // or selection re-applies the stored preset.
+    void apply_preset                 (const Graphics_preset_entry& graphics_preset, App_message_bus& app_message_bus);
 
     // Marks the preset list as changed so save_presets_if_dirty() writes it.
     void mark_presets_dirty           ();
@@ -122,6 +132,10 @@ public:
 
     [[nodiscard]] auto get_ui_scale() const -> float;
 
+    // Editor_settings_config::use_draw_lists, unless a session-only override
+    // is set. Readers of the draw-list gate go through this.
+    [[nodiscard]] auto get_use_draw_lists() const -> bool;
+
     [[nodiscard]] auto settings_store()       ->       Editor_settings_store&;
     [[nodiscard]] auto config        ()       ->       Editor_settings_config&;
     [[nodiscard]] auto config        () const -> const Editor_settings_config&;
@@ -130,6 +144,12 @@ public:
     // persisted next to the settings in user_state.json.
     [[nodiscard]] auto user_state    ()       ->       User_state_config&;
     [[nodiscard]] auto user_state    () const -> const User_state_config&;
+
+    // Session-only override of Editor_settings_config::use_draw_lists, set by
+    // the MCP set_graphics_preset / set_draw_lists_enabled tools so an
+    // automated run never writes the gate into editor_settings.json. The
+    // Settings window "Draw Lists" checkbox clears it when edited.
+    std::optional<bool> use_draw_lists_session_override;
 
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};

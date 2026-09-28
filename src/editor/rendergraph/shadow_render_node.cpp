@@ -626,7 +626,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // persistent shadow draw lists when the gate is on; content layer only,
     // matching mesh_spans below.
     erhe::scene_renderer::Draw_list_scene* draw_list_scene =
-        ((m_context.editor_settings != nullptr) && m_context.editor_settings->use_draw_lists)
+        ((m_context.app_settings != nullptr) && m_context.app_settings->get_use_draw_lists())
             ? scene_root->get_draw_list_scene()
             : nullptr;
     const erhe::scene::Layer_id draw_list_layers[] = { layers.content()->id };

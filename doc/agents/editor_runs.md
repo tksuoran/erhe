@@ -72,6 +72,14 @@ into an AI chat):
 - Fatal behavior is unchanged (errors still abort); the log line names the
   file to read.
 
+`ERHE_FORCE_DISABLE_REVERSE_DEPTH=1` (or `0`) overrides
+`force_disable_reverse_depth` of `config/editor/erhe_graphics.json` for one
+run, so a script launches a forward-Z editor without rewriting the config
+file. The override is logged at startup
+(`ERHE_FORCE_DISABLE_REVERSE_DEPTH = 1: force_disable_reverse_depth false -> true`),
+and the depth convention in effect follows the graphics device creation as
+`Reverse depth: on|off`.
+
 ## Logs
 
 The editor writes its spdlog output to `logs/` relative to the working

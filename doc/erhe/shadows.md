@@ -471,6 +471,9 @@ the per-face coordinate flip, is in
   lights stay on the 2D depth path. Point lights are unaffected by it -- they
   always use the omnidirectional radial-distance cube path (see [Point-light
   cube-map shadows](#point-light-cube-map-shadows)).
+- **MCP** - `set_graphics_preset` sets the preset's shadow fields for the
+  rest of the run without writing `graphics_presets.json`
+  ([mcp_server_usage.md](../agents/mcp_server_usage.md)).
 - **Point shadow resolution / count** - the graphics preset's
   `point_shadow_resolution` and `point_shadow_light_count` (Settings window
   sliders) size the cube array; changing either reallocates it in

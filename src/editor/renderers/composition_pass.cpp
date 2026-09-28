@@ -300,8 +300,8 @@ void Composition_pass::render(const Render_context& context)
                 ? data.shader_debug_override.value()
                 : context.shader_debug;
             const bool draw_lists_eligible =
-                (context.app_context.editor_settings != nullptr) &&
-                context.app_context.editor_settings->use_draw_lists &&
+                (context.app_context.app_settings != nullptr) &&
+                context.app_context.app_settings->get_use_draw_lists() &&
                 (draw_list_scene != nullptr) &&
                 (data.primitive_mode == erhe::primitive::Primitive_mode::polygon_fill) &&
                 (effective_shader_debug == erhe::scene_renderer::Shader_debug::none) &&

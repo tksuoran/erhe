@@ -248,24 +248,37 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
 void Graphics_settings::apply_active_preset(App_message_bus& app_message_bus)
 {
     // Sync current_graphics_preset (what the renderer reads) with the active
-    // preset, matched by name. Broadcast a Graphics_settings_message on change
-    // so subscribers (shadow map reconfigure, MSAA, etc.) react. Invoked from
-    // the change site (Settings window preset edits) instead of per frame.
+    // preset, matched by name. Invoked from the change site (Settings window
+    // preset edits) instead of per frame.
     for (Graphics_preset_entry& graphics_preset : graphics_presets) {
         if (graphics_preset.name != current_graphics_preset.name) {
             continue;
         }
         apply_limits(graphics_preset);
-        if (serialize(graphics_preset) != serialize(current_graphics_preset)) {
-            current_graphics_preset = graphics_preset;
-            app_message_bus.graphics_settings.queue_message(
-                Graphics_settings_message{
-                    .graphics_preset = &current_graphics_preset
-                }
-            );
-        }
+        apply_preset(graphics_preset, app_message_bus);
         break;
     }
+}
+
+void Graphics_settings::apply_preset(const Graphics_preset_entry& graphics_preset, App_message_bus& app_message_bus)
+{
+    // Broadcast a Graphics_settings_message on change so subscribers (shadow
+    // map reconfigure, MSAA, etc.) react.
+    if (serialize(graphics_preset) != serialize(current_graphics_preset)) {
+        current_graphics_preset = graphics_preset;
+        app_message_bus.graphics_settings.queue_message(
+            Graphics_settings_message{
+                .graphics_preset = &current_graphics_preset
+            }
+        );
+    }
+}
+
+auto App_settings::get_use_draw_lists() const -> bool
+{
+    return use_draw_lists_session_override.has_value()
+        ? use_draw_lists_session_override.value()
+        : config().use_draw_lists;
 }
 
 void Graphics_settings::mark_presets_dirty()

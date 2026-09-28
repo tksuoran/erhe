@@ -446,6 +446,30 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{dynamic_physics_enabled: true/false}`
 
+### set_graphics_preset
+
+Set shadow fields of the graphics preset in effect, and the draw-list gate,
+for the rest of the editor run: `shadow_filter`, `shadow_bias`,
+`shadow_technique`, `shadow_cull_mode` (enum value names, e.g. `hard`,
+`receiver_plane`, `distance`, `cull_back`), `shadow_depth_bits` (a depth size
+the device supports), `shadow_resolution`, `point_shadow_resolution`,
+`shadow_depth_bias_constant`, `shadow_depth_bias_slope`, `use_draw_lists`.
+Omitted arguments keep their values, so `{}` queries. The edited preset goes
+through `Graphics_settings::apply_preset()`, the same apply as a Settings
+window preset edit (limits clamp; the shadow maps are reconfigured on the next
+frame, logged as `Reconfiguring N shadow render node(s) from preset ...`). The
+change is session-only: neither `graphics_presets.json` nor
+`editor_settings.json` is modified, and the next Settings window preset edit or
+selection re-applies the stored preset. An unknown enum name or unsupported
+value is an error and applies nothing.
+
+```bash
+py -3 scripts/mcp_call.py set_graphics_preset b64:<base64 of {"shadow_filter":"hard","shadow_depth_bias_constant":-4,"shadow_resolution":1024}>
+```
+
+Returns: every field above with the value in effect, plus `preset_name` and
+`shadow_enable`.
+
 ### instantiate_prefab / reload_prefab / get_prefabs / set_prefab_template_property
 
 `instantiate_prefab` places a prefab (a glTF file, or a USD file at a prim) into a scene as a carrier prim recording the composition arc, with the template's content cloned below it; `reload_prefab` re-reads a prefab's file and refreshes every instance, keeping their overrides; `get_prefabs` lists the loaded templates. `set_prefab_template_property` sets (or, with a null value, clears) a local value on an item INSIDE a template - `source_path`, optional `prim_path`, `item_path` (the M1 path below the template root), `property`, `value` - which no scene lookup reaches otherwise; every instance reads the change live through its reference layer. It is not undoable, like `reload_prefab`. An item inside an instance is edited with `set_item_property` (a local value there is an override; a null value clears it and exposes the template's value) and reports `"source": "reference"` in `get_item_properties` for what the template supplies.

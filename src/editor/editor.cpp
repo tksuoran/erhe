@@ -258,6 +258,8 @@
 #include <set>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
 
 #if defined(ERHE_OS_LINUX)
@@ -280,6 +282,29 @@ void write_ai_error_report(const char* const path, const std::string& title, con
         return;
     }
     stream << "=== " << title << " ===\n" << content << "\n";
+}
+
+// Environment overrides of the loaded erhe_graphics.json, for automated runs
+// that need a different graphics configuration without rewriting the config
+// file (the verify scripts run forward-Z through this).
+// ERHE_FORCE_DISABLE_REVERSE_DEPTH=1|0 overrides force_disable_reverse_depth.
+void apply_graphics_config_environment_overrides(Graphics_config& graphics_config)
+{
+    const char* const value = std::getenv("ERHE_FORCE_DISABLE_REVERSE_DEPTH");
+    if (value == nullptr) {
+        return;
+    }
+    const std::string_view text{value};
+    if ((text != "1") && (text != "0")) {
+        log_startup->warn("ERHE_FORCE_DISABLE_REVERSE_DEPTH = '{}' ignored (expected 1 or 0)", text);
+        return;
+    }
+    const bool force_disable = (text == "1");
+    log_startup->info(
+        "ERHE_FORCE_DISABLE_REVERSE_DEPTH = {}: force_disable_reverse_depth {} -> {} (erhe_graphics.json not modified)",
+        text, graphics_config.force_disable_reverse_depth, force_disable
+    );
+    graphics_config.force_disable_reverse_depth = force_disable;
 }
 
 } // anonymous namespace
@@ -1350,6 +1375,8 @@ public:
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
     {
+        apply_graphics_config_environment_overrides(m_graphics_config);
+
 #if defined(__APPLE__)
         // Must happen before the first Metal framework use - window creation
         // below brings up a CAMetalLayer, which is enough to load Xcode's
@@ -1519,6 +1546,7 @@ public:
                     },
                     vulkan_xr_creators_ptr
                 );
+                log_startup->info("Reverse depth: {}", m_graphics_device->get_reverse_depth() ? "on" : "off");
             }
 
             // RenderDoc capture is auto-initialized by Device based on Graphics_config

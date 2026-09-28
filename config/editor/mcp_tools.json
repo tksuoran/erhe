@@ -7842,7 +7842,7 @@
   },
   {
     "name": "set_draw_lists_enabled",
-    "description": "Set the 'Draw Lists' editor setting (Editor_settings_config::use_draw_lists, doc/draw_list_renderer_requirements.md): when enabled, eligible composition passes and shadow maps render through the scene's persistent Draw_list_scene instead of Forward_renderer::render() / Shadow_renderer bucketing. get_composition_passes reports last_result=submitted_draw_lists and last_draw_list_entry_count for routed passes.",
+    "description": "Set the 'Draw Lists' gate for the rest of this editor run (session-only override of Editor_settings_config::use_draw_lists; editor_settings.json is not modified): when enabled, eligible composition passes and shadow maps render through the scene's persistent Draw_list_scene instead of Forward_renderer::render() / Shadow_renderer bucketing. get_composition_passes reports last_result=submitted_draw_lists and last_draw_list_entry_count for routed passes.",
     "inputSchema": {
       "properties": {
         "enabled": {
@@ -8834,5 +8834,54 @@
       "type": "object"
     },
     "name": "set_graphics_settings"
+  },
+  {
+    "description": "Set shadow fields of the graphics preset in effect, plus the draw-list gate, for the rest of this editor run. Session-only: the preset is applied the way a Settings window preset edit applies it (limits clamp, shadow map reconfigure on the next frame when resolution / depth bits / technique / point shadow resolution change), but graphics_presets.json and editor_settings.json are not modified, and the next Settings window preset edit or selection re-applies the stored preset. Omitted arguments leave their fields unchanged; an unknown enum name or out-of-range value is an error and applies nothing. Returns the values in effect after the call (so {} queries them).",
+    "inputSchema": {
+      "properties": {
+        "shadow_filter": {
+          "description": "Shadow_filter_mode: hard, pcf_2x2, pcf_4x4, pcf_6x6",
+          "type": "string"
+        },
+        "shadow_bias": {
+          "description": "Shadow_bias_mode: slope_scaled, receiver_plane",
+          "type": "string"
+        },
+        "shadow_technique": {
+          "description": "Shadow_technique_mode: depth, distance",
+          "type": "string"
+        },
+        "shadow_cull_mode": {
+          "description": "Shadow_cull_mode: cull_front, cull_back, cull_none",
+          "type": "string"
+        },
+        "shadow_depth_bits": {
+          "description": "Shadow map depth bits; must be a depth size the device supports (e.g. 16, 24, 32)",
+          "type": "integer"
+        },
+        "shadow_resolution": {
+          "description": "2D shadow map resolution in texels (clamped to the device limit)",
+          "type": "integer"
+        },
+        "shadow_depth_bias_constant": {
+          "description": "Rasterizer constant depth bias of the shadow pass",
+          "type": "number"
+        },
+        "shadow_depth_bias_slope": {
+          "description": "Rasterizer slope-scaled depth bias of the shadow pass",
+          "type": "number"
+        },
+        "point_shadow_resolution": {
+          "description": "Point light shadow cube face resolution in texels (clamped to 4096 and the device limit)",
+          "type": "integer"
+        },
+        "use_draw_lists": {
+          "description": "Render content fill and shadow maps through the persistent per-scene draw lists (session only; the stored Draw Lists setting is not modified)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_graphics_preset"
   }
 ]
