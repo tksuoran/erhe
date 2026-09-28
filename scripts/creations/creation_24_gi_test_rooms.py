@@ -337,13 +337,13 @@ DDGI_SETTINGS = {
 # sampling parameters (irradiance / distance texels, biases, intensity) are
 # the DDGI settings, pinned by set_radiance_cascades() through DDGI_SETTINGS.
 RC_SETTINGS = {
-    "probe_spacing_m":      0.5,
+    "probe_spacing_m":      1.5,
     "volume_padding_m":     1.0,
     "max_probes_cascade0":  65536,
     "max_cascades":         8,
-    "cascade0_tile_texels": 4,
-    "interval_scale":       1.0,
-    "texels_per_frame":     65536,
+    "cascade0_tile_texels": 8,
+    "interval_scale":       2.0,
+    "texels_per_frame":     131072,
     "hysteresis":           0.9,
     "direction_jitter":     "none",
     "bounces":              "single",

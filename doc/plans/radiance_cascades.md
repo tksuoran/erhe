@@ -290,11 +290,12 @@ advance. Costs are measured, recorded and compared:
   DDGI) and the full-refresh time (every texel or probe traced once), which is
   what compares the two.
 - **Budget.** Phase 0 measures DDGI at its defaults on every station and
-  records the numbers. The RC budget is: at RC defaults, per-frame GPU time
-  <= DDGI's per-frame GPU time on the same station, and full-refresh time
-  <= DDGI's. Phase 6 chooses the RC defaults (`texels_per_frame`, `q0`, `s0`)
-  to meet it. Absolute numbers depend on the machine and go to
-  `memory-bank/local/`, not into this document.
+  records the numbers. The RC budget, the user's decision after the phase 6
+  sweep (section 10, "Defaults"): at the RC defaults, RC's per-update GPU
+  time and full-refresh time are at most about 1.5 x DDGI's on the same
+  station, spent on accuracy - the settings within DDGI's own cost leave
+  the leak and accuracy gates far off. Absolute numbers depend on the
+  machine and go to `memory-bank/local/`, not into this document.
 
 ## 9. Phases
 
@@ -359,9 +360,16 @@ Each phase is one commit (or a small series), builds the editor, `src/example`,
    `per_neighbour_trace`, chosen from the three-mode `gi_verify.py`
    comparison (section 10, "Radiance cascades (phase 5)"). Gates 2, 6, 9
    and 12 still fail; the causes measured so far are listed there.
-6. **Temporal, multi-bounce, defaults.** Direction jitter, `multi_bounce`,
-   change-driven hysteresis reset; RC defaults chosen against the section 8
-   budget.
+6. **Temporal, multi-bounce, defaults** - built, described in
+   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) and
+   [../editor/ddgi.md](../editor/ddgi.md) "History reset", "Bounces": the
+   measured accuracy causes and their fixes (the `per_neighbour_trace`
+   visibility segments, cascade 0 merged at child resolution for the
+   reduce, the distance statistics), `direction_jitter`, `bounces` for both
+   producers, the change-driven history reset for both producers, the
+   sparse reduce weights, `gi_verify.py --rc-set / --ddgi-set / --bounces`,
+   and the RC defaults chosen against the section 8 budget (section 10,
+   "Radiance cascades (phase 6)").
 7. **Debug.** Probe overlay for a chosen cascade (CPU-phase debug lines only,
    see the DDGI traps).
 
@@ -402,7 +410,8 @@ the convergence rule, and the JSON result lands in `logs/gi_verify/`.
    half of DDGI's.
 8. **Noise** - static `cornell`, per-pixel luminance standard deviation over 30
    frames on the back wall: RC below DDGI.
-9. **Cost** - the section 8 budget, against the phase 0 baseline.
+9. **Cost** - the section 8 budget: RC's update and full refresh at most
+   about 1.5 x DDGI's on every station.
 10. **Validation** - Vulkan validation on for one run: zero errors.
 11. OpenGL and Metal builds compile and run with the source forced to
     `ambient` (no ray query there).
@@ -633,6 +642,172 @@ the creation module's `RC_SETTINGS` runs).
   (about twice the merge time); per update it costs 1.5 - 2.1 x
   `interpolate`. Phase 6 chooses the defaults against the section 8
   budget.
+
+### Radiance cascades (phase 6)
+
+Phase 6 changed the `per_neighbour_trace` construction and the reduce, so
+the phase 5 tables above measured the earlier construction. All numbers
+below: headless Vulkan editor, same machine, back to back with DDGI;
+costs as ratios to DDGI's at its pinned station settings (absolute numbers
+are machine-specific).
+
+#### Phase 6: accuracy causes
+
+Traced per stage on the failing groups with a chain diagnostic: field at the
+surface vs reference at the surface; the field's probes read at their own
+positions vs the reference at the probe positions; the trilinear
+combination of the reference at the probes vs the surface reference
+(probe-to-surface height); the reduce of CPU ground-truth footprint means vs
+the reference at the probe (the reduce's discretization); the read-back
+merged texels vs the ground truth per texel (the merge). At `s0` 0.5,
+`q0` 4, before phase 6:
+
+- **The connecting segment bent the texel's direction** (the old
+  `per_neighbour_trace`). The segment from the probe (`t_0 = 0`) to
+  `u_n + r0 d` deviates from `d` by up to `atan(1.5 / interval_scale)`
+  (the upper probe offset reaches 1.5 `s0 sqrt(3)`, `r0` is
+  `interval_scale sqrt(3) s0`). The `courtyard` floor probes 0.22 m above
+  the floor have their upper probes 2 cm below it, so their horizon texels
+  traced segments into the sunlit floor: merged / truth 1.8 - 3.0 (4.6 at
+  `q0` 8) on those texels, +10 % on the probes' irradiance; with
+  `interval_scale` 2 the overshoot vanished (0.65 - 1.0), confirming the
+  mechanism, and it is the `emissive_only` texel tail (p90 2.6: segments
+  reaching an emitter the texel does not point at). Fixed at the root: the
+  segment is now a visibility test from the interval end, the interval
+  stays the ray along `d` (merged / truth 0.83 - 1.17 on the same texels;
+  `cornell` texel median 0.17 -> 0.09, p90 1.15 -> 0.66, mean bias -4 %).
+- **The reduce convolved 45-degree footprint means.** Given exact
+  footprint means, the cosine reduce over `q0` 4 texels overstated the
+  irradiance of the `courtyard` and `cornell` floor probes by 15 %
+  (bright wall parts near a texel's horizon take the cosine weight of the
+  whole footprint); the `q0` 8 oracle gives +4 %. The merge already reads
+  cascade 1 at twice the angular resolution and averaged it away: cascade
+  0 is now merged at child resolution and the reduce runs over those
+  texels (probe error 1.02 on `cornell`, 0.96 on `courtyard` with jitter,
+  at no trace cost).
+- **Centre-direction sampling** of the near interval: without jitter the
+  `cornell` floor probes read 0.89 of the reference, with direction jitter
+  1.01 (section "direction jitter" below).
+- **Distance statistics**: the reduce took one centre-ray distance per
+  texel; with jitter the footprint's distance spread would widen the
+  Chebyshev variance, so the moments stay along the centre direction
+  (extra unshaded ray) and only the backface fraction comes from the
+  jittered traces; the reduce now normalizes backface traces correctly for
+  fractional backface counts.
+- **Probe-to-surface height** (the field is probe irradiance interpolated
+  to the surface, as for DDGI): the `cornell` floor's nearest probe layer
+  sits 0.27 m above it (the layer below lies inside the floor slab), where
+  the reference is 19 % lower; the `courtyard` floor 3 %. DDGI relocates
+  probes out of the slab to just above the floor; RC's grid is fixed.
+  This remains, together with small near emitters (the 0.25 m panel's
+  floor probes read 0.5 - 0.6 of the reference at `s0` 0.5) and, at
+  coarse `s0`, leaks through thin walls in the field sampling (the
+  texel-level room B of `leak_pair` stays exactly 0 at every setting;
+  the leak is the consumer's interpolation between unrelocated probes).
+
+#### Phase 6: direction jitter, history reset, bounces
+
+- **Direction jitter** (`footprint`) improves the near field (`cornell`
+  floor probes 0.89 -> 1.01 of the reference, `emissive_only` room floor
+  0.78 -> 1.05, `courtyard` sunlit floor 1.08 -> 1.01 at `s0` 0.5) but
+  leaks: the connecting segments test one point per trace while an upper
+  texel's value averages its own jittered footprint, whose interval starts
+  straddle a thin wall (`leak_pair` room B 2 % of room A with jittered
+  segments, 1.3 % with centre-direction segments, 0 without jitter), and
+  it brings per-update noise (`cornell` back wall 0.03 - 0.07 relative
+  std against DDGI's 0.004 at the defaults, gate 8 fails) and slow
+  settling (80 - 230 updates at hysteresis 0.97). Default `none`.
+- **History reset**: DDGI's `dynamic` settle times drop from 90 / 246
+  updates (phase 0) to 13 - 17 / 25 - 45 (one noise-limited 239 on the dim
+  side room floor in nine runs), RC's from 40 / 48 (phase 5) to 20 / 16 -
+  19 without jitter. New grids start with their first update for both.
+- **Bounces** `multi` converges on every station (the feedback is the
+  physical irradiance, intensity 1) and brightens the enclosed white rooms
+  strongly - DDGI / RC mean field luminance multi over single: `cornell`
+  3.6 / 3.3, `courtyard` 1.5 / 1.5, `emissive_only` 4.6 / 2.3,
+  `corridor` 8.7 / 7.1 - at +14 % / +5 % update cost. The ground truth
+  and every accuracy gate are single bounce, so the default stays
+  `single`; `gi_verify.py --bounces multi` measures the brightness.
+
+#### Defaults
+
+The sweep below (one run each, direction jitter `none`, hysteresis 0.9;
+cost = worst station ratio to DDGI, update / full refresh; accuracy =
+worst group `mean_rel_err` except `floor_0.05`, groups above DDGI's of 34;
+leaks = `leak_pair`, worst `probe_offset_sweep`; rows marked * before the
+sparse reduce weights, whose reduce was 20 - 30 % slower) was run with
+`texels_per_frame` covering each layout, so an update is a full refresh; a
+smaller budget splits the trace, but the merge and the reduce run over
+everything every update, so it only lengthens the full refresh.
+
+| `s0` m | `q0` | `interval_scale` | cost | worst group | above DDGI | leaks |
+|---|---|---|---|---|---|---|
+| 0.5 | 4 | 1 | 8.5 / 6.3 * | 2.25 | 13 | 0 / 0.026 |
+| 0.5 | 8 | 1 | 30.5 / 22.3 * | 0.67 | 13 | 0.0002 / 0.0003 |
+| 0.5 | 8 | 2 | 30.5 / 22.3 * | 0.80 | 13 | 0.003 / 0.0000 |
+| 0.75 | 4 | 2 | 3.2 / 2.5 * | 3.16 | 10 | 0.0001 / 0.034 |
+| 0.75 | 8 | 1 | 11.1 / 8.5 * | 0.59 | 12 | 0 / 0.002 |
+| 1.0 | 4 | 1 | 1.6 / 1.4 * | 3.63 | 21 | 0.033 / 0.007 |
+| 1.0 | 4 | 2 | 1.40 / 1.19 | 0.95 | 19 | 0.010 / 0.005 |
+| 1.0 | 8 | 2 | 5.2 / 4.3 * | 0.60 | 17 | 0.0008 / 0.002 |
+| 1.25 | 4 | 2 | 0.87 / 0.84 | 14.9 | 25 | 0.019 / 0.022 |
+| 1.25 | 4 | 3 | 0.86 / 0.86 | 21.2 | 27 | 0.019 / 0.016 |
+| 1.5 | 4 | 2 | 0.68 / 0.68 | 3.44 | 21 | 0.036 / 0.029 |
+| 1.5 | 4 | 3 | 0.63 / 0.63 | 3.44 | 22 | 0.036 / 0.029 |
+| **1.5** | **8** | **2** | **1.54 / 1.49** | **0.91** | **19** | **0.002 / 0.008** |
+| 2.0 | 8 | 2 | 1.13 / 1.13 | 1.85 | 19 | 0.0000 / 0.006 |
+
+The settings that cost at most DDGI (`s0` 1.25 m and above with `q0` 4)
+leave the leak and accuracy gates far off (worst group 3.4 - 21); `q0` 8
+with `interval_scale` 2 removes most leaks and brings the worst group
+below 1. The user chose accuracy at a bounded cost ("Budget", section 8):
+**the defaults are `probe_spacing_m` 1.5, `cascade0_tile_texels` 8,
+`interval_scale` 2, `texels_per_frame` 131072 (a full refresh per update on
+every test station), `hysteresis` 0.9, `direction_jitter` `none`,
+`bounces` `single`**.
+
+#### Phase 6 gates at the defaults
+
+Worst of three runs, `per_neighbour_trace`, single bounce, measured
+2026-09-28:
+
+| Metric | RC | DDGI | Gate |
+|---|---|---|---|
+| `leak_pair` leak | 0.0017 | 0.0008 | <= 0.01: pass |
+| `probe_offset_sweep` leak at offset 0.0 / 0.25 / 0.5 | 0.0001 / 0.0082 / 0.0010 | 0.0000 / 0.0020 / 0.0006 | worst <= 0.02 and <= DDGI's: fail (0.0082 > 0.0020) |
+| `probe_offset_sweep` placement, min / median: pillar faces, pillar base, crawl floor | 0.31, 0.41, 0.27 | 0.18, 0.26, 0.51 | recorded |
+| `cornell` red strip R / G, green strip G / R | 2.07, 2.07 | 1.94 | >= 1.2: pass |
+| `emissive_only` panel floor / room median, 1.0 / 0.25 / 0.05 m | 1.06 / 0.53 / 0.09 | 6.9 / 4.7 / 0.46 | 1.0 and 0.25 m > 1: fail (0.25 m) |
+| `corridor` monotonic violations; max log second difference | 0; undefined (profile 0 beyond the cascades inside the corridor) | 0; 0.21 | fail |
+| `dynamic` updates to settle, light move / door open | 19 / 16 | 29 / 258 (per run 17 - 29 / 12 - 258) | <= half: fail / pass |
+| `cornell` back wall noise | 0 | 0.0043 | pass |
+| Cost (item 9): update; full refresh, vs DDGI | 1.15 - 1.57 x; 0.79 - 1.54 x | 1 | about 1.5 x: pass |
+| Vulkan validation (item 10) | 0 errors | 0 errors | pass |
+| Accuracy (item 12): worst group except `floor_0.05` | 0.91 (`emissive_only` floor at the 1.0 m panel) | 0.65 | fail |
+
+Accuracy, `mean_rel_err` RC (DDGI): `leak_pair` room A floor / wall 0.03 /
+0.09 (0.01 / 0.08), room B floor / wall 0.02 / 0.18 (0.02 / 0.08);
+`probe_offset_sweep` room A walls 0.44 / 0.01 / 0.21 (0.37 / 0.05 /
+0.19), room B walls 0.01 / 0.62 / 0.08 (0.00 / 0.15 / 0.05), room A
+floors 0.09 / 0.02 / 0.07 (0.07 / 0.03 / 0.04), room B floors 0.01 /
+0.04 / 0.01 (0.00 / 0.03 / 0.01), pillar faces / base / crawl floor 0.25 /
+0.07 / 0.06 (0.25 / 0.20 / 0.10); `cornell` red / green strip / floor /
+back wall 0.04 / 0.01 / 0.05 / 0.09 (0.10 / 0.11 / 0.08 / 0.04);
+`emissive_only` floor at 1.0 / 0.25 m, room floor 0.91 / 0.82 / 0.31
+(0.65 / 0.05 / 0.41); `corridor` 0.41 (0.23); `courtyard` shadowed wall /
+floor / sunlit floor 0.15 / 0.03 / 0.03 (0.01 / 0.02 / 0.04); `dynamic`
+red / green strip / floor / side room floor 0.02 / 0.00 / 0.05 / 0.02
+(0.12 / 0.11 / 0.11 / 0.01). At the defaults RC passes gates 4, 8, 9, 10,
+the `leak_pair` part of 2 and the door half of 7, and is at or below
+DDGI's error on 13 of 34 groups, including the `cornell` strips and floor
+and the `dynamic` strips and floor (0.00 - 0.05 against DDGI's 0.08 -
+0.12). What fails: the `probe_offset_sweep`
+leak at offset 0.25, the small near emitters (the panels' floor probes see
+a 1.0 m or 0.25 m panel through few cascade 0 texels, gate 5 and the
+worst group), the corridor far field beyond the cascades whose probes sit
+outside the corridor (gate 6) and the light move settle (gate 7). The
+DDGI column matches the phase 0 baseline within its run-to-run noise,
+except the convergence the history reset shortened.
 
 ## 11. Follow-ups (not in the phases)
 

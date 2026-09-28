@@ -63,13 +63,13 @@ section, `editor_settings.radiance_cascades`):
 
 | Field | Default | Meaning |
 |---|---|---|
-| `probe_spacing_m` | 0.5 | cascade 0 target spacing `s0` |
+| `probe_spacing_m` | 1.5 | cascade 0 target spacing `s0` |
 | `volume_padding_m` | 1.0 | growth of the content box before the fit |
 | `max_probes_cascade0` | 65536 | cascade 0 probe budget; `s0` grows until the grid fits |
 | `max_cascades` | 8 | upper bound on the cascade count (at most 12) |
-| `cascade0_tile_texels` | 4 | `q0`, the cascade 0 octahedral tile side |
-| `interval_scale` | 1.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
-| `texels_per_frame` | 65536 | trace budget: raw texels (one interval ray each) traced per frame |
+| `cascade0_tile_texels` | 8 | `q0`, the cascade 0 octahedral tile side |
+| `interval_scale` | 2.0 | `r0 = interval_scale * sqrt(3) * s0`, at least 1 |
+| `texels_per_frame` | 131072 | trace budget: raw texels (one interval ray each) traced per frame |
 | `hysteresis` | 0.9 | blend weight kept from a raw texel's previous value each time it is traced (less during a history reset, "Trace") |
 | `direction_jitter` | `none` | `Radiance_cascades_direction_jitter`: `none` traces the texel centre direction, `footprint` a new random point of the texel footprint per trace ("Trace") |
 | `bounces` | `single` | `Indirect_diffuse_bounces` (shared with DDGI): `single`, or `multi` - hits also sample the previous field ("Trace") |
@@ -80,6 +80,12 @@ section, `editor_settings.radiance_cascades`):
 `debug_cascade_mask`, v4 `merge_mode`, v5 `direction_jitter` and `bounces`;
 an older file reads them as the defaults. `per_neighbour_trace` is a later
 enum value of the same v4 field, so a v4 file reads any of the three modes.
+The defaults of `probe_spacing_m`, `cascade0_tile_texels`,
+`interval_scale`, `texels_per_frame`, `direction_jitter` and `bounces` are
+the point of the section 8 budget sweep (doc/plans/radiance_cascades.md
+section 10, "Defaults") the user chose: accuracy at an update and full
+refresh cost of about 1.5 x DDGI's on the test stations, with a full
+refresh every update there.
 
 The field's sampling parameters (irradiance / distance texels, depth
 sharpness, biases, intensity) are the DDGI settings (`Ddgi_config`, passed
@@ -618,140 +624,97 @@ tick records it, so the copy costs nothing while the window is closed.
 
 ## Verification
 
+All checks below ran at the defaults of "Settings" (`s0` 1.5 m, `q0` 8,
+`interval_scale` 2); the per-mode ones for every merge mode.
+
 - Trace against an analytic ground truth,
   `py -3 scripts/rc_texel_verify.py [--station ...] [--reuse]` (self-launching
   headless editor with config backup / restore like `gi_verify.py`; exit
-  1 on any failure; tolerances and the skip rule in its docstring): every
-  raw texel of every cascade of `cornell`, `emissive_only` and
-  `courtyard` (read with `get_radiance_cascades_texels` after two sweeps)
-  matches a CPU ray /
-  axis-aligned box intersection of the station's parts over the texel's
-  interval, shaded with the `shade_surface()` formula (GGX + Lambert, spot /
-  directional light with range, cone and shadow tests, ambient, emission):
-  hit / miss / backface agree for every texel, cascade 0 signed distance
-  within 1 mm, front face radiance within 0.1 % (half-float storage; the
-  script's tolerance is 0.5 %), the emitter panels exactly 4.0. Texels whose
-  reference hit lies within 0.1 mm of an interval end, or ties between
-  coincident faces of touching parts (the floor top under a wall bottom,
-  where either face is a valid hit), are skipped and counted - about 0.1 %
-  of the texels.
-- Per station summary: cascade 0 beta = 1 for 82 - 88 % of the texels
-  (most short intervals are empty), backface texels only where probes sit
-  inside parts (`leak_pair` 96, `probe_offset_sweep` 872 and `dynamic` 36
-  cascade 0 probes; 0 in `cornell`, `emissive_only`, `corridor` and
-  `courtyard`), every upward cascade 0 ray inside the `courtyard` walls
-  empty. The top cascade reads beta = 1 for 97 - 100 % of its texels: in
-  these rooms its interval starts beyond the far wall.
-
-- Merge, same script and readback ("Merge"; the stations above plus
-  `leak_pair` and `corridor`, whose raw texels pass the same checks):
-  - **Exact algebra**: every merged texel of every cascade equals the merge
-    recomputed on the CPU from the read-back raw texel, the read-back
-    merged texels of the cascade above and the read-back probe states (8
-    upper probes with the documented weights and border rule, the unusable
-    ones skipped and the rest renormalized, 2x2 child average; sky for the
-    top cascade): 0 failures, worst relative difference 0.1 % (the
-    half-float store); `interpolate` and `visibility_masked`.
-  - **Per-neighbour exact check** (`per_neighbour_trace`; the segments are
-    not read back): 1500 sampled texels per cascade below the top one,
-    each merge recomputed from CPU ground-truth segments (the raw check's
-    box intersection and shading, from `p + t_i d` to `u_n + t_{i+1} d`)
-    and the read-back 2x2 child averages of the upper probes; the top
-    cascade takes the sky check. 0 failures on every station, worst
-    relative difference 0.15 % (tolerance 0.5 %, the raw shading
-    tolerance). Up to 47 of 1500 texels per cascade are skipped: besides
-    the raw skip rule, a segment that hits a front face within 0.1 mm of
-    another part (the line where a wall stands on the floor) - segment
-    ends lie on the probe grids, whose planes coincide with the room
-    faces, and there a 0.1 mm shift flips the committed face and the
-    shadow ray (measured: a `cornell` segment reading 0.2085 reads 0.1081
-    shifted by 0.1 mm).
+  1 on any failure; tolerances and the skip rule in its docstring; direction
+  jitter `none` and single bounce pinned): every raw texel of every cascade
+  of `cornell`, `emissive_only`, `courtyard`, `leak_pair` and `corridor`
+  (read with `get_radiance_cascades_texels` after two sweeps) matches a CPU
+  ray / axis-aligned box intersection of the station's parts over the
+  texel's interval, shaded with the `shade_surface()` formula (GGX +
+  Lambert, spot / directional light with range, cone and shadow tests,
+  ambient, emission): hit / miss / backface agree for every texel, cascade
+  0 distance within 1 mm, front face radiance within 0.1 % (half-float
+  storage; the script's tolerance is 0.5 %), the emitter panels exactly
+  4.0. Texels whose reference hit lies within 0.1 mm of an interval end, at
+  ties between coincident faces of touching parts (the floor top under a
+  wall bottom), or whose ray passes within 0.1 mm of a part's edge or
+  corner are skipped and counted: up to 2 % of cascade 0's texels, because
+  the round probe grid puts rays exactly through room corners.
+- Merge, same script and readback ("Merge"):
+  - **Exact algebra** (`interpolate`, `visibility_masked`): every merged
+    texel of every cascade equals the merge recomputed on the CPU from the
+    read-back raw texel, the read-back merged texels of the cascade above
+    and the read-back probe states (8 upper probes with the documented
+    weights and border rule, the unusable ones skipped and the rest
+    renormalized, 2x2 child average; sky for the top cascade), and every
+    cascade 0 child texel the raw texel merged with its one child's upper
+    value: 0 failures, worst relative difference 0.1 % (the half-float
+    store).
+  - **Per-neighbour exact check** (`per_neighbour_trace`; the visibilities
+    are not read back): 1500 sampled texels per cascade below the top one,
+    each merge (and each cascade 0 child) recomputed from CPU ground-truth
+    visibilities of the connecting segments (box crossings from
+    `p + t_{i+1} d` to `u_n + t_{i+1} d`), the read-back raw texel and the
+    read-back upper texels; the top cascade takes the sky check. 0 failures
+    on every station, worst relative difference 0.1 % (the half-float
+    store), no texel skipped.
   - **Approximation** against the full-range ground truth (400 interior
     cascade 0 texels per station, 8 x 8 sub-directions per texel, relative
-    luminance error with a floor of 10 % of the sample's mean truth),
-    `interpolate` / `visibility_masked` / `per_neighbour_trace`, all from
-    one station build per run:
-
-    | Station | median | p90 | max | mean bias |
-    |---|---|---|---|---|
-    | `cornell` | 0.13 / 0.13 / 0.17 | 0.67 / 0.75 / 1.15 | 2.1 / 2.1 / 4.4 | -17 / -21 / -2 % |
-    | `emissive_only` | 0.00 / 0.00 / 0.00 | 0.95 / 0.51 / 2.61 | 20.9 / 34.8 / 96.5 | -14 / -12 / -15 % |
-    | `courtyard` | 0.08 / 0.07 / 0.07 | 0.38 / 0.37 / 0.42 | 0.71 / 0.69 / 3.1 | -12 / -9 / +1 % |
-    | `leak_pair` | 0.03 / 0.01 / 0.00 | 0.38 / 0.33 / 0.14 | 3.7 / 2.8 / 0.29 | -10 / -8 / -2 % |
-    | `corridor` | 0.00 / 0.00 / 0.00 | 0.69 / 0.70 / 0.86 | 7.6 / 1.0 / 8.0 | -31 / -25 / -27 % |
-
-    `leak_pair` room B (no light; 201 sampled texels): mean merged
-    luminance 0.0024 / 0.0014 / 0.0000, the first two 1 - 2 % of room A's
-    mean truth; worst texel 0.046 / 0.035 / 0.0000. `per_neighbour_trace`
-    has the smallest bias on four stations and no room B light, but the
-    widest tail: its cascade 0 segments leave the probe toward upper
-    interval starts up to 1.3 m off the texel ray (0.75 of an upper
-    spacing per axis) while `r0` is 0.87 m, so a texel can see a small
-    emitter it does not point at (the worst `emissive_only` texels read
-    0.83 - 0.87 where the truth is 0). Its remaining leak is the
-    pre-averaged upper value: a child direction's interval can start
-    across a thin wall from the segment end (doc/plans/radiance_cascades.md
-    section 10, "What the numbers say"). For the other two modes the dark
-    bias follows the upper
-    stencils: over the sampled interior probes the mean weight of upper
-    probes the lower probe cannot see is 0.0 - 0.15 for cascade 1 and
-    0.3 - 1.0 for the coarser cascades, whose probes lie mostly in the
-    walls or outside the rooms. With `interpolate` the intervals of those
-    probes, starting back inside the room, carry part of the far field:
-    `visibility_masked` drops them and the `cornell` bias grows from -17 %
-    to -21 %, while the bright `corridor` outliers of 7.6 are gone. The script
-    fails only on median > 0.25 or p90 > 1.5 (5.0 for
-    `per_neighbour_trace`), about twice the worst station of the mode: a
-    broken merge (wrong child texels or upper probes) reads as errors of
-    order 1 on most texels; the mode's exact check is the per-neighbour
-    check above.
-  - **Mask decomposition** (`cornell`, `interpolate`): mean merged cascade
-    0 luminance with all bands 0.009449, sum of the single-band means
-    0.009449 (worst channel 0.001 %), all bands masked 0; the bands
-    contribute 36 % (cascade 0), 46 %, 18 % and 0.3 % (cascade 3), the sky
-    0 (black ambient).
-- Cost at the default budget (65536 texels per frame, the whole layout for
-  `cornell`), GPU ms mean: trace / merge 0.039 / 0.044 (`cornell`, 57 K
-  texels), 0.046 / 0.054 (`emissive_only`, 77 K), 0.041 / 0.107
-  (`courtyard`, 202 K), 0.046 / 0.079 (`leak_pair`, 128 K), 0.039 / 0.127
-  (`corridor`, 247 K): the merge touches every texel each update, the trace
-  only the budget; `interpolate` and `visibility_masked` cost the same
-  within the timing noise. The
-  visibility pass (`visibility_masked`), once per refit or geometry edit:
-  0.6 - 1.5 ms across the stations and runs. `per_neighbour_trace` at the
-  same budget: 4.6 - 7.2 x the rays per update (`corridor` 300 K,
-  the others 405 - 456 K), neighbour trace 0.15 - 0.21 ms, merge about
-  twice the other modes' (0.08 `cornell` - 0.29 `corridor`); per update
-  1.5 - 2.1 x `interpolate` over the `gi_verify.py` stations.
-- Vulkan validation (synchronization validation on): a `cornell` run with a
-  20000 texel budget (runs crossing cascades, the cursor wrapping into
-  cascade 0 within a frame), the raw and merged previews, mask edits and a
-  readback reports no error and no warning naming the radiance cascades
-  resources; so does a `cornell` `rc_texel_verify.py` run through all
-  three merge modes (the refits into and out of `per_neighbour_trace`, the
-  neighbour trace and its merge variant, the readbacks).
-- `editor_renderer_tests`: cascade fit (cascade 0 counts and spacing, nesting
-  of the upper grids, cascade count and `max_cascades`, probe budget, atlas
-  size limit, tile placement, the neighbour atlas block within the size
-  limit and without effect at the default one), interval bounds,
-  octahedral round trip and
-  2x2 nesting, and the upper-probe indices and weights (for an interior probe
-  the weighted upper positions reproduce the lower probe position).
+    luminance error with a floor of 10 % of the sample's mean truth,
+    `per_neighbour_trace`): median 0.00, p90 0.00 - 0.58; the mean
+    bias is within 5 % on `cornell`, `courtyard` and `leak_pair`, +131 % on
+    `emissive_only` (a centre ray hitting a small panel stands for its
+    whole footprint) and -17 % on `corridor` (the far field beyond the
+    cascades whose probes lie outside the corridor, "Merge").
+    `leak_pair` room B: every sampled texel merged 0. The script fails
+    only on median > 0.25 or p90 > 1.5: a broken merge (wrong child texels
+    or upper probes) reads as errors of order 1 on most texels.
+  - **Mask decomposition** (`cornell`): the mean merged cascade 0
+    luminance with all bands equals the sum of the single-band means
+    (worst channel 0.001 %), all bands masked 0.
 - Reduce, same script and readback ("Reduce"; every supported station,
   every merge mode): for 3 free interior cascade 0 probes per station, the
   irradiance and distance field texels containing the normals +y, +x and
   -z, and the probe state, against the reduce recomputed on the CPU from
-  the read-back merged cascade 0 texels and signed distances of the same
-  copy (the same footprint integration of the weights, backface texels
-  skipped, DDGI's classification threshold): 0 failures, worst relative
-  difference 0.09 % (the half-float store; tolerance 0.2 %).
-- `py -3 scripts/gi_verify.py --station all --source radiance_cascades
-  [--rc-merge-mode interpolate|visibility_masked|per_neighbour_trace]`
-  (default `per_neighbour_trace`, the config default) pins `RC_SETTINGS` and
-  the field sampling settings (`DDGI_SETTINGS`) of the creation module,
-  selects the source, prints each station's cascade layout, stores it
-  under `radiance_cascades` in the JSON record, and measures the field
-  like DDGI's. The three-mode comparison against DDGI, its gates and the
-  merge-mode default are in
+  the read-back merged cascade 0 child texels and distance statistics of
+  the same copy (the footprint integration of the weights over the full
+  lobes, backface texels skipped, DDGI's classification threshold): 0
+  failures, worst relative difference 0.09 % (the half-float store;
+  tolerance 0.2 %) - the sparse weight lists leave out nothing measurable.
+- Cost: every pass is timed ("Trace"). The reduce is the largest pass at
+  every setting (about 60 % of an update), then the trace, the connecting
+  visibility segments and the merge; the sparse reduce weights cut the
+  reduce by 20 - 30 %. At the defaults an update (a full refresh: the
+  default budget covers every station's layout) costs 1.15 - 1.57 x DDGI's
+  update at its pinned station settings; the sweep is in
   [../plans/radiance_cascades.md](../plans/radiance_cascades.md) section
-  10, "Radiance cascades (phase 5)".
+  10, "Defaults".
+- Vulkan validation: a `dynamic` `gi_verify.py` comparison with both
+  producers at `bounces` multi and direction jitter on (the change
+  messages, history resets, field feedback), a `leak_pair` comparison and
+  a `cornell` `rc_texel_verify.py` run through all three merge modes and
+  the mask check report no validation error and no warning naming the
+  indirect diffuse resources.
+- `editor_renderer_tests`: cascade fit (cascade 0 counts and spacing, nesting
+  of the upper grids, cascade count and `max_cascades`, probe budget, atlas
+  size limit, tile placement, the neighbour atlas block and cascade 0's
+  merged block within the size limit and without effect at the default
+  one), interval bounds, octahedral round trip and 2x2 nesting, and the
+  upper-probe indices and weights (for an interior probe the weighted upper
+  positions reproduce the lower probe position).
+- `py -3 scripts/gi_verify.py --station all --source radiance_cascades
+  [--rc-merge-mode ...] [--rc-set KEY=VALUE ...] [--bounces single|multi]`
+  pins `RC_SETTINGS` (the config defaults) and the field sampling settings
+  (`DDGI_SETTINGS`) of the creation module, with overrides for a sweep
+  point, selects the source, prints each station's cascade layout, stores
+  it under `radiance_cascades` in the JSON record, and measures the field
+  like DDGI's; both producers run single bounce unless `--bounces multi`
+  (the reference is single bounce). The comparison against DDGI, its gates
+  and the defaults sweep are in
+  [../plans/radiance_cascades.md](../plans/radiance_cascades.md) section
+  10.
