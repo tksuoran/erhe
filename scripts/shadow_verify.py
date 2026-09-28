@@ -44,24 +44,36 @@ shading multiplies visibility by max(N.L, 0), so visibility there does not
 reach the image), outside the light's shadow map (uv outside the one-texel
 border, w <= 0), outside the spot cone, beyond the light range.
 
-Edge band (section 6: within the filter footprint radius + 1 shadow texel of
-the analytic shadow boundary, in shadow-map texel space). With J the
-Jacobian of the light's texel coordinates at the receiver point (directional
-/ spot: uv of texture_from_world, one texel = 1 / resolution; point: the cube
-face coordinates (v_a / |v_major|, v_b / |v_major|), one texel =
-2 / cube resolution), the in-plane world displacements Du, Dv that move one
-texel along the light's u / v axes are solved in the receiver's face plane
-(tangent basis T: (J T) x = texel step). The pixel is in the band when the
-analytic occlusion at any corner P + r (i Du + j Dv), i, j = +-1, of its
-footprint square (r = filter radius + 1) differs from the occlusion at P (a
-straight boundary crossing the square separates a corner from the centre).
-A thin shadow, or a shadow corner poking into the square between two
-corners, is caught in the image instead: the pixel is also in the band when
-a 4-neighbour pixel pair on one box with differing analytic occlusion lies
-within ceil(sqrt(2) r texels) of it (texels converted to pixels with the
-pixel's world footprint; at most 32 pixels). Filter radius in texels: hard
-0.5, pcf_2x2 1, pcf_4x4 2, pcf_6x6 3 (distance technique the same K); point
-lights 0.5 (the cube lookup is a single compare).
+Texel coordinates: directional / spot: uv of texture_from_world times the
+map resolution; point: the coordinates (v_a / |v_major|, v_b / |v_major|) of
+the receiver point's cube face, extended beyond the face, over one texel =
+2 / cube resolution. J is their Jacobian at the receiver point, and Du, Dv
+are the in-plane world displacements that move one texel along u / v,
+solved in the receiver's face plane (tangent basis T: (J T) x = texel step);
+G3 / G5 measure through them.
+
+Edge band (section 6). The filter reads the texels whose centres lie within
+the filter radius of the sample point in texel space (L-inf: hard 0.5,
+pcf_2x2 1, pcf_4x4 2, pcf_6x6 3, the distance technique the same K; point
+lights 0.5, the cube lookup is a single compare), and each stored texel is
+the nearest caster on that texel centre's light ray. A tap therefore sees a
+caster exactly where the receiver plane point on its ray is analytically
+occluded, so the filter result can differ from the pixel's own analytic
+class only when the analytic occlusion of the receiver plane is not
+constant over the footprint square of half-size r = filter radius + 1
+texel (the one texel covers the caster's rasterization) around the pixel's
+texel coordinates. That is the band, evaluated exactly: per receiver face,
+every shadow-casting box other than the receiver's own casts a convex
+shadow polygon in texel space (the box clipped to the slab between the face
+plane and the light, and to w > 0 for a perspective map, its corners mapped
+to texel coordinates: the map is projective, so the image is the convex
+hull). A lit pixel is in the band when its square meets a polygon, a
+shadowed pixel when the polygons do not cover its square. The square is
+tested whole, not sampled: at 512 texels a band square spans 6 to 16 cm,
+wider than a 10 cm cube or the tip of a nearly edge-on tile's shadow, so a
+shadow can lie between any finite set of samples of the square (and, seen
+from the camera, behind the caster that casts it). The hut interiors of
+thin_walls belong to G4 and get no band.
 
 Gates (section 6; every gate is the worst value over poses, views and runs):
   G1 acne:       band-free lit pixels with visibility < 0.999: count = 0.
@@ -195,7 +207,6 @@ G5_SEARCH = np.concatenate([np.arange(1.0, 32.0) / 16.0, np.arange(2.0, 8.0 + 1.
 G5_DIRECTIONS = 16
 G3_BINS = 16
 EXAMPLES = 5
-IMAGE_BAND_MAX_PX = 32
 
 G3_LIMIT = {"depth": 1.5, "distance": 2.5}
 G4_MIN_THICKNESS = 0.02 - 1.0e-9
@@ -609,51 +620,250 @@ def cache_store(job, key, mask):
     os.replace(temporary, path)
 
 
-def image_band(wd, occ, excluded, Du, Dv, r):
-    """The part of the edge band the corner samples can miss, found in the
-    image (see the module docstring)."""
-    h, w = wd["shape"]
-    size = h * w
-    index = wd["index"]
-    occ_img = np.full(size, -1, dtype=np.int8)
-    occ_img[index[~excluded]] = occ[~excluded].astype(np.int8)
-    own_img = np.full(size, -1, dtype=np.int32)
-    own_img[index] = wd["own"]
-    occ_img = occ_img.reshape(h, w)
-    own_img = own_img.reshape(h, w)
-    boundary = np.zeros((h, w), dtype=bool)
-    for a_sl, b_sl in (((slice(None), slice(None, -1)), (slice(None), slice(1, None))),
-                       ((slice(None, -1), slice(None)), (slice(1, None), slice(None)))):
-        oa, ob = occ_img[a_sl], occ_img[b_sl]
-        edge = (oa >= 0) & (ob >= 0) & (oa != ob) & (own_img[a_sl] == own_img[b_sl])
-        boundary[a_sl] |= edge
-        boundary[b_sl] |= edge
-    if not boundary.any():
-        return np.zeros(len(index), dtype=bool)
-    # Pixel world size from the row neighbour (column neighbour at the edge).
-    world = np.full((size, 3), np.nan)
-    world[index] = wd["points"]
-    world = world.reshape(h, w, 3)
-    step = np.full((h, w), np.nan)
-    step[:, :-1] = np.linalg.norm(world[:, 1:] - world[:, :-1], axis=2)
-    column = np.linalg.norm(world[1:, :] - world[:-1, :], axis=2)
-    step[:-1, :] = np.where(np.isnan(step[:-1, :]), column, step[:-1, :])
-    texel = np.maximum(np.linalg.norm(Du, axis=1), np.linalg.norm(Dv, axis=1))
-    pixel = step.reshape(-1)[index]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        radius_px = np.ceil(r * math.sqrt(2.0) * texel / pixel)
-    radius_px = np.nan_to_num(radius_px, nan=1.0, posinf=IMAGE_BAND_MAX_PX)
-    radius_px = np.clip(radius_px, 1, IMAGE_BAND_MAX_PX).astype(np.int32)
-    out = np.zeros(len(index), dtype=bool)
-    grown = boundary
-    for k in range(1, int(radius_px.max()) + 1):
-        padded = np.pad(grown, 1)
-        grown = (padded[:-2, :-2] | padded[:-2, 1:-1] | padded[:-2, 2:] | padded[1:-1, :-2] | padded[1:-1, 1:-1]
-                 | padded[1:-1, 2:] | padded[2:, :-2] | padded[2:, 1:-1] | padded[2:, 2:])
-        at_k = radius_px == k
-        if at_k.any():
-            out[at_k] = grown.reshape(-1)[index[at_k]]
+# Box corners (index bits: x = 1, y = 2, z = 4) and faces as corner quads.
+BOX_CORNER_SIGNS = np.array([[1.0 if (i & bit) else -1.0 for bit in (1, 2, 4)] for i in range(8)])
+BOX_FACE_QUADS = [(0, 2, 6, 4), (1, 3, 7, 5), (0, 1, 5, 4), (2, 3, 7, 6), (0, 1, 3, 2), (4, 5, 7, 6)]
+FOOTPRINT_MIN_W = 1.0e-6          # perspective maps: casters are clipped to w >= this
+FOOTPRINT_MIN_AREA = 1.0e-6       # texels^2: a polygon / square piece smaller than this is empty
+
+
+def clip_polygon(poly, a, c):
+    """Part of the convex polygon `poly` (k, d) with a . x + c >= 0 (Sutherland-Hodgman)."""
+    if len(poly) == 0:
+        return poly
+    d = (poly @ a) + c
+    out = []
+    for i in range(len(poly)):
+        j = (i + 1) % len(poly)
+        if d[i] >= 0.0:
+            out.append(poly[i])
+        if (d[i] >= 0.0) != (d[j] >= 0.0):
+            out.append(poly[i] + ((d[i] / (d[i] - d[j])) * (poly[j] - poly[i])))
+    return np.array(out) if out else np.zeros((0, poly.shape[1]))
+
+
+def polygon_area(poly):
+    if len(poly) < 3:
+        return 0.0
+    x, y = poly[:, 0], poly[:, 1]
+    return 0.5 * float(np.sum((x * np.roll(y, -1)) - (np.roll(x, -1) * y)))
+
+
+def convex_hull(points):
+    """Counter-clockwise convex hull of 2D points (monotone chain); None when
+    its area is below FOOTPRINT_MIN_AREA."""
+    pts = np.unique(points, axis=0)
+    if len(pts) < 3:
+        return None
+
+    def cross(o, a, b):
+        return ((a[0] - o[0]) * (b[1] - o[1])) - ((a[1] - o[1]) * (b[0] - o[0]))
+    lower, upper = [], []
+    for p in pts:
+        while (len(lower) >= 2) and (cross(lower[-2], lower[-1], p) <= 0.0):
+            lower.pop()
+        lower.append(p)
+    for p in pts[::-1]:
+        while (len(upper) >= 2) and (cross(upper[-2], upper[-1], p) <= 0.0):
+            upper.pop()
+        upper.append(p)
+    hull = np.array(lower[:-1] + upper[:-1])
+    if (len(hull) < 3) or (polygon_area(hull) < FOOTPRINT_MIN_AREA):
+        return None
+    return hull
+
+
+def edge_normals(poly):
+    """Outward edge normals of a counter-clockwise polygon."""
+    e = np.roll(poly, -1, axis=0) - poly
+    return np.stack([e[:, 1], -e[:, 0]], axis=1)
+
+
+def square_vs_polygon(s, r, poly):
+    """Axis-aligned squares [s - r, s + r]^2 (s (n, 2)) against one convex
+    polygon (separating axis test) -> (intersects, contains) per square."""
+    lo = poly.min(axis=0)
+    hi = poly.max(axis=0)
+    intersects = (((s[:, 0] - r) <= hi[0]) & ((s[:, 0] + r) >= lo[0])
+                  & ((s[:, 1] - r) <= hi[1]) & ((s[:, 1] + r) >= lo[1]))
+    contains = np.ones(len(s), dtype=bool)
+    for vertex, n in zip(poly, edge_normals(poly)):
+        d = (s - vertex) @ n
+        extent = r * (abs(n[0]) + abs(n[1]))
+        intersects &= (d - extent) <= 0.0
+        contains &= (d + extent) <= 0.0
+    return intersects, contains
+
+
+def clip_polygon_2d(poly, nx, ny, c):
+    """Part of the convex 2D polygon `poly` (list of (x, y)) with
+    nx x + ny y + c >= 0; plain Python (the polygons are a few vertices, far
+    below numpy's per-call overhead)."""
+    out = []
+    count = len(poly)
+    for i in range(count):
+        x0, y0 = poly[i]
+        x1, y1 = poly[(i + 1) % count]
+        d0 = (nx * x0) + (ny * y0) + c
+        d1 = (nx * x1) + (ny * y1) + c
+        if d0 >= 0.0:
+            out.append((x0, y0))
+        if (d0 >= 0.0) != (d1 >= 0.0):
+            t = d0 / (d0 - d1)
+            out.append((x0 + (t * (x1 - x0)), y0 + (t * (y1 - y0))))
     return out
+
+
+def polygon_area_2d(poly):
+    area = 0.0
+    count = len(poly)
+    for i in range(count):
+        x0, y0 = poly[i]
+        x1, y1 = poly[(i + 1) % count]
+        area += (x0 * y1) - (x1 * y0)
+    return 0.5 * area
+
+
+def square_outside_polygons(s, r, polygons):
+    """True when part of the square [s - r, s + r]^2 (area above
+    FOOTPRINT_MIN_AREA) lies outside every polygon: the square minus each
+    convex polygon in turn, kept as convex pieces."""
+    x, y = float(s[0]), float(s[1])
+    pieces = [[(x - r, y - r), (x + r, y - r), (x + r, y + r), (x - r, y + r)]]
+    for poly in polygons:
+        edges = [(float(n[0]), float(n[1]), float(n @ vertex)) for vertex, n in zip(poly, edge_normals(poly))]
+        remaining = []
+        for piece in pieces:
+            rest = piece
+            for nx, ny, offset in edges:
+                outside = clip_polygon_2d(rest, nx, ny, -offset)
+                if polygon_area_2d(outside) > FOOTPRINT_MIN_AREA:
+                    remaining.append(outside)
+                rest = clip_polygon_2d(rest, -nx, -ny, offset)
+                if polygon_area_2d(rest) <= FOOTPRINT_MIN_AREA:
+                    break
+        pieces = remaining
+        if not pieces:
+            return False
+    return True
+
+
+def texel_map(light, M, resolution, major=None):
+    """-> function: world points (k, 3) -> (texel coordinates (k, 2), w (k,))
+    of the light's shadow map. Directional / spot: texture_from_world M.
+    Point: the cube face `major` = (axis, sign), extended beyond the face,
+    in the coordinates of texel_jacobian ((v_a, v_b) / |v_major| over one
+    texel)."""
+    if light.type == "point":
+        axis, sign = major
+        a_axis, b_axis = (axis + 1) % 3, (axis + 2) % 3
+        texel = 2.0 / resolution[0]
+
+        def to_texel_point(X):
+            v = X - light.position
+            w = sign * v[:, axis]
+            return np.stack([v[:, a_axis] / w, v[:, b_axis] / w], axis=1) / texel, w
+        return to_texel_point
+    scale = np.array([resolution[0], resolution[1]], dtype=np.float64)
+
+    def to_texel(X):
+        h = np.concatenate([X, np.ones((len(X), 1))], axis=1) @ M.T
+        return (h[:, 0:2] / h[:, 3:4]) * scale, h[:, 3]
+    return to_texel
+
+
+def footprint_band(points, own, normal, occ, light, geo, M, resolution, r):
+    """Edge band of the module docstring, exact for box casters. Per
+    receiver face (and point light cube face), every shadow-casting box
+    other than the receiver's own casts a convex shadow polygon in texel
+    space: the box clipped to the slab between the face plane and the light
+    (and to w > 0 for a perspective map), mapped to texel coordinates. A
+    point of the face plane shares its texel coordinates with every caster
+    point on its segment to the light, and the map is projective on w > 0,
+    so the polygon is the convex hull of the mapped clipped corners. A lit
+    pixel is in the band when its square meets a polygon, a shadowed pixel
+    when the polygons do not cover its square."""
+    n = len(points)
+    band = np.zeros(n, dtype=bool)
+    if n == 0:
+        return band
+    local_normal = np.einsum("nji,nj->ni", geo.rotation[own], normal)
+    axis = np.argmax(np.abs(local_normal), axis=1)
+    face_sign = np.sign(local_normal[np.arange(n), axis])
+    key = (own.astype(np.int64) * 6) + (axis * 2) + (face_sign > 0.0)
+    if light.type == "point":
+        v = points - light.position
+        major = np.argmax(np.abs(v), axis=1)
+        major_sign = np.sign(v[np.arange(n), major])
+        key = (key * 6) + (major * 2) + (major_sign > 0.0)
+    corners = [geo.center[b] + ((BOX_CORNER_SIGNS * geo.half[b]) @ geo.rotation[b].T) for b in range(geo.count)]
+    for group in np.unique(key):
+        index = np.nonzero(key == group)[0]
+        first = index[0]
+        b_own = int(own[first])
+        face_normal = geo.rotation[b_own][:, axis[first]] * face_sign[first]
+        face_point = geo.center[b_own] + (face_normal * geo.half[b_own][axis[first]])
+        halfspaces = [(face_normal, -float(face_normal @ face_point))]
+        major_key = None
+        if light.type != "directional":
+            halfspaces.append((-face_normal, float(face_normal @ light.position)))
+        if light.type == "point":
+            major_key = (int(major[first]), float(major_sign[first]))
+            e = np.zeros(3)
+            e[major_key[0]] = major_key[1]
+            halfspaces.append((e, -float(e @ light.position) - FOOTPRINT_MIN_W))
+        elif light.type == "spot":
+            halfspaces.append((M[3, :3], float(M[3, 3]) - FOOTPRINT_MIN_W))
+        to_texel = texel_map(light, M, resolution, major_key)
+        polygons = []
+        for b in range(geo.count):
+            if (b == b_own) or not geo.casts[b]:
+                continue
+            clipped = []
+            for quad in BOX_FACE_QUADS:
+                poly = corners[b][list(quad)]
+                for a, c in halfspaces:
+                    poly = clip_polygon(poly, a, c)
+                    if len(poly) == 0:
+                        break
+                if len(poly) > 0:
+                    clipped.append(poly)
+            if clipped:
+                hull = convex_hull(to_texel(np.concatenate(clipped))[0])
+                if hull is not None:
+                    polygons.append(hull)
+        if not polygons:
+            continue
+        s = to_texel(points[index])[0]
+        meets = np.zeros((len(polygons), len(index)), dtype=bool)
+        covered = np.zeros(len(index), dtype=bool)
+        for k, poly in enumerate(polygons):
+            meets[k], contains = square_vs_polygon(s, r, poly)
+            covered |= contains
+        count = meets.sum(axis=0)
+        lit = ~occ[index]
+        group_band = np.where(lit, count > 0, ~covered)
+        # A shadowed square that two or more polygons meet and none covers
+        # alone: covered by their union only when nothing of it is left
+        # outside all of them. A 7 x 7 point grid over the square settles
+        # most of them (a grid point outside every polygon is a lit point of
+        # the square); the rest take the exact difference.
+        mixed = np.nonzero(~lit & ~covered & (count >= 2))[0]
+        if mixed.size > 0:
+            grid = np.linspace(-r, r, 7)
+            probe = (s[mixed][:, None, :] + np.stack(np.meshgrid(grid, grid), axis=-1).reshape(1, -1, 2)).reshape(-1, 2)
+            inside = np.zeros(len(probe), dtype=bool)
+            for poly in polygons:
+                normals = edge_normals(poly)
+                normals /= np.linalg.norm(normals, axis=1, keepdims=True)
+                distance = ((probe[:, None, :] - poly[None, :, :]) * normals[None, :, :]).sum(axis=2)
+                inside |= np.all(distance <= FOOTPRINT_MIN_AREA, axis=1)
+            open_square = ~inside.reshape(len(mixed), -1).all(axis=1)
+            for j, is_open in zip(mixed, open_square):
+                group_band[j] = is_open or square_outside_polygons(
+                    s[j], r, [polygons[k] for k in np.nonzero(meets[:, j])[0]])
+        band[index] = group_band
+    return band
 
 
 def classify(job):
@@ -708,12 +918,23 @@ def classify(job):
     band = cache_load(job, band_key, len(points))
     if band is None:
         band = np.zeros(len(points), dtype=bool)
-        active = np.nonzero(~excluded)[0]
-        for i, j in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
-            moved = points[active] + r * ((i * Du[active]) + (j * Dv[active]))
-            band[active] |= occ_fn(moved, own[active]) != occ[active]
+        # The hut interiors of thin_walls are G4's (left out of G1 / G2),
+        # so they need no band.
+        needed = ~excluded
+        if job["station"] == "thin_walls":
+            for _, inside in hut_interiors(points, offset):
+                needed &= ~inside
+        active = np.nonzero(needed)[0]
+        # Station-local float64 like the occlusion (the root offset moves
+        # into the map's translation column).
+        M_local = None
+        if M is not None:
+            M_local = M.copy()
+            M_local[:, 3] += M[:, :3] @ offset
+        band[active] = footprint_band(points[active] - offset, own[active], normal[active], occ[active],
+                                      Light(job["light"], offset), geometry(job["station"], (0.0, 0.0, 0.0)),
+                                      M_local, job["resolution"], r)
         cache_store(job, band_key, band)
-    band |= image_band(wd, occ, excluded, Du, Dv, r)
     return {"wd": wd, "geo": geo, "light": light, "excluded": excluded, "occ": occ, "band": band,
             "J": J, "step": step, "Du": Du, "Dv": Dv, "n_dot_l": n_dot_l, "occ_fn": occ_fn}
 
@@ -809,6 +1030,16 @@ def measure_g3(job, cls, vis_flat):
     return worst, detail[:EXAMPLES]
 
 
+def hut_interiors(points, offset):
+    """-> [(hut, mask of the points inside its interior)] of thin_walls."""
+    out = []
+    for hut in rooms.STATIONS["thin_walls"]["walls"]:
+        lo = np.array(hut["interior_lo"]) + offset - 1.0e-3
+        hi = np.array(hut["interior_hi"]) + offset + 1.0e-3
+        out.append((hut, np.all((points >= lo) & (points <= hi), axis=1)))
+    return out
+
+
 def measure_g4(job, cls, vis_flat):
     """Lit pixels inside each hut -> {hut: {count, total, thickness, gated}}."""
     wd = cls["wd"]
@@ -818,10 +1049,7 @@ def measure_g4(job, cls, vis_flat):
     lit = vis_flat[wd["index"]] > 0.5
     out = {}
     inside_any = np.zeros(len(points), dtype=bool)
-    for hut in rooms.STATIONS["thin_walls"]["walls"]:
-        lo = np.array(hut["interior_lo"]) + offset - 1.0e-3
-        hi = np.array(hut["interior_hi"]) + offset + 1.0e-3
-        inside = np.all((points >= lo) & (points <= hi), axis=1)
+    for hut, inside in hut_interiors(points, offset):
         inside_any |= inside
         mask = inside & visible
         leak = mask & lit

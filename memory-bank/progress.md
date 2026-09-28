@@ -50,4 +50,7 @@
 ✓T7::37c43fd20{Shadow_gpu_test-fixture;Shadow_tie-ulp-hook;DISABLED_-head-on-until-phase-4;26-pass;finding:bias-4-fails-at-rotated-poses,D16-pcf-100%}
 ✓T8::{Mcp_test.DISABLED_shadow_head_on..;control-bias-4-passes;fails-spot-156896/directional-52992/cornell-42744}
 ✓PHASE-3-DONE
-?next::phase-4{D4->D2/D3->D1}
+✓D4::28bf2cd60{scale-1+texel-centre-offsets+snap_bias-2^-8;grazing_fan-tiles-0-all-paths;head-on-slightly-worse(noise-dz_dUV)->D2/D3+D1}
+✓D2/D3::061293535{dz_dUV=-a/c,-b/c-via-transpose(world_from_texture);geometric-normal-from-dFdx/dFdy;grazing-clamp-0.05;Medium-head_on-passes;left:cornell,fwdZ,T7-rotated,D16}
+✓D1::154627477{derived-bias-terms:projection+position+raster+gradient+format;T7-30/30+T8-enabled;cornell+head_on-full-sweep+fwdZ-head-on+16bit-pass;G3/G5-unchanged}
+⚡phase-4-residuals::trace-coder-running{grazing_fan-1px+res512-cells;then-core-matrix+sec9-rewrite}

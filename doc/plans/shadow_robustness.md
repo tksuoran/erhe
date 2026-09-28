@@ -12,7 +12,8 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is phases 4 to 8.
+the current gate table. The remaining work is the phase 4 full matrix run
+and phases 5 to 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -135,12 +136,15 @@ The bias, in the order it is built:
   T8 passes. Core matrix: spot `cornell`, directional `head_on_floor` and all
   forward-Z head-on cells pass; `head_on_floor` `--poses full` passes for Low,
   Medium and High (directional and spot); `contact_blocks` G3 / G5 on Low and
-  Medium are unchanged. Left, identical with and without D1 (not ties):
-  directional `grazing_fan` G1 1 pixel on Medium and most of its variations
-  (spot 1 on pcf_6x6), and the 512 resolution cells (`grazing_fan` 61 / 7,
-  spot `contact_blocks` G1 763, spot `thin_walls` G1 1 / G2 2, spot
-  `cube_seams` 4, directional `spot_cones` 1); the distance technique cells
-  (D7) and cull_front cells (D5).
+  Medium are unchanged. The G1 / G2 pixels left after D1 (directional
+  `grazing_fan` floor next to the 88 degree tile's shadow tip, and the 512
+  resolution cells) are ideal-filter results: at every one of them the
+  analytic occlusion of each tap's texel-centre ray reproduces the measured
+  visibility (to one tap at a caster edge), and the analytic boundary is 0.5
+  to 1.75 texels (L-inf) away, inside the band radius of 3 / 4 texels.
+  The band sampling missed them (a shadow corner or a whole 10 cm caster's
+  shadow between the footprint corners, hidden from the camera by its
+  caster); section 6 now evaluates the band exactly.
 - **D5 Cull mode default.** `cull_back` stores every lit front face, so the
   head-on tie is the common case; `cull_front` stores back faces of closed
   meshes and removes the tie structurally; single-sided geometry needs
@@ -222,10 +226,20 @@ Ground truth: `shadow_verify.py` renders the receiver world position (mode 36,
 fp32) and the per-light visibility (mode 30) with MSAA off, so each pixel has
 one surface. It casts each pixel's segment to the light against the station's
 boxes (slab test, own box excluded) and classifies the pixel `lit`,
-`shadowed`, or `edge band` - within the filter footprint plus one texel of the
-analytic shadow boundary in shadow-map texel space (T3 matrices), found by
-sampling the footprint corners in the receiver plane and dilating in image
-space. Pixels on no box, facing away or past the grazing limit
+`shadowed`, or `edge band`. The filter reads the texels whose centres lie
+within the filter radius (L-inf, in shadow-map texels: hard 0.5, pcf_2x2 1,
+pcf_4x4 2, pcf_6x6 3) of the sample point, and a texel stores the nearest
+caster on its centre's light ray, so a tap sees a caster exactly where the
+receiver plane point on its ray is analytically occluded. The edge band is
+therefore every pixel whose footprint square - half-size filter radius plus
+one texel (the caster's rasterization), around its texel coordinates (T3
+matrices) - is not of one analytic class on the receiver's face plane. It is
+evaluated exactly, per receiver face, against the convex texel-space shadow
+polygon of each box caster: a lit pixel is in the band when its square meets
+a polygon, a shadowed pixel when the polygons do not cover its square.
+Sampling the square is not enough: at 512 texels the square spans 6 to 16 cm
+and a whole 10 cm caster's shadow, or the tip of a nearly edge-on tile's
+shadow, fits between its samples. Pixels on no box, facing away or past the grazing limit
 (`N . L < 0.05`), outside the spot cone, the map border or the light range
 are excluded. Edge-band pixels are excluded from G1 and G2 and are what G5
 measures.
@@ -283,11 +297,12 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 4 - bias.** D4, then D2 / D3, then D1, each measured on its own.
-  Exit: G1 to G5 pass for directional and spot in every `cull_back` and
-  `cull_none` cell, the `DISABLED_` head-on cases of T7 and T8 are enabled and
-  pass, `head_on_floor` full sweep passes, then
-  the full matrix.
+- **Phase 4 - full matrix.** D4, D2 / D3 and D1 have landed and the core
+  matrix holds the exit (section 9): G1 to G5 pass for directional and spot
+  in every `cull_back` and `cull_none` depth-technique cell, T7's head-on
+  cases and T8 are enabled and pass, `head_on_floor` passes the full sweep.
+  What remains is the full matrix run (864 configs, about 30 hours at the
+  core matrix's rate on the development iGPU).
 - **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
   place; update the codegen default, the presets and shadows.md together.
 - **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
@@ -298,30 +313,26 @@ section 9 rewritten to the new gate table.
   sampling" and "Bias technique" for the landed design, add the verify recipe
   to `doc/testing.md`, and delete this plan's finished items.
 
-## 9. Baseline
+## 9. Gate table
 
-Baseline on the current code: `py -3 scripts/shadow_verify.py --matrix core
---save-images failing` (15 configs: Low, Medium, High and the one-axis
-variations around Medium; a requested
-`shadow_depth_bits` of 24 resolves to D32_SFLOAT on this device (axis 32); `--poses short`, `--runs 1`;
-5464 renders, 34.9 min wall on the Debug headless Vulkan editor, AMD iGPU).
-Cells not listed pass every gate that applies to them. Values are the worst
-over poses and views: failing pixel count and share of the gated pixels
-(G1, G2), texels (G3, G5 as mean / worst), pixels (G4 per wall, G6).
+`py -3 scripts/shadow_verify.py --matrix core --save-images failing` on the
+current code: 16 configs (Low, Medium, High and the one-axis variations
+around Medium; a requested `shadow_depth_bits` of 24 resolves to D32_SFLOAT
+on this device, axis 32), `--poses short`, `--runs 1`; 5827 renders, 33.4 min
+wall on the Debug headless Vulkan editor, AMD iGPU. Directional and spot pass
+every gate in every `cull_back` and `cull_none` cell of the depth technique,
+including 16-bit, forward-Z, 512 and 2048. Cells not listed pass every gate
+that applies to them. Values are the worst over poses and views: failing
+pixel count and share of the gated pixels (G1, G2), texels (G3, G5 as
+mean / worst), pixels (G4 per wall, G6).
 
 | Config | Failing cells |
 |---|---|
-| Medium (and its filter, bias, cull_none, draw-list, 2048 variations) | spot `cornell` G1 56064 (9.7 %, the section 1 tie); directional `head_on_floor` G1 55296 (9.4 %); directional `grazing_fan` G1 4.1 %, spot 0.17 %; point `contact_blocks` G2 117, G3 4.75, G5 0.15 / 3.25; directional `contact_blocks` G6 14 and a few G1 pixels at the cube's lit top edges |
-| Low | directional `contact_blocks` G1 2404, G5 0.02 / 1.81, G6 3304; directional `spot_cones` G1 3062; `thin_walls` G1 1733 (dir) / 776 (spot); spot `cornell` G1 729; point `contact_blocks` G3 2.5, G5 2.75 |
-| High, Medium/resolution=2048 | point `contact_blocks` G2 1126, G3 9.5, G5 0.40 / 6.5; point `thin_walls` G4 2 cm: 21002, 5 cm: 5519 (1 cm: 32581) |
-| Medium/shadow_depth_bits=16 | G1 on every directional / spot station: `spot_cones` 74 %, `grazing_fan` 94 % / 92 %, `head_on_floor` 67 % / 100 %, `cornell` 59 % |
-| Medium/shadow_cull_mode=cull_front | G4 on every `thin_walls` wall (directional 2 cm: 1012 .. 20 cm: 394, spot 2 cm: 1797 .. 20 cm: 4738); G2 on `contact_blocks` (1.8 % / 3.3 %), `cube_seams`, `spot_cones` (spot 62 %); G5 worst 8 (no edge found) |
-| Medium/shadow_technique=distance | `contact_blocks` G3 3.25 (dir) / 3.5 (spot), spot G5 3.75; small G1 on `grazing_fan`, `thin_walls` |
-| Medium/resolution=512 | `head_on_floor` G1 15 % (dir); `grazing_fan` G1 7 % (dir); spot `contact_blocks` G1 679 |
-| Medium/forward_z | directional matches reverse-Z except `grazing_fan` G1 48 % (one pose) and `head_on_floor` passing; spot G1: `head_on_floor` 100 %, `cornell` 30 %, `spot_cones` 12 %, `contact_blocks` 1.4 %, `depth_range` 243 - float ties near depth 1.0 (D1, D2 / D3); point matches reverse-Z |
+| Medium/shadow_cull_mode=cull_front (D5) | G4 on every `thin_walls` wall (directional 2 cm: 1219 .. 20 cm: 600, spot 2 cm: 1443 .. 20 cm: 3851); `contact_blocks` G2 9417 (1.9 %) / 15952 (3.2 %), G3 1.61 / 2.25, G5 worst 8 (no edge found), directional G6 4; `cube_seams` G2 1679 / 107; `spot_cones` G2 105 / 490 (33 %) |
+| Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 885 (dir) / 699 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), G2 20 / 59, spot G1 20, spot G5 0.24 / 3.75, directional G6 18; spot `thin_walls` G1 142, `cube_seams` G2 2, `spot_cones` G1 1 |
+| every config, point (D6) | `contact_blocks` G2 337, G3 4.75, G5 0.15 / 3.25 (High and 2048: G2 2538, G3 9.5, G5 0.40 / 6.5; Low and 512: G2 3, G3 2.5, G5 2.75); `thin_walls` G2 1 (High and 2048: G2 2, G4 2 cm: 21002, 5 cm: 5519, 1 cm: 32581); `cube_seams` G2 4 (High and 2048: 10); Low and 512 `grazing_fan` G1 44 |
 
 Point lights fail only through the constant world-space bias (D6): the
-contact gap and the leak through 2 and 5 cm walls. The head-on tie shows in
-the short sweep only for `cornell` and directional `head_on_floor`; spot
-`head_on_floor` fails on 123 of the 425 poses of `--poses full` (G1 33 %) and
-passes all of them with `--set shadow_depth_bias_constant=-4`.
+contact gap and the leak through 2 and 5 cm walls. The distance technique
+keeps the head-on tie on spot `cornell`, which the depth technique's D1 bias
+resolves.
