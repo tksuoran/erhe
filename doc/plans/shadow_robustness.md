@@ -257,4 +257,28 @@ Each phase ends with its verification run and one commit per logical change.
 
 ## 9. Baseline
 
-Filled in by phase 1: the core-matrix gate table on the current code.
+Baseline on the current code: `py -3 scripts/shadow_verify.py --matrix core
+--save-images failing` (15 configs: Low, Medium, High and the one-axis
+variations around Medium; `shadow_depth_bits` 24 is skipped, the device
+supports 16 and 32 only, and Medium runs at 32; `--poses short`, `--runs 1`;
+5464 renders, 34.9 min wall on the Debug headless Vulkan editor, AMD iGPU).
+Cells not listed pass every gate that applies to them. Values are the worst
+over poses and views: failing pixel count and share of the gated pixels
+(G1, G2), texels (G3, G5 as mean / worst), pixels (G4 per wall, G6).
+
+| Config | Failing cells |
+|---|---|
+| Medium (and its filter, bias, cull_none, draw-list, 2048 variations) | spot `cornell` G1 56064 (9.7 %, the section 1 tie); directional `head_on_floor` G1 55296 (9.4 %); directional `grazing_fan` G1 4.1 %, spot 0.17 %; point `contact_blocks` G2 117, G3 4.75, G5 0.15 / 3.25; directional `contact_blocks` G6 14 and a few G1 pixels at the cube's lit top edges |
+| Low | directional `contact_blocks` G1 2404, G5 0.02 / 1.81, G6 3304; directional `spot_cones` G1 3062; `thin_walls` G1 1733 (dir) / 776 (spot); spot `cornell` G1 729; point `contact_blocks` G3 2.5, G5 2.75 |
+| High, Medium/resolution=2048 | point `contact_blocks` G2 1126, G3 9.5, G5 0.40 / 6.5; point `thin_walls` G4 2 cm: 21002, 5 cm: 5519 (1 cm: 32581) |
+| Medium/shadow_depth_bits=16 | G1 on every directional / spot station: `spot_cones` 74 %, `grazing_fan` 94 % / 92 %, `head_on_floor` 67 % / 100 %, `cornell` 59 % |
+| Medium/shadow_cull_mode=cull_front | G4 on every `thin_walls` wall (directional 2 cm: 1012 .. 20 cm: 394, spot 2 cm: 1797 .. 20 cm: 4738); G2 on `contact_blocks` (1.8 % / 3.3 %), `cube_seams`, `spot_cones` (spot 62 %); G5 worst 8 (no edge found) |
+| Medium/shadow_technique=distance | `contact_blocks` G3 3.25 (dir) / 3.5 (spot), spot G5 3.75; small G1 on `grazing_fan`, `thin_walls` |
+| Medium/resolution=512 | `head_on_floor` G1 15 % (dir); `grazing_fan` G1 7 % (dir); spot `contact_blocks` G1 679 |
+| Medium/forward_z | G1 on nearly every directional / spot cell (lit surfaces read 0 or 0.25; `head_on_floor`, `contact_blocks`, `thin_walls`, `spot_cones` ~100 %): the forward-Z shadow comparison is broken; point cells match reverse-Z |
+
+Point lights fail only through the constant world-space bias (D6): the
+contact gap and the leak through 2 and 5 cm walls. The head-on tie shows in
+the short sweep only for `cornell` and directional `head_on_floor`; spot
+`head_on_floor` fails on 123 of the 425 poses of `--poses full` (G1 33 %) and
+passes all of them with `--set shadow_depth_bias_constant=-4`.
