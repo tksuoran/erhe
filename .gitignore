@@ -77,6 +77,7 @@ memory-bank/local/
 # and git stash -u. Add a ! line here when committing a new asset.
 res/editor/assets/*
 !res/editor/assets/RiggedFigure/
+!res/editor/assets/gi_test_rooms/
 !res/editor/assets/joint_constraints/
 !res/editor/assets/skin_test/
 !res/editor/assets/textures/

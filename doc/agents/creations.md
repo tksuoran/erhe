@@ -262,6 +262,16 @@ every rectangle through the live camera to prove it lies on its surface, and the
 `dynamic` station exposes its events (move the light, slide the door open) as
 functions. `scripts/gi_verify.py` imports all of it.
 
+The stations are also saved as loadable scene assets,
+`res/editor/assets/gi_test_rooms/gi_<station>.glb` (File > Load Scene), by
+`py -3 scripts/creations/creation_24_gi_test_rooms.py --save-assets`. Each file
+holds the station content, its lights and emissive materials, the scene ambient
+and the scene camera at the station's first view; `probe_offset_sweep`'s walls
+sit at the offsets of the pinned `DDGI_SETTINGS` grid, and `dynamic` holds its
+pre-event state. The lighting assumes the Graphics setting "headlight when
+unlit" is off (`emissive_only` has no light). Select the producer with the
+Indirect Diffuse source in Settings, or the MCP `set_indirect_diffuse` tool.
+
 ### 23 - Joint Constraint Test
 
 ![Joint Constraint Test](../images/creations/23_joint_constraint_test.png)

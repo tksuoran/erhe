@@ -16,6 +16,11 @@ The module is the single source of truth for what each station is:
 `scripts/gi_verify.py` imports STATIONS and build_station(). Importing the
 module has no side effects.
 
+`--save-assets` saves every station as a scene asset under
+res/editor/assets/gi_test_rooms/gi_<station>.glb (File > Load Scene); the
+scene camera sits at the station's first view. Station lighting assumes the
+app-wide "headlight when unlit" setting is off (emissive_only has no light).
+
   STATIONS[name] = {
       "description": ...,          # what the station measures
       "ambient":     [r, g, b],    # scene ambient
@@ -1089,9 +1094,39 @@ def run_station(c, name, report):
     return not failures
 
 
+ASSET_DIR = "res/editor/assets/gi_test_rooms"
+
+
+def asset_path(name):
+    return f"{ASSET_DIR}/gi_{name}.glb"
+
+
+def save_station(c, name, report):
+    """Build station `name` and save it as a loadable scene asset: the
+    station content, its lights and emissive materials, the scene ambient,
+    and the scene camera at the station's first view. The layout is the one
+    build_station realizes, so probe_offset_sweep's walls sit at the offsets
+    of the pinned DDGI_SETTINGS grid. Dynamic events are not part of the
+    asset (it holds the pre-event state)."""
+    print(f"=== save station {name}")
+    info = build_station(c, name, ddgi=False)
+    place_view(c, info["views"][0])
+    # Every part is a private mesh, so the brush library a new scene starts
+    # with is geometry the asset does not use.
+    if c.node_by_name("Brushes") is not None:
+        c.mutate("delete_nodes", {"scene_name": c.scene, "names": ["Brushes"]})
+    c.settle()
+    path = asset_path(name)
+    c.save(path)
+    report.append(f"{name}: saved {path} ({os.path.getsize(path)} bytes), camera at view '{info['views'][0]['name']}'")
+
+
 def add_script_arguments(parser):
     parser.add_argument("--station", default="all",
                         help="station name or 'all' (" + ", ".join(STATIONS) + ")")
+    parser.add_argument("--save-assets", action="store_true",
+                        help="build and save each station to " + ASSET_DIR + "/gi_<station>.glb "
+                             "instead of the screenshot / rectangle check run")
 
 
 def main():
@@ -1109,7 +1144,10 @@ def main():
     with fail_soft(c, BASE):
         try:
             for name in names:
-                ok = run_station(c, name, report) and ok
+                if args.save_assets:
+                    save_station(c, name, report)
+                else:
+                    ok = run_station(c, name, report) and ok
             c.close_all_scenes()
         finally:
             set_headlight(c, headlight)
