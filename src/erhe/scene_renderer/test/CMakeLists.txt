@@ -39,13 +39,22 @@ if (TARGET erhe::gpu_test_support)
     set(_gpu_target "erhe_scene_renderer_gpu_tests")
     add_executable(${_gpu_target}
         main.cpp
+        scene_renderer_test_logging.cpp
+        scene_renderer_test_logging.hpp
+        shadow_gpu_test_fixture.cpp
+        shadow_gpu_test_fixture.hpp
         test_content_line_width_gpu.cpp
         test_material_set_gpu.cpp
+        test_shadow_gpu.cpp
     )
 
     target_link_libraries(${_gpu_target}
         PRIVATE
             erhe::gpu_test_support
+            erhe::dataformat
+            erhe::file
+            erhe::log
+            erhe::math
             erhe::scene_renderer
             erhe::primitive
             erhe::scene
@@ -56,7 +65,8 @@ if (TARGET erhe::gpu_test_support)
     )
 
     # The content wide-line test compiles the editor's line shaders from
-    # res/shaders/ in the repository.
+    # res/shaders/ in the repository; the shadow tests load res/shaders/ and
+    # this directory's shaders/ through Program_interface.
     target_compile_definitions(${_gpu_target}
         PRIVATE
             "ERHE_SCENE_RENDERER_TEST_REPO_ROOT=\"${PROJECT_SOURCE_DIR}\""

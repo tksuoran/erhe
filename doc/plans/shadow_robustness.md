@@ -11,7 +11,7 @@ receiver-side and caster-side shadow bias work, including the deltas from the
 RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
-The tooling (T1 to T6) and the test stations (section 4) exist; section 9 is
+The tooling (T1 to T7) and the test stations (section 4) exist; section 9 is
 the current gate table. The remaining work is phases 2 to 8.
 
 ## 1. Evidence: the head-on tie
@@ -257,21 +257,13 @@ Every gate is the worst value over all poses and runs:
   docstring); `--enforce` exits non-zero on a FAIL. It gains `--extra-light`
   (section 4) and the G7 timing in phase 8.
 - **T7 Library GPU tests** in `erhe_scene_renderer_gpu_tests` (ctest label
-  `gpu`), in the pattern of `test_content_line_width_gpu.cpp`, built on a
-  test fixture that sets up what the shadow and forward passes need beyond
-  the `Device` (`Program_interface`, `Shader_variant_cache`, `Mesh_memory`,
-  `Light_set`, `Material_set`):
-  - `Shadow_tie`: `Shadow_renderer` rasterizes a head-on plane into the map;
-    a fullscreen fragment pass that includes `erhe_light.glsl` evaluates
-    `sample_light_visibility()` at receiver points on that plane with the
-    reference depth perturbed by -4 to +4 ulps (fragment stage, because the
-    sampling uses screen-space derivatives); every result is 1. Runs per
-    filter, bias and depth format.
-  - `Shadow_head_on_plane`: `Shadow_renderer` plus `Forward_renderer` with
-    `Shader_debug::shadow_visibility` on a plane under a spot and a
-    directional light; every pixel reads 1.
-  These run under a software Vulkan once
-  [graphics_tests.md](graphics_tests.md) brings `gpu` tests to CI.
+  `gpu`): [shadows.md](../erhe/shadows.md) "Shadow sampling GPU tests". The
+  two head-on cases (`Shadow_tie` and `Shadow_head_on_plane`) are
+  `DISABLED_` until phase 4 enables them. The process-wide test device has
+  one depth convention (reverse-Z on Vulkan), so forward-Z runs of these
+  cases need the GPU test environment to create a forward-Z device. These
+  run under a software Vulkan once [graphics_tests.md](graphics_tests.md)
+  brings `gpu` tests to CI.
 - **T8 MCP regression case.** One `Mcp_test` case in `mcp_server_tests`
   (label `editor`) loads `shadow_head_on_floor.glb` and the `cornell` pose and
   asserts G1 on a mode 30 render for spot and directional.

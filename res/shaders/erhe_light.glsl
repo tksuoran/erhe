@@ -81,6 +81,13 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     float array_layer                           = float(light.shadow_index_packed.x);
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
     vec3  position_in_light_texture             = position_in_light_texture_homogeneous.xyz / position_in_light_texture_homogeneous.w;
+#if defined(ERHE_SHADOW_TEST_REFERENCE_DEPTH_ULPS)
+    // Test-only entry point, never defined by production shaders: offsets the
+    // reference depth by a signed number of float ulps before any bias, so the
+    // Shadow_tie GPU test (src/erhe/scene_renderer/test/shaders/shadow_tie.frag)
+    // can show that no verdict depends on last-bit rounding.
+    position_in_light_texture.z = uintBitsToFloat(uint(int(floatBitsToUint(position_in_light_texture.z)) + (ERHE_SHADOW_TEST_REFERENCE_DEPTH_ULPS)));
+#endif
     // Receivers outside the light-space [0, 1] depth range are NOT rejected
     // here. With tight shadow frustum fitting (Shadow_frustum_fit_settings,
     // e.g. fit_to_casters) the far plane hugs the casters, so a visible

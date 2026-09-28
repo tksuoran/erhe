@@ -13,12 +13,12 @@
 // N pixel centers: the count is exact.
 
 #include "gpu_test_fixture.hpp"
+#include "scene_renderer_test_logging.hpp"
 
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
-#include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
@@ -29,16 +29,12 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_item/item_log.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/primitive_log.hpp"
-#include "erhe_property/property_log.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/projection.hpp"
-#include "erhe_scene/scene_log.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -92,15 +88,7 @@ protected:
     {
         Gpu_test::SetUp();
 
-        static bool s_logging_initialized = false;
-        if (!s_logging_initialized) {
-            erhe::property::initialize_logging();
-            erhe::item::initialize_logging();
-            erhe::scene::initialize_logging();
-            erhe::primitive::initialize_logging();
-            erhe::scene_renderer::initialize_logging();
-            s_logging_initialized = true;
-        }
+        initialize_scene_renderer_test_logging();
 
         erhe::graphics::Device& graphics_device = device();
         m_interface = std::make_unique<Content_wide_line_interface>(graphics_device, nullptr, 1);

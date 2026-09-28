@@ -348,6 +348,47 @@ casters: the far plane does not need to be extended to cover receivers, which
 would waste depth precision and was never the design intent (the near side
 has the same property via `near_from_main_frustum` + `depth_clamp`).
 
+### Shadow sampling GPU tests
+
+`erhe_scene_renderer_gpu_tests` (ctest label `gpu`) checks the directional
+and spot sampling paths without the editor. The fixture
+(`src/erhe/scene_renderer/test/shadow_gpu_test_fixture.hpp`) sets up
+`Mesh_memory`, `Program_interface` (shader paths `res/shaders` and the test
+directory's `shaders/`), `Shader_variant_cache`, `Material_set`,
+`Scene_pass_resources`, `Forward_renderer`, `Shadow_renderer`, `Light_set` and
+`Light_projections`, and builds a station of boxes: a floor whose top face is
+the plane y = 0, optional caster boxes, one shadow-casting light straight
+above the origin, and a top-down orthographic view of x, z in [-1, 1] whose
+depth range shows the plane only. A `Shadow_pose` places the whole station
+in the world by a rigid frame; the first pose is the identity (every matrix
+exact), the others rotate and translate it so the matrices carry the
+last-bit rounding of a real scene. It renders the shadow map through
+`Shadow_renderer`, the forward pass with `Shader_debug::shadow_visibility`
+through `Forward_renderer`, and the Shadow_tie pass: `shaders/shadow_tie.frag`
+through `Forward_renderer::draw_primitives()`, a fragment pass that evaluates
+`sample_light_visibility()` at receiver points on the plane with the reference
+depth offset by -4 to +4 float ulps, one vertical band per offset. The offset
+enters through `ERHE_SHADOW_TEST_REFERENCE_DEPTH_ULPS`, a macro only the test
+shader defines; `sample_light_visibility()` adds that many ulps to the light
+texture depth before any bias, and production shaders compile it out.
+
+The cases (`test_shadow_gpu.cpp`), each per light type (spot, directional)
+and over every pose, depth format the device offers (16, 24, 32 depth bits)
+and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
+`Shadow_bias_mode`), with `cull_back`:
+
+- `shadow_tie_head_on_plane_reads_lit` and `shadow_head_on_plane_reads_lit`
+  require visibility 1 on the head-on plane for every offset / pixel. They
+  fail on the current bias (the head-on tie of
+  [plans/shadow_robustness.md](../plans/shadow_robustness.md) section 1) and
+  are `DISABLED_` until its phase 4.
+- `shadow_tie_exact_pose_with_rasterizer_bias_reads_lit` and
+  `shadow_head_on_plane_exact_pose_with_rasterizer_bias_reads_lit`: at the
+  identity pose a rasterizer constant bias of -4 makes the plane read 1.
+- `shadow_caster_box_occludes_plane`: a box above the plane reads 0 at least
+  5 cm inside its analytic shadow at every pose, and at the identity pose 1
+  at least 10 cm outside it.
+
 ## Bias technique: RPDB reference, and the distance/fwidth alternative
 
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from
@@ -567,6 +608,9 @@ the per-face coordinate flip, is in
 | `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_distance_bias_coeff` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
 | `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
 | `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp; `sample_point_light_visibility` (cube direction sample, radial compare) |
+| `src/erhe/scene_renderer/test/shadow_gpu_test_fixture.hpp` | Shadow GPU test fixture: station, poses, shadow map / forward / Shadow_tie renders |
+| `src/erhe/scene_renderer/test/test_shadow_gpu.cpp` | Shadow sampling GPU test cases |
+| `src/erhe/scene_renderer/test/shaders/shadow_tie.frag` | Shadow_tie fragment pass (reference depth offset per band) |
 | `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map; `VARIANT_SHADOW_CUBE` writes radial distance to the cube face; point receiver multiplies `sample_point_light_visibility` |
 | `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` passes `v_position` (world) to the cube caster fragment |
 | `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
