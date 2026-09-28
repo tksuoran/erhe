@@ -382,7 +382,8 @@ bias and ignore the `ERHE_SHADOW_BIAS` axis; only the wide paths switch on it.
 erhe also goes beyond the article:
 
 - Reverse-Z aware throughout (`cdd = clip_depth_direction` drives the bias sign,
-  the rounding direction, and the non-strict `gequal` / `lequal` comparison).
+  the rounding direction, and the non-strict `gequal` / `lequal` comparison;
+  the caster-side rasterizer bias below is converted the same way).
 - Receivers outside the fitted depth range are handled by clamping the reference
   to [0, 1] after biasing instead of an early-out (see "Receivers outside the
   fitted depth range" above).
@@ -395,7 +396,12 @@ erhe also goes beyond the article:
   skipped for D32_SFLOAT -- so it matches the actual shadow map format.
 - A complementary caster-side rasterizer depth bias (constant + slope) exists
   (`shadow_depth_bias_constant` / `_slope`, applied in `shadow_renderer.cpp` via
-  `set_depth_bias`) but defaults to 0. The article criticizes rasterizer slope
+  `set_depth_bias`) but defaults to 0. Both values are signed toward the light
+  under either depth convention: negative moves the stored caster depth away
+  from the light. `Shadow_renderer::render()` passes them to the device as is
+  for reverse-Z (the light side is the larger depth) and negated for forward-Z
+  (the light side is the smaller depth), so one preset value means the same
+  bias in both conventions. The article criticizes rasterizer slope
   bias as an over-estimate, so erhe relies on RPDB by default.
 
 ### The distance / fwidth alternative

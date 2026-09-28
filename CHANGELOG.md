@@ -58,6 +58,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Shadow_renderer::Render_parameters::depth_bias_constant`
+  / `depth_bias_slope` are signed toward the light under either depth
+  convention (negative moves the stored caster depth away from the light);
+  `Shadow_renderer::render()` negates them for forward-Z. They were passed to
+  the device unconverted, which flipped their meaning under forward-Z.
 - `erhe::scene_renderer`: `Ddgi_parameters::tiles_per_row`
   (`erhe_scene_renderer/light_buffer.hpp`), written to
   `light_block.ddgi_texels.z`: the probe field atlases place probe

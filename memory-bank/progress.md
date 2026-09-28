@@ -44,4 +44,7 @@
 ✓phase-1a::b8e73afe4{creation_25;7-stations+cornell;point-leaks-1-5cm-huts}
 ✓phase-1b::257cff784{shadow_verify.py;core-15-configs-short-poses-35min;baseline-in-plan-sec9}
 ✓fable-review->plan-revised{D0-depth-bits-variant-from-actual-format;D8-forward-Z-broken;D1-derived-bias{texel+origin+format-quantum};D2/D3-plane-gradient;order-D4->D2/D3->D1->D5}
-?next::phase-2{D0-then-D8}
+✓D0::5e10ed9d0{get_shadow_depth_bits_axis-from-created-texture;set_graphics_preset-accepts-24;hard@24==hard@32-all-cells}
+✓D8::{root:shadow_renderer.cpp-depth-bias-unconverted-for-forward-Z;now-signed-toward-light;spot-fwdZ-remaining=float-ties-near-1.0->D1-ulp(z_ref)+D2/D3}
+✓PHASE-2-DONE
+?next::phase-3{T7-gpu-tests+T8-Mcp_test}

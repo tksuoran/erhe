@@ -89,11 +89,12 @@ Correctness defects that precede any bias work:
   axis is `get_shadow_depth_bits_axis()` of the shadow map texture actually
   created (16 / 24 UNORM, 32 float), so a requested 24 that resolves to
   D32_SFLOAT compiles the float path (shadows.md "Shadow sampling").
-- **D8 Forward-Z comparison.** With `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1`,
-  directional and spot shadows read 0 or 0.25 on lit surfaces (section 9).
-  The forward-Z path of the comparison sampler, the clear value, the bias
-  sign and the reference clamp are made consistent with the reverse-Z path;
-  the gates hold for both conventions (R10).
+- **D8 Forward-Z comparison.** Landed: `Shadow_renderer` treats the
+  rasterizer depth bias parameters as signed toward the light in both
+  conventions and negates them for forward-Z. Forward-Z keeps its receivers
+  near depth 1.0, where the float step is 2^-24, so the head-on tie and
+  derivative quantization are larger there than under reverse-Z; D1's format
+  term and D2 / D3 cover that (R10).
 
 The bias, in the order it is built:
 
@@ -121,7 +122,9 @@ The bias, in the order it is built:
   `texel_world` the shadow texel's world size at the receiver, `|P|` the
   receiver's distance from the origin (the fp32 error of `v_position` and of
   the composed `texture_from_world`), and `q_format` one quantum of the
-  map's actual format (D0): `2^-bits` for UNORM, 0 for float. The
+  map's actual format (D0) at the reference depth: `2^-bits` for UNORM,
+  the float step `ulp(z_ref)` for float (negligible near 0 under reverse-Z,
+  2^-24 near 1.0 under forward-Z). The
   coefficients `k_texel` and `k_origin` are derived from the filter footprint
   and the matrix composition, stated with their derivation in shadows.md, and
   exposed as preset fields `shadow_bias_texel_scale` and
@@ -317,7 +320,7 @@ over poses and views: failing pixel count and share of the gated pixels
 | Medium/shadow_cull_mode=cull_front | G4 on every `thin_walls` wall (directional 2 cm: 1012 .. 20 cm: 394, spot 2 cm: 1797 .. 20 cm: 4738); G2 on `contact_blocks` (1.8 % / 3.3 %), `cube_seams`, `spot_cones` (spot 62 %); G5 worst 8 (no edge found) |
 | Medium/shadow_technique=distance | `contact_blocks` G3 3.25 (dir) / 3.5 (spot), spot G5 3.75; small G1 on `grazing_fan`, `thin_walls` |
 | Medium/resolution=512 | `head_on_floor` G1 15 % (dir); `grazing_fan` G1 7 % (dir); spot `contact_blocks` G1 679 |
-| Medium/forward_z | G1 on nearly every directional / spot cell (lit surfaces read 0 or 0.25; `head_on_floor`, `contact_blocks`, `thin_walls`, `spot_cones` ~100 %): the forward-Z shadow comparison is broken; point cells match reverse-Z |
+| Medium/forward_z | directional matches reverse-Z except `grazing_fan` G1 48 % (one pose) and `head_on_floor` passing; spot G1: `head_on_floor` 100 %, `cornell` 30 %, `spot_cones` 12 %, `contact_blocks` 1.4 %, `depth_range` 243 - float ties near depth 1.0 (D1, D2 / D3); point matches reverse-Z |
 
 Point lights fail only through the constant world-space bias (D6): the
 contact gap and the leak through 2 and 5 cm walls. The head-on tie shows in

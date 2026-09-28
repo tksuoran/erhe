@@ -376,6 +376,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, parameters.skins);
     Ring_buffer_range light_range    = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
 
+    // The rasterizer depth bias parameters are signed toward the light:
+    // positive moves a caster's stored depth toward the light, negative away
+    // from it (the reverse-Z device sense, where the light side is the larger
+    // depth). The device adds the bias along its own depth axis, and forward-Z
+    // puts the light side at the smaller depth, so forward-Z negates them.
+    const float depth_bias_sign     = parameters.reverse_depth ? 1.0f : -1.0f;
+    const float depth_bias_constant = depth_bias_sign * parameters.depth_bias_constant;
+    const float depth_bias_slope    = depth_bias_sign * parameters.depth_bias_slope;
+
     // log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
     // Depth clamping preserves casters outside the (tightly fitted) light
@@ -431,9 +440,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         );
         // Hardware depth bias for the shadow (caster) pass. Both shadow
         // pipelines enable depth bias, so this must be set before their draws;
-        // 0/0 means no bias. The sign that reduces acne depends on the depth
-        // convention -- negative values are valid for experimentation.
-        encoder.set_depth_bias(parameters.depth_bias_constant, parameters.depth_bias_slope, 0.0f);
+        // 0/0 means no bias. The values are in the device's depth direction
+        // (converted above).
+        encoder.set_depth_bias(depth_bias_constant, depth_bias_slope, 0.0f);
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
 
@@ -622,7 +631,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     parameters.point_shadow_viewport.width,
                     parameters.point_shadow_viewport.height
                 );
-                encoder.set_depth_bias(parameters.depth_bias_constant, parameters.depth_bias_slope, 0.0f);
+                encoder.set_depth_bias(depth_bias_constant, depth_bias_slope, 0.0f);
                 m_joint_buffer.bind(encoder, joint_range);
                 m_light_buffer.bind_light_buffer(encoder, light_range);
 

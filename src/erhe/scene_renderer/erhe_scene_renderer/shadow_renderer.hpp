@@ -129,7 +129,10 @@ public:
         // Rasterizer (hardware) depth bias applied while rendering the shadow
         // map -- a caster-side acne / peter-panning control, orthogonal to the
         // receiver-side bias in the forward shader. Both default to 0 (no
-        // bias). Set per pass via Render_command_encoder::set_depth_bias().
+        // bias). Signed toward the light: negative moves the stored caster
+        // depth away from the light under either depth convention (render()
+        // converts to the device's depth direction before
+        // Render_command_encoder::set_depth_bias()).
         float                                                              depth_bias_constant{0.0f};
         float                                                              depth_bias_slope{0.0f};
 
