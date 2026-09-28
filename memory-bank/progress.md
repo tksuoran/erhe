@@ -53,4 +53,8 @@
 ✓D4::28bf2cd60{scale-1+texel-centre-offsets+snap_bias-2^-8;grazing_fan-tiles-0-all-paths;head-on-slightly-worse(noise-dz_dUV)->D2/D3+D1}
 ✓D2/D3::061293535{dz_dUV=-a/c,-b/c-via-transpose(world_from_texture);geometric-normal-from-dFdx/dFdy;grazing-clamp-0.05;Medium-head_on-passes;left:cornell,fwdZ,T7-rotated,D16}
 ✓D1::154627477{derived-bias-terms:projection+position+raster+gradient+format;T7-30/30+T8-enabled;cornell+head_on-full-sweep+fwdZ-head-on+16bit-pass;G3/G5-unchanged}
-⚡phase-4-residuals::trace-coder-running{grazing_fan-1px+res512-cells;then-core-matrix+sec9-rewrite}
+✓residuals::2750ea461{all=measurement-defect(edge-band-corner-sampling);exact-per-face-band;dir+spot-pass-all-cull_back/none-cells;left=D5+D6+D7}
+✓pairwise::502f9636b{17cfg-169-pairs-67min;only-unexpected=pcf_6x6@512-reads-1-texel-empty-border-at-dir-fit-edge}
+✓border-reach::{Shadow_map_footprint;border=max(1,ceil(reach));margin=border+reach-0.5;dir-fit+spot-frustum-padded;pairwise-clean-outside-D5/D6/D7}
+✓PHASE-4-DONE
+?next::phase-5-D5-cull-mode

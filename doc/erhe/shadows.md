@@ -44,7 +44,9 @@ Per frame, for each scene view:
 
 Steps 1-4 above describe the **2D depth array** path used by directional and
 spot lights. Spot lights use a single perspective shadow map built directly
-from the light node pose (`Light::spot_light_projection_transforms()`).
+from the light node pose (`Light::spot_light_projection_transforms()`); its
+frustum is the outer cone widened so the cone maps inside the coverage margin
+(see [Empty border and receiver coverage](#empty-border-and-receiver-coverage)).
 **Point lights take a parallel cube-map path** (`Light::point_light_projection_transforms()`
 + the `Shadow_renderer` point-cube pass): six perspective faces storing radial
 distance, sampled by direction, never touching the 2D array, the fit, or
@@ -71,11 +73,15 @@ face, looking along the negative light direction.
 `Light::stable_directional_light_projection_transforms()` (`light.cpp`):
 
 - A cube of half-extent `r = Camera::get_shadow_range()` (default 22 m)
-  centered on the view camera position; orthographic projection
-  `2r x 2r x 2r`.
+  centered on the view camera position; orthographic projection `2r` deep.
+  Laterally the `2r` square maps to the map minus the coverage margin and one
+  texel of snap slack on each side, so the projection is
+  `2r * N / (N - 2 * (margin + 1))` wide for an `N` texel map (slack 0 with
+  `texel_snap` off).
 - The view camera position is snapped to shadow map texel increments in the
   light plane, so camera translation does not make shadow edges shimmer
-  (`texel_snap` also controls this path).
+  (`texel_snap` also controls this path). The snap moves the centre by less
+  than one texel either way, which the snap slack absorbs.
 - Content-agnostic: casters and receivers are ignored, so much of the map
   area and depth range is typically wasted, and texels are large.
 
@@ -214,10 +220,16 @@ crawl. Two mechanisms reduce that:
 
 - `quantize_extents` rounds the box SIZE up to discrete steps so it stays
   constant while the content moves only a little.
-- `texel_snap` pads the box by two texels and snaps its min corner down onto
-  the texel grid. The padding guarantees that snapping never drops coverage
-  at the max edge; the snap is only effective while the box size (and thus
-  the texel grid) stays constant, which is what `quantize_extents` provides.
+- The box maps to the map minus the coverage margin on each side (see
+  [Empty border and receiver coverage](#empty-border-and-receiver-coverage)):
+  the texel size is `box_size / (N - 2 * margin - 1)` with `texel_snap` and
+  `box_size / (N - 2 * margin)` without, and the box min corner moves out by
+  the margin.
+- `texel_snap` snaps that min corner down onto the texel grid; the extra
+  texel of the covered size absorbs the snap, so the fitted box stays inside
+  the margin at both edges. The snap is only effective while the box size
+  (and thus the texel grid) stays constant, which is what `quantize_extents`
+  provides.
 
 A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
 
@@ -248,17 +260,45 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   plus depth clamping. The sibling exists so that toggling `depth_clamp`
   changes ONLY depth clamping, never the culling behavior (and so the
   per-bucket winding flip stays effective).
-- **One texel empty border** - the pass sets a scissor rectangle inset by one
-  pixel on each side, keeping the outermost texel ring at the clear value.
-  Combined with the shadow samplers' `clamp_to_edge` address mode, any
-  shadow lookup outside the map's XY range compares against the far clear
-  value and resolves to fully lit. This is what makes out-of-XY receivers
-  safe without any range check in the shader.
+- **Empty border** - the pass sets a scissor rectangle inset by the border
+  width on each side, keeping the outermost texel rings at the clear value
+  (see [Empty border and receiver coverage](#empty-border-and-receiver-coverage)).
 - **Prewarm** - `prewarm_pipelines()` warms the active cull mode's two base
   pipelines (regular and depth clamp) times both winding variants, so neither
   toggling `depth_clamp` nor mirroring a mesh hitches at first draw. Changing
   the cull mode is a rare settings action and compiles the other modes'
   pipelines once, on demand.
+
+### Empty border and receiver coverage
+
+The receiver filter reads, per lookup, the texels whose centres lie within
+its tap reach of the sample point (L-inf, in texels): hard 0.5, `pcf_2x2` 1,
+`pcf_4x4` 2, `pcf_6x6` 3, for the depth and the distance technique alike.
+`erhe::scene::Shadow_map_footprint` carries the reach of the active filter
+(`Shadow_render_node` derives it from the preset's `shadow_filter` through
+`Shadow_map_footprint::from_kernel_width()`) into `Shadow_renderer` and
+`Light_projection_parameters`, and two widths follow from it:
+
+- **Border width** `B = max(1, ceil(reach))` (1, 1, 2, 3 texels). The 2D pass
+  scissor keeps the outermost `B` texel rings at the far clear value. A lookup
+  whose sample point lies outside the map reads texel centres less than
+  `reach` inside it, which are all border texels, and with the samplers'
+  `clamp_to_edge` address mode it resolves fully lit. Out-of-XY receivers need
+  no range check in the shader.
+- **Coverage margin** `M = B + reach - 0.5` (1, 1.5, 3.5, 5.5 texels). Every
+  receiver the projection is meant to cover maps at least `M` texels inside
+  the map, so every tap of its lookup reads a texel inside the border: the
+  directional fit (stable and tight) maps its fitted region, and the spot
+  projection its outer cone, to `[M, N - M]` in texels.
+
+The directional stable fit and tight fit size and snap their light-space
+box for the margin (see "Stable fit" and "Stabilization" above). The spot
+frustum is the outer cone (full angle `outer_spot_angle`) widened to
+`2 atan(tan(outer_spot_angle / 2) * N / (N - 2M))`, which puts the cone's
+inscribed circle `M` texels inside the map edges; receivers outside the cone
+receive no light from it. The point-light cube has no border: each face is
+rasterized full-face, the lookup is a single compare along the direction, and
+cube sampling continues across faces.
 
 ## Shadow sampling
 
@@ -341,8 +381,9 @@ The clamp is geometrically correct, not a workaround:
   the comparison reference to [0, 1] only for unorm depth formats, not for
   float ones; the shadow map format is chosen at runtime from the supported
   depth formats.
-- Out-of-range XY needs no check: the one texel empty scissor border plus
-  `clamp_to_edge` (see above) resolves those lookups to lit.
+- Out-of-range XY needs no check: the empty scissor border plus
+  `clamp_to_edge` (see "Empty border and receiver coverage") resolves those
+  lookups to lit.
 
 This also means the depth range of the fit is purely a precision budget for
 casters: the far plane does not need to be extended to cover receivers, which

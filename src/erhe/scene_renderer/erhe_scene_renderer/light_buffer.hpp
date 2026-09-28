@@ -162,6 +162,9 @@ public:
     // layer / point shadow cube of the slot (max() when not shadow-mapped).
     // in_shadow_map_texture may be null (no shadow map: Light_buffer writes
     // the "no shadow map" sentinel and every light shades unshadowed).
+    // shadow_map_footprint is the receiver filter footprint of the 2D shadow
+    // maps; the directional fit and the spot projection keep their covered
+    // receivers its coverage margin inside the map.
     void apply(
         const Light_set&                                light_set,
         const erhe::scene::Camera*                      main_camera,
@@ -173,7 +176,8 @@ public:
         const erhe::math::Coordinate_conventions&       conventions = erhe::math::Coordinate_conventions{},
         std::span<const erhe::math::Aabb>               in_caster_world_aabbs = {},
         std::span<const erhe::math::Aabb>               in_receiver_world_aabbs = {},
-        const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr
+        const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr,
+        erhe::scene::Shadow_map_footprint               shadow_map_footprint = erhe::scene::Shadow_map_footprint{}
     );
 
     // Forget the resolution of the previous apply(). The slot entries name

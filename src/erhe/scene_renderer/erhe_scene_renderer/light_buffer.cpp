@@ -313,7 +313,8 @@ void Light_projections::apply(
     const erhe::math::Coordinate_conventions&       conventions,
     const std::span<const erhe::math::Aabb>         in_caster_world_aabbs,
     const std::span<const erhe::math::Aabb>         in_receiver_world_aabbs,
-    const erhe::scene::Shadow_frustum_fit_settings* fit_settings
+    const erhe::scene::Shadow_frustum_fit_settings* fit_settings,
+    const erhe::scene::Shadow_map_footprint         shadow_map_footprint
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -331,6 +332,7 @@ void Light_projections::apply(
         .reverse_depth        = reverse_depth,
         .depth_range          = depth_range,
         .conventions          = conventions,
+        .shadow_map_footprint = shadow_map_footprint,
         .fit_settings         = fit_settings,
         .caster_world_aabbs   = in_caster_world_aabbs,
         .receiver_world_aabbs = in_receiver_world_aabbs,

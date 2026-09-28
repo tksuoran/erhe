@@ -54,6 +54,31 @@ public:
     }
 };
 
+// Receiver filter footprint of a 2D (directional / spot) shadow map, in shadow
+// map texels (doc/erhe/shadows.md "Empty border and receiver coverage"). A
+// filter tap reads the texel whose centre it lands on, and the taps of one
+// lookup reach tap_reach_texels (L-inf) from the sample point to the farthest
+// texel centre: hard 0.5, KxK PCF K / 2 (depth and distance technique alike).
+class Shadow_map_footprint
+{
+public:
+    float tap_reach_texels{0.5f};
+
+    // Footprint of the receiver filter whose kernel width is K texels
+    // (0 = hard, a single nearest-texel compare).
+    [[nodiscard]] static auto from_kernel_width(unsigned int kernel_width) -> Shadow_map_footprint;
+
+    // Width of the empty scissor border the shadow pass keeps at the clear
+    // value: ceil(reach), at least 1. Every tap of a lookup whose sample
+    // point lies outside the map reads only border texels.
+    [[nodiscard]] auto get_border_texels() const -> int;
+
+    // Distance from the map edge to the region the fit covers: border +
+    // reach - 0.5. Every tap of a lookup whose sample point lies at least
+    // this far inside reads only texels inside the border.
+    [[nodiscard]] auto get_coverage_margin_texels() const -> float;
+};
+
 class Shadow_frustum_fit_debug_data; // see light_frustum_fit.hpp
 class Shadow_fit_receiver_cache;     // see light_frustum_fit.hpp
 class Shadow_fit_scratch;            // see light_frustum_fit.hpp
@@ -67,6 +92,11 @@ public:
     bool                               reverse_depth       {true};
     erhe::math::Depth_range            depth_range         {erhe::math::Depth_range::zero_to_one};
     erhe::math::Coordinate_conventions conventions;
+
+    // Receiver filter footprint of the 2D shadow maps: the directional fit
+    // (stable and tight) and the spot projection keep every receiver they
+    // cover get_coverage_margin_texels() inside the map.
+    Shadow_map_footprint               shadow_map_footprint{};
 
     // Optional tight frustum fit inputs; defaults give the legacy stable fit.
     // Pointers and spans must outlive the use of these parameters.

@@ -59,7 +59,56 @@ auto log_slider(const float min, const float max, const std::string_view label, 
     return Property_ui{.min = min, .max = max, .presentation = Property_ui::Presentation::slider, .logarithmic = true, .tooltip = tooltip, .label = label, .visible_when = std::move(visible_when)};
 }
 
+// Map texels available to the region a projection covers, per axis: the map
+// size minus the coverage margin on both sides and minus snap_slack_texels on
+// both sides (a snap that moves the covered region by less than one texel
+// either way).
+auto get_covered_texels(
+    const Light_projection_parameters& parameters,
+    const float                        snap_slack_texels
+) -> glm::vec2
+{
+    const float     margin = parameters.shadow_map_footprint.get_coverage_margin_texels();
+    const glm::vec2 viewport_size{
+        static_cast<float>(parameters.shadow_map_viewport.width),
+        static_cast<float>(parameters.shadow_map_viewport.height)
+    };
+    return glm::max(viewport_size - glm::vec2{2.0f * (margin + snap_slack_texels)}, glm::vec2{1.0f});
+}
+
+// Width and height of the stable directional projection: the shadow-range
+// square (2 r) maps to the covered texels, so the square stays the coverage
+// margin inside the map wherever the texel snap moves the projection centre.
+auto get_stable_directional_extent(const Light_projection_parameters& parameters) -> glm::vec2
+{
+    const float     r                 = parameters.view_camera->get_shadow_range();
+    const bool      texel_snap        = (parameters.fit_settings == nullptr) || parameters.fit_settings->texel_snap;
+    const float     snap_slack_texels = texel_snap ? 1.0f : 0.0f;
+    const glm::vec2 viewport_size{
+        static_cast<float>(parameters.shadow_map_viewport.width),
+        static_cast<float>(parameters.shadow_map_viewport.height)
+    };
+    return (2.0f * r) * viewport_size / get_covered_texels(parameters, snap_slack_texels);
+}
+
 } // anonymous namespace
+
+auto Shadow_map_footprint::from_kernel_width(const unsigned int kernel_width) -> Shadow_map_footprint
+{
+    return Shadow_map_footprint{
+        .tap_reach_texels = (kernel_width == 0) ? 0.5f : (0.5f * static_cast<float>(kernel_width))
+    };
+}
+
+auto Shadow_map_footprint::get_border_texels() const -> int
+{
+    return std::max(1, static_cast<int>(std::ceil(tap_reach_texels)));
+}
+
+auto Shadow_map_footprint::get_coverage_margin_texels() const -> float
+{
+    return static_cast<float>(get_border_texels()) + tap_reach_texels - 0.5f;
+}
 
 const erhe::property::Enum_info c_light_type_enum_info{"Light_type", c_light_type_entries};
 
@@ -339,25 +388,37 @@ auto Light::stable_directional_light_projection(const Light_projection_parameter
     //// const float r = parameters.view_camera->projection()->get_z_far();
     const float r = parameters.view_camera->get_shadow_range();
 
-    // Directional light uses a cube surrounding the view camera bounding box as projection frustum
+    // Directional light uses a box surrounding the view camera bounding cube
+    // as projection frustum; laterally it is widened by the coverage margin
+    // and the snap slack (get_stable_directional_extent()).
+    const glm::vec2 extent = get_stable_directional_extent(parameters);
     return Projection{
         .projection_type     = Projection::Type::orthographic,
         .orthographic_z_near = 0.0f,
         .orthographic_z_far  = 2.0f * r,
-        .ortho_width         = 2.0f * r,
-        .ortho_height        = 2.0f * r
+        .ortho_width         = extent.x,
+        .ortho_height        = extent.y
     };
 }
 
 auto Light::spot_light_projection(const Light_projection_parameters& parameters) const -> Projection
 {
-    static_cast<void>(parameters); // TODO ignored for now
+    // The outer cone (full angle outer_spot_angle) is inscribed in the
+    // covered texels: the frustum is widened so the cone's rim stays the
+    // coverage margin inside the map (receivers outside the cone are not
+    // lit, so only the cone needs coverage).
+    const glm::vec2 viewport_size{
+        static_cast<float>(parameters.shadow_map_viewport.width),
+        static_cast<float>(parameters.shadow_map_viewport.height)
+    };
+    const glm::vec2 widen          = viewport_size / get_covered_texels(parameters, 0.0f);
+    const float     tan_half_outer = std::tan(0.5f * get_outer_spot_angle());
     return Projection{
         .projection_type    = Projection::Type::perspective,
         .perspective_z_near = 0.04f, // TODO
         .perspective_z_far  = get_range(),
-        .fov_x              = get_outer_spot_angle(),
-        .fov_y              = get_outer_spot_angle()
+        .fov_x              = 2.0f * std::atan(tan_half_outer * widen.x),
+        .fov_y              = 2.0f * std::atan(tan_half_outer * widen.y)
     };
 }
 
@@ -444,8 +505,8 @@ auto Light::stable_directional_light_projection_transforms(
     const bool texel_snap = (parameters.fit_settings == nullptr) || parameters.fit_settings->texel_snap;
     const vec3 view_camera_position_in_light = light_from_world * view_camera_position;
     const vec2 texel_size{
-        (2.0f * r) / static_cast<float>(parameters.shadow_map_viewport.width),
-        (2.0f * r) / static_cast<float>(parameters.shadow_map_viewport.height)
+        light_projection.ortho_width  / static_cast<float>(parameters.shadow_map_viewport.width),
+        light_projection.ortho_height / static_cast<float>(parameters.shadow_map_viewport.height)
     };
     const vec2 snap_adjustment = texel_snap
         ? vec2{

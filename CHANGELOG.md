@@ -9,6 +9,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene`: `Shadow_map_footprint` (`erhe_scene/light.hpp`, the receiver
+  filter's tap reach with its border width and coverage margin) and
+  `Light_projection_parameters::shadow_map_footprint`;
+  `erhe::scene_renderer`: `Shadow_renderer::Render_parameters::shadow_map_footprint`
+  and a trailing `Light_projections::apply()` parameter of the same name. The
+  2D shadow pass border is the footprint's border width, and the directional
+  fit and spot projection keep covered receivers the coverage margin inside
+  the map, so the spot frustum is wider than the outer cone and the stable
+  directional projection wider than `2 * shadow_range`.
 - `erhe::scene_renderer`: `get_shadow_depth_bits_axis(erhe::dataformat::Format)`
   (`erhe_scene_renderer/shader_key.hpp`): the `ERHE_SHADOW_DEPTH_BITS` variant
   axis value of a shadow map depth format (16 / 24 UNORM, 32 float, 0 none).

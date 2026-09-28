@@ -618,6 +618,9 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_front;
     bool  use_distance        = false;
     float distance_bias_coeff = 0.0f;
+    // The forward pass samples these maps with the preset's filter, whose
+    // value is the kernel width K (0 = hard).
+    erhe::scene::Shadow_map_footprint shadow_map_footprint{};
     if (m_context.app_settings != nullptr) {
         const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
         depth_bias_constant = preset.shadow_depth_bias_constant;
@@ -634,6 +637,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         const float cdd        = m_scene_view.get_reverse_depth() ? -1.0f : 1.0f;
         const float pcf_radius = 0.5f * static_cast<float>(static_cast<uint32_t>(preset.shadow_filter));
         distance_bias_coeff    = cdd * (1.0f + pcf_radius);
+        shadow_map_footprint   = erhe::scene::Shadow_map_footprint::from_kernel_width(static_cast<unsigned int>(preset.shadow_filter));
     }
 
     // Draw-list path (plan phase 4): route casters through the scene's
@@ -679,6 +683,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .depth_range           = m_scene_view.get_depth_range(),
             .conventions           = m_scene_view.get_conventions(),
             .fit_settings          = &m_fit_settings,
+            .shadow_map_footprint  = shadow_map_footprint,
             .depth_bias_constant   = depth_bias_constant,
             .depth_bias_slope      = depth_bias_slope,
             .shadow_bias_texel_scale  = bias_texel_scale,

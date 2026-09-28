@@ -678,20 +678,25 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
         box_size.x = std::ceil(box_size.x / quantize_step) * quantize_step;
         box_size.y = std::ceil(box_size.y / quantize_step) * quantize_step;
     }
-    glm::vec2 box_xy_min = box.xy_min;
+    // Coverage margin: the fitted box maps to the texels inside the margin
+    // (Shadow_map_footprint), so no filter tap of a covered receiver reads
+    // the empty border. With texel_snap one more texel per side absorbs the
+    // snap of the min corner down onto the texel grid. The texel size, and so
+    // the grid, stays constant whenever box_size is constant (see
+    // quantize_extents), which is what makes the snap effective.
+    const float     margin_texels     = parameters.shadow_map_footprint.get_coverage_margin_texels();
+    const float     snap_slack_texels = settings.texel_snap ? 1.0f : 0.0f;
+    const glm::vec2 viewport_size{
+        static_cast<float>(parameters.shadow_map_viewport.width),
+        static_cast<float>(parameters.shadow_map_viewport.height)
+    };
+    const glm::vec2 covered_texels = glm::max(viewport_size - glm::vec2{(2.0f * margin_texels) + snap_slack_texels}, glm::vec2{1.0f});
+    const glm::vec2 texel_size     = box_size / covered_texels;
+    glm::vec2 box_xy_min = box.xy_min - (margin_texels * texel_size);
     if (settings.texel_snap) {
-        // Pad by two texels so snapping the min corner down never drops
-        // coverage at the max edge, then snap on the padded texel grid. The
-        // padded size and grid stay constant whenever box_size is constant
-        // (see quantize_extents), which is what makes the snap effective.
-        const glm::vec2 viewport_size{
-            static_cast<float>(parameters.shadow_map_viewport.width),
-            static_cast<float>(parameters.shadow_map_viewport.height)
-        };
-        box_size += 2.0f * (box_size / viewport_size);
-        const glm::vec2 texel_size = box_size / viewport_size;
         box_xy_min = glm::floor(box_xy_min / texel_size) * texel_size;
     }
+    box_size = texel_size * viewport_size;
     const glm::vec2 box_xy_max = box_xy_min + box_size;
     const float     s_extent   = std::max(box.s_max - box.s_min, min_box_extent);
 

@@ -12,8 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is the phase 4 pairwise matrix run
-and phases 5 to 8.
+the current gate table. The remaining work is phases 5 to 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -145,6 +144,14 @@ The bias, in the order it is built:
   The band sampling missed them (a shadow corner or a whole 10 cm caster's
   shadow between the footprint corners, hidden from the camera by its
   caster); section 6 now evaluates the band exactly.
+- **Border and filter reach.** Landed: the 2D pass's empty scissor border is
+  `max(1, ceil(reach))` texels for the filter's tap reach (hard 0.5, KxK
+  K / 2), and the directional fit (stable and tight, snapped the same way)
+  and the spot frustum keep every covered receiver `border + reach - 0.5`
+  texels inside the map, so no tap of a covered receiver reads the border
+  (shadows.md "Empty border and receiver coverage"). This fixed the pairwise
+  `pw14` `pcf_6x6` / 512 `cube_seams` G2 pixel whose leftmost tap column read
+  texel column 0.
 - **D5 Cull mode default.** `cull_back` stores every lit front face, so the
   head-on tie is the common case; `cull_front` stores back faces of closed
   meshes and removes the tie structurally; single-sided geometry needs
@@ -305,22 +312,6 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 4 - pairwise matrix.** D4, D2 / D3 and D1 have landed and the core
-  matrix holds the exit (section 9): G1 to G5 pass for directional and spot
-  in every `cull_back` and `cull_none` depth-technique cell, T7's head-on
-  cases and T8 are enabled and pass, `head_on_floor` passes the full sweep.
-  The pairwise matrix (section 5; 17 configs, 11485 renders, 66.9 min wall)
-  fails outside D5 / D6 / D7 in one cell: `pcf_6x6` at 512 texels
-  (`pw14`, `cube_seams`, directional, pose 0, view `corner`), G2 1 pixel at
-  visibility 0.167, the same under `receiver_plane` and `slope_scaled`. The
-  pixel's sample point lies 3.4 texels inside the map's u edge, so the
-  kernel's leftmost tap column (offset -2.9 texels) reads texel column 0, the
-  pass's empty scissor border ([shadows.md](../erhe/shadows.md) "One texel
-  empty border"), which compares lit; the other 30 taps see the caster with
-  0.03 to 0.06 depth margin. What remains is deciding whether the directional
-  fit pads the map by the filter radius or the verify exclusion widens from
-  the one-texel border to filter radius plus one texel, and re-running the
-  pairwise matrix.
 - **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
   place; update the codegen default, the presets and shadows.md together.
 - **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
@@ -350,6 +341,11 @@ mean / worst), pixels (G4 per wall, G6).
 | Medium/shadow_cull_mode=cull_front (D5) | G4 on every `thin_walls` wall (directional 2 cm: 1219 .. 20 cm: 600, spot 2 cm: 1443 .. 20 cm: 3851); `contact_blocks` G2 9417 (1.9 %) / 15952 (3.2 %), G3 1.61 / 2.25, G5 worst 8 (no edge found), directional G6 4; `cube_seams` G2 1679 / 107; `spot_cones` G2 105 / 490 (33 %) |
 | Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 885 (dir) / 699 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), G2 20 / 59, spot G1 20, spot G5 0.24 / 3.75, directional G6 18; spot `thin_walls` G1 142, `cube_seams` G2 2, `spot_cones` G1 1 |
 | every config, point (D6) | `contact_blocks` G2 337, G3 4.75, G5 0.15 / 3.25 (High and 2048: G2 2538, G3 9.5, G5 0.40 / 6.5; Low and 512: G2 3, G3 2.5, G5 2.75); `thin_walls` G2 1 (High and 2048: G2 2, G4 2 cm: 21002, 5 cm: 5519, 1 cm: 32581); `cube_seams` G2 4 (High and 2048: 10); Low and 512 `grazing_fan` G1 44 |
+
+`py -3 scripts/shadow_verify.py --matrix pairwise` on the current code: 17
+configs, 11680 renders, 67.1 min wall; no failing cells outside D5 / D6 / D7
+(99 failing cells: 44 D7, 36 D6, 19 D5), directional G6 passes in every
+depth-technique cell.
 
 Point lights fail only through the constant world-space bias (D6): the
 contact gap and the leak through 2 and 5 cm walls. The distance technique

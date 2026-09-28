@@ -347,7 +347,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.conventions,
         caster_world_aabbs,
         receiver_world_aabbs,
-        parameters.fit_settings
+        parameters.fit_settings,
+        parameters.shadow_map_footprint
     );
 
     // Make the distance map (if any) reachable to the forward pass'
@@ -450,12 +451,20 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
 
-        if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
+        // Empty border: the outermost border_texels texel rings keep the clear
+        // value, so any lookup outside the map resolves lit through
+        // clamp_to_edge (doc/erhe/shadows.md "Empty border and receiver
+        // coverage").
+        const int border_texels = parameters.shadow_map_footprint.get_border_texels();
+        if (
+            (parameters.light_camera_viewport.width  > (2 * border_texels)) &&
+            (parameters.light_camera_viewport.height > (2 * border_texels))
+        ) {
             encoder.set_scissor_rect(
-                parameters.light_camera_viewport.x + 1,
-                parameters.light_camera_viewport.y + 1,
-                parameters.light_camera_viewport.width - 2,
-                parameters.light_camera_viewport.height - 2
+                parameters.light_camera_viewport.x + border_texels,
+                parameters.light_camera_viewport.y + border_texels,
+                parameters.light_camera_viewport.width  - (2 * border_texels),
+                parameters.light_camera_viewport.height - (2 * border_texels)
             );
         }
 

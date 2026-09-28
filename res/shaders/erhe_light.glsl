@@ -157,9 +157,11 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
     //    compares lit (nothing in the map is nearer than the near plane).
     // The explicit clamp is required because hardware only clamps the
     // comparison reference for unorm depth formats, not float ones.
-    // Out-of-range XY is covered by the one texel empty border the shadow
-    // pass scissor keeps around the map (clamp_to_edge then compares
-    // against the far clear value, which always resolves to lit).
+    // Out-of-range XY is covered by the empty border the shadow pass
+    // scissor keeps around the map, as wide as the filter's tap reach
+    // (clamp_to_edge then compares against the far clear value, which
+    // always resolves to lit); see doc/erhe/shadows.md "Empty border and
+    // receiver coverage".
 
     // What follows is based on https://renderdiagrams.org/2024/12/18/shadowmap-bias/
     // Notes:

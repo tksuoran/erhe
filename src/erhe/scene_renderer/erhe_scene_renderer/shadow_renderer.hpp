@@ -126,6 +126,12 @@ public:
         // nullptr gives the legacy stable fit. Must outlive the render call.
         const erhe::scene::Shadow_frustum_fit_settings*                    fit_settings{nullptr};
 
+        // Receiver filter footprint of the 2D shadow maps (from the filter
+        // the passes sampling them use): sets the empty scissor border width
+        // and the coverage margin of the directional fit and spot projection
+        // (doc/erhe/shadows.md "Empty border and receiver coverage").
+        erhe::scene::Shadow_map_footprint                                  shadow_map_footprint{};
+
         // Rasterizer (hardware) depth bias applied while rendering the shadow
         // map -- a caster-side acne / peter-panning control, orthogonal to the
         // receiver-side bias in the forward shader. Both default to 0 (no
