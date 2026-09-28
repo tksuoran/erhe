@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace erhe::dataformat { class Vertex_format; }
+namespace erhe::dataformat { class Vertex_format; enum class Format : unsigned int; }
 namespace erhe::primitive  { class Material; }
 namespace erhe::scene {
     class Light;
@@ -325,5 +325,16 @@ public:
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
     const Light_count_limits&                            light_count_limits
 ) -> Light_layer_partition;
+
+// ERHE_SHADOW_DEPTH_BITS variant axis value of a shadow map depth format:
+// the depth bit count of a fixed-point (UNORM) format (16 or 24), 32 for a
+// floating-point format (D32_SFLOAT, D32_SFLOAT_S8_UINT) and 0 for a format
+// with no depth (no shadow map). The bit count alone identifies the encoding:
+// every float depth format has 32 bits and there is no 32-bit UNORM depth
+// format, so a value can never name a UNORM map as float or the reverse.
+// erhe_light.glsl snaps the hard-path reference depth to the UNORM grid for
+// 16 and 24 and does not snap for 32 and 0. Callers pass the format of the
+// shadow map texture actually created, never a requested bit count.
+[[nodiscard]] auto get_shadow_depth_bits_axis(erhe::dataformat::Format depth_format) -> uint32_t;
 
 } // namespace erhe::scene_renderer

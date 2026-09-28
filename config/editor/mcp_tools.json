@@ -8851,7 +8851,7 @@
     "name": "set_graphics_settings"
   },
   {
-    "description": "Set shadow fields of the graphics preset in effect, plus the draw-list gate, for the rest of this editor run. Session-only: the preset is applied the way a Settings window preset edit applies it (limits clamp, shadow map reconfigure on the next frame when resolution / depth bits / technique / point shadow resolution change), but graphics_presets.json and editor_settings.json are not modified, and the next Settings window preset edit or selection re-applies the stored preset. Omitted arguments leave their fields unchanged; an unknown enum name or out-of-range value is an error and applies nothing. Returns the values in effect after the call (so {} queries them).",
+    "description": "Set shadow fields of the graphics preset in effect, plus the draw-list gate, for the rest of this editor run. Session-only: the preset is applied the way a Settings window preset edit applies it (limits clamp, shadow map reconfigure on the next frame when resolution / depth bits / technique / point shadow resolution change), but graphics_presets.json and editor_settings.json are not modified, and the next Settings window preset edit or selection re-applies the stored preset. Omitted arguments leave their fields unchanged; an unknown enum name or out-of-range value is an error and applies nothing. Returns the values in effect after the call (so {} queries them), plus shadow_map_format (the depth format the requested shadow_depth_bits resolves to) and shadow_depth_bits_axis (its ERHE_SHADOW_DEPTH_BITS shader variant value: 16 / 24 UNORM, 32 float).",
     "inputSchema": {
       "properties": {
         "shadow_filter": {
@@ -8871,7 +8871,7 @@
           "type": "string"
         },
         "shadow_depth_bits": {
-          "description": "Shadow map depth bits; must be a depth size the device supports (e.g. 16, 24, 32)",
+          "description": "Requested shadow map depth bits, as in graphics_presets.json (e.g. 16, 24, 32); resolved to the nearest supported depth format, preferring more bits (24 -> D32_SFLOAT on a device without a 24-bit format)",
           "type": "integer"
         },
         "shadow_resolution": {

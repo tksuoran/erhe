@@ -451,8 +451,10 @@ Returns: `{dynamic_physics_enabled: true/false}`
 Set shadow fields of the graphics preset in effect, and the draw-list gate,
 for the rest of the editor run: `shadow_filter`, `shadow_bias`,
 `shadow_technique`, `shadow_cull_mode` (enum value names, e.g. `hard`,
-`receiver_plane`, `distance`, `cull_back`), `shadow_depth_bits` (a depth size
-the device supports), `shadow_resolution`, `point_shadow_resolution`,
+`receiver_plane`, `distance`, `cull_back`), `shadow_depth_bits` (a requested
+bit count, as in `graphics_presets.json`: any positive value, resolved by
+`choose_shadow_depth_format()` to the nearest supported depth format,
+preferring more bits), `shadow_resolution`, `point_shadow_resolution`,
 `shadow_depth_bias_constant`, `shadow_depth_bias_slope`, `use_draw_lists`.
 Omitted arguments keep their values, so `{}` queries. The edited preset goes
 through `Graphics_settings::apply_preset()`, the same apply as a Settings
@@ -467,8 +469,11 @@ value is an error and applies nothing.
 py -3 scripts/mcp_call.py set_graphics_preset b64:<base64 of {"shadow_filter":"hard","shadow_depth_bias_constant":-4,"shadow_resolution":1024}>
 ```
 
-Returns: every field above with the value in effect, plus `preset_name` and
-`shadow_enable`.
+Returns: every field above with the value in effect, plus `preset_name`,
+`shadow_enable`, `shadow_map_format` (the depth format the requested
+`shadow_depth_bits` resolves to, e.g. `format_d32_sfloat` for 24 on a device
+without a 24-bit format) and `shadow_depth_bits_axis` (that format's
+`ERHE_SHADOW_DEPTH_BITS` variant value: 16 / 24 UNORM, 32 float).
 
 ### instantiate_prefab / reload_prefab / get_prefabs / set_prefab_template_property
 

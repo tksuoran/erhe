@@ -105,9 +105,11 @@ set_graphics_preset (plus use_draw_lists true, the committed default), so the
 editor's active preset does not matter. --matrix core adds one-axis-at-a-time
 variations around the --around preset (default Medium; "all" = around each
 preset): shadow_filter, shadow_bias (slope_scaled, wide filters only),
-shadow_technique, shadow_depth_bits (16, 24, 32; values the device does not
-support are reported as skipped and a preset value it does not support runs
-at the next larger supported size, as the editor does), shadow_cull_mode,
+shadow_technique, shadow_depth_bits (16, 24, 32, passed as requested bits
+the way graphics_presets.json holds them; the editor resolves each to its
+nearest supported depth format, and the format and ERHE_SHADOW_DEPTH_BITS
+value set_graphics_preset reports are printed per config and recorded in the
+JSON as "shadow_map_format" / "shadow_depth_bits_axis"), shadow_cull_mode,
 forward-Z (a second editor launched with ERHE_FORCE_DISABLE_REVERSE_DEPTH=1;
 skipped with --reuse), use_draw_lists, shadow_resolution and
 point_shadow_resolution (both 512, both 2048). --matrix full is the product of
@@ -298,27 +300,13 @@ def load_presets():
     return {p["name"]: p for p in data["presets"]}
 
 
-def effective_depth_bits(bits, supported):
-    """The size the editor uses for a preset depth size: the value itself when
-    supported, else the next larger supported size (else the largest)."""
-    if bits in supported:
-        return bits
-    larger = sorted(b for b in supported if b > bits)
-    return larger[0] if larger else max(supported)
-
-
-def base_config(name, preset, supported_bits):
+def base_config(name, preset):
     fields = {k: preset[k] for k in PRESET_FIELDS}
-    note = ""
-    bits = effective_depth_bits(int(fields["shadow_depth_bits"]), supported_bits)
-    if bits != fields["shadow_depth_bits"]:
-        note = f"preset depth {fields['shadow_depth_bits']} unsupported -> {bits}"
-        fields["shadow_depth_bits"] = bits
     fields["use_draw_lists"] = True
-    return {"name": name, "fields": fields, "forward_z": False, "note": note}
+    return {"name": name, "fields": fields, "forward_z": False, "note": ""}
 
 
-def core_variations(base, supported_bits, skipped):
+def core_variations(base):
     f = base["fields"]
     out = []
 
@@ -339,9 +327,6 @@ def core_variations(base, supported_bits, skipped):
     for value in (16, 24, 32):
         if value == f["shadow_depth_bits"]:
             continue
-        if value not in supported_bits:
-            skipped.append(f"{base['name']}/shadow_depth_bits={value}: unsupported by the device")
-            continue
         add(f"shadow_depth_bits={value}", shadow_depth_bits=value)
     for value in ("cull_front", "cull_back", "cull_none"):
         if value != f["shadow_cull_mode"]:
@@ -354,12 +339,9 @@ def core_variations(base, supported_bits, skipped):
     return out
 
 
-def full_matrix(base, supported_bits, skipped):
+def full_matrix(base):
     out = []
-    for bits in (16, 24, 32):
-        if bits not in supported_bits:
-            skipped.append(f"full/shadow_depth_bits={bits}: unsupported by the device")
-    bits_values = [b for b in (16, 24, 32) if b in supported_bits]
+    bits_values = (16, 24, 32)
     for filt, tech, bits, cull, fz, dl, res in itertools.product(
             FILTERS, ("depth", "distance"), bits_values, ("cull_front", "cull_back", "cull_none"),
             (False, True), (True, False), (512, 2048)):
@@ -374,19 +356,19 @@ def full_matrix(base, supported_bits, skipped):
     return out
 
 
-def build_matrix(args, supported_bits, skipped):
+def build_matrix(args):
     presets = load_presets()
-    bases = [base_config(name, p, supported_bits) for name, p in presets.items()]
+    bases = [base_config(name, p) for name, p in presets.items()]
     configs = list(bases)
     if args.matrix == "core":
         around = [b for b in bases if (args.around == "all") or (b["name"] == args.around)]
         if not around:
             raise SystemExit(f"--around {args.around!r}: no such preset ({', '.join(presets)})")
         for base in around:
-            configs += core_variations(base, supported_bits, skipped)
+            configs += core_variations(base)
     else:
         medium = next((b for b in bases if b["name"] == args.around), bases[0])
-        configs += full_matrix(medium, supported_bits, skipped)
+        configs += full_matrix(medium)
     # Dedupe identical configs (a variation can equal another preset).
     seen = {}
     unique = []
@@ -1000,16 +982,6 @@ class Session:
         self.station = None
         self.config_name = None
 
-    def supported_depth_bits(self):
-        try:
-            self.c.call("set_graphics_preset", {"shadow_depth_bits": 1})
-        except RuntimeError as error:
-            match = re.search(r"supported: ([0-9, ]+)", str(error))
-            if match:
-                return sorted(int(v) for v in match.group(1).split(",") if v.strip())
-            raise
-        raise RuntimeError("set_graphics_preset accepted shadow_depth_bits 1")
-
     def environment(self):
         self.c.call("set_graphics_settings", {"headlight_when_unlit": False, "sky_enabled": False,
                                               "grid_visible": False})
@@ -1028,6 +1000,18 @@ class Session:
             if key in result and result[key] != value:
                 raise RuntimeError(f"set_graphics_preset: {key} = {result[key]}, requested {value}")
         self.config_name = config["name"]
+        # The shadow map format the requested depth bits resolve to, and its
+        # ERHE_SHADOW_DEPTH_BITS variant value (recorded per config).
+        shadow_map = {"shadow_depth_bits": args["shadow_depth_bits"],
+                      "shadow_map_format": result.get("shadow_map_format"),
+                      "shadow_depth_bits_axis": result.get("shadow_depth_bits_axis")}
+        if config.get("shadow_map", shadow_map) != shadow_map:
+            raise RuntimeError(f"{config['name']}: shadow map {shadow_map} differs from {config['shadow_map']}")
+        if "shadow_map" not in config:
+            config["shadow_map"] = shadow_map
+            print(f"config {config['name']}: shadow_depth_bits {args['shadow_depth_bits']} -> "
+                  f"{shadow_map['shadow_map_format']} (ERHE_SHADOW_DEPTH_BITS {shadow_map['shadow_depth_bits_axis']})",
+                  flush=True)
         self.c.settle()
         return result
 
@@ -1483,9 +1467,8 @@ def main():
                     if process is not None and info.get("pid") != process.pid:
                         raise RuntimeError(f"port {port} is served by pid {info.get('pid')}, not {process.pid}")
                     session = Session(c, run_dir, forward_z)
-                    supported = session.supported_depth_bits()
                     if all_configs is None:
-                        all_configs = build_matrix(args, supported, skipped)
+                        all_configs = build_matrix(args)
                         names = [cfg["name"] for cfg in all_configs]
                         selected = set(select(names, args.config, "config"))
                         all_configs = [cfg for cfg in all_configs if cfg["name"] in selected]
@@ -1493,9 +1476,10 @@ def main():
                             for cfg in all_configs:
                                 if cfg["forward_z"]:
                                     skipped.append(f"{cfg['name']}: forward-Z needs a launched editor (--reuse)")
-                        print(f"device depth bits {supported}; {len(all_configs)} configs:", flush=True)
+                        print(f"{len(all_configs)} configs:", flush=True)
                         for cfg in all_configs:
-                            print(f"  {cfg['name']}" + (f"  ({cfg['note']})" if cfg["note"] else ""))
+                            print(f"  {cfg['name']}  (shadow_depth_bits {cfg['fields']['shadow_depth_bits']})"
+                                  + (f"  ({cfg['note']})" if cfg["note"] else ""))
                         for line in skipped:
                             print(f"  skipped: {line}")
                         if args.list_configs:
@@ -1518,6 +1502,11 @@ def main():
             backup.restore()
     wall = time.time() - wall_started
 
+    print()
+    for cfg in configs_used:
+        shadow_map = cfg.get("shadow_map", {})
+        print(f"{cfg['name']}: shadow_depth_bits {shadow_map.get('shadow_depth_bits')} -> "
+              f"{shadow_map.get('shadow_map_format')} (ERHE_SHADOW_DEPTH_BITS {shadow_map.get('shadow_depth_bits_axis')})")
     print()
     failures = print_table(cells, order)
     for key, (vis, classes, context) in pending_images.items():

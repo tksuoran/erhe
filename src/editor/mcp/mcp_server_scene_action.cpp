@@ -38,6 +38,7 @@
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_tile_io.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "windows/viewport_config_window.hpp"
@@ -84,6 +85,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include <simdjson.h>
 
@@ -238,23 +240,13 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
     if (!args_ok) {
         return make_error_content(error);
     }
+    // shadow_depth_bits is a request, as in graphics_presets.json: any
+    // positive value is accepted and choose_shadow_depth_format() resolves it
+    // to the shadow map format Shadow_render_node::reconfigure() creates. The
+    // reply reports that format and its ERHE_SHADOW_DEPTH_BITS axis value.
     if (args.contains("shadow_depth_bits") && (m_context.graphics_device != nullptr)) {
-        // Same choice set as the Settings window "Shadow Depth Bits" combo.
-        std::set<int> depth_sizes;
-        for (const erhe::dataformat::Format format : m_context.graphics_device->get_supported_depth_stencil_formats()) {
-            depth_sizes.insert(static_cast<int>(erhe::dataformat::get_depth_size_bits(format)));
-        }
-        if (!depth_sizes.contains(preset.shadow_depth_bits)) {
-            std::string supported;
-            for (const int bits : depth_sizes) {
-                if (!supported.empty()) {
-                    supported += ", ";
-                }
-                supported += std::to_string(bits);
-            }
-            return make_error_content(
-                fmt::format("shadow_depth_bits {} is not supported by the device; supported: {}", preset.shadow_depth_bits, supported)
-            );
+        if (choose_shadow_depth_format(*m_context.graphics_device, preset.shadow_depth_bits) == erhe::dataformat::Format::format_undefined) {
+            return make_error_content(fmt::format("shadow_depth_bits {}: the device has no depth format", preset.shadow_depth_bits));
         }
     }
     std::optional<bool> use_draw_lists;
@@ -275,6 +267,9 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
     }
 
     const Graphics_preset_entry& in_effect = graphics.current_graphics_preset;
+    const erhe::dataformat::Format shadow_map_format = (m_context.graphics_device != nullptr)
+        ? choose_shadow_depth_format(*m_context.graphics_device, in_effect.shadow_depth_bits)
+        : erhe::dataformat::Format::format_undefined;
     return make_json_content({
         {"preset_name",                in_effect.name},
         {"shadow_enable",              in_effect.shadow_enable},
@@ -283,6 +278,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"shadow_technique",           std::string{to_string(in_effect.shadow_technique)}},
         {"shadow_cull_mode",           std::string{to_string(in_effect.shadow_cull_mode)}},
         {"shadow_depth_bits",          in_effect.shadow_depth_bits},
+        {"shadow_map_format",          std::string{erhe::dataformat::c_str(shadow_map_format)}},
+        {"shadow_depth_bits_axis",     erhe::scene_renderer::get_shadow_depth_bits_axis(shadow_map_format)},
         {"shadow_resolution",          in_effect.shadow_resolution},
         {"shadow_depth_bias_constant", in_effect.shadow_depth_bias_constant},
         {"shadow_depth_bias_slope",    in_effect.shadow_depth_bias_slope},

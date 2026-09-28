@@ -8,6 +8,7 @@
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
@@ -38,6 +39,42 @@ namespace editor {
 
 using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
+
+auto choose_shadow_depth_format(erhe::graphics::Device& graphics_device, const int requested_depth_bits) -> erhe::dataformat::Format
+{
+    std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
+    std::stable_sort(
+        formats.begin(),
+        formats.end(),
+        [&](const erhe::dataformat::Format& lhs, const erhe::dataformat::Format& rhs)
+        {
+            const size_t lhs_format_size_bytes = erhe::dataformat::get_format_size_bytes(lhs);
+            const size_t rhs_format_size_bytes = erhe::dataformat::get_format_size_bytes(rhs);
+            const int    lhs_depth_size_bits   = static_cast<int>(erhe::dataformat::get_depth_size_bits(lhs));
+            const int    rhs_depth_size_bits   = static_cast<int>(erhe::dataformat::get_depth_size_bits(rhs));
+            const int    lhs_depth_diff        = lhs_depth_size_bits - requested_depth_bits;
+            const int    rhs_depth_diff        = rhs_depth_size_bits - requested_depth_bits;
+            const int    lhs_abs_diff          = std::abs(lhs_depth_diff);
+            const int    rhs_abs_diff          = std::abs(rhs_depth_diff);
+            bool result;
+            if (lhs_depth_size_bits == rhs_depth_size_bits) {
+                return lhs_format_size_bytes < rhs_format_size_bytes;
+            } else if ((lhs_depth_diff > 0) && (rhs_depth_diff < 0)) {
+                result = true;
+            } else if ((rhs_depth_diff > 0) && (lhs_depth_diff < 0)) {
+                result = false;
+            } else if (lhs_depth_size_bits == 0) {
+                result = false;
+            } else if (rhs_depth_size_bits == 0) {
+                result = true;
+            } else {
+                result = (lhs_abs_diff < rhs_abs_diff);
+            }
+            return result;
+        }
+    );
+    return graphics_device.choose_depth_stencil_format(formats);
+}
 
 Shadow_render_node::Shadow_render_node(
     erhe::graphics::Device&         graphics_device,
@@ -72,38 +109,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
 {
     // Reverse-Z is the static device value; query it rather than caching.
     const bool reverse_depth = graphics_device.get_reverse_depth();
-    std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
-    std::stable_sort(
-        formats.begin(),
-        formats.end(),
-        [&](const erhe::dataformat::Format& lhs, const erhe::dataformat::Format& rhs)
-        {
-            const size_t lhs_format_size_bytes = erhe::dataformat::get_format_size_bytes(lhs);
-            const size_t rhs_format_size_bytes = erhe::dataformat::get_format_size_bytes(rhs);
-            const int    lhs_depth_size_bits   = static_cast<int>(erhe::dataformat::get_depth_size_bits(lhs));
-            const int    rhs_depth_size_bits   = static_cast<int>(erhe::dataformat::get_depth_size_bits(rhs));
-            const int    lhs_depth_diff        = lhs_depth_size_bits - requested_depth_bits;
-            const int    rhs_depth_diff        = rhs_depth_size_bits - requested_depth_bits;
-            const int    lhs_abs_diff          = std::abs(lhs_depth_diff);
-            const int    rhs_abs_diff          = std::abs(rhs_depth_diff);
-            bool result;
-            if (lhs_depth_size_bits == rhs_depth_size_bits) {
-                return lhs_format_size_bytes < rhs_format_size_bytes;
-            } else if ((lhs_depth_diff > 0) && (rhs_depth_diff < 0)) {
-                result = true;
-            } else if ((rhs_depth_diff > 0) && (lhs_depth_diff < 0)) {
-                result = false;
-            } else if (lhs_depth_size_bits == 0) {
-                result = false;
-            } else if (rhs_depth_size_bits == 0) {
-                result = true;
-            } else {
-                result = (lhs_abs_diff < rhs_abs_diff);
-            }
-            return result;
-        }
-    );
-    const erhe::dataformat::Format depth_format = graphics_device.choose_depth_stencil_format(formats);
+    const erhe::dataformat::Format depth_format = choose_shadow_depth_format(graphics_device, requested_depth_bits);
     if (depth_format == erhe::dataformat::Format::format_undefined) {
         log_render->error(
             "Reconfigure shadow resolution = {}, light count = {}, no depth format found, skip",
@@ -130,16 +136,20 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         );
         return;
     }
-    log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
+    log_render->info(
+        "Reconfigure shadow resolution = {}, light count = {}, requested depth bits = {} -> format = {}, ERHE_SHADOW_DEPTH_BITS = {}",
+        resolution, light_count, requested_depth_bits, erhe::dataformat::c_str(depth_format),
+        erhe::scene_renderer::get_shadow_depth_bits_axis(depth_format)
+    );
 
     // Cache the resolved configuration so execute_rendergraph_node can re-call
     // reconfigure() with the same dimensions when only the technique changes.
-    m_resolution         = resolution;
-    m_light_count        = light_count;
-    m_depth_bits         = requested_depth_bits;
-    m_distance_technique = distance_technique;
-    m_point_resolution   = point_resolution;
-    m_point_light_count  = point_light_count;
+    m_resolution           = resolution;
+    m_light_count          = light_count;
+    m_requested_depth_bits = requested_depth_bits;
+    m_distance_technique   = distance_technique;
+    m_point_resolution     = point_resolution;
+    m_point_light_count    = point_light_count;
 
     //// TODO device.wait_for_idle()
 
@@ -518,7 +528,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         const bool want_distance =
             (m_context.app_settings->graphics.current_graphics_preset.shadow_technique == Shadow_technique_mode::distance);
         if (want_distance != m_distance_technique) {
-            reconfigure(*m_context.graphics_device, command_buffer, m_resolution, m_light_count, m_depth_bits, want_distance, m_point_resolution, m_point_light_count);
+            reconfigure(*m_context.graphics_device, command_buffer, m_resolution, m_light_count, m_requested_depth_bits, want_distance, m_point_resolution, m_point_light_count);
             if (!m_texture) {
                 return;
             }

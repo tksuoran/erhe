@@ -16,6 +16,7 @@
 #include "time.hpp"
 
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_imgui/windows/pipelines.hpp"
 #include "erhe_item/item.hpp"
@@ -28,6 +29,7 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/draw_list_renderer.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include <imgui/imgui.h>
 
@@ -288,6 +290,14 @@ void Composition_pass::render(const Render_context& context)
             const std::shared_ptr<erhe::scene::Node> debug_target_joint =
                 context.app_context.app_rendering->debug_target_joint.lock();
 
+            // ERHE_SHADOW_DEPTH_BITS follows the format of the shadow map this
+            // view's shadow node actually created (the preset's requested bit
+            // count may resolve to another format, e.g. 24 -> D32_SFLOAT).
+            const erhe::graphics::Texture* const shadow_texture = context.scene_view.get_shadow_texture();
+            const uint32_t shadow_depth_bits = (shadow_texture != nullptr)
+                ? erhe::scene_renderer::get_shadow_depth_bits_axis(shadow_texture->get_pixelformat())
+                : 0u;
+
             // Draw-list path (doc/erhe/draw_list_renderer.md section 9.4):
             // route to the scene's persistent draw lists when the
             // gate is on and this pass is fully expressible with them -
@@ -348,7 +358,7 @@ void Composition_pass::render(const Render_context& context)
                         .shadow_filter         = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_filter),
                         .shadow_bias           = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_bias),
                         .shadow_technique      = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_technique),
-                        .shadow_depth_bits     = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
+                        .shadow_depth_bits     = shadow_depth_bits,
                         .debug_joint_indices   = context.app_context.app_rendering->debug_joint_indices,
                         .debug_joint_colors    = context.app_context.app_rendering->debug_joint_colors,
                         .debug_target_joint    = debug_target_joint.get(),
@@ -399,7 +409,7 @@ void Composition_pass::render(const Render_context& context)
                     .shadow_filter          = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_filter),
                     .shadow_bias            = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_bias),
                     .shadow_technique       = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_technique),
-                    .shadow_depth_bits      = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
+                    .shadow_depth_bits      = shadow_depth_bits,
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                     .debug_target_joint     = debug_target_joint.get(),

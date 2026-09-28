@@ -85,13 +85,10 @@ plane are outside it.
 
 Correctness defects that precede any bias work:
 
-- **D0 Depth format of the shader variant.** The `SHADOW_DEPTH_BITS` variant
-  axis is derived from the shadow texture's actual format (depth bits plus
-  whether it is floating point), taken from the texture the shadow node
-  created, not from the preset's requested bits. Today
-  `Shadow_render_node::reconfigure()` stores the requested bits and the
-  composition and prewarm paths pass the preset value, so Medium (requests 24,
-  device gives D32_SFLOAT) compiles the UNORM 24-bit snap for a float map.
+- **D0 Depth format of the shader variant.** Landed: the `SHADOW_DEPTH_BITS`
+  axis is `get_shadow_depth_bits_axis()` of the shadow map texture actually
+  created (16 / 24 UNORM, 32 float), so a requested 24 that resolves to
+  D32_SFLOAT compiles the float path (shadows.md "Shadow sampling").
 - **D8 Forward-Z comparison.** With `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1`,
   directional and spot shadows read 0 or 0.25 on lit surfaces (section 9).
   The forward-Z path of the comparison sampler, the clear value, the bias
@@ -304,8 +301,8 @@ section 9 rewritten to the new gate table.
 
 Baseline on the current code: `py -3 scripts/shadow_verify.py --matrix core
 --save-images failing` (15 configs: Low, Medium, High and the one-axis
-variations around Medium; `shadow_depth_bits` 24 is skipped, the device
-supports 16 and 32 only, and Medium runs at 32; `--poses short`, `--runs 1`;
+variations around Medium; a requested
+`shadow_depth_bits` of 24 resolves to D32_SFLOAT on this device (axis 32); `--poses short`, `--runs 1`;
 5464 renders, 34.9 min wall on the Debug headless Vulkan editor, AMD iGPU).
 Cells not listed pass every gate that applies to them. Values are the worst
 over poses and views: failing pixel count and share of the gated pixels

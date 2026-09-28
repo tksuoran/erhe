@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `get_shadow_depth_bits_axis(erhe::dataformat::Format)`
+  (`erhe_scene_renderer/shader_key.hpp`): the `ERHE_SHADOW_DEPTH_BITS` variant
+  axis value of a shadow map depth format (16 / 24 UNORM, 32 float, 0 none).
+  `Forward_renderer::Render_parameters::shadow_depth_bits`,
+  `Prewarm_parameters::shadow_depth_bits` and
+  `Draw_list_renderer::Render_parameters::shadow_depth_bits` take this value
+  for the shadow map actually sampled, not a requested bit count.
 - `erhe::scene_renderer`: `Shader_debug::world_position` (36): the fragment
   world position as the color. `Base_render_parameters::shadow_debug_light_index`,
   the `Light_buffer::update()` parameter of the same name and

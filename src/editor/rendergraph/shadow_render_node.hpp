@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe::dataformat     { enum class Format : unsigned int; }
 namespace erhe::graphics       { class Command_buffer; class Device; class Gpu_timer; }
 namespace erhe::scene          { class Camera; class Light; }
 namespace erhe::scene_renderer { class Light_projections; }
@@ -20,6 +21,13 @@ namespace editor {
 class App_context;
 class Scene_view;
 class Viewport_scene_view;
+
+// The 2D shadow map depth format for a requested depth bit count: the
+// supported depth format nearest to the request, preferring more bits over
+// fewer. Shadow_render_node::reconfigure() creates its shadow map texture in
+// this format; the init-time prewarm uses it to predict the
+// ERHE_SHADOW_DEPTH_BITS variant before any shadow node exists.
+[[nodiscard]] auto choose_shadow_depth_format(erhe::graphics::Device& graphics_device, int requested_depth_bits) -> erhe::dataformat::Format;
 
 // Helper rendergraph node calling Shadow_renderer
 
@@ -85,12 +93,15 @@ private:
     // null otherwise (a full-resolution R32F array is large). m_distance_technique
     // tracks the last-configured technique so execute_rendergraph_node can
     // reconfigure lazily when the preset flips; the cached resolution / light
-    // count / depth bits let it re-call reconfigure with the same dimensions.
+    // count / requested depth bits let it re-call reconfigure with the same
+    // dimensions. The requested bits are only the input to
+    // choose_shadow_depth_format(); the shader variant follows the format of
+    // m_texture (erhe::scene_renderer::get_shadow_depth_bits_axis()).
     std::shared_ptr<erhe::graphics::Texture>                  m_distance_texture;
     bool                                                      m_distance_technique{false};
     int                                                       m_resolution {0};
     int                                                       m_light_count{0};
-    int                                                       m_depth_bits {0};
+    int                                                       m_requested_depth_bits{0};
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
 
     // Omnidirectional point-light shadows: an R32F texture_cube_map_array (one

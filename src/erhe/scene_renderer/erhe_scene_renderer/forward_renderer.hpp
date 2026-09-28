@@ -125,11 +125,10 @@ public:
         // Shadow technique, plumbed as the ERHE_SHADOW_TECHNIQUE variant axis
         // (0 = depth + receiver-plane bias, 1 = distance map + baked fwidth bias).
         uint32_t                                               shadow_technique{0};
-        // Shadow map depth bit count (graphics preset), plumbed as the
-        // ERHE_SHADOW_DEPTH_BITS variant axis. The depth receiver snaps its
-        // hard-path reference to this UNORM format's quantization grid; 32
-        // (D32_SFLOAT -- there is no 32-bit UNORM depth) and 0 mean "float / no
-        // snap".
+        // ERHE_SHADOW_DEPTH_BITS variant axis: get_shadow_depth_bits_axis() of
+        // the format of the shadow map texture sampled by this pass (16 / 24
+        // = UNORM, the hard path snaps its reference to that grid; 32 = float
+        // and 0 = no shadow map, no snap).
         uint32_t                                               shadow_depth_bits{0};
         // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
         // mode ("missing data" magenta), anything else = one is active and
@@ -215,8 +214,8 @@ public:
         // Shadow technique to prewarm (ERHE_SHADOW_TECHNIQUE axis). Same
         // single-valued, warm-the-active-mode policy as shadow_filter.
         uint32_t                                                    shadow_technique{0};
-        // Shadow map depth bit count to prewarm (ERHE_SHADOW_DEPTH_BITS axis).
-        // Same single-valued, warm-the-active-mode policy as shadow_filter.
+        // ERHE_SHADOW_DEPTH_BITS axis to prewarm: get_shadow_depth_bits_axis()
+        // of the shadow map format the runtime will sample.
         uint32_t                                                    shadow_depth_bits{0};
     };
 

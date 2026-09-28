@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
@@ -410,6 +411,26 @@ auto compute_light_layer_partition(
         }
     }
     return partition;
+}
+
+auto get_shadow_depth_bits_axis(const erhe::dataformat::Format depth_format) -> uint32_t
+{
+    switch (depth_format) {
+        case erhe::dataformat::Format::format_d32_sfloat:
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint: {
+            return 32u;
+        }
+        case erhe::dataformat::Format::format_d16_unorm:
+        case erhe::dataformat::Format::format_x8_d24_unorm_pack32:
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint: {
+            const uint32_t depth_bits = static_cast<uint32_t>(erhe::dataformat::get_depth_size_bits(depth_format));
+            ERHE_VERIFY((depth_bits > 0u) && (depth_bits < 32u));
+            return depth_bits;
+        }
+        default: {
+            return 0u;
+        }
+    }
 }
 
 } // namespace erhe::scene_renderer

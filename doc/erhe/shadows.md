@@ -275,7 +275,19 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   (UNORM) shadow map the reference depth is then rounded direction-aware to the
   format's depth precision (toward the near plane) before the hardware
   comparison; a floating-point (D32_SFLOAT) map skips the snap. The format is
-  carried by the `ERHE_SHADOW_DEPTH_BITS` compile-time variant axis.
+  carried by the `ERHE_SHADOW_DEPTH_BITS` compile-time variant axis, whose
+  value is `get_shadow_depth_bits_axis()` (`shader_key.hpp`) of the shadow map
+  texture's actual format: 16 or 24 for a UNORM map, 32 for a float map
+  (D32_SFLOAT, D32_SFLOAT_S8_UINT), 0 for no shadow map. The bit count alone
+  identifies the encoding, because every float depth format has 32 bits and
+  there is no 32-bit UNORM depth format. The preset's `shadow_depth_bits` is
+  only a request: `choose_shadow_depth_format()` (editor
+  `shadow_render_node.hpp`) resolves it to the nearest supported format,
+  preferring more bits (24 resolves to D32_SFLOAT on a device without a 24-bit
+  format), `Shadow_render_node::reconfigure()` creates the map in that format
+  and logs `requested depth bits -> format`, and the composition pass reads the
+  axis from the view's shadow map texture; the init-time prewarm predicts it
+  with the same `choose_shadow_depth_format()`.
 - The filter is a compile-time variant (`ERHE_SHADOW_FILTER`, set from the
   graphics preset's `Shadow_filter_mode`): `hard` does a single hardware
   comparison-sampler fetch against the snapped reference; `pcf_2x2` does one
@@ -377,7 +389,8 @@ erhe also goes beyond the article:
 - Filter, bias, technique, and shadow depth format are compile-time shader
   variants (`SHADOW_FILTER`, `SHADOW_BIAS`, `SHADOW_TECHNIQUE`,
   `SHADOW_DEPTH_BITS` in `shader_key.hpp`), selected from the graphics preset
-  rather than branched at runtime. The hard path's precision snap is derived
+  (`SHADOW_DEPTH_BITS` from the created shadow map's format) rather than
+  branched at runtime. The hard path's precision snap is derived
   from `SHADOW_DEPTH_BITS` -- the format's `2^bits - 1` levels for a UNORM map,
   skipped for D32_SFLOAT -- so it matches the actual shadow map format.
 - A complementary caster-side rasterizer depth bias (constant + slope) exists

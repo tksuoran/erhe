@@ -72,8 +72,13 @@ void prewarm_all(
     const uint32_t shadow_technique = (context.app_settings != nullptr)
         ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_technique)
         : 0u;
-    const uint32_t shadow_depth_bits = (context.app_settings != nullptr)
-        ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_depth_bits)
+    // ERHE_SHADOW_DEPTH_BITS follows the shadow map's actual format, which
+    // is the format Shadow_render_node::reconfigure() creates for the preset's
+    // requested bit count (choose_shadow_depth_format) - not the request.
+    const uint32_t shadow_depth_bits = ((context.app_settings != nullptr) && (context.graphics_device != nullptr))
+        ? erhe::scene_renderer::get_shadow_depth_bits_axis(
+            choose_shadow_depth_format(*context.graphics_device, context.app_settings->graphics.current_graphics_preset.shadow_depth_bits)
+        )
         : 0u;
     // Light count limits: the runtime partitions lights with the preset's per
     // light type limits (Shadow_render_node); use the same limits here so the
