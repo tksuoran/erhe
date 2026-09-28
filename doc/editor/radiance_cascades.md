@@ -407,8 +407,8 @@ count, not to the trace budget.
   by its own `Gpu_timer` (`RC visibility`), reported as the last
   measurement and a run count. Content added without a refit and without
   one of those messages (a new part inside the current volume) does not
-  mark the states stale; the change-driven update of plan phase 6 covers
-  it.
+  mark the states stale (doc/plans/radiance_cascades.md section 9,
+  "Remaining work").
 - **Order and bindings.** One dispatch per cascade, top cascade first,
   one thread per atlas texel (8 x 8 workgroups over the atlas; the unused
   tiles of a partly filled last row return at once). The raw atlas and the

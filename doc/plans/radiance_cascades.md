@@ -300,79 +300,42 @@ advance. Costs are measured, recorded and compared:
 
 ## 9. Phases
 
-Each phase is one commit (or a small series), builds the editor, `src/example`,
-`src/hello_swap`, `src/hextiles`, and keeps Vulkan validation clean.
+Phases 0 - 7 are built: the test scene and the DDGI baseline (phase 0),
+selection and skeleton, trace, merge, reduce and render, the
+`per_neighbour_trace` merge mode, temporal / multi-bounce / defaults
+(phase 6) and the probe overlay (phase 7). What they built is described in
+[../editor/radiance_cascades.md](../editor/radiance_cascades.md) and
+[../editor/ddgi.md](../editor/ddgi.md) "History reset", "Bounces"; section
+10 holds the measurements the gates are judged by. Each further step
+builds the editor, `src/example`, `src/hello_swap`, `src/hextiles`, keeps
+Vulkan validation clean, and re-runs `scripts/gi_verify.py` and
+`scripts/rc_texel_verify.py`.
 
-0. **Test scene and DDGI baseline.** `creation_24_gi_test_rooms.py` with all
-   stations; the compute GPU timer and DDGI pass timings;
-   `get_indirect_diffuse_stats`; `scripts/gi_verify.py` measuring the stations
-   for the current source. Run it against DDGI and record the baseline
-   (quality numbers and timings). The probe-placement defects
-   `probe_offset_sweep` showed in DDGI - probes embedded in a wall never
-   relocated out of it, probes on a face looked through it, and the backface
-   weight was judged from the biased point - are fixed in DDGI, because RC
-   shares the consumer (Chebyshev visibility, probe state); what DDGI still
-   gets wrong is discretization, described in
-   [../editor/ddgi.md](../editor/ddgi.md) "Accuracy".
-1. **Selection and skeleton** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md): the
-   `Indirect_diffuse_source` selection with the `Ddgi_config::enabled`
-   migration, `Radiance_cascades_config` (the fields phase 1 uses; the trace,
-   merge and debug fields of section 4 arrive with their phases), the cascade
-   fit and atlas allocation, the Radiance Cascades window, the MCP tools
-   `set_indirect_diffuse` / `set_radiance_cascades` and the
-   `radiance_cascades` stats object, and the `editor_renderer_tests` unit
-   tests of the layout math. `scripts/gi_verify.py --source
-   radiance_cascades` builds and reports the layout per station and measures
-   the flat ambient term until phase 4 binds a field.
-2. **Trace** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) "Trace":
-   `rc_trace.comp` with the texel budget, hysteresis and first-fill rule, the
-   cascade 0 signed distance texture, the raw atlas preview, the timed pass
-   and its cost in `get_indirect_diffuse_stats`, and the
-   `get_radiance_cascades_texels` readback.
-3. **Merge** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) "Merge":
-   `rc_merge.comp` with the `interpolate` and `visibility_masked` merge
-   modes (`rc_visibility.comp`, probe state textures), the merged atlas
-   preview,
-   `debug_cascade_mask` (a masked cascade keeps its beta and contributes no
-   radiance, bit 12 masks the sky), the timed pass, merged texels in
-   `get_radiance_cascades_texels`, and the merged checks of
-   `scripts/rc_texel_verify.py` for both modes.
-4. **Reduce and render** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md)
-   "Reduce": `rc_reduce.comp` (cosine / `pow(cos, depth_sharpness)`
-   footprint-integrated weights, DDGI's border copy and classification
-   rule), the probe field atlases of cascade 0's grid, published through
-   `set_ddgi` by the single `get_indirect_diffuse_field()` site, which the
-   `sample_indirect_diffuse` query samples too; the DDGI atlas tiling
-   generalized to wrapped tile rows (`tiles_per_row`, shared by both
-   producers and the forward pass); the reduce exact-algebra check of
-   `scripts/rc_texel_verify.py`; and the first full `gi_verify.py` run for
-   RC.
-5. **`per_neighbour_trace` merge mode** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md)
-   "Trace" and "Merge": the connecting segment pass
-   (`rc_trace.comp` neighbour variant, the 4 x 2 neighbour atlases, the
-   `RC neighbour trace` timer, `neighbour_rays_per_update`), the third
-   `rc_merge.comp` variant, the layout's atlas block, the per-neighbour
-   exact check of `scripts/rc_texel_verify.py`, and the merge-mode default
-   `per_neighbour_trace`, chosen from the three-mode `gi_verify.py`
-   comparison (section 10, "Radiance cascades (phase 5)"). Gates 2, 6, 9
-   and 12 still fail; the causes measured so far are listed there.
-6. **Temporal, multi-bounce, defaults** - built, described in
-   [../editor/radiance_cascades.md](../editor/radiance_cascades.md) and
-   [../editor/ddgi.md](../editor/ddgi.md) "History reset", "Bounces": the
-   measured accuracy causes and their fixes (the `per_neighbour_trace`
-   visibility segments, cascade 0 merged at child resolution for the
-   reduce, the distance statistics), `direction_jitter`, `bounces` for both
-   producers, the change-driven history reset for both producers, the
-   sparse reduce weights, `gi_verify.py --rc-set / --ddgi-set / --bounces`,
-   and the RC defaults chosen against the section 8 budget (section 10,
-   "Radiance cascades (phase 6)").
-7. **Debug.** Probe overlay for a chosen cascade (CPU-phase debug lines only,
-   see the DDGI traps).
+### Remaining work
+
+1. **Failing gates** at the defaults (section 10, "Phase 6 gates at the
+   defaults", with the measured causes under "Phase 6: accuracy causes"
+   and "What the numbers say"): the `probe_offset_sweep` leak at offset
+   0.25 (gate 2), the small near emitters (gate 5 and the accuracy gate
+   12's worst group), the corridor far field beyond the cascades (gate 6)
+   and the light move settle (gate 7).
+2. **Per-child connecting segments**: one visibility segment per 2x2 child
+   direction of the upper value (32 rays per texel instead of 8), which
+   ends every segment at its child's interval start and removes the
+   remaining `per_neighbour_trace` leak traced under "What the numbers
+   say".
+3. **Cascade 0 probe relocation**: move cascade 0 probes out of embedded
+   geometry and toward nearby surfaces as DDGI does, for the
+   probe-to-surface height and the thin-wall field leaks ("Phase 6:
+   accuracy causes").
+4. **Change-driven refit**: the layout's refit test recomputes the padded
+   content bounds on every tick
+   ([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+   "Layout"), and content added inside the current volume without a refit
+   leaves the `visibility_masked` probe states stale (same document,
+   "Merge", visibility pass); both follow the content-change messages
+   instead.
+5. The follow-ups of section 11.
 
 ## 10. Verification
 
@@ -810,7 +773,7 @@ outside the corridor (gate 6) and the light move settle (gate 7). The
 DDGI column matches the phase 0 baseline within its run-to-run noise,
 except the convergence the history reset shortened.
 
-## 11. Follow-ups (not in the phases)
+## 11. Follow-ups
 
 - **Screen-space probes with world-space intervals** (paper 4.5): probes on the
   depth buffer at `2^i` pixel spacing, bilateral spatial interpolation, same

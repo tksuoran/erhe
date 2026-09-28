@@ -248,7 +248,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/post_processing.md](editor/post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
 - [editor/properties_window.md](editor/properties_window.md) (stable): Properties window single registered-property row path
-- [editor/radiance_cascades.md](editor/radiance_cascades.md) (experimental): Radiance cascades: indirect diffuse source selection, cascade layout and atlases, window and MCP tools
+- [editor/radiance_cascades.md](editor/radiance_cascades.md) (experimental): Radiance cascades: indirect diffuse source selection, cascade layout and atlases, trace, merge, reduce, probe overlay, window and MCP tools
 - [editor/raytrace.md](editor/raytrace.md) (experimental): GPU ray-query raytracing
 - [editor/raytrace_materials.md](editor/raytrace_materials.md) (mostly stable): Material-aware ray-traced rendering: textures, glass, light sampling
 - [editor/reloadable_asset_loads.md](editor/reloadable_asset_loads.md) (mostly stable): Undone glTF imports drop their payload and re-read on redo
@@ -362,7 +362,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
-- [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades
+- [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (proposed): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (proposed): Rigging tools roadmap (IK, constraints, skinning, drivers)
