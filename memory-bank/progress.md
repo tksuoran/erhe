@@ -57,4 +57,7 @@
 ✓pairwise::502f9636b{17cfg-169-pairs-67min;only-unexpected=pcf_6x6@512-reads-1-texel-empty-border-at-dir-fit-edge}
 ✓border-reach::{Shadow_map_footprint;border=max(1,ceil(reach));margin=border+reach-0.5;dir-fit+spot-frustum-padded;pairwise-clean-outside-D5/D6/D7}
 ✓PHASE-4-DONE
-?next::phase-5-D5-cull-mode
+✓D5::171f5e9ba{cull_back-default;cull_front-inherent-contact-leaks(99.4%-tap-trace);cull_none==cull_back-2x-raster}
+✓G2-contact-gap::141da0582+slope-bias-doc::0b93e9115{slope-0-exposes-D1-gap:spot-cube_seams-hard-5761px/512-187px;slope--1-kept-for-now}
+⚡D1-gap::trace-coder-running{find-under-bounded-term;then-raster-bias-0-if-clean}
+?next::phase-6-D6-point
