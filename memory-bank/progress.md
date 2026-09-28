@@ -28,6 +28,9 @@
 ✓phase-6-A..D::e5ffc7c83{segment-bending-fixed;c0-merged-at-child-res;sparse-reduce}+42913c0e0{jitter-default-none(leaks+noise)}+72e1a0b3c{Temporal_history-reset-both-producers;Scene_lighting_changed_message}+5db8490d9{bounces-single|multi-both}
 !user-decision-2026-09-28::RC-defaults-s0-1.5-q0-8-is-2{cost~1.54xDDGI;budget-relaxed-to~1.5x;accuracy-first}
 ✓phase-6-E::c5192abc9{defaults-s0-1.5-q0-8-is-2-texels_per_frame-131072;budget~1.5xDDGI(user);worst-group-0.91-vs-DDGI-0.65;fails:offset-0.25-leak-0.0082+0.25m-panel+corridor-far-field+light-move-settle}+9b5de8ac5{Scene_lighting_changed_message=commit-only;live-drag-no-reset}
-⚡phase-7::RC-probe-overlay+ghost-mesh-reset-check+plan-wrap-up{coder-running}
+✓phase-7::6c0e6ca8c{RC-probe-overlay;readback-only-while-on}+85ac50e9c{plan-wrap-up;Remaining-work-list}
+✓ghost-meshes-no-per-frame-reset(measured)
+✓ALL-PHASES-0-7-BUILT-2026-09-28
+?remaining::doc/plans/radiance_cascades.md-"Remaining-work"{failing-gates;32-ray-per-child;c0-relocation;change-driven-refit;graph-bake-reset}
 ?follow-up::change-driven-refit-both-producers{doc/plans/ddgi.md}
 ?phase-0b..0d->phases-1..7

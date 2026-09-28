@@ -335,7 +335,11 @@ Vulkan validation clean, and re-runs `scripts/gi_verify.py` and
    leaves the `visibility_masked` probe states stale (same document,
    "Merge", visibility pass); both follow the content-change messages
    instead.
-5. The follow-ups of section 11.
+5. **History reset on geometry graph bakes**: a committed geometry graph
+   parameter edit re-bakes a bound mesh without a commit message, so neither
+   producer resets its temporal history; the bake commit queues
+   `Scene_lighting_changed_message` like the other commit sites.
+6. The follow-ups of section 11.
 
 ## 10. Verification
 
