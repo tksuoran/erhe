@@ -62,6 +62,10 @@ public:
     std::size_t  lightmap_flags;               // uint - bit 0: bicubic lightmap sampling
 
     std::size_t  brdf_phi_incident_phi;        // vec2
+    // Index into lights[] of the light Shader_debug::shadow_visibility shows
+    // (the bucketed UBO slot, Light_projection_transforms::index). Fills the
+    // std140 padding between the vec2 above and the vec4 below.
+    std::size_t  shadow_debug_light_index;     // uint
 
     std::size_t  ambient_light;                // vec4
 
@@ -278,7 +282,8 @@ public:
         const Light_projections* light_projections,
         const glm::vec3&         ambient_light,
         uint32_t                 lightmap_flags = 0u, // bit 0: bicubic lightmap sampling
-        const Ddgi_parameters*   ddgi            = nullptr
+        const Ddgi_parameters*   ddgi            = nullptr,
+        uint32_t                 shadow_debug_light_index = 0u // light slot Shader_debug::shadow_visibility shows
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Bind the DDGI probe atlases (or the 1x1 black fallbacks when null) to

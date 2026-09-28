@@ -59,6 +59,10 @@ public:
     float                                                              exposure         {1.0f};
     const glm::vec3                                                    ambient_light    {0.0f};
     const Light_projections*                                           light_projections{nullptr};
+    // Slot in light_projections (Light_projection_transforms::index) whose
+    // visibility Shader_debug::shadow_visibility shows. Set per render by the
+    // request that wants a specific light (render_scene_image); 0 otherwise.
+    uint32_t                                                           shadow_debug_light_index{0};
     const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
     // The material slot space this pass resolves through, already updated for
     // this frame (doc/erhe/draw_list_material_set.md D5). The pass binds it

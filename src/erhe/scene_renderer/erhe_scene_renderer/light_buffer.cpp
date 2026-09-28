@@ -41,6 +41,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .brdf_material             = light_block.add_uint ("brdf_material"            )->get_offset_in_parent(),
         .lightmap_flags            = light_block.add_uint ("lightmap_flags"           )->get_offset_in_parent(),
         .brdf_phi_incident_phi     = light_block.add_vec2 ("brdf_phi_incident_phi"    )->get_offset_in_parent(),
+        .shadow_debug_light_index  = light_block.add_uint ("shadow_debug_light_index" )->get_offset_in_parent(),
         .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
 
         .ddgi_grid_origin          = light_block.add_vec4 ("ddgi_grid_origin"         )->get_offset_in_parent(),
@@ -417,7 +418,8 @@ auto Light_buffer::update(
     const Light_projections* light_projections,
     const glm::vec3&         ambient_light,
     const uint32_t           lightmap_flags,
-    const Ddgi_parameters*   ddgi
+    const Ddgi_parameters*   ddgi,
+    const uint32_t           shadow_debug_light_index
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -591,6 +593,7 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.lightmap_flags,            as_span(lightmap_flags)          );
 
     write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,     as_span(brdf_phi_incident_phi)   );
+    write(light_gpu_data, common_offset + offsets.shadow_debug_light_index,  as_span(shadow_debug_light_index));
 
     write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
 

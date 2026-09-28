@@ -4000,7 +4000,7 @@
     "name": "capture_screenshot"
   },
   {
-    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug; for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the image. See doc/editor/rendergraph.md 'Scene image capture'.",
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the image. See doc/editor/rendergraph.md 'Scene image capture'.",
     "inputSchema": {
       "properties": {
         "scene": {
@@ -4039,8 +4039,15 @@
           "type": "string"
         },
         "shader_debug": {
-          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none",
+          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (fp16 precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions).",
           "type": "integer"
+        },
+        "shadow_debug_light": {
+          "description": "With shader_debug 30: the light whose shadow visibility is shown, by light name (string) or id (integer). Default: light slot 0 (the first directional light, else the first spot light, ... in the bucketed light order).",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "msaa_samples": {
           "description": "MSAA sample count of the render target (default: the current graphics preset's, what viewports use)",
@@ -4060,7 +4067,7 @@
     "name": "request_renderdoc_capture"
   },
   {
-    "description": "Push a shader debug view onto the viewport scene views: saves each affected view's current Shader Debug mode on a LIFO stack and sets the given mode, so pop_shader_debug can restore the user's own setting afterwards. Typical use: push texcoord debug, capture_screenshot, pop. Values follow erhe::scene_renderer::Shader_debug / the viewport's Shader Debug combo: 0 none, 1 vertex normal, 2 fragment normal, 4 tangent, 7 texcoord_0 (authored/interpolated UVs), 8 texcoord_1 (generated facet UVs), 9 base color texture, 10 vertex color RGB, 14 V.N, 24 metallic, 25 roughness, 32 texcoord_2 (lightmap UVs).",
+    "description": "Push a shader debug view onto the viewport scene views: saves each affected view's current Shader Debug mode on a LIFO stack and sets the given mode, so pop_shader_debug can restore the user's own setting afterwards. Typical use: push texcoord debug, capture_screenshot, pop. Values follow erhe::scene_renderer::Shader_debug / the viewport's Shader Debug combo: 0 none, 1 vertex normal, 2 fragment normal, 4 tangent, 7 texcoord_0 (authored/interpolated UVs), 8 texcoord_1 (generated facet UVs), 9 base color texture, 10 vertex color RGB, 14 V.N, 24 metallic, 25 roughness, 30 shadow visibility (light slot 0), 32 texcoord_2 (lightmap UVs), 36 world position.",
     "inputSchema": {
       "properties": {
         "shader_debug": {

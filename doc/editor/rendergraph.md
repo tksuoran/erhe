@@ -71,6 +71,20 @@ the editor UI.
   header, width height, scale `-1.0` = little-endian, RGB float32, rows
   bottom to top) of the scene color before post-processing, camera exposure
   applied; the reply adds min / max / mean Rec. 709 luminance.
+- Debug modes: `shader_debug` selects a `Shader_debug` variant for the
+  view's content passes. A debug override replaces the lit color after the
+  exposure and output-range clamp, so the linear file holds its values
+  unscaled, at the fp16 precision of the color target (a relative step of
+  2^-11). `world_position` (36) writes the fragment world position, the
+  receiver position of each pixel; MSAA resolve averages positions across
+  silhouettes, so `msaa_samples: 0` gives exact per-pixel receivers.
+  `shadow_visibility` (30) shows the light named by `shadow_debug_light`
+  (light name or id): `Scene_image_view::execute_rendergraph_node()` resolves
+  it to its light slot through the light set its own shadow pass just built
+  (`Light_projections::get_light_projection_transforms_for_light()`), passes
+  the slot as `Render_context::shadow_debug_light_index`, and the reply
+  reports it as `shadow_debug_light.light_index` (null when the light got no
+  slot). Without it the slot is 0, as for viewports.
 - Determinism: with a static field (ambient) repeated renders are pixel
   identical; with DDGI the field's per-update random rays make them differ by
   at most one 8-bit level while it is converged.

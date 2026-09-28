@@ -54,6 +54,9 @@ public:
     Viewport_scene_view*                    viewport_scene_view{nullptr};
     erhe::math::Viewport                    viewport           {0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug      shader_debug       {erhe::scene_renderer::Shader_debug::none};
+    // Light slot Shader_debug::shadow_visibility shows
+    // (Base_render_parameters::shadow_debug_light_index).
+    uint32_t                                shadow_debug_light_index{0};
     std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
     Render_content                          content            {Render_content::scene_and_editor_aids};
 

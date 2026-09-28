@@ -27,6 +27,8 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_window/window.hpp"
 
@@ -34,6 +36,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace editor {
 
@@ -49,7 +52,8 @@ Scene_image_view::Scene_image_view(
     const int                                   width,
     const int                                   height,
     const int                                   msaa_sample_count,
-    const erhe::scene_renderer::Shader_debug    shader_debug
+    const erhe::scene_renderer::Shader_debug    shader_debug,
+    const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
 )
     // No settings store: nothing about this view persists.
     : Scene_view{context, nullptr, "", viewport_config}
@@ -66,6 +70,7 @@ Scene_image_view::Scene_image_view(
     , m_camera      {camera}
     , m_viewport    {0, 0, width, height}
     , m_shader_debug{shader_debug}
+    , m_shadow_debug_light{shadow_debug_light}
 {
     set_scene_root(scene_root);
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
@@ -104,6 +109,28 @@ auto Scene_image_view::get_shadow_render_node() const -> Shadow_render_node*
     return static_cast<Shadow_render_node*>(get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps));
 }
 
+auto Scene_image_view::resolve_shadow_debug_light_index() -> uint32_t
+{
+    // The light slots are assigned by this view's own shadow pass, which ran
+    // earlier in this frame (Light_projections::apply), so resolve here and
+    // not at request time.
+    m_shadow_debug_light_index.reset();
+    if (!m_shadow_debug_light) {
+        return 0u;
+    }
+    const erhe::scene_renderer::Light_projections* light_projections = get_light_projections();
+    const erhe::scene::Light_projection_transforms* transforms = (light_projections != nullptr)
+        ? light_projections->get_light_projection_transforms_for_light(m_shadow_debug_light.get())
+        : nullptr;
+    if ((transforms == nullptr) || (transforms->index == std::numeric_limits<std::size_t>::max())) {
+        // No slot: an index past every shaded light, which the shader reads
+        // as "not shadow-mapped" (visibility 1).
+        return std::numeric_limits<uint32_t>::max();
+    }
+    m_shadow_debug_light_index = static_cast<uint32_t>(transforms->index);
+    return m_shadow_debug_light_index.value();
+}
+
 void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -129,6 +156,7 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
         .viewport_scene_view = nullptr,
         .viewport            = m_viewport,
         .shader_debug        = m_shader_debug,
+        .shadow_debug_light_index = resolve_shadow_debug_light_index(),
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
         .content             = Render_content::scene_only
     };
@@ -209,7 +237,8 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         create_info.width,
         create_info.height,
         create_info.msaa_sample_count,
-        create_info.shader_debug
+        create_info.shader_debug,
+        create_info.shadow_debug_light
     );
 
     m_shadow_render_node = m_context.app_rendering->create_shadow_node_for_scene_view(
@@ -369,6 +398,11 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
     m_readback_buffer.reset();
     m_state = Scene_image_capture_state::complete;
     return m_state;
+}
+
+auto Scene_image_capture::get_shadow_debug_light_index() const -> std::optional<uint32_t>
+{
+    return m_view ? m_view->get_shadow_debug_light_index() : std::optional<uint32_t>{};
 }
 
 auto Scene_image_capture::get_pixels() const -> std::span<const glm::vec4>

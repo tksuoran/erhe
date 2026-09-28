@@ -40,6 +40,7 @@
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_string.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -1082,6 +1083,12 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         const std::span<const glm::vec4> pixels = m_scene_image_capture->get_pixels();
         const std::filesystem::path      path{m_scene_image_header.value("path", std::string{})};
         json result = m_scene_image_header;
+        if (result.contains("shadow_debug_light")) {
+            // The light slot the render used; null when the light got none
+            // (not shaded in that frame's light set).
+            const std::optional<uint32_t> slot = m_scene_image_capture->get_shadow_debug_light_index();
+            result["shadow_debug_light"]["light_index"] = slot.has_value() ? json(slot.value()) : json(nullptr);
+        }
         if (path.has_parent_path()) {
             std::error_code ec;
             std::filesystem::create_directories(path.parent_path(), ec);
@@ -1248,6 +1255,32 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         };
     }
 
+    // Light for Shader_debug::shadow_visibility: by light name or id. The
+    // render resolves it to its light slot (the result reports that slot).
+    std::shared_ptr<erhe::scene::Light> shadow_debug_light{};
+    json shadow_debug_light_json{};
+    if (args.contains("shadow_debug_light")) {
+        const json& selector = args["shadow_debug_light"];
+        for (const std::shared_ptr<erhe::scene::Light_layer>& light_layer : scene_root->get_scene().get_light_layers()) {
+            for (const std::shared_ptr<erhe::scene::Light>& candidate : light_layer->lights) {
+                const bool match = selector.is_number_integer()
+                    ? (candidate->get_id() == selector.get<std::size_t>())
+                    : (selector.is_string() && (candidate->get_name() == selector.get<std::string>()));
+                if (match) {
+                    shadow_debug_light = candidate;
+                    break;
+                }
+            }
+            if (shadow_debug_light) {
+                break;
+            }
+        }
+        if (!shadow_debug_light) {
+            return make_error_content("render_scene_image: light not found in scene: " + selector.dump());
+        }
+        shadow_debug_light_json = json{{"name", shadow_debug_light->get_name()}, {"id", shadow_debug_light->get_id()}};
+    }
+
     m_scene_image_capture = std::make_unique<Scene_image_capture>(
         m_context,
         Scene_image_capture_create_info{
@@ -1257,7 +1290,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .height            = height,
             .msaa_sample_count = msaa_samples,
             .output            = output,
-            .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value)
+            .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value),
+            .shadow_debug_light = shadow_debug_light
         }
     );
     m_scene_image_header = json{
@@ -1270,6 +1304,9 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         {"msaa_samples", msaa_samples},
         {"shader_debug", shader_debug_value}
     };
+    if (shadow_debug_light) {
+        m_scene_image_header["shadow_debug_light"] = shadow_debug_light_json;
+    }
     m_scene_image_request     = m_current_request;
     m_scene_image_enqueued_at = m_current_request->enqueued_at;
     m_defer_current_request   = true;

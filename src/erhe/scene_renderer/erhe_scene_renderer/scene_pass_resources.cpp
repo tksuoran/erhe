@@ -96,7 +96,13 @@ auto Scene_pass_resources::begin_pass(
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    state.light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u, &m_ddgi);
+    state.light_range = m_light_buffer.update(
+        base.light_projections,
+        base.ambient_light,
+        m_lightmap_bicubic ? 1u : 0u,
+        &m_ddgi,
+        base.shadow_debug_light_index
+    );
     m_light_buffer.bind_light_buffer(render_encoder, state.light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());

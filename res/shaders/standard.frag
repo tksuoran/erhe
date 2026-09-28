@@ -950,30 +950,42 @@ void main()
         }
 #  elif ERHE_SHADER_DEBUG == 30 // shadow_visibility
         {
-            // Shadow / light visibility factor for the first shadow-mapped
-            // light: 0.0 = fully shadowed, 1.0 = fully lit. The light buckets
-            // are ordered directional-shadowed, directional-unshadowed,
-            // spot-shadowed, ... so the first shadow-mapped light is light 0
-            // when any directional light casts shadows, otherwise the first
-            // spot-shadowed light. Point shadows are not sampled and so are
-            // not selected here. sample_light_visibility() returns 1.0 when no
-            // shadow map is bound, so this shows white when shadows are off.
+            // Shadow / light visibility factor of the light at
+            // light_block.shadow_debug_light_index (an index into
+            // light_block.lights, which is bucketed directional-shadowed,
+            // directional-unshadowed, spot-shadowed, spot-unshadowed,
+            // point-shadowed, point-unshadowed): 0.0 = fully shadowed,
+            // 1.0 = fully lit. A light that is not shadow-mapped (or an index
+            // past the shaded lights) reads 1.0, as does every light when no
+            // shadow map is bound (sample_light_visibility() returns 1.0 then).
+            // The receiver is sampled regardless of N.L, unlike the lit loops.
+            uint  dbg_light_index = light_block.shadow_debug_light_index;
+            float dbg_visibility  = 1.0;
+            const uint dbg_spot_shadowed_begin  = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
+            const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
-            uint  shadow_light_index    = 0u;
-            Light shadow_light          = light_block.lights[shadow_light_index];
-            vec3  shadow_point_to_light = shadow_light.direction_and_outer_spot_cos.xyz;
-            float shadow_N_dot_L        = dot(N, normalize(shadow_point_to_light));
-            out_color.rgb = vec3(sample_light_visibility(v_position, shadow_light_index, shadow_N_dot_L));
-#    elif ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
-            uint  shadow_light_index    = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
-            Light shadow_light          = light_block.lights[shadow_light_index];
-            vec3  shadow_point_to_light = shadow_light.position_and_inner_spot_cos.xyz - v_position.xyz;
-            float shadow_N_dot_L        = dot(N, normalize(shadow_point_to_light));
-            out_color.rgb = vec3(sample_light_visibility(v_position, shadow_light_index, shadow_N_dot_L));
-#    else
-            // No shadow-mapped light in this shader variant.
-            out_color.rgb = vec3(0.0);
+            if (dbg_light_index < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)) {
+                Light dbg_light          = light_block.lights[dbg_light_index];
+                vec3  dbg_point_to_light = dbg_light.direction_and_outer_spot_cos.xyz;
+                float dbg_N_dot_L        = dot(N, normalize(dbg_point_to_light));
+                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, dbg_N_dot_L);
+            }
 #    endif
+#    if ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
+            if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED)))) {
+                Light dbg_light          = light_block.lights[dbg_light_index];
+                vec3  dbg_point_to_light = dbg_light.position_and_inner_spot_cos.xyz - v_position.xyz;
+                float dbg_N_dot_L        = dot(N, normalize(dbg_point_to_light));
+                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, dbg_N_dot_L);
+            }
+#    endif
+#    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
+            if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)))) {
+                Light dbg_light = light_block.lights[dbg_light_index];
+                dbg_visibility = sample_point_light_visibility(v_position.xyz, dbg_light.position_and_inner_spot_cos.xyz, float(dbg_light.shadow_index_packed.y));
+            }
+#    endif
+            out_color.rgb = vec3(dbg_visibility);
         }
 #  elif ERHE_SHADER_DEBUG == 31 // vdotn_dim
         // Dimmed (0.3x) version of vdotn, easier on the eyes when
@@ -984,6 +996,12 @@ void main()
         // surface's color (the solid bone style, where a bone's own display
         // color tints its shading).
         out_color.rgb = base_color * max(dot(V, N), 0.0);
+#  elif ERHE_SHADER_DEBUG == 36 // world_position
+        // Receiver world position, unscaled: this override comes after the
+        // exposure / output-range clamp above, so a linear readback
+        // (render_scene_image output "linear") returns v_position.xyz as
+        // stored by the fp16 color target.
+        out_color.rgb = v_position.xyz;
 #  elif ERHE_SHADER_DEBUG == 34 // joint_weight_ramp
         // Blender-style single-joint weight ramp: hue sweeps 240deg (blue)
         // -> 0deg (red) with weight, brightness 0.5 -> 1.0 through a gamma

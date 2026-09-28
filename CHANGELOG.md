@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Shader_debug::world_position` (36): the fragment
+  world position as the color. `Base_render_parameters::shadow_debug_light_index`,
+  the `Light_buffer::update()` parameter of the same name and
+  `Light_block::shadow_debug_light_index` (`light_block.shadow_debug_light_index`
+  in GLSL): the light slot `Shader_debug::shadow_visibility` shows, which now
+  covers any shadow-mapped light including point lights.
 - `erhe::graphics`: `Gpu_timer(Device&, const char* label)`,
   `Gpu_timer::begin()` / `end()` and `Scoped_gpu_timer`
   (`erhe_graphics/gpu_timer.hpp`): a GPU timer for an explicit range of one

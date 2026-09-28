@@ -284,6 +284,22 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   paths use the same non-strict `gequal` / `lequal` semantics as the hardware
   sampler, so all three variants agree.
 
+### Shadow visibility debug view
+
+`Shader_debug::shadow_visibility` (30) replaces the fragment color with the
+visibility of one light (1 = lit, 0 = shadowed), sampled regardless of N.L.
+The light is `light_block.shadow_debug_light_index`, an index into
+`light_block.lights` (the bucketed slot order: directional, spot, point, each
+shadow-mapped first; `Light_projection_transforms::index`), carried from
+`Base_render_parameters::shadow_debug_light_index` through
+`Light_buffer::update()` into the std140 padding after
+`brdf_phi_incident_phi`. `standard.frag` finds the slot's bucket from the
+`ERHE_LIGHT_COUNT_*` counts and calls `sample_light_visibility()` for a
+shadow-mapped directional or spot light and `sample_point_light_visibility()`
+(cube layer `shadow_index_packed.y`) for a shadow-mapped point light; any
+other slot reads 1. Viewports use slot 0; `render_scene_image` takes the light
+by name or id (`doc/editor/rendergraph.md` "Scene image capture").
+
 ### Receivers outside the fitted depth range
 
 The sampler clamps the comparison reference depth to [0, 1] after biasing and

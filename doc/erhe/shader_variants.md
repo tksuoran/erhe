@@ -205,8 +205,8 @@ The legacy stand-alone shaders are folded in as variant axes:
   boolean axis driven by `material.use_circular_brushed_metal`.
 - The `standard_debug` ERHE_DEBUG_* modes became the
   `Shader_debug` enum stored per `Viewport_scene_view`. The
-  `SHADER_DEBUG` count axis selects one of 32 (`none` + 31)
-  variants; `standard.frag` emits an `#if ERHE_SHADER_DEBUG == N`
+  `SHADER_DEBUG` count axis selects one variant per `Shader_debug`
+  value; `standard.frag` emits an `#if ERHE_SHADER_DEBUG == N`
   override block per value at the end of `main()` that fully
   replaces the lit colour.
 - ID rendering, brush preview, and rendertarget paths are

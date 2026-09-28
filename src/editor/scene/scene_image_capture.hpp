@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -20,6 +21,7 @@ namespace erhe::graphics {
 }
 namespace erhe::scene {
     class Camera;
+    class Light;
 }
 
 namespace editor {
@@ -56,7 +58,8 @@ public:
         int                                         width,
         int                                         height,
         int                                         msaa_sample_count,
-        erhe::scene_renderer::Shader_debug          shader_debug
+        erhe::scene_renderer::Shader_debug          shader_debug,
+        const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
     );
     ~Scene_image_view() noexcept override;
 
@@ -75,12 +78,22 @@ public:
     // texture (scene root and camera were alive).
     [[nodiscard]] auto has_rendered() const -> bool { return m_has_rendered; }
 
+    // Light slot (Light_projection_transforms::index) the render resolved the
+    // shadow debug light to; empty when no light was requested or the light
+    // got no slot (not shaded) in that frame's light set.
+    [[nodiscard]] auto get_shadow_debug_light_index() const -> std::optional<uint32_t> { return m_shadow_debug_light_index; }
+
 private:
+    [[nodiscard]] auto resolve_shadow_debug_light_index() -> uint32_t;
+
     // Owned: an explicit-pose camera exists only for this capture, so the view
     // keeps it alive (a scene camera is shared with its scene).
     std::shared_ptr<erhe::scene::Camera> m_camera;
     erhe::math::Viewport                 m_viewport{0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug   m_shader_debug{erhe::scene_renderer::Shader_debug::none};
+    // Light Shader_debug::shadow_visibility shows; null = slot 0.
+    std::shared_ptr<erhe::scene::Light>  m_shadow_debug_light;
+    std::optional<uint32_t>              m_shadow_debug_light_index;
     bool                                 m_has_rendered{false};
 };
 
@@ -120,6 +133,10 @@ public:
     int                                  msaa_sample_count{0};
     Scene_image_output                   output           {Scene_image_output::png};
     erhe::scene_renderer::Shader_debug   shader_debug     {erhe::scene_renderer::Shader_debug::none};
+    // Light whose visibility Shader_debug::shadow_visibility shows. Resolved
+    // to its light slot by the render itself, from the light set that render's
+    // shadow pass built; null keeps slot 0.
+    std::shared_ptr<erhe::scene::Light>  shadow_debug_light;
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->
@@ -145,6 +162,7 @@ public:
     [[nodiscard]] auto get_pixels() const -> std::span<const glm::vec4>;
     [[nodiscard]] auto get_error () const -> const std::string& { return m_error; }
     [[nodiscard]] auto get_output() const -> Scene_image_output { return m_output; }
+    [[nodiscard]] auto get_shadow_debug_light_index() const -> std::optional<uint32_t>;
 
     // Called by Scene_image_readback_node during Rendergraph::execute().
     void record_readback(erhe::graphics::Command_buffer& command_buffer);
