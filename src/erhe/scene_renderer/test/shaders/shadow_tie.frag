@@ -8,7 +8,7 @@
 // SHADOW_TIE_WORLD_FROM_STATION, with the reference depth offset by
 // k = b - SHADOW_TIE_MAX_ULPS float ulps. Every band covers the same receiver
 // points. The band width is even, so no 2x2 quad straddles two bands and the
-// screen-space derivatives the sampler takes see one constant k.
+// screen-space derivatives of the receiver position see one plane.
 //
 // Output: r = visibility, g = k.
 
@@ -37,6 +37,10 @@ void main()
         mix(-SHADOW_TIE_EXTENT, SHADOW_TIE_EXTENT, uv.y),
         1.0
     );
-    float visibility = sample_light_visibility(position, 0u, 1.0);
+    // The receiver plane the same way standard.frag takes it: from the
+    // screen-space derivatives of the world position (position is linear in
+    // gl_FragCoord inside a band, and no quad straddles two bands).
+    vec3  receiver_normal = get_receiver_geometric_normal(position.xyz);
+    float visibility      = sample_light_visibility(position, 0u, receiver_normal);
     out_color = vec4(visibility, float(shadow_tie_reference_depth_ulps()), 0.0, 1.0);
 }

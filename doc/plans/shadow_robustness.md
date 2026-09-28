@@ -104,19 +104,18 @@ The bias, in the order it is built:
   read no acne for every filter and wide bias mode; the head-on receivers
   (directional `head_on_floor`, `grazing_fan` floor, spot `head_on_floor` 150
   pixels at Medium, and the T7 head-on cases) stay for D2 / D3 and D1.
-- **D2 / D3 Plane-derived depth gradient.** `dz_dUV` is computed from the
-  receiver plane instead of the screen-space Jacobian: the plane (N, d) of the
-  receiver, N the geometric normal (`normalize(cross(dFdx(p), dFdy(p)))` of the
-  world position, which is exact for planar triangles and independent of
-  smooth vertex normals), is transformed by the inverse transpose of
-  `texture_from_world` to texture space (a, b, c, e), and
-  `dz/du = -a / c`, `dz/dv = -b / c` - exact for planes and projectively
-  correct for spot lights. Two degenerate cases get explicit rules: a receiver
-  edge-on to the camera no longer loses its bias (the Jacobian path's
-  `detJ -> 0` leaves `dz_dUV = 0`), and a receiver edge-on to the light
-  (`c -> 0`) clamps `|dz_dUV|` to the slope at the R1 grazing limit
-  `N . L = 0.05`. `N_dot_L`, passed to `sample_light_visibility()` today and
-  unused, is replaced by the plane.
+- **D2 / D3 Plane-derived depth gradient.** Landed: `dz_dUV` is `-a / c`,
+  `-b / c` of the receiver plane transformed to texture space by
+  `transpose(world_from_texture)`, from the geometric normal of the world
+  position derivatives; edge-on to the camera keeps the gradient, edge-on to
+  the light tilts the plane to `N . L = 0.05` (shadows.md "Receiver depth
+  gradient"). Medium directional and spot `head_on_floor` pass, the
+  directional `grazing_fan` floor drops to 1 pixel next to a tile; T7's head-on cases pass at the
+  identity pose for k >= 0 (D32). What stays for D1: spot `cornell`, the
+  forward-Z head-on cells, the T7 rotated poses (reference / stored depth
+  rounding of the matrix composition, identical for every filter, plus the
+  gradient's fp32 noise on the wide `receiver_plane` path) and the T7 16-bit
+  cases.
 - **D1 Derived minimum bias.** Every receiver gets a depth bias of at least
   `bias = (dz / dworld) * (k_texel * texel_world + k_origin * |P| * 2^-23) +
   q_format`, where `dz / dworld` is the light projection's depth derivative at

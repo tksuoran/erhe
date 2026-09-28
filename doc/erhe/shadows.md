@@ -269,8 +269,9 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
 - The comparison sampler (`s_shadow_compare`) bakes a NON-STRICT comparison
   at engine init from the reverse-depth convention: `greater_or_equal` for
   reverse-Z, `less_or_equal` for forward-Z (`light_buffer.cpp`). 1.0 = lit.
-- A slope-scaled bias is derived from screen space derivatives of the light
-  texture coordinates (inverting the 2x2 Jacobian to get dz/dUV), based on
+- A slope bias is derived from the receiver's light-space depth gradient
+  dz/dUV, taken from the receiver plane (see "Receiver depth gradient"
+  below), based on
   https://renderdiagrams.org/2024/12/18/shadowmap-bias/ . For a fixed-point
   (UNORM) shadow map the reference depth is then rounded direction-aware to the
   format's depth precision (toward the near plane) before the hardware
@@ -401,16 +402,71 @@ deltas from the reference are listed in
 
 ### What erhe implements (RPDB)
 
-`sample_light_visibility()` recovers the receiver's light-space depth gradient
-`dz/dUV` by inverting the 2x2 screen-space Jacobian of the light texture
-coordinates, then offsets the comparison reference of every tap to the depth
-the receiver plane has at that tap's texel centre.
+`sample_light_visibility()` derives the receiver's light-space depth gradient
+`dz/dUV` from the receiver plane, then offsets the comparison reference of
+every tap to the depth the receiver plane has at that tap's texel centre.
+
+#### Receiver depth gradient
+
+The caller passes the receiver's unit geometric normal `N` in world space:
+`get_receiver_geometric_normal()` (`erhe_light.glsl`, fragment stage only)
+returns `normalize(cross(dFdxFine(p), dFdyFine(p)))` of the world position
+`p`, which lies in the triangle's plane for a planar triangle and ignores
+smooth vertex normals and normal maps. `standard.frag` takes it once, in
+uniform control flow ahead of the per-light branches, and passes it to every
+shadow-mapped directional and spot light and to the mode 30 debug view.
+
+With `P` the receiver point, the world plane is the row vector
+`pi = (N, -dot(N, P))`, which is 0 on homogeneous points `(x, 1)` of the
+plane. With `W = world_from_texture` (the inverse of `texture_from_world`,
+already in the light block), a homogeneous texture point `h` maps to the
+world point `W h`, so the plane in homogeneous texture coordinates is
+`pi' = transpose(W) * pi = (a, b, c, e)`: `dot(pi', h) = 0`. The light
+texture coordinates the shader compares are the post-divide
+`(u, v, z) = h.xyz / h.w`, and `h = h.w * (u, v, z, 1)`; since `h.w != 0` for
+any receiver in front of the light, `a u + b v + c z + e = 0` holds in
+post-divide texture space too. A projective map takes planes to planes, and
+the plane equation is homogeneous, so the same four coefficients describe the
+receiver after the perspective divide. Solving for `z`:
+
+    dz/du = -a / c,    dz/dv = -b / c
+
+exact for any plane, for the orthographic directional projection and the
+perspective spot projection alike, with no per-fragment matrix inverse.
+Negating `N` negates `pi'`, so the ratios do not depend on the normal's
+orientation.
+
+`c` has a direct reading: `c = dot(N, D)` with
+`D = W[2].xyz - P * W[2].w`, the world direction along which the texture
+depth changes at `P` (the derivative of the world point of
+`(u, v, z + s, 1)` with respect to `s`, up to a positive scale), which is the
+light ray through `P`. So `|c| / |D|` is `|N . L|`. Two degenerate cases:
+
+- **Edge-on to the camera.** The gradient does not depend on the camera, so
+  a receiver seen edge-on keeps its full gradient (the screen-space Jacobian
+  the RPDB article inverts is singular there and left `dz/dUV = 0`).
+- **Edge-on to the light.** As `N . L -> 0`, `c -> 0` and the gradient is
+  unbounded. Below the R1 grazing limit `|N . L| = 0.05` the plane is tilted
+  about its line through `P` perpendicular to `L`, on the side it already
+  faces, to exactly `|N . L| = 0.05`: `N' = sign(N . L) 0.05 L +
+  sqrt(1 - 0.05^2) T`, `T` the normalized component of `N` perpendicular to
+  `L`. That clamps `|dz/dUV|` to the slope at the grazing limit in the
+  direction the receiver actually tilts, and keeps `c` bounded away from 0.
+
+The remaining error of the gradient is the fp32 rounding of the interpolated
+world position: each derivative carries up to about one ulp of `|p|`, so the
+normal tilts by about `ulp(|p|) / pixel_world_size`. On a head-on receiver
+(exact gradient 0) this leaves a gradient of that order, which the per-tap
+offsets of the wide `receiver_plane` path multiply by up to `K / 2` texels;
+the minimum bias of D1 in
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) is what
+absorbs it.
+
+#### Tap offsets
 
 The offsets follow from one identity. For a planar receiver, depth in light
-texture space is an affine function of (u, v) on the plane (a projective map
-takes planes to planes, so this holds for spot lights as well as
-orthographic directional ones), and the finite-difference Jacobian of an
-affine function is exact. The depth the caster pass stored at a texel centre
+texture space is an affine function of (u, v) on the plane (see the plane
+equation above). The depth the caster pass stored at a texel centre
 `c` of that same plane therefore differs from the reference `z` at the sample
 point `s` by exactly `dot(c - s, dz/dUV)`, and each tap needs exactly that
 offset - with a scale factor of 1. What remains are two error sources:
@@ -459,9 +515,11 @@ a texel corner (tap offsets of +-0.5 texel), up to half a texel off, and the
 snap error was unaccounted for. With the exact offsets and `snap_bias`, the
 `grazing_fan` tiles (0 to 88 degrees) read no acne for every filter and both
 wide bias modes, for directional and spot lights. The tie that remains is the
-receiver whose `dz/dUV` is zero or noise - the head-on receiver of
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1 -
-whose bias cannot come from the gradient at all.
+head-on receiver of
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1,
+whose exact gradient is 0: its bias cannot come from the gradient at all,
+and what is left there is the reference / stored depth rounding of the matrix
+composition and the gradient rounding above.
 
 This matches the article's core idea: a signed receiver-plane gradient extended
 to PCF with a per-texel bias. The hard and 2x2 paths always use their own fixed

@@ -61,7 +61,22 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
     return 0.0;
 }
 
-float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
+#if defined(ERHE_FRAGMENT_SHADER)
+// Geometric normal of the receiver plane from the screen-space derivatives of
+// the world position: exact for a planar triangle (both derivatives lie in its
+// plane) and independent of smooth vertex normals and normal maps. The
+// orientation follows the screen-space winding and is not meaningful;
+// sample_light_visibility() accepts either. Call it in uniform control flow
+// (before any per-light branch) so the quad's helper lanes take part.
+vec3 get_receiver_geometric_normal(vec3 world_position) {
+    return normalize(cross(ERHE_DFDX(world_position), ERHE_DFDY(world_position)));
+}
+#endif
+
+// position: receiver world position (w = 1). receiver_normal: unit geometric
+// normal of the receiver plane in world space, either orientation (see
+// get_receiver_geometric_normal()); only the depth technique reads it.
+float sample_light_visibility(vec4 position, uint light_index, vec3 receiver_normal) {
 #if defined(ERHE_SHADOW_MAPS)
     if (light_block.shadow_texture_compare.x == max_u32) {
         return 1.0;
@@ -107,8 +122,9 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
 
     // What follows is based on https://renderdiagrams.org/2024/12/18/shadowmap-bias/
     // Notes:
-    //  - "What if the det is zero?" - I don't know. If you do, please let me know.
-    //      - I can only hope dz_dUV being left to zero is ok.
+    //  - dz_dUV comes from the receiver plane, not from the screen-space
+    //    Jacobian of the article, so it has no det == 0 case: a receiver
+    //    edge-on to the camera keeps its gradient.
     //  - HLSL code has been converted to GLSL
     //  - clip_depth_direction: -1.0 for reverse Z, 1.0 for forward Z
     //      - bias and comparisons are adjusted accordingly
@@ -153,16 +169,35 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     }
 #else
 
-    // First, a common part:
-    vec2  dU_dXY = vec2(ERHE_DFDX(position_in_light_texture.x), ERHE_DFDY(position_in_light_texture.x));
-    vec2  dV_dXY = vec2(ERHE_DFDX(position_in_light_texture.y), ERHE_DFDY(position_in_light_texture.y));
-    vec2  dz_dXY = vec2(ERHE_DFDX(position_in_light_texture.z), ERHE_DFDY(position_in_light_texture.z));
-    float detJ   = dU_dXY.x * dV_dXY.y - dV_dXY.x * dU_dXY.y;
-    vec2  dz_dUV = vec2(0.0);
-    if (detJ != 0.0) {
-        dz_dUV.x = dot(vec2( dV_dXY.y, -dV_dXY.x), dz_dXY) / detJ;
-        dz_dUV.y = dot(vec2(-dU_dXY.y,  dU_dXY.x), dz_dXY) / detJ;
+    // Receiver depth gradient dz_dUV from the receiver plane (derivation in
+    // doc/erhe/shadows.md "Receiver depth gradient"). The world plane
+    // (N, -dot(N, P)) maps to the homogeneous texture-space plane
+    // transpose(world_from_texture) * (N, -dot(N, P)) = (a, b, c, e); since
+    // a plane through the origin of homogeneous space is the same plane
+    // after the perspective divide, a * u + b * v + c * z + e = 0 holds in
+    // post-divide texture space, so dz/du = -a / c and dz/dv = -b / c for
+    // orthographic and perspective light projections alike. The orientation
+    // of N cancels in the ratios.
+    //
+    // c = dot(N, D), D = world_from_texture[2].xyz - P * world_from_texture[2].w
+    // the world direction along which the texture depth changes at P (the
+    // light ray through P), so |c| / |D| is |N . L|. A receiver edge-on to
+    // the light (c -> 0) has an unbounded gradient; below the R1 grazing
+    // limit N . L = 0.05 the plane is tilted about its line through P, on
+    // the side it already faces, to exactly N . L = 0.05, which clamps
+    // |dz_dUV| to the slope at that limit and keeps c away from 0.
+    mat4  world_from_texture  = light.world_from_texture;
+    vec3  depth_axis_in_world = normalize(world_from_texture[2].xyz - position.xyz * world_from_texture[2].w);
+    float receiver_cos        = dot(receiver_normal, depth_axis_in_world);
+    const float grazing_cos   = 0.05;
+    vec3  plane_normal        = receiver_normal;
+    if (abs(receiver_cos) < grazing_cos) {
+        vec3  tangent_direction = normalize(receiver_normal - (receiver_cos * depth_axis_in_world));
+        float side              = (receiver_cos < 0.0) ? -1.0 : 1.0;
+        plane_normal = (side * grazing_cos) * depth_axis_in_world + sqrt(1.0 - (grazing_cos * grazing_cos)) * tangent_direction;
     }
+    vec4 plane_in_texture = transpose(world_from_texture) * vec4(plane_normal, -dot(plane_normal, position.xyz));
+    vec2 dz_dUV           = -plane_in_texture.xy / plane_in_texture.z;
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
 
     // Texel geometry of the sample point, in texels. The hardware rounds
