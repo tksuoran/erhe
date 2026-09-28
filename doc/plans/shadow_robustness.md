@@ -120,7 +120,8 @@ The bias, in the order it is built:
   light by the sum of derived error bounds, in texture depth units -
   projection (two fp32 evaluations of `(T_z . P) / (T_w . P)`, gamma_4 times
   the row magnitudes at `P`, plus the divide), position (the receiver
-  point's rounding `sqrt(3) gamma_4 |P|` over `|c h.w|`), raster (`4u |z|`),
+  point's rounding `sqrt(3) gamma_4 |P|` over `|c h.w|`), raster (`4u`: the caster primitive's post-clip vertex depths, up to 1,
+  interpolated at the texel centre),
   gradient (the normal's error bound from the derivative rounding times the
   filter's tap reach, through `D_u`, `D_v`, `D`) and format (one UNORM
   quantum on the gather paths, one float ulp) - with the terms, their
@@ -135,18 +136,26 @@ The bias, in the order it is built:
   T8 passes. Core matrix: spot `cornell`, directional `head_on_floor` and all
   forward-Z head-on cells pass; `head_on_floor` `--poses full` passes for Low,
   Medium and High (directional and spot); `contact_blocks` G3 / G5 on Low and
-  Medium are unchanged. The rasterizer slope bias -1 of Medium and High
-  still has a role: `--config Low,Medium,High` fails and passes the same
-  cells at slope 0 as with the committed values (only D6 point cells fail),
-  with the same G3 (Medium 0.12 / 0.08, High 0.18 / 0.23 texels,
-  directional / spot), but the core matrix at slope 0 adds spot `cube_seams`
-  G1 on `Medium/shadow_filter=hard` (5761 pixels, 2.5 %) and
-  `Medium/resolution=512` (187): moire acne on the floor below the spot,
-  where the floor is head-on to the light ray (N . L about 1) and the spot
-  axis is tilted 34 degrees, so the D1 bound falls short of the hard and
-  low-resolution paths' stored / reference difference there; slope -1
-  removes it (and `Medium/shadow_filter=pcf_6x6` directional
-  `contact_blocks` G6 1). The presets keep slope -1 until D1 covers these.
+  Medium are unchanged. The raster term first took the receiver's `|z|` in
+  place of the caster's vertex depths; a traced gap showed why that is not a
+  bound: the `cube_seams` floor's triangles have a corner behind the spot
+  light and are clipped at the near plane (depth 1 under reverse-Z), and
+  each stored triangle is the exact plane plus an affine offset of 0.1 to
+  7.7 `u` (at a texel depth of 0.02, up to 250 ulps against a 240 ulp bound),
+  which read as moire acne below the light on `Medium/shadow_filter=hard`
+  (5761 pixels) and `Medium/resolution=512` (187) at rasterizer slope 0. With
+  it, the wide paths' gathers are placed on their sets' shared corners and
+  the nearest fetch on its texel centre (shadows.md "Tap offsets"): a
+  `pcf_6x6` gather whose own coordinate rounded to the neighbouring set had
+  flickered one `contact_blocks` pixel under G6. The core matrix at slope 0
+  now fails only D5 / D6 / D7 cells, with the same G3 (Low 0.05 / 0.13,
+  Medium 0.12 / 0.08, High 0.18 / 0.23 texels, directional / spot). The
+  presets keep slope -1 for the distance technique (D7), whose caster pass
+  stores `gl_FragCoord.z` with the rasterizer bias in it: at slope 0 its
+  failing cells grow (`grazing_fan` G1 898 / 676 to 1006 / 739,
+  `contact_blocks` G1 1 / 15 to 23 / 49 and G6 17 to 90, `thin_walls` G1
+  0 / 139 to 65 / 303), so the depth-technique presets could drop it only
+  together with a distance-technique bias of its own.
   The G1 / G2 pixels left after D1 (directional
   `grazing_fan` floor next to the 88 degree tile's shadow tip, and the 512
   resolution cells) are ideal-filter results: at every one of them the
@@ -207,7 +216,17 @@ The bias, in the order it is built:
   to spot lights by storing the radial distance from the light, with the same
   fwidth caster bias; directional keeps its linear light-space depth, point
   lights keep their own cube path. The preset UI offers `distance` for
-  directional and spot.
+  directional and spot. The distance caster pass stores `gl_FragCoord.z`,
+  which includes the rasterizer bias, so its cells depend on the presets'
+  slope bias -1; D7 gives the distance technique a derived caster bias of its
+  own, after which the presets' rasterizer bias goes to 0 (the depth
+  technique reads the same gates at 0 as at -1).
+- **D9 Minimum bias under depth clamp.** With
+  `Shadow_frustum_fit_settings::depth_clamp` on, near / far clipping is off,
+  so a caster's vertex depths are not bounded by 1 and D1's 4u raster term
+  does not hold. The raster term is bounded by the clamped primitive's actual
+  vertex depth range under depth clamp, and a `depth_range` station view with
+  `depth_clamp` on joins the matrix.
 
 ## 4. Test scenes
 

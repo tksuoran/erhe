@@ -530,15 +530,29 @@ offset - with a scale factor of 1. What remains are two error sources:
 
 - **Texel selection.** `c` must be the centre of the texel the hardware
   actually fetches. The hardware rounds texel coordinates to its sub-texel
-  precision (8 bits) before selecting texels, so a coordinate within 1/512
-  texel below a boundary selects the next texel. The shader reproduces the
-  selection with `floor(t + 1/512)` and measures the offset from the
-  unrounded `t` (`texel_offset_nearest` for the nearest fetch,
-  `gather_fraction` for `textureGather`, whose texel centres sit at integer
-  `t = uv * resolution - 0.5`). The four gather components are the texels at
-  (0, 1), (1, 1), (1, 0), (0, 0) of the selected 2x2 set, so a tap's offset is
-  `(gather_texel + corner - gather_fraction) / resolution`, `gather_texel` the
-  whole-texel offset of its gather in a KxK kernel.
+  precision (8 bits) before selecting texels, so a coordinate on or near a
+  rounding boundary selects a texel the shader cannot predict: which way a
+  coordinate exactly 1/512 texel below a boundary rounds is the device's
+  choice, and a wide kernel's per-gather coordinate `uv + offset / resolution`
+  rounds in fp32 differently from the sample point it was derived from. The
+  shader therefore picks the texels itself from the sample point
+  `t = uv * resolution` - the nearest fetch's texel `floor(t)`, the 2x2 set
+  with lower-left texel `gather_base = floor(t - 0.5)` - and fetches them at
+  coordinates half a texel from every boundary: the nearest fetch at the
+  texel's centre, each `textureGather` at the corner its set's four texels
+  share (`(gather_base + gather_texel + 1) / resolution`, `gather_texel` the
+  whole-texel offset of the gather in a KxK kernel). The offsets are measured
+  from the sample point: `texel_offset_nearest = floor(t) + 0.5 - t`, and
+  `gather_fraction = (t - 0.5) - gather_base` in [0, 1), the sample point
+  relative to the set's lower-left texel centre. The four gather components
+  are the texels at (0, 1), (1, 1), (1, 0), (0, 0) of the set, so a tap's
+  offset is `(gather_texel + corner - gather_fraction) / resolution`. Taps
+  selected from the rounded coordinate instead misread a whole texel when
+  the rounding disagrees: on `contact_blocks` (directional, `pcf_6x6`, 2048)
+  one gather column of a pixel whose per-gather coordinate fraction was
+  exactly 511/512 read the set one texel over, 12 of 36 taps compared against
+  a texel one gradient step (3e-4 in depth) nearer the light, and the pixel
+  flickered under a sub-texel camera move (G6).
 - **Caster vertex snap.** The rasterizer snaps the caster's vertices to its
   sub-pixel grid (`subPixelPrecisionBits`, 8 on current devices) before it
   interpolates depth. The stored plane is the caster plane displaced by the
@@ -615,9 +629,24 @@ applied at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and
   depth by `eta / (c h.w)`, since the texture-space plane evaluates to `eta`
   at `h`: `E_position = sqrt(3) 4u |P| / (|c| |h.w|)`, with `|c| >= 0.05 |D|`
   after the grazing clamp.
-- **Raster.** The rasterizer interpolates the vertex depths at the texel
-  centre in fp32 and applies the viewport transform: `4u |z|`, `z` standing
-  in for the vertex depths.
+- **Raster.** The rasterizer evaluates the caster primitive's depth at the
+  texel centre as a combination of its post-clip vertex depths `z_i` with
+  barycentric weights `l_i` in [0, 1] summing to 1: each weight and each
+  product rounds once, and the two sums once each, so the stored depth is off
+  by at most `2u sum(l_i |z_i|) + 2u max|z_i| <= 4u max|z_i|`. The vertex
+  depths are those of the caster, not of the receiver: clipping keeps every
+  one inside the clip volume's [0, 1], and a primitive clipped at the depth-1
+  plane (the near plane under reverse-Z, the far plane under forward-Z) has
+  vertices at depth 1 however small the texel's own depth is. The term is
+  therefore `4u`, with the vertex depth bound 1. This is the error of a large
+  receiver that extends behind the light: on `cube_seams` the 6.2 m floor's
+  triangles have a corner behind the spot light, are clipped at the near
+  plane, and the stored depth of each triangle is the exact plane depth plus
+  an affine offset of 0.1 to 7.7 `u` (plane fit residual at most 0.05 `u`),
+  hundreds of ulps of the texel's own depth 0.02; a bound taken with the
+  receiver's `|z|` in place of the vertex depths (`4u |z|`, 3 ulps there)
+  left the hard filter at 2048 texels and `pcf_4x4` at 512 with moire acne
+  on the floor below the light at no rasterizer bias.
 - **Gradient.** `get_receiver_geometric_normal()` bounds the error of its
   normal: each world-position derivative is the difference of two rounded
   positions, off by at most `e = 2 sqrt(3) gamma_4 |P|`, so the cross
@@ -628,8 +657,9 @@ applied at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and
   `z - (a o_u + b o_v) / c` at a tap offset `o` (uv units) by at most
   `theta (|o_u| |D_u| + |o_v| |D_v| + |dz/dUV . o| |D|) / (|c| - theta |D|)`.
   The tap reach bounds `|o|` per map axis: 1/2 texel for `hard`, 1 for
-  `pcf_2x2`, K/2 for `pcf_KxK`, each plus the 1/512 texel selection margin
-  and the 1/256 caster snap step (`snap_bias` also reads the gradient). This
+  `pcf_2x2`, K/2 for `pcf_KxK` (the fetched texels are chosen from the
+  sample point, "Tap offsets"), each plus the 1/256 caster snap step
+  (`snap_bias` also reads the gradient). This
   is the term that keeps the head-on receiver's wide `receiver_plane` taps
   from reading the gradient's rounding noise as slope.
 - **Format.** The map stores the depth rounded to its format (D0): at most
@@ -657,10 +687,15 @@ rasterizer constant bias because the rasterizer's unit depends on each
 primitive's depth extent and on the format; `shadow_depth_bias_constant`
 stays as the caster-side control.
 
-Magnitude. On the T7 station (receivers within about 5 m of the origin, a
-D32 map) the bound is 15 to 95 float ulps of the reference depth over the
-poses and filters, against at most about 5 ulps of measured stored /
-reference difference. In world units that is micrometres, so the
+Magnitude. The raster term puts a floor of `4u = 2^-22` under the bound in
+texture depth, 128 float ulps of a reference depth in [1/64, 1/32) (a
+reverse-Z receiver a few metres from a spot light); the other terms are 15
+to 95 ulps on the T7 station (receivers within about 5 m of the origin, a D32
+map) over the poses and filters, against at most about 5 ulps of measured
+stored / reference difference there. In world units that is micrometres to
+a fraction of a millimetre (the raster floor along a spot light's ray is
+about `2^-22 d^2 / n`, `n` the 0.04 m spot near plane: 0.05 mm at 3 m, 0.6 mm
+at 10 m, against texels of millimetres to centimetres), so the
 `contact_blocks` contact gap (G3) and edge placement (G5) read the same with
 and without it on Low and Medium. It grows linearly with `|P|`: at 10 km
 from the origin the position term alone is about 4 mm along the receiver
@@ -710,20 +745,20 @@ erhe also goes beyond the article:
   (`shadow_depth_bias_constant` / `_slope`, applied in `shadow_renderer.cpp` via
   `set_depth_bias`). Its field default is 0; the Medium and High presets set
   `shadow_depth_bias_slope` -1, Low and OpenXR 0, every preset constant 0.
-  The receiver's minimum bias ("Minimum bias") does not cover every
-  near-head-on spot receiver: at slope 0 the hard filter at 2048 texels, and
-  `pcf_4x4` at 512, read acne on the `cube_seams` floor below the spot (N . L
-  about 1, gate G1 of
-  [plans/shadow_robustness.md](../plans/shadow_robustness.md)), which slope
-  -1 removes. The presets themselves read the same gates at slope 0 and -1,
-  with the same contact gap (G3). Both values are signed toward the light
+  The depth technique does not need it: with the receiver's minimum bias
+  ("Minimum bias") and the texel selection of "Tap offsets", every
+  `cull_back` and `cull_none` depth technique cell of the core matrix of
+  [plans/shadow_robustness.md](../plans/shadow_robustness.md) reads the same
+  gates at slope 0 as at -1, with the same contact gap (G3). The distance
+  technique does: its caster pass stores `gl_FragCoord.z`, which carries the
+  rasterizer bias, so slope -1 is part of its stored distance (see "The
+  distance / fwidth alternative"). Both values are signed toward the light
   under either depth convention: negative moves the stored caster depth away
   from the light. `Shadow_renderer::render()` passes them to the device as is
   for reverse-Z (the light side is the larger depth) and negated for forward-Z
   (the light side is the smaller depth), so one preset value means the same
   bias in both conventions. The article criticizes rasterizer slope
-  bias as an over-estimate, so erhe relies on RPDB, with the preset slope
-  bias only as the backstop above.
+  bias as an over-estimate, so erhe relies on RPDB for the depth technique.
 
 ### The distance / fwidth alternative
 

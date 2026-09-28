@@ -261,23 +261,30 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
     vec2 dz_dUV           = -plane_in_texture.xy / plane_in_texture.z;
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
 
-    // Texel geometry of the sample point, in texels. The hardware rounds
+    // Texel geometry of the sample point, in texels. The shader picks the
+    // texels itself and fetches them at coordinates the hardware selects
+    // without ambiguity: a nearest fetch at the texel's centre, a
+    // textureGather() at the corner its 2x2 set shares. The hardware rounds
     // texel coordinates to its sub-texel precision (subTexelPrecisionBits,
-    // typically 8) before it picks texels, so a coordinate within 1/512 texel
-    // below a texel boundary picks the texel above it; the + 1.0 / 512.0 inside
-    // floor() reproduces that selection
-    // (https://www.reedbeta.com/blog/texture-gathers-and-coordinate-precision/).
-    // The offsets below are measured from the unrounded coordinate, so they
-    // are the exact distances to the centres of the texels actually fetched.
-    //  - texel_offset_nearest: sample point -> centre of the texel a nearest
-    //    fetch reads (texel centres at integer + 0.5).
-    //  - gather_fraction: position of the sample point relative to the
-    //    lower-left texel centre of the 2x2 set textureGather() reads
-    //    (texel centres at integers); in [-1/512, 1 + 1/512).
+    // typically 8) before it selects texels, so a coordinate that lies on or
+    // near a rounding boundary (a sample point within 1/512 texel of a texel
+    // boundary, or a gather coordinate whose fp32 sum with the kernel offset
+    // lands there) selects a texel the shader cannot predict; a centre or a
+    // shared corner is half a texel from every boundary. The offsets are
+    // measured from the sample point, so they are the exact distances to the
+    // centres of the texels fetched.
+    //  - nearest_texel / texel_offset_nearest: the texel containing the sample
+    //    point, and sample point -> its centre (texel centres at integer +
+    //    0.5), in (-0.5, 0.5].
+    //  - gather_base / gather_fraction: the lower-left texel of the 2x2 set
+    //    around the sample point, and the sample point's position relative to
+    //    that texel's centre (texel centres at integers), in [0, 1).
     vec2 sample_texel           = position_in_light_texture.xy * shadowmap_resolution;
-    vec2 texel_offset_nearest   = floor(sample_texel + 1.0 / 512.0) + 0.5 - sample_texel;
+    vec2 nearest_texel          = floor(sample_texel);
+    vec2 texel_offset_nearest   = nearest_texel + 0.5 - sample_texel;
     vec2 gather_texel_position  = sample_texel - 0.5;
-    vec2 gather_fraction        = gather_texel_position - floor(gather_texel_position + 1.0 / 512.0);
+    vec2 gather_base            = floor(gather_texel_position);
+    vec2 gather_fraction        = gather_texel_position - gather_base;
 
     // Caster vertex snap. The rasterizer snaps the caster's vertices to its
     // sub-pixel grid (subPixelPrecisionBits, typically 8) before it
@@ -302,8 +309,13 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
     //  - position: the rounding of the receiver point itself moves it off
     //    the plane by up to get_world_position_rounding(); at fixed (u, v)
     //    that is a depth offset of that distance over |c * h.w|.
-    //  - raster: the rasterizer's fp32 interpolation of the vertex depths at
-    //    the texel centre and the viewport transform, 4u |z|.
+    //  - raster: the rasterizer's fp32 interpolation of the caster
+    //    primitive's vertex depths at the texel centre, 4u times the largest
+    //    vertex depth. Clipping keeps every vertex depth inside the clip
+    //    volume's [0, 1], and a primitive clipped at the depth-1 plane (the
+    //    near plane under reverse-Z, the far plane under forward-Z) has
+    //    vertices at depth 1 however small the texel's own depth is, so the
+    //    bound is taken with the vertex depth 1: 4u.
     //  - gradient: the normal's error bound tilts the plane about P, which
     //    moves the plane depth at a tap by up to
     //    normal_error * (|o_u| |D_u| + |o_v| |D_v| + |dz_dUV . o| |D|) / (|c| - normal_error |D|)
@@ -331,8 +343,8 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
     float projection_error   = 2.0 * (((((5.0 * u) * row_z_magnitude) + ((4.0 * u) * abs_z * row_w_magnitude)) / h_w) + (u * abs_z));
     float plane_c            = plane_determined ? abs(plane_in_texture.z) : (grazing_cos * D_length);
     float position_error     = get_world_position_rounding(receiver_point) / (plane_c * h_w);
-    float raster_error       = (4.0 * u) * abs_z;
-    vec2  tap_reach_uv       = (tap_reach_texels + (1.0 / 512.0) + caster_snap_texels) / shadowmap_resolution;
+    float raster_error       = 4.0 * u;
+    vec2  tap_reach_uv       = (tap_reach_texels + caster_snap_texels) / shadowmap_resolution;
     float tap_reach_lateral  = (tap_reach_uv.x * length(D_u)) + (tap_reach_uv.y * length(D_v));
     float gradient_error     = plane_determined
         ? ((normal_error * (tap_reach_lateral + (dot(abs(dz_dUV), tap_reach_uv) * D_length))) / (abs(plane_in_texture.z) - (normal_error * D_length)))
@@ -380,14 +392,18 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
 #       else
         float D_ref        = clamp(D_ref_, 0.0, 1.0);
 #       endif
-        vec4  uv_ref_layer = vec4(position_in_light_texture.xy, array_layer, D_ref);
+        // Fetched at the centre of nearest_texel, so the hardware selects
+        // exactly the texel texel_offset_nearest measures to.
+        vec4  uv_ref_layer = vec4((nearest_texel + 0.5) / shadowmap_resolution, array_layer, D_ref);
         return texture(s_shadow_compare, uv_ref_layer);
     }
 #   elif ERHE_SHADOW_FILTER == 2
     {
         // 2x2 PCF: a single textureGather() with bilinear weighting of the
         // four comparison results, for a smooth sub-texel-accurate edge.
-        vec4 shadowDepths = textureGather(s_shadow_no_compare, vec3(position_in_light_texture.xy, array_layer));
+        // Gathered at the corner the four texels of the gather_base set share,
+        // so the hardware selects exactly that set.
+        vec4 shadowDepths = textureGather(s_shadow_no_compare, vec3((gather_base + 1.0) / shadowmap_resolution, array_layer));
 
         // textureGather() returns the four texels in counter-clockwise order
         // starting from the upper-left: (0, 1), (1, 1), (1, 0), (0, 0) relative
@@ -439,12 +455,13 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
         float visibility = 0.0;
         for (int gj = 0; gj < gathers; ++gj) {
             for (int gi = 0; gi < gathers; ++gi) {
-                // Gather centers tile the KxK block, spaced 2 texels apart and
-                // centered on the sample point. The spacing is whole texels, so
-                // every gather selects its set with the gather_fraction of the
-                // sample point.
+                // Gather sets tile the KxK block, spaced 2 texels apart and
+                // centred on the gather_base set. Each is gathered at the
+                // corner its four texels share, so the hardware selects
+                // exactly the set gather_texel names, and every tap's offset
+                // is measured from the sample point with gather_fraction.
                 vec2 gather_texel = (vec2(float(gi), float(gj)) - float(gathers - 1) * 0.5) * 2.0;
-                vec2 guv          = position_in_light_texture.xy + gather_texel / shadowmap_resolution;
+                vec2 guv          = (gather_base + gather_texel + 1.0) / shadowmap_resolution;
                 vec4 depths       = textureGather(s_shadow_no_compare, vec3(guv, array_layer));
                 for (int t = 0; t < 4; ++t) {
                     // Sample point -> centre of this tap's texel.
