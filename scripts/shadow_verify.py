@@ -78,6 +78,14 @@ thin_walls belong to G4 and get no band.
 Gates (section 6; every gate is the worst value over poses, views and runs):
   G1 acne:       band-free lit pixels with visibility < 0.999: count = 0.
   G2 occlusion:  band-free shadowed pixels with visibility > 0.001: count = 0.
+                 Shadowed pixels inside the contact gap G3 allows are G3's,
+                 not G2's: a pixel on either box of a touching pair (every
+                 two axis-aligned station boxes with coincident opposite
+                 faces - resting casters, hut and room walls on the floor
+                 and under the roof / ceiling, wall-wall joins, blocks under
+                 the ceiling), in their contact plane, within the G3 bound
+                 (1.5 texels depth, 2.5 distance technique) of an edge of
+                 the contact rectangle, the distance through J at the pixel.
   G3 contact:    contact_blocks. Along every contact line (a resting caster's
                  footprint edge) in 16 bins, the distance from the line to
                  the nearest floor pixel with visibility <= 0.5 on the shadow
@@ -1144,6 +1152,81 @@ def measure_g3(job, cls, vis_flat):
     return worst, detail[:EXAMPLES]
 
 
+_CONTACT_CACHE = {}
+CONTACT_TOLERANCE_M = 1.0e-6
+
+
+def contacts(station_name):
+    """-> [(box a, box b, axis, plane, [(p0, p1), ...])] station-local: every
+    pair of axis-aligned boxes of the station with touching faces (a face of
+    one on the opposite face of the other, overlapping with positive area),
+    with the four edges of the overlap rectangle - the contact lines (a
+    resting caster's footprint edges, hut and room walls on their floor and
+    under their roof / ceiling, wall-wall joins, blocks under a ceiling).
+    Rotated boxes (grazing_fan tiles) touch nothing."""
+    if station_name in _CONTACT_CACHE:
+        return _CONTACT_CACHE[station_name]
+    boxes = []
+    for index, b in enumerate(rooms.STATIONS[station_name]["boxes"]):
+        if not np.allclose(b["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]):
+            continue
+        c = np.array(b["center"], dtype=np.float64)
+        h = np.array(b["half_extents"], dtype=np.float64)
+        boxes.append((index, c - h, c + h))
+    out = []
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            a_index, a_lo, a_hi = boxes[i]
+            b_index, b_lo, b_hi = boxes[j]
+            for axis in range(3):
+                for plane_a, plane_b in ((a_hi[axis], b_lo[axis]), (a_lo[axis], b_hi[axis])):
+                    if abs(plane_a - plane_b) > CONTACT_TOLERANCE_M:
+                        continue
+                    u, v = (axis + 1) % 3, (axis + 2) % 3
+                    lo = np.maximum(a_lo, b_lo)
+                    hi = np.minimum(a_hi, b_hi)
+                    if ((hi[u] - lo[u]) <= CONTACT_TOLERANCE_M) or ((hi[v] - lo[v]) <= CONTACT_TOLERANCE_M):
+                        continue
+                    corners = []
+                    for cu, cv in ((lo[u], lo[v]), (hi[u], lo[v]), (hi[u], hi[v]), (lo[u], hi[v])):
+                        corner = np.zeros(3)
+                        corner[axis] = plane_a
+                        corner[u] = cu
+                        corner[v] = cv
+                        corners.append(corner)
+                    edges = [(corners[k], corners[(k + 1) % 4]) for k in range(4)]
+                    out.append((a_index, b_index, axis, float(plane_a), edges))
+    _CONTACT_CACHE[station_name] = out
+    return out
+
+
+def contact_gap(job, cls, candidates):
+    """-> mask of the candidate pixels inside the contact gap G3 allows: on a
+    box of a touching pair, in the contact plane, and within the G3 bound
+    (job["g3_limit"] texels, through J at the pixel) of one of the pair's
+    contact lines. G3 governs these pixels, so G2 leaves them out."""
+    wd = cls["wd"]
+    points, own = wd["points"], wd["own"]
+    offset = np.array(job["offset"], dtype=np.float64)
+    near = np.zeros(len(points), dtype=bool)
+    for a_index, b_index, axis, plane, edges in contacts(job["station"]):
+        sel = candidates & ~near & ((own == a_index) | (own == b_index))
+        sel &= np.abs(points[:, axis] - (plane + offset[axis])) <= SURFACE_TOLERANCE_M
+        idx = np.nonzero(sel)[0]
+        if len(idx) == 0:
+            continue
+        P = points[idx]
+        best = np.full(len(idx), np.inf)
+        for p0, p1 in edges:
+            a = p0 + offset
+            d = (p1 + offset) - a
+            t = np.clip(((P - a) @ d) / float(d @ d), 0.0, 1.0)
+            Q = a[None, :] + t[:, None] * d[None, :]
+            best = np.minimum(best, texel_length(cls["J"][idx], P - Q, cls["step"]))
+        near[idx[best <= job["g3_limit"]]] = True
+    return near
+
+
 def hut_interiors(points, offset):
     """-> [(hut, mask of the points inside its interior)] of thin_walls."""
     out = []
@@ -1249,12 +1332,15 @@ def analyze(job):
         measured &= ~hut_interior
     lit = measured & ~cls["occ"]
     shadow = measured & cls["occ"]
+    gap = contact_gap(job, cls, shadow)
+    shadow &= ~gap
     g1 = lit & (vis_c < LIT_BELOW)
     g2 = shadow & (vis_c > SHADOW_ABOVE)
     result["G1"] = {"count": int(g1.sum()), "total": int(lit.sum()), "examples": examples(wd, g1, vis_flat)}
     result["G2"] = {"count": int(g2.sum()), "total": int(shadow.sum()), "examples": examples(wd, g2, vis_flat)}
     result["pixels"] = {"covered": int(len(wd["index"])), "excluded": int(cls["excluded"].sum()),
-                        "band": int((cls["band"] & ~cls["excluded"]).sum()), "unknown": int((wd["own"] < 0).sum())}
+                        "band": int((cls["band"] & ~cls["excluded"]).sum()), "unknown": int((wd["own"] < 0).sum()),
+                        "contact_gap": int(gap.sum())}
     if job.get("g3"):
         worst, detail = measure_g3(job, cls, vis_flat)
         result["G3"] = {"worst_texels": worst, "examples": detail}
