@@ -183,8 +183,14 @@ auto fit_radiance_cascades(const erhe::math::Aabb& bounds, const Radiance_cascad
             cascade.interval_end   = interval.y;
             // The top cascade (at most 2 probes on its longest axis, or the
             // last one allowed) has no upper cascade, so no neighbour atlas.
+            // Cascade 0's merged atlas has c_merged_cascade0_block^2 texels
+            // per texel.
             const bool is_top = (i == (max_cascades - 1)) || (std::max(grid.counts.x, std::max(grid.counts.y, grid.counts.z)) <= 2);
-            if (!place_tiles(cascade, max_texture_size, is_top ? glm::ivec2{1, 1} : atlas_block)) {
+            glm::ivec2 block = is_top ? glm::ivec2{1, 1} : atlas_block;
+            if (i == 0) {
+                block = glm::max(block, glm::ivec2{c_merged_cascade0_block});
+            }
+            if (!place_tiles(cascade, max_texture_size, block)) {
                 fits = false;
                 break;
             }

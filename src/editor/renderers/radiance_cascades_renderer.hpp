@@ -108,11 +108,12 @@ public:
     // into rows of tiles_per_row), R32F holding an integer-valued float,
     // the probe state of the visibility pass (c_state_* bits); allocated
     // only in the visibility_masked merge mode.
-    // neighbours holds, per raw texel, the 8 connecting segments of the
-    // per_neighbour_trace merge mode (RGBA16F, rgb radiance, a beta; a
-    // 4 x 2 texel block per raw texel, segment n at
-    // (4 x + (n & 3), 2 y + (n >> 2))); allocated only in that mode, for
-    // every cascade but the top one.
+    // neighbours holds, per raw texel, the visibilities of the 8 connecting
+    // segments of the per_neighbour_trace merge mode (RGBA16F, one channel
+    // each, a 2 x 1 texel block per raw texel, segment n in channel n & 3 of
+    // (2 x + (n >> 2), y)); allocated only in that mode, for every cascade
+    // but the top one. Cascade 0's merged atlas has 2 x 2 texels per raw
+    // texel (the merge at cascade 1's angular resolution).
     class Cascade_textures
     {
     public:
@@ -240,8 +241,9 @@ public:
 
     [[nodiscard]] auto get_layout                   () const -> const Radiance_cascades_layout&;
     [[nodiscard]] auto get_cascade_textures         (int cascade) const -> const Cascade_textures&;
-    // Cascade 0 signed hit distance per raw texel (R32F, same layout as the
-    // cascade 0 raw atlas).
+    // Cascade 0 hit distance statistics per raw texel (RGBA32F, same layout
+    // as the cascade 0 raw atlas): mean distance, mean squared distance,
+    // backface fraction, blended with the raw texel's hysteresis.
     [[nodiscard]] auto get_distance_texture         () const -> const std::shared_ptr<erhe::graphics::Texture>&;
     // Bytes of one cascade's textures (cascade 0 includes the distance
     // texture), and of all cascades.
@@ -269,10 +271,17 @@ public:
     // rgb radiance, a beta of one raw texel; probe coordinates and tile
     // texel must be inside the snapshot layout.
     [[nodiscard]] auto read_raw_texel             (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
-    // rgb merged radiance, a merged transparency of one texel.
+    // rgb merged radiance, a merged transparency of one texel (cascade 0:
+    // the mean of its child texels).
     [[nodiscard]] auto read_merged_texel          (int cascade, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
-    // Cascade 0 signed hit distance of one texel.
-    [[nodiscard]] auto read_distance_texel        (const glm::ivec3& probe, const glm::ivec2& texel) const -> float;
+    // Cascade 0 is merged at cascade 1's angular resolution: child
+    // (0 .. c_merged_cascade0_block^2 - 1, x + block * y) of a cascade 0
+    // texel is the texel merged with the upper value of cascade 1 texel
+    // (block * u + x, block * v + y).
+    [[nodiscard]] auto read_merged_child_texel    (const glm::ivec3& probe, const glm::ivec2& texel, int child) const -> glm::vec4;
+    // Cascade 0 hit distance statistics of one texel: x mean distance, y
+    // mean squared distance, z backface fraction.
+    [[nodiscard]] auto read_distance_statistics   (const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4;
     // The snapshot holds the probe field atlases (irradiance, distance,
     // probe data), copied with the parameters get_readback_field_parameters()
     // reports.
@@ -520,12 +529,13 @@ private:
 
     // Probe field (rc_reduce.comp): the three DDGI-format atlases for
     // cascade 0's grid, the settings they were allocated with, and the
-    // reduce weights - per output texel the lobe integral over each cascade
-    // 0 texel footprint (compute_octahedral_lobe_weights()), cosine for
-    // irradiance, pow(cos, depth_sharpness) for distance, then the cascade 0
-    // texel solid angles - the lobe tables transposed to [cascade 0 texel]
-    // [output texel], packed four floats per vec4 in one read-only
-    // storage buffer, created on change only.
+    // reduce weights - per output texel the lobe integral over each input
+    // texel footprint (compute_octahedral_lobe_weights()), cosine over the
+    // merged cascade 0 child texels for irradiance, pow(cos,
+    // depth_sharpness) over the cascade 0 texels for distance, each stored
+    // as a sparse list per output texel (the inputs the lobe reaches), then
+    // the cascade 0 texel solid angles - packed four floats per vec4 in one
+    // read-only storage buffer, created on change only.
     class Field_settings
     {
     public:

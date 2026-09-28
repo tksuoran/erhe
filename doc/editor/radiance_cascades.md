@@ -122,14 +122,17 @@ glm only) and unit tested by `editor_renderer_tests`
   (`Radiance_cascade::get_tile_origin()`), so the atlas stays close to square
   and both sides stay within `Device_info::max_texture_size`. In the
   `per_neighbour_trace` merge mode every cascade but the top one also has a
-  neighbour atlas of 4 x 2 texels per raw texel ("Textures"); the fit
+  neighbour atlas of 2 x 1 texels per raw texel ("Textures"); the fit
   settings then carry that block (`atlas_block_width` /
   `atlas_block_height`, `c_neighbour_block_width` / `_height`) and the
-  row length is chosen so the neighbour atlas fits too. The block is part
-  of the fit settings, so switching into or out of that mode refits. When
-  a cascade would still exceed the limit, the cascade 0 budget is lowered
-  (growing `s0`) and the fit repeated; at the default 16384 limit the
-  block changes no layout of the stations (unit tested).
+  row length is chosen so the neighbour atlas fits too. Cascade 0's merged
+  atlas has 2 x 2 texels per raw texel in every mode
+  (`c_merged_cascade0_block`, "Merge"), so cascade 0 always fits with at
+  least that block. The block is part of the fit settings, so switching
+  into or out of `per_neighbour_trace` refits. When a cascade would still
+  exceed the limit, the cascade 0 budget is lowered (growing `s0`) and the
+  fit repeated; at the default 16384 limit the blocks change no layout of
+  the stations (unit tested).
 - **Merge math**: `get_child_texels()` - cascade `i` texel `(u, v)` covers
   cascade `i + 1` texels `(2u .. 2u+1, 2v .. 2v+1)`, the octahedral nesting of
   the merge; `get_upper_probes()` - the 8 cascade `i + 1` probes of a cascade
@@ -149,12 +152,14 @@ small volume (the window and the MCP stats report the real numbers).
 is constructed in `editor.cpp`'s `post_processing_task` next to
 `Ddgi_renderer`, owned by `Editor`, and published as
 `App_context::radiance_cascades_renderer`. Per cascade it allocates two
-atlases of the cascade's atlas size, RGBA16F, storage + sampled + transfer:
-**raw** (the traced intervals, rgb radiance and a transparency beta) and
-**merged** (raw merged with everything beyond it, "Merge"). Cascade 0 also has a
-**distance** texture of its atlas size, R32F: the signed hit distance of
-each raw texel's last trace (see "Trace"), which the reduce pass turns into
-the distance moments and the probe classification. In the
+atlases, RGBA16F, storage + sampled + transfer: **raw** (the traced
+intervals, rgb radiance and a transparency beta, the cascade's atlas size)
+and **merged** (raw merged with everything beyond it, "Merge"; the atlas
+size, for cascade 0 twice it per axis: cascade 0 is merged at cascade 1's
+angular resolution). Cascade 0 also has a **distance** texture of its atlas
+size, RGBA32F: the hit distance statistics of each raw texel (see "Trace"),
+which the reduce pass turns into the distance moments and the probe
+classification. In the
 `visibility_masked` merge mode every cascade also has a **probe state**
 texture, R32F, one texel per probe at its tile coordinates
 (`tiles_per_row x tile_rows`): the visibility pass's bits ("Merge"); it is
@@ -162,16 +167,17 @@ allocated on the first tick in that mode (and after each refit in it) and
 released when the mode is left. All are cleared to zero at allocation,
 recorded into the frame command buffer, and left in
 `shader_read_only_optimal`. Texture memory per cascade is
-`2 x atlas width x atlas height x 8` bytes, plus
-`tiles_per_row x tile_rows x 4` bytes for the probe state and
-`atlas width x atlas height x 4` bytes for cascade 0's distance texture.
-In the `per_neighbour_trace` merge mode every cascade but the top one
-also has a **neighbours** texture, RGBA16F, 4 x 2 texels per raw texel
-(`4 x atlas width` by `2 x atlas height`, 8 times its raw atlas): the 8
-connecting segments of each texel ("Trace", "Merge"), segment `n` of raw
-texel `(x, y)` at `(4 x + (n & 3), 2 y + (n >> 2))`
-(`rc_neighbour_texel()` in `res/editor/shaders/erhe_rc_upper.glsl`),
-allocated with the layout in that mode.
+`2 x atlas width x atlas height x 8` bytes (cascade 0: 5 x, the merged atlas
+being 4 times the raw one), plus `tiles_per_row x tile_rows x 4` bytes for
+the probe state and `atlas width x atlas height x 16` bytes for cascade 0's
+distance texture. In the `per_neighbour_trace` merge mode every cascade but
+the top one also has a **neighbours** texture, RGBA16F, 2 x 1 texels per
+raw texel (`2 x atlas width` by `atlas height`): the visibilities of the 8
+connecting segments of each texel, one channel each ("Trace", "Merge"),
+segment `n` of raw texel `(x, y)` in channel `n & 3` of texel
+`(2 x + (n >> 2), y)` (`rc_neighbour_texel()` in
+`res/editor/shaders/erhe_rc_upper.glsl`), allocated with the layout in that
+mode.
 The probe field atlases of "Reduce" come on top (the reported total
 `texture_bytes` includes them).
 
@@ -223,34 +229,35 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   (`ERHE_RC_TRACE_NEIGHBOURS 1`, `record_neighbour_trace()`), for every
   cascade but the top one. Per texel, for each of the 8 upper probes
   `u_n` of the merge stencil (`get_upper_probes()`, shared by the
-  shaders through `erhe_rc_upper.glsl`) the segment from this probe's
-  interval start `p + t_i d` to `u_n`'s interval start `u_n + t_{i+1} d`,
-  `d` the texel-centre direction, is traced from `t = 0` over its length
-  with the same transport (front face hit shaded as seen along the
-  segment, beta 0; backface 0, beta 0; miss 0, beta 1), and blended into
-  its texel of the neighbour atlas with the same hysteresis and first-fill
-  flag as the run's raw texels. Upper probes of weight 0 (odd lower
-  counts) are not traced and store (0, 0). The variant writes only the
-  neighbour atlas. **Budget**: `texels_per_frame` counts texels, as in the
-  other modes, so a texel below the top cascade costs its raw ray plus up
-  to 8 segments; the raw interval stays traced (cascade 0's distance
-  texture and classification feed the reduce, and the raw atlases stay
-  valid for the preview and the readback checks), which is one ray in
-  nine. The segments run in their own pass rather than in the merge: the
-  merge runs over every texel each update, so tracing there would make
-  its cost 8 rays per texel of the whole layout per update, outside the
-  budget, and would drop the hysteresis the raw intervals have.
-- **Cascade 0 distance.** Cascade 0 runs also store the signed hit distance
-  in the distance texture, same texel address as the raw atlas and not
-  blended: `+t` for a front face hit, `-t` for a backface hit, `r0` (the
-  interval end) for a miss.
+  shaders through `erhe_rc_upper.glsl`) the segment from the END of the
+  texel's interval, `p + t_{i+1} d`, to `u_n`'s interval start
+  `u_n + t_{i+1} d` (`d` the texel's direction; the segment vector is
+  `u_n - p`) is a visibility
+  test: `segment_free()` (`res/shaders/erhe_ray_hit.glsl`), a ray query
+  that ends at the first hit of any face and fetches nothing, 1 when the
+  segment is free. The 8 visibilities are blended into the texel's 2 x 1
+  block of the neighbour atlas with the texel's hysteresis and first-fill rule. Upper
+  probes of weight 0 (odd lower counts) are not traced and store 0. The
+  variant writes only the neighbour atlas. **Budget**: `texels_per_frame`
+  counts texels, as in the other modes, so a texel below the top cascade
+  costs its raw ray plus up to 8 visibility rays. The segments run in
+  their own pass rather than in the merge: the merge runs over every
+  texel each update, so tracing there would make its cost 8 rays per
+  texel of the whole layout per update, outside the budget, and would
+  drop the hysteresis the raw intervals have.
+- **Cascade 0 distance statistics.** Cascade 0 runs also blend, with the
+  texel's hysteresis, the texel's hit statistics into the distance texture
+  (same texel address as the raw atlas): x the mean distance `d`, y the
+  mean `d^2` (`d` the hit distance, front or back face, or `r0` on a miss)
+  along the texel's CENTRE direction, and z the backface fraction of the
+  raw traces.
 - **Trace inputs** are built as for DDGI: the scene root's forward
   `Material_set`, a `Light_buffer` with projections fitted by
   `fit_trace_light_projections()` (`src/editor/renderers/trace_lights.{hpp,cpp}`,
   shared with `Ddgi_renderer`; no trace without a scene camera), and the
   renderer's own `Scene_tlas`, rebuilt each frame it traces. Binding points
   follow DDGI's trace layout: material 0, light 1, control 2, instance
-  records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`r32f`),
+  records 3, TLAS 4, raw atlas 5 (`rgba16f`), distance 6 (`rgba32f`),
   neighbour atlas 7 (`rgba16f`; the raw variants bind their raw atlas
   there, unreferenced); the texture heap is set 1.
 - **Timing.** One explicit-range `Gpu_timer` per pass
@@ -261,7 +268,7 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   `merge` and their sum `total`, each last /
   mean over the last 60 samples; `texels_per_update`, `rays_per_update`
   (one ray per texel plus the connecting segments) and
-  `neighbour_rays_per_update` (the segments: their count per full sweep,
+  `neighbour_rays_per_update` (the visibility segments: their count per full sweep,
   from `get_upper_probes()` at allocation, spread over the updates of a
   sweep), `ms_per_million_rays` (total mean per million rays),
   `updates_per_full_refresh` = ceil(total texels / texels per update) and
@@ -289,7 +296,13 @@ count, not to the trace budget.
   interpolated to the probe - the 8 upper probes and trilinear weights of
   `get_upper_probes()` ("Layout") - and averaged at
   each upper probe over the 2x2 child texels of `get_child_texels()`, the
-  directions nesting in this texel. **Border rule**: upper indices are
+  directions nesting in this texel.
+- **Cascade 0 at child resolution**: cascade 0 is merged into 2 x 2 texels
+  per raw texel (`c_merge_flag_child_resolution`): merged texel `(U, V)` is
+  raw texel `(U / 2, V / 2)` merged with the upper value of the one
+  cascade 1 texel `(U, V)` instead of the 2x2 mean. The mean of the 4 is
+  the texel merged at its own resolution; the reduce convolves the far
+  field at cascade 1's angular resolution ("Reduce"). **Border rule**: upper indices are
   clamped to the upper grid (clamp to edge). A lower probe beyond the
   outermost upper probe of an axis - the first and the last lower index
   when the lower count is even - puts that axis' 0.25 weight on the
@@ -298,17 +311,18 @@ count, not to the trace budget.
   probes coincide with upper probes.
 - **Merge modes** (`merge_mode`, three variants of the shader,
   `ERHE_RC_MERGE_MODE` 0 / 1 / 2, the enum values). `interpolate`: all 8
-  upper probes with their trilinear weights. `per_neighbour_trace` (the
-  "bilinear fix", here trilinear): the texel's own interval is replaced
-  by its 8 connecting segments ("Trace"), each merged with its own upper
-  probe before the weight,
-  `merged = sum_n w_n (segment_n.rgb + segment_n.a * upper_n.rgb, segment_n.a * upper_n.a)`,
-  so every upper interval continues exactly where the lower ray, re-aimed
-  at that upper probe, ends. The segments use the texel-centre direction
-  and the upper value is the 2x2 child average ("pre-averaged", 8 rays per
-  texel instead of 32): the known approximation is that the segment
-  direction differs from the child directions by up to half a lower texel
-  and each segment is one ray, not a footprint average. The top cascade
+  upper probes with their trilinear weights. `per_neighbour_trace`: each
+  upper probe is weighted by the visibility `V_n` of its connecting
+  segment ("Trace") - from the end of the texel's interval to the upper
+  interval's start - and the weights are renormalized,
+  `upper = sum_n w_n V_n upper_n / sum_n w_n V_n`, `(0, 0)` when none is
+  visible. The texel's own interval stays the ray along its direction; an
+  upper interval that starts behind a wall from the lower ray's end is left
+  out. (The segment was first a radiance interval replacing the texel's
+  own - the community "bilinear fix" - which bends the direction toward the
+  upper probe by up to `atan(1.5 / interval_scale)` at cascade 0 and made
+  floor probes see the sunlit floor through their horizon texels;
+  doc/plans/radiance_cascades.md section 10, "Phase 6".) The top cascade
   takes the `interpolate` variant (it merges with the sky in every mode).
   `visibility_masked`: only usable upper probes
   take part: the
@@ -382,13 +396,15 @@ count, not to the trace budget.
   but the same test also removes coarse probes that lie outside a closed
   room or inside its walls whose intervals, starting back inside the
   room, carried part of its far field - so in `cornell` the far field gets
-  darker. The `per_neighbour_trace` merge mode traces from the lower
-  probe's interval start to each upper interval start, so an upper
-  interval behind a wall is continued only through a segment that the
-  wall blocks: it removes the start-point parallax; what remains is the
+  darker. The `per_neighbour_trace` merge mode tests the visibility from
+  the lower ray's end to each upper interval start, so an upper interval
+  behind a wall is not continued: it removes the start-point parallax;
+  what remains is the
   upper interval's own offset (it starts at `u_n + t_{i+1} d`, up to
-  three quarters of an upper spacing from the lower ray) and the
-  pre-averaged direction ("Verification").
+  three quarters of an upper spacing from the lower ray) and the child
+  directions of the upper value, whose interval starts lie up to
+  `t_{i+1}` times half a lower texel from the tested point
+  ("Verification").
 
 ## Reduce
 
@@ -418,17 +434,24 @@ it with `erhe_ddgi.glsl` unchanged.
   through reflection and MCP `set_ddgi` without a change notification, so
   `update_layout()` compares them with the ones the field was allocated
   with, as it compares the fit settings.
-- **Irradiance** (variant `ERHE_RC_REDUCE_DISTANCE 0`). Every merged
-  cascade 0 texel `j` is the full-range radiance averaged over the
-  octahedral footprint of `j`, so the cosine convolution is exact per
-  footprint: the texel for direction `n` stores
-  `sum_j W_j(n) L_j / sum_j W_j(n)` with
+- **Irradiance** (variant `ERHE_RC_REDUCE_DISTANCE 0`). The input is
+  merged cascade 0 at child resolution: `(2 q0)^2` texels per probe, each
+  the full-range radiance averaged over its footprint, so the texel for
+  direction `n` stores `sum_j W_j(n) L_j / sum_j W_j(n) (1 - b_j)` with
   `W_j(n) = integral over footprint j of max(0, n . w) dw` - the
-  cosine-weighted mean radiance (`E / pi`) DDGI's irradiance blend stores.
-  Texels whose cascade 0 ray hit a backface are skipped, as the DDGI blend
-  skips backface rays.
-- **Distance** (variant 1). The moments `(d, d^2)` of
-  `d = min(|signed distance|, r0)` of the cascade 0 texels, weighted with
+  cosine-weighted mean radiance (`E / pi`) DDGI's irradiance blend stores -
+  and `b_j` the backface fraction of the texel's cascade 0 parent (its
+  radiance is the mean over all traces, backface ones contributing 0, so
+  only the normalization drops them; without jitter `b_j` is 0 or 1 and
+  this skips backface texels, as the DDGI blend skips backface rays). At
+  cascade 0's own resolution (`q0` 4, a footprint about 45 degrees wide)
+  the cosine weighting of footprint means overstates radiance that sits
+  near the horizon of a texel: a floor probe's texels that hold both the
+  sky and a sunlit wall near the horizon read up to 15 % bright (measured,
+  doc/plans/radiance_cascades.md section 10, "Phase 6"); the child
+  resolution removes most of it for the far field at no trace cost.
+- **Distance** (variant 1). The blended moments `(d, d^2)` of the
+  cascade 0 texels (distance statistics x, y; `d <= r0`), weighted with
   `integral over footprint j of pow(max(0, n . w), depth_sharpness) dw`.
   A miss stores `r0` (the interval end), so a free direction reads at
   least `r0 >= sqrt(3) * s0`, the cell diagonal: the Chebyshev test of a
@@ -438,27 +461,31 @@ it with `erhe_ddgi.glsl` unchanged.
   exponent, never on the probe, so it is integrated on the CPU
   (`compute_octahedral_lobe_weights()` in
   `src/editor/renderers/radiance_cascades_layout.{hpp,cpp}`, unit tested):
-  each cascade 0 texel is split into about `32 / q0` squares per axis of
+  each input texel is split into about `32 / q` squares per axis of
   the octahedral parameter, each contributing at its centre direction `w`
   with the solid angle `dA * |w|_1^3` (the octahedral map's area element).
-  The irradiance weights, the distance weights (both transposed to
-  `[cascade 0 texel][output texel]`, so the invocations of a workgroup read
-  consecutive floats) and the cascade 0 texel solid angles are packed into
-  one read-only storage buffer, created on change only (15 KB at the
-  defaults: 6 and 14 texels, `q0` 4).
+  Each output texel stores a sparse list of the input texels its lobe
+  reaches - weights above `c_reduce_weight_threshold` (1e-4) of its largest
+  one: a header of (first pair, pair count) per output texel, then
+  (input texel, weight) pairs - for the irradiance (`(2 q0)^2` inputs) and
+  the distance (`q0^2` inputs) lobes, followed by the cascade 0 texel
+  solid angles, in one read-only storage buffer, created on change only.
+  The dense loop spent most of the reduce, the largest pass, on zero
+  weights.
 - **Probe state** (written by the irradiance variant): inactive when more
-  than a quarter of the probe's sphere, by solid angle, is cascade 0
-  texels that hit a backface - DDGI's classification rule on cascade 0's
-  rays. It is the one rule in both merge modes: the `visibility_masked`
+  than a quarter of the probe's sphere, by solid angle weighted with each
+  texel's backface fraction, hit a backface - DDGI's classification rule on
+  cascade 0's rays. It is the one rule in both merge modes: the `visibility_masked`
   mode's inside bit (64 rays over the full range, nearest hit a backface)
   answers a different question - whether the probe's merged intervals can
   carry light - and does not classify the field.
 - **Shape.** One workgroup of 64 invocations per cascade 0 probe (a 2D
   grid of workgroups, rows of 32768), striding over the tile's texels; the
-  probe's `q0^2` merged texels and signed distances are read once into
-  shared memory (tiles up to 16 x 16), then the border is filled with
-  DDGI's border copy (`res/editor/shaders/erhe_ddgi_border.glsl`). No
-  hysteresis: the raw intervals are blended over time already, and the
+  probe's `(2 q0)^2` merged child texels and `q0^2` distance statistics
+  are read once into shared memory (tiles up to 16 x 16; the merged tile
+  side `2 q0` rides in the control block, `weights.w`), then the border is
+  filled with DDGI's border copy (`res/editor/shaders/erhe_ddgi_border.glsl`).
+  No hysteresis: the raw intervals are blended over time already, and the
   field is rewritten from merged cascade 0 every update. The two variants
   write different images, so they need no barrier between them; the
   atlases are left `shader_read_only_optimal`.
@@ -478,8 +505,10 @@ visibility pass's last time and run count, and the
 cost figures; the debug cascade mask as one checkbox per cascade plus Sky
 (checked bands contribute radiance; they edit `debug_cascade_mask`); and an
 atlas preview of a chosen cascade, atlas (raw or merged) and channel
-(radiance with a scale, beta, or cascade 0 signed distance - green front
-face, red backface, brightness distance / `r0`).
+(radiance with a scale, beta, or cascade 0 distance statistics - green
+front face, red backface (backface fraction above one half), brightness
+the mean distance / `r0`); cascade 0's merged atlas shows its child
+resolution.
 
 The atlases carry beta in alpha, which the ImGui image widget would use as
 opacity (every hit texel would vanish), so the preview is an opaque copy
@@ -535,7 +564,11 @@ tick records it, so the copy costs nothing while the window is closed.
   texel:[u,v]}]` (at most 4096): `{cascade, probe, texel, probe_position,
   direction, interval, radiance, beta, merged_radiance, merged_beta,
   probe_inside, upper_visible_mask}` (the probe's state, "Merge"),
-  cascade 0 also `signed_distance`. With a field the copy also holds the
+  cascade 0 also `merged_children` (the 4 child resolution texels, rgba,
+  child `x + 2 y`; `merged_radiance` / `merged_beta` are their mean),
+  `signed_distance` (the mean centre distance, negative when the backface
+  fraction exceeds one half), `distance_mean_squared` and
+  `backface_fraction`. With a field the copy also holds the
   three field atlases: `field` (the parameters they were copied with) and
   `field_texels`, index-aligned with the optional input
   `field_texels: [{probe:[x,y,z], texel:[u,v], atlas}]` (cascade 0 probe,

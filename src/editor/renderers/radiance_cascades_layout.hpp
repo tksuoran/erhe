@@ -25,11 +25,19 @@ namespace editor {
 // the one below it, so even a 4096^3 cascade 0 is covered by 12 cascades.
 constexpr int c_max_radiance_cascades = 12;
 
-// The per_neighbour_trace merge mode stores 8 connecting segments per raw
-// texel of every cascade but the top one, as a 4 x 2 texel block of a
-// neighbour atlas (doc/editor/radiance_cascades.md "Merge").
-constexpr int c_neighbour_block_width  = 4;
-constexpr int c_neighbour_block_height = 2;
+// The per_neighbour_trace merge mode stores the visibility of 8 connecting
+// segments per raw texel of every cascade but the top one, one channel
+// each, as a 2 x 1 texel block (two RGBA texels) of a neighbour atlas
+// (doc/editor/radiance_cascades.md "Merge").
+constexpr int c_neighbour_block_width  = 2;
+constexpr int c_neighbour_block_height = 1;
+
+// Cascade 0's merged atlas keeps the merge at cascade 1's angular
+// resolution: 2 x 2 texels per cascade 0 texel, one per nested cascade 1
+// texel, each the cascade 0 interval merged with that child direction's
+// upper value (doc/editor/radiance_cascades.md "Merge", "Reduce"). The
+// tiling keeps that atlas within max_texture_size too.
+constexpr int c_merged_cascade0_block = 2;
 
 class Radiance_cascades_layout_settings
 {

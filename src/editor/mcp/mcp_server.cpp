@@ -1649,7 +1649,22 @@ auto Mcp_server::query_radiance_cascades_texels(const json& args) -> std::string
                     entry["upper_visible_mask"] = probe_state & Radiance_cascades_renderer::c_state_upper_visible_mask;
                 }
                 if (address.cascade == 0) {
-                    entry["signed_distance"] = renderer->read_distance_texel(address.probe, address.texel);
+                    // Cascade 0 is merged at cascade 1's angular resolution:
+                    // the merged value of each nested cascade 1 direction
+                    // (merged_radiance / merged_beta are their mean).
+                    json children = json::array();
+                    for (int child = 0; child < (c_merged_cascade0_block * c_merged_cascade0_block); ++child) {
+                        const glm::vec4 child_value = renderer->read_merged_child_texel(address.probe, address.texel, child);
+                        children.push_back(json::array({child_value.r, child_value.g, child_value.b, child_value.a}));
+                    }
+                    entry["merged_children"] = std::move(children);
+                    // The blended hit distance statistics; signed_distance
+                    // is the mean distance, negative when most traces hit a
+                    // backface (exact without direction jitter).
+                    const glm::vec4 statistics = renderer->read_distance_statistics(address.probe, address.texel);
+                    entry["signed_distance"]   = (statistics.z > 0.5f) ? -statistics.x : statistics.x;
+                    entry["distance_mean_squared"] = statistics.y;
+                    entry["backface_fraction"]     = statistics.z;
                 }
                 texels.push_back(std::move(entry));
             }

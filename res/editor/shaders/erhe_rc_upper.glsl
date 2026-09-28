@@ -31,12 +31,14 @@ void rc_upper_axis(int lower_index, int lower_count, int upper_count, out ivec2 
     }
 }
 
-// The per_neighbour_trace connecting segments of one lower texel are stored
-// in a 4 x 2 texel block of the neighbour atlas: segment n (upper probe n)
-// of the lower atlas texel t sits at (4 t.x + (n & 3), 2 t.y + (n >> 2)).
-ivec2 rc_neighbour_texel(ivec2 atlas_texel, int n)
+// The per_neighbour_trace connecting segment visibilities of one lower
+// texel are stored in a 2 x 1 texel block of the neighbour atlas, one
+// channel per segment: segment n (upper probe n) of the lower atlas texel t
+// is channel n & 3 of texel (2 t.x + (n >> 2), t.y). Upper probes 0 - 3 are
+// the first texel, 4 - 7 the second.
+ivec2 rc_neighbour_texel(ivec2 atlas_texel, int half_index)
 {
-    return ivec2((4 * atlas_texel.x) + (n & 3), (2 * atlas_texel.y) + (n >> 2));
+    return ivec2((2 * atlas_texel.x) + half_index, atlas_texel.y);
 }
 
 #endif // ERHE_RC_UPPER_GLSL

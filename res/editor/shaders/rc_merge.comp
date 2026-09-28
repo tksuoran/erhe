@@ -29,16 +29,27 @@
 //   usable upper probe, upper is (0, 0): nothing beyond the interval is
 //   known, and the merged texel keeps its own interval only
 //   (doc/editor/radiance_cascades.md "Merge").
-//   Merge mode per_neighbour_trace (ERHE_RC_MERGE_MODE 2): the texel's own
-//   interval is replaced by 8 connecting segments, one per upper probe n,
-//   from this probe's interval start to upper probe n's interval start
-//   (rc_trace.comp, ERHE_RC_TRACE_NEIGHBOURS; 4 x 2 block per texel of the
-//   neighbour atlas), and each is merged with its own upper probe before
-//   the trilinear weight:
-//     merged = sum_n w_n (segment_n.rgb + segment_n.a * upper_n.rgb, segment_n.a * upper_n.a)
-//   so no upper interval is continued from a start point the lower ray
-//   does not reach (the start-point parallax of the other two modes).
+//   Merge mode per_neighbour_trace (ERHE_RC_MERGE_MODE 2): each upper
+//   probe n is weighted by the visibility V_n of the connecting segment
+//   from the end of this texel's interval, p + t_{i+1} d, to upper probe
+//   n's interval start, u_n + t_{i+1} d (rc_trace.comp,
+//   ERHE_RC_TRACE_NEIGHBOURS; one channel each of the 2 x 1 block of the
+//   neighbour atlas), and the weights are renormalized:
+//     upper = sum_n w_n V_n upper_n / sum_n w_n V_n
+//   so no upper interval is continued from a start point the lower ray's
+//   end cannot see (the start-point parallax of the interpolate mode),
+//   while the texel's own interval stays the ray along its direction.
+//   With no visible upper probe upper is (0, 0), as in visibility_masked.
 //   Upper probes of weight 0 are skipped (their segments are not traced).
+// - Child resolution (flag c_flag_child_resolution, cascade 0 below the
+//   top cascade): the merged atlas has 2 x 2 texels per raw texel (tile
+//   side 2 q, the upper cascade's), and merged texel (U, V) is the raw
+//   texel (U / 2, V / 2) merged with the upper value of upper texel (U, V)
+//   alone instead of the 2x2 child mean, so the reduce convolves the far
+//   field at cascade 1's angular resolution (doc/editor/radiance_cascades.md
+//   "Reduce"). The mean of the 4 merged texels equals the texel merged at
+//   its own resolution. A top cascade 0 (one cascade) merges with the sky
+//   at child resolution the same way.
 // - Debug cascade mask (flag c_flag_mask_radiance): the cascade's own
 //   radiance is zeroed, its beta kept, so the merged atlases show only the
 //   unmasked interval bands. A masked sky arrives as a zero sky radiance.
@@ -46,8 +57,7 @@
 // Bindings: the raw atlas and probe state of this cascade and the merged
 // atlas and probe state of the cascade above are sampled (read-only,
 // texelFetch; only the visibility_masked variant reads the states, only
-// the per_neighbour_trace variant the neighbour atlas, which it reads
-// instead of the raw atlas); the
+// the per_neighbour_trace variant the neighbour atlas); the
 // merged atlas of this cascade is the only storage image, and the only
 // write. Probe states are integer-valued floats, one texel per probe at
 // its tile coordinates.
@@ -55,8 +65,9 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 // rc_merge.params.y flags
-const uint c_flag_top           = 1u; // top cascade: merge with the sky
-const uint c_flag_mask_radiance = 2u; // debug_cascade_mask: zero this cascade's radiance
+const uint c_flag_top              = 1u; // top cascade: merge with the sky
+const uint c_flag_mask_radiance    = 2u; // debug_cascade_mask: zero this cascade's radiance
+const uint c_flag_child_resolution = 4u; // cascade 0: write at the upper cascade's angular resolution
 
 // Probe state bits (Radiance_cascades_renderer::c_state_*)
 const uint c_state_inside = 256u;
@@ -71,18 +82,25 @@ void main()
         return;
     }
 
-    int   q             = int(rc_merge.grid_counts.w);
-    ivec3 counts        = ivec3(rc_merge.grid_counts.xyz);
-    int   tiles_per_row = int(rc_merge.params.x);
-    ivec2 tile          = atlas_texel / q;
-    int   probe_index   = (tile.y * tiles_per_row) + tile.x;
+    uint  flags            = rc_merge.params.y;
+    bool  child_resolution = (flags & c_flag_child_resolution) != 0u;
+    int   q                = int(rc_merge.grid_counts.w);
+    // The merged texel's tile side: q, or 2 q when cascade 0 is merged at
+    // the upper cascade's angular resolution (child_resolution).
+    int   merged_q         = child_resolution ? (2 * q) : q;
+    ivec3 counts           = ivec3(rc_merge.grid_counts.xyz);
+    int   tiles_per_row    = int(rc_merge.params.x);
+    ivec2 tile             = atlas_texel / merged_q;
+    int   probe_index      = (tile.y * tiles_per_row) + tile.x;
     if (probe_index >= (counts.x * counts.y * counts.z)) {
         return; // unused tile of a partly filled last row
     }
-    ivec2 uv = atlas_texel - (tile * q);
+    ivec2 merged_uv = atlas_texel - (tile * merged_q);
+    // The raw texel (and neighbour block) this merged texel belongs to.
+    ivec2 uv        = child_resolution ? (merged_uv / 2) : merged_uv;
+    ivec2 raw_texel = (tile * q) + uv;
 
-    vec4 raw   = texelFetch(s_rc_raw, atlas_texel, 0);
-    uint flags = rc_merge.params.y;
+    vec4 raw   = texelFetch(s_rc_raw, raw_texel, 0);
     vec3 own   = ((flags & c_flag_mask_radiance) != 0u) ? vec3(0.0) : raw.rgb;
 
     vec4 upper;
@@ -109,6 +127,12 @@ void main()
 #if ERHE_RC_MERGE_MODE == 1
         uint lower_state = uint(texelFetch(s_rc_state, tile, 0).r + 0.5);
 #endif
+#if ERHE_RC_MERGE_MODE == 2
+        vec4 visibility[2] = vec4[2](
+            texelFetch(s_rc_neighbours, rc_neighbour_texel(raw_texel, 0), 0),
+            texelFetch(s_rc_neighbours, rc_neighbour_texel(raw_texel, 1), 0)
+        );
+#endif
 
         vec4  sum        = vec4(0.0);
         float weight_sum = 0.0;
@@ -124,38 +148,35 @@ void main()
                         continue;
                     }
 #endif
-                    ivec2 base     = (upper_tile * upper_q) + child;
-                    vec4  children =
-                        texelFetch(s_rc_upper, base + ivec2(0, 0), 0) +
-                        texelFetch(s_rc_upper, base + ivec2(1, 0), 0) +
-                        texelFetch(s_rc_upper, base + ivec2(0, 1), 0) +
-                        texelFetch(s_rc_upper, base + ivec2(1, 1), 0);
+                    ivec2 base = (upper_tile * upper_q) + child;
+                    // The mean of the 2x2 child texels nesting in this
+                    // texel, or at child resolution the one child texel
+                    // this merged texel stands for.
+                    vec4  children = child_resolution
+                        ? texelFetch(s_rc_upper, (upper_tile * upper_q) + merged_uv, 0)
+                        : (0.25 * (
+                            texelFetch(s_rc_upper, base + ivec2(0, 0), 0) +
+                            texelFetch(s_rc_upper, base + ivec2(1, 0), 0) +
+                            texelFetch(s_rc_upper, base + ivec2(0, 1), 0) +
+                            texelFetch(s_rc_upper, base + ivec2(1, 1), 0)
+                          ));
                     float weight = wx[i] * wy[j] * wz[k];
 #if ERHE_RC_MERGE_MODE == 2
-                    if (weight == 0.0) {
+                    int n = i + (2 * j) + (4 * k);
+                    weight *= visibility[n >> 2][n & 3];
+                    if (weight <= 0.0) {
                         continue;
                     }
-                    vec4 segment     = texelFetch(s_rc_neighbours, rc_neighbour_texel(atlas_texel, i + (2 * j) + (4 * k)), 0);
-                    vec3 segment_rgb = ((flags & c_flag_mask_radiance) != 0u) ? vec3(0.0) : segment.rgb;
-                    vec4 upper_n     = 0.25 * children;
-                    sum        += weight * vec4(segment_rgb + (segment.a * upper_n.rgb), segment.a * upper_n.a);
-#else
-                    sum        += weight * (0.25 * children);
 #endif
+                    sum        += weight * children;
                     weight_sum += weight;
                 }
             }
         }
-#if ERHE_RC_MERGE_MODE == 2
-        // The segments replace the texel's own interval: sum is already the
-        // merged value (the weights sum to exactly 1).
-        imageStore(i_rc_merged, atlas_texel, sum);
-        return;
-#else
         // interpolate: the weights sum to exactly 1 (products of 0, 0.25,
-        // 0.5, 0.75 and 1), so the division is exact.
+        // 0.5, 0.75 and 1), so the division is exact; the other modes
+        // renormalize over the usable (visible) upper probes.
         upper = (weight_sum > 0.0) ? (sum / weight_sum) : vec4(0.0);
-#endif
     }
 
     imageStore(i_rc_merged, atlas_texel, vec4(own + (raw.a * upper.rgb), raw.a * upper.a));

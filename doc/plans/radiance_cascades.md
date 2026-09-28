@@ -169,10 +169,13 @@ textures.
    (the atmosphere-LUT sky is the shared DDGI follow-up). Lower cascades: 2x2
    child average from each of the 8 upper probes, trilinear weights,
    `merged = raw.rgb + raw.a * upper`, with the upper weights of the
-   selected `merge_mode` (below).
+   selected `merge_mode` (below). Cascade 0 is merged at cascade 1's
+   angular resolution (2 x 2 texels per texel, each with one child's upper
+   value), the reduce's input.
 3. **`rc_reduce.comp`** - one workgroup per cascade 0 probe, writing the three
    DDGI atlases of section 2, borders included (the `ddgi_blend.comp` border
-   copy is reused).
+   copy is reused); the irradiance convolution runs over the child
+   resolution texels, with sparse per-output-texel lobe weights.
 
 The merge and reduce passes run whenever a trace dispatch ran; they touch
 about `2 * M0` texels, far below the trace cost.
@@ -194,18 +197,21 @@ Merge-quality option `merge_mode`, three modes; the default,
   upper probes (`upper = (0, 0)` when none is). Reduces the leak, but
   darkens closed rooms: coarse probes outside a room carry part of its far
   field through intervals that start back inside it.
-- `per_neighbour_trace` (default) - the community "bilinear fix", here
-  trilinear: every cascade below the top one traces, per texel, a
-  connecting segment from its interval start `p + t_i d` to the interval
-  start `u_n + t_{i+1} d` of each upper probe `u_n` of nonzero weight, and
-  merges each segment with that probe's 2x2-averaged upper value before
-  the trilinear weight (the "pre-averaged" variant: 8 rays per texel along
-  the texel-centre direction). The segments run in their own budgeted,
-  hysteresis-blended pass next to the trace and are stored in a 4 x 2
-  neighbour atlas per cascade
-  ([../editor/radiance_cascades.md](../editor/radiance_cascades.md)
+- `per_neighbour_trace` (default) - every cascade below the top one
+  traces, per texel, a visibility segment from the END of its interval,
+  `p + t_{i+1} d`, to the interval start `u_n + t_{i+1} d` of each upper
+  probe `u_n` of nonzero weight, and the merge weights each upper probe by
+  that visibility and renormalizes; the texel's own interval stays the ray
+  along `d`. The segments run in their own budgeted, hysteresis-blended
+  pass next to the trace and are stored in a 2 x 1 neighbour atlas per
+  cascade (one channel per segment;
+  [../editor/radiance_cascades.md](../editor/radiance_cascades.md)
   "Trace", "Merge"). Removes the start-point parallax leak; costs up to 8
-  more rays per texel below the top cascade.
+  more visibility rays (no shading) per texel below the top cascade. Up to
+  phase 5 the segment ran from the interval START to the upper interval
+  start and replaced the texel's own interval (the community "bilinear
+  fix"); phase 6 measured that construction bending the texel's direction
+  (section 10, "Phase 6").
 
 ## 6. Multi-bounce and change response
 

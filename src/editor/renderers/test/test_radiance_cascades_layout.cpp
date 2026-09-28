@@ -135,8 +135,12 @@ TEST(Radiance_cascades_layout, neighbour_atlases_stay_within_max_texture_size)
         for (int i = 0; i < layout.cascade_count; ++i) {
             const Radiance_cascade& cascade = layout.cascades[static_cast<std::size_t>(i)];
             const bool is_top = (i == (layout.cascade_count - 1));
-            const int  block_w = is_top ? 1 : editor::c_neighbour_block_width;
-            const int  block_h = is_top ? 1 : editor::c_neighbour_block_height;
+            int        block_w = is_top ? 1 : editor::c_neighbour_block_width;
+            int        block_h = is_top ? 1 : editor::c_neighbour_block_height;
+            if (i == 0) { // cascade 0's merged atlas at cascade 1's angular resolution
+                block_w = std::max(block_w, editor::c_merged_cascade0_block);
+                block_h = std::max(block_h, editor::c_merged_cascade0_block);
+            }
             EXPECT_LE(cascade.get_atlas_width () * block_w, max_texture_size) << i;
             EXPECT_LE(cascade.get_atlas_height() * block_h, max_texture_size) << i;
             EXPECT_GE(static_cast<int64_t>(cascade.tiles_per_row) * cascade.tile_rows, cascade.get_probe_count());

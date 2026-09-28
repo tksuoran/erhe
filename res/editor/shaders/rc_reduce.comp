@@ -6,9 +6,14 @@
 // erhe_ddgi.glsl samples either producer the same way. One workgroup per
 // cascade 0 probe; the workgroup strides over the probe's output tile.
 //
-// Every merged cascade 0 texel j is the full-range radiance averaged over
-// the octahedral footprint of j. The output texel for direction n is the
-// lobe-weighted mean over the probe's texels,
+// The irradiance variant reads merged cascade 0 at cascade 1's angular
+// resolution (rc_merge.comp child resolution: tile side m = 2 q0, merged
+// texel (U, V) is raw texel (U / 2, V / 2) merged with the upper value of
+// the nested cascade 1 texel (U, V)); the distance variant reads the
+// cascade 0 distance statistics at q0. Every input texel j is a full-range
+// radiance (or distance moment) averaged over the octahedral footprint of
+// j, and the output texel for direction n is the lobe-weighted mean over
+// the probe's input texels,
 //
 //   value(n) = sum_j W_j(n) x_j / sum_j W_j(n),
 //   W_j(n)   = integral over the footprint of j of pow(max(0, n . w), k) dw,
@@ -17,19 +22,29 @@
 // in src/editor/renderers/radiance_cascades_layout.cpp) because they depend
 // only on the tile sizes and k, never on the probe:
 //
-//  - irradiance (ERHE_RC_REDUCE_DISTANCE 0): k = 1, x_j = merged radiance,
-//    the cosine-weighted mean radiance (E / pi) the DDGI irradiance blend
-//    stores. Texels whose cascade 0 ray hit a backface (negative signed
-//    distance) are skipped, as ddgi_blend.comp skips backface rays: they
-//    carry no radiance and must not dilute the estimate.
-//  - distance (ERHE_RC_REDUCE_DISTANCE 1): k = depth_sharpness,
-//    x_j = (d, d^2) with d = min(|signed distance|, r0), the moments of the
-//    Chebyshev visibility test. Backface hits keep their (short) distance.
+//  - irradiance (ERHE_RC_REDUCE_DISTANCE 0): k = 1, x_j = merged radiance
+//    over the m^2 texels, the cosine-weighted mean radiance (E / pi) the
+//    DDGI irradiance blend stores. The finer footprints keep the cosine
+//    weighting of the far field accurate where the radiance varies inside
+//    a cascade 0 footprint (a bright wall near the horizon of a floor
+//    probe). Backface traces carry no radiance and must not dilute the
+//    estimate (ddgi_blend.comp skips backface rays): a texel's radiance is
+//    the mean over all its traces, backface ones contributing 0, so it
+//    enters the sum with its full weight while the normalization takes only
+//    its front face part, W_j (1 - b_j), b_j the backface fraction of its
+//    cascade 0 parent's traces (the distance statistics' z; 0 or 1 without
+//    direction jitter, where this is exactly skipping backface texels).
+//  - distance (ERHE_RC_REDUCE_DISTANCE 1): k = depth_sharpness, over the
+//    q0^2 cascade 0 texels, x_j = (mean d, mean d^2) of the texel's traces
+//    (the distance statistics' x and y, d the hit distance or r0 on a
+//    miss), the moments of the Chebyshev visibility test. Backface hits
+//    keep their (short) distance.
 //
 // The irradiance variant also writes the probe data texel: offset 0 (no
 // relocation) and the state of DDGI's classification rule - inactive when
-// more than a quarter of the probe's sphere of directions (by solid angle)
-// hit a backface within cascade 0's interval.
+// more than a quarter of the probe's sphere of directions (by solid angle,
+// weighted with each texel's backface fraction) hit a backface within
+// cascade 0's interval.
 //
 // No hysteresis: the raw intervals are already blended over time; the field
 // is rewritten from the merged atlas every update. The tile's 1-texel
@@ -54,12 +69,13 @@ layout(local_size_x = ERHE_RC_REDUCE_GROUP_SIZE, local_size_y = 1, local_size_z 
 // DDGI's classification threshold (ddgi_relocate.comp).
 const float c_backface_fraction_threshold = 0.25;
 
-// The probe's cascade 0 texels are read once per workgroup into shared
-// memory when they fit (q0 <= 16), since every output texel of the tile
-// reads all of them; larger tiles read the textures directly.
+// The probe's input texels are read once per workgroup into shared memory
+// when they fit (merged: 2 q0 <= 16; statistics: q0 <= 16), since every
+// output texel of the tile reads all of them; larger tiles read the
+// textures directly.
 const int c_cache_texels = 256;
-shared vec3  s_cached_radiance[c_cache_texels];
-shared float s_cached_distance[c_cache_texels];
+shared vec3  s_cached_radiance  [c_cache_texels];
+shared vec3  s_cached_statistics[c_cache_texels]; // mean d, mean d^2, backface fraction
 
 // One float of the weight buffer (four per vec4).
 float rc_reduce_weight(uint index)
@@ -85,11 +101,16 @@ void main()
     );
 
     // Cascade 0 tile: probe_index wrapped into rows of the cascade's
-    // tiles_per_row (Radiance_cascade::get_tile_origin()).
+    // tiles_per_row (Radiance_cascade::get_tile_origin()); the merged atlas
+    // uses the same tile placement with its m x m tiles.
     int   q                     = int(rc_reduce.grid_counts.w);
+    int   m                     = int(rc_reduce.weights.w);
     int   texels_per_probe      = q * q;
+    int   merged_per_probe      = m * m;
     int   cascade_tiles_per_row = int(rc_reduce.params.x);
-    ivec2 cascade_tile_origin   = ivec2(probe_index % cascade_tiles_per_row, probe_index / cascade_tiles_per_row) * q;
+    ivec2 tile                  = ivec2(probe_index % cascade_tiles_per_row, probe_index / cascade_tiles_per_row);
+    ivec2 cascade_tile_origin   = tile * q;
+    ivec2 merged_tile_origin    = tile * m;
 
     // Field tile (erhe_ddgi_tiles.glsl), with its 1-texel border.
     int   interior    = OUTPUT_TEXELS;
@@ -97,15 +118,16 @@ void main()
     ivec2 tile_origin = ddgi_probe_tile(coords, counts, int(rc_reduce.params.y)) * tile_size;
     float r0          = rc_reduce.limits.x;
 
-    bool cached = (texels_per_probe <= c_cache_texels);
+    bool cached = (texels_per_probe <= c_cache_texels) && (merged_per_probe <= c_cache_texels);
     if (cached) {
         for (int j = int(gl_LocalInvocationID.x); j < texels_per_probe; j += ERHE_RC_REDUCE_GROUP_SIZE) {
-            ivec2 cascade_texel  = cascade_tile_origin + ivec2(j % q, j / q);
-            s_cached_distance[j] = texelFetch(s_rc_distance, cascade_texel, 0).r;
-#if !ERHE_RC_REDUCE_DISTANCE
-            s_cached_radiance[j] = texelFetch(s_rc_merged, cascade_texel, 0).rgb;
-#endif
+            s_cached_statistics[j] = texelFetch(s_rc_distance, cascade_tile_origin + ivec2(j % q, j / q), 0).xyz;
         }
+#if !ERHE_RC_REDUCE_DISTANCE
+        for (int j = int(gl_LocalInvocationID.x); j < merged_per_probe; j += ERHE_RC_REDUCE_GROUP_SIZE) {
+            s_cached_radiance[j] = texelFetch(s_rc_merged, merged_tile_origin + ivec2(j % m, j / m), 0).rgb;
+        }
+#endif
         barrier();
     }
 
@@ -115,25 +137,37 @@ void main()
 
         VALUE_TYPE sum        = VALUE_TYPE(0.0);
         float      weight_sum = 0.0;
-        for (int j = 0; j < texels_per_probe; ++j) {
-            // Weights are stored [j][output texel] (allocate_field()).
-            float weight = rc_reduce_weight(WEIGHTS_OFFSET + uint((j * output_count) + texel));
-            if (weight <= 0.0) {
-                continue;
-            }
-            ivec2 cascade_texel   = cascade_tile_origin + ivec2(j % q, j / q);
-            float signed_distance = cached ? s_cached_distance[j] : texelFetch(s_rc_distance, cascade_texel, 0).r;
+        // Sparse weights (allocate_field()): a header of (first pair, pair
+        // count) per output texel, then (input texel, weight) pairs - only
+        // the input texels the lobe reaches.
+        uint header     = WEIGHTS_OFFSET + (2u * uint(texel));
+        uint first_pair = uint(rc_reduce_weight(header));
+        uint pair_count = uint(rc_reduce_weight(header + 1u));
+        uint pairs      = WEIGHTS_OFFSET + (2u * uint(output_count));
+        for (uint entry = 0u; entry < pair_count; ++entry) {
+            uint  pair   = pairs + (2u * (first_pair + entry));
+            int   j      = int(rc_reduce_weight(pair));
+            float weight = rc_reduce_weight(pair + 1u);
 #if ERHE_RC_REDUCE_DISTANCE
-            float distance_value = min(abs(signed_distance), r0);
-            sum        += vec2(distance_value, distance_value * distance_value) * weight;
+            vec3 statistics = cached ? s_cached_statistics[j] : texelFetch(s_rc_distance, cascade_tile_origin + ivec2(j % q, j / q), 0).xyz;
+            sum        += vec2(min(statistics.x, r0), min(statistics.y, r0 * r0)) * weight;
             weight_sum += weight;
 #else
-            if (signed_distance < 0.0) {
+            ivec2 merged_uv    = ivec2(j % m, j / m);
+            ivec2 parent_uv    = merged_uv / 2;
+            int   parent       = (parent_uv.y * q) + parent_uv.x;
+            float backface     = cached ? s_cached_statistics[parent].z : texelFetch(s_rc_distance, cascade_tile_origin + parent_uv, 0).z;
+            // The texel's radiance is the mean over all its traces, the
+            // backface ones contributing 0, so it enters with the full
+            // footprint weight and only the normalization takes the front
+            // face part: sum_j W_j L_j / sum_j W_j (1 - b_j).
+            float front_weight = weight * (1.0 - backface);
+            if (front_weight <= 0.0) {
                 continue;
             }
-            vec3 radiance = cached ? s_cached_radiance[j] : texelFetch(s_rc_merged, cascade_texel, 0).rgb;
+            vec3 radiance = cached ? s_cached_radiance[j] : texelFetch(s_rc_merged, merged_tile_origin + merged_uv, 0).rgb;
             sum        += radiance * weight;
-            weight_sum += weight;
+            weight_sum += front_weight;
 #endif
         }
         if (weight_sum > 1.0e-9) {
@@ -153,10 +187,8 @@ void main()
         for (int j = 0; j < texels_per_probe; ++j) {
             float solid_angle = rc_reduce_weight(rc_reduce.weights.z + uint(j));
             total_solid_angle += solid_angle;
-            float signed_distance = cached ? s_cached_distance[j] : texelFetch(s_rc_distance, cascade_tile_origin + ivec2(j % q, j / q), 0).r;
-            if (signed_distance < 0.0) {
-                backface_solid_angle += solid_angle;
-            }
+            float backface    = cached ? s_cached_statistics[j].z : texelFetch(s_rc_distance, cascade_tile_origin + ivec2(j % q, j / q), 0).z;
+            backface_solid_angle += solid_angle * backface;
         }
         float state = (backface_solid_angle > (c_backface_fraction_threshold * total_solid_angle)) ? 0.0 : 1.0;
         imageStore(i_probe_data, ddgi_probe_tile(coords, counts, int(rc_reduce.params.y)), vec4(0.0, 0.0, 0.0, state));

@@ -4224,7 +4224,7 @@
           "type": "number"
         },
         "merge_mode": {
-          "description": "Merge mode: \"interpolate\" (trilinear over the 8 upper probes), \"visibility_masked\" (skip upper probes the probe cannot see or that sit inside geometry; runs a visibility pass on layout / geometry change) or \"per_neighbour_trace\" (trace a connecting segment from the probe's interval start to each upper probe's interval start and merge each with that upper probe; up to 8 more rays per texel of every cascade but the top one; switching into or out of it refits); omit to leave unchanged",
+          "description": "Merge mode: \"interpolate\" (trilinear over the 8 upper probes), \"visibility_masked\" (skip upper probes the probe cannot see or that sit inside geometry; runs a visibility pass on layout / geometry change) or \"per_neighbour_trace\" (weight each upper probe by the visibility of a connecting segment from the end of the texel's interval to that upper probe's interval start; up to 8 more visibility rays per texel of every cascade but the top one; switching into or out of it refits); omit to leave unchanged",
           "type": "string"
         },
         "debug_cascade_mask": {

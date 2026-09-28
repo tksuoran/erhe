@@ -51,9 +51,10 @@ namespace {
 
 // rgb radiance, a transparency beta (doc/plans/radiance_cascades.md section 3).
 constexpr erhe::dataformat::Format c_radiance_format = erhe::dataformat::Format::format_16_vec4_float;
-// Cascade 0 signed hit distance per raw texel. Full float: one channel per
-// cascade 0 texel is small, and the readback is a plain memcpy.
-constexpr erhe::dataformat::Format c_distance_format = erhe::dataformat::Format::format_32_scalar_float;
+// Cascade 0 hit distance statistics per raw texel: mean distance, mean
+// squared distance, backface fraction (blended like the raw texel). Full
+// float: the readback is a plain memcpy and the distances keep millimetres.
+constexpr erhe::dataformat::Format c_distance_format = erhe::dataformat::Format::format_32_vec4_float;
 
 // Raw binding points of the trace bind group layout, as in Ddgi_renderer:
 // 0 and 1 are the shared material / light block binding points
@@ -85,6 +86,7 @@ constexpr int          c_merge_workgroup_size       = 8; // rc_merge.comp local 
 // rc_merge.comp params.y flags
 constexpr uint32_t c_merge_flag_top            = 1u; // top cascade: merge with the sky
 constexpr uint32_t c_merge_flag_mask_radiance  = 2u; // debug_cascade_mask: zero the cascade's radiance
+constexpr uint32_t c_merge_flag_child_resolution = 4u; // cascade 0: merged at cascade 1's angular resolution
 
 // Reduce pass layout (rc_reduce.comp): the control block, the weight
 // storage buffer, then as combined image samplers merged cascade 0 and the
@@ -97,6 +99,10 @@ constexpr unsigned int c_reduce_distance_binding_point   = 1;
 constexpr unsigned int c_reduce_atlas_binding_point      = 6;
 constexpr unsigned int c_reduce_probe_data_binding_point = 7;
 constexpr int          c_reduce_workgroup_size           = 64; // one workgroup per probe, striding over its tile
+// Reduce lobe weights below this fraction of an output texel's largest one
+// are left out of its sparse list (their share of the sum is below 1e-4
+// times the input count).
+constexpr float        c_reduce_weight_threshold         = 1.0e-4f;
 // Workgroups per row of the 2D reduce dispatch (within the Vulkan-guaranteed
 // maxComputeWorkGroupCount of 65535).
 constexpr int          c_reduce_dispatch_row             = 32768;
@@ -304,7 +310,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .type          = Binding_type::storage_image,
                     .name          = "i_rc_distance",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "r32f",
+                    .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
@@ -748,7 +754,7 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
                     .type          = Binding_type::storage_image,
                     .name          = "i_rc_distance",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "r32f",
+                    .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 {
@@ -1077,9 +1083,14 @@ void Radiance_cascades_renderer::allocate_textures(erhe::graphics::Command_buffe
         const int width  = cascade.get_atlas_width();
         const int height = cascade.get_atlas_height();
         Cascade_textures& textures = m_cascade_textures[static_cast<std::size_t>(i)];
+        // Cascade 0 is merged at cascade 1's angular resolution
+        // (c_merged_cascade0_block^2 texels per texel), the reduce's input.
+        const int merged_block = (i == 0) ? c_merged_cascade0_block : 1;
         textures.raw    = make_texture(fmt::format("RC cascade {} raw",    i), c_radiance_format, width, height);
-        textures.merged = make_texture(fmt::format("RC cascade {} merged", i), c_radiance_format, width, height);
-        const std::size_t bytes = 2 * static_cast<std::size_t>(cascade.get_atlas_texel_count()) * radiance_texel_bytes;
+        textures.merged = make_texture(fmt::format("RC cascade {} merged", i), c_radiance_format, width * merged_block, height * merged_block);
+        const std::size_t bytes =
+            static_cast<std::size_t>(1 + (merged_block * merged_block)) *
+            static_cast<std::size_t>(cascade.get_atlas_texel_count()) * radiance_texel_bytes;
         m_cascade_byte_counts[static_cast<std::size_t>(i)] = bytes;
         m_texture_byte_count += bytes;
         m_cascade_texel_offsets[static_cast<std::size_t>(i)] = texel_offset;
@@ -1329,32 +1340,55 @@ void Radiance_cascades_renderer::allocate_field(erhe::graphics::Command_buffer& 
     // Reduce weights: they depend only on the tile sizes and the depth
     // sharpness, so they are integrated here, on change, never per update.
     // Cold path: the temporaries allocate once per layout or settings edit.
-    const int          q0 = cascade0.tile_texels;
+    // The irradiance reduce reads merged cascade 0 at cascade 1's angular
+    // resolution (tile side c_merged_cascade0_block x q0), the distance
+    // reduce and the classification the cascade 0 distance statistics.
+    const int          q0       = cascade0.tile_texels;
+    const int          merged_q = c_merged_cascade0_block * q0;
     std::vector<float> irradiance_weights;
     std::vector<float> distance_weights;
     std::vector<float> solid_angles;
-    compute_octahedral_lobe_weights(m_field_settings.irradiance_texels, q0, 1.0f, irradiance_weights);
-    compute_octahedral_lobe_weights(m_field_settings.distance_texels,   q0, m_field_settings.depth_sharpness, distance_weights);
+    compute_octahedral_lobe_weights(m_field_settings.irradiance_texels, merged_q, 1.0f, irradiance_weights);
+    compute_octahedral_lobe_weights(m_field_settings.distance_texels,   q0,       m_field_settings.depth_sharpness, distance_weights);
     compute_octahedral_texel_solid_angles(q0, solid_angles);
-    m_reduce_irradiance_weights_offset = 0;
-    m_reduce_distance_weights_offset   = static_cast<uint32_t>(irradiance_weights.size());
-    m_reduce_solid_angle_offset        = static_cast<uint32_t>(irradiance_weights.size() + distance_weights.size());
+    // Sparse per output texel: the lobes cover only part of the sphere (the
+    // cosine lobe a hemisphere, the pow(cos, depth_sharpness) lobe a narrow
+    // cone), so each output texel lists only the input texels whose weight
+    // is above c_reduce_weight_threshold of its largest one - the dense loop
+    // spent most of the reduce on zero weights. Layout per variant: a
+    // header of (first pair, pair count) per output texel, then the
+    // (input texel, weight) pairs, all as floats (indices are exact).
     std::vector<float> packed;
-    packed.reserve(irradiance_weights.size() + distance_weights.size() + solid_angles.size() + 4);
-    // Transposed to [cascade 0 texel j][output texel n]: the invocations of
-    // a workgroup take consecutive output texels, so at each j they read
-    // consecutive floats.
-    const std::size_t q0_texels = static_cast<std::size_t>(q0) * static_cast<std::size_t>(q0);
-    const auto append_transposed = [&](const std::vector<float>& weights) {
-        const std::size_t output_count = weights.size() / q0_texels;
-        for (std::size_t j = 0; j < q0_texels; ++j) {
-            for (std::size_t n = 0; n < output_count; ++n) {
-                packed.push_back(weights[(n * q0_texels) + j]);
+    const auto append_sparse = [&](const std::vector<float>& weights, const int tile_texels) -> uint32_t {
+        const std::size_t input_count  = static_cast<std::size_t>(tile_texels) * static_cast<std::size_t>(tile_texels);
+        const std::size_t output_count = weights.size() / input_count;
+        const uint32_t    base         = static_cast<uint32_t>(packed.size());
+        const std::size_t header       = packed.size();
+        packed.resize(packed.size() + (2 * output_count), 0.0f);
+        const std::size_t pairs_base   = packed.size();
+        for (std::size_t n = 0; n < output_count; ++n) {
+            float largest = 0.0f;
+            for (std::size_t j = 0; j < input_count; ++j) {
+                largest = std::max(largest, weights[(n * input_count) + j]);
             }
+            const std::size_t first = (packed.size() - pairs_base) / 2;
+            std::size_t       count = 0;
+            for (std::size_t j = 0; j < input_count; ++j) {
+                const float weight = weights[(n * input_count) + j];
+                if (weight > (c_reduce_weight_threshold * largest)) {
+                    packed.push_back(static_cast<float>(j));
+                    packed.push_back(weight);
+                    ++count;
+                }
+            }
+            packed[header + (2 * n)]     = static_cast<float>(first);
+            packed[header + (2 * n) + 1] = static_cast<float>(count);
         }
+        return base;
     };
-    append_transposed(irradiance_weights);
-    append_transposed(distance_weights);
+    m_reduce_irradiance_weights_offset = append_sparse(irradiance_weights, merged_q);
+    m_reduce_distance_weights_offset   = append_sparse(distance_weights,   q0);
+    m_reduce_solid_angle_offset        = static_cast<uint32_t>(packed.size());
     packed.insert(packed.end(), solid_angles.begin(), solid_angles.end());
     // Whole vec4s: the shader reads four floats per array element.
     while ((packed.size() % 4) != 0) {
@@ -1757,8 +1791,13 @@ void Radiance_cascades_renderer::record_merge(erhe::graphics::Command_buffer& co
         if ((mask & (1u << static_cast<uint32_t>(i))) != 0u) {
             flags |= c_merge_flag_mask_radiance;
         }
-        const int width  = cascade.get_atlas_width();
-        const int height = cascade.get_atlas_height();
+        if (i == 0) {
+            flags |= c_merge_flag_child_resolution;
+        }
+        // One thread per merged texel: cascade 0's merged atlas has
+        // c_merged_cascade0_block^2 texels per raw texel.
+        const int width  = merged.get_width();
+        const int height = merged.get_height();
 
         const std::size_t byte_count = m_merge_block.get_size_bytes();
         Ring_buffer_range control_range = m_control_buffer->acquire(Ring_buffer_usage::CPU_write, byte_count);
@@ -1844,7 +1883,7 @@ void Radiance_cascades_renderer::record_reduce(erhe::graphics::Command_buffer& c
             m_reduce_irradiance_weights_offset,
             m_reduce_distance_weights_offset,
             m_reduce_solid_angle_offset,
-            0u
+            static_cast<uint32_t>(c_merged_cascade0_block * cascade0.tile_texels) // merged cascade 0 tile side
         };
         const glm::vec4 limits{m_layout.r0, 0.0f, 0.0f, 0.0f};
         write(gpu_data, m_reduce_offsets.grid_counts, as_span(grid_counts));
@@ -1917,9 +1956,15 @@ void Radiance_cascades_renderer::record_preview(erhe::graphics::Command_buffer& 
     using namespace erhe::graphics;
 
     const int               cascade_index = std::clamp(m_preview_cascade, 0, m_layout.cascade_count - 1);
-    const Radiance_cascade& cascade       = m_layout.cascades[static_cast<std::size_t>(cascade_index)];
-    const int               width         = cascade.get_atlas_width();
-    const int               height        = cascade.get_atlas_height();
+    const Cascade_textures& textures      = m_cascade_textures[static_cast<std::size_t>(cascade_index)];
+    // The previewed atlas' own size: cascade 0's merged atlas is at
+    // cascade 1's angular resolution.
+    // The distance channel reads the cascade 0 distance statistics at the
+    // raw atlas' texel addresses, so it always takes the raw atlas' size.
+    const bool              merged_source = (m_preview_source == Rc_preview_source::merged) && (m_preview_channel != Rc_preview_channel::distance);
+    const Texture&          previewed     = merged_source ? *textures.merged : *textures.raw;
+    const int               width         = previewed.get_width();
+    const int               height        = previewed.get_height();
     // Sized to the previewed atlas; reallocated only when the window
     // switches to a cascade of another size, or after a refit.
     if (!m_preview_texture || (m_preview_texture->get_width() != width) || (m_preview_texture->get_height() != height)) {
@@ -1956,8 +2001,7 @@ void Radiance_cascades_renderer::record_preview(erhe::graphics::Command_buffer& 
         control_range.close();
     }
 
-    const Cascade_textures& textures = m_cascade_textures[static_cast<std::size_t>(cascade_index)];
-    Texture& atlas = (m_preview_source == Rc_preview_source::merged) ? *textures.merged : *textures.raw;
+    Texture& atlas = merged_source ? *textures.merged : *textures.raw;
     command_buffer.transition_texture_layout(atlas,               Image_layout::general);
     command_buffer.transition_texture_layout(*m_distance_texture, Image_layout::general);
     command_buffer.transition_texture_layout(*m_preview_texture,  Image_layout::general);
@@ -1999,11 +2043,12 @@ void Radiance_cascades_renderer::record_texel_readback(erhe::graphics::Command_b
     const std::size_t distance_texel_bytes = erhe::dataformat::get_format_size_bytes(c_distance_format);
     std::size_t offset = 0;
     for (int i = 0; i < m_layout.cascade_count; ++i) {
-        const std::size_t atlas_bytes = static_cast<std::size_t>(m_layout.cascades[static_cast<std::size_t>(i)].get_atlas_texel_count()) * radiance_texel_bytes;
+        const std::size_t atlas_bytes  = static_cast<std::size_t>(m_layout.cascades[static_cast<std::size_t>(i)].get_atlas_texel_count()) * radiance_texel_bytes;
+        const std::size_t merged_block = (i == 0) ? static_cast<std::size_t>(c_merged_cascade0_block * c_merged_cascade0_block) : 1u;
         m_readback_raw_offsets[static_cast<std::size_t>(i)] = offset;
         offset = round_up(offset + atlas_bytes, c_readback_alignment);
         m_readback_merged_offsets[static_cast<std::size_t>(i)] = offset;
-        offset = round_up(offset + atlas_bytes, c_readback_alignment);
+        offset = round_up(offset + (merged_block * atlas_bytes), c_readback_alignment);
     }
     m_readback_distance_offset = offset;
     offset = round_up(offset + (static_cast<std::size_t>(m_layout.cascades[0].get_atlas_texel_count()) * distance_texel_bytes), c_readback_alignment);
@@ -2129,7 +2174,7 @@ auto Radiance_cascades_renderer::poll_texel_readback() -> Rc_readback_state
                             if (texel.a > 0.5f) {
                                 ++beta_one_count;
                             }
-                            if ((i == 0) && (read_distance_texel(glm::ivec3{x, y, z}, glm::ivec2{u, v}) < 0.0f)) {
+                            if ((i == 0) && (read_distance_statistics(glm::ivec3{x, y, z}, glm::ivec2{u, v}).z > 0.5f)) {
                                 ++backface_count;
                                 probe_has_backface = true;
                             }
@@ -2194,7 +2239,40 @@ auto Radiance_cascades_renderer::read_raw_texel(const int cascade_index, const g
 auto Radiance_cascades_renderer::read_merged_texel(const int cascade_index, const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4
 {
     ERHE_VERIFY((cascade_index >= 0) && (cascade_index < m_readback_layout.cascade_count));
-    return read_radiance_texel(m_readback_merged_offsets[static_cast<std::size_t>(cascade_index)], cascade_index, probe, texel);
+    if (cascade_index > 0) {
+        return read_radiance_texel(m_readback_merged_offsets[static_cast<std::size_t>(cascade_index)], cascade_index, probe, texel);
+    }
+    // Cascade 0 is merged at cascade 1's angular resolution: the texel's
+    // merged value is the mean of its child texels.
+    glm::vec4 sum{0.0f};
+    for (int child = 0; child < (c_merged_cascade0_block * c_merged_cascade0_block); ++child) {
+        sum += read_merged_child_texel(probe, texel, child);
+    }
+    return sum / static_cast<float>(c_merged_cascade0_block * c_merged_cascade0_block);
+}
+
+auto Radiance_cascades_renderer::read_merged_child_texel(const glm::ivec3& probe, const glm::ivec2& texel, const int child) const -> glm::vec4
+{
+    const Radiance_cascade& cascade     = m_readback_layout.cascades[0];
+    const int               probe_index = probe.x + (cascade.grid.counts.x * (probe.y + (cascade.grid.counts.y * probe.z)));
+    const glm::ivec2        child_texel =
+        (cascade.get_tile_origin(probe_index) * c_merged_cascade0_block) +
+        (texel * c_merged_cascade0_block) +
+        glm::ivec2{child % c_merged_cascade0_block, child / c_merged_cascade0_block};
+    const std::size_t       width       = static_cast<std::size_t>(cascade.get_atlas_width() * c_merged_cascade0_block);
+    const std::size_t       texel_bytes = erhe::dataformat::get_format_size_bytes(c_radiance_format);
+    const std::size_t       offset      =
+        m_readback_merged_offsets[0] +
+        (((static_cast<std::size_t>(child_texel.y) * width) + static_cast<std::size_t>(child_texel.x)) * texel_bytes);
+    ERHE_VERIFY((offset + texel_bytes) <= m_readback_snapshot.size());
+    std::array<uint16_t, 4> halves{};
+    std::memcpy(halves.data(), m_readback_snapshot.data() + offset, sizeof(halves));
+    return glm::vec4{
+        glm::unpackHalf1x16(halves[0]),
+        glm::unpackHalf1x16(halves[1]),
+        glm::unpackHalf1x16(halves[2]),
+        glm::unpackHalf1x16(halves[3])
+    };
 }
 
 auto Radiance_cascades_renderer::read_radiance_texel(
@@ -2296,18 +2374,18 @@ auto Radiance_cascades_renderer::read_probe_state(const int cascade_index, const
     return static_cast<uint32_t>(state + 0.5f);
 }
 
-auto Radiance_cascades_renderer::read_distance_texel(const glm::ivec3& probe, const glm::ivec2& texel) const -> float
+auto Radiance_cascades_renderer::read_distance_statistics(const glm::ivec3& probe, const glm::ivec2& texel) const -> glm::vec4
 {
     const Radiance_cascade& cascade     = m_readback_layout.cascades[0];
     const int               probe_index = probe.x + (cascade.grid.counts.x * (probe.y + (cascade.grid.counts.y * probe.z)));
     const glm::ivec2        atlas_texel = cascade.get_tile_origin(probe_index) + texel;
     const std::size_t       offset      =
         m_readback_distance_offset +
-        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(cascade.get_atlas_width())) + static_cast<std::size_t>(atlas_texel.x)) * sizeof(float));
-    ERHE_VERIFY((offset + sizeof(float)) <= m_readback_snapshot.size());
-    float distance = 0.0f;
-    std::memcpy(&distance, m_readback_snapshot.data() + offset, sizeof(float));
-    return distance;
+        (((static_cast<std::size_t>(atlas_texel.y) * static_cast<std::size_t>(cascade.get_atlas_width())) + static_cast<std::size_t>(atlas_texel.x)) * sizeof(glm::vec4));
+    ERHE_VERIFY((offset + sizeof(glm::vec4)) <= m_readback_snapshot.size());
+    glm::vec4 statistics{0.0f};
+    std::memcpy(&statistics, m_readback_snapshot.data() + offset, sizeof(glm::vec4));
+    return statistics;
 }
 
 void Radiance_cascades_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root)

@@ -234,6 +234,28 @@ bool trace_closest(vec3 origin, vec3 direction, float t_max, out Hit_surface sur
     return trace_closest_from(origin, direction, c_t_min, t_max, surface);
 }
 
+// True when no geometry (front or back face, every instance) lies on the
+// segment [t_min, t_max] of the ray - a visibility test between two points
+// in free space, such as the radiance cascades connecting segments
+// (rc_trace.comp). The first hit ends the query; no surface is fetched.
+bool segment_free(vec3 origin, vec3 direction, float t_min, float t_max)
+{
+    rayQueryEXT ray_query;
+    rayQueryInitializeEXT(
+        ray_query,
+        s_tlas,
+        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+        c_mask_all,
+        origin,
+        t_min,
+        direction,
+        t_max
+    );
+    while (rayQueryProceedEXT(ray_query)) {
+    }
+    return rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT;
+}
+
 // True when nothing opaque lies between the (offset) surface point and the
 // light. Mask excludes transmissive instances so glass does not shadow.
 bool light_visible(vec3 position, vec3 offset_normal, vec3 L, float t_max)

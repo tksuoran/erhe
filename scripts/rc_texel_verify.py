@@ -25,10 +25,13 @@ distance within DISTANCE_TOLERANCE, front face radiance within
 RADIANCE_TOLERANCE relative per channel (floor RADIANCE_FLOOR; the raw
 atlases are half floats). Skip rule: a texel is left out when its reference
 hit lies within SKIP_MARGIN of the interval ends (grazing the interval
-boundary), or when another part has a crossing of the other kind (front
+boundary), when another part has a crossing of the other kind (front
 vs back) within SKIP_MARGIN of the hit - coincident faces of touching parts,
 such as the floor top under a wall bottom, where the GPU may commit either
-face. Skipped texels are counted in the output.
+face - or when the ray passes within SKIP_MARGIN of a part's edge or corner
+(it crosses the part grown by SKIP_MARGIN but not the part shrunk by it;
+round probe grids and room dimensions produce such rays). Skipped texels are
+counted in the output.
 
 Merged checks (doc/editor/radiance_cascades.md "Merge"), from the same
 readback (every texel carries its merged value too):
@@ -44,23 +47,25 @@ readback (every texel carries its merged value too):
   (the scene ambient). Tolerance MERGE_ALGEBRA_TOLERANCE
   relative (floor MERGE_ALGEBRA_FLOOR): only the final half-float rounding
   differs. This verifies the shader's arithmetic, not the approximation.
-- per_neighbour_trace exact check: the connecting segments are not read
-  back, so for NEIGHBOUR_SAMPLES texels per cascade below the top one
-  (fixed seed; every texel when fewer) the merge is recomputed from CPU
-  ground-truth segments - for each upper probe n of nonzero weight the
-  segment from probe + t_i d to upper_n + t_{i+1} d (d the read-back
-  texel-centre direction), intersected with the station's boxes and
-  shaded exactly like the raw check (miss: 0, beta 1; backface: 0, beta
-  0) - merged with the READ-BACK 2x2 child average of upper probe n:
-  merged = sum_n w_n (segment_n + beta_n * upper_n). A texel with any
-  segment under the raw check's skip rule, or whose segment hits a front
-  face within SKIP_MARGIN of another part (the junction line of two parts,
-  where the committed face and the shadow ray flip under a 0.1 mm shift;
-  segment ends sit on the probe grids, whose planes coincide with the room
-  faces, so segments hit these lines often), is skipped and counted.
-  Tolerance NEIGHBOUR_TOLERANCE relative (floor MERGE_ALGEBRA_FLOOR): the
-  raw check's shading tolerance, since the segments are traced, not
-  read back. The top cascade takes the sky check above.
+- per_neighbour_trace exact check: the connecting segment visibilities
+  are not read back, so for NEIGHBOUR_SAMPLES texels per cascade below the
+  top one (fixed seed; every texel when fewer) the merge is recomputed from
+  CPU ground-truth visibilities - for each upper probe n of nonzero weight
+  whether the segment from the texel's interval end probe + t_{i+1} d to
+  upper_n + t_{i+1} d (d the read-back texel-centre direction) crosses any
+  of the station's boxes - and the READ-BACK raw texel and 2x2 child
+  average of each upper probe: upper = sum_n w_n V_n upper_n /
+  sum_n w_n V_n ((0, 0) when no upper probe is visible), merged = raw +
+  beta * upper. A texel with a box crossing within SKIP_MARGIN of a segment
+  end (segment ends sit on the probe grids, whose planes coincide with the
+  room faces) is skipped and counted. Tolerance MERGE_ALGEBRA_TOLERANCE:
+  only the visibility is traced, the radiance is read back. The top
+  cascade takes the sky check above.
+- cascade 0 child resolution: cascade 0 is merged at cascade 1's angular
+  resolution; the readback reports its 4 child texels (merged_children)
+  and their mean as merged_radiance / merged_beta. Both merge checks also
+  compare every child with the raw texel merged with the upper value of
+  that child alone.
 - approximation: for APPROX_SAMPLES cascade 0 texels (probes outside every
   part, fixed seed), the ground truth is the average over the texel's
   octahedral footprint - APPROX_SUBDIVISIONS^2 sub-directions uniform in
@@ -80,12 +85,12 @@ readback (every texel carries its merged value too):
   fixed picks), the probe field texels of REDUCE_NORMALS - irradiance and
   distance moments at the texel containing each normal, and the probe data
   state - against the reduce recomputed on the CPU from the READ-BACK
-  merged cascade 0 texels and signed distances of the same copy: lobe
-  weights integrated over each cascade 0 texel footprint exactly like
-  compute_octahedral_lobe_weights() (cosine for irradiance, backface texels
-  skipped; pow(cos, depth_sharpness) for the moments of
-  min(|distance|, r0)), and the solid-angle backface fraction against
-  DDGI's 0.25 classification threshold. Tolerance REDUCE_TOLERANCE
+  merged cascade 0 child texels and signed distances of the same copy:
+  lobe weights integrated over each texel footprint exactly like
+  compute_octahedral_lobe_weights() (cosine over the 2 q0 child texels for
+  irradiance, backface parents skipped; pow(cos, depth_sharpness) over the
+  q0 texels for the moments of min(|distance|, r0)), and the solid-angle
+  backface fraction against DDGI's 0.25 classification threshold. Tolerance REDUCE_TOLERANCE
   relative (floor REDUCE_FLOOR): the half-float store.
 - --mask-check (cornell by default): the merge is linear in the interval
   radiances, so the mean merged cascade 0 radiance with every band shown
@@ -138,7 +143,6 @@ MERGE_ALGEBRA_TOLERANCE = 2.0e-3  # relative: the half-float store rounds by at 
 MERGE_ALGEBRA_FLOOR     = 1.0e-4  # absolute floor of the relative error denominator
 NEIGHBOUR_SAMPLES       = 1500    # texels per cascade of the per_neighbour_trace exact check
 NEIGHBOUR_SEED          = 1
-NEIGHBOUR_TOLERANCE     = 5.0e-3  # relative: traced segments, the raw check's shading tolerance
 APPROX_SAMPLES          = 400     # cascade 0 texels per station
 APPROX_SUBDIVISIONS     = 8       # sub-directions per texel axis of the ground truth
 APPROX_SEED             = 1
@@ -149,14 +153,7 @@ APPROX_FLOOR_FRACTION   = 0.1     # relative error denominator floor, of the sam
 # probes read as errors of order 1 on most texels), not the parallax error.
 APPROX_MEDIAN_BOUND     = 0.25
 APPROX_P90_BOUND        = 1.5
-# per_neighbour_trace: its cascade 0 segments leave the probe toward upper
-# interval starts up to 1.3 m (0.75 of an upper spacing per axis) off the
-# texel ray while r0 is 0.87 m, so a small bright emitter is seen by
-# segments of texels that do not point at it (emissive_only p90 2.6 when
-# the mode was written, doc/editor/radiance_cascades.md "Verification");
-# about twice that, like the bounds above. The mode's exact check is the
-# per-neighbour merge check.
-APPROX_P90_BOUND_BY_MODE = {"per_neighbour_trace": 5.0}
+APPROX_P90_BOUND_BY_MODE = {}
 MASK_SUM_TOLERANCE      = 2.0e-3  # relative
 REDUCE_PROBES           = 3
 REDUCE_NORMALS          = ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0))
@@ -391,13 +388,30 @@ def reference_texel(texel, boxes, lights, ambient):
     return reference_ray(texel["probe_position"], texel["direction"], t_start, t_end, boxes, lights, ambient)
 
 
+def grazes_edge(origin, direction, t_start, t_end, boxes):
+    """The ray crosses some box grown by SKIP_MARGIN within [t_start, t_end]
+    but not the same box shrunk by SKIP_MARGIN: it passes within SKIP_MARGIN
+    of an edge or corner (or along a face), where the GPU and the CPU may
+    disagree on hit versus miss and on which face is hit (probe grids and
+    room dimensions are round numbers, so such rays occur)."""
+    for box in boxes:
+        grown = Box(box.name, [v - SKIP_MARGIN for v in box.lo], [v + SKIP_MARGIN for v in box.hi], box.material)
+        shrunk = Box(box.name, [v + SKIP_MARGIN for v in box.lo], [v - SKIP_MARGIN for v in box.hi], box.material)
+        hits_grown = any(t_start <= t <= t_end for t, _, _ in box_crossings(origin, direction, grown))
+        hits_shrunk = any(t_start <= t <= t_end for t, _, _ in box_crossings(origin, direction, shrunk))
+        if hits_grown and not hits_shrunk:
+            return True
+    return False
+
+
 def reference_ray(origin, direction, t_start, t_end, boxes, lights, ambient):
     """The ray [t_start, t_end] -> dict(kind, radiance, beta, distance, skip)."""
     hit = closest_hit(origin, direction, t_start, t_end, boxes)
     if hit is None:
-        return {"kind": "miss", "radiance": [0.0, 0.0, 0.0], "beta": 1.0, "distance": t_end, "skip": False}
+        return {"kind": "miss", "radiance": [0.0, 0.0, 0.0], "beta": 1.0, "distance": t_end,
+                "skip": grazes_edge(origin, direction, t_start, t_end, boxes)}
     t, normal, side, box = hit
-    skip = min(abs(t - t_start), abs(t_end - t)) < SKIP_MARGIN
+    skip = (min(abs(t - t_start), abs(t_end - t)) < SKIP_MARGIN) or grazes_edge(origin, direction, t_start, t_end, boxes)
     for other in boxes:
         if other is box:
             continue
@@ -558,13 +572,15 @@ def upper_probe_axis(lower_index, lower_count, upper_count):
     return [min(max(m, 0), last), min(max(m + 1, 0), last)], [0.75, 0.25]
 
 
-def expected_merge(index, texel, rc, texels_by_address, ambient):
+def expected_merge(index, texel, rc, texels_by_address, ambient, child=None):
     """rc_merge.comp on the read-back raw / upper merged texels (mask 0).
     visibility_masked (the texels carry probe states): upper probes whose
     segment is blocked (the lower texel's upper_visible_mask) or that are
     inside geometry (the upper texel's probe_inside) are skipped and the
     remaining weights renormalized; with none left, upper is (0, 0).
-    interpolate: all 8 with their trilinear weights."""
+    interpolate: all 8 with their trilinear weights. child (0 - 3, cascade
+    0): the texel merged with that one child texel's upper value instead of
+    the 2x2 mean."""
     raw = texel["radiance"] + [texel["beta"]]
     if index == len(rc["cascades"]) - 1:
         upper = list(ambient) + [1.0]
@@ -573,6 +589,7 @@ def expected_merge(index, texel, rc, texels_by_address, ambient):
         lower_counts = rc["cascades"][index]["grid_counts"]
         axes = [upper_probe_axis(texel["probe"][a], lower_counts[a], upper_counts[a]) for a in range(3)]
         u, v = texel["texel"]
+        children = CHILD_OFFSETS if child is None else (CHILD_OFFSETS[child],)
         upper = [0.0, 0.0, 0.0, 0.0]
         weight_sum = 0.0
         for k in range(2):
@@ -589,13 +606,30 @@ def expected_merge(index, texel, rc, texels_by_address, ambient):
                         weight_sum += weight
                     if not usable:
                         continue
-                    for du, dv in ((0, 0), (1, 0), (0, 1), (1, 1)):
-                        child = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
-                        value = child["merged_radiance"] + [child["merged_beta"]]
+                    for du, dv in children:
+                        value = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
+                        value = value["merged_radiance"] + [value["merged_beta"]]
                         for ch in range(4):
-                            upper[ch] += weight * 0.25 * value[ch]
+                            upper[ch] += weight * value[ch] / len(children)
         upper = [x / weight_sum for x in upper] if weight_sum > 0.0 else [0.0, 0.0, 0.0, 0.0]
     return [raw[ch] + (raw[3] * upper[ch]) for ch in range(3)] + [raw[3] * upper[3]]
+
+
+# Child texel offsets in the order of the readback's merged_children
+# (x + 2 y), Radiance_cascades_renderer::read_merged_child_texel().
+CHILD_OFFSETS = ((0, 0), (1, 0), (0, 1), (1, 1))
+
+
+def merge_error(measured, expected):
+    return max(abs(measured[ch] - expected[ch]) / max(abs(expected[ch]), MERGE_ALGEBRA_FLOOR) for ch in range(4))
+
+
+def child_errors(index, texel, expected_child):
+    """Cascade 0: the largest error of the read-back child texels against
+    expected_child(child) -> rgba; 0 for the other cascades."""
+    if (index != 0) or ("merged_children" not in texel):
+        return 0.0
+    return max(merge_error(texel["merged_children"][c], expected_child(c)) for c in range(4))
 
 
 def check_merge_algebra(name, rc, texels_by_address, ambient):
@@ -611,8 +645,9 @@ def check_merge_algebra(name, rc, texels_by_address, ambient):
                 continue
             expected = expected_merge(index, texel, rc, texels_by_address, ambient)
             measured = texel["merged_radiance"] + [texel["merged_beta"]]
-            error = max(abs(measured[ch] - expected[ch]) / max(abs(expected[ch]), MERGE_ALGEBRA_FLOOR)
-                        for ch in range(4))
+            error = max(merge_error(measured, expected),
+                        child_errors(index, texel,
+                                     lambda c: expected_merge(index, texel, rc, texels_by_address, ambient, c)))
             checked += 1
             worst = max(worst, error)
             if error > MERGE_ALGEBRA_TOLERANCE:
@@ -631,38 +666,45 @@ def upper_probe_position(cascade, probe):
     return [cascade["grid_origin"][a] + (probe[a] * cascade["grid_spacing"][a]) for a in range(3)]
 
 
-def on_junction(result, boxes):
-    """A front face hit within SKIP_MARGIN of another part: the line where
-    two parts meet (a wall foot on the floor). Its shading - which face is
-    committed, whether the shadow ray from the offset point grazes the other
-    part - flips under a 0.1 mm shift. Segment ends sit on the probe grids,
-    whose planes coincide with the room faces, so segments hit these lines
-    far more often than texel-centre rays do."""
-    if result["kind"] != "front":
-        return False
-    point = result["position"]
+def segment_visibility(start, end, boxes):
+    """rc_trace.comp segment_free() on the CPU: (visible, ambiguous) - no box
+    crossed (front or back) on the segment; ambiguous when a crossing lies
+    within SKIP_MARGIN of an end."""
+    delta = v_sub(end, start)
+    length = math.sqrt(v_dot(delta, delta))
+    if length <= 0.0:
+        return True, False
+    direction = v_mul(delta, 1.0 / length)
+    visible = True
+    ambiguous = False
     for box in boxes:
-        if box.name == result["part"]:
-            continue
-        d = [max(box.lo[i] - point[i], 0.0, point[i] - box.hi[i]) for i in range(3)]
-        if math.sqrt(v_dot(d, d)) < SKIP_MARGIN:
-            return True
-    return False
+        for t, _, _ in box_crossings(start, direction, box):
+            if (abs(t) < SKIP_MARGIN) or (abs(t - length) < SKIP_MARGIN):
+                ambiguous = True
+            elif 0.0 < t < length:
+                visible = False
+    return visible, ambiguous
 
 
-def expected_neighbour_merge(index, texel, rc, texels_by_address, boxes, lights, ambient):
+def expected_neighbour_merge(index, texel, rc, texels_by_address, boxes, child=None):
     """rc_merge.comp per_neighbour_trace (mask 0) on CPU ground-truth
-    connecting segments and the read-back upper merged texels.
-    -> (merged rgba, skipped)."""
+    connecting segment visibilities, the read-back raw texel and the
+    read-back upper merged texels (child: the one child texel of cascade 0's
+    child resolution instead of the 2x2 mean). -> (merged rgba, skipped)."""
+    raw = texel["radiance"] + [texel["beta"]]
+    if raw[3] <= 0.0:
+        return raw[:3] + [0.0], False  # the interval hit: nothing beyond it counts
     lower_counts = rc["cascades"][index]["grid_counts"]
     upper_cascade = rc["cascades"][index + 1]
     upper_counts = upper_cascade["grid_counts"]
     axes = [upper_probe_axis(texel["probe"][a], lower_counts[a], upper_counts[a]) for a in range(3)]
     u, v = texel["texel"]
     direction = texel["direction"]
-    t_start, t_end = texel["interval"]
-    start = v_add(texel["probe_position"], v_mul(direction, t_start))
-    merged = [0.0, 0.0, 0.0, 0.0]
+    t_end = texel["interval"][1]
+    start = v_add(texel["probe_position"], v_mul(direction, t_end))
+    children = CHILD_OFFSETS if child is None else (CHILD_OFFSETS[child],)
+    upper = [0.0, 0.0, 0.0, 0.0]
+    weight_sum = 0.0
     for k in range(2):
         for j in range(2):
             for i in range(2):
@@ -671,22 +713,19 @@ def expected_neighbour_merge(index, texel, rc, texels_by_address, boxes, lights,
                     continue
                 probe = (axes[0][0][i], axes[1][0][j], axes[2][0][k])
                 end = v_add(upper_probe_position(upper_cascade, probe), v_mul(direction, t_end))
-                delta = v_sub(end, start)
-                length = math.sqrt(v_dot(delta, delta))
-                segment = reference_ray(start, v_mul(delta, 1.0 / length), 0.0, length, boxes, lights, ambient)
-                if segment["skip"] or on_junction(segment, boxes):
+                visible, ambiguous = segment_visibility(start, end, boxes)
+                if ambiguous:
                     return None, True
-                upper = [0.0, 0.0, 0.0, 0.0]
-                for du, dv in ((0, 0), (1, 0), (0, 1), (1, 1)):
-                    child = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
-                    value = child["merged_radiance"] + [child["merged_beta"]]
+                if not visible:
+                    continue
+                weight_sum += weight
+                for du, dv in children:
+                    value = texels_by_address[(index + 1, probe, (2 * u + du, 2 * v + dv))]
+                    value = value["merged_radiance"] + [value["merged_beta"]]
                     for ch in range(4):
-                        upper[ch] += 0.25 * value[ch]
-                beta = segment["beta"]
-                for ch in range(3):
-                    merged[ch] += weight * (segment["radiance"][ch] + (beta * upper[ch]))
-                merged[3] += weight * beta * upper[3]
-    return merged, False
+                        upper[ch] += weight * value[ch] / len(children)
+    upper = [x / weight_sum for x in upper] if weight_sum > 0.0 else [0.0, 0.0, 0.0, 0.0]
+    return [raw[ch] + (raw[3] * upper[ch]) for ch in range(3)] + [raw[3] * upper[3]], False
 
 
 def check_neighbour_merge(name, rc, texels_by_address, boxes, lights, ambient):
@@ -711,14 +750,19 @@ def check_neighbour_merge(name, rc, texels_by_address, boxes, lights, ambient):
                 expected = expected_merge(index, texel, rc, texels_by_address, ambient)
                 tolerance = MERGE_ALGEBRA_TOLERANCE
             else:
-                expected, skip = expected_neighbour_merge(index, texel, rc, texels_by_address, boxes, lights, ambient)
+                expected, skip = expected_neighbour_merge(index, texel, rc, texels_by_address, boxes)
                 if skip:
                     skipped += 1
                     continue
-                tolerance = NEIGHBOUR_TOLERANCE
+                tolerance = MERGE_ALGEBRA_TOLERANCE
             measured = texel["merged_radiance"] + [texel["merged_beta"]]
-            error = max(abs(measured[ch] - expected[ch]) / max(abs(expected[ch]), MERGE_ALGEBRA_FLOOR)
-                        for ch in range(4))
+            error = merge_error(measured, expected)
+            if index == top:
+                error = max(error, child_errors(index, texel,
+                                                lambda c: expected_merge(index, texel, rc, texels_by_address, ambient, c)))
+            else:
+                error = max(error, child_errors(index, texel,
+                                                lambda c: expected_neighbour_merge(index, texel, rc, texels_by_address, boxes, c)[0]))
             checked += 1
             worst = max(worst, error)
             if error > tolerance:
@@ -992,6 +1036,7 @@ def check_reduce(c, name, rc, boxes):
     depth_sharpness = result["field"]["depth_sharpness"]
     by_address = {(tuple(t["probe"]), tuple(t["texel"])): t for t in result["texels"]}
     subdivisions = texel_subdivisions(q)
+    child_subdivisions = texel_subdivisions(2 * q)
     solid_angles = [0.0] * (q * q)
     for index, _, solid_angle in subdivisions:
         solid_angles[index] += solid_angle
@@ -1006,13 +1051,19 @@ def check_reduce(c, name, rc, boxes):
         tile = irradiance_texels if entry["atlas"] == "irradiance" else distance_texels
         direction = texel_direction(entry["texel"], tile)
         if entry["atlas"] == "irradiance":
-            weights = lobe_weights(direction, q, 1.0, subdivisions)
+            # Merged cascade 0 at cascade 1's angular resolution: the child
+            # texels of a 2 q tile, each with its parent's backface flag.
+            m = 2 * q
+            weights = lobe_weights(direction, m, 1.0, child_subdivisions)
             total = [0.0, 0.0, 0.0]
             weight_sum = 0.0
-            for j, texel in enumerate(texels):
-                if (weights[j] <= 0.0) or (texel["signed_distance"] < 0.0):
+            for j in range(m * m):
+                cu, cv = j % m, j // m
+                parent = texels[((cv // 2) * q) + (cu // 2)]
+                if (weights[j] <= 0.0) or (parent["signed_distance"] < 0.0):
                     continue
-                total = v_add(total, v_mul(texel["merged_radiance"], weights[j]))
+                child = parent["merged_children"][((cv % 2) * 2) + (cu % 2)]
+                total = v_add(total, v_mul(child[:3], weights[j]))
                 weight_sum += weights[j]
             expected = v_mul(total, 1.0 / weight_sum) if weight_sum > 1.0e-9 else [0.0, 0.0, 0.0]
             measured = entry["irradiance"]

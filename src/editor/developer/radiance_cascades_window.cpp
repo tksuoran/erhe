@@ -120,7 +120,7 @@ void Radiance_cascades_window::imgui()
         ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", to_mib(static_cast<double>(renderer->get_texture_byte_count())));
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade (plus the 4 x 2 neighbour atlas in the per_neighbour_trace merge mode), plus the cascade 0 R32F distance texture; the total includes the probe field atlases.");
+    ImGui::TextUnformatted("Memory: raw + merged RGBA16F atlas per cascade (cascade 0 merged at 2 x 2 per texel, plus the 2 x 1 neighbour atlas in the per_neighbour_trace merge mode), plus the cascade 0 RGBA32F distance statistics; the total includes the probe field atlases.");
 
     // GPU cost of the trace, merge and reduce
     // (doc/editor/radiance_cascades.md "Trace", "Merge", "Reduce").
