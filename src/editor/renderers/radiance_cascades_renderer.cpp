@@ -537,17 +537,13 @@ Radiance_cascades_renderer::Radiance_cascades_renderer(
 
     // The visibility depends on the scene geometry: recompute it when an
     // edit changes a transform or a mesh's geometry, or removes content.
-    // The same edits, and every other change of the light transport
-    // (Scene_lighting_changed_message: content or lights added or removed,
-    // light and material edits), reset the temporal history of the traced
-    // texels (doc/editor/ddgi.md "History reset").
+    // Committed changes of the light transport reset the temporal history
+    // of the traced texels (doc/editor/ddgi.md "History reset"): geometry
+    // edits, removals and Scene_lighting_changed_message (committed node
+    // transforms, content or lights added or removed, light and material
+    // edits). A live transform touch does not: a drag keeps blending.
     m_node_touched_subscription = app_message_bus.node_touched.subscribe(
-        [this](Node_touched_message& message) {
-            m_visibility_dirty = true;
-            if ((message.node != nullptr) && node_affects_indirect_lighting(*message.node)) {
-                m_history.request_reset();
-            }
-        }
+        [this](Node_touched_message&) { m_visibility_dirty = true; }
     );
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
         [this](Mesh_geometry_changed_message&) {

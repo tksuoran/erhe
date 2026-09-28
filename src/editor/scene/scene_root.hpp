@@ -505,8 +505,8 @@ private:
     void add_trigger_event(bool enter, const erhe::physics::Trigger_event& event);
 
     // Queues Scene_lighting_changed_message (app_message.hpp): a content
-    // mesh or a light entered or left this scene, or a light changed. Any
-    // thread (the Scene_host hooks run on worker threads during async loads).
+    // mesh or a light entered or left this scene. Any thread (the Scene_host
+    // hooks run on worker threads during async loads).
     void notify_lighting_changed();
 
     // Returns the raytrace IInstance mask for a mesh: the role bits of the

@@ -106,14 +106,21 @@ struct Mesh_geometry_changed_message
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
-// A light transport input of a scene changed outside a node transform: a
-// content-layer mesh or a light entered or left the scene, a light's
-// properties changed, or a material's properties changed. Queued, because
-// the Scene_host hooks that send it (Scene_root::register_mesh() and
-// friends, Scene_root::on_light_changed()) may run on any thread; delivered
-// on the main thread by App_message_bus::update(). The indirect diffuse
-// producers (Ddgi_renderer, Radiance_cascades_renderer) reset their
-// temporal history on it (doc/editor/ddgi.md "History reset").
+// A COMMITTED change of a scene's light transport: a content-layer mesh or
+// a light entered or left the scene (Scene_root::register_mesh() and
+// friends), a Node_transform_operation moved content or a light (execute,
+// undo, redo; also the end of its transform animation), or a property
+// operation edited a light or a material (App_context::
+// on_item_property_changed()). Only these commit sites send it; a live,
+// uncommitted change - a gizmo or transform tool drag, a slider being
+// dragged, a frame of a transform animation - arrives as
+// Node_touched_message or a property change callback and never as this
+// message, so the indirect diffuse producers (Ddgi_renderer,
+// Radiance_cascades_renderer), which reset their temporal history on this
+// message only, keep blending through a drag and reset once at its commit
+// (doc/editor/ddgi.md "History reset"). Queued, because the Scene_host
+// hooks may run on any thread; delivered on the main thread by
+// App_message_bus::update().
 class Scene_lighting_changed_message
 {
 public:

@@ -468,7 +468,6 @@ private:
     // allocation and by the change messages (doc/editor/ddgi.md "History
     // reset").
     Temporal_history                                                m_history{};
-    erhe::message_bus::Subscription<Node_touched_message>           m_node_touched_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message>  m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Items_removed_message>          m_items_removed_subscription;
     erhe::message_bus::Subscription<Scene_lighting_changed_message> m_scene_lighting_changed_subscription;

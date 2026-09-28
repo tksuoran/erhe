@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "renderers/indirect_diffuse.hpp"
 #include "scene/node_physics_system.hpp"
 #include "time.hpp"
 
@@ -81,6 +82,8 @@ void Node_transform_operation::execute(App_context& context)
             // body is moving; record without writing or snapping.
             m_xform_op_stack_after          = m_parameters.xform_op_stack_after;
             m_xform_op_stack_after_recorded = true;
+            // The drag ends here: its pose is committed.
+            announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
             return;
         } else {
             m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
@@ -93,6 +96,7 @@ void Node_transform_operation::execute(App_context& context)
                 .node   = m_parameters.node.get()
             }
         );
+        announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
         // Snap the node's rigid body to the new pose at rest so the simulation does
         // not react to this discrete (non-interactive) move with a kinematic velocity
         // injection or corrective impulse.
@@ -120,6 +124,7 @@ void Node_transform_operation::undo(App_context& context)
             .node   = m_parameters.node.get()
         }
     );
+    announce_committed_node_transform(*context.app_message_bus, *m_parameters.node);
     // Snap the node's rigid body to the restored pose at rest (see execute()).
     Node_physics_system* const system = find_node_physics_system(*m_parameters.node.get());
     if (system != nullptr) {

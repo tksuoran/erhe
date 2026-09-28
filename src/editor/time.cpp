@@ -1,6 +1,7 @@
 #include "time.hpp"
 
 #include "app_message_bus.hpp"
+#include "renderers/indirect_diffuse.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
@@ -188,6 +189,7 @@ void Time::finish_all_transform_animations(App_message_bus& app_message_bus)
                 .node   = entry.node.get()
             }
         );
+        announce_committed_node_transform(app_message_bus, *entry.node);
     }
 }
 
@@ -208,6 +210,8 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
                             .node   = entry.node.get()
                         }
                     );
+                    // The animated operation's pose is reached: committed.
+                    announce_committed_node_transform(app_message_bus, *entry.node);
                     return true;
                 }
                 return false;

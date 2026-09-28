@@ -257,17 +257,11 @@ Ddgi_renderer::Ddgi_renderer(
     // erhe_temporal_history.glsl): the blend's per-probe hysteresis.
     m_control_offsets.history         = m_control_block.add_uvec4("history"        )->get_offset_in_parent();
 
-    // A change of the light transport resets the probes' temporal history
-    // (doc/editor/ddgi.md "History reset"): content or light transforms,
-    // geometry edits, removals, and Scene_lighting_changed_message (content
-    // or lights added or removed, light and material edits).
-    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
-        [this](Node_touched_message& message) {
-            if ((message.node != nullptr) && node_affects_indirect_lighting(*message.node)) {
-                m_history.request_reset();
-            }
-        }
-    );
+    // A committed change of the light transport resets the probes' temporal
+    // history (doc/editor/ddgi.md "History reset"): geometry edits, removals
+    // and Scene_lighting_changed_message (committed node transforms, content
+    // or lights added or removed, light and material edits). Live transform
+    // touches during a drag do not.
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
         [this](Mesh_geometry_changed_message&) { m_history.request_reset(); }
     );

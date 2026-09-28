@@ -1,6 +1,7 @@
 #include "renderers/indirect_diffuse.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/indirect_diffuse_source.hpp"
 #include "renderers/ddgi_renderer.hpp"
@@ -134,6 +135,13 @@ auto node_affects_indirect_lighting(const erhe::scene::Node& node) -> bool
         }
     );
     return affects;
+}
+
+void announce_committed_node_transform(App_message_bus& app_message_bus, const erhe::scene::Node& node)
+{
+    if (node_affects_indirect_lighting(node)) {
+        app_message_bus.scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
+    }
 }
 
 } // namespace editor

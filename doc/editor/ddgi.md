@@ -152,17 +152,29 @@ radiance cascades raw texels) resets the history instead:
   index and its slot in the dispatch. Once every probe has reached the
   configured hysteresis the flag clears and the blend uses it directly.
 - **When.** Every allocation (refit) resets, so a new grid starts with its
-  first update instead of fading in from black. So do the change messages
-  on `App_message_bus`, which the renderer subscribes to (no polling):
-  `Node_touched_message` for a node whose subtree holds a content-layer mesh
-  or a light (`node_affects_indirect_lighting()`; a camera or tool node
-  does not reset), `Mesh_geometry_changed_message`, `Items_removed_message`
-  and `Scene_lighting_changed_message` - queued by `Scene_root` when a
-  content-layer mesh or a light is registered or unregistered and when a
-  light's properties change (`Scene_root::on_light_changed()`), and by
-  `App_context::on_item_property_changed()` for a material edit. A request
-  is applied at the next update, at its cursor; any number of requests
-  before it make one reset.
+  first update instead of fading in from black. So does every COMMITTED
+  change of the light transport, announced on `App_message_bus` (no
+  polling): `Mesh_geometry_changed_message`, `Items_removed_message` and
+  `Scene_lighting_changed_message`. The last is queued only at commit sites:
+  `Node_transform_operation` execute / undo / redo and the end of its
+  transform animation, for a node whose subtree holds a content-layer mesh
+  or a light (`announce_committed_node_transform()`,
+  `node_affects_indirect_lighting()`; a camera or tool node does not
+  reset); `Scene_root` when a content-layer mesh or a light is registered
+  or unregistered; `App_context::on_item_property_changed()` after a
+  property operation edited a light or a material.
+- **Live edits keep blending.** A gizmo or transform tool drag, a slider
+  being dragged and each frame of a transform animation send
+  `Node_touched_message` or a property change callback, which the
+  producers do not reset on - the commit is a different message type, so a
+  live touch cannot reset the history. A drag therefore converges through
+  the normal hysteresis while it moves, and the release (the queued
+  `Node_transform_operation`) resets once. Measured: ten live
+  `transform_selection` steps (`end_edit` false) on the `cornell` light
+  leave `history_reset_count` unchanged for both producers; the commit
+  adds exactly one.
+- A request is applied at the next update, at its cursor; any number of
+  requests before it make one reset.
 - **Stats.** `get_indirect_diffuse_stats` reports `history_reset_count`.
 
 ## Bounces

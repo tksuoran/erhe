@@ -1856,12 +1856,14 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     notify_lighting_changed();
 }
 
-// Light hook: any thread, mark stale only (Scene_host contract).
+// Light hook: any thread, mark stale only (Scene_host contract). Every
+// property change calls it, a live slider drag too, so it is not a commit:
+// committed light edits announce themselves through
+// App_context::on_item_property_changed().
 void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& light)
 {
     static_cast<void>(light);
     m_light_set.invalidate();
-    notify_lighting_changed();
 }
 
 void Scene_root::notify_lighting_changed()

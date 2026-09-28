@@ -244,9 +244,11 @@ refit (doc/plans/radiance_cascades.md section 5, pass 1).
   texel is blended with `min(hysteresis, k / (k + 1))`, so its first trace
   replaces the history and the next ones form the running mean until it
   reaches `hysteresis`. Every allocation resets (the first fill: the
-  history is the allocation clear), and so do the change messages - a
-  node transform of content or lights, a geometry edit, a removal,
-  `Scene_lighting_changed_message` - at the next update, at the cursor.
+  history is the allocation clear), and so do the committed changes - a
+  geometry edit, a removal, `Scene_lighting_changed_message` (committed
+  node transforms, content or lights added or removed, light and material
+  edits; a live drag does not reset, [ddgi.md](ddgi.md) "History reset") -
+  at the next update, at the cursor.
   Without direction jitter a static scene is exact after one full sweep
   after a reset. The control block carries the reset state per run
   (`history`), and the run's first texel in the global order (`run.x`),

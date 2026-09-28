@@ -9,6 +9,7 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
@@ -47,11 +48,13 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
         }
     }
 
-    // A material edit changes what every probe ray that hits it returns:
-    // the indirect diffuse producers reset their temporal history
-    // (doc/editor/ddgi.md "History reset"). Lights announce their own
-    // changes through Scene_root::on_light_changed().
-    if ((app_message_bus != nullptr) && erhe::is<erhe::primitive::Material>(&item)) {
+    // A committed material or light edit (this runs after the property
+    // operation applied it) changes what the probe rays see: the indirect
+    // diffuse producers reset their temporal history (doc/editor/ddgi.md
+    // "History reset"). A live edit that has not been committed yet does not
+    // come through here.
+    const bool lighting_item = erhe::is<erhe::primitive::Material>(&item) || erhe::is<erhe::scene::Light>(&item);
+    if ((app_message_bus != nullptr) && lighting_item) {
         app_message_bus->scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
     }
 }
