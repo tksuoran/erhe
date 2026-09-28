@@ -21,6 +21,7 @@
 //   ERHE_MCP_TEST_LAUNCH_TIMEOUT_S default 180 (/health wait for a self-launched editor)
 
 #include "editor_launcher.hpp"
+#include "pfm_image.hpp"
 
 #include <gtest/gtest.h>
 
@@ -34,6 +35,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -5385,4 +5387,423 @@ TEST_F(Mcp_test, set_node_transform_refuses_a_non_unit_rotation_and_normalizes_r
 
     client.call_tool("close_scene", json{{"scene_name", scene}});
     advance_frames(client, 3);
+}
+
+// ---- Head-on shadow acne (doc/plans/shadow_robustness.md T8) ----------------------------
+//
+// Gate G1 of doc/plans/shadow_robustness.md section 6 on receivers that face
+// the light head-on, where the stored and the reference depth come from the
+// same surface (the section 1 tie): every floor pixel whose segment to the
+// light is unobstructed reads shadow visibility 1 in a shader_debug 30
+// (shadow_visibility) render. The receiver world position comes from a
+// shader_debug 36 (world_position) render of the same camera. The stations
+// hold no caster between the light and the measured floor region, so that
+// region is the analytic lit set; scripts/shadow_verify.py measures the
+// general case. Scenes, views and light poses are those of
+// scripts/creations/creation_25_shadow_test_rooms.py.
+
+namespace {
+
+constexpr const char* c_shadow_head_on_floor_glb = "res/editor/assets/shadow_test_rooms/shadow_head_on_floor.glb";
+constexpr const char* c_shadow_cornell_glb       = "res/editor/assets/gi_test_rooms/gi_cornell.glb";
+constexpr const char* c_shadow_light_name        = "Shadow Light";
+constexpr const char* c_cornell_light_name       = "Cornell Light";
+constexpr int         c_shadow_image_size        = 768;
+
+// The set_graphics_preset fields a shadow measurement pins (the verify
+// script's PRESET_FIELDS plus use_draw_lists).
+constexpr std::array<const char*, 10> c_shadow_preset_fields{
+    "shadow_filter", "shadow_bias", "shadow_technique", "shadow_cull_mode", "shadow_depth_bits",
+    "shadow_resolution", "point_shadow_resolution", "shadow_depth_bias_constant", "shadow_depth_bias_slope",
+    "use_draw_lists"
+};
+
+// Light node rotation shining straight down (-Y): lights shine down their -Z.
+const json c_light_down_rotation_xyzw = json{-0.70710678118654752, 0.0, 0.0, 0.70710678118654752};
+
+// Restores the session-wide state a shadow measurement changes (the shadow
+// fields of the preset in effect and the graphics settings) for the cases
+// that run after it on the shared editor.
+class Shadow_session_state_guard
+{
+public:
+    explicit Shadow_session_state_guard(Mcp_client& client)
+        : m_client{client}
+    {
+        m_preset   = client.call_tool("set_graphics_preset",   json::object()).payload;
+        m_graphics = client.call_tool("set_graphics_settings", json::object()).payload;
+    }
+    Shadow_session_state_guard(const Shadow_session_state_guard&) = delete;
+    auto operator=(const Shadow_session_state_guard&) -> Shadow_session_state_guard& = delete;
+    ~Shadow_session_state_guard()
+    {
+        json preset_args = json::object();
+        for (const char* key : c_shadow_preset_fields) {
+            if (m_preset.is_object() && m_preset.contains(key)) {
+                preset_args[key] = m_preset[key];
+            }
+        }
+        m_client.call_tool("set_graphics_preset", preset_args);
+        if (m_graphics.is_object()) {
+            m_client.call_tool("set_graphics_settings", m_graphics);
+        }
+        advance_frames(m_client, 2);
+    }
+
+private:
+    Mcp_client& m_client;
+    json        m_preset;
+    json        m_graphics;
+};
+
+// Medium's shadow fields (config/editor/graphics_presets.json), pinned so the
+// preset the editor runs with does not matter, with the given rasterizer
+// constant depth bias.
+void pin_medium_shadow_preset(Mcp_client& client, const float shadow_depth_bias_constant)
+{
+    const json args{
+        {"shadow_filter",              "pcf_4x4"},
+        {"shadow_bias",                "receiver_plane"},
+        {"shadow_technique",           "depth"},
+        {"shadow_cull_mode",           "cull_back"},
+        {"shadow_depth_bits",          24},
+        {"shadow_resolution",          2048},
+        {"point_shadow_resolution",    1024},
+        {"shadow_depth_bias_constant", shadow_depth_bias_constant},
+        {"shadow_depth_bias_slope",    -1.0f},
+        {"use_draw_lists",             true}
+    };
+    Mcp_client::Tool_result result = client.call_tool("set_graphics_preset", args);
+    ASSERT_FALSE(result.is_error) << result.text;
+    ASSERT_TRUE(result.payload.value("shadow_enable", false)) << "the preset in effect has shadows disabled";
+    for (const auto& [key, value] : args.items()) {
+        EXPECT_EQ(result.payload.value(key, json{}), value) << "set_graphics_preset did not apply " << key << ": " << result.text;
+    }
+    // The shadow maps are reconfigured on the next frame.
+    advance_frames(client, 4);
+}
+
+// tools/call that re-issues the call while the server answers "Request
+// timed out" / "Server busy" (a render spans frames; the first one of a
+// shader_debug variant also compiles its shaders). Only for idempotent
+// tools: a timed-out request still runs.
+[[nodiscard]] auto call_tool_retrying_timeouts(Mcp_client& client, const std::string& name, const json& arguments, const int timeout_s) -> Mcp_client::Tool_result
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{timeout_s};
+    while (true) {
+        const json response = client.rpc("tools/call", json{{"name", name}, {"arguments", arguments}});
+        if (response.is_object() && response.contains("error")) {
+            const std::string message = response["error"].value("message", std::string{});
+            const bool        busy    = (message.find("timed out") != std::string::npos) || (message.find("Server busy") != std::string::npos);
+            if (busy && (std::chrono::steady_clock::now() < deadline)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds{250});
+                continue;
+            }
+        }
+        Mcp_client::Tool_result out;
+        if (!response.is_object() || !response.contains("result")) {
+            ADD_FAILURE() << "tools/call '" << name << "' failed: " << response.dump();
+            out.is_error = true;
+            return out;
+        }
+        const json& result = response["result"];
+        out.is_error = result.value("isError", false);
+        if (result.contains("content") && result["content"].is_array() && !result["content"].empty()) {
+            out.text = result["content"][0].value("text", "");
+            json parsed = json::parse(out.text, nullptr, false);
+            if (!parsed.is_discarded()) {
+                out.payload = std::move(parsed);
+            }
+        }
+        return out;
+    }
+}
+
+// load_scene (File > Load Scene) and wait for the scene to be listed and
+// its content to settle. Returns the scene name, empty on failure.
+[[nodiscard]] auto load_scene_and_wait(Mcp_client& client, const char* path) -> std::string
+{
+    Mcp_client::Tool_result result = client.call_tool("load_scene", json{{"path", path}});
+    EXPECT_FALSE(result.is_error) << result.text;
+    if (result.is_error) {
+        return {};
+    }
+    const std::string scene    = result.payload.value("scene_name", "");
+    const auto        deadline = std::chrono::steady_clock::now() + std::chrono::seconds{120};
+    while (std::chrono::steady_clock::now() < deadline) {
+        advance_frames(client, 2);
+        const std::vector<std::string> names = scene_names(client);
+        if (std::find(names.begin(), names.end(), scene) != names.end()) {
+            EXPECT_TRUE(wait_until_idle(client, 60000)) << path << " did not settle";
+            return scene;
+        }
+    }
+    ADD_FAILURE() << "load_scene " << path << " did not list scene '" << scene << "'";
+    return {};
+}
+
+// A render_scene_image camera looking straight down (-Y) from `height` with
+// image up -Z, far / shadow_range as the station module computes them.
+[[nodiscard]] auto top_down_camera(const float height, const float fov_y_degrees, const float far_and_shadow_range) -> json
+{
+    return json{
+        {"eye",           {0.0f, height, 0.0f}},
+        {"target",        {0.0f, 0.0f, 0.0f}},
+        {"up",            {0.0f, 0.0f, -1.0f}},
+        {"fov_y_degrees", fov_y_degrees},
+        {"near",          0.02f},
+        {"far",           far_and_shadow_range},
+        {"shadow_range",  far_and_shadow_range}
+    };
+}
+
+class Acne_count
+{
+public:
+    std::size_t gated_pixels  {0}; // floor pixels in the lit region
+    std::size_t failing_pixels{0}; // of those, visibility < 0.999
+};
+
+// G1 on one view: renders the world position (mode 36) and the visibility of
+// `light_name` (mode 30), gates the pixels on the floor top (y = 0) whose
+// (x, z) `in_lit_region` accepts, and counts those below visibility 0.999.
+[[nodiscard]] auto count_head_on_acne(
+    Mcp_client&                              client,
+    const std::string&                       scene,
+    const std::string&                       light_name,
+    const json&                              camera,
+    const std::function<bool(float, float)>& in_lit_region,
+    const std::string&                       label
+) -> Acne_count
+{
+    Acne_count count{};
+    const std::filesystem::path directory       = std::filesystem::temp_directory_path();
+    const std::filesystem::path world_path      = directory / ("erhe_mcp_shadow_acne_" + label + "_world.pfm");
+    const std::filesystem::path visibility_path = directory / ("erhe_mcp_shadow_acne_" + label + "_visibility.pfm");
+
+    json args{
+        {"scene",        scene},
+        {"camera",       camera},
+        {"width",        c_shadow_image_size},
+        {"height",       c_shadow_image_size},
+        {"output",       "linear"},
+        {"msaa_samples", 0}
+    };
+    json world_args = args;
+    world_args["shader_debug"] = 36;
+    world_args["color_format"] = "rgba32f";
+    world_args["path"]         = world_path.generic_string();
+    Mcp_client::Tool_result world_render = call_tool_retrying_timeouts(client, "render_scene_image", world_args, 120);
+    EXPECT_FALSE(world_render.is_error) << label << ": " << world_render.text;
+
+    json visibility_args = args;
+    visibility_args["shader_debug"]       = 30;
+    visibility_args["shadow_debug_light"] = light_name;
+    visibility_args["path"]               = visibility_path.generic_string();
+    Mcp_client::Tool_result visibility_render = call_tool_retrying_timeouts(client, "render_scene_image", visibility_args, 120);
+    EXPECT_FALSE(visibility_render.is_error) << label << ": " << visibility_render.text;
+
+    // The light must be shadow-mapped in that render, or mode 30 reads 1
+    // everywhere and the gate passes vacuously.
+    bool light_shadow_mapped = false;
+    if (visibility_render.payload.contains("shadow_lights")) {
+        for (const json& entry : visibility_render.payload["shadow_lights"]) {
+            if (entry.value("name", "") == light_name) {
+                light_shadow_mapped = true;
+            }
+        }
+    }
+    EXPECT_TRUE(light_shadow_mapped) << label << ": " << light_name << " is not shadow-mapped in the render: " << visibility_render.text;
+
+    mcp_test::Pfm_image world;
+    mcp_test::Pfm_image visibility;
+    std::string         error;
+    const bool world_read      = world.read(world_path, error);
+    EXPECT_TRUE(world_read) << label << ": " << error;
+    const bool visibility_read = visibility.read(visibility_path, error);
+    EXPECT_TRUE(visibility_read) << label << ": " << error;
+    std::error_code ignored;
+    std::filesystem::remove(world_path, ignored);
+    std::filesystem::remove(visibility_path, ignored);
+    if (!world_read || !visibility_read) {
+        return count;
+    }
+    EXPECT_EQ(world.get_channels(), 3);
+    EXPECT_EQ(visibility.get_width(),  world.get_width());
+    EXPECT_EQ(visibility.get_height(), world.get_height());
+    if ((world.get_channels() != 3) || (visibility.get_width() != world.get_width()) || (visibility.get_height() != world.get_height())) {
+        return count;
+    }
+
+    for (int y = 0; y < world.get_height(); ++y) {
+        for (int x = 0; x < world.get_width(); ++x) {
+            const float world_x = world.get(x, y, 0);
+            const float world_y = world.get(x, y, 1);
+            const float world_z = world.get(x, y, 2);
+            if (std::isnan(world_x) || (std::abs(world_y) > 1.0e-4f) || !in_lit_region(world_x, world_z)) {
+                continue; // background, not the floor top, or outside the lit region
+            }
+            ++count.gated_pixels;
+            const float value = visibility.get(x, y, 0);
+            if (!(value >= 0.999f)) {
+                ++count.failing_pixels;
+            }
+        }
+    }
+    return count;
+}
+
+class Head_on_measurement
+{
+public:
+    std::string label;
+    Acne_count  count;
+};
+
+// The head-on receivers of plan sections 1 and 9 under Medium with the given
+// rasterizer constant depth bias, at light poses that fail on the tie:
+// - head_on_floor, spot at 4.711 m straight above the floor (full-sweep pose
+//   349 of scripts/shadow_verify.py --poses full, G1 33 % in section 9),
+// - head_on_floor, directional straight down (the default pose),
+// - cornell, "Cornell Light" at the pose the asset saves (spot 2.9 m above
+//   the floor, straight down; plan section 1).
+[[nodiscard]] auto measure_head_on_receivers(Mcp_client& client, const float shadow_depth_bias_constant) -> std::vector<Head_on_measurement>
+{
+    std::vector<Head_on_measurement> measurements;
+    pin_medium_shadow_preset(client, shadow_depth_bias_constant);
+    Mcp_client::Tool_result environment = client.call_tool(
+        "set_graphics_settings", json{{"headlight_when_unlit", false}, {"sky_enabled", false}}
+    );
+    EXPECT_FALSE(environment.is_error) << environment.text;
+
+    // head_on_floor: 12 x 12 m floor, top at y = 0, nothing above it but the
+    // light. View "top" of the station module.
+    const std::string floor_scene = load_scene_and_wait(client, c_shadow_head_on_floor_glb);
+    EXPECT_FALSE(floor_scene.empty());
+    if (floor_scene.empty()) {
+        return measurements;
+    }
+    const json floor_camera = top_down_camera(7.0f, 60.0f, 13.0f);
+
+    const float spot_height = 4.710945080103613f;
+    Mcp_client::Tool_result spot_pose = client.call_tool(
+        "set_node_transform",
+        json{
+            {"scene_name",    floor_scene},
+            {"node_name",     c_shadow_light_name},
+            {"space",         "world"},
+            {"translation",   {0.0f, spot_height, 0.0f}},
+            {"rotation_xyzw", c_light_down_rotation_xyzw}
+        }
+    );
+    EXPECT_FALSE(spot_pose.is_error) << spot_pose.text;
+    advance_frames(client, 2);
+    // Inside 90 % of the 90 degree cone.
+    const float spot_radius = 0.9f * spot_height;
+    measurements.push_back(Head_on_measurement{
+        .label = "head_on_floor spot",
+        .count = count_head_on_acne(
+            client, floor_scene, c_shadow_light_name, floor_camera,
+            [spot_radius](const float x, const float z) -> bool { return ((x * x) + (z * z)) < (spot_radius * spot_radius); },
+            "head_on_floor_spot"
+        )
+    });
+
+    Mcp_client::Tool_result directional = client.call_tool(
+        "edit_light",
+        json{
+            {"scene_name",  floor_scene},
+            {"light_name",  c_shadow_light_name},
+            {"type",        "directional"},
+            {"range",       0.0f},
+            {"intensity",   3.0f},
+            {"cast_shadow", true}
+        }
+    );
+    EXPECT_FALSE(directional.is_error) << directional.text;
+    Mcp_client::Tool_result directional_pose = client.call_tool(
+        "set_node_transform",
+        json{
+            {"scene_name",    floor_scene},
+            {"node_name",     c_shadow_light_name},
+            {"space",         "world"},
+            {"translation",   {0.0f, 3.0f, 0.0f}},
+            {"rotation_xyzw", c_light_down_rotation_xyzw}
+        }
+    );
+    EXPECT_FALSE(directional_pose.is_error) << directional_pose.text;
+    advance_frames(client, 2);
+    measurements.push_back(Head_on_measurement{
+        .label = "head_on_floor directional",
+        .count = count_head_on_acne(
+            client, floor_scene, c_shadow_light_name, floor_camera,
+            [](const float, const float) -> bool { return true; },
+            "head_on_floor_directional"
+        )
+    });
+    client.call_tool("close_scene", json{{"scene_name", floor_scene}});
+    advance_frames(client, 4);
+
+    // cornell: 3 x 3 m room interior (walls from |x|, |z| = 1.5), the light
+    // at its saved pose. Floor pixels within 0.1 m of a wall are left out
+    // (the wall bases share their texels). View "top" of the station module.
+    const std::string cornell_scene = load_scene_and_wait(client, c_shadow_cornell_glb);
+    EXPECT_FALSE(cornell_scene.empty());
+    if (cornell_scene.empty()) {
+        return measurements;
+    }
+    measurements.push_back(Head_on_measurement{
+        .label = "cornell spot",
+        .count = count_head_on_acne(
+            client, cornell_scene, c_cornell_light_name, top_down_camera(2.8f, 70.0f, 5.0f),
+            [](const float x, const float z) -> bool { return (std::abs(x) < 1.4f) && (std::abs(z) < 1.4f); },
+            "cornell_spot"
+        )
+    });
+    client.call_tool("close_scene", json{{"scene_name", cornell_scene}});
+    advance_frames(client, 4);
+    return measurements;
+}
+
+// Every measured view gates enough floor pixels that a pass is not vacuous
+// (768 x 768 renders; the smallest region, cornell's, covers ~40 %).
+constexpr std::size_t c_min_gated_pixels = 100000;
+
+} // anonymous namespace
+
+// Plan phase 4 (the bias work, D1 to D4) makes these pass; until then the
+// head-on tie leaves bands of visibility 0 on every measured floor
+// (doc/plans/shadow_robustness.md sections 1 and 9). Run with
+// --gtest_also_run_disabled_tests to see the failing pixel counts.
+TEST_F(Mcp_test, DISABLED_shadow_head_on_receivers_have_no_acne)
+{
+    Mcp_client&                            client = Mcp_env::get().client();
+    const Shadow_session_state_guard       guard{client};
+    const std::vector<Head_on_measurement> measurements = measure_head_on_receivers(client, 0.0f);
+    ASSERT_EQ(measurements.size(), 3u);
+    for (const Head_on_measurement& measurement : measurements) {
+        EXPECT_GT(measurement.count.gated_pixels, c_min_gated_pixels) << measurement.label;
+        EXPECT_EQ(measurement.count.failing_pixels, 0u)
+            << measurement.label << ": " << measurement.count.failing_pixels << " of " << measurement.count.gated_pixels
+            << " unobstructed floor pixels read shadow visibility < 0.999";
+    }
+}
+
+// Control: the same measurement with a rasterizer constant depth bias of -4
+// (plan section 1: an ulp-scaled floor for D32_SFLOAT that removes the tie at
+// these axis-aligned poses) reads no acne, so the pipeline the disabled case
+// relies on - scene load, light pose, shadow-mapped mode 30 render, world
+// position render, floor classification - finds lit floor and measures it.
+TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne_with_constant_depth_bias)
+{
+    Mcp_client&                            client = Mcp_env::get().client();
+    const Shadow_session_state_guard       guard{client};
+    const std::vector<Head_on_measurement> measurements = measure_head_on_receivers(client, -4.0f);
+    ASSERT_EQ(measurements.size(), 3u);
+    for (const Head_on_measurement& measurement : measurements) {
+        EXPECT_GT(measurement.count.gated_pixels, c_min_gated_pixels) << measurement.label;
+        EXPECT_EQ(measurement.count.failing_pixels, 0u)
+            << measurement.label << ": " << measurement.count.failing_pixels << " of " << measurement.count.gated_pixels
+            << " unobstructed floor pixels read shadow visibility < 0.999";
+    }
 }

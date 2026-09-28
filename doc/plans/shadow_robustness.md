@@ -11,8 +11,8 @@ receiver-side and caster-side shadow bias work, including the deltas from the
 RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
-The tooling (T1 to T7) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is phases 2 to 8.
+The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
+the current gate table. The remaining work is phases 4 to 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -264,23 +264,22 @@ Every gate is the worst value over all poses and runs:
   cases need the GPU test environment to create a forward-Z device. These
   run under a software Vulkan once [graphics_tests.md](graphics_tests.md)
   brings `gpu` tests to CI.
-- **T8 MCP regression case.** One `Mcp_test` case in `mcp_server_tests`
-  (label `editor`) loads `shadow_head_on_floor.glb` and the `cornell` pose and
-  asserts G1 on a mode 30 render for spot and directional.
+- **T8 MCP regression case.** `Mcp_test.DISABLED_shadow_head_on_receivers_have_no_acne`
+  (label `editor`) asserts G1 on mode 30 renders of `shadow_head_on_floor.glb`
+  (spot at 4.711 m, directional straight down) and `gi_cornell.glb` at its
+  saved pose, with Medium's shadow fields pinned; phase 4 enables it. The
+  control `shadow_head_on_receivers_have_no_acne_with_constant_depth_bias`
+  runs the same measurement with rasterizer constant bias -4 and passes.
 
 ## 8. Phases
 
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 2 - correctness defects.** D0, then D8. Exit: the depth-bits and
-  forward-Z rows of section 9 match their reverse-Z / 32-bit counterparts
-  apart from the bias failures D1 addresses.
-- **Phase 3 - library and MCP tests.** T7 and T8; both fail on the head-on
-  cases before phase 4, which confirms they detect the tie.
 - **Phase 4 - bias.** D4, then D2 / D3, then D1, each measured on its own.
   Exit: G1 to G5 pass for directional and spot in every `cull_back` and
-  `cull_none` cell, T7 and T8 pass, `head_on_floor` full sweep passes, then
+  `cull_none` cell, the `DISABLED_` head-on cases of T7 and T8 are enabled and
+  pass, `head_on_floor` full sweep passes, then
   the full matrix.
 - **Phase 5 - cull mode (D5).** Decide the default from the matrix with D1 in
   place; update the codegen default, the presets and shadows.md together.

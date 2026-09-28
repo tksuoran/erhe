@@ -14,6 +14,8 @@ add_executable(${_target}
     editor_launcher.hpp
     main.cpp
     mcp_server_tests.cpp
+    pfm_image.cpp
+    pfm_image.hpp
 )
 
 # Where the binary finds an editor to launch when none answers on the test

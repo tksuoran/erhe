@@ -47,4 +47,7 @@
 ✓D0::5e10ed9d0{get_shadow_depth_bits_axis-from-created-texture;set_graphics_preset-accepts-24;hard@24==hard@32-all-cells}
 ✓D8::{root:shadow_renderer.cpp-depth-bias-unconverted-for-forward-Z;now-signed-toward-light;spot-fwdZ-remaining=float-ties-near-1.0->D1-ulp(z_ref)+D2/D3}
 ✓PHASE-2-DONE
-?next::phase-3{T7-gpu-tests+T8-Mcp_test}
+✓T7::37c43fd20{Shadow_gpu_test-fixture;Shadow_tie-ulp-hook;DISABLED_-head-on-until-phase-4;26-pass;finding:bias-4-fails-at-rotated-poses,D16-pcf-100%}
+✓T8::{Mcp_test.DISABLED_shadow_head_on..;control-bias-4-passes;fails-spot-156896/directional-52992/cornell-42744}
+✓PHASE-3-DONE
+?next::phase-4{D4->D2/D3->D1}
