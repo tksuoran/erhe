@@ -79,6 +79,7 @@ res/editor/assets/*
 !res/editor/assets/RiggedFigure/
 !res/editor/assets/gi_test_rooms/
 !res/editor/assets/joint_constraints/
+!res/editor/assets/shadow_test_rooms/
 !res/editor/assets/skin_test/
 !res/editor/assets/textures/
 !res/editor/assets/SM_Deccer_Cubes_Textured.glb

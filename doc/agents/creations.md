@@ -243,6 +243,36 @@ creations up beyond single showcase scenes.
 
 ## The creations
 
+### 25 - Shadow Test Rooms
+
+A test asset for the directional, spot and point shadow paths, specified in
+[../plans/shadow_robustness.md](../plans/shadow_robustness.md) section 4.
+Seven stations are built as their own scenes: `head_on_floor` (a floor with
+the light on the axis above it), `grazing_fan` (tiles at 0 to 88 degrees to
+the light axis), `contact_blocks` (a cube, a 1 cm plate and a thin post
+resting on a floor), `thin_walls` (five closed huts with 1, 2, 5, 10 and 20 cm
+walls, viewed from inside), `depth_range` (a non-casting floor beyond the
+fitted far plane and a block next to the light), `cube_seams` (a point light
+in a closed room with casters on its cube face boundaries) and `spot_cones`
+(a spot aimed at a floor, swept over 5, 45 and 80 degree cones). The eighth
+station, `cornell`, is `gi_test_rooms/gi_cornell.glb` as is. Every station is
+built only from boxes with plain white materials, black ambient and one
+shadow-casting light named "Shadow Light" under the station's single root
+node, so the ground truth is analytic and the root can be translated as a
+whole. The script's `STATIONS` table carries each station's boxes (center,
+half extents, rotation, role), the default light pose per light type, the
+measurement views, the shadow texel size at the default poses, the contact
+lines (`contact_blocks`) and wall regions (`thin_walls`); `pose_sweep()` is
+the per-station light pose sweep and `apply_light_pose()` switches the
+light's type and pose. `scripts/shadow_verify.py` imports all of it.
+
+The stations are saved as loadable scene assets,
+`res/editor/assets/shadow_test_rooms/shadow_<station>.glb`, by
+`py -3 scripts/creations/creation_25_shadow_test_rooms.py --save-assets`. Each
+file holds the station with its light at the default spot pose and the scene
+camera at the station's first view. The lighting assumes the Graphics setting
+"headlight when unlit" is off.
+
 ### 24 - GI Test Rooms
 
 A test asset for the indirect diffuse producers (DDGI and, next, radiance

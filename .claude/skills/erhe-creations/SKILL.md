@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` ... `creation_24_gi_test_rooms` (henge,
+`creation_1_conway_cathedral` ... `creation_25_shadow_test_rooms` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
@@ -50,7 +50,11 @@ verify script imports - see physics_rigs.md "Test assets",
 gi test rooms = seven one-scene-each GI stations (closed white rooms, black
 ambient, headlight off) whose STATIONS table of views + raycast-verified
 viewport-fraction rectangles scripts/gi_verify.py imports; rectangles are
-fractions of the VIEWPORT, since capture_screenshot grabs the whole window).
+fractions of the VIEWPORT, since capture_screenshot grabs the whole window),
+shadow test rooms = seven box-only shadow stations whose STATIONS table (boxes,
+light poses per type, render_scene_image views, pose sweeps) is the data
+source of scripts/shadow_verify.py; measure with render_scene_image, not
+capture_screenshot.
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
