@@ -4000,7 +4000,7 @@
     "name": "capture_screenshot"
   },
   {
-    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the image. See doc/editor/rendergraph.md 'Scene image capture'.",
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). See doc/editor/rendergraph.md 'Scene image capture'.",
     "inputSchema": {
       "properties": {
         "scene": {
@@ -4039,7 +4039,7 @@
           "type": "string"
         },
         "shader_debug": {
-          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (fp16 precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions).",
+          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions).",
           "type": "integer"
         },
         "shadow_debug_light": {
@@ -4048,6 +4048,14 @@
             "string",
             "integer"
           ]
+        },
+        "color_format": {
+          "description": "Scene color target format: 'rgba16f' (default, what viewports use) or 'rgba32f' (output 'linear' only; fp32 values, e.g. shader_debug 36 world positions far from the origin - fp16 rounds by about 1 mm at 1 m). Refused when the device cannot render rgba32f (at the msaa_samples count).",
+          "enum": [
+            "rgba16f",
+            "rgba32f"
+          ],
+          "type": "string"
         },
         "msaa_samples": {
           "description": "MSAA sample count of the render target (default: the current graphics preset's, what viewports use)",

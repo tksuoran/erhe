@@ -508,6 +508,9 @@ App_rendering::App_rendering(
             .shader_stages{&programs.sky.shader_stages}
         };
         sky_pass->data.base_render_pipelines = { &m_pipeline_passes.sky };
+        // Fills the pixels no surface covers; Render_content::scene_surfaces
+        // (render_scene_image linear debug renders) leaves it out.
+        sky_pass->data.kind = Composition_pass_kind::background;
         {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
             m_composer.composition_passes.push_back(sky_pass);

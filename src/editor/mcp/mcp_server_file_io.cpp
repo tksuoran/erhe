@@ -33,6 +33,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -1053,6 +1054,65 @@ void Mcp_server::release_abandoned_scene_image_capture()
     log_mcp->info("MCP server: released the capture of an abandoned render_scene_image request");
 }
 
+namespace {
+
+// Row-major: element [row][column], so rows[r] dotted with (x, y, z, 1) is
+// output component r (glm stores columns: m[column][row]).
+[[nodiscard]] auto mat4_rows_json(const glm::mat4& m) -> json
+{
+    json rows = json::array();
+    for (int row = 0; row < 4; ++row) {
+        rows.push_back(json::array({m[0][row], m[1][row], m[2][row], m[3][row]}));
+    }
+    return rows;
+}
+
+[[nodiscard]] auto make_scene_image_shadow_maps_json(const Scene_image_shadow_maps& maps) -> json
+{
+    return json{
+        {"map_width",       maps.map_width},
+        {"map_height",      maps.map_height},
+        {"map_format",      erhe::dataformat::c_str(maps.map_format)},
+        {"depth_bits",      erhe::dataformat::get_depth_size_bits(maps.map_format)},
+        {"technique",       (maps.distance_format != erhe::dataformat::Format::format_undefined) ? "distance" : "depth"},
+        {"cube_size",       maps.cube_size},
+        {"cube_format",     erhe::dataformat::c_str(maps.cube_format)},
+        {"reverse_depth",   maps.reverse_depth},
+        {"depth_range",     (maps.depth_range == erhe::math::Depth_range::zero_to_one) ? "zero_to_one" : "negative_one_to_one"}
+    };
+}
+
+[[nodiscard]] auto make_scene_image_shadow_lights_json(const std::span<const Scene_image_shadow_light> lights, const Scene_image_shadow_maps& maps) -> json
+{
+    json array = json::array();
+    for (const Scene_image_shadow_light& light : lights) {
+        const bool point = (light.type == erhe::scene::Light_type::point);
+        const char* type_name =
+            point                                              ? "point" :
+            (light.type == erhe::scene::Light_type::spot)      ? "spot"  : "directional";
+        json entry{
+            {"name", light.name},
+            {"id",   light.id},
+            {"type", type_name},
+            {"slot", light.slot},
+            {"position", json::array({light.position.x, light.position.y, light.position.z})}
+        };
+        if (point) {
+            entry["cube_index"] = light.layer;
+            entry["resolution"] = json::array({maps.cube_size, maps.cube_size});
+        } else {
+            entry["resolution"]         = json::array({maps.map_width, maps.map_height});
+            entry["layer"]              = light.layer;
+            entry["texture_from_world"] = mat4_rows_json(light.texture_from_world);
+            entry["clip_from_world"]    = mat4_rows_json(light.clip_from_world);
+        }
+        array.push_back(entry);
+    }
+    return array;
+}
+
+} // anonymous namespace
+
 // Offscreen render of a scene through an explicit camera into a temporary
 // render target owned by the request (doc/editor/rendergraph.md "Scene image
 // capture"): independent of viewport windows and the ImGui layout. The first
@@ -1089,6 +1149,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             const std::optional<uint32_t> slot = m_scene_image_capture->get_shadow_debug_light_index();
             result["shadow_debug_light"]["light_index"] = slot.has_value() ? json(slot.value()) : json(nullptr);
         }
+        result["shadow_maps"]   = make_scene_image_shadow_maps_json(m_scene_image_capture->get_shadow_maps());
+        result["shadow_lights"] = make_scene_image_shadow_lights_json(m_scene_image_capture->get_shadow_lights(), m_scene_image_capture->get_shadow_maps());
         if (path.has_parent_path()) {
             std::error_code ec;
             std::filesystem::create_directories(path.parent_path(), ec);
@@ -1106,18 +1168,28 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             written = writer->write_png(path, width, height, width * 4, erhe::dataformat::Format::format_8_vec4_srgb, bytes);
         } else {
             written = write_pfm(path, width, height, pixels);
-            float  min_luminance = std::numeric_limits<float>::max();
-            float  max_luminance = std::numeric_limits<float>::lowest();
-            double sum_luminance = 0.0;
+            // Statistics over the covered pixels: background-marked (NaN)
+            // pixels are left out.
+            float       min_luminance = std::numeric_limits<float>::max();
+            float       max_luminance = std::numeric_limits<float>::lowest();
+            double      sum_luminance = 0.0;
+            std::size_t sample_count  = 0;
             for (const glm::vec4& p : pixels) {
                 const float luminance = (0.2126f * p.r) + (0.7152f * p.g) + (0.0722f * p.b);
+                if (std::isnan(luminance)) {
+                    continue;
+                }
                 min_luminance = std::min(min_luminance, luminance);
                 max_luminance = std::max(max_luminance, luminance);
                 sum_luminance += static_cast<double>(luminance);
+                ++sample_count;
             }
-            result["min_luminance"]  = min_luminance;
-            result["max_luminance"]  = max_luminance;
-            result["mean_luminance"] = pixels.empty() ? 0.0 : (sum_luminance / static_cast<double>(pixels.size()));
+            result["min_luminance"]  = (sample_count > 0) ? json(min_luminance) : json(nullptr);
+            result["max_luminance"]  = (sample_count > 0) ? json(max_luminance) : json(nullptr);
+            result["mean_luminance"] = (sample_count > 0) ? json(sum_luminance / static_cast<double>(sample_count)) : json(nullptr);
+            if (result.contains("background")) {
+                result["background"]["pixel_count"] = m_scene_image_capture->get_background_pixel_count();
+            }
         }
         m_scene_image_capture.reset();
         if (!written) {
@@ -1188,6 +1260,37 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     if ((msaa_samples < 0) || (msaa_samples > 16)) {
         return make_error_content("render_scene_image: 'msaa_samples' must be in [0, 16]");
     }
+
+    // Scene color target format. rgba32f is for output linear only: png goes
+    // through the fp16 post-processing chain, so it would gain nothing.
+    const std::string color_format_name = args.value("color_format", std::string{"rgba16f"});
+    erhe::dataformat::Format color_format = erhe::dataformat::Format::format_16_vec4_float;
+    if (color_format_name == "rgba32f") {
+        color_format = erhe::dataformat::Format::format_32_vec4_float;
+        if (output != Scene_image_output::linear) {
+            return make_error_content("render_scene_image: 'color_format' \"rgba32f\" needs output \"linear\"");
+        }
+        const erhe::graphics::Format_properties format_properties = m_context.graphics_device->get_format_properties(color_format);
+        if (!format_properties.color_renderable || !format_properties.framebuffer_blend) {
+            return make_error_content("render_scene_image: the device does not support rgba32f as a blendable color attachment");
+        }
+        if (
+            (msaa_samples > 1) &&
+            (std::find(format_properties.texture_2d_sample_counts.begin(), format_properties.texture_2d_sample_counts.end(), msaa_samples) == format_properties.texture_2d_sample_counts.end())
+        ) {
+            return make_error_content(fmt::format("render_scene_image: the device does not support rgba32f with {} MSAA samples", msaa_samples));
+        }
+    } else if (color_format_name != "rgba16f") {
+        return make_error_content("render_scene_image: 'color_format' must be \"rgba16f\" or \"rgba32f\"");
+    }
+
+    // Linear debug renders mark the pixels no surface covers (NaN RGB); a
+    // debug value there would otherwise read as a valid one (world position
+    // (0, 0, 0), or the sky color).
+    const Scene_image_background background =
+        ((output == Scene_image_output::linear) && (shader_debug_value != 0))
+            ? Scene_image_background::marked
+            : Scene_image_background::sky;
 
     // Camera: an existing scene camera, or an explicit pose + projection.
     std::shared_ptr<erhe::scene::Camera> camera{};
@@ -1290,6 +1393,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .height            = height,
             .msaa_sample_count = msaa_samples,
             .output            = output,
+            .color_format      = color_format,
+            .background        = background,
             .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value),
             .shadow_debug_light = shadow_debug_light
         }
@@ -1302,8 +1407,12 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         {"scene",        scene_root->get_name()},
         {"camera",       camera_json},
         {"msaa_samples", msaa_samples},
+        {"color_format", color_format_name},
         {"shader_debug", shader_debug_value}
     };
+    if (background == Scene_image_background::marked) {
+        m_scene_image_header["background"] = json{{"marker", "nan"}};
+    }
     if (shadow_debug_light) {
         m_scene_image_header["shadow_debug_light"] = shadow_debug_light_json;
     }

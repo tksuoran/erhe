@@ -52,6 +52,8 @@ Scene_image_view::Scene_image_view(
     const int                                   width,
     const int                                   height,
     const int                                   msaa_sample_count,
+    const erhe::dataformat::Format              color_format,
+    const Render_content                        content,
     const erhe::scene_renderer::Shader_debug    shader_debug,
     const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
 )
@@ -62,13 +64,14 @@ Scene_image_view::Scene_image_view(
             .rendergraph          = rendergraph,
             .debug_label          = erhe::utility::Debug_label{"Scene image view"},
             .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
-            .color_format         = erhe::dataformat::Format::format_16_vec4_float,
+            .color_format         = color_format,
             .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,
             .sample_count         = msaa_sample_count
         }
     }
     , m_camera      {camera}
     , m_viewport    {0, 0, width, height}
+    , m_content     {content}
     , m_shader_debug{shader_debug}
     , m_shadow_debug_light{shadow_debug_light}
 {
@@ -131,6 +134,53 @@ auto Scene_image_view::resolve_shadow_debug_light_index() -> uint32_t
     return m_shadow_debug_light_index.value();
 }
 
+void Scene_image_view::copy_shadow_projections()
+{
+    // A copy, not the Light_projections entries: those name their lights by
+    // raw pointer and are rewritten by the next apply(), while the reply is
+    // built frames later, once the readback retired.
+    m_shadow_lights.clear();
+    m_shadow_maps = Scene_image_shadow_maps{};
+    const erhe::scene_renderer::Light_projections* light_projections = get_light_projections();
+    if (light_projections == nullptr) {
+        return;
+    }
+    m_shadow_maps.reverse_depth = light_projections->parameters.reverse_depth;
+    m_shadow_maps.depth_range   = light_projections->parameters.depth_range;
+    if (light_projections->shadow_map_texture) {
+        m_shadow_maps.map_width  = light_projections->shadow_map_texture->get_width();
+        m_shadow_maps.map_height = light_projections->shadow_map_texture->get_height();
+        m_shadow_maps.map_format = light_projections->shadow_map_texture->get_pixelformat();
+    }
+    if (light_projections->shadow_distance_texture) {
+        m_shadow_maps.distance_format = light_projections->shadow_distance_texture->get_pixelformat();
+    }
+    if (light_projections->shadow_cube_texture) {
+        m_shadow_maps.cube_size   = light_projections->shadow_cube_texture->get_width();
+        m_shadow_maps.cube_format = light_projections->shadow_cube_texture->get_pixelformat();
+    }
+    for (const erhe::scene::Light_projection_transforms& transforms : light_projections->light_projection_transforms) {
+        if ((transforms.light == nullptr) || !transforms.is_shadow_mapped()) {
+            continue;
+        }
+        const erhe::scene::Light&     light = *transforms.light;
+        const erhe::scene::Light_type type  = light.get_light_type();
+        m_shadow_lights.push_back(
+            Scene_image_shadow_light{
+                .name               = std::string{light.get_name()},
+                .id                 = light.get_id(),
+                .type               = type,
+                .slot               = transforms.index,
+                .layer              = (type == erhe::scene::Light_type::point) ? transforms.point_shadow_index : transforms.shadow_index,
+                .texture_from_world = transforms.texture_from_world.get_matrix(),
+                .clip_from_world    = transforms.clip_from_world.get_matrix(),
+                // Same expression Light_buffer::update() writes as the light position.
+                .position           = glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}
+            }
+        );
+    }
+}
+
 void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -158,8 +208,9 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
         .shader_debug        = m_shader_debug,
         .shadow_debug_light_index = resolve_shadow_debug_light_index(),
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
-        .content             = Render_content::scene_only
+        .content             = m_content
     };
+    copy_shadow_projections();
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
@@ -209,6 +260,8 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
     , m_width  {create_info.width}
     , m_height {create_info.height}
     , m_output {create_info.output}
+    , m_color_format{create_info.color_format}
+    , m_background  {create_info.background}
 {
     ERHE_VERIFY(m_context.rendergraph != nullptr);
     ERHE_VERIFY(m_context.graphics_device != nullptr);
@@ -237,6 +290,10 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         create_info.width,
         create_info.height,
         create_info.msaa_sample_count,
+        create_info.color_format,
+        // marked: skip the sky so uncovered pixels keep the clear value
+        // (alpha 0), which the readback turns into the NaN marker.
+        (create_info.background == Scene_image_background::marked) ? Render_content::scene_surfaces : Render_content::scene_only,
         create_info.shader_debug,
         create_info.shadow_debug_light
     );
@@ -252,8 +309,12 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
     m_readback_node = std::make_shared<Scene_image_readback_node>(rendergraph, *this);
 
     // --no-post-processing: viewports show the HDR scene color directly, so
-    // the png output does too.
-    const bool post_processing = (m_context.post_processing != nullptr) && !m_context.force_post_processing_off;
+    // the png output does too. The linear output reads the scene color itself,
+    // so its chain has no post-processing node.
+    const bool post_processing =
+        (m_output == Scene_image_output::png) &&
+        (m_context.post_processing != nullptr) &&
+        !m_context.force_post_processing_off;
     if (post_processing) {
         m_post_processing_node = std::make_shared<Post_processing_node>(
             *m_context.graphics_device,
@@ -318,14 +379,14 @@ void Scene_image_capture::record_readback(erhe::graphics::Command_buffer& comman
     if (
         (texture->get_width () != m_width ) ||
         (texture->get_height() != m_height) ||
-        (texture->get_pixelformat() != erhe::dataformat::Format::format_16_vec4_float)
+        (texture->get_pixelformat() != m_color_format)
     ) {
         m_error = "image texture has an unexpected size or format";
         m_state = Scene_image_capture_state::failed;
         return;
     }
 
-    const std::size_t bytes_per_row = static_cast<std::size_t>(m_width) * erhe::dataformat::get_format_size_bytes(erhe::dataformat::Format::format_16_vec4_float);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(m_width) * erhe::dataformat::get_format_size_bytes(m_color_format);
     const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(m_height);
     m_readback_buffer = std::make_unique<Buffer>(
         *m_context.graphics_device,
@@ -365,8 +426,10 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
         return m_state;
     }
 
-    const std::size_t pixel_count = static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height);
-    const std::size_t byte_count  = pixel_count * 4 * sizeof(uint16_t);
+    const bool        fp32            = (m_color_format == erhe::dataformat::Format::format_32_vec4_float);
+    const std::size_t bytes_per_pixel = erhe::dataformat::get_format_size_bytes(m_color_format);
+    const std::size_t pixel_count     = static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height);
+    const std::size_t byte_count      = pixel_count * bytes_per_pixel;
     const std::span<std::byte> mapped = m_readback_buffer->map_bytes(0, byte_count);
     m_readback_buffer->invalidate(0, byte_count);
     if (mapped.size() < byte_count) {
@@ -379,19 +442,35 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
     // Rows top to bottom: a bottom-left texture origin (OpenGL) stores the
     // image bottom-up (see Imgui_renderer::get_rtt_uv0()).
     const bool bottom_left = (m_context.graphics_device->get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::bottom_left);
+    // Background marker: the render cleared the color target to (0, 0, 0, 0)
+    // and skipped the sky, and every surface writes alpha > 0 (opaque 1,
+    // blended surfaces their alpha), so alpha 0 is a pixel no surface covered.
+    const bool  mark_background = (m_background == Scene_image_background::marked);
+    const float nan             = std::numeric_limits<float>::quiet_NaN();
+    m_background_pixel_count = 0;
     m_pixels.resize(pixel_count);
     for (int y = 0; y < m_height; ++y) {
         const int source_row = bottom_left ? (m_height - 1 - y) : y;
-        const std::byte* source = mapped.data() + (static_cast<std::size_t>(source_row) * static_cast<std::size_t>(m_width) * 4 * sizeof(uint16_t));
+        const std::byte* source = mapped.data() + (static_cast<std::size_t>(source_row) * static_cast<std::size_t>(m_width) * bytes_per_pixel);
         for (int x = 0; x < m_width; ++x) {
-            uint16_t half[4];
-            std::memcpy(half, source + (static_cast<std::size_t>(x) * sizeof(half)), sizeof(half));
-            m_pixels[(static_cast<std::size_t>(y) * static_cast<std::size_t>(m_width)) + static_cast<std::size_t>(x)] = glm::vec4{
-                glm::unpackHalf1x16(half[0]),
-                glm::unpackHalf1x16(half[1]),
-                glm::unpackHalf1x16(half[2]),
-                glm::unpackHalf1x16(half[3])
-            };
+            glm::vec4 pixel{0.0f};
+            if (fp32) {
+                std::memcpy(&pixel[0], source + (static_cast<std::size_t>(x) * bytes_per_pixel), 4 * sizeof(float));
+            } else {
+                uint16_t half[4];
+                std::memcpy(half, source + (static_cast<std::size_t>(x) * bytes_per_pixel), sizeof(half));
+                pixel = glm::vec4{
+                    glm::unpackHalf1x16(half[0]),
+                    glm::unpackHalf1x16(half[1]),
+                    glm::unpackHalf1x16(half[2]),
+                    glm::unpackHalf1x16(half[3])
+                };
+            }
+            if (mark_background && (pixel.a == 0.0f)) {
+                pixel = glm::vec4{nan, nan, nan, 0.0f};
+                ++m_background_pixel_count;
+            }
+            m_pixels[(static_cast<std::size_t>(y) * static_cast<std::size_t>(m_width)) + static_cast<std::size_t>(x)] = pixel;
         }
     }
     m_readback_buffer->unmap();
@@ -403,6 +482,17 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
 auto Scene_image_capture::get_shadow_debug_light_index() const -> std::optional<uint32_t>
 {
     return m_view ? m_view->get_shadow_debug_light_index() : std::optional<uint32_t>{};
+}
+
+auto Scene_image_capture::get_shadow_lights() const -> std::span<const Scene_image_shadow_light>
+{
+    return m_view ? m_view->get_shadow_lights() : std::span<const Scene_image_shadow_light>{};
+}
+
+auto Scene_image_capture::get_shadow_maps() const -> const Scene_image_shadow_maps&
+{
+    ERHE_VERIFY(m_view);
+    return m_view->get_shadow_maps();
 }
 
 auto Scene_image_capture::get_pixels() const -> std::span<const glm::vec4>

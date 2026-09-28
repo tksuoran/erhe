@@ -32,9 +32,13 @@ class Viewport_scene_view;
 // marked Composition_pass_kind::editor_aid (grid, selection outline, ghost
 // edge lines, brush preview, solid bones): the offscreen scene image render
 // (MCP render_scene_image, scene/scene_image_capture.hpp) uses it.
+// scene_surfaces also leaves out the Composition_pass_kind::background passes
+// (sky), so pixels no surface covers keep the render target's clear value:
+// render_scene_image's linear debug renders mark them from that.
 enum class Render_content : unsigned int {
     scene_and_editor_aids = 0,
-    scene_only
+    scene_only,
+    scene_surfaces
 };
 
 class Render_context

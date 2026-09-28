@@ -55,8 +55,14 @@ void Composer::render(const Render_context& context, const bool include_content,
             continue;
         }
         if (
-            (context.content == Render_content::scene_only) &&
+            (context.content != Render_content::scene_and_editor_aids) &&
             (composition_pass->data.kind == Composition_pass_kind::editor_aid)
+        ) {
+            continue;
+        }
+        if (
+            (context.content == Render_content::scene_surfaces) &&
+            (composition_pass->data.kind == Composition_pass_kind::background)
         ) {
             continue;
         }

@@ -693,9 +693,14 @@ Two tools write images; choose by what is being verified.
   viewport shows) or `linear` (HDR scene color as `.pfm`, with luminance
   statistics in the reply). Options: `scene`, `path`, `shader_debug`,
   `shadow_debug_light` (the light, by name or id, that `shader_debug` 30
-  shadow_visibility shows), `msaa_samples`. `shader_debug` 36
+  shadow_visibility shows), `msaa_samples`, `color_format` (`rgba16f`
+  default, `rgba32f` for `output: "linear"`). `shader_debug` 36
   world_position with `output: "linear"` reads back the per-pixel world
-  position. Use it for scene-content verification: rendering changes,
+  position (use `rgba32f`: fp16 rounds by about 1 mm at 1 m). Linear
+  debug renders mark uncovered pixels with NaN RGB (`background` in the
+  reply). The reply's `shadow_maps` / `shadow_lights` give each
+  shadow-mapped light's `texture_from_world` (row-major), map resolution
+  and layer as that render's shadow pass used them. Use it for scene-content verification: rendering changes,
   lighting, GI, A/B and reference comparisons. Design:
   `doc/editor/rendergraph.md` "Scene image capture".
 - `capture_screenshot` captures the whole editor window as presented,

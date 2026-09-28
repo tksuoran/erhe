@@ -1,10 +1,13 @@
 #pragma once
 
+#include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <glm/glm.hpp>
@@ -13,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace erhe::graphics {
@@ -21,7 +25,6 @@ namespace erhe::graphics {
 }
 namespace erhe::scene {
     class Camera;
-    class Light;
 }
 
 namespace editor {
@@ -31,6 +34,41 @@ class Post_processing_node;
 class Scene_image_capture;
 class Scene_root;
 class Shadow_render_node;
+
+// One shadow-mapped light of the shadow pass a scene image render used, copied
+// from that pass's Light_projections (the matrices the forward pass sampled
+// with; the directional fit depends on the render's own camera).
+class Scene_image_shadow_light
+{
+public:
+    std::string             name;
+    std::size_t             id                {0};
+    erhe::scene::Light_type type              {erhe::scene::Light_type::directional};
+    std::size_t             slot              {0}; // light block index
+    // 2D shadow map array layer (directional, spot) or cube index (point:
+    // layers [6 * index, 6 * index + 6) of the cube array).
+    std::size_t             layer             {0};
+    glm::mat4               texture_from_world{1.0f};
+    glm::mat4               clip_from_world   {1.0f};
+    // Origin of the light's shadow camera in world space: for a point light
+    // the centre the shader measures the radial cube distances from.
+    glm::vec3               position          {0.0f};
+};
+
+// Shadow map textures of the same shadow pass.
+class Scene_image_shadow_maps
+{
+public:
+    int                      map_width      {0};
+    int                      map_height     {0};
+    erhe::dataformat::Format map_format     {erhe::dataformat::Format::format_undefined};
+    // Shadow_technique_mode::distance R32F map; undefined for the depth technique.
+    erhe::dataformat::Format distance_format{erhe::dataformat::Format::format_undefined};
+    int                      cube_size      {0};
+    erhe::dataformat::Format cube_format    {erhe::dataformat::Format::format_undefined};
+    bool                     reverse_depth  {false};
+    erhe::math::Depth_range  depth_range    {erhe::math::Depth_range::zero_to_one};
+};
 
 // Offscreen scene render for the MCP tool render_scene_image
 // (doc/editor/rendergraph.md "Scene image capture").
@@ -58,6 +96,8 @@ public:
         int                                         width,
         int                                         height,
         int                                         msaa_sample_count,
+        erhe::dataformat::Format                    color_format,
+        Render_content                              content,
         erhe::scene_renderer::Shader_debug          shader_debug,
         const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
     );
@@ -83,18 +123,27 @@ public:
     // got no slot (not shaded) in that frame's light set.
     [[nodiscard]] auto get_shadow_debug_light_index() const -> std::optional<uint32_t> { return m_shadow_debug_light_index; }
 
+    // Shadow-mapped lights and shadow map textures of this render's shadow
+    // pass, copied when the view rendered.
+    [[nodiscard]] auto get_shadow_lights() const -> std::span<const Scene_image_shadow_light> { return m_shadow_lights; }
+    [[nodiscard]] auto get_shadow_maps  () const -> const Scene_image_shadow_maps& { return m_shadow_maps; }
+
 private:
     [[nodiscard]] auto resolve_shadow_debug_light_index() -> uint32_t;
+    void copy_shadow_projections();
 
     // Owned: an explicit-pose camera exists only for this capture, so the view
     // keeps it alive (a scene camera is shared with its scene).
     std::shared_ptr<erhe::scene::Camera> m_camera;
     erhe::math::Viewport                 m_viewport{0, 0, 0, 0};
-    erhe::scene_renderer::Shader_debug   m_shader_debug{erhe::scene_renderer::Shader_debug::none};
+    Render_content                        m_content     {Render_content::scene_only};
+    erhe::scene_renderer::Shader_debug    m_shader_debug{erhe::scene_renderer::Shader_debug::none};
     // Light Shader_debug::shadow_visibility shows; null = slot 0.
-    std::shared_ptr<erhe::scene::Light>  m_shadow_debug_light;
-    std::optional<uint32_t>              m_shadow_debug_light_index;
-    bool                                 m_has_rendered{false};
+    std::shared_ptr<erhe::scene::Light>   m_shadow_debug_light;
+    std::optional<uint32_t>               m_shadow_debug_light_index;
+    std::vector<Scene_image_shadow_light> m_shadow_lights;
+    Scene_image_shadow_maps               m_shadow_maps;
+    bool                                  m_has_rendered{false};
 };
 
 // Final node of a capture chain: records the texture-to-buffer copy of the
@@ -116,6 +165,12 @@ enum class Scene_image_output : unsigned int {
     linear   // linear HDR scene color before post-processing
 };
 
+// What the pixels no scene surface covers hold.
+enum class Scene_image_background : unsigned int {
+    sky = 0, // the sky pass (or the clear color), as viewports show
+    marked   // sky pass skipped; the readback sets their RGB to NaN
+};
+
 enum class Scene_image_capture_state : unsigned int {
     rendering = 0, // chain enabled, waiting for the rendergraph to run it
     in_flight,     // copy recorded, waiting for that frame to retire
@@ -132,6 +187,10 @@ public:
     int                                  height           {0};
     int                                  msaa_sample_count{0};
     Scene_image_output                   output           {Scene_image_output::png};
+    // Scene color target format: format_16_vec4_float or (output linear only)
+    // format_32_vec4_float. The caller checks device support.
+    erhe::dataformat::Format             color_format     {erhe::dataformat::Format::format_16_vec4_float};
+    Scene_image_background               background       {Scene_image_background::sky};
     erhe::scene_renderer::Shader_debug   shader_debug     {erhe::scene_renderer::Shader_debug::none};
     // Light whose visibility Shader_debug::shadow_visibility shows. Resolved
     // to its light slot by the render itself, from the light set that render's
@@ -140,8 +199,8 @@ public:
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->
-// Scene_image_view -> Post_processing_node -> Scene_image_readback_node when
-// constructed, the rendergraph runs it on the next frame, and the destructor
+// Scene_image_view -> Post_processing_node (png output only) ->
+// Scene_image_readback_node when constructed, the rendergraph runs it on the next frame, and the destructor
 // removes every node again. It exists only while a request is pending, so the
 // tool costs nothing per frame when unused. Destroy it only once poll()
 // reports complete or failed (the recorded frame has retired, and the chain
@@ -163,6 +222,11 @@ public:
     [[nodiscard]] auto get_error () const -> const std::string& { return m_error; }
     [[nodiscard]] auto get_output() const -> Scene_image_output { return m_output; }
     [[nodiscard]] auto get_shadow_debug_light_index() const -> std::optional<uint32_t>;
+    [[nodiscard]] auto get_shadow_lights() const -> std::span<const Scene_image_shadow_light>;
+    [[nodiscard]] auto get_shadow_maps  () const -> const Scene_image_shadow_maps&;
+    // Scene_image_background::marked: pixels with no surface coverage (their
+    // RGB is NaN in get_pixels()).
+    [[nodiscard]] auto get_background_pixel_count() const -> std::size_t { return m_background_pixel_count; }
 
     // Called by Scene_image_readback_node during Rendergraph::execute().
     void record_readback(erhe::graphics::Command_buffer& command_buffer);
@@ -174,6 +238,9 @@ private:
     int                                        m_width {0};
     int                                        m_height{0};
     Scene_image_output                         m_output{Scene_image_output::png};
+    erhe::dataformat::Format                   m_color_format{erhe::dataformat::Format::format_16_vec4_float};
+    Scene_image_background                     m_background{Scene_image_background::sky};
+    std::size_t                                m_background_pixel_count{0};
     Scene_image_capture_state                  m_state {Scene_image_capture_state::rendering};
     std::string                                m_error;
     std::shared_ptr<Scene_image_view>          m_view;

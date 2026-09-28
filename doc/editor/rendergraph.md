@@ -29,10 +29,12 @@ the editor UI.
   in the rendergraph, the same nodes and the same wiring `Scene_views`
   gives a viewport, minus the overlay node and the ImGui host consumer.
   Under `--no-post-processing` the post-processing node is left out and the
-  png is the HDR scene color, as viewports then show it.
+  png is the HDR scene color, as viewports then show it. The linear output
+  reads the scene color itself, so its chain has no post-processing node.
 - `Scene_image_view` is a window-less sibling of `Viewport_scene_view`
   (`Scene_view` + `Texture_rendergraph_node`, HDR `format_16_vec4_float`
-  color, `d32_sfloat_s8_uint` depth, the requested MSAA sample count). Its
+  color, or `format_32_vec4_float` for `color_format: "rgba32f"`,
+  `d32_sfloat_s8_uint` depth, the requested MSAA sample count). Its
   `execute_rendergraph_node()` ensures the atmosphere LUTs and calls
   `App_rendering::render_viewport_main(context, false)` with
   `Render_context::content = Render_content::scene_only`: no ID pass, no tools,
@@ -54,8 +56,8 @@ the editor UI.
   request; the next `Rendergraph::execute()` runs the chain, and
   `Scene_image_readback_node` copies the chosen texture (the post-processed
   image for png, the view's resolved HDR color for linear) into a host-visible
-  buffer, records the frame index and disables all four nodes; later passes
-  poll `Device::is_frame_completed()`, convert the half floats, write the file
+  buffer, records the frame index and disables the chain's nodes; later passes
+  poll `Device::is_frame_completed()`, convert the half (or fp32) floats, write the file
   and destroy the capture, which unregisters the nodes and hands the shadow
   node back through `App_rendering::destroy_shadow_node()`. Nothing is cached
   between requests, so the tool costs nothing per frame when unused. When the
@@ -74,10 +76,30 @@ the editor UI.
 - Debug modes: `shader_debug` selects a `Shader_debug` variant for the
   view's content passes. A debug override replaces the lit color after the
   exposure and output-range clamp, so the linear file holds its values
-  unscaled, at the fp16 precision of the color target (a relative step of
-  2^-11). `world_position` (36) writes the fragment world position, the
-  receiver position of each pixel; MSAA resolve averages positions across
+  unscaled, at the precision of the color target: fp16 by default (a
+  relative step of 2^-11, about 1 mm at 1 m from the origin), fp32 with
+  `color_format: "rgba32f"` (linear output only; the png chain is fp16
+  throughout, so the tool refuses rgba32f with png). The request checks that
+  the device supports `format_32_vec4_float` as a blendable color attachment
+  and, when `msaa_samples` > 1, at that sample count, and fails otherwise.
+  `world_position` (36) writes the fragment world position, the receiver
+  position of each pixel; MSAA resolve averages positions across
   silhouettes, so `msaa_samples: 0` gives exact per-pixel receivers.
+  Measured on the Cornell floor seen top-down (512 x 512, msaa 0): fp32
+  receiver error against the analytic ray-floor hit 1.9e-6 m at the origin,
+  8e-5 m with the scene 1 km out, 1.8e-3 m at 10 km; fp16 1.4e-3 m at the
+  origin, 0.7 m at 1 km.
+- Background marker: a linear render with a debug mode (`shader_debug` not
+  0) marks the pixels no surface covers, so a debug value never reads as a
+  valid one there (world position (0, 0, 0), or the sky color). The view
+  renders with `Render_content::scene_surfaces`, which also skips the
+  `Composition_pass_kind::background` passes (the sky); the color target
+  clears to (0, 0, 0, 0) and every surface writes alpha > 0, so the
+  readback sets the RGB of alpha-0 pixels to NaN and the reply reports
+  `background: {marker: "nan", pixel_count}`. The luminance statistics
+  leave marked pixels out (null when every pixel is marked). With MSAA a
+  silhouette pixel partly covered keeps its resolved (averaged) value.
+  Linear renders without a debug mode and png renders keep the sky.
   `shadow_visibility` (30) shows the light named by `shadow_debug_light`
   (light name or id): `Scene_image_view::execute_rendergraph_node()` resolves
   it to its light slot through the light set its own shadow pass just built
@@ -85,6 +107,26 @@ the editor UI.
   the slot as `Render_context::shadow_debug_light_index`, and the reply
   reports it as `shadow_debug_light.light_index` (null when the light got no
   slot). Without it the slot is 0, as for viewports.
+- Shadow projections: at the same point `Scene_image_view` copies what its
+  shadow pass put into `Light_projections` (`copy_shadow_projections()`:
+  a copy, since the slot entries name lights by raw pointer and the reply is
+  built frames later), and the reply carries it, so texel-space distances use
+  the matrices the forward pass sampled with (the directional fit depends on
+  the render's own camera). `shadow_maps`: `map_width`, `map_height`,
+  `map_format`, `depth_bits`, `technique` (`depth` | `distance`),
+  `cube_size`, `cube_format`, `reverse_depth`, `depth_range`.
+  `shadow_lights`: one entry per shadow-mapped light, `{name, id, type
+  (directional | spot | point), slot (light block index), position,
+  resolution [w, h]}` plus, for directional and spot, `layer` (2D shadow map
+  array layer), `texture_from_world` and `clip_from_world`, and, for point,
+  `cube_index` (array layers `6 * cube_index` to `6 * cube_index + 5`).
+  Matrices are row-major: `rows[r]` dotted with `(x, y, z, 1)` gives output
+  component `r`; after the divide by w, `texture_from_world` gives the
+  shadow map uv (origin at the first texel row as stored, the device's
+  framebuffer origin) and the depth in `depth_range`, reversed when
+  `reverse_depth`. `position` is the shadow camera origin, for a point light
+  the centre its cube stores radial world distances from (the shader
+  compares `length(p - position)`; the cube has no near / far).
 - Determinism: with a static field (ambient) repeated renders are pixel
   identical; with DDGI the field's per-update random rays make them differ by
   at most one 8-bit level while it is converged.

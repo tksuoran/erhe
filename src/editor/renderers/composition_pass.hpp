@@ -27,10 +27,13 @@ class Render_context;
 class Scene_root;
 
 // editor_aid passes draw editor guides rather than scene content; a render
-// with Render_content::scene_only skips them (Composer::render).
+// with Render_content::scene_only skips them (Composer::render). background
+// passes (the sky) fill the pixels no scene surface covers; a render with
+// Render_content::scene_surfaces skips them as well.
 enum class Composition_pass_kind : unsigned int {
     scene_content = 0,
-    editor_aid
+    editor_aid,
+    background
 };
 
 class Composition_pass_data
