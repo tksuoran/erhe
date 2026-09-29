@@ -85,5 +85,5 @@
 ✓hidden::bbc9c6e0b{ERHE_DEBUG_LINE_HIDDEN*view.hidden_dim;gray-bg-test}
 ✓setting+docs::ea9e70241{Debug_visualizations_style-v5-anti_aliased_lines;apply-at-startup+checkbox}
 ✓cost-gate::e2c1cdb43{aa_cost_benchmark;on/off-1.16..1.21x;local/debug_lines.md}
-!trade::fringe-over-fringe-double-blend{joints+line-twice;plan-sec-2;exact=two-draws}
-?follow-up::content-wide-lines+Metal-run
+✓two-draws::a81ebbfef{user-saw-joint-double-blend(hidden-sphere-silhouette)->core(gequal)+fringe(greater)-draws;line-twice==once-pixel-exact;on/off-1.64..1.73x-accepted}
+?follow-up::joined-polylines(plan-sec-2)+content-wide-lines+Metal-run
