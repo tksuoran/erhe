@@ -58,3 +58,7 @@ the window's `Context_window::get_scale_factor()`. `erhe_renderer_gpu_tests`
 (`src/erhe/renderer/test/`) draws lines through `Debug_renderer` into
 offscreen targets and checks the exact pixel width across viewport sizes,
 fields of view, orthographic projection and pixel scales.
+
+## Future work
+
+- [plans/debug_renderer_anti_aliasing.md](../plans/debug_renderer_anti_aliasing.md) - analytic coverage (one-pixel fringe, sub-pixel fade) for wide lines in place of the binary 50 % edge.
