@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::renderer`: `Minor_lines` and `Primitive_renderer::set_minor_lines()`
+  (default `draw`): `skip` makes `add_sphere`, `add_cone`, `add_capsule` and
+  `add_torus` emit only their self-visible major-style lines.
 - `erhe::renderer`: `Anti_aliasing` and
   `Debug_renderer::set_anti_aliasing()` / `get_anti_aliasing()` (default
   `on`): wide debug lines are drawn with analytic, energy-conserving

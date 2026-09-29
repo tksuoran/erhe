@@ -36,6 +36,16 @@ public:
     glm::vec4 p1;
 };
 
+// Whether the shape helpers (add_sphere, add_cone, add_capsule, add_torus)
+// emit their minor-style lines: the parts of the shape behind its own
+// silhouette (back arcs, self-occluded wireframe, structural lines). skip
+// draws only the self-visible parts and runs no occlusion tests for the rest.
+enum class Minor_lines : unsigned int
+{
+    draw,
+    skip
+};
+
 class Primitive_renderer
 {
 public:
@@ -50,6 +60,7 @@ public:
     void set_line_color(const glm::vec3& color);
     void set_line_color(const glm::vec4& color);
     void set_thickness (float thickness);
+    void set_minor_lines(Minor_lines minor_lines);
 
     void add_lines(const std::vector<Line>& lines);
     void add_lines(const std::initializer_list<Line> lines);
@@ -273,6 +284,7 @@ private:
     // Current state
     glm::vec4              m_line_color           {1.0f, 1.0f, 1.0f, 1.0f};
     float                  m_half_line_thickness  {0.5f};
+    Minor_lines            m_minor_lines          {Minor_lines::draw};
 };
 
 } // namespace erhe::renderer

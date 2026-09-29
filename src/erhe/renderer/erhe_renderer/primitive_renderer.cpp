@@ -28,6 +28,7 @@ Primitive_renderer::Primitive_renderer(Primitive_renderer&& old) noexcept
     , m_last_allocate_word_count    {0}
     , m_line_color                  {old.m_line_color}
     , m_half_line_thickness         {old.m_half_line_thickness}
+    , m_minor_lines                 {old.m_minor_lines}
 {
     ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
@@ -41,6 +42,7 @@ auto Primitive_renderer::operator=(Primitive_renderer&& old) noexcept -> Primiti
     m_bucket         = std::exchange(old.m_bucket, nullptr);
     m_line_color     = old.m_line_color;
     m_half_line_thickness = old.m_half_line_thickness;
+    m_minor_lines    = old.m_minor_lines;
     ERHE_VERIFY(m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(m_last_allocate_gpu_float_data == nullptr);
     ERHE_VERIFY(m_last_allocate_word_offset == 0);
@@ -107,6 +109,11 @@ void Primitive_renderer::set_line_color(const glm::vec4& color)
 void Primitive_renderer::set_thickness(const float thickness)
 {
     m_half_line_thickness = 0.5f * thickness;
+}
+
+void Primitive_renderer::set_minor_lines(const Minor_lines minor_lines)
+{
+    m_minor_lines = minor_lines;
 }
 
 #pragma region add
@@ -446,16 +453,21 @@ void Primitive_renderer::add_sphere(
         const float a      = glm::dot(u, w);
         const float b      = glm::dot(v, w);
         const float radial = std::sqrt((a * a) + (b * b));
+        const bool draw_minor = (m_minor_lines == Minor_lines::draw);
         if (!camera_outside || (radial <= radius)) {
             // No camera, camera inside the sphere, or the whole circle is at
             // or behind the horizon
-            add_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            if (draw_minor) {
+                add_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            }
             return;
         }
         const float t_mid = std::atan2(b, a);
         const float t_cut = std::acos(glm::clamp(radius / radial, -1.0f, 1.0f));
         add_arc(t_mid - t_cut, 2.0f * t_cut, major_color, major_thickness);
-        add_arc(t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
+        if (draw_minor) {
+            add_arc(t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
+        }
     };
     add_great_circle(axis_x, axis_y);
     add_great_circle(axis_y, axis_z);
@@ -549,22 +561,25 @@ void Primitive_renderer::add_cone(
     const glm::vec3 top_v          = glm::normalize(camera_position_in_node - top_center);
     const bool      top_visible    = glm::dot(top_normal, top_v) >= 0.0f;
 
+    const bool draw_minor = (m_minor_lines == Minor_lines::draw);
     set_thickness(minor_thickness);
-    add_lines(
-        m,
-        minor_color,
-        {
-            { bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x },
-            { bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z },
-            { top_center    - top_radius    * axis_x, top_center    + top_radius    * axis_x },
-            { top_center    - top_radius    * axis_z, top_center    + top_radius    * axis_z },
-            { bottom_center,                          top_center                             },
-            { bottom_center - bottom_radius * axis_x, top_center    - top_radius    * axis_x },
-            { bottom_center + bottom_radius * axis_x, top_center    + top_radius    * axis_x },
-            { bottom_center - bottom_radius * axis_z, top_center    - top_radius    * axis_z },
-            { bottom_center + bottom_radius * axis_z, top_center    + top_radius    * axis_z }
-        }
-    );
+    if (draw_minor) {
+        add_lines(
+            m,
+            minor_color,
+            {
+                { bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x },
+                { bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z },
+                { top_center    - top_radius    * axis_x, top_center    + top_radius    * axis_x },
+                { top_center    - top_radius    * axis_z, top_center    + top_radius    * axis_z },
+                { bottom_center,                          top_center                             },
+                { bottom_center - bottom_radius * axis_x, top_center    - top_radius    * axis_x },
+                { bottom_center + bottom_radius * axis_x, top_center    + top_radius    * axis_x },
+                { bottom_center - bottom_radius * axis_z, top_center    - top_radius    * axis_z },
+                { bottom_center + bottom_radius * axis_z, top_center    + top_radius    * axis_z }
+            }
+        );
+    }
 
     // The outward normal along the lateral generatrix at azimuth phi,
     // n(phi) = (height cos(phi), bottom_radius - top_radius, height sin(phi)) / slant,
@@ -620,10 +635,14 @@ void Primitive_renderer::add_cone(
         if (cap_visible || facing_all) {
             add_rim_arc(0.0f, glm::two_pi<float>(), major_color, major_thickness);
         } else if (facing_none) {
-            add_rim_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            if (draw_minor) {
+                add_rim_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            }
         } else {
             add_rim_arc(phi_mid - phi_delta, 2.0f * phi_delta, major_color, major_thickness);
-            add_rim_arc(phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
+            if (draw_minor) {
+                add_rim_arc(phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
+            }
         }
     };
     add_rim(bottom_center, bottom_radius, bottom_visible);
@@ -678,52 +697,54 @@ void Primitive_renderer::add_capsule(
     // Structural lines: junction (tangency) rings, cap profile arcs with the
     // connecting cone generatrices in the XY / ZY planes, and the axis
     set_thickness(minor_thickness);
-    for (int i = 0; i < side_count; ++i) {
-        const float phi0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(side_count);
-        const float phi1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(side_count);
-        const glm::vec3 d0 = (std::cos(phi0) * axis_x) + (std::sin(phi0) * axis_z);
-        const glm::vec3 d1 = (std::cos(phi1) * axis_x) + (std::sin(phi1) * axis_z);
-        add_lines(
-            m,
-            minor_color,
-            {
-                { bottom_ring_center + bottom_ring_radius * d0, bottom_ring_center + bottom_ring_radius * d1 },
-                { top_ring_center    + top_ring_radius    * d0, top_ring_center    + top_ring_radius    * d1 }
-            }
-        );
-    }
-
-    const int arc_step_count = std::max(2, side_count / 4);
-    for (const glm::vec3& radial : { axis_x, -axis_x, axis_z, -axis_z }) {
-        for (int i = 0; i < arc_step_count; ++i) {
-            const float rel0 = static_cast<float>(i    ) / static_cast<float>(arc_step_count);
-            const float rel1 = static_cast<float>(i + 1) / static_cast<float>(arc_step_count);
-            const float bottom_theta0 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel0);
-            const float bottom_theta1 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel1);
-            const float top_theta0    = alpha + ((glm::half_pi<float>() - alpha) * rel0);
-            const float top_theta1    = alpha + ((glm::half_pi<float>() - alpha) * rel1);
+    if (m_minor_lines == Minor_lines::draw) {
+        for (int i = 0; i < side_count; ++i) {
+            const float phi0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(side_count);
+            const float phi1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(side_count);
+            const glm::vec3 d0 = (std::cos(phi0) * axis_x) + (std::sin(phi0) * axis_z);
+            const glm::vec3 d1 = (std::cos(phi1) * axis_x) + (std::sin(phi1) * axis_z);
             add_lines(
                 m,
                 minor_color,
                 {
-                    {
-                        bottom_center + bottom_radius * ((std::cos(bottom_theta0) * radial) + (std::sin(bottom_theta0) * axis_y)),
-                        bottom_center + bottom_radius * ((std::cos(bottom_theta1) * radial) + (std::sin(bottom_theta1) * axis_y))
-                    },
-                    {
-                        top_center + top_radius * ((std::cos(top_theta0) * radial) + (std::sin(top_theta0) * axis_y)),
-                        top_center + top_radius * ((std::cos(top_theta1) * radial) + (std::sin(top_theta1) * axis_y))
-                    }
+                    { bottom_ring_center + bottom_ring_radius * d0, bottom_ring_center + bottom_ring_radius * d1 },
+                    { top_ring_center    + top_ring_radius    * d0, top_ring_center    + top_ring_radius    * d1 }
                 }
             );
         }
-        add_lines(
-            m,
-            minor_color,
-            { { bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial } }
-        );
+
+        const int arc_step_count = std::max(2, side_count / 4);
+        for (const glm::vec3& radial : { axis_x, -axis_x, axis_z, -axis_z }) {
+            for (int i = 0; i < arc_step_count; ++i) {
+                const float rel0 = static_cast<float>(i    ) / static_cast<float>(arc_step_count);
+                const float rel1 = static_cast<float>(i + 1) / static_cast<float>(arc_step_count);
+                const float bottom_theta0 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel0);
+                const float bottom_theta1 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel1);
+                const float top_theta0    = alpha + ((glm::half_pi<float>() - alpha) * rel0);
+                const float top_theta1    = alpha + ((glm::half_pi<float>() - alpha) * rel1);
+                add_lines(
+                    m,
+                    minor_color,
+                    {
+                        {
+                            bottom_center + bottom_radius * ((std::cos(bottom_theta0) * radial) + (std::sin(bottom_theta0) * axis_y)),
+                            bottom_center + bottom_radius * ((std::cos(bottom_theta1) * radial) + (std::sin(bottom_theta1) * axis_y))
+                        },
+                        {
+                            top_center + top_radius * ((std::cos(top_theta0) * radial) + (std::sin(top_theta0) * axis_y)),
+                            top_center + top_radius * ((std::cos(top_theta1) * radial) + (std::sin(top_theta1) * axis_y))
+                        }
+                    }
+                );
+            }
+            add_lines(
+                m,
+                minor_color,
+                { { bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial } }
+            );
+        }
+        add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
     }
-    add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
 
     // Silhouette: the capsule is convex and tangent continuous, so the view
     // silhouette is a single closed curve. A plane through the camera tangent
@@ -1132,6 +1153,9 @@ void Primitive_renderer::add_torus(
     const auto add_wire_segment = [&](const Torus_point& a, const Torus_point& b, const Torus_point& mid) {
         const bool facing  = glm::dot(mid.n, camera_position_in_node - mid.p) > 0.0f;
         const bool visible = facing && is_unoccluded(mid.p);
+        if (!visible && (m_minor_lines == Minor_lines::skip)) {
+            return;
+        }
         set_thickness(visible ? major_thickness : minor_thickness);
         add_lines(m, visible ? major_color : minor_color, { { a.p, b.p } });
     };
@@ -1211,6 +1235,9 @@ void Primitive_renderer::add_torus(
     };
 
     const auto add_silhouette_segment = [&](const glm::vec3& p0, const glm::vec3& p1, const bool visible) {
+        if (!visible && (m_minor_lines == Minor_lines::skip)) {
+            return;
+        }
         set_thickness(visible ? major_thickness : minor_thickness);
         add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
     };

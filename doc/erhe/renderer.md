@@ -40,6 +40,10 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - `Debug_renderer_config::primitive_type` is `line` (the default) or `triangle`; any other type fails an `ERHE_VERIFY` when its bucket is created. There is no point primitive.
 - Buckets use `etl::vector` (fixed capacity) so that element addresses remain stable.
 - `Primitive_renderer` is move-only; obtain one per frame per config.
+- `Primitive_renderer::set_minor_lines(Minor_lines::skip)` makes the shape
+  helpers (`add_sphere`, `add_cone`, `add_capsule`, `add_torus`) emit only
+  their self-visible, major-style lines and skip the minor-style parts behind
+  the shape's own silhouette (default `draw`).
 
 ## Line widths
 `Primitive_renderer::set_thickness(t)` sets the width of the wide lines that

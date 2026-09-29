@@ -166,6 +166,10 @@ void Create::window_imgui()
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Draw the parts of the preview occluded by scene geometry as dimmed hidden lines; off draws only the unoccluded parts");
     }
+    ImGui::Checkbox("Preview Self-occluded Lines", &m_preview_self_occluded_lines);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Draw the parts of the preview behind the shape's own silhouette (thin lines); off draws only the self-visible parts");
+    }
     brush_create_button("UV Sphere", &m_create_uv_sphere);
     brush_create_button("Cone",      &m_create_cone);
     brush_create_button("Capsule",   &m_create_capsule);
@@ -337,7 +341,8 @@ void Create::tool_render(const Render_context& context)
                 .major_color    = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f},
                 .minor_color    = glm::vec4{1.0f, 0.5f, 0.0f, 0.5f},
                 .ideal_shape    = true,
-                .draw_hidden    = m_preview_hidden_lines
+                .draw_hidden    = m_preview_hidden_lines,
+                .self_occluded_lines = m_preview_self_occluded_lines
             };
             m_create_shape->render_preview(preview_settings);
         }
@@ -348,7 +353,8 @@ void Create::tool_render(const Render_context& context)
                 .major_color    = glm::vec4{0.5f, 1.0f, 0.0f, 1.0f},
                 .minor_color    = glm::vec4{0.5f, 1.0f, 0.0f, 0.5f},
                 .ideal_shape    = false,
-                .draw_hidden    = m_preview_hidden_lines
+                .draw_hidden    = m_preview_hidden_lines,
+                .self_occluded_lines = m_preview_self_occluded_lines
             };
             m_create_shape->render_preview(preview_settings);
         }

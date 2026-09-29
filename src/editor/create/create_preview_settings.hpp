@@ -22,6 +22,10 @@ public:
     // hidden lines (the debug renderer's hidden pass); false draws only the
     // unoccluded parts.
     bool                          draw_hidden    {true};
+    // Draw the parts of the preview behind the shape's own silhouette (the
+    // shape helpers' minor-style lines); false draws only the self-visible
+    // parts.
+    bool                          self_occluded_lines{true};
 };
 
 }
