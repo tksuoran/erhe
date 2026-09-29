@@ -1,6 +1,7 @@
 #include "shadow_gpu_test_fixture.hpp"
 #include "scene_renderer_test_logging.hpp"
 
+#include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
@@ -570,22 +571,31 @@ auto Shadow_gpu_test::render_visibility(const Shadow_filter_case& filter_case) -
 
 auto Shadow_gpu_test::get_tie_stages(const Shadow_filter_case& filter_case) -> erhe::graphics::Shader_stages*
 {
-    // The station frame goes in as exact float bits: GLSL has no hexadecimal
-    // float literals, and a decimal round trip would not reproduce the
-    // matrix the other passes use.
-    const uint32_t depth_bits = get_shadow_depth_bits_axis(m_shadow_map_format);
-    std::string world_from_station = "mat4(";
+    // The receiver points are view-relative, as standard.vert produces them:
+    // the station frame with its translation taken relative to the view
+    // camera's view origin, subtracted in double (Primitive_struct::
+    // view_relative_translation). It goes in as exact float bits: GLSL has
+    // no hexadecimal float literals, and a decimal round trip would not
+    // reproduce the matrix the other passes use.
+    const uint32_t  depth_bits  = get_shadow_depth_bits_axis(m_shadow_map_format);
+    const glm::vec3 view_origin = get_view_origin(m_camera->world_from_node_transform().get_matrix());
+    glm::mat4 view_relative_from_station = m_world_from_station;
+    view_relative_from_station[3] = glm::vec4{
+        glm::vec3{glm::dvec3{glm::vec3{m_world_from_station[3]}} - glm::dvec3{view_origin}},
+        1.0f
+    };
+    std::string view_relative_from_station_string = "mat4(";
     for (int column = 0; column < 4; ++column) {
         for (int row = 0; row < 4; ++row) {
-            world_from_station += fmt::format(
+            view_relative_from_station_string += fmt::format(
                 "{}uintBitsToFloat(0x{:08x}u)",
                 ((column == 0) && (row == 0)) ? "" : ", ",
-                std::bit_cast<uint32_t>(m_world_from_station[column][row])
+                std::bit_cast<uint32_t>(view_relative_from_station[column][row])
             );
         }
     }
-    world_from_station += ")";
-    const std::string key = fmt::format("{} {} {} {}", filter_case.filter, filter_case.bias, depth_bits, world_from_station);
+    view_relative_from_station_string += ")";
+    const std::string key = fmt::format("{} {} {} {}", filter_case.filter, filter_case.bias, depth_bits, view_relative_from_station_string);
     const auto it = m_tie_stages.find(key);
     if (it != m_tie_stages.end()) {
         return it->second.get();
@@ -604,7 +614,7 @@ auto Shadow_gpu_test::get_tie_stages(const Shadow_filter_case& filter_case) -> e
     defines.emplace_back("SHADOW_TIE_MAX_ULPS",   fmt::format("{}", c_tie_max_ulps));
     defines.emplace_back("SHADOW_TIE_EXTENT",     fmt::format("{:.1f}", c_view_extent));
     defines.emplace_back("SHADOW_TIE_PLANE_Y",    "0.0");
-    defines.emplace_back("SHADOW_TIE_WORLD_FROM_STATION", world_from_station);
+    defines.emplace_back("SHADOW_TIE_VIEW_RELATIVE_FROM_STATION", view_relative_from_station_string);
 
     erhe::graphics::Shader_stages_create_info create_info{
         .name            = "shadow_tie",
@@ -659,9 +669,9 @@ auto Shadow_gpu_test::render_tie(const Shadow_filter_case& filter_case) -> Shado
     descriptor.render_target_height               = height;
     descriptor.debug_label                        = erhe::utility::Debug_label{"shadow tie"};
 
-    // The view camera is bound for camera.cameras[0].clip_depth_direction,
-    // which sample_light_visibility() reads; the receiver points come from
-    // gl_FragCoord, not from this camera.
+    // The view camera is bound for camera.cameras[0].clip_depth_direction
+    // and view_origin, which sample_light_visibility() reads; the receiver
+    // points come from gl_FragCoord, relative to this camera's view origin.
     const erhe::math::Viewport viewport{0, 0, width, height};
     const Camera_view_input view_input{
         .projection = m_camera->projection(),

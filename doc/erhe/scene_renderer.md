@@ -9,7 +9,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 - `Forward_renderer` -- Renders meshes with full lighting, materials, and shadows. Takes `Render_parameters` specifying camera, lights, skins, materials, mesh spans, pipeline states, and viewport.
 - `Shadow_renderer` -- Generates shadow maps by rendering meshes from each light's perspective into a texture array.
 - `Program_interface` -- Defines the shader resource layout (vertex format, camera/light/material/primitive/joint/cube blocks). Creates shader prototypes with all blocks pre-configured.
-- `Camera_buffer` -- Ring buffer client uploading camera matrices, viewport, exposure, and grid settings.
+- `Camera_buffer` -- Ring buffer client uploading camera matrices, viewport, exposure, and grid settings, plus the pass's view origin and `clip_from_view_relative` (`get_view_origin()`, `get_clip_from_view_relative()`; doc/erhe/shadows.md "View-relative positions").
 - `Light_buffer` -- Ring buffer client uploading light data (position, direction, color, shadow transforms) and shadow map texture handles.
 - `Material_buffer` -- Ring buffer client uploading PBR material properties and texture handles.
 - `Primitive_buffer` -- Ring buffer client uploading per-primitive world transforms, normal transforms, color, material index, and skinning data. Also manages ID ranges for GPU picking.

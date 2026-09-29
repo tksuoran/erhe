@@ -315,12 +315,92 @@ receive no light from it. The point-light cube has no border: each face is
 rasterized full-face, the lookup is a single compare along the direction, and
 cube sampling continues across faces.
 
+## View-relative positions
+
+Every position the shadow casters and receivers compute with is relative to
+a view origin near what the pass sees, never an absolute fp32 world position,
+so each fp32 rounding bound of the bias ("Minimum bias", "The distance
+technique", [`point_light_shadows.md`](point_light_shadows.md) "Receiver
+bias") scales with the distance from the camera or from the light camera, not
+with the distance from the world origin.
+
+- **View origin of a pass.** `get_view_origin(world_from_camera)`
+  (`camera_buffer.hpp`) is the position of the pass's (first) camera, taken
+  from the fp32 matrix as is, so it is exactly representable: the view camera
+  for a forward pass, the light camera `world_from_light_camera` for a 2D
+  shadow pass, the light position for a cube face pass (`create_look_at()`
+  puts the eye in column 3). A multiview pass shares its first view's origin.
+- **Camera block.** Per view, written with the camera block (constant cost
+  per pass): `view_origin` and `clip_from_view_relative`
+  (`get_clip_from_view_relative()`): `clip_from_camera *
+  inverse(world_from_camera) * translate(view_origin)`, composed and inverted
+  in double from the fp32 camera matrices, so the translation cancels in
+  double.
+- **Vertex stage (relative to eye).** The primitive records are unchanged:
+  `world_from_node` is the node's fp32 world transform, written when the
+  node's transform changes (the draw-list records) or with the bucket's
+  primitive range, never per camera. `standard.vert` subtracts the view
+  origin from its translation, `precise`: both are exact fp32 values, so the
+  one subtraction is correctly rounded - the value a double subtraction
+  rounded once gives, so no low-order split of either is needed - and small
+  near the view origin. With the upper 3x3 of `world_from_node` it forms
+  `view_relative_from_node`; `v_view_relative_position` (location 17) and
+  `gl_Position = clip_from_view_relative * v_view_relative_position` come
+  from it (also `precise`, so the compiler cannot fold the subtraction into
+  the sum). The vertex's fp32 error is then `5u` times its distance from the
+  view origin (a four-term row sum plus the rounded translation).
+  `v_position` stays the absolute world position for lighting, DDGI, texgen
+  and `Shader_debug::world_position`.
+- **Light block.** Per light, composed once per frame by
+  `Light_projections::apply()` (`light_view_relative_transforms`, parallel to
+  the slots) and copied into the light block per pass: `view_origin` (the light camera position,
+  `world_from_light_camera[3]`; the light position for spot and point
+  lights), `texture_from_view_relative` (`get_texture_from_clip()` times
+  `get_clip_from_view_relative()` of the light camera, in double) and its
+  double inverse `view_relative_from_texture`. The shadow pass camera block is
+  composed from the same fp32 inputs with the same function, so the caster
+  pass and the receiver use the same rows. `texture_from_world` and
+  `world_from_texture` remain for the other consumers (the shadow texel debug
+  view, the editor's shadow debug lines).
+- **Receiver.** `get_light_relative_position()` (`erhe_light.glsl`) moves the
+  receiver's view-relative position into a light's view-relative space by
+  adding the offset between the two exact origins, `precise`, so the offset
+  is formed first; `get_light_relative_receiver_rounding()` bounds the result
+  (the interpolated point, `9u` times its distance from the camera, plus one
+  rounding each of the offset and the sum). The receiver normal
+  (`get_receiver_geometric_normal()`) takes the derivatives of
+  `v_view_relative_position`.
+- **Casters.** The 2D distance caster and the cube caster work on their
+  fragment's `v_view_relative_position`, relative to the light camera; the
+  cube caster's position is its offset from the light directly.
+
+Subtracting the view origin from an fp32 world position after the vertex
+transform would not remove the error: the world position already carries
+`u |P|` of rounding. The subtraction happens on the translation, before the
+vertex transform adds anything to it. Skinned primitives are the exception:
+their joint matrices (`world_from_bind`, written when the joints move) are
+absolute and blended per vertex in fp32, so their blended translation
+carries the blend's rounding of the absolute joint translations before the
+view origin is subtracted; making it view-relative would need the joint
+translations relative to each pass's view origin. Skinned casters are outside the requirements of
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md).
+
+What stays absolute is the scene itself: a node's world transform is
+composed in fp32, so far from the origin each node lands within half an ulp
+of its world coordinate (0.49 mm at 10 km) of where its parent chain puts it,
+independently of its neighbours. That is the geometry both passes see; at
+10 km it opens 0.16 to 0.27 mm slits and 0.2 mm steps at some joins of the
+`thin_walls` huts, which the shadow maps reproduce as light through the slit
+and a step's shadow (`shadow_verify.py` takes its ground truth from the same
+fp32 placement).
+
 ## Shadow sampling
 
 `sample_light_visibility()` in `res/shaders/erhe_light.glsl`:
 
-- The fragment's world position is transformed by the light's
-  `texture_from_world` into [0,1] texture space plus depth.
+- The fragment's view-relative position, moved into the light's view-relative
+  space ("View-relative positions"), is transformed by the light's
+  `texture_from_view_relative` into [0,1] texture space plus depth.
 - The comparison sampler (`s_shadow_compare`) bakes a NON-STRICT comparison
   at engine init from the reverse-depth convention: `greater_or_equal` for
   reverse-Z, `less_or_equal` for forward-Z (`light_buffer.cpp`). 1.0 = lit.
@@ -469,19 +549,21 @@ every tap to the depth the receiver plane has at that tap's texel centre.
 
 #### Receiver depth gradient
 
-The caller passes the receiver's unit geometric normal `N` in world space:
+The caller passes the receiver's unit geometric normal `N`:
 `get_receiver_geometric_normal()` (`erhe_light.glsl`, fragment stage only)
-returns `normalize(cross(dFdxFine(p), dFdyFine(p)))` of the world position
-`p`, which lies in the triangle's plane for a planar triangle and ignores
-smooth vertex normals and normal maps. `standard.frag` takes it once, in
+returns `normalize(cross(dFdxFine(p), dFdyFine(p)))` of the view-relative
+position `p` ("View-relative positions"), which lies in the triangle's plane
+for a planar triangle and ignores smooth vertex normals and normal maps. `standard.frag` takes it once, in
 uniform control flow ahead of the per-light branches, and passes it to every
 shadow-mapped directional and spot light and to the mode 30 debug view.
 
-With `P` the receiver point, the world plane is the row vector
+With `P` the receiver point (relative to the light's view origin, as are
+all light-space quantities below; directions are the same in every
+translated frame), the plane is the row vector
 `pi = (N, -dot(N, P))`, which is 0 on homogeneous points `(x, 1)` of the
-plane. With `W = world_from_texture` (the inverse of `texture_from_world`,
-already in the light block), a homogeneous texture point `h` maps to the
-world point `W h`, so the plane in homogeneous texture coordinates is
+plane. With `W = view_relative_from_texture` (the inverse of
+`texture_from_view_relative`, both in the light block), a homogeneous texture
+point `h` maps to the point `W h`, so the plane in homogeneous texture coordinates is
 `pi' = transpose(W) * pi = (a, b, c, e)`: `dot(pi', h) = 0`. The light
 texture coordinates the shader compares are the post-divide
 `(u, v, z) = h.xyz / h.w`, and `h = h.w * (u, v, z, 1)`; since `h.w != 0` for
@@ -514,9 +596,9 @@ light ray through `P`. So `|c| / |D|` is `|N . L|`. Two degenerate cases:
   `L`. That clamps `|dz/dUV|` to the slope at the grazing limit in the
   direction the receiver actually tilts, and keeps `c` bounded away from 0.
 
-The remaining error of the gradient is the fp32 rounding of the world
-position: each derivative carries a few ulps of `|p|`, so the normal tilts by
-about `ulp(|p|) / pixel_world_size`. On a head-on receiver (exact gradient 0)
+The remaining error of the gradient is the fp32 rounding of the
+position: each derivative carries a few ulps of `|p|`, the distance from the
+camera, so the normal tilts by about `ulp(|p|) / pixel_world_size`. On a head-on receiver (exact gradient 0)
 this leaves a gradient of that order, which the per-tap offsets of the wide
 `receiver_plane` path multiply by up to `K / 2` texels.
 `get_receiver_geometric_normal()` therefore returns a bound on that tilt next
@@ -604,35 +686,45 @@ comparison is a tie that fp32 rounding decides. Every tap reference therefore
 also moves toward the light by a minimum bias: the sum of bounds on the error
 sources, in texture depth units, computed per fragment in
 `sample_light_visibility()`. Notation: `u = 2^-24` the fp32 unit roundoff,
-`gamma_n = n u` (first order), `T = texture_from_world` with depth row `T_z`
-and w row `T_w`, `h = T (P, 1)`, `z = h.z / h.w`, `|x|` elementwise absolute
-values, `D_u`, `D_v`, `D` the columns 0, 1, 2 of `world_from_texture`
-applied at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and
-`c` the depth coefficient of the receiver plane in texture space.
+`gamma_n = n u` (first order), `T = texture_from_view_relative` with depth
+row `T_z` and w row `T_w`, `P` the receiver point relative to the light's
+view origin ("View-relative positions"), `P_c` the receiver relative to the
+camera, `h = T (P, 1)`, `z = h.z / h.w`, `|x|` elementwise absolute values,
+`D_u`, `D_v`, `D` the columns 0, 1, 2 of `view_relative_from_texture` applied
+at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and `c` the
+depth coefficient of the receiver plane in texture space.
 
 - **Projection.** The reference is `(T_z . P) / (T_w . P)`. The shadow pass
-  evaluates the stored depth of each caster vertex from the same rows (for a
-  [0, 1] depth range the z and w rows of `texture_from_world` are the
-  entries of the light's `clip_from_world`; for [-1, 1] the composed depth
-  row carries one rounding more) and divides. A four-term fp32 dot product is
+  evaluates the stored depth of each caster vertex, relative to the same view
+  origin, from the same rows (for a [0, 1] depth range the z and w rows of
+  `texture_from_view_relative` are the entries of the shadow pass camera's
+  `clip_from_view_relative`, both rounded once from the same double
+  composition; for [-1, 1] the composed depth row carries one rounding more)
+  and divides. A four-term fp32 dot product is
   off by at most `gamma_4` times the sum of the magnitudes it adds,
   `S_z = |T_z| . (|P|, 1)` and `S_w = |T_w| . (|P|, 1)`, and the divide adds
   `u |z|`, so one evaluation is off by at most
   `E = (5u S_z + 4u |z| S_w) / |h.w| + u |z|`. The reference and the stored
-  depth are two evaluations: `2 E`. The row magnitudes carry the light's
-  position and the projection's scale, `|P|` the receiver's distance from the
-  origin. The caster vertices are evaluated at `P`, as their stand-in.
-- **Position.** Both passes compute the caster's vertices as the same fp32
-  `world_from_node * vertex` (`standard.vert`), so the vertex rounding moves
-  the stored plane and the receiver's plane together. What differs is the
-  receiver point: `v_position` is interpolated from those vertices in fp32
-  (the T7 tie pass computes it from a matrix), which puts it off the plane by
-  at most `get_world_position_rounding(P) = sqrt(3) gamma_4 |P|` (each
-  component is a four-term sum; `|P|` stands in for the magnitudes summed).
-  At fixed (u, v), an offset `eta` along the unit plane normal changes the
-  depth by `eta / (c h.w)`, since the texture-space plane evaluates to `eta`
-  at `h`: `E_position = sqrt(3) 4u |P| / (|c| |h.w|)`, with `|c| >= 0.05 |D|`
-  after the grazing clamp.
+  depth are two evaluations: `2 E`. The row magnitudes carry the
+  projection's scale and the light camera's offset from its view origin (0
+  for a spot light), `|P|` the receiver's distance from the light camera. The
+  caster vertices are evaluated at `P`, as their stand-in.
+- **Position.** The shadow pass computes the caster's vertices relative to
+  the light camera, the forward pass the receiver's relative to the camera
+  (`standard.vert`), so the two roundings are independent. The caster
+  vertices move the stored plane by at most
+  `get_vertex_position_rounding(P) = sqrt(3) 5u |P|` (a four-term row sum
+  plus the rounded view-relative translation; `|P|` stands in for the
+  magnitudes summed). The receiver point is interpolated from its own
+  vertices and moved into the light's frame, which puts it off the surface by
+  at most `get_light_relative_receiver_rounding()`:
+  `get_position_rounding(P_c) = sqrt(3) 9u |P_c|` (vertices and
+  interpolation) plus `sqrt(3) u` times the origin offset and `|P|` (the T7
+  tie pass computes the view-relative point from a matrix). At fixed (u, v),
+  an offset `eta` along the unit plane normal changes the depth by
+  `eta / (c h.w)`, since the texture-space plane evaluates to `eta` at `h`:
+  `E_position` is the sum of the two bounds over `|c| |h.w|`, with
+  `|c| >= 0.05 |D|` after the grazing clamp.
 - **Raster.** The rasterizer evaluates the caster primitive's depth at the
   texel centre as a combination of its post-clip vertex depths `z_i` with
   barycentric weights `l_i` in [0, 1] summing to 1: each weight and each
@@ -652,8 +744,11 @@ applied at `P` (`W[i].xyz - P W[i].w`, see "Receiver depth gradient"), and
   left the hard filter at 2048 texels and `pcf_4x4` at 512 with moire acne
   on the floor below the light at no rasterizer bias.
 - **Gradient.** `get_receiver_geometric_normal()` bounds the error of its
-  normal: each world-position derivative is the difference of two rounded
-  positions, off by at most `e = 2 sqrt(3) gamma_4 |P|`, so the cross
+  normal: each position derivative is the difference of two rounded
+  positions, off by at most `e = 2 get_position_rounding(P_c)` (the vertex
+  rounding included: the stored plane comes from vertices rounded in the
+  light camera's frame, so the receiver's triangle is bounded against the
+  true surface), so the cross
   product moves by at most `e (|dp/dx| + |dp/dy| + e)` and the unit normal
   tilts by at most `theta`, that over `|dp/dx x dp/dy|`. The texture-space
   plane is linear in the normal, `(a, b, c) = (N . D_u, N . D_v, N . D)`, so
@@ -701,9 +796,11 @@ a fraction of a millimetre (the raster floor along a spot light's ray is
 about `2^-22 d^2 / n`, `n` the 0.04 m spot near plane: 0.05 mm at 3 m, 0.6 mm
 at 10 m, against texels of millimetres to centimetres), so the
 `contact_blocks` contact gap (G3) and edge placement (G5) read the same with
-and without it on Low and Medium. It grows linearly with `|P|`: at 10 km
-from the origin the position term alone is about 4 mm along the receiver
-normal.
+and without it on Low and Medium. The projection, position and gradient
+terms grow with the receiver's distance from the camera and from the light
+camera, not with its distance from the world origin ("View-relative
+positions"), so a station translated 10 km from the origin reads the gates
+it reads at the origin.
 
 #### Undetermined receiver plane
 
@@ -781,21 +878,24 @@ bias is the sum of derived fp32 error bounds.
 **The ray of a texel.** `get_shadow_distance_ray()`
 (`res/shaders/erhe_shadow_distance.glsl`) builds the ray through the centre
 `(i + 0.5) / N` of texel `i` (`get_shadow_distance_texel_centre()`) from the
-light's `world_from_texture`: the world point `X` of texture coordinates
-(centre, z = 0.5). For a spot light the ray starts at the light position and
-points at `X`, and a distance is the radial distance from the light. For a
-directional light the ray starts at `X` and follows the projection's depth
-axis (`world_from_texture[2]`, oriented away from the light), and a distance
-is the linear light-space depth, in world units from the map's mid-depth
-plane (negative nearer the light). Both passes evaluate these expressions as
+light's `view_relative_from_texture`, in the light's view-relative space (the
+light camera at the origin; "View-relative positions"): the point `X` of
+texture coordinates (centre, z = 0.5). For a spot light the ray starts at the
+light position, which is that origin, and points at `X`, and a distance is
+the radial distance from the light. For a directional light the ray starts at
+`X` and follows the projection's depth axis
+(`view_relative_from_texture[2]`, oriented away from the light), and a
+distance is the linear light-space depth, in world units from the map's
+mid-depth plane (negative nearer the light). Both passes evaluate these expressions as
 `precise` (no contraction or reassociation) from the same inputs, so the
 caster and the receiver get the same ray bit for bit, and the ray's own
 rounding is not an error term.
 
 **Stored distance.** The caster (`standard.frag` under
 `VARIANT_SHADOW_DISTANCE`) runs at its pixel centre, the texel centre. It
-finds its texel from the texture coordinates of its interpolated world
-position `p`, which lie a small fraction of a texel from that centre, and
+finds its texel from the texture coordinates (`texture_from_view_relative`)
+of its interpolated view-relative position `p`, relative to the light camera,
+which lie a small fraction of a texel from that centre, and
 reads the map resolution from `light_control_block.shadow_map_resolution`.
 Its plane is the geometric normal `N` of the derivatives of `p`, through `p`,
 and it stores the farther of the plane's distance on the ray,
@@ -837,8 +937,8 @@ the ray over the planes within the grazing limit of head-on: for a
 directional light the receiver's distance less `tan(alpha_max)` times its
 lateral distance from the ray, for a spot light the point-light cube's
 closed form. Every reference then moves toward the light by the sum of these
-bounds (world units along the ray, `u = 2^-24`,
-`e = 2 get_world_position_rounding(P)`):
+bounds (world units along the ray, `u = 2^-24`, `P` the receiver point
+relative to the light camera, `e = 2 get_position_rounding(P)`):
 
 - **Coverage snap.** The receiver plane's distance slope per texel,
   `|N . l_u| / |N . d|` plus the same for `v`, times 1/256, where `l_u`,
@@ -853,8 +953,9 @@ bounds (world units along the ray, `u = 2^-24`,
   the caster taken at the receiver's distance, where the tie is), times half
   the texel diagonal on the plane, over `|N . d|` less the bound but at least
   the caster's threshold 0.01.
-- **Position.** The rounding of the receiver point and of the caster's
-  interpolated point, `get_world_position_rounding()` each, over `|N . d|`.
+- **Position.** The rounding of the receiver point
+  (`get_light_relative_receiver_rounding()`) and of the caster's interpolated
+  point (`get_position_rounding(P)`), over `|N . d|`.
 - **Evaluation.** Each side's `N . (p - O) / (N . d)`: the subtraction and
   the three-term dot product `4u |p - O|`, the dot `N . d` `3u |s| / |N . d|`
   and the divide `u |s|` (`s` the distance), plus the receiver's own length
@@ -910,9 +1011,10 @@ the per-face coordinate flip, is in
   (`Light::point_light_projection_transforms()`, `perspective_z_far = light->range`). The
   caster fragment (`standard.frag` under `VARIANT_SHADOW_CUBE`) writes its
   primitive plane's distance on the texel centre ray (from the geometric
-  normal of the interpolated world position and that position) to the R32F
-  face (`cull_none`; the light world position and the face resolution come
-  from `light_control_block`), so the rasterizer's placement of the
+  normal of the interpolated position relative to the light, the face pass's
+  view origin, and that position) to the R32F face (`cull_none`; the face
+  resolution comes from `light_control_block.shadow_map_resolution`), so the
+  rasterizer's placement of the
   interpolated point does not reach the stored value
   ([`point_light_shadows.md`](point_light_shadows.md) "Stored distance"). A
   shared 2D depth scratch is reused for every face, for rasterization only
@@ -1031,7 +1133,8 @@ the per-face coordinate flip, is in
 | `src/erhe/scene/erhe_scene/light_frustum_fit.hpp` | `Shadow_frustum_fit_debug_data`, `Shadow_fit_step` |
 | `src/erhe/math/erhe_math/math_util.cpp` | Convex hull clip, point-in-hull, rotating calipers, F_shadow open planes (`build_shadow_caster_volume_planes`) + silhouette side planes (`build_shadow_caster_silhouette`), AABB-vs-convex-volume cull (`aabb_in_convex_volume`), half-space intersection to polyhedron (`convex_polyhedron_from_planes`) |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + map resolution); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_map_resolution` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO (per light `view_origin`, `texture_from_view_relative`, `view_relative_from_texture`), shadow samplers; `s_shadow_distance` + distance fallback, `shadow_map_resolution` control field (2D map or cube face resolution); `point_shadow_index` assignment, `shadow_cube_texture` + 1x1 fallback cube |
+| `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.cpp` | `get_view_origin()`, `get_clip_from_view_relative()`; camera block `view_origin`, `clip_from_view_relative` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
 | `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance path (`get_shadow_distance_tap`), reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
 | `res/shaders/erhe_point_shadow.glsl` | Point cube texel-centre selection shared by the cube caster and the receiver |
@@ -1040,7 +1143,7 @@ the per-face coordinate flip, is in
 | `src/erhe/scene_renderer/test/test_shadow_gpu.cpp` | Shadow sampling GPU test cases |
 | `src/erhe/scene_renderer/test/shaders/shadow_tie.frag` | Shadow_tie fragment pass (reference depth offset per band) |
 | `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the caster plane's light distance on the texel centre ray to the distance map; `VARIANT_SHADOW_CUBE` writes the caster plane's radial distance on the texel centre ray to the cube face; point receiver multiplies `sample_point_light_visibility` |
-| `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` and `VARIANT_SHADOW_DISTANCE` pass `v_position` (world) to the caster fragment |
+| `res/shaders/standard.vert` | `view_relative_from_node`, `gl_Position` from `clip_from_view_relative`; `v_view_relative_position` to the receiver and to the `VARIANT_SHADOW_CUBE` / `VARIANT_SHADOW_DISTANCE` caster fragment |
 | `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |
 | `src/editor/config/definitions/shadow_frustum_fit_config.py` | Frustum fit settings codegen definition |

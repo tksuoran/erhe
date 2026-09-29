@@ -35,16 +35,17 @@ vec2 get_shadow_distance_texel_centre(vec2 texel, float resolution)
     return centre;
 }
 
-// The ray whose light distance a texel stores. world_from_texture maps
-// texture (u, v, z, 1) to world; the ray passes through the world point of
-// (texel_centre, 0.5). Spot: origin = the light position, direction =
-// towards that point. Directional: origin = that point, direction = the
-// projection's depth axis, oriented away from the light (light_direction
-// points towards the light, direction_and_outer_spot_cos). The direction is
-// unit length.
+// The ray whose light distance a texel stores, in the light's view-relative
+// space (positions relative to the light block's view_origin, the light
+// camera position; for a spot light that is the light position).
+// view_relative_from_texture maps texture (u, v, z, 1) to that space; the ray
+// passes through the point of (texel_centre, 0.5). Spot: origin = the light
+// position (0), direction = towards that point. Directional: origin = that
+// point, direction = the projection's depth axis, oriented away from the
+// light (light_direction points towards the light,
+// direction_and_outer_spot_cos). The direction is unit length.
 void get_shadow_distance_ray(
-    mat4     world_from_texture,
-    vec3     light_position,
+    mat4     view_relative_from_texture,
     vec3     light_direction,
     bool     is_directional,
     vec2     texel_centre,
@@ -52,16 +53,15 @@ void get_shadow_distance_ray(
     out vec3 ray_direction
 )
 {
-    ERHE_SHADOW_DISTANCE_PRECISE vec4 homogeneous = world_from_texture * vec4(texel_centre, 0.5, 1.0);
+    ERHE_SHADOW_DISTANCE_PRECISE vec4 homogeneous = view_relative_from_texture * vec4(texel_centre, 0.5, 1.0);
     ERHE_SHADOW_DISTANCE_PRECISE vec3 point       = homogeneous.xyz / homogeneous.w;
     if (is_directional) {
-        ERHE_SHADOW_DISTANCE_PRECISE vec3 axis = normalize(world_from_texture[2].xyz);
+        ERHE_SHADOW_DISTANCE_PRECISE vec3 axis = normalize(view_relative_from_texture[2].xyz);
         ray_origin    = point;
         ray_direction = (dot(axis, light_direction) > 0.0) ? -axis : axis;
     } else {
-        ERHE_SHADOW_DISTANCE_PRECISE vec3 light_to_point = point - light_position;
-        ERHE_SHADOW_DISTANCE_PRECISE vec3 direction      = normalize(light_to_point);
-        ray_origin    = light_position;
+        ERHE_SHADOW_DISTANCE_PRECISE vec3 direction = normalize(point);
+        ray_origin    = vec3(0.0);
         ray_direction = direction;
     }
 }

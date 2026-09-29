@@ -33,11 +33,16 @@ bloom):
     resolution as that render's shadow pass used them (the directional fit
     follows the camera).
 
-Ground truth per pixel. The pixel's box is the station box whose surface is
+Ground truth per pixel. The boxes are placed as the scene holds them: at a
+root offset the scene composes each box's world translation in fp32, which
+moves it by up to half an ulp (0.49 mm at 10 km) and can open slits or
+overlaps at joins (scene_box_center()); off the origin the thin_walls hut
+interiors get a band too, and G4 does not count light through such a slit.
+The pixel's box is the station box whose surface is
 nearest its world position (within 3 mm; farther pixels are "unknown" and
 excluded); its face normal is that box face's normal. A pixel whose two
 nearest faces of that box lie within the fp32 rounding bound of its world
-position, sqrt(3) 4u |P| (the shader's get_world_position_rounding()), is on
+position, sqrt(3) 4u |P| (the fp32 absolute v_position mode 36 reads back), is on
 a box edge with no determined face and is "unknown" as well: at a root
 offset (R7) the rounding, not the geometry, would pick its face. The pixel is occluded
 when the segment from its world position to the light (point / spot: to the
@@ -552,17 +557,44 @@ def quat_to_matrix(q):
     ], dtype=np.float64)
 
 
-class Geometry:
-    """World-space boxes of one station at one root offset."""
+def scene_box_center(b, root_offset):
+    """-> the world centre of box b as the editor holds it, in float64: the
+    scene composes a box's world transform from the root's fp32 translation
+    and the box's fp32 local translation in fp32 (identity root rotation:
+    world = fl32(root + local) per component). Off the origin that rounds
+    each box by up to half an ulp of its world coordinate (0.49 mm at 10 km),
+    independently of its neighbours, so joins can open or overlap; the
+    ground truth is taken from this geometry, the one the shadow maps see."""
+    local = np.array(b["center"], dtype=np.float32)
+    root = np.array(root_offset, dtype=np.float32)
+    return (root + local).astype(np.float64)
 
-    def __init__(self, station_name, root_offset, dtype=np.float64):
+
+def scene_boxes_exact(station_name, root_offset):
+    """True when the scene holds every box of the station within 1 um of its
+    exact place (scene_box_center()): its joins are closed. False off the
+    origin, where the rounding (up to 0.49 mm at 10 km) is far larger than
+    what the read-back world positions resolve, so which interior pixels a
+    slit lights cannot be told from the positions alone."""
+    for b in rooms.STATIONS[station_name]["boxes"]:
+        exact = np.array(b["center"], dtype=np.float64) + np.array(root_offset, dtype=np.float64)
+        if np.max(np.abs(scene_box_center(b, root_offset) - exact)) > 1.0e-6:
+            return False
+    return True
+
+
+class Geometry:
+    """Boxes of one station at one root offset, as the scene holds them
+    (scene_box_center()), in world space minus frame_offset (station-local
+    for frame_offset = root_offset)."""
+
+    def __init__(self, station_name, root_offset, dtype=np.float64, frame_offset=(0.0, 0.0, 0.0)):
         station = rooms.STATIONS[station_name]
         self.names = []
         centers, rotations, halves, casts = [], [], [], []
         for b in station["boxes"]:
-            w = rooms.box_to_world(b, root_offset)
             self.names.append(b["name"])
-            centers.append(w["center"])
+            centers.append(scene_box_center(b, root_offset) - np.array(frame_offset, dtype=np.float64))
             rotations.append(quat_to_matrix(b["rotation_xyzw"]))   # columns = local axes in world
             halves.append(b["half_extents"])
             casts.append(bool(b["casts_shadow"]))
@@ -588,7 +620,7 @@ def surface_of(points, geo):
     bound of its read-back world position of each other (a pixel centre on a
     box edge) has no determined face and is -1 as well: which face it gets
     would be decided by the rounding (R7 root offsets make that bound grow
-    with |P|, the shader's get_world_position_rounding())."""
+    with |P|: mode 36 reads back the absolute fp32 v_position)."""
     n = len(points)
     best = np.full(n, np.inf)
     face_gap = np.full(n, np.inf)
@@ -726,10 +758,10 @@ def read_pfm(path):
     return np.flipud(image).copy()
 
 
-def geometry(station, offset, dtype=np.float64):
-    key = (station, tuple(offset), np.dtype(dtype).name)
+def geometry(station, offset, dtype=np.float64, frame_offset=(0.0, 0.0, 0.0)):
+    key = (station, tuple(offset), np.dtype(dtype).name, tuple(frame_offset))
     if key not in _GEO_CACHE:
-        _GEO_CACHE[key] = Geometry(station, offset, dtype)
+        _GEO_CACHE[key] = Geometry(station, offset, dtype, frame_offset)
     return _GEO_CACHE[key]
 
 
@@ -1039,9 +1071,10 @@ def classify(job):
         to_light = delta / np.maximum(distance, 1.0e-12)[:, None]
     n_dot_l = np.einsum("ij,ij->i", normal, to_light)
     # Occlusion runs in station-local float32 (station extents are metres,
-    # so float32 resolves far below OCCLUSION_OVERLAP_M at any root offset).
+    # so float32 resolves far below OCCLUSION_OVERLAP_M at any root offset),
+    # on the boxes as the scene holds them at this root offset.
     offset = np.array(job["offset"], dtype=np.float64)
-    geo_local = geometry(job["station"], (0.0, 0.0, 0.0), np.float32)
+    geo_local = geometry(job["station"], tuple(offset), np.float32, tuple(offset))
     light_local = Light(job["light"], offset, np.float32)
 
     def occ_fn(world_points, own_index):
@@ -1073,10 +1106,14 @@ def classify(job):
     band = cache_load(job, band_key, len(points))
     if band is None:
         band = np.zeros(len(points), dtype=bool)
-        # The hut interiors of thin_walls are G4's (left out of G1 / G2),
-        # so they need no band.
+        # The hut interiors of thin_walls are G4's (left out of G1 / G2).
+        # They need a band only where the scene's huts are not closed: off
+        # the origin the fp32 box placement (scene_box_center()) can open
+        # slits at the joins, and interior points lit through one, and the
+        # pixels whose filter footprint reaches such a point, are not leaks
+        # (measure_g4()).
         needed = ~excluded
-        if job["station"] == "thin_walls":
+        if (job["station"] == "thin_walls") and scene_boxes_exact(job["station"], offset):
             for _, inside in hut_interiors(points, offset):
                 needed &= ~inside
         active = np.nonzero(needed)[0]
@@ -1087,7 +1124,7 @@ def classify(job):
             M_local = M.copy()
             M_local[:, 3] += M[:, :3] @ offset
         band[active] = footprint_band(points[active] - offset, own[active], normal[active], occ[active],
-                                      Light(job["light"], offset), geometry(job["station"], (0.0, 0.0, 0.0)),
+                                      Light(job["light"], offset), geometry(job["station"], tuple(offset), np.float64, tuple(offset)),
                                       M_local, job["resolution"], r)
         cache_store(job, band_key, band)
     return {"wd": wd, "geo": geo, "light": light, "excluded": excluded, "occ": occ, "band": band,
@@ -1271,11 +1308,14 @@ def hut_interiors(points, offset):
 
 
 def measure_g4(job, cls, vis_flat):
-    """Lit pixels inside each hut -> {hut: {count, total, thickness, gated}}."""
+    """Lit pixels inside each hut -> {hut: {count, total, thickness, gated}}.
+    Interior points the ground truth lights (through a slit the scene's fp32
+    box placement opened, scene_box_center()) and their band are not
+    counted; at the origin every interior point is occluded."""
     wd = cls["wd"]
     points = wd["points"]
     offset = np.array(job["offset"], dtype=np.float64)
-    visible = ~cls["excluded"]
+    visible = ~cls["excluded"] & cls["occ"] & ~cls["band"]
     lit = vis_flat[wd["index"]] > 0.5
     out = {}
     inside_any = np.zeros(len(points), dtype=bool)

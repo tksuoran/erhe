@@ -45,6 +45,8 @@ layout(location = 0) in vec4 v_point_color;
 
 #if defined(ERHE_USE_VARYING_POSITION)
 layout(location = 0) in vec4      v_position;
+// Position relative to the pass's view origin (see standard.vert).
+layout(location = 17) in vec3     v_view_relative_position;
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -275,37 +277,40 @@ void main()
     // Shadow_technique_mode::distance caster for directional and spot lights:
     // store the light distance, on this texel's centre ray, of the caster's
     // plane into the R32F distance map (doc/erhe/shadows.md "The distance
-    // technique"). The fragment runs at its pixel centre, the texel centre;
-    // the texel is found from the interpolated world position's texture
-    // coordinates, which lie within a small fraction of a texel of that
-    // centre. The plane is the geometric normal of the interpolated world
-    // position's derivatives and the interpolated point; any point of the
-    // plane gives the same distance, so neither the rasterizer's placement of
-    // the interpolated point nor its depth (with the rasterizer depth bias)
-    // reaches the stored value. A caster within
+    // technique"). Positions are relative to this pass's view origin, the
+    // light camera position (the light block's view_origin), and the ray
+    // comes from the light's view-relative matrices, so every quantity here
+    // has the magnitude of the caster's distance from the light camera. The
+    // fragment runs at its pixel centre, the texel centre; the texel is found
+    // from the interpolated position's texture coordinates, which lie within
+    // a small fraction of a texel of that centre. The plane is the geometric
+    // normal of the interpolated position's derivatives and the interpolated
+    // point; any point of the plane gives the same distance, so neither the
+    // rasterizer's placement of the interpolated point nor its depth (with
+    // the rasterizer depth bias) reaches the stored value. A caster within
     // erhe_shadow_distance_plane_cos_min of edge-on to the ray, or with no
     // plane at this footprint, stores its interpolated point's distance.
     // Unrendered texels keep the large clear value, which the receiver reads
     // as "lit".
     {
+        vec3  caster_position = v_view_relative_position;
 #   if __VERSION__ >= 450
-        vec3  caster_dp_dx = dFdxFine(v_position.xyz);
-        vec3  caster_dp_dy = dFdyFine(v_position.xyz);
+        vec3  caster_dp_dx = dFdxFine(caster_position);
+        vec3  caster_dp_dy = dFdyFine(caster_position);
 #   else
-        vec3  caster_dp_dx = dFdx(v_position.xyz);
-        vec3  caster_dp_dy = dFdy(v_position.xyz);
+        vec3  caster_dp_dx = dFdx(caster_position);
+        vec3  caster_dp_dy = dFdy(caster_position);
 #   endif
         uint  light_index    = light_control_block.light_index;
         Light light          = light_block.lights[light_index];
         bool  is_directional = (light_index < light_block.directional_light_count);
         float resolution     = light_control_block.shadow_map_resolution;
-        vec4  caster_in_texture_homogeneous = light.texture_from_world * vec4(v_position.xyz, 1.0);
+        vec4  caster_in_texture_homogeneous = light.texture_from_view_relative * vec4(caster_position, 1.0);
         vec2  caster_texel   = clamp(floor((caster_in_texture_homogeneous.xy / caster_in_texture_homogeneous.w) * resolution), vec2(0.0), vec2(resolution - 1.0));
         vec3  ray_origin;
         vec3  ray_direction;
         get_shadow_distance_ray(
-            light.world_from_texture,
-            light.position_and_inner_spot_cos.xyz,
+            light.view_relative_from_texture,
             light.direction_and_outer_spot_cos.xyz,
             is_directional,
             get_shadow_distance_texel_centre(caster_texel, resolution),
@@ -314,7 +319,7 @@ void main()
         );
         vec3  caster_normal   = cross(caster_dp_dx, caster_dp_dy);
         float normal_length   = length(caster_normal);
-        float stored_distance = get_shadow_distance_of_point(v_position.xyz, ray_origin, ray_direction, is_directional);
+        float stored_distance = get_shadow_distance_of_point(caster_position, ray_origin, ray_direction, is_directional);
         if (normal_length > 0.0) {
             vec3  plane_normal = caster_normal / normal_length;
             float ray_cos      = dot(plane_normal, ray_direction);
@@ -330,7 +335,7 @@ void main()
                 // The receiver compares its own plane on the ray, which the
                 // plane distance equals for its own surface, so taking the
                 // farther value never shadows a lit receiver.
-                stored_distance = max(dot(plane_normal, v_position.xyz - ray_origin) / ray_cos, stored_distance);
+                stored_distance = max(dot(plane_normal, caster_position - ray_origin) / ray_cos, stored_distance);
             }
         }
         out_color = vec4(stored_distance);
@@ -348,22 +353,24 @@ void main()
     // point (vertex snap, barycentric precision on large near-clipped
     // triangles) does not reach the stored value. A caster within
     // erhe_point_shadow_plane_cos_min of edge-on, or with no plane at this
-    // footprint, stores its interpolated point's distance. The light world
-    // position (xyz) and the face resolution (w) come per pass in the light
-    // control block. Unrendered texels keep the large clear value, which the
-    // receiver reads as "lit".
+    // footprint, stores its interpolated point's distance. The cube face
+    // passes' view origin is the light position, so the view-relative
+    // position is the caster's offset from the light, of the magnitude of
+    // its distance from the light. The face resolution comes per pass in the
+    // light control block. Unrendered texels keep the large clear value,
+    // which the receiver reads as "lit".
     {
+        vec3  light_to_caster = v_view_relative_position;
 #   if __VERSION__ >= 450
-        vec3  caster_dp_dx = dFdxFine(v_position.xyz);
-        vec3  caster_dp_dy = dFdyFine(v_position.xyz);
+        vec3  caster_dp_dx = dFdxFine(light_to_caster);
+        vec3  caster_dp_dy = dFdyFine(light_to_caster);
 #   else
-        vec3  caster_dp_dx = dFdx(v_position.xyz);
-        vec3  caster_dp_dy = dFdy(v_position.xyz);
+        vec3  caster_dp_dx = dFdx(light_to_caster);
+        vec3  caster_dp_dy = dFdy(light_to_caster);
 #   endif
         vec3  caster_normal    = cross(caster_dp_dx, caster_dp_dy);
         float normal_length    = length(caster_normal);
-        vec3  light_to_caster  = v_position.xyz - light_control_block.point_light_position.xyz;
-        vec3  centre           = get_point_shadow_texel_centre(light_to_caster, light_control_block.point_light_position.w);
+        vec3  centre           = get_point_shadow_texel_centre(light_to_caster, light_control_block.shadow_map_resolution);
         vec3  centre_direction = normalize(centre);
         float stored_distance  = length(light_to_caster);
         if (normal_length > 0.0) {
@@ -431,8 +438,9 @@ void main()
 
     // Receiver plane for the shadow depth bias (sample_light_visibility()):
     // geometric normal and its error bound, taken here in uniform control
-    // flow, ahead of the per-light branches.
-    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_position.xyz);
+    // flow, ahead of the per-light branches, from the view-relative position
+    // (its rounding scales with the distance from the camera).
+    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position);
 
 #  ifdef ERHE_USE_VERTEX_VARYING_TANGENT
     vec3 T = normalize(v_T);
@@ -709,7 +717,7 @@ void main()
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
-                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, shadow_receiver_plane);
+                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, light_index, shadow_receiver_plane);
                 color += intensity * BXDF_CALL(L);
             }
         }
@@ -739,7 +747,7 @@ void main()
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-                float light_visibility  = sample_light_visibility(v_position, light_index, shadow_receiver_plane);
+                float light_visibility  = sample_light_visibility(v_view_relative_position, light_index, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
@@ -773,7 +781,7 @@ void main()
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-                float light_visibility  = sample_point_light_visibility(v_position.xyz, light.position_and_inner_spot_cos.xyz, float(light.shadow_index_packed.y), shadow_receiver_plane);
+                float light_visibility  = sample_point_light_visibility(v_view_relative_position, light.view_origin.xyz, float(light.shadow_index_packed.y), shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
@@ -1066,18 +1074,18 @@ void main()
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
             if (dbg_light_index < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)) {
-                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_plane);
+                dbg_visibility = sample_light_visibility(v_view_relative_position, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED)))) {
-                dbg_visibility = sample_light_visibility(v_position, dbg_light_index, shadow_receiver_plane);
+                dbg_visibility = sample_light_visibility(v_view_relative_position, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)))) {
                 Light dbg_light = light_block.lights[dbg_light_index];
-                dbg_visibility = sample_point_light_visibility(v_position.xyz, dbg_light.position_and_inner_spot_cos.xyz, float(dbg_light.shadow_index_packed.y), shadow_receiver_plane);
+                dbg_visibility = sample_point_light_visibility(v_view_relative_position, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), shadow_receiver_plane);
             }
 #    endif
             out_color.rgb = vec3(dbg_visibility);

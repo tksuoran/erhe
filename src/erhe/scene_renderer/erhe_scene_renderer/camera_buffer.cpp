@@ -51,6 +51,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .sun_direction            = camera_struct.add_vec4 ("sun_direction"           )->get_offset_in_parent(),
         .atmosphere               = camera_struct.add_vec4 ("atmosphere"              )->get_offset_in_parent(),
         .frame_number             = camera_struct.add_uvec2("frame_number"            )->get_offset_in_parent(),
+        .view_origin              = camera_struct.add_vec4 ("view_origin"             )->get_offset_in_parent(),
+        .clip_from_view_relative  = camera_struct.add_mat4 ("clip_from_view_relative" )->get_offset_in_parent(),
     }
     , max_camera_count{static_cast<std::size_t>(max_camera_count)}
     , view_count{static_cast<std::size_t>(view_count)}
@@ -70,6 +72,23 @@ Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_int
 {
 }
 
+auto get_view_origin(const glm::mat4& world_from_camera) -> glm::vec3
+{
+    return glm::vec3{world_from_camera[3]};
+}
+
+auto get_clip_from_view_relative(
+    const glm::mat4& clip_from_camera,
+    const glm::mat4& world_from_camera,
+    const glm::vec3& view_origin
+) -> glm::dmat4
+{
+    const glm::dmat4 camera_from_world = glm::inverse(glm::dmat4{world_from_camera});
+    glm::dmat4 world_from_view_relative{1.0};
+    world_from_view_relative[3] = glm::dvec4{glm::dvec3{view_origin}, 1.0};
+    return glm::dmat4{clip_from_camera} * camera_from_world * world_from_view_relative;
+}
+
 namespace {
 
 void write_camera_entry(
@@ -85,7 +104,8 @@ void write_camera_entry(
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
+    const erhe::math::Coordinate_conventions& conventions,
+    const glm::vec3&                          view_origin
 )
 {
     const glm::mat4&              world_from_camera_node     = world_from_camera.get_matrix();
@@ -93,6 +113,8 @@ void write_camera_entry(
     const erhe::scene::Transform& clip_from_camera_transform = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
     const glm::mat4               world_from_clip            = world_from_camera_node * clip_from_camera_transform.get_inverse_matrix();
     const glm::mat4               clip_from_world            = clip_from_camera_transform.get_matrix() * camera_node_from_world;
+    const glm::mat4               clip_from_view_relative    = glm::mat4{get_clip_from_view_relative(clip_from_camera_transform.get_matrix(), world_from_camera_node, view_origin)};
+    const glm::vec4               view_origin_vec4           = glm::vec4{view_origin, 0.0f};
     const float     viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -159,6 +181,8 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.sun_direction,        as_span(sky_parameters.sun_direction        ));
     write(gpu_data, write_offset + offsets.atmosphere,           as_span(sky_parameters.atmosphere           ));
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number                        ));
+    write(gpu_data, write_offset + offsets.view_origin,             as_span(view_origin_vec4       ));
+    write(gpu_data, write_offset + offsets.clip_from_view_relative, as_span(clip_from_view_relative));
 }
 
 } // anonymous namespace
@@ -190,12 +214,14 @@ auto Camera_buffer::update(
     erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();
 
+    const erhe::scene::Trs_transform& world_from_camera = camera_node.world_from_node_transform();
     write_camera_entry(
         gpu_data, 0, offsets,
-        camera_projection, camera_node.world_from_node_transform(),
+        camera_projection, world_from_camera,
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
-        reverse_depth, depth_range, conventions
+        reverse_depth, depth_range, conventions,
+        get_view_origin(world_from_camera.get_matrix())
     );
     if (block_size > entry_size) {
         std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
@@ -235,7 +261,8 @@ auto Camera_buffer::update(
         world_from_camera,
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
-        reverse_depth, depth_range, conventions
+        reverse_depth, depth_range, conventions,
+        get_view_origin(world_from_camera.get_matrix())
     );
     if (block_size > entry_size) {
         std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
@@ -272,6 +299,11 @@ auto Camera_buffer::update_views(
     erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();
 
+    // One view origin for the whole pass: the primitive records carry one
+    // view-relative translation per primitive, shared by every view.
+    ERHE_VERIFY(!views.empty() && (views.front().node != nullptr));
+    const glm::vec3 view_origin = get_view_origin(views.front().node->world_from_node_transform().get_matrix());
+
     std::size_t write_offset = 0;
     for (const Camera_view_input& view : views) {
         ERHE_VERIFY(view.projection != nullptr);
@@ -282,7 +314,8 @@ auto Camera_buffer::update_views(
             view.node->world_from_node_transform(),
             view.viewport,
             exposure, grid_parameters, sky_parameters, frame_number,
-            reverse_depth, depth_range, conventions
+            reverse_depth, depth_range, conventions,
+            view_origin
         );
         write_offset += entry_size;
     }

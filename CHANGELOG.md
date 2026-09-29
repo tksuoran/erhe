@@ -64,8 +64,29 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   and `Box3d_constraint::prepare_step()` / `Jolt_constraint::prepare_step()`,
   called by the world's `update_fixed_step()` before the engine step: a
   velocity drive's motor force bound follows the current velocity error.
+- `erhe::scene_renderer`: view-relative positions (`doc/erhe/shadows.md`
+  "View-relative positions"). `get_view_origin()` and
+  `get_clip_from_view_relative()` (`erhe_scene_renderer/camera_buffer.hpp`);
+  `Camera_struct::view_origin` / `clip_from_view_relative` (camera block);
+  `Light_struct::view_origin` / `texture_from_view_relative` /
+  `view_relative_from_texture` (light block), composed once per
+  `Light_projections::apply()` into `Light_view_relative_transforms`
+  (`Light_projections::light_view_relative_transforms`).
 
 ### Changed
+
+- `erhe::scene_renderer`: `standard.vert` computes positions relative to the
+  pass's view origin (relative to eye: the fp32 node translation minus the
+  fp32 view origin, `precise`) and `gl_Position` from
+  `clip_from_view_relative`, and the shadow
+  casters and receivers (`sample_light_visibility()`,
+  `sample_point_light_visibility()`, which now take the view-relative receiver
+  position) work relative to the camera and to the light camera, so the
+  shadow bias bounds no longer grow with the distance from the world origin.
+  `Light_buffer::update_control()` drops `point_light_position`: the cube
+  caster reads its face resolution from `shadow_map_resolution`.
+- `erhe::scene`: `Light::get_texture_from_clip()` and
+  `Light::get_clip_from_texture()` are public.
 
 - `erhe::scene_renderer`: the `distance` shadow technique covers spot lights
   and stores, per texel of the R32F distance map, the caster plane's light

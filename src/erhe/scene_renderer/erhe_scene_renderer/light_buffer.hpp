@@ -43,6 +43,17 @@ public:
     // the fragment shader as `array_layer = float(shadow_index.x)`.
     // packed[1..3] reserved for future per-light shadow metadata.
     std::size_t shadow_index_packed;            // uvec4 (uint shadow_index, uvec3 padding)
+    // The light's shadow view origin and its view-relative light matrices
+    // (doc/erhe/shadows.md "View-relative positions"). view_origin is the
+    // position of the light camera (world_from_light_camera[3]; for spot
+    // and point lights the light position), the view origin of this light's
+    // shadow passes. The two matrices are texture_from_world and its inverse
+    // with the world translated so that view_origin is at the origin,
+    // composed in double (get_clip_from_view_relative()); the caster passes
+    // and the receiver read the same bits. Point lights use view_origin only.
+    std::size_t view_origin;                    // vec4 (xyz, 0)
+    std::size_t texture_from_view_relative;     // mat4
+    std::size_t view_relative_from_texture;     // mat4
 };
 
 class Light_block
@@ -143,14 +154,11 @@ public:
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
-    // Per-pass 2D shadow map resolution in texels, used by the
-    // VARIANT_SHADOW_DISTANCE caster (Shadow_technique_mode::distance) to find
-    // its texel's centre ray. 0 outside the distance pass.
+    // Per-pass shadow map resolution in texels: the 2D map's for the
+    // VARIANT_SHADOW_DISTANCE caster (Shadow_technique_mode::distance), the
+    // cube face's for the VARIANT_SHADOW_CUBE caster; each finds its texel's
+    // centre ray from it. 0 outside those passes.
     std::size_t                     shadow_map_resolution_offset;
-    // Per-pass point light world position (xyz) + cube face resolution in
-    // texels (w), used by the VARIANT_SHADOW_CUBE caster to store the radial
-    // distance on each texel's centre ray into the cube face.
-    std::size_t                     point_light_position_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
     // Bilinear clamp sampler for the baked lightmap atlas (immutable in the
@@ -160,6 +168,22 @@ public:
     // texture shares it; the shader reads that one with texelFetch, which
     // ignores filtering.
     erhe::graphics::Sampler         ddgi_sampler;
+};
+
+// A light's shadow view origin and its light matrices relative to it
+// (doc/erhe/shadows.md "View-relative positions"): view_origin is the light
+// camera position (world_from_light_camera[3]; the light position for spot
+// and point lights), the view origin of the light's shadow passes;
+// texture_from_view_relative is get_texture_from_clip() times
+// get_clip_from_view_relative() of the light camera, composed in double, and
+// view_relative_from_texture its double inverse. Identity matrices for point
+// lights, which have no single projection.
+class Light_view_relative_transforms
+{
+public:
+    glm::vec3 view_origin               {0.0f};
+    glm::mat4 texture_from_view_relative{1.0f};
+    glm::mat4 view_relative_from_texture{1.0f};
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -215,6 +239,9 @@ public:
     // point_shadow_slots are the shadow-mapped slots in shadow layer / cube
     // order (Shadow_renderer iterates these).
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
+    // Parallel to light_projection_transforms: composed once per apply(), so
+    // the per-pass Light_buffer::update() only copies them.
+    std::vector<Light_view_relative_transforms>           light_view_relative_transforms;
     Light_layer_partition                                 light_partition{};
     std::vector<std::size_t>                              shadow_map_2d_slots;
     std::vector<std::size_t>                              point_shadow_slots;
@@ -344,9 +371,8 @@ public:
     );
 
     auto update_control(
-        std::size_t      light_index,
-        float            shadow_map_resolution      = 0.0f,
-        const glm::vec4& point_light_position       = glm::vec4{0.0f}
+        std::size_t light_index,
+        float       shadow_map_resolution = 0.0f
     ) -> erhe::graphics::Ring_buffer_range;
 
     void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);

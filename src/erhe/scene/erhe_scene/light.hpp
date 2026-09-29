@@ -362,7 +362,10 @@ private:
         const glm::mat4&                   light_camera_from_world
     ) const -> Light_projection_transforms;
 
-    // Maps clip space to [0,1] texture space.
+public:
+    // Maps clip space to [0,1] texture space (the shadow map's texture
+    // coordinates; Light_buffer composes the view-relative light matrices
+    // with it).
     // For zero_to_one:          z is already in [0,1], identity for z
     // For negative_one_to_one:  z is in [-1,1], needs scale+bias
     [[nodiscard]] static auto get_texture_from_clip(erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}) -> glm::mat4;

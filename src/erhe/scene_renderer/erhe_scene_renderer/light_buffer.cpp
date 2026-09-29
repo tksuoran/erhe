@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_scene_renderer/light_set.hpp"
@@ -59,6 +60,9 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .direction_and_outer_spot_cos = light_struct.add_vec4 ("direction_and_outer_spot_cos")->get_offset_in_parent(),
             .radiance_and_range           = light_struct.add_vec4 ("radiance_and_range"          )->get_offset_in_parent(),
             .shadow_index_packed          = light_struct.add_uvec4("shadow_index_packed"         )->get_offset_in_parent(),
+            .view_origin                  = light_struct.add_vec4 ("view_origin"                 )->get_offset_in_parent(),
+            .texture_from_view_relative   = light_struct.add_mat4 ("texture_from_view_relative"  )->get_offset_in_parent(),
+            .view_relative_from_texture   = light_struct.add_mat4 ("view_relative_from_texture"  )->get_offset_in_parent(),
         },
         .light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->get_offset_in_parent()
     }
@@ -67,9 +71,6 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     }
     , shadow_map_resolution_offset{
         light_control_block.add_float("shadow_map_resolution")->get_offset_in_parent()
-    }
-    , point_light_position_offset{
-        light_control_block.add_vec4("point_light_position")->get_offset_in_parent()
     }
     , shadow_sampler_compare{
         graphics_device,
@@ -294,6 +295,7 @@ Light_buffer::Light_buffer(
 void Light_projections::clear()
 {
     light_projection_transforms.clear();
+    light_view_relative_transforms.clear();
     light_partition = Light_layer_partition{};
     shadow_map_2d_slots.clear();
     point_shadow_slots.clear();
@@ -355,6 +357,9 @@ void Light_projections::apply(
 
     light_projection_transforms.clear();
     light_projection_transforms.reserve(lights.size());
+    light_view_relative_transforms.clear();
+    light_view_relative_transforms.reserve(lights.size());
+    const glm::dmat4 texture_from_clip{erhe::scene::Light::get_texture_from_clip(depth_range, conventions)};
 
     const bool collect_fit_debug = (fit_settings != nullptr) && fit_settings->collect_debug;
     fit_debug_data.clear();
@@ -373,6 +378,20 @@ void Light_projections::apply(
         transforms.index              = slot;
         transforms.shadow_index       = std::numeric_limits<std::size_t>::max();
         transforms.point_shadow_index = std::numeric_limits<std::size_t>::max();
+
+        // Composed exactly as the shadow pass camera block composes its
+        // clip_from_view_relative (same fp32 inputs, same function), then
+        // inverted in double.
+        const glm::mat4& world_from_light_camera = transforms.world_from_light_camera.get_matrix();
+        Light_view_relative_transforms& view_relative = light_view_relative_transforms.emplace_back();
+        view_relative.view_origin = get_view_origin(world_from_light_camera);
+        if (light->get_light_type() != erhe::scene::Light_type::point) {
+            const glm::dmat4 texture_from_view_relative = texture_from_clip * get_clip_from_view_relative(
+                transforms.clip_from_light_camera.get_matrix(), world_from_light_camera, view_relative.view_origin
+            );
+            view_relative.texture_from_view_relative = glm::mat4{texture_from_view_relative};
+            view_relative.view_relative_from_texture = glm::mat4{glm::inverse(texture_from_view_relative)};
+        }
     }
     parameters.fit_debug_out        = nullptr;
     parameters.caster_world_aabbs   = {};
@@ -498,6 +517,7 @@ auto Light_buffer::update(
     const std::size_t light_count = (light_projections != nullptr)
         ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
         : std::size_t{0};
+    ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_view_relative_transforms.size() == light_projections->light_projection_transforms.size()));
     for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
         const erhe::scene::Light_projection_transforms& light_projection_transforms = light_projections->light_projection_transforms[light_index];
         const erhe::scene::Light* const light = light_projection_transforms.light;
@@ -534,6 +554,10 @@ auto Light_buffer::update(
 
         const mat4 texture_from_world   = light_projection_transforms.texture_from_world.get_matrix();
         const mat4 world_from_texture   = light_projection_transforms.texture_from_world.get_inverse_matrix();
+        // The light's shadow view origin and view-relative matrices, composed
+        // once per frame by Light_projections::apply().
+        const Light_view_relative_transforms& view_relative = light_projections->light_view_relative_transforms[light_index];
+        const vec4 light_view_origin_vec4 = vec4{view_relative.view_origin, 0.0f};
         // From the orthonormal light frame: already unit length, and consistent
         // with the frame the shadow projection was fitted in.
         const vec3 direction            = light->get_light_frame().direction;
@@ -552,6 +576,9 @@ auto Light_buffer::update(
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));
+        write(light_gpu_data, light_offset + offsets.light.view_origin,                  as_span(light_view_origin_vec4));
+        write(light_gpu_data, light_offset + offsets.light.texture_from_view_relative,   as_span(view_relative.texture_from_view_relative));
+        write(light_gpu_data, light_offset + offsets.light.view_relative_from_texture,   as_span(view_relative.view_relative_from_texture));
 
         // Shadow_renderer writes its shadow map into render_passes[shadow_index];
         // the fragment shader reads the same value as the shadow texture
@@ -727,7 +754,7 @@ void Light_buffer::bind_ddgi(
     encoder.set_sampled_image(c_texture_heap_slot_ddgi_probe_data, *probe_data, m_light_interface.ddgi_sampler);
 }
 
-auto Light_buffer::update_control(const std::size_t light_index, const float shadow_map_resolution, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range
+auto Light_buffer::update_control(const std::size_t light_index, const float shadow_map_resolution) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -742,7 +769,6 @@ auto Light_buffer::update_control(const std::size_t light_index, const float sha
     const auto uint_light_index = static_cast<uint32_t>(light_index);
     write(gpu_data, m_light_interface.light_index_offset,                as_span(uint_light_index));
     write(gpu_data, m_light_interface.shadow_map_resolution_offset,      as_span(shadow_map_resolution));
-    write(gpu_data, m_light_interface.point_light_position_offset,       as_span(point_light_position));
     write_offset += entry_size;
 
     buffer_range.bytes_written(write_offset);

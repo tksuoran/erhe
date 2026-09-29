@@ -34,6 +34,13 @@ layout(location = 0) out vec4 v_point_color;
 
 #if defined(ERHE_USE_VARYING_POSITION)
 layout(location = 0) out vec4      v_position;
+// The position relative to the pass's view origin
+// (camera.cameras[].view_origin): what gl_Position is computed from, and what
+// the shadow casters and receivers work with (doc/erhe/shadows.md
+// "View-relative positions"). Its fp32 rounding scales with the distance
+// from the view origin; v_position's scales with the distance from the world
+// origin.
+layout(location = 17) out vec3     v_view_relative_position;
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -154,6 +161,12 @@ vec3 erhe_min_axis(vec3 v)
 }
 #endif
 
+#if __VERSION__ >= 450
+#   define ERHE_VIEW_RELATIVE_PRECISE precise
+#else
+#   define ERHE_VIEW_RELATIVE_PRECISE
+#endif
+
 void main()
 {
     mat4 world_from_node;
@@ -181,7 +194,24 @@ void main()
     world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
 #endif
 
-    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
+    // Relative to eye (doc/erhe/shadows.md "View-relative positions"): the
+    // node's translation relative to the pass's view origin. Both are exact
+    // fp32 values (the CPU writes the node's fp32 world transform as is, and
+    // the view origin is the fp32 camera position), so this one subtraction
+    // is correctly rounded - the value a double subtraction rounded once
+    // would give - and small near the view origin; the vertex positions
+    // computed from it round with the distance from the view origin, not from
+    // the world origin. precise: the compiler must not fold the subtraction
+    // into the sum below, which would reintroduce the large magnitudes. A
+    // skinned primitive's translation is the fp32 blend of its absolute joint
+    // matrices and keeps that blend's rounding.
+    ERHE_VIEW_RELATIVE_PRECISE vec3 view_relative_translation = world_from_node[3].xyz - camera.cameras[c_view_index].view_origin.xyz;
+    mat4 view_relative_from_node = mat4(
+        world_from_node[0],
+        world_from_node[1],
+        world_from_node[2],
+        vec4(view_relative_translation, 1.0)
+    );
 
     // Object space position: identical to a_position unless the vertex format
     // stores it quantized into the primitive AABB, in which case this is the
@@ -192,8 +222,9 @@ void main()
         primitive.primitives[ERHE_DRAW_ID].position_offset.xyz
     );
 
-    vec4 position        = world_from_node * vec4(node_position, 1.0);
-    gl_Position          = clip_from_world * position;
+    vec4 position               = world_from_node * vec4(node_position, 1.0);
+    ERHE_VIEW_RELATIVE_PRECISE vec4 view_relative_position = view_relative_from_node * vec4(node_position, 1.0);
+    gl_Position                 = camera.cameras[c_view_index].clip_from_view_relative * view_relative_position;
 
     // Object space tangent frame. Under the optimized variant's quaternion
     // encoding there is no a_normal attribute at all and both the normal and the
@@ -206,15 +237,17 @@ void main()
 
 #if defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_SHADOW_DISTANCE)
     // Point-light shadow cube caster and distance-technique caster: the
-    // fragment shader needs the world position to compute the caster plane's
-    // distance from the light. This is a position pass,
-    // so the lit-varying block below is skipped; assign v_position here. The
-    // per-face clip-space y-flip that makes the stored face match the
-    // samplerCubeArray (s,t) convention is NOT done here: it is applied on the
-    // C++ side via the cube caster's coordinate conventions (clip_space_y_flip
-    // derived from framebuffer_origin), baked into clip_from_world. See the
+    // fragment shader needs the caster position relative to the shadow pass's
+    // view origin (the light camera) to compute the caster plane's distance
+    // from the light. This is a position pass, so the lit-varying block below
+    // is skipped; assign the position varyings here. The per-face clip-space
+    // y-flip that makes the stored face match the samplerCubeArray (s,t)
+    // convention is NOT done here: it is applied on the C++ side via the cube
+    // caster's coordinate conventions (clip_space_y_flip derived from
+    // framebuffer_origin), baked into clip_from_view_relative. See the
     // Shadow_renderer point-cube pass.
-    v_position = position;
+    v_position               = position;
+    v_view_relative_position = view_relative_position.xyz;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
@@ -349,7 +382,8 @@ void main()
     // rotated, and only stretch when it is scaled.
     v_position_scale_only  = node_position * texgen_node_scale;
 #   endif
-    v_position       = position;
+    v_position               = position;
+    v_view_relative_position = view_relative_position.xyz;
 
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
 

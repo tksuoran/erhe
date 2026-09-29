@@ -113,12 +113,16 @@ every texel and face boundary, so a cube lookup in its direction selects
 exactly that texel.
 
 The caster fragment runs at its pixel centre, which lies on the texel centre
-ray. It takes the plane of its primitive - the geometric normal
-`cross(dFdxFine(p), dFdyFine(p))` of the interpolated world position `p`, and
-`p` itself - and stores the farther of the plane's radial distance on the
-centre ray, `|N . (p - L)| / |N . d_c|` (`L` the light position, `d_c` the
-unit centre direction; the centre is `get_point_shadow_texel_centre(p - L)`,
-the fragment's own pixel), and `length(p - L)`. Any point of the plane gives
+ray. The face passes' view origin is the light position (`shadows.md`
+"View-relative positions"), so the caster's interpolated position `p` is its
+offset from the light, computed from a translation the CPU subtracted in
+double: its rounding scales with its distance from the light, not from the
+world origin. The caster takes the plane of its primitive - the geometric
+normal `cross(dFdxFine(p), dFdyFine(p))` and `p` itself - and stores the
+farther of the plane's radial distance on the centre ray,
+`|N . p| / |N . d_c|` (`d_c` the unit centre direction; the centre is
+`get_point_shadow_texel_centre(p)`, the fragment's own pixel), and
+`length(p)`. Any point of the plane gives
 the same plane distance, so
 where the rasterizer puts the interpolated point does not reach the stored
 value: the vertex snap and the barycentric precision move `p` within the
@@ -135,7 +139,7 @@ inside the primitive, on the far side of the neighbour's plane. Taking the
 farther value never raises a receiver's own stored surface above its
 reference, since that is the plane distance. A primitive within `erhe_point_shadow_plane_cos_min`
 (0.01) of edge-on to the centre ray, or with no plane at this footprint (the
-derivatives' cross product is 0), stores `length(p - L)`: its plane is
+derivatives' cross product is 0), stores `length(p)`: its plane is
 ill-conditioned there, and no receiver inside the R1 grazing limit reads it
 as its own surface ("Receiver bias", validity).
 
@@ -147,8 +151,12 @@ texel's centre ray with the stored value, and subtracts the bounds of the
 error sources ("Minimum bias" there), restated for radial distances. The cube
 lookup is one nearest fetch, a single compare with no filter.
 
-- **Reference.** `d_c` is the texel centre of the receiver direction; the
-  receiver plane (normal `N` from `get_receiver_geometric_normal()`, tilted to
+- **Reference.** The receiver's position relative to the light,
+  `P - L = get_light_relative_position()` of its view-relative position and
+  the light's `view_origin` (`shadows.md` "View-relative positions"), is
+  what every term below reads. `d_c` is the texel centre of the receiver
+  direction; the receiver plane (normal `N` from
+  `get_receiver_geometric_normal()` of the view-relative position, tilted to
   `|N . L| = 0.05` below the R1 grazing limit, as in "Receiver depth
   gradient") meets the centre ray at `r_c = |N . (P - L)| / |N . d_c|`. The
   reference is `min(current, r_c)`, `current = |P - L|`: one-sided, since a
@@ -182,16 +190,20 @@ lookup is one nearest fetch, a single compare with no filter.
   through and `X_c` its point on the centre ray. Receiver: the normal's error
   bound from `get_receiver_geometric_normal()` times the computed
   `|P - X_c|`, over `|N . d_c|` less the bound. Caster: its normal's error
-  bound `e (2a + e) / a^2` (`e = 2 sqrt(3) gamma_4 |P|`, the error of one
-  world-position derivative with `|P|` standing in for the caster's
+  bound `e (2a + e) / a^2` (`e = 2 get_position_rounding(P - L)`
+  `= 2 sqrt(3) 9u |P - L|`, the error of one derivative of the caster's
+  light-relative position with `|P - L|` standing in for the caster's
   magnitudes, and `a = 2 r_c / (resolution |q|^2)` the smallest world size of
   a cube pixel at the centre, which maximizes the bound), times half the
   texel diagonal on the plane, `sqrt(2) r_c / (resolution |q| |N . d_c|)`,
   over `|N . d_c|` less the bound but at least the caster's plane threshold
   0.01.
-- **Position.** The rounding of the receiver point and of the caster's
-  interpolated point, `sqrt(3) gamma_4 |P|` each along the plane normal,
-  moves each plane's centre-ray distance by that over `|N . d_c|`.
+- **Position.** The rounding of the receiver point
+  (`get_light_relative_receiver_rounding()`: its camera-relative
+  interpolation `sqrt(3) 9u |P_c|` plus one rounding each of the origin
+  offset and of `P - L`) and of the caster's interpolated point
+  (`get_position_rounding(P - L)`), along the plane normal, moves each
+  plane's centre-ray distance by that over `|N . d_c|`.
 - **Evaluation.** Each side's `|N . v| / |N . d_c|`: `v` and `d_c` rounded,
   two three-term dots and the divide, `12u / |N . d_c| + 5u` relative to
   `r_c`; the receiver's `length()` when `current` is the reference, `13u`
@@ -199,9 +211,10 @@ lookup is one nearest fetch, a single compare with no filter.
   `inversesqrt` and a divide in Vulkan's precision rules, 4.5 ulps = 9u,
   rounded up).
 - **Not terms.** R32F stores the caster's fp32 value exactly; both passes
-  read the same fp32 light position (`world_from_light_camera` applied to the
-  origin, in `Light_buffer` and in `Shadow_renderer`); both select the same
-  texel centre, computed by the same expression from the same resolution.
+  work relative to the same exact fp32 light position (the light block's
+  `view_origin`, `world_from_light_camera[3]`, which is the cube face
+  cameras' eye); both select the same texel centre, computed by the same
+  expression from the same resolution.
 
 The bias is
 
@@ -241,7 +254,7 @@ nearer than their own, against 0.08 mm of bias.
 | `src/editor/rendergraph/shadow_render_node.{hpp,cpp}` | cube texture, shared depth scratch, `6*count` render passes (face `f` of cube `p` at `[6*p+f]`), `reconfigure()` on resolution / count |
 | `src/editor/app_rendering.cpp` | threads the preset fields into the node |
 | `src/erhe/scene/erhe_scene/light.{hpp,cpp}` | `point_light_projection_transforms`, `Light_projection_transforms::point_shadow_index` |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.{hpp,cpp}` | dense `point_shadow_index` assignment, `shadow_index_packed.y`, `point_light_position` control field (xyz light position, w face resolution), `shadow_cube_texture` + fallback, `c_texture_heap_slot_shadow_cube = 3`, `c_min_point_shadow_resolution` |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.{hpp,cpp}` | dense `point_shadow_index` assignment, `shadow_index_packed.y`, per light `view_origin` (the light position), `shadow_map_resolution` control field (the face resolution), `shadow_cube_texture` + fallback, `c_texture_heap_slot_shadow_cube = 3`, `c_min_point_shadow_resolution` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.{hpp,cpp}` | `draw_shadow_casters()` shared by both passes, the point-cube loop, `Render_parameters::point_cube_*` |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shader_key.hpp` | `VARIANT_SHADOW_CUBE` |
 | `res/shaders/erhe_standard_variant.glsl`, `standard.vert`, `standard.frag` | `ERHE_USE_VARYING_POSITION` for the cube variant, the caster write, the receiver multiply |

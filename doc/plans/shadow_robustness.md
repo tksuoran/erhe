@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is D12 (phase 7), D9, D11 and phase 8.
+the current gate table. The remaining work is D9, D11 and phase 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -71,7 +71,10 @@ plane are outside it.
 - **R7 Origin independence.** R1 to R5 hold with the whole station translated
   1 km and 10 km from the origin. Every bias term's error bound scales with
   a distance that stays small for what the camera sees (distance from the
-  camera or the light), not with the distance from the world origin (D12).
+  camera or the light camera), not with the distance from the world origin
+  (D12). The station measured is the one the scene holds: its boxes' world
+  transforms are composed in fp32, which far from the origin moves each box
+  by up to half an ulp (section 6).
 - **R8 Temporal stability.** For a static scene, a sub-texel camera
   translation changes directional shadow visibility only inside the edge band.
   Spot and point maps do not depend on the camera, so for them G6 detects only
@@ -319,6 +322,32 @@ The bias, in the order it is built:
   camera, composed on the CPU in double precision), so `e` scales with the
   distance from the camera; the point-light caster normal (D6) is
   light-relative in the same way. R7 is met when the 1 km and 10 km runs pass.
+  Landed as relative-to-eye positions (shadows.md "View-relative positions"):
+  every pass has a view origin, the fp32 position of its (first) camera (the
+  light camera for a 2D shadow pass, the light for a cube face);
+  `standard.vert` subtracts it from the node's fp32 world translation
+  (`precise`; both are exact fp32 values, so the difference is correctly
+  rounded and no hi / lo split is needed) and computes `gl_Position` with
+  `clip_from_view_relative` (camera block, composed in double). The light
+  block carries each light's view origin and `texture_from_view_relative` /
+  `view_relative_from_texture` (composed and inverted in double once per
+  `Light_projections::apply()`); the receiver moves its camera-relative
+  position into the light's frame by the exact origin offset. The primitive
+  records and the draw-list records are unchanged (moving only the camera
+  rewrites no record: `transform_update_count` stays 0 over 30 camera moves);
+  per frame the cost is one double composition per camera view and per light.
+  The rounding bounds take the relative magnitudes, with the caster and
+  receiver vertices now rounded in different frames: vertex `5u`,
+  interpolated point `9u` (`get_vertex_position_rounding()`,
+  `get_position_rounding()`), the frame change `u` each for the offset and
+  the sum. Skinned primitives keep the fp32 blend of absolute joint
+  matrices. At 10 km the remaining failures traced to the scene geometry, not
+  the bias: the fp32 box placement opens 0.16 mm (2 cm hut) and 0.20 mm
+  (10 cm hut) slits at wall joins, through which High directional lit a line
+  along the floor (G4 65 / 67 px), and 0.2 mm steps at the 5 cm hut's +Z
+  wall, whose protruding edge shadowed pcf_4x4 taps within one filter reach
+  (Medium G1 9 / 12 px); `shadow_verify.py` now takes its ground truth from
+  that fp32 placement (section 6), after which every cell passes (section 9).
 
 ## 4. Test scenes
 
@@ -392,7 +421,12 @@ covering array is 14 configs. It runs at the end of phase 4 and phase 8.
 
 Ground truth: `shadow_verify.py` renders the receiver world position (mode 36,
 fp32) and the per-light visibility (mode 30) with MSAA off, so each pixel has
-one surface. It casts each pixel's segment to the light against the station's
+one surface. The boxes are placed as the scene holds them: the scene composes
+each box's world translation from the root's and its own fp32 translation in
+fp32, which at a root offset moves it by up to half an ulp (0.49 mm at 10 km)
+and can open slits or steps at joins; off the origin the hut interiors get an
+edge band too, and G4 does not count interior pixels the placed geometry
+lights through such a slit. It casts each pixel's segment to the light against the station's
 boxes (slab test, own box excluded) and classifies the pixel `lit`,
 `shadowed`, or `edge band`. The filter reads the texels whose centres lie
 within the filter radius (L-inf, in shadow-map texels: hard 0.5, pcf_2x2 1,
@@ -475,12 +509,10 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 7 - origin independence (D12).** Camera-relative receiver
-  normal and light-relative point caster normal; exit: R7 runs at 10 m, 50 m,
-  1 km and 10 km pass for all three light types.
 - **Phase 8 - backends, cost and documentation.** Build the shadow
   changes on the OpenGL tree and run T7 there (the `precise` ray
-  construction of D7 and every shader change of phases 2 to 7 are verified on
+  construction of D7, D12's `precise` view-relative translation and every
+  shader change of phases 2 to 7 are verified on
   Vulkan only), and on Metal where a macOS machine is available. G7; rewrite shadows.md "Shadow
   sampling" and "Bias technique" for the landed design, add the verify recipe
   to `doc/testing.md`, run the pairwise matrix, and delete this plan's
@@ -504,11 +536,14 @@ G2), texels (G3, G5 as mean / worst), pixels (G4 per wall, G6).
 
 | Config | Failing cells |
 |---|---|
-| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 9, 2 cm: 11 .. 20 cm: 4, spot 1 cm: 91, 2 cm: 39 .. 20 cm: 465); `contact_blocks` G2 1075 (0.22 %) / 4446 (0.9 %), G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1583 (1.1 %) / 15 (0.17 %) |
+| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 8, 2 cm: 9 .. 20 cm: 4, spot 1 cm: 91, 2 cm: 39 .. 20 cm: 428); `contact_blocks` G2 1070 (0.22 %) / 4441 (0.9 %), G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1590 (1.1 %) / 15 (0.17 %) |
 
 `contact_blocks` G3 (directional / spot, texels): Low 0.05 / 0.13, Medium
-0.12 / 0.08, High 0.18 / 0.23, 512 0.65 / 0.75; point Low 1.0, Medium 0.03,
-High 0.06.
+0.13 / 0.08, High 0.18 / 0.24, 512 0.65 / 0.75; point Low 1.0, Medium 0.03,
+High 0.06. Re-measured on the D12 code (6322 renders, 35.2 min): the same
+failing cells, and the same G3 but Medium directional 0.12 -> 0.13 and High
+spot 0.23 -> 0.24 (the larger rounding bounds of the separately rounded
+caster and receiver vertices).
 
 The distance technique on every core axis (`--matrix core --set
 shadow_technique=distance --light directional,spot`, 4597 renders, 29.1
@@ -523,7 +558,9 @@ caster rule: 1426 renders, 8.9 min); 18 failing cells, all in the
 `cull_front` configs (D5): `pw01`, `pw10`, `pw07` (depth) and `pw06`
 (distance, forward-Z). Every other cell of both techniques passes,
 including every point cell and directional G6 in every non-`cull_front`
-cell.
+cell. Re-run on the D12 code (7192 renders): the same 18 failing cells.
+`--extra-light unshadowed shadowed` on Medium on the D12 code (769 renders):
+every cell passes, G3 as the plain placement.
 
 `--extra-light unshadowed shadowed` on Low, Medium and High, every station
 and light type (144 cells, 2253 renders, 14.4 min): every cell passes every
@@ -532,25 +569,12 @@ slot / layer: `unshadowed` directional 0 / 0, spot 1 / 0, point 1 / cube 0;
 `shadowed` directional 1 / 1, spot 2 / 1, point 2 / cube 1.
 
 R7, `--config Low,Medium,High,Medium/shadow_technique=distance --station
-head_on_floor,contact_blocks,thin_walls,cube_seams`, short sweep. At root
-offsets (10, 0, 10) and (20, 0, 20) m (2118 renders, 13.6 min) every cell
-passes except Medium spot `thin_walls` G4 on the 5 cm hut, 272 pixels at 10
-m and 1424 at 20 m, in every re-run: hut wall pixels seen at a grazing
-camera angle (0.6 mm footprint) and lit at `N . L` 0.09, where `theta_r` is
-0.048 (254 of the 272 have an undetermined plane). With
-`shadow_bias_texel_scale` 0 the 20 m leak is gone, with
-`shadow_bias_origin_scale` 0 it stays (1182 pixels). At (50, 0, 50) m
-`contact_blocks` still passes and the huts leak for Medium directional (2
-cm: 2 pixels), spot (2 cm: 812, 5 cm: 62986), High point (5 cm: 39792) and
-distance spot (5 cm: 34590). At 1 km and 10 km (first run only) G1 passes
-in every cell but High directional `contact_blocks` at 10 km (4 pixels, not
-traced), and R2 to R5 fail on every station but `head_on_floor`:
-`contact_blocks` G3 at the 20-texel search limit with G2 up to every
-shadowed pixel for every config and light, G4 on every gated hut, and
-`cube_seams` G2 (directional and point; spot too at 10 km). On the
-`contact_blocks` close-ups (0.48 mm footprint) `theta_r` grows from 0.005
-rad at the origin to 0.15 at 41 m and 0.55 at 140 m; directional and point
-G2 / G3 fail from 140 m. The 50 m, 1 km and 10 km runs predate the edge
-rule of `shadow_verify.py` ("Ground truth per pixel"): a pixel centre on a
-box edge, whose face the fp32 rounding picked, read as a 1-pixel G1 on the
-post and plate edges at 20 and 50 m.
+head_on_floor,contact_blocks,thin_walls,cube_seams --root-offset 10,0,10
+50,0,50 1000,0,1000 10000,0,10000`, short sweep, on the D12 code (3887
+renders, 26.3 min): every cell passes every gate at every offset, all three
+light types. `contact_blocks` G3 (texels, directional / spot / point): at
+10 m and 50 m Low 0.05 / 0.13 / 1.0, Medium 0.12 / 0.08 / 0.03, High 0.17 /
+0.23 (0.24 at 50 m) / 0.06; at 1 km Medium 0.15 / 0.09 / 0.03, High 0.24 /
+0.23 / 0.06; at 10 km Low 0.17 / 0.20 / 0.25, Medium 0.17 / 0.23 / 0.20, High
+0.19 / 0.24 / 0.23 (distance technique as depth). At 10 km G4 does not
+count the light the placed geometry lets through its slits (section 6).

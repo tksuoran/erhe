@@ -64,4 +64,7 @@
 ✓PHASE-6-DONE
 ✓D7+D10::{distance=caster-plane-distance-on-texel-ray;fwidth-removed;farther-of-plane/point-for-creases;presets-slope-0;only-cull_front-fails}
 ?open::D9-depth-clamp,D11-spot-distance-min-res
-?next::phase-7b{R7-origin+extra-light}->D9/D11->phase-8{GL/Metal+G7+docs}
+✓extra-light::5b8d03abf{layer-indirection-passes}
+✓D12::{RTE:precise-fp32(t_node-view_origin);no-per-primitive-per-frame-work(draw-list-counters-0-over-30-camera-moves);light-view-relative-matrices-per-apply();R7-passes-10m..10km}
+✓PHASE-7-DONE
+?next::D9/D11->phase-8{GL/Metal+G7+docs}

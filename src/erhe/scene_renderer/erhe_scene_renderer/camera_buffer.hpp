@@ -66,7 +66,35 @@ public:
     std::size_t sun_direction;        // vec4 xyz = world dir toward sun, w = sun illuminance
     std::size_t atmosphere;           // vec4 x = march steps, y = observer altitude (km), z = cos(sun angular radius), w = sun disc brightness
     std::size_t frame_number;         // uvec2
+    // View-relative space (doc/erhe/shadows.md "View-relative positions"):
+    // world space translated so that the pass's view origin is at the
+    // origin. standard.vert computes its vertex positions in this space
+    // (Primitive_struct::view_relative_translation), so their fp32 rounding
+    // scales with the distance from the view origin rather than from the
+    // world origin. view_origin is the same in every cameras[] entry of a
+    // pass (the first view's position, get_view_origin()).
+    std::size_t view_origin;              // vec4 xyz = view origin in world, w = 0
+    std::size_t clip_from_view_relative;  // mat4 clip_from_world * translate(view_origin), composed in double
 };
+
+// The view origin of a pass whose (first) camera has this world_from_camera:
+// the camera position, taken from the fp32 matrix as is, so the value is
+// exactly representable and every consumer (camera block, primitive records,
+// light block) reads the same bits.
+[[nodiscard]] auto get_view_origin(const glm::mat4& world_from_camera) -> glm::vec3;
+
+// clip_from_camera * inverse(world_from_camera) * translate(view_origin),
+// composed in double precision from the fp32 inputs: the translation to the
+// view origin cancels there instead of in fp32, so the result has entries of
+// the magnitude of the view origin's distance from the camera, not of the
+// camera's distance from the world origin. Shared by the camera block and the
+// light block (Light_buffer::update()) so that a shadow pass camera and the
+// receiver's light matrices are composed identically.
+[[nodiscard]] auto get_clip_from_view_relative(
+    const glm::mat4& clip_from_camera,
+    const glm::mat4& world_from_camera,
+    const glm::vec3& view_origin
+) -> glm::dmat4;
 
 // Grid rendering parameters written to the camera UBO; read by the
 // editor's grid composition pass fragment shader (grid.frag). Other

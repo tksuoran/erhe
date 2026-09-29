@@ -674,13 +674,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 );
                 m_camera_buffer.bind(encoder, camera_range);
 
-                // The caster fragment shader reads the light world position and
-                // the face resolution from the light control block to store the
-                // radial distance on each texel's centre ray.
+                // The caster fragment shader reads the face resolution from the
+                // light control block to store the radial distance on each
+                // texel's centre ray. The face camera's view origin is the light
+                // position (world_from_face[3] = light_pos), so the caster's
+                // view-relative position is its direction from the light.
+                ERHE_VERIFY(get_view_origin(world_from_face) == light_pos);
                 Ring_buffer_range control_range = m_light_buffer.update_control(
                     light_index,
-                    0.0f,
-                    glm::vec4{light_pos, static_cast<float>(parameters.point_shadow_viewport.width)}
+                    static_cast<float>(parameters.point_shadow_viewport.width)
                 );
                 m_light_buffer.bind_control_buffer(encoder, control_range);
 
