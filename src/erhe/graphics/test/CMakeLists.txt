@@ -129,6 +129,7 @@ if (_gpu_tests_supported)
         test_copy.cpp
         test_copy_texture.cpp
         test_load_action.cpp
+        test_render_target_subresource.cpp
         test_blend_premultiplied.cpp
         test_blend_factors.cpp
         test_blend_ops.cpp

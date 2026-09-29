@@ -3,8 +3,8 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (107 passed) and on non-headless
-OpenGL (118 passed + 1 capability skip, no failures); Metal builds but has not
+target builds and runs on headless Vulkan (116 passed) and on non-headless
+OpenGL (127 passed + 1 capability skip, no failures); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
@@ -45,6 +45,8 @@ limitation, not a coverage gap to fill).
 ## Render pass
 
 - [x] Load_action::Load preserves prior pass across two passes (`test_load_action.cpp`)
+- [x] Load_action Clear / Dont_care / Load over a seeded attachment: corners equal the clear color, a full-coverage draw, or the seed byte for byte (`test_load_action.cpp`, `Pass_action_test`)
+- [x] Render into one subresource (`texture_level` / `texture_layer`): level 1 of a two-level 2D texture, layer 2 of a 2D array, face 3 (-Y) of a cube map, with Clear or with Load plus a draw; every other level / layer / face reads back byte-exact equal to its seed (`test_render_target_subresource.cpp`, `Render_target_subresource_test`)
 - [x] Multisample (4x MSAA) color render + average resolve to single-sample target (`test_msaa_resolve.cpp`)
 
 ## Compute
@@ -129,7 +131,9 @@ Golden-asserting tests: `msaa_color_resolve` (`msaa_color_resolve.png`),
 rasterization and depth state ports of the agfx suite, each against the
 golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
 (6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3),
-and the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5).
+the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5), and the
+render pass action and subresource target ports: `Pass_action_test` (3),
+`Render_target_subresource_test` (6).
 
 ## Known gaps (not yet covered)
 
