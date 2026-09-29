@@ -87,15 +87,3 @@
 ✓cost-gate::e2c1cdb43{aa_cost_benchmark;on/off-1.16..1.21x;local/debug_lines.md}
 ✓two-draws::a81ebbfef{user-saw-joint-double-blend(hidden-sphere-silhouette)->core(gequal)+fringe(greater)-draws;line-twice==once-pixel-exact;on/off-1.64..1.73x-accepted}
 ?follow-up::joined-polylines(plan-sec-2)+content-wide-lines+Metal-run
-
-[TASK::agfx-test-port]{started-2026-09-29;via-harness;doc/plans/graphics_tests_agfx_port.md}
-✓plan::5ac16c1f9+8704ee38b{FLIP-from-start(user)}
-✓phase-0::6c5107fd9{expect_buffer/image_matches_golden;FLIP-via-CPM-archive-URL(no-tags);ERHE_GPU_TEST_UPDATE_GOLDENS;results.json+artifacts;gpu_test_report.py;Vk-64/64;GL-75+1skip;negative-check-mean-0.53}
-✓phase-1::b395b5e53{25-tests;Device_info::use_depth_clamp;image-space-coords+native_depth_range->one-golden-set;Vk-89/89;GL-100+1skip}
-✓phase-2::b11d49cd1+d42ab3d05{18-tests;root-cause:Image_loader-always-RGBA_PREMUL->Alpha_mode(premultiplied|straight);golden-helper-reads-straight;Vk-107/107;GL-118+1skip}
-✓phase-3::2fb81325f+00c7d4fb9{9-tests;engine-fixes:Vk-EXTERNAL->0-dependency-adds-attachment-READ(loadOp-LOAD-sync-hazard)+GL-tex->buffer-layer-count+GL-cube-is_layered;renderer+scene_renderer-gpu-tests-pass;Vk-116/116;GL-127+1skip}
-✓phase-4::85ff0c263{10-tests;buffer-goldens-first-use;read/seed_subresource_rgba8->Gpu_test;Vk-126/126;GL-137+1skip;OPEN:Vk-blit-dst-transition-from-UNDEFINED-needs-per-subresource-layout-tracking(plan-sec-7)}
-✓phase-5::7ac1c2996+c217a74b6{23-tests;fix:Vk-drawIndirectFirstInstance-enabled+use_base_instance;fixture:render_fullscreen_pass(IMAGE_POSITION)+make_sampled_texture;Vk-149/149;GL-154+1skip+6-FAIL(AMD-GL-driver:comparison-sampler-reads-never-after-never-case;state-probed-correct;documented)}
-✓phase-6::b1bd453d7+392dff56e{10-tests;fix:GL-compute-set_sampled_image-was-no-op;storage-images-work-on-all-backends(plan-premise-was-stale);make_compute_program;Vk-159/159;GL-164+1skip+6-known}
-✓phase-7::4998557b3{6-tests;GPU-written-indirect-commands+command_barrier_bit(sync-validation-proves-barrier-needed);ERHE_DRAW_ID;Vk-165/165;GL-170+1skip+known}
-?phase-8{ray-query-11}
