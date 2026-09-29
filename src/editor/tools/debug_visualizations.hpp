@@ -19,6 +19,7 @@
 
 namespace erhe::graphics { class Command_buffer; }
 namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe::renderer { class Debug_renderer; }
 namespace erhe::scene {
     class Camera;
     class Layout_data;
@@ -67,6 +68,11 @@ public:
     // `context` is needed so an edit can be pushed straight into the part that
     // owns the affected derived state (the bone proxy materials).
     static void style_imgui(Property_editor& property_editor, App_context& context, Debug_visualizations_style& style);
+
+    // Pushes the style fields that configure the debug renderer itself
+    // (anti-aliased lines) to it. Called once at startup and from the
+    // style_imgui edit site; there is no per-frame push.
+    static void apply_debug_renderer_style(erhe::renderer::Debug_renderer& debug_renderer, const Debug_visualizations_style& style);
 
     // Whole-struct copy in / out of m_settings. Persistence is owned by
     // Scene_view, whose collect callback (registered with

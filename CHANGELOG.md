@@ -9,6 +9,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::renderer`: `Anti_aliasing` and
+  `Debug_renderer::set_anti_aliasing()` / `get_anti_aliasing()` (default
+  `on`): wide debug lines are drawn with analytic, energy-conserving
+  coverage over a one-pixel fringe and fade below one pixel wide; `off`
+  keeps the rasterized binary edge. The hidden pass dims in a fragment
+  shader variant instead of a constant blend factor. Inside a bucket the
+  stencil compare is now `greater_or_equal` (last fragment wins), so
+  translucent lines of one bucket blend where they overlap
+  (`doc/erhe/renderer.md` "Line anti-aliasing").
 - `erhe::graphics`: `Device_info::sub_pixel_precision_bits` (Vulkan
   `subPixelPrecisionBits`, `GL_SUBPIXEL_BITS`; 0 = not reported, Metal).
   `Shadow_renderer` logs an error below the 8 bits its caster vertex snap

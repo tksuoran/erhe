@@ -122,6 +122,7 @@
 #include "tools/weight_display.hpp"
 #include "tools/weight_paint_tool.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/debug_visualizations.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
@@ -1796,6 +1797,7 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get(), xr_view_count);
+                Debug_visualizations::apply_debug_renderer_style(*m_debug_renderer, m_editor_settings.debug_visualizations_style);
             }
             ERHE_TASK_FOOTER( .name("Debug_renderer") );
 

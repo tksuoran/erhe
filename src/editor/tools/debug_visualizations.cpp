@@ -42,6 +42,7 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iinstance.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
@@ -2280,6 +2281,13 @@ void Debug_visualizations::make_combo(const char* label, Visualization_mode& vis
     );
 }
 
+void Debug_visualizations::apply_debug_renderer_style(erhe::renderer::Debug_renderer& debug_renderer, const Debug_visualizations_style& style)
+{
+    debug_renderer.set_anti_aliasing(
+        style.anti_aliased_lines ? erhe::renderer::Anti_aliasing::on : erhe::renderer::Anti_aliasing::off
+    );
+}
+
 void Debug_visualizations::style_imgui(Property_editor& p, App_context& context, Debug_visualizations_style& style)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2301,6 +2309,19 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     // Top-level framed group, matching how the Settings window renders the
     // other editor config sections (add_config_section).
     p.push_group("Debug Visualizations Style", ImGuiTreeNodeFlags_Framed);
+
+    // Debug renderer configuration. The checkbox is the change site: the
+    // renderer is updated on the edit, not per frame.
+    p.push_group("Lines", ImGuiTreeNodeFlags_None);
+    p.add_entry("Anti-aliased", [&context, &style]() {
+        if (ImGui::Checkbox("##", &style.anti_aliased_lines) && (context.debug_renderer != nullptr)) {
+            apply_debug_renderer_style(*context.debug_renderer, style);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Analytic anti-aliasing of wide debug lines (one-pixel fringe, sub-pixel fade); off draws a binary edge");
+        }
+    });
+    p.pop_group();
 
     p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
     // Casters: affecting color, culled color, line width.

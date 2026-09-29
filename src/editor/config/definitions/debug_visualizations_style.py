@@ -8,11 +8,17 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=4,
+    version=5,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
     fields=[
+        # Wide-line edge treatment of the debug renderer (doc/erhe/renderer.md
+        # "Line widths"). Applied to Debug_renderer::set_anti_aliasing at
+        # startup and at the style_imgui edit site
+        # (Debug_visualizations::apply_debug_renderer_style).
+        field("anti_aliased_lines",                Bool,  added_in=5, default="true", short_desc="Anti-aliased Lines", long_desc="Analytic anti-aliasing of the debug renderer's wide lines (one-pixel fringe, sub-pixel fade). Off draws a binary edge."),
+
         # Shadow frustum fit visualization colors and line widths.
         field("shadow_fit_casters_color",          Vec4,  added_in=1, default="0.2f, 1.0f, 0.3f, 0.6f", short_desc="Fit Casters Color",        long_desc="Caster that affects the selected light's shadow (its bounds intersect F_shadow)"),
         field("shadow_fit_casters_culled_color",   Vec4,  added_in=1, default="1.0f, 0.2f, 0.2f, 0.4f", short_desc="Fit Casters Culled Color", long_desc="Caster culled from the fit (its bounds do not intersect F_shadow), so it cannot affect the selected light's shadow"),

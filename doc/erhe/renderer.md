@@ -57,8 +57,44 @@ follow (the compute path; thin lines are one pixel):
 the window's `Context_window::get_scale_factor()`. `erhe_renderer_gpu_tests`
 (`src/erhe/renderer/test/`) draws lines through `Debug_renderer` into
 offscreen targets and checks the exact pixel width across viewport sizes,
-fields of view, orthographic projection and pixel scales.
+fields of view, orthographic projection and pixel scales, and the
+anti-aliased edge profiles below.
+
+## Line anti-aliasing
+
+`Debug_renderer::set_anti_aliasing(Anti_aliasing)` selects the edge treatment
+of the wide lines (default `on`; the editor exposes it as "Anti-aliased
+Lines" in the Debug Visualizations Style section of the Settings window and
+applies it at startup and on the edit).
+
+- **On**: analytic coverage. In framebuffer pixels, with `h` the half width
+  and `d` the distance of the fragment centre from the segment (round caps),
+  the geometric half width is `hg = max(h, 0.5)`, the compute shader builds
+  the ribbon `hg + 0.5` wide on each side and at each end (a one-pixel
+  fringe), and the fragment shader outputs premultiplied color scaled by
+  `coverage = clamp(hg + 0.5 - d, 0, 1) * min(1, 2h)`. The coverage
+  integrated across the line equals the width for every width: a line
+  thinner than a pixel keeps a one-pixel footprint and fades by alpha
+  instead of flickering between pixel centres. Zero-coverage fragments are
+  discarded. The hidden pass draws the same coverage at the bucket's dim
+  factor (0.1, 1.0 for x-ray) from its own fragment shader variant
+  (`ERHE_DEBUG_LINE_HIDDEN`), blending premultiplied like the visible pass.
+- **Off**: the ribbon is exactly the line width and its rasterized edge is
+  the line edge (binary, smooth only under MSAA); the round caps are cut by
+  the distance test.
+
+Inside a bucket the stencil compare is `greater_or_equal`, so the last
+fragment wins: a fully covered fragment overwrites a fringe fragment drawn
+earlier at a joint or crossing, and a fringe over a fully covered pixel of
+the same color leaves it unchanged. Where two fringes coincide they blend
+twice: the overlapping round caps at a polyline joint, or a line drawn
+twice, show a fringe pixel at 0.75 instead of 0.5 coverage. Translucent
+lines of one bucket blend where they overlap (the selection minor lines and
+the shadow-fit visualizations use alpha below 1), instead of the earlier
+first-fragment rule. Across buckets a higher stencil reference still wins
+regardless of draw order. The direct tier (thin one-pixel lines, filled
+triangles) is unchanged.
 
 ## Future work
 
-- [plans/debug_renderer_anti_aliasing.md](../plans/debug_renderer_anti_aliasing.md) - analytic coverage (one-pixel fringe, sub-pixel fade) for wide lines in place of the binary 50 % edge.
+- [plans/debug_renderer_anti_aliasing.md](../plans/debug_renderer_anti_aliasing.md) - cost gate of the anti-aliased wide lines, the fringe double-blend at joints, content wide lines.
