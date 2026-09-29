@@ -211,7 +211,10 @@ public:
     // two horizon points per tube cross section, traced around the major
     // circle). Visible lines use major style; back-facing or self-occluded
     // lines use minor style. Occlusion is ray tested against the torus;
-    // epsilon is the self-hit tolerance for those rays.
+    // epsilon is the self-hit tolerance for those rays. The step counts
+    // choose how many wire circles are drawn; every circle and the contour
+    // are sampled densely for the visibility split and drawn with a chord
+    // per fixed turning angle, so segment lengths follow the curvature.
     void add_torus(
         const erhe::scene::Transform& world_from_node,
         const glm::vec4&              major_color,

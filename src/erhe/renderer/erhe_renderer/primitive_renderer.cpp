@@ -1107,6 +1107,87 @@ auto ray_torus_intersection(const glm::dvec3 ro, const glm::dvec3 rd, const glm:
 
 } // anonymous namespace
 
+namespace {
+
+// Turns a densely sampled curve into line segments whose length follows the
+// curve: a segment ends where the curve has turned by turn_threshold since
+// the segment started, where the visibility classification of the next fine
+// sample changes, or at the end of the curve. Fine samples in between are
+// dropped, so straight-ish stretches become one chord while folds and
+// visible/hidden transitions stay exact to one fine sample. Emit is called
+// as emit(p0, p1, visible).
+template <typename Emit>
+class Curve_emitter
+{
+public:
+    Curve_emitter(const float turn_threshold, Emit& emit)
+        : m_turn_threshold{turn_threshold}
+        , m_emit          {emit}
+    {
+    }
+
+    void start(const glm::vec3& p)
+    {
+        m_last_emitted = p;
+        m_prev         = p;
+        m_turn         = 0.0f;
+        m_have_dir     = false;
+        m_run_valid    = false;
+    }
+
+    // Adds the fine sample p; visible classifies the fine segment from the
+    // previous sample to p.
+    void push(const glm::vec3& p, const bool visible)
+    {
+        if (m_run_valid && (visible != m_run_visible)) {
+            m_emit(m_last_emitted, m_prev, m_run_visible);
+            m_last_emitted = m_prev;
+            m_turn         = 0.0f;
+        }
+        m_run_visible = visible;
+        m_run_valid   = true;
+
+        const glm::vec3 delta   = p - m_prev;
+        const float     length2 = glm::dot(delta, delta);
+        if (length2 > 0.0f) {
+            const glm::vec3 dir = delta / std::sqrt(length2);
+            if (m_have_dir) {
+                m_turn += std::acos(glm::clamp(glm::dot(m_dir, dir), -1.0f, 1.0f));
+            }
+            m_dir      = dir;
+            m_have_dir = true;
+        }
+        m_prev = p;
+        if (m_turn >= m_turn_threshold) {
+            m_emit(m_last_emitted, p, visible);
+            m_last_emitted = p;
+            m_turn         = 0.0f;
+            m_run_valid    = false;
+        }
+    }
+
+    void finish()
+    {
+        if (m_run_valid && (m_prev != m_last_emitted)) {
+            m_emit(m_last_emitted, m_prev, m_run_visible);
+        }
+        m_run_valid = false;
+    }
+
+private:
+    float     m_turn_threshold;
+    Emit&     m_emit;
+    glm::vec3 m_last_emitted{0.0f};
+    glm::vec3 m_prev        {0.0f};
+    glm::vec3 m_dir         {0.0f};
+    float     m_turn        {0.0f};
+    bool      m_have_dir    {false};
+    bool      m_run_valid   {false};
+    bool      m_run_visible {false};
+};
+
+} // anonymous namespace
+
 void Primitive_renderer::add_torus(
     const erhe::scene::Transform& world_from_node,
     const glm::vec4&              major_color,
@@ -1122,7 +1203,14 @@ void Primitive_renderer::add_torus(
 )
 {
     constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
-    constexpr int       k = 8;
+    // Every circle (tube cross sections, rings, and the silhouette traced
+    // around the major circle) is sampled at c_fine_samples_per_circle points
+    // for the visibility classification and drawn with a chord per
+    // c_turn_threshold of turning (64 chords around a full circle), so the
+    // segment length follows the curvature instead of the step counts, which
+    // only choose how many wire circles are drawn.
+    constexpr int   c_fine_samples_per_circle = 128;
+    constexpr float c_turn_threshold          = glm::two_pi<float>() / 64.0f;
 
     const glm::mat4  m                       = world_from_node.get_matrix();
     const glm::mat4  node_from_world         = world_from_node.get_inverse_matrix();
@@ -1147,42 +1235,41 @@ void Primitive_renderer::add_torus(
         return (d < static_cast<double>(epsilon)) || (d > glm::distance(glm::dvec3{p}, camera));
     };
 
-    // Structural wireframe: tube cross-section circles and rings around the
-    // axis; visible parts major style, hidden parts minor style. Back-facing
-    // points are rejected without running the quartic ray test.
-    const auto add_wire_segment = [&](const Torus_point& a, const Torus_point& b, const Torus_point& mid) {
-        const bool facing  = glm::dot(mid.n, camera_position_in_node - mid.p) > 0.0f;
-        const bool visible = facing && is_unoccluded(mid.p);
+    const auto emit_segment = [&](const glm::vec3& p0, const glm::vec3& p1, const bool visible) {
         if (!visible && (m_minor_lines == Minor_lines::skip)) {
             return;
         }
         set_thickness(visible ? major_thickness : minor_thickness);
-        add_lines(m, visible ? major_color : minor_color, { { a.p, b.p } });
+        add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
+    };
+    Curve_emitter<decltype(emit_segment)> curve{c_turn_threshold, emit_segment};
+
+    // Structural wireframe: tube cross-section circles and rings around the
+    // axis; visible parts major style, hidden parts minor style. Each fine
+    // sample segment is classified at its midpoint; back-facing points are
+    // rejected without running the quartic ray test.
+    const auto is_visible_at = [&](const Torus_point& mid) -> bool {
+        const bool facing = glm::dot(mid.n, camera_position_in_node - mid.p) > 0.0f;
+        return facing && is_unoccluded(mid.p);
+    };
+    const auto add_wire_circle = [&](const auto& point_at) { // point_at(rel) for rel in [0, 1]
+        curve.start(point_at(0.0f).p);
+        for (int j = 1; j <= c_fine_samples_per_circle; ++j) {
+            const float rel_prev = static_cast<float>(j - 1) / static_cast<float>(c_fine_samples_per_circle);
+            const float rel      = static_cast<float>(j    ) / static_cast<float>(c_fine_samples_per_circle);
+            const bool  visible  = is_visible_at(point_at(0.5f * (rel_prev + rel)));
+            curve.push(point_at(rel).p, visible);
+        }
+        curve.finish();
     };
 
     for (int i = 0; i < major_step_count; ++i) {
         const float rel_major = static_cast<float>(i) / static_cast<float>(major_step_count);
-        for (int j = 0; j < minor_step_count * k; ++j) {
-            const float rel_minor      = static_cast<float>(j    ) / static_cast<float>(minor_step_count * k);
-            const float rel_minor_next = static_cast<float>(j + 1) / static_cast<float>(minor_step_count * k);
-            add_wire_segment(
-                torus_point(major_radius, minor_radius, rel_major, rel_minor),
-                torus_point(major_radius, minor_radius, rel_major, rel_minor_next),
-                torus_point(major_radius, minor_radius, rel_major, 0.5f * (rel_minor + rel_minor_next))
-            );
-        }
+        add_wire_circle([&](const float rel_minor) { return torus_point(major_radius, minor_radius, rel_major, rel_minor); });
     }
     for (int j = 0; j < minor_step_count; ++j) {
         const float rel_minor = static_cast<float>(j) / static_cast<float>(minor_step_count);
-        for (int i = 0; i < major_step_count * k; ++i) {
-            const float rel_major      = static_cast<float>(i    ) / static_cast<float>(major_step_count * k);
-            const float rel_major_next = static_cast<float>(i + 1) / static_cast<float>(major_step_count * k);
-            add_wire_segment(
-                torus_point(major_radius, minor_radius, rel_major,      rel_minor),
-                torus_point(major_radius, minor_radius, rel_major_next, rel_minor),
-                torus_point(major_radius, minor_radius, 0.5f * (rel_major + rel_major_next), rel_minor)
-            );
-        }
+        add_wire_circle([&](const float rel_major) { return torus_point(major_radius, minor_radius, rel_major, rel_minor); });
     }
 
     // True silhouette contour. torus_point() puts the major circle in the XY
@@ -1197,8 +1284,10 @@ void Primitive_renderer::add_torus(
     // traced into polylines around the major circle; where the branch pair
     // appears or disappears (grazing cross sections) the branch ends are
     // joined, exact up to one theta step. Self-occluded silhouette parts are
-    // drawn in minor style via the same ray test.
-    const int   silhouette_step_count = major_step_count * k;
+    // drawn in minor style via the same ray test. The two branches are fed
+    // as fine samples into their own Curve_emitter, so the drawn segments
+    // follow the contour's curvature.
+    const int   silhouette_step_count = c_fine_samples_per_circle;
     const float chord_threshold       = 2.0f * glm::two_pi<float>() * (major_radius + minor_radius) / static_cast<float>(silhouette_step_count);
 
     class Silhouette_sample
@@ -1234,26 +1323,30 @@ void Primitive_renderer::add_torus(
         return sample;
     };
 
-    const auto add_silhouette_segment = [&](const glm::vec3& p0, const glm::vec3& p1, const bool visible) {
-        if (!visible && (m_minor_lines == Minor_lines::skip)) {
-            return;
-        }
-        set_thickness(visible ? major_thickness : minor_thickness);
-        add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
-    };
+    Curve_emitter<decltype(emit_segment)> branch0{c_turn_threshold, emit_segment};
+    Curve_emitter<decltype(emit_segment)> branch1{c_turn_threshold, emit_segment};
 
     const auto emit_between = [&](const Silhouette_sample& s0, const Silhouette_sample& s1) {
         if (s0.exists && s1.exists) {
-            add_silhouette_segment(s0.q0, s1.q0, s0.vis0 && s1.vis0);
-            add_silhouette_segment(s0.q1, s1.q1, s0.vis1 && s1.vis1);
+            branch0.push(s1.q0, s0.vis0 && s1.vis0);
+            branch1.push(s1.q1, s0.vis1 && s1.vis1);
         } else if (s0.exists && !s1.exists) {
-            add_silhouette_segment(s0.q0, s0.q1, s0.vis0 && s0.vis1); // branches fold together
+            // The branches fold together: close both and join their ends.
+            branch0.finish();
+            branch1.finish();
+            emit_segment(s0.q0, s0.q1, s0.vis0 && s0.vis1);
         } else if (!s0.exists && s1.exists) {
-            add_silhouette_segment(s1.q0, s1.q1, s1.vis0 && s1.vis1);
+            emit_segment(s1.q0, s1.q1, s1.vis0 && s1.vis1);
+            branch0.start(s1.q0);
+            branch1.start(s1.q1);
         }
     };
 
     Silhouette_sample prev = solve_at(0.0f);
+    if (prev.exists) {
+        branch0.start(prev.q0);
+        branch1.start(prev.q1);
+    }
     for (int i = 1; i <= silhouette_step_count; ++i) {
         const float theta0 = glm::two_pi<float>() * static_cast<float>(i - 1) / static_cast<float>(silhouette_step_count);
         const float theta1 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(silhouette_step_count);
@@ -1287,6 +1380,8 @@ void Primitive_renderer::add_torus(
         }
         prev = cur;
     }
+    branch0.finish();
+    branch1.finish();
 }
 #pragma endregion add
 
