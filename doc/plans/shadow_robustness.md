@@ -7,7 +7,9 @@ requirements and gates (R1 to R8, R10; G1 to G6) of [`shadows.md`](../erhe/shado
 headless editor matrices) and OpenGL (the library GPU tests); the design is in
 [`shadows.md`](../erhe/shadows.md) and
 [`point_light_shadows.md`](../erhe/point_light_shadows.md), the commands in
-[`testing.md`](../testing.md) "Shadow verification". Two items remain, both future work.
+[`testing.md`](../testing.md) "Shadow verification". Two items remain, both future work. The analytic review of the landed series, with its
+potential issues and improvements, is
+[reference/shadow_robustness_review_2026_09_29.md](../reference/shadow_robustness_review_2026_09_29.md).
 
 ## 1. Metal
 

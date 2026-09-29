@@ -396,3 +396,4 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [reference/nvidia_present_timing_driver_report.md](reference/nvidia_present_timing_driver_report.md): NVIDIA VK_EXT_present_timing driver issue report
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
+- [reference/shadow_robustness_review_2026_09_29.md](reference/shadow_robustness_review_2026_09_29.md): Shadow robustness series change summary, correctness analysis, potential issues and improvements (2026-09-29)
