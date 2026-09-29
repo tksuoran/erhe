@@ -157,7 +157,9 @@ vec4 get_receiver_geometric_normal(vec3 view_relative_position, float vertex_rou
 // receiver point's own light distance (the one-sided cap: a centre whose
 // plane point is farther from the light compares the point itself), z = the
 // bias: the sum of error bounds that moves the reference toward the light,
-// in world units along the ray (u = 2^-24, e = 2 get_position_rounding(P)):
+// in world units along the ray (u = 2^-24, e = 2 get_position_rounding(P,
+// light.shadow_limits.x), the caster's interpolated point with the light's
+// caster vertex bound):
 //  - snap (bias_terms.x, precomputed): the caster coverage snap.
 //  - receiver gradient: a normal error dN moves a plane's ray distance by
 //    dN . (P - X) / (N . d), X the plane point on the ray.

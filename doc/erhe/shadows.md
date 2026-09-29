@@ -843,10 +843,10 @@ depth coefficient of the receiver plane in texture space.
   on the floor below the light at no rasterizer bias.
 - **Gradient.** `get_receiver_geometric_normal()` bounds the error of its
   normal: each position derivative is the difference of two rounded
-  positions, off by at most `e = 2 get_position_rounding(P_c)` (the vertex
-  rounding included: the stored plane comes from vertices rounded in the
-  light camera's frame, so the receiver's triangle is bounded against the
-  true surface), so the cross
+  positions, off by at most `e = 2 get_position_rounding(P_c,
+  v_position_rounding)` (the vertex rounding included: the stored plane
+  comes from vertices rounded in the light camera's frame, so the
+  receiver's triangle is bounded against the true surface), so the cross
   product moves by at most `e (|dp/dx| + |dp/dy| + e)` and the unit normal
   tilts by at most `theta`, that over `|dp/dx x dp/dy|`. The texture-space
   plane is linear in the normal, `(a, b, c) = (N . D_u, N . D_v, N . D)`, so

@@ -634,8 +634,9 @@ auto Shadow_gpu_test::get_tie_stages(const Shadow_filter_case& filter_case) -> e
 {
     // The receiver points are view-relative, as standard.vert produces them:
     // the station frame with its translation taken relative to the view
-    // camera's view origin, subtracted in double (Primitive_struct::
-    // view_relative_translation). It goes in as exact float bits: GLSL has
+    // camera's view origin (standard.vert subtracts the two exact fp32
+    // values, correctly rounded; the double subtraction rounded to float
+    // here is that same value). It goes in as exact float bits: GLSL has
     // no hexadecimal float literals, and a decimal round trip would not
     // reproduce the matrix the other passes use.
     const uint32_t  depth_bits  = get_shadow_depth_bits_axis(m_shadow_map_format);
