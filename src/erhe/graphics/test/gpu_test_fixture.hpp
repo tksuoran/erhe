@@ -21,9 +21,12 @@ namespace erhe::graphics {
     class Buffer;
     class Color_blend_state;
     class Command_buffer;
+    class Compute_pipeline;
     class Device;
     class Rasterization_state;
     class Sampler;
+    class Shader_resource;
+    class Shader_stages;
     class Texture;
 }
 
@@ -37,6 +40,24 @@ public:
     uint32_t                       binding_point{0};
     const erhe::graphics::Texture* texture      {nullptr};
     const erhe::graphics::Sampler* sampler      {nullptr};
+};
+
+// A compute shader program and its pipeline, built by
+// Gpu_test::make_compute_program. The pipeline refers to the shader stages, so
+// both live behind stable pointers. Either is null when building failed (the
+// helper has already reported the failure).
+class Compute_program
+{
+public:
+    Compute_program();
+    ~Compute_program() noexcept;
+    Compute_program(Compute_program&&) noexcept;
+    auto operator=(Compute_program&&) noexcept -> Compute_program&;
+
+    [[nodiscard]] auto is_valid() const -> bool;
+
+    std::unique_ptr<erhe::graphics::Shader_stages>    shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline> pipeline;
 };
 
 // Per-test fixture over the process-wide headless Vulkan device. Provides the
@@ -179,6 +200,21 @@ protected:
         int                          array_layer_count,
         const char*                  debug_label
     ) -> std::shared_ptr<erhe::graphics::Texture>;
+
+    // Build a compute program from one compute shader source against layout.
+    // name is also the pipeline's debug name (a string literal: the pipeline
+    // keeps the pointer). struct_types and interface_blocks are passed to the
+    // shader stages as Shader_stages_create_info documents. On failure the
+    // helper adds a test failure and returns a program whose is_valid() is
+    // false.
+    [[nodiscard]] auto make_compute_program(
+        const char*                                                name,
+        std::string_view                                           compute_source,
+        const std::vector<std::pair<std::string, std::string>>&    defines,
+        const std::vector<const erhe::graphics::Shader_resource*>& struct_types,
+        const std::vector<const erhe::graphics::Shader_resource*>& interface_blocks,
+        const erhe::graphics::Bind_group_layout&                   layout
+    ) -> Compute_program;
 
     // Render one fullscreen (oversized) triangle into a fresh width x height
     // color target of the given format (a make_color_target texture) and return

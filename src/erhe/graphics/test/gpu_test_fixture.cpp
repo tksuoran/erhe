@@ -6,6 +6,7 @@
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_output.hpp"
@@ -29,6 +30,16 @@
 #include <vector>
 
 namespace erhe::graphics::test {
+
+Compute_program::Compute_program() = default;
+Compute_program::~Compute_program() noexcept = default;
+Compute_program::Compute_program(Compute_program&&) noexcept = default;
+auto Compute_program::operator=(Compute_program&&) noexcept -> Compute_program& = default;
+
+auto Compute_program::is_valid() const -> bool
+{
+    return (shader_stages != nullptr) && (pipeline != nullptr) && pipeline->is_valid();
+}
 
 void Gpu_test::SetUp()
 {
@@ -529,6 +540,44 @@ auto Gpu_test::make_sampled_texture(
             .debug_label       = erhe::utility::Debug_label{debug_label}
         }
     );
+}
+
+auto Gpu_test::make_compute_program(
+    const char* const                                          name,
+    const std::string_view                                     compute_source,
+    const std::vector<std::pair<std::string, std::string>>&    defines,
+    const std::vector<const erhe::graphics::Shader_resource*>& struct_types,
+    const std::vector<const erhe::graphics::Shader_resource*>& interface_blocks,
+    const erhe::graphics::Bind_group_layout&                   layout
+) -> Compute_program
+{
+    Compute_program program{};
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name              = name,
+        .defines           = defines,
+        .struct_types      = struct_types,
+        .interface_blocks  = interface_blocks,
+        .shaders           = { { erhe::graphics::Shader_type::compute_shader, compute_source } },
+        .bind_group_layout = &layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(device(), shader_create_info);
+    if (!prototype.is_valid()) {
+        ADD_FAILURE() << name << ": compute shader failed to compile/link";
+        return program;
+    }
+    program.shader_stages = std::make_unique<erhe::graphics::Shader_stages>(device(), std::move(prototype));
+    program.pipeline = std::make_unique<erhe::graphics::Compute_pipeline>(
+        device(),
+        erhe::graphics::Compute_pipeline_data{
+            .name              = name,
+            .shader_stages     = program.shader_stages.get(),
+            .bind_group_layout = &layout
+        }
+    );
+    if (!program.pipeline->is_valid()) {
+        ADD_FAILURE() << name << ": compute pipeline is not valid";
+    }
+    return program;
 }
 
 auto Gpu_test::render_fullscreen_pass(

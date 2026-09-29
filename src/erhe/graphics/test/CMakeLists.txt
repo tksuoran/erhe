@@ -150,6 +150,11 @@ if (_gpu_tests_supported)
         test_texgen_render.cpp
         test_worker_context.cpp
         test_multi_copy_buffer.cpp
+        test_compute_atomics.cpp
+        test_compute_shared.cpp
+        test_compute_multi_dispatch.cpp
+        test_buffer_bindings.cpp
+        test_storage_image.cpp
     )
 
     # GL-specific worker-context tests: worker-side texture upload and

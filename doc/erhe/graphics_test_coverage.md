@@ -3,8 +3,8 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (149 passed) and on non-headless
-OpenGL (154 passed + 1 capability skip + 6 comparison-sampler failures from a
+target builds and runs on headless Vulkan (159 passed) and on non-headless
+OpenGL (164 passed + 1 capability skip + 6 comparison-sampler failures from a
 driver defect, see "Known gaps"); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
@@ -36,6 +36,7 @@ limitation, not a coverage gap to fill).
 - [x] Blend factors zero, one, src_color, one_minus_src_color, dst_color, one_minus_dst_color, src_alpha, one_minus_src_alpha, dst_alpha, one_minus_dst_alpha, constant_color, constant_alpha (source factor, dst factor one, add) and the canonical src_alpha / one_minus_src_alpha blend, over three destination columns of distinct color and alpha plus the cleared background (`test_blend_factors.cpp`, `Blend_factor_test`)
 - [x] Blend equations add, subtract, reverse_subtract, min, max with factors one / one over the same destinations (`test_blend_ops.cpp`, `Blend_op_test`)
 - [x] Multiple render targets / MRT (`test_mrt.cpp`)
+- [x] MRT read back by compute: two attachments written with different ramps, then sampled in a compute pass (combined image samplers in the compute layout, `texelFetch`, attachments transitioned to shader_read_only_optimal) that writes the per-texel sum into an SSBO, checked against the analytic sum (`test_mrt.cpp`, `Gpu_test.multiple_render_targets_compute_sum`)
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
 - [x] Indirect indexed draw parameters: one `Draw_indexed_primitives_indirect_command` through `multi_draw_indexed_primitives_indirect` with non-zero `first_index`, `base_vertex` and `base_instance`, per-instance vertex attributes (`Vertex_step::Step_per_instance`) placing and coloring each instance; the columns drawn and their colors asserted analytically; skips without `Device_info::use_base_instance` (`test_instanced.cpp`, `Gpu_test.draw_parameters_indirect`)
@@ -57,10 +58,15 @@ limitation, not a coverage gap to fill).
 - [x] Compute reading a uniform buffer (`test_compute_ubo.cpp`)
 - [x] Compute 2D dispatch, group counts > 1 per dim over non-multiple extents (`test_compute_2d.cpp`)
 - [x] User struct (`add_struct`) in a UBO interface block, `struct_types` wiring + std140 member offsets (`test_struct_types.cpp`)
+- [x] SSBO atomics: 128 invocations apply atomicAdd / And / Or / Xor / Min / Max with order-independent operands and one atomicCompSwap only a single invocation can win; every member and the per-invocation winner flags checked against a CPU model (`test_compute_atomics.cpp`)
+- [x] `shared` memory: four workgroups reverse their 64 values through a shared array, then sum them with a barriered log-step reduction (`test_compute_shared.cpp`)
+- [x] Four dependent dispatches over one SSBO with `memory_barrier(shader_storage_barrier_bit)` between them, the pass index from a uniform block bound at a per-pass offset; the texture variant builds an RGBA8 image in the SSBO and copies it into a 64x64 texture (`copy_from_buffer` after `pixel_buffer_barrier_bit`) (`test_compute_multi_dispatch.cpp`, `Multi_dispatch_test`)
+- [x] Storage images (`set_storage_image`, `format_32_vec4_float`, `Image_layout::general`): 16 buffer -> image -> buffer round trips adding 1 per step with `memory_barrier` between the dispatches (buffer ends at 32, texels at 31); a compute-written HDR image with values in [1, 9] read back exactly. Runs on Vulkan and OpenGL; the round trip skips on devices with `Device_info::workaround_no_compute_storage_image_read` (`test_storage_image.cpp`, `Storage_image_test`)
 
 ## Buffers / transfer
 
 - [x] Buffer upload + copy + fill (`test_buffer_transfer.cpp`)
+- [x] Buffer bindings, each written by one dispatch and read by the next: a raw `uint[]` SSBO (reads cross invocations of the writer), an SSBO array of a 16-byte struct (`add_struct`, `struct_types`), and a uniform block with a vec4 after three uints, written through a `uint[]` storage view of the same buffer at the word offsets `Shader_resource` reports and read as the uniform block after `uniform_barrier_bit` (`test_buffer_bindings.cpp`, `Buffer_binding_test`)
 - [x] Buffer -> buffer copy with zero offsets over the whole buffer and with non-zero source / destination offsets into a `fill_buffer`-prefilled buffer; bytes outside the copied range keep the fill (`test_buffer_transfer.cpp`, `Gpu_test.copy_buffer_to_buffer`)
 - [x] Texture upload roundtrip + constant clear (`test_texture_upload.cpp`)
 - [x] Texture sampling, nearest filter; full image: a 16x8 texture magnified to 64x64, every output texel exact (`test_texture_sample.cpp`, `Gpu_test.texture_sample_2d_image`)
@@ -150,7 +156,11 @@ render pass action and subresource target ports: `Pass_action_test` (3),
 (3), `Gpu_test.texture_sample_2d_image`, `texture_2d_array_sample_image`,
 `texture_3d_sample_image`, `texture_cube_sample_image`,
 `texture_gather_red_corners`, `draw_parameters_indirect` and
-`depth_texture_sample_float` (the one `.pfm` golden, HDR-FLIP). The texture
+`depth_texture_sample_float` (`.pfm`, HDR-FLIP), and the compute and buffer
+ports: `Gpu_test.compute_buffer_atomics`, `compute_shared_memory`,
+`multiple_render_targets_compute_sum`, `Multi_dispatch_test` (1 buffer, 1
+image golden), `Buffer_binding_test` (3 buffer goldens) and
+`Storage_image_test` (1 buffer golden, 1 `.pfm` golden). The texture
 -> buffer tests order the payload rows top-down from `texture_origin` before
 the buffer compare, as the image helper does for images, so their buffer
 goldens are shared by every backend too.
@@ -168,6 +178,13 @@ samples a texture it rendered itself addresses it by `gl_FragCoord` (memory
 rows), which reads the texel rendered at that pixel. `make_sampled_texture`,
 `find_depth32f_format`, `memory_rows_to_image_rows` and `expect_rgba8_near`
 are the helpers the sampling ports share.
+
+**Compute passes.** `Gpu_test::make_compute_program` builds a compute shader
+and its pipeline against a bind group layout (`Compute_program`). A compute
+test that produces an image in memory-row order (an SSBO copied into a
+texture, a storage image) computes its content from the image row, not the
+storage row, through an `IMAGE_ROW(y)` define derived from `texture_origin`,
+so one golden serves every backend.
 
 ## Known gaps (not yet covered)
 
