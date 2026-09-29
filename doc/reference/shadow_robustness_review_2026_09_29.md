@@ -88,7 +88,10 @@ covered by the position bound. It is fixed after this review (the vertex
 stage bounds each vertex from its node transform and node-space position,
 `erhe_position_rounding.glsl`; the light block carries a per-light caster
 vertex bound; the `far_vertices` station exercises it, `shadows.md` "Minimum
-bias"). Issues 2 to 11 stand, and no current test station exercises them.
+bias"). Issue 3 keeps its hard-coded 1/256 step but is no longer silent:
+`Shadow_renderer` reads `Device_info::sub_pixel_precision_bits` and logs an
+error below 8 bits (a warning when the device does not report it). Issues 2
+and 4 to 11 stand, and no current test station exercises them.
 
 | # | Severity | Location | Issue | Failure scenario |
 | --- | --- | --- | --- | --- |

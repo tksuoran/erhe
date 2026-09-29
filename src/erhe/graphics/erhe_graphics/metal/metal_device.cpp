@@ -165,6 +165,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.glsl_version                             = 460;
     m_info.api_info                                 = fmt::format("Metal ({})", m_mtl_device->name()->utf8String());
     m_info.max_texture_size                         = 16384;
+    m_info.sub_pixel_precision_bits                 = 0; // Metal does not report it
     m_info.max_samples                              = max_samples;
     m_info.max_color_texture_samples                = max_samples;
     m_info.max_depth_texture_samples                = max_samples;

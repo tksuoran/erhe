@@ -2109,6 +2109,7 @@ Device_impl::Device_impl(
         return static_cast<int>(std::min(value, static_cast<uint32_t>(INT_MAX)));
     };
 
+    m_info.sub_pixel_precision_bits                  = cap(limits.subPixelPrecisionBits);
     m_info.max_per_stage_descriptor_samplers         = limits.maxPerStageDescriptorSamplers;
     m_info.max_combined_texture_image_units          = cap(limits.maxDescriptorSetSampledImages);
     m_info.max_uniform_block_size                    = cap(limits.maxUniformBufferRange);

@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device_info::sub_pixel_precision_bits` (Vulkan
+  `subPixelPrecisionBits`, `GL_SUBPIXEL_BITS`; 0 = not reported, Metal).
+  `Shadow_renderer` logs an error below the 8 bits its caster vertex snap
+  bound assumes, and a warning when the value is not reported.
 - `erhe::scene_renderer`: `Light_shadow_limits::caster_vertex_rounding`,
   `Caster_vertex_extent` and a trailing `Light_projections::apply()`
   parameter `in_caster_vertex_extents` (one per caster mesh: the upper 3x3

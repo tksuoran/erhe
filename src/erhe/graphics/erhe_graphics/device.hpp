@@ -338,6 +338,11 @@ public:
     int max_vertex_attribs                       {0};
 
     int max_texture_size                        {64};
+    // Rasterizer sub-pixel precision in bits (Vulkan subPixelPrecisionBits,
+    // GL_SUBPIXEL_BITS); 0 when the API does not report it (Metal). The
+    // shadow caster vertex snap bound assumes at least 8
+    // (doc/erhe/shadows.md "Tap offsets"); Shadow_renderer checks it.
+    int sub_pixel_precision_bits                 {0};
     int max_3d_texture_size                      {0};
     int max_cube_map_texture_size                {0};
     int max_texture_buffer_size                  {0};

@@ -261,6 +261,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             m_info.max_integer_samples
         );
 
+        gl::get_integer_v(gl::Get_p_name::subpixel_bits,             &m_info.sub_pixel_precision_bits);
         gl::get_integer_v(gl::Get_p_name::max_texture_size,          &m_info.max_texture_size);
         gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,       &m_info.max_3d_texture_size);
         gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size, &m_info.max_cube_map_texture_size);

@@ -84,6 +84,34 @@ Shadow_renderer::Shadow_renderer(
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
 {
+    // The receivers' caster vertex snap bound assumes the rasterizer snaps
+    // vertices to a 2^-8 sub-pixel grid (doc/erhe/shadows.md "Tap offsets",
+    // the 1/256 caster_snap_texels of erhe_light.glsl and
+    // get_spot_distance_min_resolution()). Vulkan guarantees only 4 bits and
+    // the measured margin of the bound is 2x, so a device below 8 bits can
+    // show acne on grazing receivers with the hard filter: say so loudly.
+    constexpr int assumed_sub_pixel_precision_bits = 8;
+    const int sub_pixel_precision_bits = graphics_device.get_info().sub_pixel_precision_bits;
+    if (sub_pixel_precision_bits == 0) {
+        log_shadow_renderer->warn(
+            "Shadow_renderer: the device does not report its rasterizer sub-pixel precision; the shadow caster vertex snap bound assumes {} bits",
+            assumed_sub_pixel_precision_bits
+        );
+    } else if (sub_pixel_precision_bits < assumed_sub_pixel_precision_bits) {
+        log_shadow_renderer->error(
+            "Shadow_renderer: the device rasterizes with {} sub-pixel bits, fewer than the {} the shadow caster vertex snap bound assumes"
+            " (the 1/256 caster_snap_texels of erhe_light.glsl): shadow receivers can show acne on grazing surfaces, most visibly with the hard filter",
+            sub_pixel_precision_bits,
+            assumed_sub_pixel_precision_bits
+        );
+    } else {
+        log_shadow_renderer->info(
+            "Shadow_renderer: device sub-pixel precision {} bits (the shadow caster vertex snap bound assumes {})",
+            sub_pixel_precision_bits,
+            assumed_sub_pixel_precision_bits
+        );
+    }
+
     // Build one shadow caster pipeline per Shadow_cull_mode, plus a depth-clamp
     // sibling for each. Cull back (the default; front faces write depth) lets
     // single-sided geometry cast shadows from the lit side; cull front (back

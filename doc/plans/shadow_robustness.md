@@ -12,8 +12,10 @@ potential issues and improvements, is
 [reference/shadow_robustness_review_2026_09_29.md](../reference/shadow_robustness_review_2026_09_29.md);
 its one high-severity issue (the position rounding bound ignored the
 vertices' distance from their node origin) is fixed and covered by the
-`far_vertices` station, its medium and low issues (2 to 11) are open and
-listed there.
+`far_vertices` station; issue 3 (the 8 sub-pixel-bit assumption) is
+checked at run time against the device and logged loudly, the step itself
+unchanged; its other medium and low issues (2, 4 to 11) are open and listed
+there.
 
 ## 1. Metal
 

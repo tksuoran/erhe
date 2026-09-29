@@ -698,7 +698,12 @@ offset - with a scale factor of 1. What remains are two error sources:
   flickered under a sub-texel camera move (G6).
 - **Caster vertex snap.** The rasterizer snaps the caster's vertices to its
   sub-pixel grid (`subPixelPrecisionBits`, 8 on current devices) before it
-  interpolates depth. The stored plane is the caster plane displaced by the
+  interpolates depth. The 8 bits are a device assumption, not a spec
+  guarantee (Vulkan's minimum is 4), so `Shadow_renderer`'s constructor
+  reads the device's value (`Device_info::sub_pixel_precision_bits`:
+  Vulkan `subPixelPrecisionBits`, `GL_SUBPIXEL_BITS`, 0 on Metal which does
+  not report it) and logs an error at fewer than 8 bits and a warning when
+  the value is not reported; the bound itself stays 2^-8. The stored plane is the caster plane displaced by the
   barycentric blend of the vertex displacements, at most one sub-texel step
   `2^-8` along each map axis, so its depth at a texel centre is off by at most
   `2^-8 * (|dz/du| + |dz/dv|) / resolution`. `snap_bias` moves every
