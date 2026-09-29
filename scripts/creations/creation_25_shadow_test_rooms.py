@@ -257,6 +257,27 @@ HEAD_ON_BOXES = [floor("Floor", 6.0, 6.0)]
 HEAD_ON_LIGHTS = poses_from([0.0, HEAD_ON_HEIGHT, 0.0], [0.0, 0.0, 0.0], 90.0, 72.0)
 
 
+# far_vertices ----------------------------------------------------------------------
+# One 1000 x 1000 m floor rotated 20 degrees about Y, the light 3 m straight
+# above a point 350 m from the floor's node origin (station local (350, 0,
+# 350); inside the rotated floor). The floor is a box of eight vertices, so
+# every receiver point is interpolated from vertices 500 to 707 m from their
+# node origin, and the vertex shader's product of the rotation with such a
+# vertex rounds with that distance, not with the distance from the camera or
+# the light (both a few metres): the position term of the minimum bias
+# (shadows.md "Minimum bias") has to cover it. Head-on, like head_on_floor.
+# Texels: spot (90 deg) 2.9 mm; point 2.9 mm; directional ~3.9 mm (fit to
+# the view frustum's 8 m footprint on the floor).
+FAR_VERTICES_HALF     = 500.0
+FAR_VERTICES_ROTATION = axis_angle_quaternion([0.0, 1.0, 0.0], math.radians(20.0))
+FAR_VERTICES_CENTRE   = [350.0, 0.0, 350.0]
+FAR_VERTICES_BOXES    = [box("Floor", "receiver", center=[0.0, -0.5 * FLOOR_T, 0.0],
+                             size=[2.0 * FAR_VERTICES_HALF, FLOOR_T, 2.0 * FAR_VERTICES_HALF],
+                             rotation_xyzw=FAR_VERTICES_ROTATION)]
+FAR_VERTICES_LIGHTS   = poses_from(v_add(FAR_VERTICES_CENTRE, [0.0, HEAD_ON_HEIGHT, 0.0]), FAR_VERTICES_CENTRE,
+                                   90.0, 72.0)
+
+
 # grazing_fan -------------------------------------------------------------------------
 # Eight 0.5 x 0.5 m tiles, 2 cm thick, 0.6 m above a 5 x 5 m floor, whose
 # normals make 0, 15, 30, 45, 60, 75, 85 and 88 degrees with the light axis
@@ -496,6 +517,13 @@ STATIONS = {
         ["R1", "R6", "R7"], HEAD_ON_BOXES, HEAD_ON_LIGHTS,
         [view("top", [0.0, 7.0, 0.0], [0.0, 0.0, 0.0], 60.0, up=TOP_DOWN_UP, boxes=HEAD_ON_BOXES)],
         _texels(3.0, 90.0, 3.0, 12.0)),
+    "far_vertices": _station(
+        "1000 x 1000 m rotated floor, light on the axis above a point 350 m from the floor's node origin: "
+        "R1 where the vertex positions round with their distance from the node origin.",
+        ["R1"], FAR_VERTICES_BOXES, FAR_VERTICES_LIGHTS,
+        [view("top", v_add(FAR_VERTICES_CENTRE, [0.0, 7.0, 0.0]), FAR_VERTICES_CENTRE, 60.0, up=TOP_DOWN_UP,
+              shadow_range=20.0, far=20.0)],
+        _texels(3.0, 90.0, 3.0, 8.0)),
     "grazing_fan": _station(
         "Eight 2 cm tiles whose normals make 0 .. 88 degrees with the light axis above a floor: R1 across "
         "orientations, D3.",

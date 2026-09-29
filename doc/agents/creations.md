@@ -247,14 +247,16 @@ creations up beyond single showcase scenes.
 
 A test asset for the directional, spot and point shadow paths, specified in
 [../erhe/shadows.md](../erhe/shadows.md) "Shadow verification".
-Seven stations are built as their own scenes: `head_on_floor` (a floor with
-the light on the axis above it), `grazing_fan` (tiles at 0 to 88 degrees to
+Eight stations are built as their own scenes: `head_on_floor` (a floor with
+the light on the axis above it), `far_vertices` (a 1000 m rotated floor
+with the light above a point 350 m from the floor's node origin),
+`grazing_fan` (tiles at 0 to 88 degrees to
 the light axis), `contact_blocks` (a cube, a 1 cm plate and a thin post
 resting on a floor), `thin_walls` (five closed huts with 1, 2, 5, 10 and 20 cm
 walls, viewed from inside), `depth_range` (a non-casting floor beyond the
 fitted far plane and a block next to the light), `cube_seams` (a point light
 in a closed room with casters on its cube face boundaries) and `spot_cones`
-(a spot aimed at a floor, swept over 5, 45 and 80 degree cones). The eighth
+(a spot aimed at a floor, swept over 5, 45 and 80 degree cones). The ninth
 station, `cornell`, is `gi_test_rooms/gi_cornell.glb` as is. Every station is
 built only from boxes with plain white materials, black ambient and one
 shadow-casting light named "Shadow Light" under the station's single root
