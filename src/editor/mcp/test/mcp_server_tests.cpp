@@ -5389,11 +5389,11 @@ TEST_F(Mcp_test, set_node_transform_refuses_a_non_unit_rotation_and_normalizes_r
     advance_frames(client, 3);
 }
 
-// ---- Head-on shadow acne (doc/plans/shadow_robustness.md T8) ----------------------------
+// ---- Head-on shadow acne (doc/erhe/shadows.md "Shadow verification") -------------------
 //
-// Gate G1 of doc/plans/shadow_robustness.md section 6 on receivers that face
+// Gate G1 of doc/erhe/shadows.md "Shadow verification" on receivers that face
 // the light head-on, where the stored and the reference depth come from the
-// same surface (the section 1 tie): every floor pixel whose segment to the
+// same surface (the head-on tie of "Minimum bias" there): every floor pixel whose segment to the
 // light is unobstructed reads shadow visibility 1 in a shader_debug 30
 // (shadow_visibility) render. The receiver world position comes from a
 // shader_debug 36 (world_position) render of the same camera. The stations
@@ -5662,13 +5662,13 @@ public:
     Acne_count  count;
 };
 
-// The head-on receivers of plan sections 1 and 9 under Medium with the given
+// The head-on receivers of doc/erhe/shadows.md "Minimum bias" under Medium with the given
 // rasterizer constant depth bias, at light poses that fail on the tie:
 // - head_on_floor, spot at 4.711 m straight above the floor (full-sweep pose
-//   349 of scripts/shadow_verify.py --poses full, G1 33 % in section 9),
+//   349 of scripts/shadow_verify.py --poses full, G1 33 % without the minimum bias),
 // - head_on_floor, directional straight down (the default pose),
 // - cornell, "Cornell Light" at the pose the asset saves (spot 2.9 m above
-//   the floor, straight down; plan section 1).
+//   the floor, straight down; doc/erhe/shadows.md "Minimum bias").
 [[nodiscard]] auto measure_head_on_receivers(Mcp_client& client, const float shadow_depth_bias_constant) -> std::vector<Head_on_measurement>
 {
     std::vector<Head_on_measurement> measurements;
@@ -5773,9 +5773,9 @@ constexpr std::size_t c_min_gated_pixels = 100000;
 
 } // anonymous namespace
 
-// The head-on tie of doc/plans/shadow_robustness.md section 1, with no
-// rasterizer bias: the receiver's minimum bias (doc/erhe/shadows.md
-// "Minimum bias", plan D1) alone keeps every measured floor lit.
+// The head-on tie of doc/erhe/shadows.md "Minimum bias", with no
+// rasterizer bias: the receiver's minimum bias alone keeps every measured
+// floor lit.
 TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne)
 {
     Mcp_client&                            client = Mcp_env::get().client();
@@ -5791,7 +5791,7 @@ TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne)
 }
 
 // Control: the same measurement with a rasterizer constant depth bias of -4
-// (plan section 1: an ulp-scaled floor for D32_SFLOAT that removes the tie at
+// (doc/erhe/shadows.md "Minimum bias": an ulp-scaled floor for D32_SFLOAT that removes the tie at
 // these axis-aligned poses) on top of the receiver's minimum bias reads no
 // acne, so the pipeline the case above relies on - scene load, light pose, shadow-mapped mode 30 render, world
 // position render, floor classification - finds lit floor and measures it.

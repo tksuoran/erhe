@@ -260,8 +260,7 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   receiver plane there, or inside the touching box, reads a tie or a stored
   surface behind the reference, and reads lit. Within the filter reach plus
   the depth gap the bias covers, a receiver inside a closed hut or behind a
-  resting caster is partly lit (G2 / G4 of
-  [plans/shadow_robustness.md](../plans/shadow_robustness.md)). This is
+  resting caster is partly lit (G2 / G4 of "Shadow verification"). This is
   inherent to storing back faces, not a bias defect; closing it needs a second
   depth layer (midpoint or second-depth maps). A negative rasterizer slope
   bias (`shadow_depth_bias_slope`, 0 in every committed preset) moves the stored back
@@ -395,8 +394,8 @@ their joint matrices (`world_from_bind`, written when the joints move) are
 absolute and blended per vertex in fp32, so their blended translation
 carries the blend's rounding of the absolute joint translations before the
 view origin is subtracted; making it view-relative would need the joint
-translations relative to each pass's view origin. Skinned casters are outside the requirements of
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md).
+translations relative to each pass's view origin. Skinned casters are outside the scope of
+"Shadow verification".
 
 What stays absolute is the scene itself: a node's world transform is
 composed in fp32, so far from the origin each node lands within half an ulp
@@ -409,45 +408,54 @@ fp32 placement).
 
 ## Shadow sampling
 
-`sample_light_visibility()` in `res/shaders/erhe_light.glsl`:
+`sample_light_visibility()` (`res/shaders/erhe_light.glsl`) resolves one
+directional or spot light for one receiver point; the forward pass
+(`standard.frag`) calls it per shadow-mapped light with the receiver's
+geometric normal (`get_receiver_geometric_normal()`). 1.0 = lit.
 
-- The fragment's view-relative position, moved into the light's view-relative
-  space ("View-relative positions"), is transformed by the light's
-  `texture_from_view_relative` into [0,1] texture space plus depth.
-- The comparison sampler (`s_shadow_compare`) bakes a NON-STRICT comparison
-  at engine init from the reverse-depth convention: `greater_or_equal` for
-  reverse-Z, `less_or_equal` for forward-Z (`light_buffer.cpp`). 1.0 = lit.
-- A slope bias is derived from the receiver's light-space depth gradient
-  dz/dUV, taken from the receiver plane (see "Receiver depth gradient"
-  below), based on
-  https://renderdiagrams.org/2024/12/18/shadowmap-bias/ . For a fixed-point
-  (UNORM) shadow map the reference depth is then rounded direction-aware to the
-  format's depth precision (toward the near plane) before the hardware
-  comparison; a floating-point (D32_SFLOAT) map skips the snap. The format is
-  carried by the `ERHE_SHADOW_DEPTH_BITS` compile-time variant axis, whose
-  value is `get_shadow_depth_bits_axis()` (`shader_key.hpp`) of the shadow map
+- **Lookup.** The fragment's view-relative position, moved into the light's
+  view-relative space ("View-relative positions"), goes through the light's
+  `texture_from_view_relative` to texture coordinates `(u, v)` and the
+  reference depth `z`. The shader picks the texels a filter reads from the
+  sample point itself and fetches them at coordinates half a texel from every
+  boundary ("Tap offsets").
+- **Comparison.** Non-strict: `greater_or_equal` for reverse-Z, `less_or_equal`
+  for forward-Z, baked into the comparison sampler (`s_shadow_compare`) at
+  engine init from the device's depth convention (`light_buffer.cpp`) and
+  used by the gather paths on the non-comparison sampler
+  (`s_shadow_no_compare`), so every filter agrees.
+- **Reference per tap.** Every tap compares the receiver plane's depth at its
+  own texel centre, from the plane-derived gradient `dz/dUV` ("Receiver depth
+  gradient", "Tap offsets"), moved toward the light by the caster vertex snap
+  bound (`snap_bias`) and the minimum bias, the sum of the derived error bounds
+  ("Minimum bias"). No term is a tuned constant. The reference is clamped to
+  [0, 1] afterwards ("Receivers outside the fitted depth range").
+- **Filter.** A compile-time variant (`ERHE_SHADOW_FILTER`, from the graphics
+  preset's `Shadow_filter_mode`): `hard` is one comparison-sampler fetch;
+  `pcf_2x2` one `textureGather` with bilinear weights; `pcf_4x4` / `pcf_6x6`
+  `(K/2)^2` gathers, averaged, with the `ERHE_SHADOW_BIAS` axis
+  (`receiver_plane` or `slope_scaled`) choosing signed or one-sided tap
+  offsets.
+- **Depth format.** The `ERHE_SHADOW_DEPTH_BITS` variant axis is
+  `get_shadow_depth_bits_axis()` (`shader_key.hpp`) of the shadow map
   texture's actual format: 16 or 24 for a UNORM map, 32 for a float map
   (D32_SFLOAT, D32_SFLOAT_S8_UINT), 0 for no shadow map. The bit count alone
   identifies the encoding, because every float depth format has 32 bits and
-  there is no 32-bit UNORM depth format. The preset's `shadow_depth_bits` is
-  only a request: `choose_shadow_depth_format()` (editor
-  `shadow_render_node.hpp`) resolves it to the nearest supported format,
-  preferring more bits (24 resolves to D32_SFLOAT on a device without a 24-bit
-  format), `Shadow_render_node::reconfigure()` creates the map in that format
-  and logs `requested depth bits -> format`, and the composition pass reads the
-  axis from the view's shadow map texture; the init-time prewarm predicts it
-  with the same `choose_shadow_depth_format()`.
-- The filter is a compile-time variant (`ERHE_SHADOW_FILTER`, set from the
-  graphics preset's `Shadow_filter_mode`): `hard` does a single hardware
-  comparison-sampler fetch against the snapped reference; `pcf_2x2` does one
-  `textureGather` on the non-comparison sampler with bilinear weighting; the
-  wide `pcf_4x4` / `pcf_6x6` paths do `(K/2)^2` gathers and average. The gather
-  paths use the same non-strict `gequal` / `lequal` semantics as the hardware
-  sampler, so all three variants agree.
-- With the `distance` shadow technique (`ERHE_SHADOW_TECHNIQUE`, from the
-  preset's `shadow_technique`), the same filters read the R32F distance map
-  `s_shadow_distance` and compare light distances on the texel rays instead of
-  depths (see "The distance technique" below).
+  there is no 32-bit UNORM depth format. The minimum bias's format term reads
+  it, and the hard path rounds a UNORM reference direction-aware onto the
+  format's `2^bits - 1` levels (toward the light) so it matches the hardware
+  comparison. The preset's `shadow_depth_bits` is only a request:
+  `choose_shadow_depth_format()` (editor `shadow_render_node.hpp`) resolves it
+  to the nearest supported format, preferring more bits (24 resolves to
+  D32_SFLOAT on a device without a 24-bit format),
+  `Shadow_render_node::reconfigure()` creates the map in that format and logs
+  `requested depth bits -> format`, and the composition pass reads the axis
+  from the view's shadow map texture; the init-time prewarm predicts it with
+  the same `choose_shadow_depth_format()`.
+- **Technique.** With the `distance` shadow technique (`ERHE_SHADOW_TECHNIQUE`,
+  from the preset's `shadow_technique`) the same filters and texel selection
+  read the R32F distance map `s_shadow_distance` and compare plane distances
+  on the texel rays instead of depths ("The distance technique").
 
 ### Shadow visibility debug view
 
@@ -531,27 +539,35 @@ and over every pose, depth format the device offers (16, 24, 32 depth bits)
 and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
 `Shadow_bias_mode`), with `cull_back`:
 
-- `shadow_tie_head_on_plane_reads_lit` and `shadow_head_on_plane_reads_lit`
-  require visibility 1 on the head-on plane for every offset / pixel with no
-  rasterizer bias (the head-on tie of
-  [plans/shadow_robustness.md](../plans/shadow_robustness.md) section 1):
-  the minimum bias ("Minimum bias" below) alone separates the tie, with
-  4 ulps of reference offset to spare in either direction.
+- `shadow_tie_head_on_plane_reads_lit` and `shadow_head_on_plane_reads_lit`,
+  for the depth and the distance technique, require visibility 1 on the
+  head-on plane for every offset / pixel with no rasterizer bias: the minimum
+  bias ("Minimum bias" below; for the distance technique the bounds of "The
+  distance technique") alone separates the head-on tie, with 4 ulps of
+  reference offset to spare in either direction. The offset moves the
+  light-space depth only, which the distance technique does not compare, so
+  for it every band evaluates the plain tie.
 - `shadow_tie_exact_pose_with_rasterizer_bias_reads_lit` and
-  `shadow_head_on_plane_exact_pose_with_rasterizer_bias_reads_lit`: at the
-  identity pose a rasterizer constant bias of -4 makes the plane read 1.
-- `shadow_caster_box_occludes_plane`: a box above the plane reads 0 at least
-  5 cm inside its analytic shadow at every pose, and at the identity pose 1
-  at least 10 cm outside it.
+  `shadow_head_on_plane_exact_pose_with_rasterizer_bias_reads_lit`, depth
+  technique only (the distance technique stores plane distances, which the
+  rasterizer bias does not move): at the identity pose a rasterizer constant
+  bias of -4 makes the plane read 1.
+- `shadow_caster_box_occludes_plane`, for both techniques: a box above the
+  plane reads 0 at least 5 cm inside its analytic shadow at every pose, and
+  at the identity pose 1 at least 10 cm outside it.
 
 ### Verified backends
 
 The shadow path is verified on Vulkan (these cases, and
 `scripts/shadow_verify.py` on the headless Vulkan editor) and on OpenGL
-(these cases on a non-ASAN OpenGL test tree, `scripts\configure_tests.bat`).
-The OpenGL editor has no headless build, so `shadow_verify.py` runs on
-Vulkan only. The cases above use the depth technique, so on OpenGL the
-distance technique (its caster and receiver) is not exercised.
+(these cases, both techniques, on a non-ASAN OpenGL test tree,
+`scripts\configure_tests.bat`). The OpenGL editor has no headless build, so
+`shadow_verify.py` runs on Vulkan only. The process-wide test device logs its
+depth convention to `logs/log.txt` of the test's working directory
+(`erhe.graphics.gpu_test`: "GPU test device depth convention: ..."); both
+the Vulkan device and an OpenGL 4.5 device (`glClipControl`) run the cases
+under reverse-Z, so forward-Z is covered by the editor-level matrix
+(`ERHE_FORCE_DISABLE_REVERSE_DEPTH`, "Shadow verification") only.
 Metal is not verified. The `precise` qualifiers (`ERHE_SHADOW_DISTANCE_PRECISE`,
 `ERHE_VIEW_RELATIVE_PRECISE`) apply from GLSL 4.00, where `precise` is core;
 only `dFdxFine` / `dFdyFine` need GLSL 4.50.
@@ -561,10 +577,10 @@ only `dFdxFine` / `dFdyFine` need GLSL 4.50.
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from
 https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (cited in
 `sample_light_visibility()`, `res/shaders/erhe_light.glsl`). This section records how the implementation
-maps onto that reference, where it goes beyond it, and the `distance` shadow
-technique, which compares plane distances on the texel rays instead. The known
-deltas from the reference are listed in
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md).
+maps onto that reference, where it goes beyond it (the tap offsets and the
+derived minimum bias in place of the article's scaled slope bias), and the
+`distance` shadow technique, which compares plane distances on the texel rays
+instead.
 
 ### What erhe implements (RPDB)
 
@@ -691,23 +707,29 @@ Per path:
   plus `snap_bias` and the minimum bias.
 
 The RPDB article's code uses the signed offset for its single tap and
-`min(0, ...)` (one-sided) for its 2x2 gather, with no scale factor; erhe
-formerly scaled every slope term by 2.0. That factor compensated two defects
-that the offsets above remove: the wide paths assumed the sample point sits on
-a texel corner (tap offsets of +-0.5 texel), up to half a texel off, and the
-snap error was unaccounted for. With the exact offsets and `snap_bias`, the
-`grazing_fan` tiles (0 to 88 degrees) read no acne for every filter and both
-wide bias modes, for directional and spot lights. On the head-on receiver of
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 1 the
-exact gradient is 0, so no bias can come from the gradient there; the
-minimum bias below is what separates that tie.
+`min(0, ...)` (one-sided) for its 2x2 gather. erhe's offsets have scale 1: a
+tap is offset to its own fetched texel's centre, not to an assumed texel
+corner, and the caster vertex snap has its own bound, so no safety factor on
+the slope is needed. With them the `grazing_fan` tiles (0 to 88 degrees) read
+no acne for every filter and both wide bias modes, for directional and spot
+lights. On a head-on receiver the exact gradient is 0, so no bias can come
+from the gradient; the minimum bias below separates that tie.
 
 #### Minimum bias
 
 The tap offsets are exact for the receiver plane in real arithmetic. Where the
 stored depth and the reference come from the same surface - a lit face stored
 under `cull_back` or `cull_none`, most visibly the head-on receiver - the
-comparison is a tie that fp32 rounding decides. Every tap reference therefore
+comparison is a tie that fp32 rounding decides. On a receiver exactly
+perpendicular to the light (the `gi_cornell.glb` floor under a spot light
+straight above it, D32_SFLOAT, reverse-Z) the gradient, the tap offsets and
+`snap_bias` are all 0, and the stored and reference depths differ by one float
+ulp either way, so without a further term a pixel's verdict is last-bit
+rounding. A rasterizer constant bias of -4 also separates that tie: for a
+float format Vulkan scales it by `2^(e - 23)`, `e` the largest exponent of the
+primitive's depth range, an ulp-scaled floor; its unit depends on each
+primitive's depth extent and on the format, so it is a control, not the
+bias. Every tap reference therefore
 also moves toward the light by a minimum bias: the sum of bounds on the error
 sources, in texture depth units, computed per fragment in
 `sample_light_visibility()`. Notation: `u = 2^-24` the fp32 unit roundoff,
@@ -891,9 +913,9 @@ erhe also goes beyond the article:
   `set_depth_bias`). Its field default is 0 and every committed preset sets
   both to 0: neither technique needs it. With the receiver's minimum bias
   ("Minimum bias") and the texel selection of "Tap offsets", every
-  `cull_back` and `cull_none` depth technique cell of the core matrix of
-  [plans/shadow_robustness.md](../plans/shadow_robustness.md) reads the same
-  gates at slope 0 as at -1, with the same contact gap (G3); the distance
+  `cull_back` and `cull_none` depth technique cell of the core matrix
+  ("Shadow verification") reads the same gates at slope 0 as at -1, with the
+  same contact gap (G3); the distance
   technique's stored value does not contain the rasterized depth at all, so
   the rasterizer bias only changes which of two nearly coincident casters
   wins the depth test ("The distance technique"). Under `cull_front` a
@@ -1049,16 +1071,12 @@ technique, the map has 256: shadowed with the depth technique"), and
 `render_scene_image` reports `raster_vertex_depth` and `distance_rays_valid`
 per light in its `shadow_lights` entries.
 
-The technique replaced a caster-side "bias-free" form ("bias-free shadow
-mapping", Avelina9X, r/GraphicsProgramming) that stored
-`gl_FragCoord.z + fwidth(z) (1 + K / 2)` and compared unbiased. `fwidth` is
-an L1 over-estimate of the caster's slope, zero for a head-on caster, and
-`gl_FragCoord.z` carries the rasterizer depth bias; the plane comparison on
-the texel's own ray needs no slope term at all. Measured with
-[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 6 (the
-Medium distance config, the core matrix and the pairwise matrix), the
-distance technique reads the depth technique's gates, with its contact gap
-(G3) and edge placement (G5).
+The plane comparison on the texel's own ray needs no caster slope term: a
+caster-side `fwidth(z)` bias (the "bias-free shadow mapping" form) would be an
+L1 over-estimate of the slope that is zero for a head-on caster, and
+`gl_FragCoord.z` would carry the rasterizer depth bias into the stored value.
+On the matrices of "Shadow verification" the distance technique reads the
+depth technique's gates, with its contact gap (G3) and edge placement (G5).
 
 ## Point-light cube-map shadows
 
@@ -1126,6 +1144,178 @@ the per-face coordinate flip, is in
   on the light; the only tuning is `range` (the cube far plane). The directional tight-fit pipeline does not apply, and lights exceeding
   `point_shadow_light_count` are dropped from the cube (same implicit cap as the
   2D `shadow_light_count`).
+
+## Shadow verification
+
+The directional, spot and point paths are held to measured requirements on
+dedicated test scenes, with analytic ground truth. The recipe (commands,
+build trees, run times) is in [`testing.md`](../testing.md) "Shadow
+verification"; this section defines what is measured.
+
+### Scope and requirements
+
+Opaque, rigid casters. Alpha-tested casters (the depth-only caster variant has
+no alpha discard), skinned casters ("View-relative positions") and spot
+casters inside the fixed 0.04 m spot near plane are outside the scope. For
+every configuration of the matrices below:
+
+- **R1 No self-shadowing.** A receiver point whose segment to the light is
+  unobstructed reads 1, for every orientation from head-on (`N . L = 1`) to
+  the grazing limit `N . L = 0.05`, and every light pose.
+- **R2 Occlusion.** A receiver point whose segment passes through a caster,
+  farther than the filter footprint from the caster's shadow silhouette,
+  reads 0.
+- **R3 Contact.** A caster resting on a receiver shadows it up to a bounded
+  distance from the contact line (G3).
+- **R4 No leaks.** A closed wall of at least 2 cm blocks the light, including
+  at wall-floor and wall-wall joins (G4).
+- **R5 Edge placement.** A hard shadow edge lies within a bounded distance of
+  the analytic edge (G5).
+- **R6 Pose independence.** R1 to R5 hold at every pose of the pose sweep; no
+  verdict depends on where last-bit rounding falls.
+- **R7 Origin independence.** R1 to R5 hold with the station translated 1 km
+  and 10 km from the origin ("View-relative positions").
+- **R8 Temporal stability.** For a static scene, a sub-texel camera
+  translation changes directional visibility only inside the edge band (G6;
+  spot and point maps do not depend on the camera).
+- **R9 Cost.** The forward pass GPU time stays within the G7 budget.
+- **R10 Conventions and formats.** R1 to R5 hold under reverse-Z and forward-Z
+  and for every depth format the device offers.
+
+### Test stations
+
+`scripts/creations/creation_25_shadow_test_rooms.py` builds the stations and
+saves them as `res/editor/assets/shadow_test_rooms/shadow_<station>.glb`
+([`creations.md`](../agents/creations.md) "25 - Shadow Test Rooms"). Every
+station holds one shadow-casting light "Shadow Light" under a single root
+node, white Lambertian materials and ambient 0, and is built only from boxes.
+The module exports every box, the default light pose per type, the views, the
+pose sweeps and the contact / wall regions as data for `shadow_verify.py`; the
+light type and pose are set per measurement, so one station serves all three
+light types.
+
+| Station | Content | Exercises |
+|---|---|---|
+| `head_on_floor` | Large floor, light on the axis above it | R1 at `dz/dUV = 0`, R6 |
+| `grazing_fan` | Tiles at 0, 15, 30, 45, 60, 75, 85, 88 degrees to the light axis | R1 across orientations, crease neighbours |
+| `contact_blocks` | Cube, 1 cm plate, thin post resting on the floor | R2, R3, R5 |
+| `thin_walls` | Closed huts with 1, 2, 5, 10, 20 cm walls, viewed from inside | R4 |
+| `depth_range` | Non-casting floor beyond the fitted far plane, caster near the light; views from above and from below the near caster (`under_block`) | R1, R2 outside the fitted depth range, the depth-clamped raster bound |
+| `cube_seams` | Point light in a closed room, casters on cube face boundaries | R1, R2 for the point cube |
+| `spot_cones` | Spot aimed at a floor, 5, 45 and 80 degree cones | R1, R5 across projection widths, the distance technique's resolution floor |
+| `cornell` | `res/editor/assets/gi_test_rooms/gi_cornell.glb` at its saved light pose | the head-on tie of "Minimum bias" |
+
+Two placement variants reuse the stations. `--root-offset` translates the root
+of `head_on_floor`, `contact_blocks`, `thin_walls` and `cube_seams` (R7).
+`--extra-light` puts lights ahead of the station light in the scene's light
+order: `unshadowed` a non-shadow directional light, which takes a slot of the
+directional bucket, so a spot or point station light's UBO slot differs from
+its shadow layer (`shadow_index_packed.x` / `.y`); `shadowed` adds a second
+shadow-casting light of the measured type, so the station light's layer is 1.
+Each render's slot and layer are checked against that.
+
+### Ground truth and gates
+
+`shadow_verify.py` renders the receiver world position
+(`Shader_debug::world_position`, 36, fp32) and the station light's visibility
+(`Shader_debug::shadow_visibility`, 30) with MSAA off, so each pixel has one
+surface. The boxes are placed as the scene holds them: each box's world
+translation is composed from the root's and its own fp32 translation in fp32,
+which at a root offset moves it by up to half an ulp (0.49 mm at 10 km) and
+can open slits or steps at joins. Each pixel's segment to the light is cast
+against the station's boxes (slab test, own box excluded), and the pixel is
+`lit`, `shadowed`, or in the edge band.
+
+The filter reads the texels whose centres lie within its tap reach (L-inf, in
+shadow-map texels: hard 0.5, `pcf_2x2` 1, `pcf_4x4` 2, `pcf_6x6` 3; point
+0.5) of the sample point, and a texel stores the nearest caster on its
+centre's light ray, so a tap sees a caster exactly where the receiver plane
+point on its ray is analytically occluded. The edge band is every pixel whose
+footprint square - half-size tap reach plus one texel (the caster's
+rasterization), around its texel coordinates - is not of one analytic class on
+the receiver's face plane, evaluated exactly per receiver face against the
+convex texel-space shadow polygon of each box caster. Pixels on no box, facing
+away or past the grazing limit, outside the spot cone, the map border or the
+light range are excluded; edge-band pixels are excluded from G1 and G2 and are
+what G5 measures.
+
+Every gate is the worst value over all poses, views and runs:
+
+- **G1 Acne:** `lit` pixels with visibility < 0.999 = 0.
+- **G2 Occlusion:** `shadowed` pixels with visibility > 0.001 = 0. Shadowed
+  pixels of a touching box pair (coincident opposite faces: a resting caster
+  on its floor, walls on the floor and under a roof or ceiling, wall-wall
+  joins) in their contact plane within the G3 bound of an edge of their
+  contact rectangle belong to G3.
+- **G3 Contact gap:** distance from a resting caster's footprint edge to the
+  receiver's 0.5-visibility crossing <= 1.5 shadow texels, measured through
+  the texel Jacobian at the pixel.
+- **G4 Leaks:** walls of 2 cm and thicker at map resolution >= 2048: lit
+  pixels inside the hut = 0 (thinner walls are reported, not gated; light the
+  fp32-placed geometry lets through a slit is not counted).
+- **G5 Edge placement:** mean signed offset of the measured 0.5-visibility
+  edge from the analytic edge <= 1 texel; worst <= tap reach + 1 texel.
+- **G6 Stability:** eight camera translations of 1/8 of the shadow texel's
+  world size at the view target, along camera right and up: pixels outside
+  the edge band whose visibility changes = 0.
+- **G7 Cost:** forward pass GPU time on the `cornell` and `contact_blocks`
+  views, median of at least 5 runs, within 10 percent of a baseline measured
+  on the same machine (`shadow_verify.py --g7`; absolute numbers stay in the
+  machine-local memory bank).
+
+### Matrices
+
+The axes: light type; `shadow_filter` (hard, `pcf_2x2`, `pcf_4x4`,
+`pcf_6x6`); `shadow_bias` (`receiver_plane`, `slope_scaled`; wide filters);
+`shadow_technique` (depth, distance; directional and spot);
+`shadow_depth_bits` (each size the device offers); `shadow_cull_mode`;
+depth convention (reverse-Z, forward-Z via `ERHE_FORCE_DISABLE_REVERSE_DEPTH`);
+`use_draw_lists`; `shadow_resolution` / `point_shadow_resolution` (512,
+2048); the directional fit's `depth_clamp` with `near_from_main_frustum` (on,
+off). Every config pins the directional fit as a session-only per-scene
+override (`set_scene_settings`), `depth_clamp` on unless the config turns it
+off.
+
+- **Core matrix** (`--matrix core`): the committed presets plus one-axis
+  variations around Medium, 17 configs, short pose sweep (5 poses per station
+  and light type), one run; a failing cell is re-run three times before it
+  counts. `head_on_floor` additionally has a full sweep (`--poses full`, 425
+  poses: 200 heights in 1 mm steps, 200 over 0.5 to 10 m, a 5 x 5 lateral
+  grid), because the short sweep can miss a tie at a given pose.
+- **Pairwise matrix** (`--matrix pairwise`): the presets plus an all-pairs
+  covering array over the axes other than light type (17 configs; requested
+  depth bits 16, 24 and 32), each config measuring all three light types:
+  a failure that needs two settings together shows up.
+- **Final gate**: Low, Medium, High, `Medium/shadow_technique=distance` and
+  `Medium/depth_clamp=false`, short sweep, every station and light type.
+
+### Results
+
+On the development machine (AMD iGPU, headless Vulkan editor):
+
+- Final gate: every cell passes every gate (1846 renders, 10.5 min; 112
+  cells, the distance config's 8 point cells unsupported). `contact_blocks` G3 / G5
+  worst in texels (directional / spot / point): Low 0.05 / 0.13 / 1.00, G5
+  0.75 / 1.25 / 0.88; Medium 0.13 / 0.08 / 0.03, G5 0.94 / 0.94 / 0.75; High
+  0.18 / 0.24 / 0.06, G5 0.88 / 0.81 / 0.81; the distance and the
+  `depth_clamp=false` configs read Medium's values. `thin_walls` 1 cm (not
+  gated) at Low: spot 19, point 36 lit pixels.
+- G7: see [plans/shadow_robustness.md](../plans/shadow_robustness.md).
+
+The core and pairwise matrices pass every gate in every `cull_back` and
+`cull_none` cell of both techniques, including forward-Z, 512 and 2048, for
+every light type, and so do the R7 root offsets (10 m to 10 km) and both
+`--extra-light` variants on Low, Medium and High. `cull_front` fails G2 and G4
+by construction ("Shadow pass mechanics", cull mode): every `thin_walls` hut
+leaks, and `contact_blocks` and `cube_seams` read light at the contact lines.
+`contact_blocks` G3 in texels (directional / spot / point): Low 0.05 / 0.13 /
+1.0, Medium 0.13 / 0.08 / 0.03, High 0.18 / 0.24 / 0.06, 512 0.65 / 0.75, the
+distance technique as the depth technique's. The directional raster vertex
+depth bound under depth clamp reads 1 on `head_on_floor` and `grazing_fan`,
+1.06 to 1.41 on `spot_cones`, `cornell`, `cube_seams` and `thin_walls`, 2.65
+on `depth_range` and 10.2 on `contact_blocks`; no core cell falls back from
+the distance technique (the preset resolutions exceed every station cone's
+minimum).
 
 ## Editor integration
 
@@ -1226,5 +1416,5 @@ the per-face coordinate flip, is in
 
 ## Future work
 
-- [plans/shadow_robustness.md](../plans/shadow_robustness.md) - bias hardening, shadow test scenes and automated shadow verification.
+- [plans/shadow_robustness.md](../plans/shadow_robustness.md) - Metal verification of the shadow path and the forward pass cost (G7).
 - [plans/shadows.md](../plans/shadows.md) - remaining fit and point-shadow performance candidates.

@@ -246,7 +246,7 @@ creations up beyond single showcase scenes.
 ### 25 - Shadow Test Rooms
 
 A test asset for the directional, spot and point shadow paths, specified in
-[../plans/shadow_robustness.md](../plans/shadow_robustness.md) section 4.
+[../erhe/shadows.md](../erhe/shadows.md) "Shadow verification".
 Seven stations are built as their own scenes: `head_on_floor` (a floor with
 the light on the axis above it), `grazing_fan` (tiles at 0 to 88 degrees to
 the light axis), `contact_blocks` (a cube, a 1 cm plate and a thin post

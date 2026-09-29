@@ -9,7 +9,9 @@ cube path). Decide each item from a Tracy capture rather than in advance.
 
 ## Bias
 
-Shadow bias work, including the deltas from the RPDB reference, is planned in
+The shadow bias design and its verification are in
+[../erhe/shadows.md](../erhe/shadows.md) ("Bias technique", "Shadow
+verification"); Metal verification and the forward pass cost (G7) remain in
 [shadow_robustness.md](shadow_robustness.md).
 
 ## Cap the receiver silhouette plane count

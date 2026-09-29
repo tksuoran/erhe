@@ -707,7 +707,10 @@ Two tools write images; choose by what is being verified.
   debug renders mark uncovered pixels with NaN RGB (`background` in the
   reply). The reply's `shadow_maps` / `shadow_lights` give each
   shadow-mapped light's `texture_from_world` (row-major), map resolution
-  and layer as that render's shadow pass used them. Use it for scene-content verification: rendering changes,
+  and layer as that render's shadow pass used them. The forward render pass
+  of each capture is timed by the GPU timer `render_scene_image forward
+  pass`; `get_gpu_timers` lists every live GPU timer's latest result, which
+  lands a few frames after the reply. Use it for scene-content verification: rendering changes,
   lighting, GI, A/B and reference comparisons. Design:
   `doc/editor/rendergraph.md` "Scene image capture".
 - `capture_screenshot` captures the whole editor window as presented,

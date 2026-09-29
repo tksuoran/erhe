@@ -2,7 +2,7 @@
 """Creation 25 - Shadow Test Rooms.
 
 A test ASSET for the shadow paths: the stations of
-doc/plans/shadow_robustness.md section 4. Every station is its own scene,
+doc/erhe/shadows.md "Shadow verification". Every station is its own scene,
 built only from boxes (a plane is a thin box), with plain white materials
 (base colour 1, roughness 1, metallic 0), scene ambient 0 and exactly one
 shadow-casting light named "Shadow Light", so the ground truth is analytic:
@@ -54,7 +54,7 @@ saved asset; floor tops are at y = 0):
          seen from the eye, so the capped directional fit keeps every
          caster and receiver of the station.
 
-pose_sweep(name, light_type, sweep="full" | "short") is the plan section 5
+pose_sweep(name, light_type, sweep="full" | "short") is the
 pose sweep of a station: head_on_floor moves the light height over 200 steps
 of 1 mm and 200 steps spread over 0.5 .. 10 m, then offsets it laterally over
 a 5 x 5 grid (425 poses; directional: the 5 x 5 grid only, see
@@ -249,7 +249,7 @@ def ortho_texel_mm(extent):
 
 # head_on_floor ---------------------------------------------------------------------
 # 12 x 12 m floor, light 3 m straight above its centre: the lit floor faces
-# the light head-on (dz_dUV = 0), the section 1 tie.
+# the light head-on (dz_dUV = 0), the head-on tie (shadows.md "Minimum bias").
 # Texels: spot (90 deg) 2.9 mm at the floor centre; point 2.9 mm; directional
 # ~5.9 mm (fit to the 12 m floor).
 HEAD_ON_HEIGHT = 3.0
@@ -449,7 +449,7 @@ SPOT_LIGHTS = poses_from([0.0, 4.0, 1.0], [0.0, 0.0, 0.0], 45.0, 36.0)
 # hard-coded here; built by creation_24_gi_test_rooms.py build_cornell_room
 # (3 x 3 x 3 m interior, 0.2 m parts, red -X / green +X walls). Its light is
 # the spot "Cornell Light" at (0, 2.9, 0) pointing straight down, outer 90 /
-# inner 70 deg, range 12, intensity 12 - the section 1 head-on case.
+# inner 70 deg, range 12, intensity 12 - the head-on tie case.
 # Texels: spot 2.8 mm at the floor; point 2.8 mm; directional: all interior
 # surfaces shadowed (closed room), fit ~3.4 m -> 1.7 mm.
 CORNELL_BOXES = [
@@ -530,7 +530,7 @@ STATIONS = {
          # The camera below the Near Block: the block lies between the light
          # and the view frustum, so the directional fit's
          # near_from_main_frustum puts the near plane below it and depth
-         # clamp keeps it in the map with vertex depths above 1 (plan D9).
+         # clamp keeps it in the map with vertex depths above 1 (shadows.md "Minimum bias").
          view("under_block", [0.0, 3.0, 0.0], [0.0, 0.0, 0.0], 90.0, up=TOP_DOWN_UP, boxes=DEPTH_BOXES)],
         _texels(6.0, 90.0, 6.0, 5.0)),
     "cube_seams": _station(
@@ -551,7 +551,7 @@ STATIONS = {
          "point": round(point_texel_mm(math.sqrt(17.0)), 2), "directional": round(ortho_texel_mm(10.0), 2)},
         cone_angles_deg=list(SPOT_CONE_ANGLES)),
     "cornell": _station(
-        "gi_cornell.glb at its saved light pose: the section 1 head-on tie as a regression.",
+        "gi_cornell.glb at its saved light pose: the head-on tie as a regression.",
         ["R1"], CORNELL_BOXES, CORNELL_LIGHTS,
         [view("main", [0.0, 1.7, 1.4], [0.0, 0.9, -1.5], 75.0, boxes=CORNELL_BOXES),
          view("top", [0.0, 2.8, 0.0], [0.0, 0.0, 0.0], 70.0, up=TOP_DOWN_UP, boxes=CORNELL_BOXES)],
@@ -566,7 +566,7 @@ for _name, _entry in STATIONS.items():
     _entry.setdefault("prebuilt", False)
 
 
-# --- pose sweeps (plan section 5) ------------------------------------------------------------------
+# --- pose sweeps (shadows.md "Matrices") -----------------------------------------------------------
 
 SWEEP_STEP_M   = 0.013    # lateral light offset step: a few texels, never texel aligned
 SWEEP_STEP_DEG = 0.25     # directional tilt step
@@ -666,7 +666,7 @@ def _sweep_spot_cones(light_type):
 
 
 def pose_sweep(name, light_type, sweep="full"):
-    """The station's light pose sweep (plan section 5) for one light type,
+    """The station's light pose sweep (shadows.md "Matrices") for one light type,
     station-local. sweep "short" keeps 5 poses evenly spread over the full
     list (first = the default pose)."""
     if name == "head_on_floor":

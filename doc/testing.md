@@ -126,6 +126,45 @@ Run via `ctest` from the build directory, or invoke the
 `.../bin/<config>/erhe_<name>_tests.exe` binary directly. Run suites serially
 and fix one failure at a time -- an abort hides the rest of the run.
 
+## Shadow verification
+
+What is measured (requirements, stations, gates G1 to G7, matrices, current
+results) is defined in [`erhe/shadows.md`](erhe/shadows.md) "Shadow
+verification"; the commands:
+
+- **Library GPU tests** (label `gpu`): `erhe_scene_renderer_gpu_tests
+  --gtest_filter=*Shadow*` checks the directional and spot sampling paths,
+  both techniques, without the editor (`erhe/shadows.md` "Shadow sampling GPU
+  tests"). Run it on Vulkan (`build_vs2026_vulkan_headless`) and on OpenGL
+  (the non-ASAN `build_tests` tree); the device's depth convention is logged
+  to `logs/log.txt` of the working directory.
+- **MCP regression** (label `editor`): `Mcp_test.shadow_head_on_receivers_have_no_acne`
+  asserts G1 on `shadow_head_on_floor.glb` and `gi_cornell.glb` with Medium's
+  shadow fields and no rasterizer bias; its control
+  `..._with_constant_depth_bias` runs the same measurement with rasterizer
+  constant bias -4.
+- **Gates**: `py -3 scripts/shadow_verify.py` (usage in its docstring) launches
+  its own headless Vulkan editor(s) (`build_vs2026_vulkan_headless`, Debug),
+  backs up `config/` and restores it byte-exactly, and stops only the editors
+  it launched. `--matrix core` (the default, about 40 min on the development
+  iGPU), `--matrix pairwise` (about 45 min), the final gate
+  `--config "Low,Medium,High,Medium/shadow_technique=distance,Medium/depth_clamp=false"`
+  (about 11 min); `--list-configs` prints a matrix, `--station` / `--light` /
+  `--config` narrow it, `--root-offset` and `--extra-light` run the placement
+  variants, `--save-images failing` keeps the worst image of each failing
+  cell, `--enforce` exits non-zero on a FAIL. Results go to
+  `logs/shadow_verify/<timestamp>.json`.
+- **Cost (G7)**: `py -3 scripts/shadow_verify.py --g7 9` times the
+  `render_scene_image` forward pass (MCP `get_gpu_timers`) on the `cornell`
+  and `contact_blocks` views with the active preset. For a before / after
+  comparison, extract the baseline commit with `git archive <commit> | tar -x
+  -C <dir>` (no checkout, no branch), configure and build its headless
+  editor there in its own build directory (the `get_gpu_timers` tool and the
+  timed forward pass have to be present in that tree), and run
+  `--g7 9 --editor-root <dir> --editor <dir>/<build>/bin/Debug/editor.exe`
+  alternately with the current editor; compare the medians of the same
+  view and light.
+
 ## Future work
 
 - [plans/graphics_tests.md](plans/graphics_tests.md)

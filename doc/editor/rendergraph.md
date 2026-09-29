@@ -47,6 +47,11 @@ the editor UI.
   selected style equal to the unselected one. Nothing about the view persists
   (no settings store). The shadow fit gets its aspect ratio from
   `Scene_view::get_camera_viewport()`, which it overrides.
+- Timing: `Scene_image_view` brackets its forward render pass with an
+  explicit-range `erhe::graphics::Gpu_timer` owned by the `Mcp_server`
+  (`render_scene_image forward pass`), which outlives each capture because
+  the result lands frames after the readback; the MCP tool `get_gpu_timers`
+  reads it (the cost gate G7 of `doc/erhe/shadows.md` "Shadow verification").
 - Explicit camera (`camera`): a standalone `erhe::scene::Camera` (perspective,
   vertical fov) owned by the view, placed with `erhe::math::create_look_at`,
   with the given exposure and shadow range. `camera_node` uses a scene camera
