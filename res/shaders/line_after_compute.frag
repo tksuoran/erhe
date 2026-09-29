@@ -23,14 +23,35 @@ void main(void)
     float t          = dot(frag_xy - start, line) / l2;
     vec2  projection = start + clamp(t, 0.0, 1.0) * line;
     vec2  delta      = frag_xy - projection;
-    float d2         = dot(delta, delta);
-    float s          = v_line_width * v_line_width * 0.25;
-    float k          = clamp(s - d2, 0.0, 1.0);
-    float end_weight = step(abs(t * 2.0 - 1.0), 1.0);
-    float alpha      = mix(k, 1.0, end_weight);
+    float h          = 0.5 * v_line_width;
 
-    if (alpha < 0.5) {
-        discard;
+    float coverage;
+    if (view.binary_edge > 0.0) {
+        // Anti-aliasing off: the ribbon is exactly the line width, so its
+        // rasterized edge is the line edge; only the round caps are cut by
+        // the distance test.
+        float d2         = dot(delta, delta);
+        float k          = clamp((h * h) - d2, 0.0, 1.0);
+        float end_weight = step(abs(t * 2.0 - 1.0), 1.0);
+        if (mix(k, 1.0, end_weight) < 0.5) {
+            discard;
+        }
+        coverage = 1.0;
+    } else {
+        // Analytic coverage of a one-pixel box filter against the line edge
+        // (doc/erhe/renderer.md "Line widths"): d is the distance to the
+        // segment (round caps). The geometric half width hg is at least half
+        // a pixel (view.fringe) so a thinner line keeps a one-pixel footprint
+        // and fades by alpha (2 * h) instead: the coverage integrated across
+        // the line is the full width for every width. The ribbon extends
+        // hg + 0.5 from the segment, so every non-zero coverage is inside it.
+        float d  = length(delta);
+        float hg = max(h, view.fringe);
+        coverage = clamp(hg + 0.5 - d, 0.0, 1.0) * min(1.0, 2.0 * h);
+        if (coverage <= 0.0) {
+            discard;
+        }
     }
-    out_color = vec4(v_color.rgb * v_color.a, v_color.a);
+    float alpha = v_color.a * coverage;
+    out_color = vec4(v_color.rgb * alpha, alpha);
 }

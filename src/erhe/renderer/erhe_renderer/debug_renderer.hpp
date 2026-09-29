@@ -146,6 +146,13 @@ public:
     // up to whole workgroups, so the tail invocations of the last group have no
     // line; compute_before_line.comp uses this to drop them before writing.
     std::size_t                                      line_count_offset          {0};
+    // Anti-aliasing controls (Debug_renderer::set_anti_aliasing). fringe is
+    // the ribbon extension in pixels beyond the geometric half width (0.5 on,
+    // 0.0 off); binary_edge (0.0 on, 1.0 off) selects the fragment shader's
+    // edge rule: analytic coverage, or the ribbon's rasterized edge with
+    // round caps by distance.
+    std::size_t                                      fringe_offset              {0};
+    std::size_t                                      binary_edge_offset         {0};
 };
 
 class Primitive_renderer;

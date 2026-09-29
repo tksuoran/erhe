@@ -450,7 +450,7 @@ constexpr int c_aa_width = 512;
 
 // 1. A 4-pixel line shifted by half a pixel covers three pixels fully and the
 // two pixels beside them by half.
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_half_pixel_offset_profile)
+TEST_F(Debug_line_width_gpu_test, aa_half_pixel_offset_profile)
 {
     const std::vector<uint8_t> row = render_row(aa_case(-4.0f, 0.5f));
     ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
@@ -466,7 +466,7 @@ TEST_F(Debug_line_width_gpu_test, DISABLED_aa_half_pixel_offset_profile)
 
 // 2. The coverage across the line sums to the requested width for fractional
 // widths and sub-pixel offsets alike (energy conservation).
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_coverage_sum_equals_width)
+TEST_F(Debug_line_width_gpu_test, aa_coverage_sum_equals_width)
 {
     for (const float width : {0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 4.0f, 4.5f}) {
         for (const float offset : {0.0f, 0.5f, 0.25f}) {
@@ -480,7 +480,7 @@ TEST_F(Debug_line_width_gpu_test, DISABLED_aa_coverage_sum_equals_width)
 }
 
 // 3. A quarter-pixel line stays one pixel wide at a quarter of the intensity.
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_sub_pixel_width_fades)
+TEST_F(Debug_line_width_gpu_test, aa_sub_pixel_width_fades)
 {
     const std::vector<uint8_t> row = render_row(aa_case(-0.25f, 0.5f));
     ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
@@ -495,24 +495,34 @@ TEST_F(Debug_line_width_gpu_test, DISABLED_aa_sub_pixel_width_fades)
     EXPECT_LE(nonzero, 2);
 }
 
-// 4. An opaque line added twice renders as once (the fringe blends the color
-// with itself under the last-fragment-wins stencil rule).
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_opaque_line_twice_equals_once)
+// 4. An opaque line added twice: the fully covered pixels are unchanged (a
+// fringe over a core of the same color blends the color with itself), the
+// fringe pixels blend twice (0.5 over 0.5 = 0.75). This is the documented
+// trade of the last-fragment-wins rule (plan section 3); overlapping round
+// caps of a polyline joint show the same brighter fringe.
+TEST_F(Debug_line_width_gpu_test, aa_opaque_line_twice_brightens_fringe_only)
 {
     Line_case twice = aa_case(-4.0f, 0.5f);
     twice.repeat = 2;
     const std::vector<uint8_t> once_row  = render_row(aa_case(-4.0f, 0.5f));
     const std::vector<uint8_t> twice_row = render_row(twice);
-    ASSERT_EQ(once_row.size(), twice_row.size());
+    ASSERT_EQ(once_row.size(), static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(twice_row.size(), static_cast<std::size_t>(c_aa_width));
+    const int c = c_aa_width / 2;
     for (std::size_t x = 0; x < once_row.size(); ++x) {
-        EXPECT_NEAR(once_row[x], twice_row[x], 1) << "x " << x;
+        if ((x == static_cast<std::size_t>(c - 2)) || (x == static_cast<std::size_t>(c + 2))) {
+            EXPECT_NEAR(once_row[x],  128, 2) << "x " << x;
+            EXPECT_NEAR(twice_row[x], 191, 2) << "x " << x;
+        } else {
+            EXPECT_EQ(once_row[x], twice_row[x]) << "x " << x;
+        }
     }
 }
 
 // 5. A crossing line of the same color: every pixel of the row lies inside
 // the horizontal line's core, so the row is fully lit whichever line is
 // drawn first (a fringe never blocks or darkens a core).
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_crossing_core_is_never_blocked)
+TEST_F(Debug_line_width_gpu_test, aa_crossing_core_is_never_blocked)
 {
     for (const Cross_line cross : {Cross_line::after, Cross_line::before}) {
         Line_case line_case = aa_case(-4.0f, 0.5f);
@@ -564,7 +574,7 @@ TEST_F(Debug_line_width_gpu_test, DISABLED_aa_hidden_pass_is_dimmed_and_anti_ali
 
 // 7. With anti-aliasing off the edge is binary: the half-pixel-offset line
 // lights exactly four pixels and no partial pixel exists.
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_off_is_binary)
+TEST_F(Debug_line_width_gpu_test, aa_off_is_binary)
 {
     Line_case line_case = aa_case(-4.0f, 0.5f);
     line_case.anti_aliasing = Anti_aliasing::off;

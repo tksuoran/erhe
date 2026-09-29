@@ -132,6 +132,11 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
     // Line count of the dispatched draw, for the compute shader's tail guard.
     line_count_offset           = view_block->add_uint ("line_count"          )->get_offset_in_parent();
     view_block->add_float("_padding1");
+    // Anti-aliasing controls; a third trailing vec4 with two pad words.
+    fringe_offset               = view_block->add_float("fringe"              )->get_offset_in_parent();
+    binary_edge_offset          = view_block->add_float("binary_edge"         )->get_offset_in_parent();
+    view_block->add_float("_padding2");
+    view_block->add_float("_padding3");
 
     const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 

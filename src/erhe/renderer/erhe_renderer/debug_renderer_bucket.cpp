@@ -264,6 +264,15 @@ auto Debug_renderer_bucket::update_view_buffer(
     write(view_gpu_data, program_interface.line_bias_margin_offset,    as_span(line_bias_margin));
     write(view_gpu_data, program_interface.window_to_ndc_scale_offset, as_span(window_to_ndc_scale));
 
+    // Anti-aliasing: on extends the ribbon by half a pixel and outputs the
+    // analytic coverage; off keeps the ribbon at the geometric width and
+    // takes the edge from its rasterization (binary edge).
+    const bool  anti_aliasing = (m_debug_renderer.get_anti_aliasing() == Anti_aliasing::on);
+    const float fringe        = anti_aliasing ? 0.5f : 0.0f;
+    const float binary_edge   = anti_aliasing ? 0.0f : 1.0f;
+    write(view_gpu_data, program_interface.fringe_offset,      as_span(fringe));
+    write(view_gpu_data, program_interface.binary_edge_offset, as_span(binary_edge));
+
     view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
     return view_buffer_range;

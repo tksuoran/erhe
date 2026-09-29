@@ -183,6 +183,14 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     float width0      = get_line_width(view_index, v0_clipped, line_width0);
     float width1      = get_line_width(view_index, v1_clipped, line_width1);
 
+    // Ribbon half extent in pixels. With anti-aliasing (view.fringe = 0.5) the
+    // geometric half width is at least half a pixel (thinner lines fade by
+    // alpha instead of narrowing, see line_after_compute.frag) and the ribbon
+    // grows by the fringe so every fragment with non-zero coverage is inside
+    // it. With view.fringe = 0 the ribbon is the geometric half width.
+    float extent0     = max(width0, view.fringe) + view.fringe;
+    float extent1     = max(width1, view.fringe) + view.fringe;
+
     vec2 vp_size         = view.cameras[view_index].viewport.zw;
 
     // Compute line axis and side vector in screen space
@@ -195,10 +203,10 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     vec2 side_in_screen  = vec2(-axis_in_screen.y, axis_in_screen.x); // rotate
     vec2 axis_in_ndc     = ndc_from_screen_direction(axis_in_screen, vp_size);
     vec2 side_in_ndc     = ndc_from_screen_direction(side_in_screen, vp_size);
-    vec2 offset_a_in_ndc = ( side_in_ndc - axis_in_ndc) * width0;
-    vec2 offset_b_in_ndc = ( side_in_ndc + axis_in_ndc) * width1;
-    vec2 offset_c_in_ndc = (-side_in_ndc + axis_in_ndc) * width1;
-    vec2 offset_d_in_ndc = (-side_in_ndc - axis_in_ndc) * width0;
+    vec2 offset_a_in_ndc = ( side_in_ndc - axis_in_ndc) * extent0;
+    vec2 offset_b_in_ndc = ( side_in_ndc + axis_in_ndc) * extent1;
+    vec2 offset_c_in_ndc = (-side_in_ndc + axis_in_ndc) * extent1;
+    vec2 offset_d_in_ndc = (-side_in_ndc - axis_in_ndc) * extent0;
 
     // Corner NDC.xy. a, b lie on the +side of the edge; c, d on the -side.
     vec2 a_in_ndc = v0_in_ndc.xy + offset_a_in_ndc;
@@ -209,8 +217,8 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     // they sit on BOTH face planes. They split the ribbon into a +side and a
     // -side half-quad so each half can be coplanar with its own face (a real
     // tent) instead of a single quad blending the two planes across its width.
-    vec2 e0_in_ndc = v0_in_ndc.xy - axis_in_ndc * width0;
-    vec2 e1_in_ndc = v1_in_ndc.xy + axis_in_ndc * width1;
+    vec2 e0_in_ndc = v0_in_ndc.xy - axis_in_ndc * extent0;
+    vec2 e1_in_ndc = v1_in_ndc.xy + axis_in_ndc * extent1;
 
     // Surface-aligned edge "tent". Endpoint 0 carries face A's world normal and
     // the interior-tangent sign (normal_0.w); endpoint 1 carries face B's world
@@ -281,10 +289,9 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
 
     // a, b, c, d are in ndc space.
     // .w carries the full-width line thickness in screen pixels for
-    // line_after_compute.frag (which computes s = v_line_width^2 * 0.25
-    // assuming full-width, matching wide_lines.frag). width0/width1 are
-    // half-widths used for the per-side quad offsets above, so we double
-    // them when writing to .w.
+    // line_after_compute.frag (which derives its coverage from the half
+    // width). width0/width1 are half-widths, so we double them when writing
+    // to .w; the fringe extension is not part of the width.
     vec4 a  = vec4(a_in_ndc,  a_z,  2.0 * width0);
     vec4 b  = vec4(b_in_ndc,  b_z,  2.0 * width1);
     vec4 c  = vec4(c_in_ndc,  c_z,  2.0 * width1);
