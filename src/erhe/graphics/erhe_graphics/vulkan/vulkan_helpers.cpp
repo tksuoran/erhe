@@ -1629,23 +1629,32 @@ void log_image_layout_transition(
 
 namespace {
 
+// out_access_mask: the attachment writes of the subpass (the source of the
+// outgoing dependency). out_incoming_access_mask: the attachment reads and
+// writes of the subpass (the destination of the incoming dependency); the reads
+// are there so loadOp LOAD, which reads the attachment, is ordered after the
+// initial layout transition the render pass performs.
 void compute_canonical_dependency_masks(
     const bool            has_color,
     const bool            has_depth_stencil,
     VkPipelineStageFlags& out_stage_mask,
-    VkAccessFlags&        out_access_mask
+    VkAccessFlags&        out_access_mask,
+    VkAccessFlags&        out_incoming_access_mask
 )
 {
-    out_stage_mask  = 0;
-    out_access_mask = 0;
+    out_stage_mask           = 0;
+    out_access_mask          = 0;
+    out_incoming_access_mask = 0;
     if (has_color) {
-        out_stage_mask  |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        out_access_mask |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        out_stage_mask           |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        out_access_mask          |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        out_incoming_access_mask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
     if (has_depth_stencil) {
-        out_stage_mask  |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-                        |  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        out_access_mask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        out_stage_mask           |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                                 |  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        out_access_mask          |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        out_incoming_access_mask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     }
     if (out_stage_mask == 0) {
         out_stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -1660,9 +1669,10 @@ void make_canonical_subpass_dependencies(
     VkSubpassDependency out_dependencies[2]
 )
 {
-    VkPipelineStageFlags stage_mask  = 0;
-    VkAccessFlags        access_mask = 0;
-    compute_canonical_dependency_masks(has_color, has_depth_stencil, stage_mask, access_mask);
+    VkPipelineStageFlags stage_mask           = 0;
+    VkAccessFlags        access_mask          = 0;
+    VkAccessFlags        incoming_access_mask = 0;
+    compute_canonical_dependency_masks(has_color, has_depth_stencil, stage_mask, access_mask, incoming_access_mask);
 
     out_dependencies[0] = VkSubpassDependency{
         .srcSubpass      = VK_SUBPASS_EXTERNAL,
@@ -1670,7 +1680,7 @@ void make_canonical_subpass_dependencies(
         .srcStageMask    = stage_mask,
         .dstStageMask    = stage_mask,
         .srcAccessMask   = 0,
-        .dstAccessMask   = access_mask,
+        .dstAccessMask   = incoming_access_mask,
         .dependencyFlags = 0,
     };
     out_dependencies[1] = VkSubpassDependency{
@@ -1690,9 +1700,10 @@ void make_canonical_subpass_dependencies2(
     VkSubpassDependency2 out_dependencies[2]
 )
 {
-    VkPipelineStageFlags stage_mask  = 0;
-    VkAccessFlags        access_mask = 0;
-    compute_canonical_dependency_masks(has_color, has_depth_stencil, stage_mask, access_mask);
+    VkPipelineStageFlags stage_mask           = 0;
+    VkAccessFlags        access_mask          = 0;
+    VkAccessFlags        incoming_access_mask = 0;
+    compute_canonical_dependency_masks(has_color, has_depth_stencil, stage_mask, access_mask, incoming_access_mask);
 
     out_dependencies[0] = VkSubpassDependency2{
         .sType           = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
@@ -1702,7 +1713,7 @@ void make_canonical_subpass_dependencies2(
         .srcStageMask    = stage_mask,
         .dstStageMask    = stage_mask,
         .srcAccessMask   = 0,
-        .dstAccessMask   = access_mask,
+        .dstAccessMask   = incoming_access_mask,
         .dependencyFlags = 0,
         .viewOffset      = 0,
     };

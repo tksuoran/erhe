@@ -1001,12 +1001,15 @@ auto Texture_impl::is_layered() const -> bool
         case gl::Texture_target::texture_2d:
         case gl::Texture_target::texture_2d_multisample:
         case gl::Texture_target::texture_rectangle:
-        case gl::Texture_target::texture_cube_map:
         case gl::Texture_target::texture_3d: {
             ERHE_VERIFY(m_array_layer_count == 0);
             return false;
         }
 
+        // A cube map carries its six faces as array layers (the abstraction's
+        // Vulkan-style representation, array_layer_count == 6), and
+        // glNamedFramebufferTextureLayer selects a face by layer.
+        case gl::Texture_target::texture_cube_map:
         case gl::Texture_target::texture_1d_array:
         case gl::Texture_target::texture_2d_array:
         case gl::Texture_target::texture_2d_multisample_array:

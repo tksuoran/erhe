@@ -61,13 +61,17 @@ abstraction promises, and each was a suite failure before it did.
   `copy_from_texture` / `copy_from_buffer` derive the GL copy depth from the
   copied texture (`source_size.z` for layered targets, 0 otherwise) rather
   than from a hardcoded layer count. Sub-rect 2D copies and `copy_from_buffer`
-  into 2D-array layers depend on it.
+  into 2D-array layers depend on it. The texture-to-buffer overload does the
+  same (it passed `source_slice` as the count, which aborted when reading
+  layer 0 of an array).
 - **Cube maps** (`gl_texture.cpp` + `gl_blit_command_encoder.cpp`): the GL
   backend honors the abstraction's Vulkan-style cube representation
   (`array_layer_count == 6`). `convert_texture_dimensions_to_gl` folds the
   layer count into depth, `convert_texture_offset_to_gl` selects the face via
   the z offset, and `copy_from_buffer` uses 3D sub-image addressing for cubes
-  (2D storage, z = face for uploads).
+  (2D storage, z = face for uploads). `Texture_impl::is_layered()` counts a
+  cube map as layered, so a face can be a framebuffer attachment through
+  `glNamedFramebufferTextureLayer`.
 
 ### Tests
 

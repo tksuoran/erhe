@@ -422,7 +422,12 @@ void Blit_command_encoder_impl::copy_from_texture(
     ERHE_VERIFY((source_origin.y + source_size.y) <= source_texture->get_height());
     ERHE_VERIFY((source_origin.z + source_size.z) <= source_texture->get_depth ());
 
-    convert_texture_dimensions_to_gl(gl_source_texture_target, gl_width, gl_height, gl_depth, static_cast<int>(source_slice));
+    // As in the texture->texture copy_from_texture: the layer count folded into
+    // gl_depth is the number of slices copied (source_size.z) for layered source
+    // targets (array / cube), 0 for non-layered ones; source_slice selects the
+    // first slice through the z offset.
+    const int gl_source_array_layer_count = (source_texture->get_array_layer_count() != 0) ? source_size.z : 0;
+    convert_texture_dimensions_to_gl(gl_source_texture_target, gl_width, gl_height, gl_depth, gl_source_array_layer_count);
     int gl_source_x = source_origin.x;
     int gl_source_y = source_origin.y;
     int gl_source_z = source_origin.z;
