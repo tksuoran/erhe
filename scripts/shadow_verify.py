@@ -14,7 +14,8 @@ Usage:
     py -3 scripts/shadow_verify.py [--matrix core|pairwise|full] [--poses full|short]
                                    [--station NAME[,NAME]] [--light TYPE[,TYPE]]
                                    [--config NAME[,NAME]] [--around PRESET|all]
-                                   [--set KEY=VALUE ...] [--root-offset X ...]
+                                   [--set KEY=VALUE ...] [--root-offset X[,Y,Z] ...]
+                                   [--extra-light none|unshadowed|shadowed ...]
                                    [--runs N] [--rerun-failing N] [--enforce] [--no-g6]
                                    [--save-images none|failing|all] [--workers N]
                                    [--list-configs] [--reuse] [--port N] [--editor PATH]
@@ -34,7 +35,11 @@ bloom):
 
 Ground truth per pixel. The pixel's box is the station box whose surface is
 nearest its world position (within 3 mm; farther pixels are "unknown" and
-excluded); its face normal is that box face's normal. The pixel is occluded
+excluded); its face normal is that box face's normal. A pixel whose two
+nearest faces of that box lie within the fp32 rounding bound of its world
+position, sqrt(3) 4u |P| (the shader's get_world_position_rounding()), is on
+a box edge with no determined face and is "unknown" as well: at a root
+offset (R7) the rounding, not the geometry, would pick its face. The pixel is occluded
 when the segment from its world position to the light (point / spot: to the
 light position; directional: along -direction, 10 km) overlaps a
 shadow-casting station box other than its own by more than 0.1 mm (oriented
@@ -164,7 +169,21 @@ Analysis runs in --workers processes (default: half the CPUs; more slow the
 editor's renders) while the editor renders; occlusion and band masks are
 cached per world image and light pose, so configs that differ only in how the
 shader uses the map share them.
---root-offset translates the station root along x (R7: 1000 10000). Output: the table on stdout, logs/shadow_verify/<timestamp>.json
+Placements: --root-offset translates the station root (R7: 1000,0,1000
+10000,0,10000; a single number moves it along x). --extra-light (plan
+section 4) puts extra lights ahead of the station light in the scene's light
+order (the station light is deleted and created again after them):
+unshadowed = a non-shadow directional light, which takes a slot of the
+directional bucket, so a spot or point station light's UBO slot differs
+from its shadow layer (shadow_index_packed.x / .y; a directional station
+light keeps slot = layer = 0, its bucket puts shadow-mapped lights first);
+shadowed = that plus a second shadow-casting light of the measured type,
+above the station and shining up, so the station light's layer is 1. Each
+render's shadow_lights entry (slot, layer / cube_index) is checked against
+that and recorded per cell as "slot_layer"; the active preset's light count
+limits (not set by set_graphics_preset) must admit the extra lights. Every
+placement is its own set of cells ("<config>@<offset>m+extra=<variant>").
+Output: the table on stdout, logs/shadow_verify/<timestamp>.json
 (per cell worst values plus per pose / view detail of every failure: failing
 pixel count and example pixel coordinates with world points), and with
 --save-images failing the visibility image of the worst image of every failing cell
@@ -220,6 +239,7 @@ POINT_FILTER_RADIUS = 0.5
 
 # Ground truth tolerances.
 SURFACE_TOLERANCE_M = 0.003      # pixel -> box surface
+WORLD_POSITION_ROUNDING = math.sqrt(3.0) * 4.0 * (2.0 ** -24)   # x |P|: fp32 world position bound (erhe_light.glsl)
 OCCLUSION_OVERLAP_M = 1.0e-4     # segment / box overlap that counts as a hit
 DIRECTIONAL_FAR_M = 1.0e4
 MIN_N_DOT_L = 0.05               # R1's grazing limit
@@ -237,6 +257,10 @@ G4_MIN_THICKNESS = 0.02 - 1.0e-9
 G4_MIN_RESOLUTION = 2048
 G6_STATIONS = ["head_on_floor", "contact_blocks"]
 G5_STATIONS = ["contact_blocks", "spot_cones"]
+# --extra-light variants (plan section 4).
+EXTRA_LIGHT_VARIANTS = ["none", "unshadowed", "shadowed"]
+EXTRA_UNSHADOWED_LIGHT = "Extra Unshadowed Light"
+EXTRA_SHADOW_LIGHT = "Extra Shadow Light"
 GATES = ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]
 
 
@@ -559,25 +583,34 @@ class Light:
 
 
 def surface_of(points, geo):
-    """-> (own box index or -1, face normal) of world points (N, 3)."""
+    """-> (own box index or -1, face normal) of world points (N, 3).
+    A point whose two nearest faces of its box are within the fp32 rounding
+    bound of its read-back world position of each other (a pixel centre on a
+    box edge) has no determined face and is -1 as well: which face it gets
+    would be decided by the rounding (R7 root offsets make that bound grow
+    with |P|, the shader's get_world_position_rounding())."""
     n = len(points)
     best = np.full(n, np.inf)
+    face_gap = np.full(n, np.inf)
     own = np.full(n, -1, dtype=np.int32)
     normal = np.zeros((n, 3))
+    rows = np.arange(n)
     for b in range(geo.count):
         q = (points - geo.center[b]) @ geo.rotation[b]
         m = np.abs(q) - geo.half[b]
         axis = np.argmax(m, axis=1)
-        s = m[np.arange(n), axis]
+        s = m[rows, axis]
         better = np.abs(s) < best
         if not better.any():
             continue
         best[better] = np.abs(s[better])
+        face_gap[better] = (s - np.sort(m, axis=1)[:, 1])[better]
         own[better] = b
-        sign = np.sign(q[np.arange(n), axis])[better]
+        sign = np.sign(q[rows, axis])[better]
         sign[sign == 0.0] = 1.0
         normal[better] = geo.rotation[b][:, axis[better]].T * sign[:, None]
-    own[best > SURFACE_TOLERANCE_M] = -1
+    rounding = WORLD_POSITION_ROUNDING * np.linalg.norm(points, axis=1)
+    own[(best > SURFACE_TOLERANCE_M) | (face_gap <= rounding)] = -1
     return own, normal
 
 
@@ -1455,6 +1488,57 @@ class Session:
         self.c.settle()
         self.station = name
 
+    def add_extra_lights(self, name, offset, variant):
+        """--extra-light: put the variant's extra lights ahead of the station
+        light in the light layer's input order (Light_set walks the scene's
+        lights in that order within each type bucket). The station light is
+        deleted and created again after the extra lights, so it is the last
+        light of the layer; apply_light_pose() sets every field the
+        measurement uses on it per pose."""
+        if variant == "none":
+            return
+        station = rooms.STATIONS[name]
+        c = self.c
+        c.mutate("delete_nodes", {"scene_name": c.scene, "names": [station["light"]]})
+        c.settle()
+        down = rooms.pose("directional", [0.0, 10.0, 0.0], [0.0, -1.0, 0.0], light_range=0.0)
+        c.light("directional", EXTRA_UNSHADOWED_LIGHT, rooms.to_world(down["position"], offset), [1.0, 1.0, 1.0],
+                down["intensity"], cast_shadow=False)
+        if variant == "shadowed":
+            c.light("directional", EXTRA_SHADOW_LIGHT, rooms.to_world([0.0, 10.0, 0.0], offset), [1.0, 1.0, 1.0],
+                    1.0, cast_shadow=True)
+        c.settle()
+        c.set_node_transform(EXTRA_UNSHADOWED_LIGHT, rotation_xyzw=down["rotation_xyzw"])
+        spot = station["lights"]["spot"]
+        kwargs = {"range": spot["range"], "cast_shadow": True,
+                  "outer_spot_angle": math.radians(spot["outer_spot_angle_deg"]),
+                  "inner_spot_angle": math.radians(spot["inner_spot_angle_deg"])}
+        if not station["prebuilt"]:
+            kwargs["parent_node_name"] = station["root"]
+        c.light("spot", station["light"], rooms.to_world(spot["position"], offset), [1.0, 1.0, 1.0],
+                spot["intensity"], **kwargs)
+        c.settle()
+
+    def set_extra_light_type(self, name, offset, variant, light_type):
+        """--extra-light shadowed: the second shadow-casting light takes the
+        measured light's type (so it precedes it in the same bucket: the
+        measured light's layer is 1), placed above the station's default
+        pose and shining away from the receivers (up); its own shadow map is
+        never read by the measured visibility (shadow_debug_light)."""
+        if variant != "shadowed":
+            return
+        base = rooms.STATIONS[name]["lights"][light_type]
+        position = [base["position"][0], base["position"][1] + 1.0, base["position"][2]]
+        if light_type == "point":
+            p = rooms.pose("point", position, light_range=base["range"])
+        elif light_type == "spot":
+            p = rooms.pose("spot", position, [0.0, 1.0, 0.0], base["outer_spot_angle_deg"],
+                           base["inner_spot_angle_deg"], base["range"])
+        else:
+            p = rooms.pose("directional", position, [0.0, 1.0, 0.0], light_range=0.0)
+        rooms.apply_light_pose(self.c, self.c.scene, EXTRA_SHADOW_LIGHT, p, offset)
+        self.c.settle()
+
     def render(self, camera, view, shader_debug, light_name=None):
         path = os.path.join(self.tmp_dir, f"render_{shader_debug}.pfm")
         args = {"scene": self.c.scene, "camera": camera, "width": view["width"], "height": view["height"],
@@ -1533,6 +1617,53 @@ def find_shadow_light(reply, light_name, light_type):
                 raise RuntimeError(f"{light_name}: render used type {entry.get('type')}, expected {light_type}")
             return entry
     raise RuntimeError(f"{light_name} is not shadow-mapped in the render: {reply.get('shadow_lights')}")
+
+
+def placement_suffix(offset, variant):
+    """Cell name suffix of a station placement: the R7 root offset and the
+    --extra-light variant ("" for the plain placement)."""
+    parts = []
+    if any(v != 0.0 for v in offset):
+        parts.append(",".join(f"{v:g}" for v in offset) + "m")
+    if variant != "none":
+        parts.append(f"extra={variant}")
+    return ("@" + "+".join(parts)) if parts else ""
+
+
+def parse_root_offset(text):
+    """--root-offset value: "X" (along x) or "X,Y,Z", metres."""
+    values = [float(v) for v in text.split(",")]
+    if len(values) == 1:
+        values += [0.0, 0.0]
+    if len(values) != 3:
+        raise argparse.ArgumentTypeError(f"{text!r}: expected X or X,Y,Z")
+    return values
+
+
+def light_indirection(entry):
+    """(UBO slot, shadow layer) of a shadow_lights entry: the 2D array layer
+    (shadow_index_packed.x) or, for a point light, the cube index
+    (shadow_index_packed.y)."""
+    layer = entry.get("cube_index") if entry.get("type") == "point" else entry.get("layer")
+    return int(entry["slot"]), int(layer)
+
+
+def check_extra_light(variant, light_type, entry):
+    """What each --extra-light variant must exercise, from the render's own
+    slot / layer of the measured light. unshadowed: the non-shadow
+    directional light takes the directional bucket's slot ahead of a spot or
+    point light's bucket, so slot != layer (a directional measured light
+    keeps slot = layer = 0: its bucket puts shadow-mapped lights first).
+    shadowed: the second shadow-casting light of the measured type precedes
+    it in its bucket, so layer >= 1."""
+    slot, layer = light_indirection(entry)
+    if variant == "unshadowed" and (light_type != "directional") and (slot == layer):
+        raise RuntimeError(f"--extra-light unshadowed: {light_type} slot {slot} = layer {layer}; "
+                           "the light count limits of the active preset dropped the extra light")
+    if variant == "shadowed" and (layer < 1):
+        raise RuntimeError(f"--extra-light shadowed: {light_type} layer {layer}; "
+                           "the light count limits of the active preset dropped the extra shadow light")
+    return slot, layer
 
 
 # --- aggregation + report --------------------------------------------------------------------
@@ -1710,19 +1841,19 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
     only_keys, only those cells (the failing-cell re-runs)."""
     stations = select(list(rooms.STATIONS), args.station, "station")
     lights = select(LIGHT_TYPES, args.light, "light")
-    offsets = [[float(v), 0.0, 0.0] for v in args.root_offset]
     pending = []
 
     def wanted(name, light_type, station):
         return (only_keys is None) or (cell_key(name, light_type, station) in only_keys)
 
-    for offset in offsets:
-        suffix = f"@{offset[0]:g}m" if offset[0] else ""
+    for offset, variant in itertools.product(args.root_offset, args.extra_light):
+        suffix = placement_suffix(offset, variant)
         for station in stations:
             if not any(wanted(cfg["name"] + suffix, lt, station) for cfg in configs for lt in lights):
                 continue
             station_info = rooms.STATIONS[station]
             session.load_station(station, offset)
+            session.add_extra_lights(station, offset, variant)
             views = station_views(station)
             for config in configs:
                 if not any(wanted(config["name"] + suffix, lt, station) for lt in lights):
@@ -1745,6 +1876,7 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                     if (light_type == "point") and (technique == "distance"):
                         cell["status"] = "unsupported"
                         continue
+                    session.set_extra_light_type(station, offset, variant, light_type)
                     started = time.time()
                     poses = rooms.pose_sweep(station, light_type, args.poses)
                     futures = []
@@ -1757,6 +1889,7 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                             reply, image = session.render(shifted_camera(view, offset, shift), view, 30,
                                                           station_info["light"])
                             entry = find_shadow_light(reply, station_info["light"], light_type)
+                            cell["slot_layer"] = list(check_extra_light(variant, light_type, entry))
                             vis = image[:, :, 0].astype(np.float32)
                             job = {"kind": "image", "key": key, "station": station, "offset": offset,
                                    "cache_dir": session.cache_dir,
@@ -1864,8 +1997,13 @@ def main():
     parser.add_argument("--config", default="all", help="config name(s) / fnmatch patterns, comma separated")
     parser.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
                         help="set_graphics_preset fields applied on top of every config")
-    parser.add_argument("--root-offset", nargs="*", type=float, default=[0.0], metavar="X",
-                        help="station root x offsets in metres (R7: 1000 10000)")
+    parser.add_argument("--root-offset", nargs="*", type=parse_root_offset, default=[[0.0, 0.0, 0.0]],
+                        metavar="X[,Y,Z]",
+                        help="station root offsets in metres, X alone = along x (R7: 1000,0,1000 10000,0,10000)")
+    parser.add_argument("--extra-light", nargs="*", default=["none"], choices=EXTRA_LIGHT_VARIANTS,
+                        help="extra lights ahead of the station light (plan section 4): unshadowed = a "
+                             "non-shadow directional light; shadowed = that plus a second shadow-casting "
+                             "light of the measured type")
     parser.add_argument("--runs", type=int, default=1, help="full runs; every gate is the worst over the runs")
     parser.add_argument("--rerun-failing", type=int, default=3, metavar="N",
                         help="re-run every failing cell N times after the runs (section 5; default 3)")
@@ -1993,7 +2131,8 @@ def main():
     record = {
         "matrix": args.matrix, "poses": args.poses, "around": args.around, "runs": args.runs,
         "rerun_failing": args.rerun_failing,
-        "overrides": overrides, "root_offsets": args.root_offset, "skipped": skipped,
+        "overrides": overrides, "root_offsets": args.root_offset, "extra_light": args.extra_light,
+        "skipped": skipped,
         "configs": configs_used, "cells": [dict(cells[k], verdicts=verdicts(cells[k])) for k in order],
         "wall_seconds": round(wall, 1), "renders": len(render_seconds),
         "render_seconds_mean": round(float(np.mean(render_seconds)), 3) if render_seconds else None,

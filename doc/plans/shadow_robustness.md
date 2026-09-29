@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is phases 7 and 8.
+the current gate table. The remaining work is D12 (phase 7), D9, D11 and phase 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -69,9 +69,9 @@ plane are outside it.
 - **R6 Pose independence.** R1 to R5 hold at every pose of the light pose
   sweep; no verdict depends on where last-bit rounding falls.
 - **R7 Origin independence.** R1 to R5 hold with the whole station translated
-  1 km and 10 km from the origin. The fp32 world position and matrix
-  composition carry about 0.6 mm of error at 10 km against 2 to 4 mm shadow
-  texels; the origin term of D1 is what absorbs it.
+  1 km and 10 km from the origin. Every bias term's error bound scales with
+  a distance that stays small for what the camera sees (distance from the
+  camera or the light), not with the distance from the world origin (D12).
 - **R8 Temporal stability.** For a static scene, a sub-texel camera
   translation changes directional shadow visibility only inside the edge band.
   Spot and point maps do not depend on the camera, so for them G6 detects only
@@ -305,6 +305,21 @@ The bias, in the order it is built:
   shadow resolution is clamped, the way D6 enforces
   `c_min_point_shadow_resolution`.
 
+- **D12 Camera-relative receiver normal.** The receiver geometric normal
+  (D2 / D3) comes from screen-space derivatives of the absolute world
+  position, whose fp32 error `e = 8.3e-7 |P|` grows with the distance from the
+  world origin while the pixel footprint `f` stays small on close views: the
+  normal bound `theta_r ~ 2 e / f` reaches the undetermined-plane case at
+  about `|P| = 1e4 f` (10 m for a 1 mm footprint at the grazing limit), and
+  the gradient term then over-biases - measured: Medium spot `thin_walls` 5 cm
+  hut leaks 272 px at 10 m and 1424 px at 20 m from the origin; at 1 km and 10
+  km R2 to R5 fail on every station except `head_on_floor` (section 9). The
+  receiver position used for the normal and for the gradient bound is
+  camera-relative (the vertex stage outputs the position relative to the
+  camera, composed on the CPU in double precision), so `e` scales with the
+  distance from the camera; the point-light caster normal (D6) is
+  light-relative in the same way. R7 is met when the 1 km and 10 km runs pass.
+
 ## 4. Test scenes
 
 `scripts/creations/creation_25_shadow_test_rooms.py` builds the stations and
@@ -328,11 +343,18 @@ station serves all three light types.
 | `spot_cones` | Spot aimed at a floor, 5, 45 and 80 degree cones | R1, R5 across projection widths |
 | `cornell` | `gi_cornell.glb` at its saved light pose | the section 1 case |
 
-Two measurement variants reuse the stations: R7 translates the root of
-`head_on_floor` and `contact_blocks` by 1 km and 10 km, and the
-`--extra-light` variant adds a non-shadow directional light ahead of the
-shadow light in the light buckets, which exercises the
-`shadow_index_packed.x` layer indirection of `sample_light_visibility()`.
+Two measurement variants reuse the stations. R7 (`--root-offset`)
+translates the root of `head_on_floor`, `contact_blocks`, `thin_walls` and
+`cube_seams`. `--extra-light` puts lights ahead of the station light in the
+scene's light order: `unshadowed` a non-shadow directional light, which
+takes a slot of the directional bucket, so a spot or point station light's
+UBO slot differs from its shadow layer and `sample_light_visibility()` /
+`sample_point_light_visibility()` read the layer through
+`shadow_index_packed.x` / `.y` (a directional station light keeps slot =
+layer = 0: its bucket puts shadow-mapped lights first); `shadowed` adds a
+second shadow-casting light of the measured type, so the station light's
+layer is 1. Each render's `shadow_lights` slot and layer are checked
+against that.
 
 ## 5. Test matrix
 
@@ -430,8 +452,9 @@ Every gate is the worst value over all poses and runs:
 - **T5** `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1|0` selects the depth convention
   without editing `erhe_graphics.json`.
 - **T6** `scripts/shadow_verify.py` runs section 5 and 6 (usage in its
-  docstring); `--enforce` exits non-zero on a FAIL. It gains `--extra-light`
-  (section 4) and the G7 timing in phase 8.
+  docstring); `--enforce` exits non-zero on a FAIL. `--root-offset` and
+  `--extra-light` run the section 4 variants; it gains the G7 timing in
+  phase 8.
 - **T7 Library GPU tests** in `erhe_scene_renderer_gpu_tests` (ctest label
   `gpu`): [shadows.md](../erhe/shadows.md) "Shadow sampling GPU tests",
   including the two head-on cases (`Shadow_tie` and `Shadow_head_on_plane`)
@@ -452,8 +475,9 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 7 - coverage.** D7 (spot distance technique), R7 origin runs, the
-  `--extra-light` variant.
+- **Phase 7 - origin independence (D12).** Camera-relative receiver
+  normal and light-relative point caster normal; exit: R7 runs at 10 m, 50 m,
+  1 km and 10 km pass for all three light types.
 - **Phase 8 - backends, cost and documentation.** Build the shadow
   changes on the OpenGL tree and run T7 there (the `precise` ray
   construction of D7 and every shader change of phases 2 to 7 are verified on
@@ -500,3 +524,33 @@ caster rule: 1426 renders, 8.9 min); 18 failing cells, all in the
 (distance, forward-Z). Every other cell of both techniques passes,
 including every point cell and directional G6 in every non-`cull_front`
 cell.
+
+`--extra-light unshadowed shadowed` on Low, Medium and High, every station
+and light type (144 cells, 2253 renders, 14.4 min): every cell passes every
+gate, with the plain placement's G3 and G5 values. The measured light's
+slot / layer: `unshadowed` directional 0 / 0, spot 1 / 0, point 1 / cube 0;
+`shadowed` directional 1 / 1, spot 2 / 1, point 2 / cube 1.
+
+R7, `--config Low,Medium,High,Medium/shadow_technique=distance --station
+head_on_floor,contact_blocks,thin_walls,cube_seams`, short sweep. At root
+offsets (10, 0, 10) and (20, 0, 20) m (2118 renders, 13.6 min) every cell
+passes except Medium spot `thin_walls` G4 on the 5 cm hut, 272 pixels at 10
+m and 1424 at 20 m, in every re-run: hut wall pixels seen at a grazing
+camera angle (0.6 mm footprint) and lit at `N . L` 0.09, where `theta_r` is
+0.048 (254 of the 272 have an undetermined plane). With
+`shadow_bias_texel_scale` 0 the 20 m leak is gone, with
+`shadow_bias_origin_scale` 0 it stays (1182 pixels). At (50, 0, 50) m
+`contact_blocks` still passes and the huts leak for Medium directional (2
+cm: 2 pixels), spot (2 cm: 812, 5 cm: 62986), High point (5 cm: 39792) and
+distance spot (5 cm: 34590). At 1 km and 10 km (first run only) G1 passes
+in every cell but High directional `contact_blocks` at 10 km (4 pixels, not
+traced), and R2 to R5 fail on every station but `head_on_floor`:
+`contact_blocks` G3 at the 20-texel search limit with G2 up to every
+shadowed pixel for every config and light, G4 on every gated hut, and
+`cube_seams` G2 (directional and point; spot too at 10 km). On the
+`contact_blocks` close-ups (0.48 mm footprint) `theta_r` grows from 0.005
+rad at the origin to 0.15 at 41 m and 0.55 at 140 m; directional and point
+G2 / G3 fail from 140 m. The 50 m, 1 km and 10 km runs predate the edge
+rule of `shadow_verify.py` ("Ground truth per pixel"): a pixel centre on a
+box edge, whose face the fp32 rounding picked, read as a 1-pixel G1 on the
+post and plate edges at 20 and 50 m.
