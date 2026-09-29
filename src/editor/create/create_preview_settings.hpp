@@ -18,6 +18,10 @@ public:
     const float                   major_thickness{6.0f};
     const float                   minor_thickness{3.0f};
     bool                          ideal_shape    {false};
+    // Draw the parts of the preview occluded by scene geometry as dimmed
+    // hidden lines (the debug renderer's hidden pass); false draws only the
+    // unoccluded parts.
+    bool                          draw_hidden    {true};
 };
 
 }

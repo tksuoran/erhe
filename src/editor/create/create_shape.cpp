@@ -16,7 +16,7 @@ auto Create_shape::get_line_renderer(const Create_preview_settings& preview_sett
         .primitive_type    = erhe::graphics::Primitive_type::line,
         .stencil_reference = 2,
         .draw_visible      = true,
-        .draw_hidden       = true
+        .draw_hidden       = preview_settings.draw_hidden
     };
     return preview_settings.render_context.app_context.debug_renderer->get(config);
 }

@@ -57,6 +57,7 @@ private:
     float                         m_density     {1.0f};
     bool                          m_preview_ideal_shape{false};
     bool                          m_preview_shape{true};
+    bool                          m_preview_hidden_lines{true};
     Create_uv_sphere              m_create_uv_sphere;
     Create_cone                   m_create_cone;
     Create_capsule                m_create_capsule;
