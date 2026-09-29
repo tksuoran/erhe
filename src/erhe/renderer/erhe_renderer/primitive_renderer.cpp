@@ -578,24 +578,6 @@ void Primitive_renderer::add_cone(
 
     const bool         draw_minor          = (m_minor_lines == Minor_lines::draw);
     Primitive_renderer minor_line_renderer = make_minor_line_renderer();
-    minor_line_renderer.set_thickness(minor_thickness);
-    if (draw_minor) {
-        minor_line_renderer.add_lines(
-            m,
-            minor_color,
-            {
-                { bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x },
-                { bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z },
-                { top_center    - top_radius    * axis_x, top_center    + top_radius    * axis_x },
-                { top_center    - top_radius    * axis_z, top_center    + top_radius    * axis_z },
-                { bottom_center,                          top_center                             },
-                { bottom_center - bottom_radius * axis_x, top_center    - top_radius    * axis_x },
-                { bottom_center + bottom_radius * axis_x, top_center    + top_radius    * axis_x },
-                { bottom_center - bottom_radius * axis_z, top_center    - top_radius    * axis_z },
-                { bottom_center + bottom_radius * axis_z, top_center    + top_radius    * axis_z }
-            }
-        );
-    }
 
     // The outward normal along the lateral generatrix at azimuth phi,
     // n(phi) = (height cos(phi), bottom_radius - top_radius, height sin(phi)) / slant,
@@ -620,6 +602,37 @@ void Primitive_renderer::add_cone(
     } else {
         facing_all  = (tangent_c < 0.0f);
         facing_none = !facing_all;
+    }
+
+    const auto facing = [&](const float phi) -> bool {
+        return ((tangent_a * std::cos(phi)) + (tangent_b * std::sin(phi))) > tangent_c;
+    };
+
+    // Structural lines, each visible or self-occluded as a whole (the cone is
+    // convex): the cap cross lines lie on the cap discs and are visible
+    // exactly when the cap is, a lateral generatrix at azimuth phi exactly
+    // when facing(phi), and the axis runs inside the cone.
+    const auto add_structural_line = [&](const bool line_visible, const glm::vec3& p0, const glm::vec3& p1) {
+        if (line_visible) {
+            set_thickness(major_thickness);
+            add_lines(m, major_color, { { p0, p1 } });
+        } else if (draw_minor) {
+            minor_line_renderer.set_thickness(minor_thickness);
+            minor_line_renderer.add_lines(m, minor_color, { { p0, p1 } });
+        }
+    };
+    if (bottom_radius > 0.0f) {
+        add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x);
+        add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z);
+    }
+    if (top_radius > 0.0f) {
+        add_structural_line(top_visible, top_center - top_radius * axis_x, top_center + top_radius * axis_x);
+        add_structural_line(top_visible, top_center - top_radius * axis_z, top_center + top_radius * axis_z);
+    }
+    add_structural_line(false, bottom_center, top_center);
+    for (const float phi : { 0.0f, glm::half_pi<float>(), glm::pi<float>(), 3.0f * glm::half_pi<float>() }) {
+        const glm::vec3 radial = (std::cos(phi) * axis_x) + (std::sin(phi) * axis_z);
+        add_structural_line(facing(phi), bottom_center + bottom_radius * radial, top_center + top_radius * radial);
     }
 
     // Rim circles: visible parts (cap visible or lateral surface facing the
@@ -710,58 +723,174 @@ void Primitive_renderer::add_capsule(
     const float     bottom_ring_radius = bottom_radius * cos_alpha;
     const float     top_ring_radius    = top_radius    * cos_alpha;
 
-    // Structural lines: junction (tangency) rings, cap profile arcs with the
-    // connecting cone generatrices in the XY / ZY planes, and the axis
-    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
-    minor_line_renderer.set_thickness(minor_thickness);
-    if (m_minor_lines == Minor_lines::draw) {
-        for (int i = 0; i < side_count; ++i) {
-            const float phi0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(side_count);
-            const float phi1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(side_count);
-            const glm::vec3 d0 = (std::cos(phi0) * axis_x) + (std::sin(phi0) * axis_z);
-            const glm::vec3 d1 = (std::cos(phi1) * axis_x) + (std::sin(phi1) * axis_z);
-            minor_line_renderer.add_lines(
-                m,
-                minor_color,
-                {
-                    { bottom_ring_center + bottom_ring_radius * d0, bottom_ring_center + bottom_ring_radius * d1 },
-                    { top_ring_center    + top_ring_radius    * d0, top_ring_center    + top_ring_radius    * d1 }
-                }
-            );
-        }
-
-        const int arc_step_count = std::max(2, side_count / 4);
-        for (const glm::vec3& radial : { axis_x, -axis_x, axis_z, -axis_z }) {
-            for (int i = 0; i < arc_step_count; ++i) {
-                const float rel0 = static_cast<float>(i    ) / static_cast<float>(arc_step_count);
-                const float rel1 = static_cast<float>(i + 1) / static_cast<float>(arc_step_count);
-                const float bottom_theta0 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel0);
-                const float bottom_theta1 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel1);
-                const float top_theta0    = alpha + ((glm::half_pi<float>() - alpha) * rel0);
-                const float top_theta1    = alpha + ((glm::half_pi<float>() - alpha) * rel1);
-                minor_line_renderer.add_lines(
-                    m,
-                    minor_color,
-                    {
-                        {
-                            bottom_center + bottom_radius * ((std::cos(bottom_theta0) * radial) + (std::sin(bottom_theta0) * axis_y)),
-                            bottom_center + bottom_radius * ((std::cos(bottom_theta1) * radial) + (std::sin(bottom_theta1) * axis_y))
-                        },
-                        {
-                            top_center + top_radius * ((std::cos(top_theta0) * radial) + (std::sin(top_theta0) * axis_y)),
-                            top_center + top_radius * ((std::cos(top_theta1) * radial) + (std::sin(top_theta1) * axis_y))
-                        }
-                    }
-                );
-            }
-            minor_line_renderer.add_lines(
-                m,
-                minor_color,
-                { { bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial } }
-            );
-        }
-        minor_line_renderer.add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
+    // Lateral facing. The tangent plane at azimuth phi, with normal
+    // n(phi) = (cos_alpha cos(phi), sin_alpha, cos_alpha sin(phi)), faces the
+    // camera iff n(phi) . (camera - bottom_center) > bottom_radius, i.e.
+    //   facing(phi) = tangent_a cos(phi) + tangent_b sin(phi) - tangent_c > 0,
+    // and the two silhouette generatrices sit at the exact zero crossings
+    // phi_mid -/+ phi_delta. The plane is tangent to both cap spheres, so the
+    // same test classifies the junction rings and the cone generatrices, and
+    // it agrees with the sphere horizon test of the cap profile arcs at the
+    // junction latitude.
+    const glm::vec3 to_camera_from_bottom = camera_position_in_node - bottom_center;
+    const float     tangent_a             = to_camera_from_bottom.x * cos_alpha;
+    const float     tangent_b             = to_camera_from_bottom.z * cos_alpha;
+    const float     tangent_c             = bottom_radius - (to_camera_from_bottom.y * sin_alpha);
+    const float     tangent_norm          = std::sqrt((tangent_a * tangent_a) + (tangent_b * tangent_b));
+    const float     phi_mid               = std::atan2(tangent_b, tangent_a);
+    bool  facing_all  = false;
+    bool  facing_none = false;
+    float phi_delta   = 0.0f; // facing arc is (phi_mid - phi_delta, phi_mid + phi_delta)
+    if (tangent_norm > std::abs(tangent_c)) {
+        phi_delta = std::acos(glm::clamp(tangent_c / tangent_norm, -1.0f, 1.0f));
+    } else {
+        facing_all  = (tangent_c < 0.0f);
+        facing_none = !facing_all;
     }
+    const auto facing = [&](const float phi) -> bool {
+        return ((tangent_a * std::cos(phi)) + (tangent_b * std::sin(phi))) > tangent_c;
+    };
+
+    // Structural lines: junction (tangency) rings, cap profile arcs with the
+    // connecting cone generatrices in the XY / ZY planes, and the axis. The
+    // capsule is convex, so a surface line is visible exactly where its
+    // surface faces the camera: rings are split at the silhouette azimuths,
+    // profile arcs at the sphere horizon, and a generatrix is visible or
+    // self-occluded as a whole; the axis runs inside the capsule.
+    const bool         draw_minor          = (m_minor_lines == Minor_lines::draw);
+    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
+    const auto add_structural_line = [&](const bool line_visible, const glm::vec3& p0, const glm::vec3& p1) {
+        if (line_visible) {
+            set_thickness(major_thickness);
+            add_lines(m, major_color, { { p0, p1 } });
+        } else if (draw_minor) {
+            minor_line_renderer.set_thickness(minor_thickness);
+            minor_line_renderer.add_lines(m, minor_color, { { p0, p1 } });
+        }
+    };
+
+    const auto add_ring_arc = [&](
+        Primitive_renderer& target,
+        const glm::vec3&    ring_center,
+        const float         ring_radius,
+        const float         t_first,
+        const float         t_span,
+        const glm::vec4&    color,
+        const float         thickness
+    ) {
+        if ((t_span <= 0.0f) || (ring_radius <= 0.0f)) {
+            return;
+        }
+        target.set_thickness(thickness);
+        const int step_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(side_count) * t_span / glm::two_pi<float>())));
+        for (int i = 0; i < step_count; ++i) {
+            const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(step_count));
+            const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(step_count));
+            target.add_lines(
+                m,
+                color,
+                {{
+                    ring_center + ring_radius * ((std::cos(t0) * axis_x) + (std::sin(t0) * axis_z)),
+                    ring_center + ring_radius * ((std::cos(t1) * axis_x) + (std::sin(t1) * axis_z))
+                }}
+            );
+        }
+    };
+    const auto add_ring = [&](const glm::vec3& ring_center, const float ring_radius) {
+        if (facing_all) {
+            add_ring_arc(*this, ring_center, ring_radius, 0.0f, glm::two_pi<float>(), major_color, major_thickness);
+        } else if (facing_none) {
+            if (draw_minor) {
+                add_ring_arc(minor_line_renderer, ring_center, ring_radius, 0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            }
+        } else {
+            add_ring_arc(*this, ring_center, ring_radius, phi_mid - phi_delta, 2.0f * phi_delta, major_color, major_thickness);
+            if (draw_minor) {
+                add_ring_arc(minor_line_renderer, ring_center, ring_radius, phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
+            }
+        }
+    };
+    add_ring(bottom_ring_center, bottom_ring_radius);
+    add_ring(top_ring_center,    top_ring_radius);
+
+    // Cap profile arc q(theta) = center + radius (cos(theta) radial + sin(theta) Y)
+    // over [theta_first, theta_last] within the cap's latitude range. With
+    // w = camera - center, q is visible iff (q - center) . (camera - q) > 0,
+    // i.e. (radial . w) cos(theta) + (Y . w) sin(theta) > radius: the
+    // visible latitudes are (theta_mid - theta_cut, theta_mid + theta_cut),
+    // narrower than pi and centred in (-pi, pi], so they meet the cap range
+    // inside [-pi/2, pi/2] without wrapping.
+    const int  arc_step_count  = std::max(2, side_count / 4);
+    const auto add_profile_arc = [&](
+        Primitive_renderer& target,
+        const glm::vec3&    sphere_center,
+        const float         sphere_radius,
+        const glm::vec3&    radial,
+        const float         theta_first,
+        const float         theta_last,
+        const float         full_span,
+        const glm::vec4&    color,
+        const float         thickness
+    ) {
+        if (theta_last <= theta_first) {
+            return;
+        }
+        target.set_thickness(thickness);
+        const int step_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(arc_step_count) * (theta_last - theta_first) / full_span)));
+        for (int i = 0; i < step_count; ++i) {
+            const float theta0 = theta_first + ((theta_last - theta_first) * static_cast<float>(i    ) / static_cast<float>(step_count));
+            const float theta1 = theta_first + ((theta_last - theta_first) * static_cast<float>(i + 1) / static_cast<float>(step_count));
+            target.add_lines(
+                m,
+                color,
+                {{
+                    sphere_center + sphere_radius * ((std::cos(theta0) * radial) + (std::sin(theta0) * axis_y)),
+                    sphere_center + sphere_radius * ((std::cos(theta1) * radial) + (std::sin(theta1) * axis_y))
+                }}
+            );
+        }
+    };
+    const auto add_cap_profile = [&](
+        const glm::vec3& sphere_center,
+        const float      sphere_radius,
+        const glm::vec3& radial,
+        const float      theta_first,
+        const float      theta_last
+    ) {
+        const float     full_span = theta_last - theta_first;
+        const glm::vec3 w         = camera_position_in_node - sphere_center;
+        const float     a         = glm::dot(radial, w);
+        const float     b         = w.y;
+        const float     rho       = std::sqrt((a * a) + (b * b));
+        float visible_first = theta_last;
+        float visible_last  = theta_first;
+        if (rho > sphere_radius) {
+            const float theta_mid = std::atan2(b, a);
+            const float theta_cut = std::acos(glm::clamp(sphere_radius / rho, -1.0f, 1.0f));
+            visible_first = std::max(theta_first, theta_mid - theta_cut);
+            visible_last  = std::min(theta_last,  theta_mid + theta_cut);
+        }
+        if (visible_last <= visible_first) {
+            if (draw_minor) {
+                add_profile_arc(minor_line_renderer, sphere_center, sphere_radius, radial, theta_first, theta_last, full_span, minor_color, minor_thickness);
+            }
+            return;
+        }
+        if (draw_minor) {
+            add_profile_arc(minor_line_renderer, sphere_center, sphere_radius, radial, theta_first, visible_first, full_span, minor_color, minor_thickness);
+        }
+        add_profile_arc(*this, sphere_center, sphere_radius, radial, visible_first, visible_last, full_span, major_color, major_thickness);
+        if (draw_minor) {
+            add_profile_arc(minor_line_renderer, sphere_center, sphere_radius, radial, visible_last, theta_last, full_span, minor_color, minor_thickness);
+        }
+    };
+    for (const float phi : { 0.0f, glm::half_pi<float>(), glm::pi<float>(), 3.0f * glm::half_pi<float>() }) {
+        const glm::vec3 radial = (std::cos(phi) * axis_x) + (std::sin(phi) * axis_z);
+        add_cap_profile(bottom_center, bottom_radius, radial, -glm::half_pi<float>(), alpha);
+        add_cap_profile(top_center,    top_radius,    radial, alpha, glm::half_pi<float>());
+        add_structural_line(facing(phi), bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial);
+    }
+    add_structural_line(false, bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y);
 
     // Silhouette: the capsule is convex and tangent continuous, so the view
     // silhouette is a single closed curve. A plane through the camera tangent
@@ -771,17 +900,8 @@ void Primitive_renderer::add_capsule(
     // join the cap silhouette arcs exactly.
     set_thickness(major_thickness);
 
-    // Cone silhouette generatrices: azimuths phi where the tangent plane with
-    // normal n(phi) = (cos_alpha cos(phi), sin_alpha, cos_alpha sin(phi))
-    // passes through the camera: n(phi) . (camera - bottom_center) = bottom_radius
-    const glm::vec3 to_camera_from_bottom = camera_position_in_node - bottom_center;
-    const float     tangent_a             = to_camera_from_bottom.x * cos_alpha;
-    const float     tangent_b             = to_camera_from_bottom.z * cos_alpha;
-    const float     tangent_c             = bottom_radius - (to_camera_from_bottom.y * sin_alpha);
-    const float     tangent_norm          = std::sqrt((tangent_a * tangent_a) + (tangent_b * tangent_b));
-    if (tangent_norm > std::abs(tangent_c)) {
-        const float phi_mid   = std::atan2(tangent_b, tangent_a);
-        const float phi_delta = std::acos(glm::clamp(tangent_c / tangent_norm, -1.0f, 1.0f));
+    // Cone silhouette generatrices at the tangency azimuths (see facing above)
+    if (!facing_all && !facing_none) {
         for (const float phi : { phi_mid - phi_delta, phi_mid + phi_delta }) {
             const glm::vec3 n =
                 ((cos_alpha * std::cos(phi)) * axis_x) +

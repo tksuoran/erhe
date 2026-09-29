@@ -182,6 +182,14 @@ public:
         int                           step_count = 40
     );
 
+    // Cone (or truncated cone) on the local Y axis. Draws the rim circles,
+    // the silhouette generatrices, the cap cross lines, the lateral
+    // generatrices in the XZ axis directions and the axis. The cone is
+    // convex, so every surface line is classified exactly: rim arcs are
+    // split at the silhouette azimuths, a cap cross line is visible when its
+    // cap is, a lateral generatrix when the lateral surface faces the camera
+    // at its azimuth; visible parts use major style, the rest and the axis
+    // (inside the cone) minor style.
     void add_cone(
         const erhe::scene::Transform& transform,
         const glm::vec4&              major_color,
@@ -200,8 +208,13 @@ public:
     // bottom_center and top_radius at bottom_center + length * Y, joined by
     // their common tangent cone (the convex hull of the two spheres; equal
     // radii give the classic capsule). Draws the single closed view
-    // silhouette in major style and structural lines (junction rings, cap
-    // profile arcs, side generatrices, axis) in minor style.
+    // silhouette and the structural lines (junction rings, cap profile arcs,
+    // side generatrices, axis). The capsule is convex, so the structural
+    // surface lines are classified exactly: rings are split at the
+    // silhouette azimuths, profile arcs at the cap sphere's horizon, and a
+    // generatrix is visible as a whole when the cone faces the camera at its
+    // azimuth; visible parts use major style, the rest and the axis (inside
+    // the capsule) minor style.
     void add_capsule(
         const erhe::scene::Transform& world_from_node,
         const glm::vec4&              major_color,

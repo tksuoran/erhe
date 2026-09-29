@@ -118,6 +118,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::renderer`: `Primitive_renderer::add_cone` and `add_capsule` classify
+  their structural surface lines exactly instead of drawing them all in
+  minor style: cone cap cross lines follow their cap's visibility and
+  lateral generatrices the lateral facing test at their azimuth; capsule
+  junction rings are split at the silhouette azimuths, cap profile arcs at
+  the cap sphere's horizon, and generatrices follow the tangent-plane test.
+  Only the axis stays minor.
 - `erhe::renderer`: `Debug_renderer_config::primitive_type` defaults to
   `Primitive_type::line` (was `Primitive_type{0}`, i.e. `point`) and must be
   `line` or `triangle`; any other type fails an `ERHE_VERIFY` when its bucket
