@@ -9,6 +9,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Light_shadow_limits::caster_vertex_rounding`,
+  `Caster_vertex_extent` and a trailing `Light_projections::apply()`
+  parameter `in_caster_vertex_extents` (one per caster mesh: the upper 3x3
+  and translation of its `world_from_node`, the largest `|coordinate|` per
+  axis of its node-space bounds): the per-light bound on the fp32 rounding
+  of any caster vertex position, from the vertices' distance from their node
+  origin, written to the light block's new `shadow_limits.x` and read by the
+  minimum bias's position term. `Shadow_renderer::render()` gathers the
+  extents with the caster bounds (every caster, whatever the fit settings).
 - `erhe::scene_renderer`: `Light_shadow_limits` and
   `Light_projections::light_shadow_limits` (parallel to the slots, derived
   once per `apply()`): `raster_vertex_depth`, the vertex depth bound of the

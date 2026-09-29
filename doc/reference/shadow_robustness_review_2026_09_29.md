@@ -83,9 +83,12 @@ Empirical or assumed:
 
 ## Potential issues
 
-One issue is high severity: large meshes far from their node origin are not
-covered by the position bound. None of these issues is exercised by the current
-test stations.
+One issue was high severity: large meshes far from their node origin were not
+covered by the position bound. It is fixed after this review (the vertex
+stage bounds each vertex from its node transform and node-space position,
+`erhe_position_rounding.glsl`; the light block carries a per-light caster
+vertex bound; the `far_vertices` station exercises it, `shadows.md` "Minimum
+bias"). Issues 2 to 11 stand, and no current test station exercises them.
 
 | # | Severity | Location | Issue | Failure scenario |
 | --- | --- | --- | --- | --- |

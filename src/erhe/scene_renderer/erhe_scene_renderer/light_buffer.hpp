@@ -57,6 +57,10 @@ public:
     // (Light_shadow_limits::raster_vertex_depth, doc/erhe/shadows.md
     // "Minimum bias").
     std::size_t view_origin;                    // vec4 (xyz, raster vertex depth bound)
+    // x: the light's caster vertex rounding bound
+    // (Light_shadow_limits::caster_vertex_rounding, doc/erhe/shadows.md
+    // "Minimum bias", position term), world units; yzw reserved (0).
+    std::size_t shadow_limits;                  // vec4 (caster vertex rounding, 0, 0, 0)
     std::size_t texture_from_view_relative;     // mat4
     std::size_t view_relative_from_texture;     // mat4
 };
@@ -191,13 +195,37 @@ public:
     glm::mat4 view_relative_from_texture{1.0f};
 };
 
-// Per-light limits of the 2D shadow map receiver bias, derived once per
+// What bounds the fp32 rounding of one shadow caster's vertex positions in
+// the caster passes (Light_shadow_limits::caster_vertex_rounding): the
+// vertex shader computes each vertex as the upper 3x3 of world_from_node
+// times the node-space position plus the node's world translation less the
+// pass's view origin (standard.vert, doc/erhe/shadows.md "View-relative
+// positions"), so the rounding scales with the products' magnitudes - the
+// vertex's distance from its node origin - and with the translation's.
+// Gathered per caster mesh by Shadow_renderer::render().
+class Caster_vertex_extent
+{
+public:
+    glm::mat3 world_from_node_linear{1.0f}; // upper 3x3 of the mesh node's world_from_node
+    glm::vec3 world_translation     {0.0f}; // world_from_node[3]
+    glm::vec3 node_abs_extent       {0.0f}; // largest |coordinate| per axis over the mesh's node-space bounds
+};
+
+// Per-light limits of the shadow map receiver bias, derived once per
 // Light_projections::apply() from the light's projection, the caster bounds
 // and the receiver filter footprint (doc/erhe/shadows.md "Minimum bias" and
 // "The distance technique").
 class Light_shadow_limits
 {
 public:
+    // Bound on the fp32 rounding of any caster vertex position this light's
+    // shadow passes compute (world units; the position term of the minimum
+    // bias, doc/erhe/shadows.md "Minimum bias"): over the casters
+    // (Caster_vertex_extent), the length of 4u |linear| |extent| + 5u
+    // |translation - view_origin| per component, u = 2^-24. The receiver
+    // adds it to its own vertex bound (standard.vert's v_position_rounding).
+    // Directional, spot and point lights alike; 0 without casters.
+    float caster_vertex_rounding{0.0f};
     // Largest |texture depth| of any caster vertex the rasterizer
     // interpolates in this light's 2D shadow pass: the raster term of the
     // minimum bias is 4u times it. 1 when the pass clips at the depth
@@ -239,7 +267,9 @@ public:
     // the "no shadow map" sentinel and every light shades unshadowed).
     // shadow_map_footprint is the receiver filter footprint of the 2D shadow
     // maps; the directional fit and the spot projection keep their covered
-    // receivers its coverage margin inside the map.
+    // receivers its coverage margin inside the map. in_caster_vertex_extents
+    // (one per caster mesh, in any order) bound every light's caster vertex
+    // rounding (Light_shadow_limits::caster_vertex_rounding).
     void apply(
         const Light_set&                                light_set,
         const erhe::scene::Camera*                      main_camera,
@@ -252,7 +282,8 @@ public:
         std::span<const erhe::math::Aabb>               in_caster_world_aabbs = {},
         std::span<const erhe::math::Aabb>               in_receiver_world_aabbs = {},
         const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr,
-        erhe::scene::Shadow_map_footprint               shadow_map_footprint = erhe::scene::Shadow_map_footprint{}
+        erhe::scene::Shadow_map_footprint               shadow_map_footprint = erhe::scene::Shadow_map_footprint{},
+        std::span<const Caster_vertex_extent>           in_caster_vertex_extents = {}
     );
 
     // Forget the resolution of the previous apply(). The slot entries name

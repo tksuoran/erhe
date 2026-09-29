@@ -181,8 +181,9 @@ void Scene_image_view::copy_shadow_projections()
                 .clip_from_world    = transforms.clip_from_world.get_matrix(),
                 // Same expression Light_buffer::update() writes as the light position.
                 .position           = glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}},
-                .raster_vertex_depth = shadow_limits.raster_vertex_depth,
-                .distance_rays_valid = shadow_limits.distance_rays_valid
+                .raster_vertex_depth    = shadow_limits.raster_vertex_depth,
+                .caster_vertex_rounding = shadow_limits.caster_vertex_rounding,
+                .distance_rays_valid    = shadow_limits.distance_rays_valid
             }
         );
     }

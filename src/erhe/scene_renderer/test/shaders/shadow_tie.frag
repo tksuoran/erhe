@@ -39,10 +39,18 @@ void main()
         mix(-SHADOW_TIE_EXTENT, SHADOW_TIE_EXTENT, uv.y),
         1.0
     );
+    // The vertex rounding bound the same way standard.vert takes it: the
+    // matrix above stands for view_relative_from_node (its upper 3x3 and its
+    // translation), the station point for the node-space vertex.
+    float vertex_rounding = get_vertex_position_rounding(
+        mat3(SHADOW_TIE_VIEW_RELATIVE_FROM_STATION),
+        vec3(mix(-SHADOW_TIE_EXTENT, SHADOW_TIE_EXTENT, uv.x), SHADOW_TIE_PLANE_Y, mix(-SHADOW_TIE_EXTENT, SHADOW_TIE_EXTENT, uv.y)),
+        SHADOW_TIE_VIEW_RELATIVE_FROM_STATION[3].xyz
+    );
     // The receiver plane the same way standard.frag takes it: from the
     // screen-space derivatives of the view-relative position (position is
     // linear in gl_FragCoord inside a band, and no quad straddles two bands).
-    vec4  receiver_plane  = get_receiver_geometric_normal(position.xyz);
-    float visibility      = sample_light_visibility(position.xyz, 0u, receiver_plane);
+    vec4  receiver_plane  = get_receiver_geometric_normal(position.xyz, vertex_rounding);
+    float visibility      = sample_light_visibility(position.xyz, vertex_rounding, 0u, receiver_plane);
     out_color = vec4(visibility, float(shadow_tie_reference_depth_ulps()), 0.0, 1.0);
 }

@@ -2,6 +2,7 @@
 #include "erhe_skinning.glsl"
 #include "erhe_standard_variant.glsl"
 #include "erhe_vertex_joint_weights.glsl"
+#include "erhe_position_rounding.glsl"
 #include "erhe_vertex_position.glsl"
 #include "erhe_vertex_tbn.glsl"
 #include "erhe_vertex_texcoord.glsl"
@@ -39,8 +40,11 @@ layout(location = 0) out vec4      v_position;
 // the shadow casters and receivers work with (doc/erhe/shadows.md
 // "View-relative positions"). Its fp32 rounding scales with the distance
 // from the view origin; v_position's scales with the distance from the world
-// origin.
+// origin. v_position_rounding is the bound on that rounding
+// (get_vertex_position_rounding(), erhe_position_rounding.glsl), interpolated
+// to the fragment for the shadow receiver's minimum bias.
 layout(location = 17) out vec3     v_view_relative_position;
+layout(location = 18) out float    v_position_rounding;
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -226,6 +230,11 @@ void main()
     vec4 position               = world_from_node * vec4(node_position, 1.0);
     ERHE_VIEW_RELATIVE_PRECISE vec4 view_relative_position = view_relative_from_node * vec4(node_position, 1.0);
     gl_Position                 = camera.cameras[c_view_index].clip_from_view_relative * view_relative_position;
+    // The bound on view_relative_position's fp32 rounding: the products
+    // above round with the vertex's distance from its node origin (a large
+    // mesh far from its node origin carries a large bound however near the
+    // view origin its vertex is), the translation with its own magnitude.
+    float position_rounding     = get_vertex_position_rounding(mat3(world_from_node), node_position, view_relative_translation);
 
     // Object space tangent frame. Under the optimized variant's quaternion
     // encoding there is no a_normal attribute at all and both the normal and the
@@ -249,6 +258,7 @@ void main()
     // Shadow_renderer point-cube pass.
     v_position               = position;
     v_view_relative_position = view_relative_position.xyz;
+    v_position_rounding      = position_rounding;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
@@ -385,6 +395,7 @@ void main()
 #   endif
     v_position               = position;
     v_view_relative_position = view_relative_position.xyz;
+    v_position_rounding      = position_rounding;
 
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
 

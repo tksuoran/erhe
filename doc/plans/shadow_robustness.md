@@ -9,7 +9,11 @@ headless editor matrices) and OpenGL (the library GPU tests); the design is in
 [`point_light_shadows.md`](../erhe/point_light_shadows.md), the commands in
 [`testing.md`](../testing.md) "Shadow verification". Two items remain, both future work. The analytic review of the landed series, with its
 potential issues and improvements, is
-[reference/shadow_robustness_review_2026_09_29.md](../reference/shadow_robustness_review_2026_09_29.md).
+[reference/shadow_robustness_review_2026_09_29.md](../reference/shadow_robustness_review_2026_09_29.md);
+its one high-severity issue (the position rounding bound ignored the
+vertices' distance from their node origin) is fixed and covered by the
+`far_vertices` station, its medium and low issues (2 to 11) are open and
+listed there.
 
 ## 1. Metal
 

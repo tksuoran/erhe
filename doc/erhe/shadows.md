@@ -359,10 +359,19 @@ with the distance from the world origin.
   `view_relative_from_node`; `v_view_relative_position` (location 17) and
   `gl_Position = clip_from_view_relative * v_view_relative_position` come
   from it (also `precise`, so the compiler cannot fold the subtraction into
-  the sum). The vertex's fp32 error is then `5u` times its distance from the
-  view origin (a four-term row sum plus the rounded translation).
-  `v_position` stays the absolute world position for lighting, DDGI, texgen
-  and `Shader_debug::world_position`.
+  the sum). The vertex's fp32 error is bounded per component by `4u` times
+  the magnitudes the row sum adds, `|M_ij| |x_j|` for the upper 3x3 `M` of
+  `world_from_node` and the node-space vertex `x`, plus `5u` times the
+  view-relative translation (`get_vertex_position_rounding()`,
+  `erhe_position_rounding.glsl`): the products round with the vertex's
+  distance from its node origin, not from the view origin, so a large mesh
+  whose node sits far from its vertices carries a large bound however near
+  the view origin the vertex is (the `far_vertices` station). The vertex
+  stage writes the bound as `v_position_rounding` (location 18),
+  interpolated to the fragment: the barycentric combination of the vertex
+  errors is bounded by the same combination of their bounds. `v_position`
+  stays the absolute world position for lighting, DDGI, texgen and
+  `Shader_debug::world_position`.
 - **Light block.** Per light, composed once per frame by
   `Light_projections::apply()` (`light_view_relative_transforms`, parallel to
   the slots) and copied into the light block per pass: `view_origin` (the light camera position,
@@ -371,7 +380,14 @@ with the distance from the world origin.
   `get_clip_from_view_relative()` of the light camera, in double) and its
   double inverse `view_relative_from_texture`. The shadow pass camera block is
   composed from the same fp32 inputs with the same function, so the caster
-  pass and the receiver use the same rows. `texture_from_world` and
+  pass and the receiver use the same rows. `shadow_limits.x` is the light's
+  caster vertex rounding bound (`Light_shadow_limits::caster_vertex_rounding`,
+  "Minimum bias"), the largest `get_vertex_position_rounding()` any caster
+  vertex of the light's passes can have: per caster mesh
+  (`Caster_vertex_extent`, gathered by `Shadow_renderer::render()` with the
+  caster bounds) the length of `4u |M| |x_max| + 5u |t - view_origin|` per
+  component, `|x_max|` the largest `|coordinate|` per axis over the mesh's
+  node-space bounds, in double, rounded up to float. `texture_from_world` and
   `world_from_texture` remain for the other consumers (the shadow texel debug
   view, the editor's shadow debug lines).
 - **Receiver.** `get_light_relative_position()` (`erhe_light.glsl`) moves the
@@ -758,20 +774,36 @@ depth coefficient of the receiver plane in texture space.
   caster vertices are evaluated at `P`, as their stand-in.
 - **Position.** The shadow pass computes the caster's vertices relative to
   the light camera, the forward pass the receiver's relative to the camera
-  (`standard.vert`), so the two roundings are independent. The caster
-  vertices move the stored plane by at most
-  `get_vertex_position_rounding(P) = sqrt(3) 5u |P|` (a four-term row sum
-  plus the rounded view-relative translation; `|P|` stands in for the
-  magnitudes summed). The receiver point is interpolated from its own
-  vertices and moved into the light's frame, which puts it off the surface by
-  at most `get_light_relative_receiver_rounding()`:
-  `get_position_rounding(P_c) = sqrt(3) 9u |P_c|` (vertices and
-  interpolation) plus `sqrt(3) u` times the origin offset and `|P|` (the T7
-  tie pass computes the view-relative point from a matrix). At fixed (u, v),
-  an offset `eta` along the unit plane normal changes the depth by
-  `eta / (c h.w)`, since the texture-space plane evaluates to `eta` at `h`:
-  `E_position` is the sum of the two bounds over `|c| |h.w|`, with
-  `|c| >= 0.05 |D|` after the grazing clamp.
+  (`standard.vert`), so the two roundings are independent. A vertex
+  `M x + t` (`M` the upper 3x3 of `world_from_node`, `x` the node-space
+  position, `t` the view-relative translation) is off by at most
+  `get_vertex_position_rounding(M, x, t)` (`erhe_position_rounding.glsl`):
+  per component `4u` times the magnitudes the four-term row sum adds,
+  `sum_j |M_ij| |x_j|`, plus `5u |t_i|` (the translation's own rounding
+  passes through the sum), as a vector length. The products round with the
+  vertex's distance from its node origin, which is why `|P|` cannot stand in
+  for them: a 1000 m floor whose node origin is 500 m from its vertices
+  rounds by 0.03 mm however near the camera the vertex is (the
+  `far_vertices` station). The receiver's vertex bound arrives interpolated
+  as `v_position_rounding` ("View-relative positions"); the caster's
+  vertices are unknown to the receiver, so `Light_projections::apply()`
+  bounds them over the light's casters as
+  `Light_shadow_limits::caster_vertex_rounding` = `V_c` (the light block's
+  `shadow_limits.x`, the largest `get_vertex_position_rounding()` over the
+  corners of every caster's node-space bounds). The caster vertices move the
+  stored plane by at most `V_c`. The receiver point is interpolated from its
+  own vertices and moved into the light's frame, which puts it off the
+  surface by at most `get_light_relative_receiver_rounding()`:
+  `get_position_rounding(P_c, v_position_rounding) = (1 + 4u)
+  v_position_rounding + sqrt(3) 4u |P_c|` (the interpolated vertex bound,
+  restored from its own interpolation rounding, plus the interpolation of
+  the position) plus `sqrt(3) u` times the origin offset and `|P|` (the T7
+  tie pass computes the view-relative point from a matrix and its vertex
+  bound from the same matrix). At fixed (u, v), an offset `eta` along the
+  unit plane normal changes the depth by `eta / (c h.w)`, since the
+  texture-space plane evaluates to `eta` at `h`: `E_position` is the sum of
+  the two bounds over `|c| |h.w|`, with `|c| >= 0.05 |D|` after the grazing
+  clamp.
 - **Raster.** The rasterizer evaluates the caster primitive's depth at the
   texel centre as a combination of its post-clip vertex depths `z_i` with
   barycentric weights `l_i` in [0, 1] summing to 1: each weight and each
@@ -866,7 +898,14 @@ and without it on Low and Medium. The projection, position and gradient
 terms grow with the receiver's distance from the camera and from the light
 camera, not with its distance from the world origin ("View-relative
 positions"), so a station translated 10 km from the origin reads the gates
-it reads at the origin.
+it reads at the origin; the vertex terms grow with the vertices' distance
+from their node origin, so the `far_vertices` station's 1000 m floor (0.03
+mm of vertex rounding) reads a caster vertex bound `V_c` of 0.36 mm for its
+spot and point lights (`4u (cos 20 + sin 20) 500 + 5u 350` on x and z) and
+passes G1 on Low, Medium, High, `hard` and the distance technique, which
+without the node-origin term it fails on the point light (7.9 % of its lit
+pixels; the 2D paths hid the same error under the raster floor and the
+light camera's distance).
 
 #### Undetermined receiver plane
 
@@ -1004,7 +1043,8 @@ directional light the receiver's distance less `tan(alpha_max)` times its
 lateral distance from the ray, for a spot light the point-light cube's
 closed form. Every reference then moves toward the light by the sum of these
 bounds (world units along the ray, `u = 2^-24`, `P` the receiver point
-relative to the light camera, `e = 2 get_position_rounding(P)`):
+relative to the light camera, `e = 2 get_position_rounding(P, V_c)` with
+`V_c` the light's caster vertex rounding bound, "Minimum bias"):
 
 - **Coverage snap.** The receiver plane's distance slope per texel,
   `|N . l_u| / |N . d|` plus the same for `v`, times 1/256, where `l_u`,
@@ -1021,7 +1061,7 @@ relative to the light camera, `e = 2 get_position_rounding(P)`):
   the caster's threshold 0.01.
 - **Position.** The rounding of the receiver point
   (`get_light_relative_receiver_rounding()`) and of the caster's interpolated
-  point (`get_position_rounding(P)`), over `|N . d|`.
+  point (`get_position_rounding(P, V_c)`), over `|N . d|`.
 - **Evaluation.** Each side's `N . (p - O) / (N . d)`: the subtraction and
   the three-term dot product `4u |p - O|`, the dot `N . d` `3u |s| / |N . d|`
   and the divide `u |s|` (`s` the distance), plus the receiver's own length
@@ -1197,6 +1237,7 @@ light types.
 | Station | Content | Exercises |
 |---|---|---|
 | `head_on_floor` | Large floor, light on the axis above it | R1 at `dz/dUV = 0`, R6 |
+| `far_vertices` | 1000 x 1000 m floor rotated 20 degrees about Y (eight vertices, 500 to 707 m from the node origin), light on the axis above a point 350 m from the node origin | R1 where the vertex rounding follows the distance from the node origin ("Minimum bias", position term) |
 | `grazing_fan` | Tiles at 0, 15, 30, 45, 60, 75, 85, 88 degrees to the light axis | R1 across orientations, crease neighbours |
 | `contact_blocks` | Cube, 1 cm plate, thin post resting on the floor | R2, R3, R5 |
 | `thin_walls` | Closed huts with 1, 2, 5, 10, 20 cm walls, viewed from inside | R4 |
@@ -1296,7 +1337,9 @@ off.
 On the development machine (AMD iGPU, headless Vulkan editor):
 
 - Final gate: every cell passes every gate (1846 renders, 10.5 min; 112
-  cells, the distance config's 8 point cells unsupported). `contact_blocks` G3 / G5
+  cells before `far_vertices`, the distance config's 8 point cells
+  unsupported; with `far_vertices` 135 cells, 1779 renders and 11.4 min
+  without G6). `contact_blocks` G3 / G5
   worst in texels (directional / spot / point): Low 0.05 / 0.13 / 1.00, G5
   0.75 / 1.25 / 0.88; Medium 0.13 / 0.08 / 0.03, G5 0.94 / 0.94 / 0.75; High
   0.18 / 0.24 / 0.06, G5 0.88 / 0.81 / 0.81; the distance and the
@@ -1406,11 +1449,12 @@ minimum).
 | `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance path (`get_shadow_distance_tap`), reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
 | `res/shaders/erhe_point_shadow.glsl` | Point cube texel-centre selection shared by the cube caster and the receiver |
 | `res/shaders/erhe_shadow_distance.glsl` | Distance technique texel centre and ray (`precise`) shared by the distance caster and the receiver |
+| `res/shaders/erhe_position_rounding.glsl` | fp32 unit roundoff; `get_vertex_position_rounding()` (per-vertex bound from the node transform and node-space position, shared by `standard.vert` and the receivers) and `get_position_rounding()` (interpolated point) |
 | `src/erhe/scene_renderer/test/shadow_gpu_test_fixture.hpp` | Shadow GPU test fixture: station, poses, shadow map / forward / Shadow_tie renders |
 | `src/erhe/scene_renderer/test/test_shadow_gpu.cpp` | Shadow sampling GPU test cases |
 | `src/erhe/scene_renderer/test/shaders/shadow_tie.frag` | Shadow_tie fragment pass (reference depth offset per band) |
 | `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the caster plane's light distance on the texel centre ray to the distance map; `VARIANT_SHADOW_CUBE` writes the caster plane's radial distance on the texel centre ray to the cube face; point receiver multiplies `sample_point_light_visibility` |
-| `res/shaders/standard.vert` | `view_relative_from_node`, `gl_Position` from `clip_from_view_relative`; `v_view_relative_position` to the receiver and to the `VARIANT_SHADOW_CUBE` / `VARIANT_SHADOW_DISTANCE` caster fragment |
+| `res/shaders/standard.vert` | `view_relative_from_node`, `gl_Position` from `clip_from_view_relative`; `v_view_relative_position` and its vertex rounding bound `v_position_rounding` to the receiver and to the `VARIANT_SHADOW_CUBE` / `VARIANT_SHADOW_DISTANCE` caster fragment |
 | `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |
 | `src/editor/config/definitions/shadow_frustum_fit_config.py` | Frustum fit settings codegen definition |

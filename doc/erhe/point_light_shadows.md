@@ -115,9 +115,11 @@ exactly that texel.
 The caster fragment runs at its pixel centre, which lies on the texel centre
 ray. The face passes' view origin is the light position (`shadows.md`
 "View-relative positions"), so the caster's interpolated position `p` is its
-offset from the light, computed from a translation the CPU subtracted in
-double: its rounding scales with its distance from the light, not from the
-world origin. The caster takes the plane of its primitive - the geometric
+offset from the light, computed from the node's translation less the light
+position (one correctly rounded fp32 subtraction in `standard.vert`): its
+rounding scales with its distance from the light and with its vertices'
+distance from their node origin, not with the distance from the world
+origin. The caster takes the plane of its primitive - the geometric
 normal `cross(dFdxFine(p), dFdyFine(p))` and `p` itself - and stores the
 farther of the plane's radial distance on the centre ray,
 `|N . p| / |N . d_c|` (`d_c` the unit centre direction; the centre is
@@ -190,19 +192,22 @@ lookup is one nearest fetch, a single compare with no filter.
   through and `X_c` its point on the centre ray. Receiver: the normal's error
   bound from `get_receiver_geometric_normal()` times the computed
   `|P - X_c|`, over `|N . d_c|` less the bound. Caster: its normal's error
-  bound `e (2a + e) / a^2` (`e = 2 get_position_rounding(P - L)`
-  `= 2 sqrt(3) 9u |P - L|`, the error of one derivative of the caster's
-  light-relative position with `|P - L|` standing in for the caster's
+  bound `e (2a + e) / a^2` (`e = 2 get_position_rounding(P - L, V_c)`
+  `= 2 ((1 + 4u) V_c + sqrt(3) 4u |P - L|)`, the error of one derivative of
+  the caster's light-relative position: `V_c` the light's caster vertex
+  rounding bound (`shadows.md` "Minimum bias", the light block's
+  `shadow_limits.x`) and `|P - L|` standing in for the caster's interpolation
   magnitudes, and `a = 2 r_c / (resolution |q|^2)` the smallest world size of
   a cube pixel at the centre, which maximizes the bound), times half the
   texel diagonal on the plane, `sqrt(2) r_c / (resolution |q| |N . d_c|)`,
   over `|N . d_c|` less the bound but at least the caster's plane threshold
   0.01.
 - **Position.** The rounding of the receiver point
-  (`get_light_relative_receiver_rounding()`: its camera-relative
-  interpolation `sqrt(3) 9u |P_c|` plus one rounding each of the origin
-  offset and of `P - L`) and of the caster's interpolated point
-  (`get_position_rounding(P - L)`), along the plane normal, moves each
+  (`get_light_relative_receiver_rounding()`: its interpolated vertex bound
+  `v_position_rounding` and camera-relative interpolation `sqrt(3) 4u |P_c|`
+  plus one rounding each of the origin offset and of `P - L`) and of the
+  caster's interpolated point (`get_position_rounding(P - L, V_c)`), along
+  the plane normal, moves each
   plane's centre-ray distance by that over `|N . d_c|`.
 - **Evaluation.** Each side's `|N . v| / |N . d_c|`: `v` and `d_c` rounded,
   two three-term dots and the divide, `12u / |N . d_c| + 5u` relative to

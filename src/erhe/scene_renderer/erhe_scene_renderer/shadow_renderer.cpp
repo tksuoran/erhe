@@ -271,19 +271,25 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // light inside the fit (Light::tight_directional_light_projection_transforms);
     // here we only collect the candidates. Light_projections::apply() borrows
     // these vectors as spans for the duration of the call; no copy is made.
-    std::vector<erhe::math::Aabb>& caster_world_aabbs   = m_caster_world_aabbs;
-    std::vector<erhe::math::Aabb>& receiver_world_aabbs = m_receiver_world_aabbs;
+    std::vector<erhe::math::Aabb>&     caster_world_aabbs    = m_caster_world_aabbs;
+    std::vector<erhe::math::Aabb>&     receiver_world_aabbs  = m_receiver_world_aabbs;
+    std::vector<Caster_vertex_extent>& caster_vertex_extents = m_caster_vertex_extents;
     caster_world_aabbs.clear();
     receiver_world_aabbs.clear();
-    // The caster bounds also bound the vertex depths of the depth-clamped
-    // directional passes (Light_shadow_limits::raster_vertex_depth).
-    const bool gather_casters =
-        (parameters.fit_settings != nullptr) &&
-        (parameters.fit_settings->fit_to_casters || parameters.fit_settings->depth_clamp);
+    caster_vertex_extents.clear();
+    // Every caster is gathered, whatever the fit settings: its node
+    // transform and node-space bounds bound the caster vertex rounding of
+    // every light's minimum bias (Light_shadow_limits::
+    // caster_vertex_rounding), and its world bounds fit the directional
+    // frustum and bound the vertex depths of the depth-clamped directional
+    // passes (Light_shadow_limits::raster_vertex_depth).
     // Receiver bounds refine the caster cull (Shadow_frustum_fit_settings::
     // fit_to_receivers) and are only consumed when casters are also fitted.
-    const bool gather_receivers = gather_casters && parameters.fit_settings->fit_to_casters && parameters.fit_settings->fit_to_receivers;
-    if (gather_casters || gather_receivers) {
+    const bool gather_receivers =
+        (parameters.fit_settings != nullptr) &&
+        parameters.fit_settings->fit_to_casters &&
+        parameters.fit_settings->fit_to_receivers;
+    {
         ERHE_PROFILE_SCOPE("shadow: gather caster/receiver bounds");
         for (const auto& meshes : mesh_spans) {
             for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
@@ -298,7 +304,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     continue;
                 }
                 const bool is_caster =
-                    gather_casters &&
                     shadow_filter(flag_bits) &&
                     (!parameters.exclude_unlit_casters || !is_fully_unlit(*mesh.get()));
                 if (!gather_receivers && !is_caster) {
@@ -313,6 +318,27 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 }
                 if (is_caster) {
                     caster_world_aabbs.push_back(aabb);
+                    // The vertex shader's inputs: the mesh node's world
+                    // transform and the node-space bounds of its primitives
+                    // (a skinned mesh blends absolute joint matrices instead,
+                    // outside the bound's scope: doc/erhe/shadows.md
+                    // "View-relative positions").
+                    const glm::mat4 world_from_node = mesh->world_from_node();
+                    glm::vec3 node_abs_extent{0.0f};
+                    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                        const erhe::math::Aabb node_aabb = mesh_primitive.primitive->get_bounding_box();
+                        if (!node_aabb.is_valid()) {
+                            continue;
+                        }
+                        node_abs_extent = glm::max(node_abs_extent, glm::max(glm::abs(node_aabb.min), glm::abs(node_aabb.max)));
+                    }
+                    caster_vertex_extents.push_back(
+                        Caster_vertex_extent{
+                            .world_from_node_linear = glm::mat3{world_from_node},
+                            .world_translation      = glm::vec3{world_from_node[3]},
+                            .node_abs_extent        = node_abs_extent
+                        }
+                    );
                 }
             }
         }
@@ -354,7 +380,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         caster_world_aabbs,
         receiver_world_aabbs,
         parameters.fit_settings,
-        parameters.shadow_map_footprint
+        parameters.shadow_map_footprint,
+        caster_vertex_extents
     );
 
     // Make the distance map (if any) reachable to the forward pass'

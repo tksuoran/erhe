@@ -272,6 +272,9 @@ private:
     // fit; members (cleared each call) so the vectors keep their capacity.
     std::vector<erhe::math::Aabb>                 m_caster_world_aabbs;
     std::vector<erhe::math::Aabb>                 m_receiver_world_aabbs;
+    // Per-render() caster vertex rounding inputs (Caster_vertex_extent, one
+    // per caster mesh), gathered with the bounds above.
+    std::vector<Caster_vertex_extent>             m_caster_vertex_extents;
 };
 
 

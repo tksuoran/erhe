@@ -66,36 +66,17 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
     return 0.0;
 }
 
-// Unit roundoff of fp32 (round to nearest): a rounded operation returns
-// x * (1 + d) with |d| <= 2^-24. The receiver's minimum shadow bias (D1,
-// doc/erhe/shadows.md "Minimum bias") is built from bounds in these units.
-const float erhe_fp32_unit_roundoff = 1.0 / 16777216.0;
-
 // Positions in the shadow code are view-relative (doc/erhe/shadows.md
 // "View-relative positions"): standard.vert computes every vertex relative to
 // its pass's view origin (camera.cameras[].view_origin), the camera for a
-// forward pass and the light camera for a shadow pass, with a
-// view_relative_from_node whose translation the CPU subtracted in double. The
-// rounding bounds below therefore take the distance from the view origin, not
-// from the world origin.
-//
-// Bound on the fp32 rounding of a vertex position, as a vector length. Each
-// component is a four-term fp32 sum (a row of view_relative_from_node times
-// the homogeneous vertex), at most gamma_4 = 4u times the magnitudes it adds,
-// plus the one rounding of the row's translation when the CPU composed it:
-// 5u. The position's own distance from the view origin stands in for the
-// magnitudes; the three components combine to sqrt(3) * 5u * |p|.
-float get_vertex_position_rounding(vec3 view_relative_position) {
-    return (sqrt(3.0) * 5.0 * erhe_fp32_unit_roundoff) * length(view_relative_position);
-}
-
-// Bound on the rounding of an interpolated view-relative position (a
-// fragment's receiver point, a caster fragment's point): its triangle's
-// vertices (get_vertex_position_rounding()) plus the barycentric
-// interpolation, a four-term sum per component (4u): sqrt(3) * 9u * |p|.
-float get_position_rounding(vec3 view_relative_position) {
-    return (sqrt(3.0) * 9.0 * erhe_fp32_unit_roundoff) * length(view_relative_position);
-}
+// forward pass and the light camera for a shadow pass, from the node's
+// translation less that origin. The interpolation bounds take the distance
+// from the view origin, not from the world origin; the vertex bounds
+// (erhe_position_rounding.glsl) take the vertex's distance from its node
+// origin, which the vertex stage knows and passes on as v_position_rounding
+// for the receiver, and which Light_projections::apply() bounds over the
+// casters of each light (light.shadow_limits.x) for the caster side.
+#include "erhe_position_rounding.glsl"
 
 #if defined(ERHE_SHADOW_MAPS)
 // A receiver position relative to a light's shadow view origin (the light
@@ -112,12 +93,13 @@ vec3 get_light_relative_position(vec3 view_relative_position, vec3 light_view_or
 
 // Bound on the distance between the light-relative receiver point of
 // get_light_relative_position() and the receiver surface in real
-// arithmetic: the interpolated view-relative point (get_position_rounding()),
-// the rounding of the origin offset (u |offset| per component) and of the
-// sum (u |result| per component).
-float get_light_relative_receiver_rounding(vec3 view_relative_position, vec3 light_relative_position, vec3 light_view_origin) {
+// arithmetic: the interpolated view-relative point (get_position_rounding()
+// with the receiver's own vertex bound, v_position_rounding), the rounding
+// of the origin offset (u |offset| per component) and of the sum (u |result|
+// per component).
+float get_light_relative_receiver_rounding(vec3 view_relative_position, float vertex_rounding, vec3 light_relative_position, vec3 light_view_origin) {
     vec3 origin_offset = camera.cameras[c_view_index].view_origin.xyz - light_view_origin;
-    return get_position_rounding(view_relative_position) +
+    return get_position_rounding(view_relative_position, vertex_rounding) +
         ((sqrt(3.0) * erhe_fp32_unit_roundoff) * (length(origin_offset) + length(light_relative_position)));
 }
 #endif
@@ -147,7 +129,7 @@ float get_light_relative_receiver_rounding(vec3 view_relative_position, vec3 lig
 // vec4(0.0); sample_light_visibility() treats the receiver as head-on to the
 // light and covers every plane R1 admits (doc/erhe/shadows.md "Undetermined
 // receiver plane").
-vec4 get_receiver_geometric_normal(vec3 view_relative_position) {
+vec4 get_receiver_geometric_normal(vec3 view_relative_position, float vertex_rounding) {
     vec3  dp_dx    = ERHE_DFDX(view_relative_position);
     vec3  dp_dy    = ERHE_DFDY(view_relative_position);
     vec3  n        = cross(dp_dx, dp_dy);
@@ -155,7 +137,7 @@ vec4 get_receiver_geometric_normal(vec3 view_relative_position) {
     if (!(n_length > 0.0)) {
         return vec4(0.0);
     }
-    float derivative_error = 2.0 * get_position_rounding(view_relative_position);
+    float derivative_error = 2.0 * get_position_rounding(view_relative_position, vertex_rounding);
     float normal_error     = (derivative_error * (length(dp_dx) + length(dp_dy) + derivative_error)) / n_length;
     return vec4(n / n_length, normal_error);
 }
@@ -262,7 +244,11 @@ vec3 get_shadow_distance_tap(
 // light's view-relative matrices, so their fp32 rounding scales with the
 // distances from the camera and from the light camera, not from the world
 // origin (doc/erhe/shadows.md "View-relative positions").
-float sample_light_visibility(vec3 view_relative_position, uint light_index, vec4 receiver_plane) {
+// view_relative_position and vertex_rounding are the receiver's interpolated
+// view-relative position and its vertex rounding bound (standard.vert:
+// v_view_relative_position, v_position_rounding); receiver_plane is
+// get_receiver_geometric_normal() of them.
+float sample_light_visibility(vec3 view_relative_position, float vertex_rounding, uint light_index, vec4 receiver_plane) {
 #if defined(ERHE_SHADOW_MAPS)
     if (light_block.shadow_texture_compare.x == max_u32) {
         return 1.0;
@@ -423,12 +409,13 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
         // The caster's plane normal comes from the derivatives of its
         // interpolated position over one map pixel, relative to the light
         // camera (the shadow pass's view origin), each off by up to
-        // e = 2 get_position_rounding(P), so it tilts by at most
-        // e (|l_u| + |l_v| + e) / |l_u x l_v| (l_u, l_v the pixel's extents
-        // perpendicular to the ray; the caster taken at the receiver's
-        // distance, which is where the tie is).
-        float caster_rounding     = get_position_rounding(receiver_point);
-        float receiver_rounding   = get_light_relative_receiver_rounding(view_relative_position, receiver_point, light.view_origin.xyz);
+        // e = 2 get_position_rounding(P, caster vertex bound), so it tilts
+        // by at most e (|l_u| + |l_v| + e) / |l_u x l_v| (l_u, l_v the
+        // pixel's extents perpendicular to the ray; the caster taken at the
+        // receiver's distance, which is where the tie is, with the light's
+        // caster vertex rounding bound, light.shadow_limits.x).
+        float caster_rounding     = get_position_rounding(receiver_point, light.shadow_limits.x);
+        float receiver_rounding   = get_light_relative_receiver_rounding(view_relative_position, vertex_rounding, receiver_point, light.view_origin.xyz);
         float derivative_error    = 2.0 * caster_rounding;
         float caster_normal_error = (derivative_error * (lateral_u_length + lateral_v_length + derivative_error)) / length(cross(lateral_u, lateral_v));
         float texel_half_diagonal = 0.5 * sqrt((lateral_u_length * lateral_u_length) + (lateral_v_length * lateral_v_length));
@@ -540,7 +527,8 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
     //  - position: the rounding of the receiver point moves it off the
     //    surface by up to get_light_relative_receiver_rounding(), and the
     //    rounding of the caster's vertices (computed relative to the light
-    //    camera in the shadow pass, get_vertex_position_rounding()) moves the
+    //    camera in the shadow pass; bounded over the light's casters by
+    //    Light_projections::apply(), light.shadow_limits.x) moves the
     //    stored plane; at fixed (u, v) that is a depth offset of their sum
     //    over |c * h.w|.
     //  - raster: the rasterizer's fp32 interpolation of the caster
@@ -581,7 +569,7 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
     float abs_z              = abs(reference_depth);
     float projection_error   = 2.0 * (((((5.0 * u) * row_z_magnitude) + ((4.0 * u) * abs_z * row_w_magnitude)) / h_w) + (u * abs_z));
     float plane_c            = plane_determined ? abs(plane_in_texture.z) : (grazing_cos * D_length);
-    float position_rounding  = get_light_relative_receiver_rounding(view_relative_position, receiver_point, light.view_origin.xyz) + get_vertex_position_rounding(receiver_point);
+    float position_rounding  = get_light_relative_receiver_rounding(view_relative_position, vertex_rounding, receiver_point, light.view_origin.xyz) + light.shadow_limits.x;
     float position_error     = position_rounding / (plane_c * h_w);
     float raster_error       = (4.0 * u) * light.view_origin.w;
     vec2  tap_reach_uv       = (tap_reach_texels + caster_snap_texels) / shadowmap_resolution;
@@ -756,10 +744,11 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
 // distance of every plane R1 admits.
 //
 // The reference then moves toward the light by the sum of error bounds, in
-// world units along the ray (u = 2^-24, e = 2 get_position_rounding(P), the
-// error of one position derivative; P is relative to the light, the cube
-// passes' view origin, and |P| stands in for the caster's position
-// magnitudes):
+// world units along the ray (u = 2^-24, e = 2 get_position_rounding(P,
+// caster_vertex_rounding), the error of one position derivative; P is
+// relative to the light, the cube passes' view origin, |P| stands in for the
+// caster's interpolation magnitudes and caster_vertex_rounding bounds its
+// vertices, light.shadow_limits.x):
 //  - gradient: a normal error dN moves a plane's centre-ray distance by
 //    dN . (X - X_c) / (N' . d_c), X the point the plane was taken through and
 //    X_c its point on the centre ray. Receiver: its normal's error bound over
@@ -798,7 +787,11 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
 // view_relative_position: the receiver relative to this pass's view origin;
 // light_view_origin: the light block's view_origin of the light (its
 // position, the view origin of its cube passes, which store relative to it).
-float sample_point_light_visibility(vec3 view_relative_position, vec3 light_view_origin, float cube_index, vec4 receiver_plane)
+// view_relative_position, vertex_rounding and receiver_plane as for
+// sample_light_visibility(); light_view_origin, cube_index and
+// caster_vertex_rounding are the light's view_origin.xyz,
+// shadow_index_packed.y and shadow_limits.x.
+float sample_point_light_visibility(vec3 view_relative_position, float vertex_rounding, vec3 light_view_origin, float cube_index, float caster_vertex_rounding, vec4 receiver_plane)
 {
 #if defined(ERHE_SHADOW_MAPS)
     const float u            = erhe_fp32_unit_roundoff;
@@ -860,8 +853,8 @@ float sample_point_light_visibility(vec3 view_relative_position, vec3 light_view
     float snap_bias      = snap_step * (distance_slope.x + distance_slope.y + distance_slope.z);
 
     // Minimum bias (see the function comment).
-    float caster_rounding    = get_position_rounding(light_to_receiver);
-    float receiver_rounding  = get_light_relative_receiver_rounding(view_relative_position, light_to_receiver, light_view_origin);
+    float caster_rounding    = get_position_rounding(light_to_receiver, caster_vertex_rounding);
+    float receiver_rounding  = get_light_relative_receiver_rounding(view_relative_position, vertex_rounding, light_to_receiver, light_view_origin);
     float derivative_error   = 2.0 * caster_rounding;
     float receiver_lateral   = length(light_to_receiver - (centre_distance * centre_direction));
     // The undetermined reference already takes every admissible receiver plane.

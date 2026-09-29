@@ -45,8 +45,11 @@ layout(location = 0) in vec4 v_point_color;
 
 #if defined(ERHE_USE_VARYING_POSITION)
 layout(location = 0) in vec4      v_position;
-// Position relative to the pass's view origin (see standard.vert).
+// Position relative to the pass's view origin (see standard.vert), and the
+// bound on its vertices' fp32 rounding (erhe_position_rounding.glsl), which
+// the shadow receiver's minimum bias reads.
 layout(location = 17) in vec3     v_view_relative_position;
+layout(location = 18) in float    v_position_rounding;
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -440,7 +443,7 @@ void main()
     // geometric normal and its error bound, taken here in uniform control
     // flow, ahead of the per-light branches, from the view-relative position
     // (its rounding scales with the distance from the camera).
-    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position);
+    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position, v_position_rounding);
 
 #  ifdef ERHE_USE_VERTEX_VARYING_TANGENT
     vec3 T = normalize(v_T);
@@ -717,7 +720,7 @@ void main()
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
-                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, light_index, shadow_receiver_plane);
+                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane);
                 color += intensity * BXDF_CALL(L);
             }
         }
@@ -747,7 +750,7 @@ void main()
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-                float light_visibility  = sample_light_visibility(v_view_relative_position, light_index, shadow_receiver_plane);
+                float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
@@ -781,7 +784,7 @@ void main()
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-                float light_visibility  = sample_point_light_visibility(v_view_relative_position, light.view_origin.xyz, float(light.shadow_index_packed.y), shadow_receiver_plane);
+                float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, float(light.shadow_index_packed.y), light.shadow_limits.x, shadow_receiver_plane);
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
@@ -1074,18 +1077,18 @@ void main()
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
             if (dbg_light_index < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, dbg_light_index, shadow_receiver_plane);
+                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED)))) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, dbg_light_index, shadow_receiver_plane);
+                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, shadow_receiver_plane);
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)))) {
                 Light dbg_light = light_block.lights[dbg_light_index];
-                dbg_visibility = sample_point_light_visibility(v_view_relative_position, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), shadow_receiver_plane);
+                dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, float(dbg_light.shadow_index_packed.y), dbg_light.shadow_limits.x, shadow_receiver_plane);
             }
 #    endif
             out_color.rgb = vec3(dbg_visibility);

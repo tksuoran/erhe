@@ -1098,6 +1098,7 @@ namespace {
             {"slot", light.slot},
             {"position", json::array({light.position.x, light.position.y, light.position.z})}
         };
+        entry["caster_vertex_rounding"] = light.caster_vertex_rounding;
         if (point) {
             entry["cube_index"] = light.layer;
             entry["resolution"] = json::array({maps.cube_size, maps.cube_size});

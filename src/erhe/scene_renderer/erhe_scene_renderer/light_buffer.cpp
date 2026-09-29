@@ -65,6 +65,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .radiance_and_range           = light_struct.add_vec4 ("radiance_and_range"          )->get_offset_in_parent(),
             .shadow_index_packed          = light_struct.add_uvec4("shadow_index_packed"         )->get_offset_in_parent(),
             .view_origin                  = light_struct.add_vec4 ("view_origin"                 )->get_offset_in_parent(),
+            .shadow_limits                = light_struct.add_vec4 ("shadow_limits"               )->get_offset_in_parent(),
             .texture_from_view_relative   = light_struct.add_mat4 ("texture_from_view_relative"  )->get_offset_in_parent(),
             .view_relative_from_texture   = light_struct.add_mat4 ("view_relative_from_texture"  )->get_offset_in_parent(),
         },
@@ -335,6 +336,44 @@ namespace {
         : std::nextafter(static_cast<float>(max_depth), std::numeric_limits<float>::infinity());
 }
 
+// Bound on the fp32 rounding of any caster vertex position in the shadow
+// passes of a light whose view origin is view_origin (doc/erhe/shadows.md
+// "Minimum bias", position term; Light_shadow_limits::caster_vertex_rounding).
+// standard.vert computes a vertex as linear * node_position +
+// (translation - view_origin), a four-term fp32 sum per component: at most
+// gamma_4 = 4u times the magnitudes it adds, plus the rounding of the
+// translation difference (u), which passes through the sum: 4u sum_j
+// |linear_ij| |x_j| + 5u |t_i| per component, largest at the corner of the
+// mesh's node-space bounds with the largest |coordinate| per axis
+// (Caster_vertex_extent::node_abs_extent). The length over the components,
+// the largest over the casters, evaluated in double and rounded up to float.
+[[nodiscard]] auto get_max_caster_vertex_rounding(
+    const glm::vec3&                             view_origin,
+    const std::span<const Caster_vertex_extent>  caster_vertex_extents
+) -> float
+{
+    constexpr double unit_roundoff = 1.0 / 16777216.0; // 2^-24
+    const glm::dvec3 origin{view_origin};
+    double max_rounding = 0.0;
+    for (const Caster_vertex_extent& extent : caster_vertex_extents) {
+        const glm::dmat3 linear{extent.world_from_node_linear};
+        const glm::dvec3 abs_extent{extent.node_abs_extent};
+        const glm::dvec3 abs_translation = glm::abs(glm::dvec3{extent.world_translation} - origin);
+        glm::dvec3 rounding{0.0};
+        for (int row = 0; row < 3; ++row) {
+            const double magnitudes =
+                (std::abs(linear[0][row]) * abs_extent.x) +
+                (std::abs(linear[1][row]) * abs_extent.y) +
+                (std::abs(linear[2][row]) * abs_extent.z);
+            rounding[row] = ((4.0 * unit_roundoff) * magnitudes) + ((5.0 * unit_roundoff) * abs_translation[row]);
+        }
+        max_rounding = std::max(max_rounding, glm::length(rounding));
+    }
+    return (max_rounding <= 0.0)
+        ? 0.0f
+        : std::nextafter(static_cast<float>(max_rounding), std::numeric_limits<float>::infinity());
+}
+
 } // anonymous namespace
 
 auto get_spot_distance_min_resolution(const float outer_spot_angle, const erhe::scene::Shadow_map_footprint footprint) -> float
@@ -425,7 +464,8 @@ void Light_projections::apply(
     const std::span<const erhe::math::Aabb>         in_caster_world_aabbs,
     const std::span<const erhe::math::Aabb>         in_receiver_world_aabbs,
     const erhe::scene::Shadow_frustum_fit_settings* fit_settings,
-    const erhe::scene::Shadow_map_footprint         shadow_map_footprint
+    const erhe::scene::Shadow_map_footprint         shadow_map_footprint,
+    const std::span<const Caster_vertex_extent>     in_caster_vertex_extents
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -500,6 +540,7 @@ void Light_projections::apply(
         Light_view_relative_transforms& view_relative = light_view_relative_transforms.emplace_back();
         view_relative.view_origin = get_view_origin(world_from_light_camera);
         Light_shadow_limits& limits = light_shadow_limits.emplace_back();
+        limits.caster_vertex_rounding = get_max_caster_vertex_rounding(view_relative.view_origin, in_caster_vertex_extents);
         const erhe::scene::Light_type light_type = light->get_light_type();
         if (light_type != erhe::scene::Light_type::point) {
             const glm::dmat4 texture_from_view_relative = texture_from_clip * get_clip_from_view_relative(
@@ -683,6 +724,8 @@ auto Light_buffer::update(
         // w: the raster vertex depth bound of the minimum bias (Light_shadow_limits).
         const Light_shadow_limits& shadow_limits = light_projections->light_shadow_limits[light_index];
         const vec4 light_view_origin_vec4 = vec4{view_relative.view_origin, shadow_limits.raster_vertex_depth};
+        // x: the caster vertex rounding bound of the minimum bias (Light_shadow_limits).
+        const vec4 light_shadow_limits_vec4 = vec4{shadow_limits.caster_vertex_rounding, 0.0f, 0.0f, 0.0f};
         // From the orthonormal light frame: already unit length, and consistent
         // with the frame the shadow projection was fitted in.
         const vec3 direction            = light->get_light_frame().direction;
@@ -702,6 +745,7 @@ auto Light_buffer::update(
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));
         write(light_gpu_data, light_offset + offsets.light.view_origin,                  as_span(light_view_origin_vec4));
+        write(light_gpu_data, light_offset + offsets.light.shadow_limits,                as_span(light_shadow_limits_vec4));
         write(light_gpu_data, light_offset + offsets.light.texture_from_view_relative,   as_span(view_relative.texture_from_view_relative));
         write(light_gpu_data, light_offset + offsets.light.view_relative_from_texture,   as_span(view_relative.view_relative_from_texture));
 
