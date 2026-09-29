@@ -309,12 +309,8 @@ backend; **Partial** = present with a stated restriction; **No** = absent.
   values intact passes. Metal GPU tests have never been run.
 - **Single blend state** for all attachments; per-attachment blend and write
   masks are unavailable.
-- **Size and coupling.** Three full backends plus a null backend at ~48k lines
-  is a large surface to keep consistent; `command_queue.hpp` is a stale stub
-  that conflicts with live names; the texture-heap size in
-  `vulkan_backend.md` (256) disagrees with the code (4096);
-  `src/erhe/graphics/Readme.md` and `claude_review.md` describe an OpenGL-era
-  library.
+- **Size.** Three full backends plus a null backend at ~48k lines is a large
+  surface to keep consistent, and each feature lands three or four times.
 - **No native handle accessors per object**, so integrating an upscaler, a
   GPU profiler such as Tracy's Vulkan zones, or a third-party compute library
   needs backend-internal access.
@@ -524,12 +520,3 @@ productive relationship is the one in section 6: adopt agfx's bindless
 resource heap, count-buffer indirect draws, persistent pipeline cache,
 golden-image testing and native escape hatch inside erhe's own backends, and
 use agfx's test suite as a checklist for `erhe_graphics_gpu_tests` coverage.
-
-## 8. Housekeeping found during the review
-
-Items in erhe that the comparison surfaced and that are cheap to fix
-independently of section 6: remove the stale `command_queue.hpp` stub;
-correct the texture-heap descriptor count in `vulkan_backend.md`; replace
-`src/erhe/graphics/Readme.md` and delete `claude_review.md` in favor of
-`doc/erhe/graphics.md`; decide whether `textureCompressionASTC_LDR` should be
-enabled on Vulkan given the KTX2 loader can transcode to ASTC.

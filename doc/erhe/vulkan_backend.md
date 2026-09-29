@@ -269,8 +269,9 @@ MoltenVK requires for comparison samplers
 ### Texture heap (bindless)
 
 `Texture_heap_impl` (`vulkan_texture_heap.cpp`) is a descriptor-indexing array
-at set 1. The device creates `m_texture_set_layout` as a single binding of 256
-combined image samplers with `PARTIALLY_BOUND | UPDATE_AFTER_BIND |
+at set 1. The device creates `m_texture_set_layout` as a single binding of
+`max_texture_heap_size` (4096, `vulkan_texture_heap.hpp`) combined image
+samplers with `PARTIALLY_BOUND | UPDATE_AFTER_BIND |
 VARIABLE_DESCRIPTOR_COUNT`. `allocate(texture, sampler)` writes the descriptor
 and returns its array index as an opaque handle; `bind()` binds the set against
 the active bind group layout's pipeline layout. The heap is color-only:
