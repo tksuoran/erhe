@@ -105,9 +105,10 @@ with that reason.
 ### 2.3 Output routing for compute-produced images
 
 Nineteen agfx texture tests produce their image by writing an RGBA8 storage
-texture from a compute shader. erhe's `set_storage_image` is Vulkan-only and
-`image_2d` only (`Compute_command_encoder` header), so the port routes those
-outputs one of two ways, chosen per test and stated in its comment:
+texture from a compute shader. erhe's `set_storage_image` binds level 0 of a
+2D texture only (`Compute_command_encoder` header; Vulkan, OpenGL and
+Metal), so the port routes those outputs one of two ways, chosen per test
+and stated in its comment:
 
 - Sampling, gather, texture-load and comparison-sampler tests render a
   fullscreen triangle in a fragment shader into a color target (the
@@ -119,8 +120,7 @@ outputs one of two ways, chosen per test and stated in its comment:
 
 Only the two tests that exist to exercise storage images themselves
 (`UAVBarriers`, `WriteHDRTexture`) use `set_storage_image` with
-`format_32_vec4_float`, and they `GTEST_SKIP` on OpenGL and Metal with
-"storage images are Vulkan-only" as the reason.
+`format_32_vec4_float`; they run on every backend.
 
 ### 2.4 Artifacts and report
 
@@ -226,7 +226,7 @@ All through a fullscreen fragment pass (2.3).
 | ComputeMultiDispatchBuffer, ComputeMultiDispatchTexture | new `test_compute_multi_dispatch.cpp` | Four dispatches with `memory_barrier` between; the texture variant runs on an SSBO and copies to a texture for the image golden |
 | BufferViewByteAddress, BufferViewStructured, BufferViewConstant | new `test_buffer_bindings.cpp` | `uint[]` SSBO, struct-array SSBO, UBO; two-dispatch write then read-and-fold; buffer goldens |
 | MRT | `test_mrt.cpp` (extend) | Compute sum of the two attachments into an SSBO, analytic expected sum |
-| UAVBarriers, WriteHDRTexture | new `test_storage_image.cpp` | `set_storage_image` with `format_32_vec4_float`; 16 buffer/image ping-pongs with `memory_barrier`; `.pfm` golden; Vulkan-only, skips elsewhere (2.3) |
+| UAVBarriers, WriteHDRTexture | new `test_storage_image.cpp` | `set_storage_image` with `format_32_vec4_float`; 16 buffer/image ping-pongs with `memory_barrier`; `.pfm` golden; every backend (2.3) |
 
 ### Phase 7: indirect draws (5 tests)
 
@@ -324,6 +324,10 @@ Fixed:
 - GL: texture-to-buffer `copy_from_texture` passed the slice index as the
   layer count; `is_layered()` did not count a cube map as layered, so a face
   could not be a framebuffer attachment (phase 3).
+- GL: `Compute_command_encoder::set_sampled_image` was a no-op, so a
+  compute shader sampled whatever the texture unit held (phase 6). The
+  encoder header also claimed storage images were Vulkan-only; they work on
+  Vulkan, OpenGL and Metal.
 - Vulkan: `drawIndirectFirstInstance` was enabled as `VK_FALSE`, so a
   non-zero `base_instance` in an indirect draw was invalid usage (phase 5,
   enabled when the device has it, `Device_info::use_base_instance`).
@@ -345,3 +349,6 @@ Open:
   `Sampler_comparison_test`, six cases fail on that driver; see
   [`erhe/graphics_test_coverage.md`](../erhe/graphics_test_coverage.md)
   "Known gaps"). Not reproduced on Vulkan.
+- `scripts/gpu_test_report.py` previews a `.pfm` golden clamped to [0, 1],
+  so an HDR golden with values above 1 shows white; the preview needs a
+  tone map or an exposure control.

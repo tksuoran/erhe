@@ -350,9 +350,9 @@ precedent; it is unrelated to this feature despite the name.
    recompiling; the SPIR-V cache absorbs recompiles of unchanged sources.
 
 2. **Fragment shader fullscreen pass, not compute.** Material Maker bakes via
-   compute; erhe's `set_storage_image` is Vulkan-only while the fragment RTT
-   path works on all backends and has the `brdf_slice`/`post_processing`
-   precedent. Compute can be revisited for iterative buffers later.
+   compute; the fragment RTT path has the `brdf_slice`/`post_processing`
+   precedent and needs no storage image binding (which exists on every
+   backend). Compute can be revisited for iterative buffers later.
 
 3. **Pure codegen core is a new library `src/erhe/texgen/` (`erhe::texgen`)**
    with its own gtest suite (`src/erhe/texgen/test/`), no graphics
