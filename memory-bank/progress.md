@@ -63,8 +63,11 @@
 ✓D6::{caster-stores-plane-distance-on-texel-centre-ray;derived-point-bias;thin_walls/contact_blocks/cube_seams-point-green;min-point-res-64}
 ✓PHASE-6-DONE
 ✓D7+D10::{distance=caster-plane-distance-on-texel-ray;fwidth-removed;farther-of-plane/point-for-creases;presets-slope-0;only-cull_front-fails}
-?open::D9-depth-clamp,D11-spot-distance-min-res
 ✓extra-light::5b8d03abf{layer-indirection-passes}
 ✓D12::{RTE:precise-fp32(t_node-view_origin);no-per-primitive-per-frame-work(draw-list-counters-0-over-30-camera-moves);light-view-relative-matrices-per-apply();R7-passes-10m..10km}
 ✓PHASE-7-DONE
-?next::D9/D11->phase-8{GL/Metal+G7+docs}
+✓D9::c0b72caa8{raster-4u*Z-caster-vertex-depth;depth-clamp-directional-only;committed-settings-already-depth-clamped}
+✓D11::d9bb299ad{spot-distance-min-res;per-light-fallback-to-depth}
+!incident::coder-stash-pop-applied-user-stash@{0};reset-22-files-to-HEAD;stash-intact-verified
+⚡phase-8a::OpenGL-verification-coder-running
+?next::phase-8b{G7+final-pairwise+docs}
