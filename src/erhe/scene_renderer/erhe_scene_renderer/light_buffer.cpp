@@ -21,6 +21,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace erhe::scene_renderer {
@@ -292,10 +294,52 @@ Light_buffer::Light_buffer(
     init_command_buffer.clear_texture(*m_fallback_ddgi_rg_texture.get(),   {0.0, 0.0, 0.0, 0.0});
 }
 
+namespace {
+
+// Largest |texture depth| over the corners of the caster bounds, at least 1
+// (doc/erhe/shadows.md "Minimum bias", raster term under depth clamp). With
+// depth clamp the rasterizer clips a caster primitive only against the x / y
+// planes of the clip volume, so every vertex it interpolates lies on the
+// primitive, inside its mesh's world AABB; the texture depth of the
+// orthographic directional projection is an affine function of the position,
+// so its extremes over a box are at the corners. Evaluated in double,
+// relative to the light's view origin, and rounded up to float.
+[[nodiscard]] auto get_max_caster_texture_depth(
+    const glm::dmat4&                       texture_from_view_relative,
+    const glm::vec3&                        view_origin,
+    const std::span<const erhe::math::Aabb> caster_world_aabbs
+) -> float
+{
+    const glm::dvec4 row_z{texture_from_view_relative[0].z, texture_from_view_relative[1].z, texture_from_view_relative[2].z, texture_from_view_relative[3].z};
+    const glm::dvec4 row_w{texture_from_view_relative[0].w, texture_from_view_relative[1].w, texture_from_view_relative[2].w, texture_from_view_relative[3].w};
+    const glm::dvec3 origin{view_origin};
+    double max_depth = 1.0;
+    for (const erhe::math::Aabb& aabb : caster_world_aabbs) {
+        const glm::dvec3 lo = glm::dvec3{aabb.min} - origin;
+        const glm::dvec3 hi = glm::dvec3{aabb.max} - origin;
+        for (int corner = 0; corner < 8; ++corner) {
+            const glm::dvec4 p{
+                ((corner & 1) != 0) ? hi.x : lo.x,
+                ((corner & 2) != 0) ? hi.y : lo.y,
+                ((corner & 4) != 0) ? hi.z : lo.z,
+                1.0
+            };
+            const double depth = glm::dot(row_z, p) / glm::dot(row_w, p);
+            max_depth = std::max(max_depth, std::abs(depth));
+        }
+    }
+    return (max_depth <= 1.0)
+        ? 1.0f
+        : std::nextafter(static_cast<float>(max_depth), std::numeric_limits<float>::infinity());
+}
+
+} // anonymous namespace
+
 void Light_projections::clear()
 {
     light_projection_transforms.clear();
     light_view_relative_transforms.clear();
+    light_shadow_limits.clear();
     light_partition = Light_layer_partition{};
     shadow_map_2d_slots.clear();
     point_shadow_slots.clear();
@@ -359,7 +403,12 @@ void Light_projections::apply(
     light_projection_transforms.reserve(lights.size());
     light_view_relative_transforms.clear();
     light_view_relative_transforms.reserve(lights.size());
+    light_shadow_limits.clear();
+    light_shadow_limits.reserve(lights.size());
     const glm::dmat4 texture_from_clip{erhe::scene::Light::get_texture_from_clip(depth_range, conventions)};
+    // Depth clamp applies to the directional passes only (Shadow_renderer);
+    // their raster bound then comes from the caster bounds.
+    const bool directional_depth_clamp = (fit_settings != nullptr) && fit_settings->depth_clamp;
 
     const bool collect_fit_debug = (fit_settings != nullptr) && fit_settings->collect_debug;
     fit_debug_data.clear();
@@ -385,12 +434,17 @@ void Light_projections::apply(
         const glm::mat4& world_from_light_camera = transforms.world_from_light_camera.get_matrix();
         Light_view_relative_transforms& view_relative = light_view_relative_transforms.emplace_back();
         view_relative.view_origin = get_view_origin(world_from_light_camera);
-        if (light->get_light_type() != erhe::scene::Light_type::point) {
+        Light_shadow_limits& limits = light_shadow_limits.emplace_back();
+        const erhe::scene::Light_type light_type = light->get_light_type();
+        if (light_type != erhe::scene::Light_type::point) {
             const glm::dmat4 texture_from_view_relative = texture_from_clip * get_clip_from_view_relative(
                 transforms.clip_from_light_camera.get_matrix(), world_from_light_camera, view_relative.view_origin
             );
             view_relative.texture_from_view_relative = glm::mat4{texture_from_view_relative};
             view_relative.view_relative_from_texture = glm::mat4{glm::inverse(texture_from_view_relative)};
+            if ((light_type == erhe::scene::Light_type::directional) && directional_depth_clamp) {
+                limits.raster_vertex_depth = get_max_caster_texture_depth(texture_from_view_relative, view_relative.view_origin, in_caster_world_aabbs);
+            }
         }
     }
     parameters.fit_debug_out        = nullptr;
@@ -518,6 +572,7 @@ auto Light_buffer::update(
         ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
         : std::size_t{0};
     ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_view_relative_transforms.size() == light_projections->light_projection_transforms.size()));
+    ERHE_VERIFY((light_projections == nullptr) || (light_projections->light_shadow_limits.size() == light_projections->light_projection_transforms.size()));
     for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
         const erhe::scene::Light_projection_transforms& light_projection_transforms = light_projections->light_projection_transforms[light_index];
         const erhe::scene::Light* const light = light_projection_transforms.light;
@@ -557,7 +612,9 @@ auto Light_buffer::update(
         // The light's shadow view origin and view-relative matrices, composed
         // once per frame by Light_projections::apply().
         const Light_view_relative_transforms& view_relative = light_projections->light_view_relative_transforms[light_index];
-        const vec4 light_view_origin_vec4 = vec4{view_relative.view_origin, 0.0f};
+        // w: the raster vertex depth bound of the minimum bias (Light_shadow_limits).
+        const Light_shadow_limits& shadow_limits = light_projections->light_shadow_limits[light_index];
+        const vec4 light_view_origin_vec4 = vec4{view_relative.view_origin, shadow_limits.raster_vertex_depth};
         // From the orthonormal light frame: already unit length, and consistent
         // with the frame the shadow projection was fitted in.
         const vec3 direction            = light->get_light_frame().direction;

@@ -526,7 +526,12 @@ STATIONS = {
         "Non-casting floor below the fitted far plane, a floating plate, and a block next to the light's "
         "near plane: R1, R2 at the depth clamp paths.",
         ["R1", "R2"], DEPTH_BOXES, DEPTH_LIGHTS,
-        [view("top", [0.0, 11.0, 0.0], [0.0, 0.0, 0.0], 42.0, up=TOP_DOWN_UP, boxes=DEPTH_BOXES)],
+        [view("top", [0.0, 11.0, 0.0], [0.0, 0.0, 0.0], 42.0, up=TOP_DOWN_UP, boxes=DEPTH_BOXES),
+         # The camera below the Near Block: the block lies between the light
+         # and the view frustum, so the directional fit's
+         # near_from_main_frustum puts the near plane below it and depth
+         # clamp keeps it in the map with vertex depths above 1 (plan D9).
+         view("under_block", [0.0, 3.0, 0.0], [0.0, 0.0, 0.0], 90.0, up=TOP_DOWN_UP, boxes=DEPTH_BOXES)],
         _texels(6.0, 90.0, 6.0, 5.0)),
     "cube_seams": _station(
         "Point light in a closed room, casters straddling its cube face boundaries: R1, R2 for the point "

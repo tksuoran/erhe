@@ -253,7 +253,8 @@ private:
     bool                                          m_y_flip{false};
     // Shadow caster pipelines, one per Shadow_cull_mode (indexed by its value).
     // m_pipelines_depth_clamp[] are the depth-clamp siblings, selected by
-    // Shadow_frustum_fit_settings::depth_clamp. Both built in the constructor;
+    // Shadow_frustum_fit_settings::depth_clamp for the directional passes
+    // (spot passes always clip). Both built in the constructor;
     // only the pipeline for the active cull mode ever builds GPU pipelines.
     std::array<erhe::graphics::Base_render_pipeline, shadow_cull_mode_count> m_pipelines;
     std::array<erhe::graphics::Base_render_pipeline, shadow_cull_mode_count> m_pipelines_depth_clamp;

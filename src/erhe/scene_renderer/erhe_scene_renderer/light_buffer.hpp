@@ -51,7 +51,10 @@ public:
     // with the world translated so that view_origin is at the origin,
     // composed in double (get_clip_from_view_relative()); the caster passes
     // and the receiver read the same bits. Point lights use view_origin only.
-    std::size_t view_origin;                    // vec4 (xyz, 0)
+    // view_origin.w is the light's raster vertex depth bound
+    // (Light_shadow_limits::raster_vertex_depth, doc/erhe/shadows.md
+    // "Minimum bias").
+    std::size_t view_origin;                    // vec4 (xyz, raster vertex depth bound)
     std::size_t texture_from_view_relative;     // mat4
     std::size_t view_relative_from_texture;     // mat4
 };
@@ -186,6 +189,21 @@ public:
     glm::mat4 view_relative_from_texture{1.0f};
 };
 
+// Per-light limits of the 2D shadow map receiver bias, derived once per
+// Light_projections::apply() from the light's projection and the caster
+// bounds (doc/erhe/shadows.md "Minimum bias").
+class Light_shadow_limits
+{
+public:
+    // Largest |texture depth| of any caster vertex the rasterizer
+    // interpolates in this light's 2D shadow pass: the raster term of the
+    // minimum bias is 4u times it. 1 when the pass clips at the depth
+    // planes; under depth clamp (directional lights with
+    // Shadow_frustum_fit_settings::depth_clamp) the largest |depth| over the
+    // caster bounds' corners, at least 1.
+    float raster_vertex_depth{1.0f};
+};
+
 // Selects camera for which the shadow frustums are fitted
 class Light_projections
 {
@@ -242,6 +260,9 @@ public:
     // Parallel to light_projection_transforms: composed once per apply(), so
     // the per-pass Light_buffer::update() only copies them.
     std::vector<Light_view_relative_transforms>           light_view_relative_transforms;
+    // Parallel to light_projection_transforms as well: the per-light bias
+    // limits (Light_shadow_limits), derived once per apply().
+    std::vector<Light_shadow_limits>                      light_shadow_limits;
     Light_layer_partition                                 light_partition{};
     std::vector<std::size_t>                              shadow_map_2d_slots;
     std::vector<std::size_t>                              point_shadow_slots;

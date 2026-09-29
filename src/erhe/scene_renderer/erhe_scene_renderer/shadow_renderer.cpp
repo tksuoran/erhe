@@ -275,10 +275,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     std::vector<erhe::math::Aabb>& receiver_world_aabbs = m_receiver_world_aabbs;
     caster_world_aabbs.clear();
     receiver_world_aabbs.clear();
-    const bool gather_casters = (parameters.fit_settings != nullptr) && parameters.fit_settings->fit_to_casters;
+    // The caster bounds also bound the vertex depths of the depth-clamped
+    // directional passes (Light_shadow_limits::raster_vertex_depth).
+    const bool gather_casters =
+        (parameters.fit_settings != nullptr) &&
+        (parameters.fit_settings->fit_to_casters || parameters.fit_settings->depth_clamp);
     // Receiver bounds refine the caster cull (Shadow_frustum_fit_settings::
     // fit_to_receivers) and are only consumed when casters are also fitted.
-    const bool gather_receivers = gather_casters && parameters.fit_settings->fit_to_receivers;
+    const bool gather_receivers = gather_casters && parameters.fit_settings->fit_to_casters && parameters.fit_settings->fit_to_receivers;
     if (gather_casters || gather_receivers) {
         ERHE_PROFILE_SCOPE("shadow: gather caster/receiver bounds");
         for (const auto& meshes : mesh_spans) {
@@ -396,13 +400,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     // Depth clamping preserves casters outside the (tightly fitted) light
     // space near plane by clamping their depth instead of clipping them.
-    // Face culling is the active graphics preset's Shadow_cull_mode; both
-    // dimensions index the pre-built pipeline set.
+    // It is a setting of the directional fit (it pairs with
+    // near_from_main_frustum) and applies to the directional passes only:
+    // a spot pass clips at its fixed near plane, so every vertex depth it
+    // interpolates stays within [0, 1], while under depth clamp a caster
+    // passing close to the spot light has unbounded vertex depths and the
+    // minimum bias's raster term no finite bound (doc/erhe/shadows.md
+    // "Minimum bias"). Face culling is the active graphics preset's
+    // Shadow_cull_mode; both dimensions index the pre-built pipeline set.
     const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
     const std::size_t cull_index      = static_cast<std::size_t>(parameters.cull_mode);
-    erhe::graphics::Base_render_pipeline& base_pipeline = use_depth_clamp
-        ? m_pipelines_depth_clamp[cull_index]
-        : m_pipelines[cull_index];
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
@@ -428,6 +435,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         if (shadow_index >= parameters.render_passes.size()) {
             continue;
         }
+        erhe::graphics::Base_render_pipeline& base_pipeline =
+            (use_depth_clamp && (light->get_light_type() == erhe::scene::Light_type::directional))
+                ? m_pipelines_depth_clamp[cull_index]
+                : m_pipelines[cull_index];
 
         erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{

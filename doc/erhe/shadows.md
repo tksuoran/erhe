@@ -26,10 +26,12 @@ Per frame, for each scene view:
    fit target camera (the view camera, or the per-scene-view override), and
    calls `Shadow_renderer::render()`.
 2. `Shadow_renderer::render()` (erhe::scene_renderer) gathers one world-space
-   AABB per shadow caster when `fit_to_casters` is enabled, then calls
-   `Light_projections::apply()`, which invokes
+   AABB per shadow caster when `fit_to_casters` or `depth_clamp` is
+   enabled, then calls `Light_projections::apply()`, which invokes
    `Light::projection_transforms()` per light to compute the light camera
-   pose, projection, `clip_from_world` and `texture_from_world`. The per-light
+   pose, projection, `clip_from_world` and `texture_from_world`, and derives
+   each light's bias limits (`Light_shadow_limits`: the raster vertex depth
+   bound of "Minimum bias"). The per-light
    filtering of those casters happens inside the fit (see fit_to_casters),
    because which casters can contribute depends on the light direction.
 3. The shadow pass rasterizes each shadow casting light into its own layer of
@@ -103,7 +105,7 @@ gated by a `Shadow_frustum_fit_settings` field:
 | `fit_to_receivers_hull` | off | Use the tight convex receiver hull (clipped to the frustum) instead of a bounding box for the receiver cull volume |
 | `optimize_rotation` | off | Rotating calipers roll around the light direction for minimum covered area |
 | `near_from_main_frustum` | off | Pull the near plane down to the view frustum extent (needs `depth_clamp`) |
-| `depth_clamp` | off | Depth-clamp rasterization in the shadow pass (caster "pancaking") |
+| `depth_clamp` | off | Depth-clamp rasterization in the directional shadow passes (caster "pancaking") |
 | `texel_snap` | on | Snap the light space box to shadow map texels |
 | `quantize_extents` | off | Round the box size up to multiples of `quantize_step` |
 | `quantize_step` | 0 | World units; 0 derives `2 * shadow_range / 16` |
@@ -208,7 +210,8 @@ the view frustum: casters between the near plane and the light are preserved
 by depth clamping in the shadow pass (classic "pancaking" - their depth
 clamps to the near plane instead of being clipped away). The two settings
 pair: enabling `near_from_main_frustum` without `depth_clamp` loses shadows
-from casters above the near plane.
+from casters above the near plane. Depth clamp moves the minimum bias's
+raster bound from 1 to the largest caster depth ("Minimum bias").
 
 **cap_by_shadow_range.** Safety net: the box never exceeds the stable fit's
 shadow-range cube around the view camera, so a stray huge caster cannot
@@ -237,10 +240,11 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
 
 `Shadow_renderer` (`erhe_scene_renderer/shadow_renderer.cpp`):
 
-- **Caster bounds gathering** - when `fit_to_casters` is on, one world-space
-  AABB per mesh passing the shadow filter (visible + shadow_cast) is collected
-  before `Light_projections::apply()` and copied into frame-lifetime storage
-  inside `Light_projections`. The per-light contribution cull and the
+- **Caster bounds gathering** - when `fit_to_casters` or `depth_clamp` is
+  on, one world-space AABB per mesh passing the shadow filter (visible +
+  shadow_cast) is collected before `Light_projections::apply()`, which reads
+  them during the call: the fit's casters, and under depth clamp the bound on
+  the depth-clamped vertex depths ("Minimum bias"). The per-light contribution cull and the
   per-box clipping happen inside the fit, not here (the gather is
   light-independent; the cull is not).
 - **Cull mode** - the active graphics preset's `Shadow_cull_mode` selects the
@@ -268,13 +272,21 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   variant; see "Mirrored (negative-determinant) geometry" in
   `editor_rendering.md`.
 - **Depth clamp pipeline** - `Shadow_frustum_fit_settings::depth_clamp`
-  selects the depth-clamp sibling of the active cull mode
-  (`m_pipelines_depth_clamp[]`), e.g.
+  selects, for the directional light passes, the depth-clamp sibling of the
+  active cull mode (`m_pipelines_depth_clamp[]`), e.g.
   `Rasterization_state::cull_mode_front_ccw_depth_clamp` for `cull_front`: the
   same culling and y-flip winding compensation as the regular shadow pipeline,
   plus depth clamping. The sibling exists so that toggling `depth_clamp`
   changes ONLY depth clamping, never the culling behavior (and so the
-  per-bucket winding flip stays effective).
+  per-bucket winding flip stays effective). Depth clamp is a setting of the
+  directional fit (it pairs with `near_from_main_frustum`); spot passes
+  always clip at their fixed 0.04 m near plane and their range. Under depth
+  clamp nothing clips at the depth planes, so a caster passing close to a
+  spot light would reach unbounded vertex depths, which no finite raster
+  bound of the minimum bias covers ("Minimum bias"); with clipping a spot
+  caster's vertex depths stay in [0, 1], and a caster beyond the range is
+  clipped where depth clamp would have pancaked it onto the far clear value,
+  which reads the same.
 - **Empty border** - the pass sets a scissor rectangle inset by the border
   width on each side, keeping the outermost texel rings at the clear value
   (see [Empty border and receiver coverage](#empty-border-and-receiver-coverage)).
@@ -734,7 +746,28 @@ depth coefficient of the receiver plane in texture space.
   one inside the clip volume's [0, 1], and a primitive clipped at the depth-1
   plane (the near plane under reverse-Z, the far plane under forward-Z) has
   vertices at depth 1 however small the texel's own depth is. The term is
-  therefore `4u`, with the vertex depth bound 1. This is the error of a large
+  therefore `4u Z` with the vertex depth bound `Z = 1`. Under depth clamp
+  (the directional passes with `Shadow_frustum_fit_settings::depth_clamp`)
+  the rasterizer clips only at the x / y planes; it interpolates the
+  unclamped vertex depths and clamps the result to [0, 1] afterwards, and the
+  clamp only moves two values closer, so the same bound holds with the
+  largest `|z_i|` of the clamped primitive, which exceeds 1 for a caster
+  beyond the near plane. Every vertex the rasterizer interpolates lies on its
+  primitive, inside its mesh's world AABB, and the orthographic texture depth
+  is affine, so `Light_projections::apply()` takes `Z` as the largest
+  `|depth|` over the corners of the caster bounds (at least 1), once per light
+  and apply(), in double relative to the light's view origin
+  (`Light_shadow_limits::raster_vertex_depth`, in the light block's
+  `view_origin.w`). The spot passes do not depth clamp ("Shadow pass
+  mechanics"), so their `Z` is 1. The distance technique and the point cube
+  store plane distances, not the rasterized depth, so the raster term does not
+  apply to them and depth clamp changes only which caster wins the depth
+  test: two casters pancaked onto the near plane tie there, and either one
+  shadows every receiver the fit covers, which lies beyond the near plane.
+  On the `depth_range` station's `under_block` view the Near Block lies
+  between the light and the view frustum and `Z` is 2.65;
+  `render_scene_image` reports `raster_vertex_depth` per light in its
+  `shadow_lights` entries. This is the error of a large
   receiver that extends behind the light: on `cube_seams` the 6.2 m floor's
   triangles have a corner behind the spot light, are clipped at the near
   plane, and the stored depth of each triangle is the exact plane depth plus

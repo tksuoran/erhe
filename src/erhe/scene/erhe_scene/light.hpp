@@ -35,7 +35,7 @@ public:
     bool  fit_to_receivers_hull {true};  // use the tighter convex receiver hull (clipped to the view frustum) instead of a bounding box for the receiver cull volume
     bool  optimize_rotation     {false}; // rotating calipers roll around the light direction for minimum area coverage
     bool  near_from_main_frustum{false}; // near distance from the F_main plane most facing the light (relies on depth_clamp for closer casters)
-    bool  depth_clamp           {false}; // depth-clamp rasterization in the shadow pass
+    bool  depth_clamp           {false}; // depth-clamp rasterization in the directional shadow passes (spot passes always clip)
 
     // Stabilization
     bool  texel_snap            {true};  // snap the light-space box to shadow map texels

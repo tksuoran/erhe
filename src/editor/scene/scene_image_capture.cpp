@@ -159,10 +159,12 @@ void Scene_image_view::copy_shadow_projections()
         m_shadow_maps.cube_size   = light_projections->shadow_cube_texture->get_width();
         m_shadow_maps.cube_format = light_projections->shadow_cube_texture->get_pixelformat();
     }
-    for (const erhe::scene::Light_projection_transforms& transforms : light_projections->light_projection_transforms) {
+    for (std::size_t slot = 0, end = light_projections->light_projection_transforms.size(); slot < end; ++slot) {
+        const erhe::scene::Light_projection_transforms& transforms = light_projections->light_projection_transforms[slot];
         if ((transforms.light == nullptr) || !transforms.is_shadow_mapped()) {
             continue;
         }
+        const erhe::scene_renderer::Light_shadow_limits& shadow_limits = light_projections->light_shadow_limits[slot];
         const erhe::scene::Light&     light = *transforms.light;
         const erhe::scene::Light_type type  = light.get_light_type();
         m_shadow_lights.push_back(
@@ -175,7 +177,8 @@ void Scene_image_view::copy_shadow_projections()
                 .texture_from_world = transforms.texture_from_world.get_matrix(),
                 .clip_from_world    = transforms.clip_from_world.get_matrix(),
                 // Same expression Light_buffer::update() writes as the light position.
-                .position           = glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}
+                .position           = glm::vec3{transforms.world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}},
+                .raster_vertex_depth = shadow_limits.raster_vertex_depth
             }
         );
     }

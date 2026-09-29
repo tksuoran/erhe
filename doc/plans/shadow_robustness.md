@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is D9, D11 and phase 8.
+the current gate table. The remaining work is D11 and phase 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -278,6 +278,34 @@ The bias, in the order it is built:
   does not hold. The raster term is bounded by the clamped primitive's actual
   vertex depth range under depth clamp, and a `depth_range` station view with
   `depth_clamp` on joins the matrix.
+  Landed: under depth clamp the rasterizer clips only at x / y, interpolates
+  the unclamped vertex depths and clamps the result, so D1's raster term is
+  `4u Z` with `Z` the largest `|z_i|` the clamped primitive can have. For a
+  directional light (orthographic, affine depth) `Light_projections::apply()`
+  takes `Z` as the largest `|depth|` over the caster bounds' corners, at least
+  1, once per light (`Light_shadow_limits::raster_vertex_depth`, light block
+  `view_origin.w`): a per-light constant, because each directional light has
+  its own fit. `Shadow_renderer` gathers the caster bounds whenever
+  `depth_clamp` is on. A spot light has no finite bound under depth clamp (a
+  caster passing near the light reaches unbounded vertex depths, and a caster
+  AABB that contains the light bounds nothing), so depth clamp now applies to
+  the directional passes only: `depth_clamp` is a setting of the directional
+  fit, pairs with `near_from_main_frustum`, and spot passes clip at their
+  0.04 m near plane (`Z = 1`, in the scope of section 2) and their range (a
+  caster beyond it was pancaked onto the far clear value, which reads the
+  same). The distance technique and the point cube store plane distances;
+  depth clamp only changes which of two pancaked casters wins the depth
+  test, and either shadows every receiver the fit covers. The committed
+  `editor_settings.json` has had `depth_clamp` (and
+  `near_from_main_frustum`) on, so every earlier directional measurement
+  already ran depth-clamped; `shadow_verify.py` now pins the fit explicitly
+  per config (a session-only per-scene override through
+  `set_scene_settings`), with `depth_clamp` on, and the core matrix gains a
+  `Medium/depth_clamp=false` row (both settings off). `depth_range` gains
+  the `under_block` view (camera 3 m up, below the Near Block): the block
+  lies between the light and the view frustum, the fit's near plane is below
+  it, and directional `Z` reads 2.65 there; every gate passes in both
+  configs.
 
 - **D10 Crease neighbour steeper than the receiver.** The coverage-snap
   terms (2D `snap_bias`, point snap term) use the receiver's own slope, but
@@ -367,7 +395,7 @@ station serves all three light types.
 | `grazing_fan` | Tiles at 0, 15, 30, 45, 60, 75, 85, 88 degrees to the light axis | R1 across orientations, D2 / D3, D4 |
 | `contact_blocks` | Cube, 1 cm plate, thin post resting on the floor | R2, R3, R5 |
 | `thin_walls` | Closed huts with 1, 2, 5, 10, 20 cm walls, viewed from inside | R4 |
-| `depth_range` | Non-casting floor beyond the fitted far plane, caster near the light | R1, R2 at the clamp paths of shadows.md "Receivers outside the fitted depth range" |
+| `depth_range` | Non-casting floor beyond the fitted far plane, caster near the light; views from above and from below the near caster (`under_block`, D9) | R1, R2 at the clamp paths of shadows.md "Receivers outside the fitted depth range", the depth-clamped raster bound |
 | `cube_seams` | Point light in a closed room, casters on cube face boundaries | R1, R2 for the point cube |
 | `spot_cones` | Spot aimed at a floor, 5, 45 and 80 degree cones | R1, R5 across projection widths |
 | `cornell` | `gi_cornell.glb` at its saved light pose | the section 1 case |
@@ -399,6 +427,8 @@ The axes and their values:
 - depth convention: reverse-Z, forward-Z
 - `use_draw_lists`: on, off
 - `shadow_resolution` / `point_shadow_resolution`: 512 and 2048
+- directional fit `depth_clamp` (with `near_from_main_frustum`): on, off (D9;
+  the core matrix only, the pairwise and full matrices keep it on)
 
 The **core matrix** is every committed preset plus one-axis-at-a-time
 variations around Medium, run with the short pose sweep (5 poses per station)
@@ -487,8 +517,10 @@ Every gate is the worst value over all poses and runs:
   without editing `erhe_graphics.json`.
 - **T6** `scripts/shadow_verify.py` runs section 5 and 6 (usage in its
   docstring); `--enforce` exits non-zero on a FAIL. `--root-offset` and
-  `--extra-light` run the section 4 variants; it gains the G7 timing in
-  phase 8.
+  `--extra-light` run the section 4 variants. Every config sets the
+  directional fit (`depth_clamp` on unless the config turns it off, D9) as a
+  session-only per-scene override with the MCP tool `set_scene_settings`. It
+  gains the G7 timing in phase 8.
 - **T7 Library GPU tests** in `erhe_scene_renderer_gpu_tests` (ctest label
   `gpu`): [shadows.md](../erhe/shadows.md) "Shadow sampling GPU tests",
   including the two head-on cases (`Shadow_tie` and `Shadow_head_on_plane`)

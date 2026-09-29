@@ -539,11 +539,16 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
     //    over |c * h.w|.
     //  - raster: the rasterizer's fp32 interpolation of the caster
     //    primitive's vertex depths at the texel centre, 4u times the largest
-    //    vertex depth. Clipping keeps every vertex depth inside the clip
-    //    volume's [0, 1], and a primitive clipped at the depth-1 plane (the
-    //    near plane under reverse-Z, the far plane under forward-Z) has
+    //    |vertex depth|, light.view_origin.w (Light_shadow_limits::
+    //    raster_vertex_depth). Clipping keeps every vertex depth inside the
+    //    clip volume's [0, 1], and a primitive clipped at the depth-1 plane
+    //    (the near plane under reverse-Z, the far plane under forward-Z) has
     //    vertices at depth 1 however small the texel's own depth is, so the
-    //    bound is taken with the vertex depth 1: 4u.
+    //    bound is 1. Under depth clamp (directional passes with
+    //    Shadow_frustum_fit_settings::depth_clamp) nothing clips at the depth
+    //    planes, the interpolation takes the unclamped vertex depths and the
+    //    clamp to [0, 1] follows it, so the bound is the largest |depth| over
+    //    the caster bounds' corners.
     //  - gradient: the normal's error bound tilts the plane about P, which
     //    moves the plane depth at a tap by up to
     //    normal_error * (|o_u| |D_u| + |o_v| |D_v| + |dz_dUV . o| |D|) / (|c| - normal_error |D|)
@@ -572,7 +577,7 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
     float plane_c            = plane_determined ? abs(plane_in_texture.z) : (grazing_cos * D_length);
     float position_rounding  = get_light_relative_receiver_rounding(view_relative_position, receiver_point, light.view_origin.xyz) + get_vertex_position_rounding(receiver_point);
     float position_error     = position_rounding / (plane_c * h_w);
-    float raster_error       = 4.0 * u;
+    float raster_error       = (4.0 * u) * light.view_origin.w;
     vec2  tap_reach_uv       = (tap_reach_texels + caster_snap_texels) / shadowmap_resolution;
     float tap_reach_lateral  = (tap_reach_uv.x * length(D_u)) + (tap_reach_uv.y * length(D_v));
     float gradient_error     = plane_determined

@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Light_shadow_limits` and
+  `Light_projections::light_shadow_limits` (parallel to the slots, derived
+  once per `apply()`): `raster_vertex_depth`, the vertex depth bound of the
+  minimum bias's raster term (the largest caster-bounds depth for a
+  depth-clamped directional pass, else 1; written to the light block's
+  `view_origin.w`).
 - `erhe::scene`: `Shadow_map_footprint` (`erhe_scene/light.hpp`, the receiver
   filter's tap reach with its border width and coverage margin) and
   `Light_projection_parameters::shadow_map_footprint`;
@@ -75,6 +81,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Shadow_frustum_fit_settings::depth_clamp` selects
+  the depth-clamp pipelines for the directional light passes only; spot
+  passes always clip. `Shadow_renderer::render()` gathers the caster bounds
+  when `depth_clamp` is on as well as with `fit_to_casters`.
 - `erhe::scene_renderer`: `standard.vert` computes positions relative to the
   pass's view origin (relative to eye: the fp32 node translation minus the
   fp32 view origin, `precise`) and `gl_Position` from

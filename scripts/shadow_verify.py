@@ -142,7 +142,13 @@ value set_graphics_preset reports are printed per config and recorded in the
 JSON as "shadow_map_format" / "shadow_depth_bits_axis"), shadow_cull_mode,
 forward-Z (a second editor launched with ERHE_FORCE_DISABLE_REVERSE_DEPTH=1;
 skipped with --reuse), use_draw_lists, shadow_resolution and
-point_shadow_resolution (both 512, both 2048). --matrix pairwise adds a
+point_shadow_resolution (both 512, both 2048), and depth_clamp=false (the
+directional fit's depth_clamp and near_from_main_frustum off: the directional
+passes clip at the fitted depth planes, plan D9). Every config sets the
+directional fit (FIT_SETTINGS, the committed editor_settings.json values, with
+depth_clamp on) as a session-only per-scene override of the loaded station
+with set_scene_settings, so the editor's own settings do not matter either.
+--matrix pairwise adds a
 deterministic all-pairs covering array over the section 5 axes around the
 --around preset (shadow_filter, shadow_bias, shadow_technique,
 shadow_depth_bits 16 / 24 / 32, shadow_cull_mode, depth convention,
@@ -188,6 +194,10 @@ render's shadow_lights entry (slot, layer / cube_index) is checked against
 that and recorded per cell as "slot_layer"; the active preset's light count
 limits (not set by set_graphics_preset) must admit the extra lights. Every
 placement is its own set of cells ("<config>@<offset>m+extra=<variant>").
+Per cell the script also records, from the renders' shadow_lights entries,
+the largest raster vertex depth bound (above 1 only for a depth-clamped
+directional pass whose casters reach past the fitted near plane, plan D9),
+listed under the table.
 Output: the table on stdout, logs/shadow_verify/<timestamp>.json
 (per cell worst values plus per pose / view detail of every failure: failing
 pixel count and example pixel coordinates with world points), and with
@@ -237,6 +247,17 @@ PRESET_FIELDS = ["shadow_filter", "shadow_bias", "shadow_technique", "shadow_cul
 # Values of the preset fields a graphics_presets.json entry may leave out
 # (fields added after the shipped presets were written).
 PRESET_FIELD_DEFAULTS = {"shadow_bias_texel_scale": 1.0, "shadow_bias_origin_scale": 1.0}
+# The directional shadow frustum fit every config runs with, set explicitly
+# per station scene with set_scene_settings (a session-only per-scene
+# override; the editor-global editor_settings.json is left alone): the
+# committed editor_settings.json values. depth_clamp is a matrix axis (the
+# core matrix's depth_clamp=false row); near_from_main_frustum pairs with it
+# (without depth clamp it clips casters between the light and the view
+# frustum, doc/erhe/shadows.md "Tight modular fit").
+FIT_SETTINGS = {"_version": 1, "fit_to_view_frustum": True, "fit_to_casters": True, "fit_to_receivers": True,
+                "fit_to_receivers_hull": True, "optimize_rotation": True, "near_from_main_frustum": True,
+                "depth_clamp": True, "texel_snap": True, "quantize_extents": False, "quantize_step": 0.0,
+                "cap_by_shadow_range": True, "collect_debug": False}
 FILTERS = ["hard", "pcf_2x2", "pcf_4x4", "pcf_6x6"]
 WIDE_FILTERS = ["pcf_4x4", "pcf_6x6"]
 FILTER_RADIUS = {"hard": 0.5, "pcf_2x2": 1.0, "pcf_4x4": 2.0, "pcf_6x6": 3.0}
@@ -370,16 +391,17 @@ def load_presets():
 def base_config(name, preset):
     fields = {k: preset.get(k, PRESET_FIELD_DEFAULTS[k]) if k in PRESET_FIELD_DEFAULTS else preset[k] for k in PRESET_FIELDS}
     fields["use_draw_lists"] = True
-    return {"name": name, "fields": fields, "forward_z": False, "note": ""}
+    return {"name": name, "fields": fields, "fit": dict(FIT_SETTINGS), "forward_z": False, "note": ""}
 
 
 def core_variations(base):
     f = base["fields"]
     out = []
 
-    def add(label, forward_z=False, **changes):
+    def add(label, forward_z=False, fit=None, **changes):
         fields = dict(f, **changes)
-        out.append({"name": f"{base['name']}/{label}", "fields": fields, "forward_z": forward_z, "note": ""})
+        out.append({"name": f"{base['name']}/{label}", "fields": fields,
+                    "fit": dict(base["fit"], **(fit or {})), "forward_z": forward_z, "note": ""})
 
     for value in FILTERS:
         if value != f["shadow_filter"]:
@@ -403,6 +425,11 @@ def core_variations(base):
     for value in (512, 2048):
         if (value != f["shadow_resolution"]) or (value != f["point_shadow_resolution"]):
             add(f"resolution={value}", shadow_resolution=value, point_shadow_resolution=value)
+    # The directional passes clip at the fitted near / far planes instead of
+    # clamping depth (plan D9): the other side of the minimum bias's raster
+    # term. near_from_main_frustum goes with it (FIT_SETTINGS).
+    if base["fit"]["depth_clamp"]:
+        add("depth_clamp=false", fit={"depth_clamp": False, "near_from_main_frustum": False})
     return out
 
 
@@ -538,7 +565,8 @@ def build_matrix(args):
     seen = {}
     unique = []
     for config in configs:
-        key = (json.dumps(config["fields"], sort_keys=True), config["forward_z"])
+        key = (json.dumps(config["fields"], sort_keys=True), json.dumps(config.get("fit", FIT_SETTINGS), sort_keys=True),
+               config["forward_z"])
         if key in seen:
             continue
         seen[key] = config["name"]
@@ -1503,6 +1531,16 @@ class Session:
         for key, value in args.items():
             if key in result and result[key] != value:
                 raise RuntimeError(f"set_graphics_preset: {key} = {result[key]}, requested {value}")
+        # The directional fit, as a per-scene override of the loaded station
+        # (session-only; apply_config() runs after every load_station()).
+        fit = config.get("fit", FIT_SETTINGS)
+        self.c.call("set_scene_settings", {"scene_name": self.c.scene, "merge": True,
+                                           "settings": {"shadow_frustum_fit": fit}})
+        applied = self.c.call("get_scene_settings", {"scene_name": self.c.scene})
+        applied_fit = (applied.get("settings") or {}).get("shadow_frustum_fit") or {}
+        for key, value in fit.items():
+            if (key != "_version") and (applied_fit.get(key) != value):
+                raise RuntimeError(f"set_scene_settings: shadow_frustum_fit.{key} = {applied_fit.get(key)}, requested {value}")
         self.config_name = config["name"]
         # The shadow map format the requested depth bits resolve to, and its
         # ERHE_SHADOW_DEPTH_BITS variant value (recorded per config).
@@ -1930,6 +1968,10 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                                                           station_info["light"])
                             entry = find_shadow_light(reply, station_info["light"], light_type)
                             cell["slot_layer"] = list(check_extra_light(variant, light_type, entry))
+                            # The light's raster vertex depth bound as the render used it (plan D9).
+                            if "raster_vertex_depth" in entry:
+                                cell["raster_vertex_depth"] = max(cell.get("raster_vertex_depth", 1.0),
+                                                                  entry["raster_vertex_depth"])
                             vis = image[:, :, 0].astype(np.float32)
                             job = {"kind": "image", "key": key, "station": station, "offset": offset,
                                    "cache_dir": session.cache_dir,
@@ -2160,6 +2202,15 @@ def main():
               f"{shadow_map.get('shadow_map_format')} (ERHE_SHADOW_DEPTH_BITS {shadow_map.get('shadow_depth_bits_axis')})")
     print()
     failures = print_table(cells, order)
+    # Plan D9: cells whose light had a raster vertex depth bound above 1
+    # (depth-clamped directional passes).
+    for key in order:
+        cell = cells[key]
+        notes = []
+        if cell.get("raster_vertex_depth", 1.0) > 1.0:
+            notes.append(f"raster vertex depth bound {cell['raster_vertex_depth']:.4g}")
+        if notes:
+            print(f"  {cell['config']} {cell['light']} {cell['station']}: " + "; ".join(notes))
     for key, (vis, classes, context) in pending_images.items():
         name = re.sub(r"[^A-Za-z0-9_.=-]+", "_", key)
         save_worst_image(os.path.join(run_dir, f"{name}.png"), vis, classes)
