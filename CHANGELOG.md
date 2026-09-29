@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device_info::use_depth_clamp`: whether
+  `Rasterization_state::depth_clamp_enable` is honoured (Vulkan: the
+  `depthClamp` device feature; always true on OpenGL and Metal).
 - `erhe::renderer`: `Minor_lines` and `Primitive_renderer::set_minor_lines()`
   (default `draw`): `skip` makes `add_sphere`, `add_cone`, `add_capsule` and
   `add_torus` emit only their self-visible major-style lines.

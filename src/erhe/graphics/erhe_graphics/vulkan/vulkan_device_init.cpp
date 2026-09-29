@@ -2080,6 +2080,7 @@ Device_impl::Device_impl(
     m_info.use_texture_view            = true;
     m_info.use_persistent_buffers      = true;
     m_info.use_clip_distance           = (qf.shaderClipDistance == VK_TRUE);
+    m_info.use_depth_clamp             = (qf.depthClamp         == VK_TRUE);
     m_info.shader_float16              = (set_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     m_info.shader_int8                 = (set_shader_float16_int8_features.shaderInt8    == VK_TRUE);
     m_info.shader_relaxed_extended_instruction =

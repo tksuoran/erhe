@@ -3,11 +3,12 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (64 passed) and on non-headless
-OpenGL (75 passed + 1 capability skip, no failures); Metal builds but has not
+target builds and runs on headless Vulkan (89 passed) and on non-headless
+OpenGL (100 passed + 1 capability skip, no failures); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
-row maps to one or more `TEST_F(Gpu_test, ...)` cases.
+row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
+fixture derived from it.
 `[x]` = covered, `[ ]` = gap, `[-]` = not testable on this device (a device/engine
 limitation, not a coverage gap to fill).
 
@@ -20,14 +21,22 @@ limitation, not a coverage gap to fill).
 ## Rasterization / draw
 
 - [x] Triangle raster, fullscreen (`test_m3_triangle.cpp`)
+- [x] Triangle with interpolated per-vertex color (`test_m3_triangle.cpp`, `Triangle_region_test.draw_triangle`)
+- [x] Viewport rectangle: bottom-right quadrant, rest untouched (`test_m3_triangle.cpp`, `Triangle_region_test.viewport`)
+- [x] Scissor rectangle: off-centre 64x64 of 128x128, exact rectangle written (`test_m3_triangle.cpp`, `Triangle_region_test.scissor_rect`)
 - [x] Raster state: cull mode + color write mask (`test_raster_state.cpp`)
+- [x] Cull mode none / back / front and front face ccw / cw over two oppositely wound triangles (`test_raster_state.cpp`, `Raster_state_test`)
+- [x] Fragment discard against a threshold read from a uniform block (`test_raster_state.cpp`, `Raster_state_test.fragment_discard`)
 - [x] Depth test less/greater (`test_m5_depth.cpp`)
+- [x] Depth compare ops, all eight, against a floor at depth 0.5 with columns at 0.25 / 0.5 / 0.75; depth clear value; depth write enable on / off (`test_depth_compare.cpp`)
+- [x] Depth clamp disabled / enabled: out-of-range columns clipped, or drawn with depth clamped to 0 and 1 (read back); the enabled case skips without `Device_info::use_depth_clamp` (`test_depth_clamp.cpp`)
 - [x] Color blend, straight-alpha over (`test_m5_blend.cpp`)
 - [x] Color blend, premultiplied-alpha over (`test_blend_premultiplied.cpp`)
 - [x] Multiple render targets / MRT (`test_mrt.cpp`)
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
+- [x] Six single-texel points, exact lit count and positions; line_list from a vertex buffer, non-indexed and indexed (uint16), rasterizing identically (`test_topology.cpp`, `Topology_test`)
 - [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
 - [-] Polygon mode line/point - NOT testable here: lavapipe (the headless CI device) has `fillModeNonSolid` disabled, so `VK_POLYGON_MODE_LINE`/`VK_POLYGON_MODE_POINT` fail pipeline creation. This is an engine/device limitation, not a coverage gap to fill; no engine feature should be added solely to test it.
 
@@ -114,7 +123,10 @@ output / golden / FLIP error map triptych with the numbers per image golden,
 and a hex view of the differing bytes per buffer golden.
 
 Golden-asserting tests: `msaa_color_resolve` (`msaa_color_resolve.png`),
-`Texgen_render_test.uv_gradient` (`texgen_uv_gradient.png`).
+`Texgen_render_test.uv_gradient` (`texgen_uv_gradient.png`), and the
+rasterization and depth state ports of the agfx suite, each against the
+golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
+(6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3).
 
 ## Known gaps (not yet covered)
 

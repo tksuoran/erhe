@@ -186,6 +186,10 @@ public:
 
     bool use_clip_control            {false};
     bool use_clip_distance           {true};  // shaderClipDistance / gl_ClipDistance
+    // Rasterization_state::depth_clamp_enable is honoured. Vulkan: the
+    // depthClamp device feature (enabled whenever the physical device has it);
+    // OpenGL (core since 3.2) and Metal always support it.
+    bool use_depth_clamp             {true};
     erhe::math::Coordinate_conventions coordinate_conventions;
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
