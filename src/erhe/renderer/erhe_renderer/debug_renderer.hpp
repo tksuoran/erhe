@@ -152,6 +152,15 @@ class Primitive_renderer;
 class Debug_renderer_bucket;
 class Debug_renderer_config;
 
+// Wide-line edge treatment (doc/erhe/renderer.md "Line widths"). on: analytic
+// coverage with a one-pixel fringe and a sub-pixel fade. off: binary edge at
+// 50 % coverage.
+enum class Anti_aliasing : unsigned int
+{
+    off,
+    on
+};
+
 class Debug_renderer
 {
 public:
@@ -173,6 +182,11 @@ public:
     // unitless; written to the view UBO each frame and tunable live.
     void               set_line_bias_margin(float margin) { m_line_bias_margin = margin; }
     [[nodiscard]] auto get_line_bias_margin() const -> float { return m_line_bias_margin; }
+
+    // Wide-line anti-aliasing (default on). Written to the view UBO of every
+    // bucket draw, so a change takes effect on the next frame.
+    void               set_anti_aliasing(Anti_aliasing anti_aliasing) { m_anti_aliasing = anti_aliasing; }
+    [[nodiscard]] auto get_anti_aliasing() const -> Anti_aliasing { return m_anti_aliasing; }
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
@@ -249,6 +263,7 @@ private:
     std::stack<View>                                m_view_stack{};
     View                                            m_view      {};
     float                                           m_line_bias_margin{1024.0f};
+    Anti_aliasing                                   m_anti_aliasing{Anti_aliasing::on};
 
     // Multiview state, parallel to m_view_stack / m_view. Non-empty
     // when a multiview begin_frame() supplied a per-eye View span;

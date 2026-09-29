@@ -1,4 +1,5 @@
-// Debug_renderer wide-line width (doc/erhe/renderer.md "Line widths").
+// Debug_renderer wide-line width and anti-aliasing (doc/erhe/renderer.md
+// "Line widths", doc/plans/debug_renderer_anti_aliasing.md).
 //
 // A negative Primitive_renderer thickness is a constant screen-space width:
 // set_thickness(-N) draws a line N logical pixels wide, and View::pixel_scale
@@ -11,6 +12,9 @@
 // The line sits at NDC x = 0, which is the pixel boundary W/2 for an even
 // target width W, so a ribbon of width N covers exactly the N pixel centers
 // W/2 - N/2 .. W/2 + N/2 - 1: the count is exact, not approximate.
+//
+// The anti-aliasing tests shift the line by a fraction of a pixel (x_offset)
+// and read the coverage profile of the middle row instead of a count.
 
 #include "gpu_test_fixture.hpp"
 
@@ -32,6 +36,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -55,15 +60,76 @@ enum class Projection_kind : unsigned int
     orthographic
 };
 
+enum class Occlusion : unsigned int
+{
+    none,   // depth cleared to far: the line passes the visible pass
+    behind  // depth cleared to near: only the hidden pass draws the line
+};
+
+enum class Cross_line : unsigned int
+{
+    none,
+    after,  // a horizontal line of the same width drawn after the vertical one
+    before  // ... drawn before it
+};
+
 class Line_case
 {
 public:
     int             target_width;
     Projection_kind projection;
-    float           fov_y;        // perspective only, radians
+    float           fov_y;                   // perspective only, radians
     float           pixel_scale;
-    float           thickness;    // passed to Primitive_renderer::set_thickness()
+    float           thickness;               // passed to Primitive_renderer::set_thickness()
+    float           x_offset_pixels{0.0f};   // shift of the line from the pixel boundary at NDC x = 0
+    int             repeat         {1};      // the line is added this many times
+    float           alpha          {1.0f};   // line color alpha (color is white)
+    Occlusion       occlusion      {Occlusion::none};
+    bool            xray           {false};
+    Cross_line      cross          {Cross_line::none};
+    Anti_aliasing   anti_aliasing  {Anti_aliasing::on};
 };
+
+// Row profile helpers: values are the red channel (0..255) of the middle row.
+[[nodiscard]] auto count_lit(const std::vector<uint8_t>& row) -> int
+{
+    int lit = 0;
+    for (const uint8_t value : row) {
+        if (value > 127u) {
+            ++lit;
+        }
+    }
+    return lit;
+}
+
+[[nodiscard]] auto coverage_sum(const std::vector<uint8_t>& row) -> float
+{
+    float sum = 0.0f;
+    for (const uint8_t value : row) {
+        sum += static_cast<float>(value) / 255.0f;
+    }
+    return sum;
+}
+
+[[nodiscard]] auto count_partial(const std::vector<uint8_t>& row) -> int
+{
+    int partial = 0;
+    for (const uint8_t value : row) {
+        if ((value > 0u) && (value < 255u)) {
+            ++partial;
+        }
+    }
+    return partial;
+}
+
+[[nodiscard]] auto max_value(const std::vector<uint8_t>& row) -> int
+{
+    int result = 0;
+    for (const uint8_t value : row) {
+        result = std::max(result, static_cast<int>(value));
+    }
+    return result;
+}
 
 } // anonymous namespace
 
@@ -107,6 +173,13 @@ protected:
     // middle row of the target.
     [[nodiscard]] auto measure_line_width(const Line_case& line_case) -> int
     {
+        return count_lit(render_row(line_case));
+    }
+
+    // Draws the case's line(s) and returns the red channel of the middle row
+    // of the target (empty on failure).
+    [[nodiscard]] auto render_row(const Line_case& line_case) -> std::vector<uint8_t>
+    {
         erhe::graphics::Device& graphics_device = device();
 
         const int   width  = line_case.target_width;
@@ -137,16 +210,21 @@ protected:
         glm::mat4 clip_from_world{1.0f};
         glm::vec4 fov_sides{-1.0f, 1.0f, 1.0f, -1.0f};
         float     line_half_height = 0.5f;
+        float     frame_width_in_world = 2.0f * aspect; // world extent of the target width at z = -5
         if (line_case.projection == Projection_kind::perspective) {
             clip_from_world = glm::perspectiveRH_ZO(line_case.fov_y, aspect, near_z, far_z);
             const float half_fov_y = 0.5f * line_case.fov_y;
             const float half_fov_x = std::atan(std::tan(half_fov_y) * aspect);
             fov_sides = glm::vec4{-half_fov_x, half_fov_x, half_fov_y, -half_fov_y};
             line_half_height = 5.0f * std::tan(half_fov_y) * 0.5f;
+            frame_width_in_world = 2.0f * 5.0f * std::tan(half_fov_x);
         } else {
             clip_from_world = glm::orthoRH_ZO(-aspect, aspect, -1.0f, 1.0f, near_z, far_z);
             fov_sides = glm::vec4{-aspect, aspect, 1.0f, -1.0f};
         }
+        const float pixel_in_world = frame_width_in_world / static_cast<float>(width);
+        const float line_x         = line_case.x_offset_pixels * pixel_in_world;
+        const bool  occluded       = (line_case.occlusion == Occlusion::behind);
 
         const erhe::math::Viewport viewport{0, 0, width, height};
         const View view{
@@ -167,7 +245,9 @@ protected:
         descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
         descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
         descriptor.depth_attachment.texture           = depth_stencil_target.get();
-        descriptor.depth_attachment.clear_value[0]    = reverse_depth ? 0.0 : 1.0;
+        // Far (the line is visible) or near (the line is behind everything and
+        // only the hidden pass draws it).
+        descriptor.depth_attachment.clear_value[0]    = (reverse_depth != occluded) ? 0.0 : 1.0;
         descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
         descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
         descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
@@ -187,30 +267,51 @@ protected:
         descriptor.debug_label = erhe::utility::Debug_label{"line width"};
 
         Debug_renderer& debug_renderer = *m_debug_renderer;
+        debug_renderer.set_anti_aliasing(line_case.anti_aliasing);
         submit_and_wait(
             [&](erhe::graphics::Command_buffer& command_buffer) {
                 debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
                 {
                     // Stencil reference 1 passes the debug pipeline's
-                    // "greater" stencil test against the cleared 0.
+                    // stencil test against the cleared 0.
                     Primitive_renderer line_renderer = debug_renderer.get(
                         Debug_renderer_config{
                             .primitive_type    = erhe::graphics::Primitive_type::line,
                             .stencil_reference = 1,
                             .draw_visible      = true,
-                            .draw_hidden       = false
+                            .draw_hidden       = occluded,
+                            .xray              = line_case.xray
                         }
                     );
-                    line_renderer.set_line_color(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
+                    line_renderer.set_line_color(glm::vec4{1.0f, 1.0f, 1.0f, line_case.alpha});
                     line_renderer.set_thickness(line_case.thickness);
-                    line_renderer.add_lines(
-                        {
-                            Line{
-                                .p0 = glm::vec3{0.0f, -line_half_height, -5.0f},
-                                .p1 = glm::vec3{0.0f,  line_half_height, -5.0f}
+                    const float cross_half_width = 0.5f * frame_width_in_world;
+                    const auto add_cross = [&]() {
+                        line_renderer.add_lines(
+                            {
+                                Line{
+                                    .p0 = glm::vec3{-cross_half_width, 0.0f, -5.0f},
+                                    .p1 = glm::vec3{ cross_half_width, 0.0f, -5.0f}
+                                }
                             }
-                        }
-                    );
+                        );
+                    };
+                    if (line_case.cross == Cross_line::before) {
+                        add_cross();
+                    }
+                    for (int i = 0; i < line_case.repeat; ++i) {
+                        line_renderer.add_lines(
+                            {
+                                Line{
+                                    .p0 = glm::vec3{line_x, -line_half_height, -5.0f},
+                                    .p1 = glm::vec3{line_x,  line_half_height, -5.0f}
+                                }
+                            }
+                        );
+                    }
+                    if (line_case.cross == Cross_line::after) {
+                        add_cross();
+                    }
                 }
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
@@ -234,17 +335,15 @@ protected:
         const std::vector<uint8_t> pixels = read_texture_rgba8(*color_target);
         EXPECT_EQ(pixels.size(), static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
         if (pixels.size() != static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u) {
-            return -1;
+            return {};
         }
         const int row = height / 2;
-        int lit = 0;
+        std::vector<uint8_t> result(static_cast<std::size_t>(width));
         for (int x = 0; x < width; ++x) {
             const std::size_t index = ((static_cast<std::size_t>(row) * static_cast<std::size_t>(width)) + static_cast<std::size_t>(x)) * 4u;
-            if (pixels[index] > 127u) {
-                ++lit;
-            }
+            result[static_cast<std::size_t>(x)] = pixels[index];
         }
-        return lit;
+        return result;
     }
 
     std::unique_ptr<Debug_renderer> m_debug_renderer;
@@ -327,6 +426,152 @@ TEST_F(Debug_line_width_gpu_test, screen_space_width_scales_with_pixel_scale)
         );
         EXPECT_EQ(lit_1_5x, 6) << "pixel scale 1.5, viewport width " << target_width;
     }
+}
+
+// --- Anti-aliasing (doc/plans/debug_renderer_anti_aliasing.md section 7) ---
+
+namespace {
+
+constexpr int c_aa_width = 512;
+
+[[nodiscard]] auto aa_case(float thickness, float x_offset_pixels) -> Line_case
+{
+    return Line_case{
+        .target_width    = c_aa_width,
+        .projection      = Projection_kind::perspective,
+        .fov_y           = 1.0f,
+        .pixel_scale     = 1.0f,
+        .thickness       = thickness,
+        .x_offset_pixels = x_offset_pixels
+    };
+}
+
+} // anonymous namespace
+
+// 1. A 4-pixel line shifted by half a pixel covers three pixels fully and the
+// two pixels beside them by half.
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_half_pixel_offset_profile)
+{
+    const std::vector<uint8_t> row = render_row(aa_case(-4.0f, 0.5f));
+    ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
+    const int c = c_aa_width / 2;
+    EXPECT_EQ(row[c - 3], 0u);
+    EXPECT_NEAR(row[c - 2], 128, 2);
+    EXPECT_EQ(row[c - 1], 255u);
+    EXPECT_EQ(row[c    ], 255u);
+    EXPECT_EQ(row[c + 1], 255u);
+    EXPECT_NEAR(row[c + 2], 128, 2);
+    EXPECT_EQ(row[c + 3], 0u);
+}
+
+// 2. The coverage across the line sums to the requested width for fractional
+// widths and sub-pixel offsets alike (energy conservation).
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_coverage_sum_equals_width)
+{
+    for (const float width : {0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 4.0f, 4.5f}) {
+        for (const float offset : {0.0f, 0.5f, 0.25f}) {
+            const std::vector<uint8_t> row = render_row(aa_case(-width, offset));
+            ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
+            const float sum       = coverage_sum(row);
+            const float tolerance = 0.02f * width + 0.5f * static_cast<float>(count_partial(row) + 1) / 255.0f;
+            EXPECT_NEAR(sum, width, tolerance) << "width " << width << " offset " << offset;
+        }
+    }
+}
+
+// 3. A quarter-pixel line stays one pixel wide at a quarter of the intensity.
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_sub_pixel_width_fades)
+{
+    const std::vector<uint8_t> row = render_row(aa_case(-0.25f, 0.5f));
+    ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
+    EXPECT_NEAR(max_value(row), 64, 2);
+    int nonzero = 0;
+    for (const uint8_t value : row) {
+        if (value > 0u) {
+            ++nonzero;
+        }
+    }
+    EXPECT_GE(nonzero, 1);
+    EXPECT_LE(nonzero, 2);
+}
+
+// 4. An opaque line added twice renders as once (the fringe blends the color
+// with itself under the last-fragment-wins stencil rule).
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_opaque_line_twice_equals_once)
+{
+    Line_case twice = aa_case(-4.0f, 0.5f);
+    twice.repeat = 2;
+    const std::vector<uint8_t> once_row  = render_row(aa_case(-4.0f, 0.5f));
+    const std::vector<uint8_t> twice_row = render_row(twice);
+    ASSERT_EQ(once_row.size(), twice_row.size());
+    for (std::size_t x = 0; x < once_row.size(); ++x) {
+        EXPECT_NEAR(once_row[x], twice_row[x], 1) << "x " << x;
+    }
+}
+
+// 5. A crossing line of the same color: every pixel of the row lies inside
+// the horizontal line's core, so the row is fully lit whichever line is
+// drawn first (a fringe never blocks or darkens a core).
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_crossing_core_is_never_blocked)
+{
+    for (const Cross_line cross : {Cross_line::after, Cross_line::before}) {
+        Line_case line_case = aa_case(-4.0f, 0.5f);
+        line_case.cross = cross;
+        const std::vector<uint8_t> row = render_row(line_case);
+        ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
+        for (std::size_t x = 0; x < row.size(); ++x) {
+            EXPECT_GE(row[x], 254u) << "cross " << static_cast<unsigned int>(cross) << " x " << x;
+        }
+    }
+}
+
+// 5b. Translucent lines of one bucket blend on top of each other (last
+// fragment wins), so the same line at alpha 0.5 twice is brighter than once.
+TEST_F(Debug_line_width_gpu_test, DISABLED_translucent_line_twice_is_brighter_than_once)
+{
+    Line_case once = aa_case(-4.0f, 0.0f);
+    once.alpha = 0.5f;
+    Line_case twice = once;
+    twice.repeat = 2;
+    const std::vector<uint8_t> once_row  = render_row(once);
+    const std::vector<uint8_t> twice_row = render_row(twice);
+    ASSERT_EQ(once_row.size(), static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(twice_row.size(), static_cast<std::size_t>(c_aa_width));
+    const int c = c_aa_width / 2;
+    EXPECT_NEAR(once_row[c], 128, 2);
+    EXPECT_NEAR(twice_row[c], 191, 2);
+}
+
+// 6. Behind everything, the hidden pass draws the same profile dimmed to
+// 0.1; an xray bucket draws it at full strength.
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_hidden_pass_is_dimmed_and_anti_aliased)
+{
+    Line_case hidden = aa_case(-4.0f, 0.5f);
+    hidden.occlusion = Occlusion::behind;
+    Line_case xray = hidden;
+    xray.xray = true;
+    const std::vector<uint8_t> visible_row = render_row(aa_case(-4.0f, 0.5f));
+    const std::vector<uint8_t> hidden_row  = render_row(hidden);
+    const std::vector<uint8_t> xray_row    = render_row(xray);
+    ASSERT_EQ(visible_row.size(), static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(hidden_row.size(),  static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(xray_row.size(),    static_cast<std::size_t>(c_aa_width));
+    for (std::size_t x = 0; x < visible_row.size(); ++x) {
+        EXPECT_NEAR(static_cast<float>(hidden_row[x]), 0.1f * static_cast<float>(visible_row[x]), 2.0f) << "x " << x;
+        EXPECT_NEAR(xray_row[x], visible_row[x], 1) << "x " << x;
+    }
+}
+
+// 7. With anti-aliasing off the edge is binary: the half-pixel-offset line
+// lights exactly four pixels and no partial pixel exists.
+TEST_F(Debug_line_width_gpu_test, DISABLED_aa_off_is_binary)
+{
+    Line_case line_case = aa_case(-4.0f, 0.5f);
+    line_case.anti_aliasing = Anti_aliasing::off;
+    const std::vector<uint8_t> row = render_row(line_case);
+    ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
+    EXPECT_EQ(count_lit(row), 4);
+    EXPECT_EQ(count_partial(row), 0);
 }
 
 } // namespace erhe::renderer::test
