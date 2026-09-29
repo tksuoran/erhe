@@ -67,6 +67,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: point-light cube shadows. The `VARIANT_SHADOW_CUBE`
+  caster stores its primitive plane's radial distance on each texel's centre
+  ray, and `sample_point_light_visibility()` (`res/shaders/erhe_light.glsl`)
+  takes the receiver plane `vec4` of `get_receiver_geometric_normal()` as a
+  fourth argument and replaces the fixed `max(0.05, 0.02 * distance)` bias
+  with the derived one (`doc/erhe/point_light_shadows.md` "Receiver bias").
+  The w component of `Light_buffer::update_control()`'s
+  `point_light_position` is the cube face resolution in texels (was the far
+  distance). New `c_min_point_shadow_resolution` (64,
+  `erhe_scene_renderer/light_buffer.hpp`): the smallest face resolution the
+  derivation holds for. New shader include `res/shaders/erhe_point_shadow.glsl`.
 - `erhe::scene_renderer`: `Shadow_renderer::Render_parameters::cull_mode`
   defaults to `Shadow_cull_mode::cull_back` (was `cull_front`, which leaks
   light where a caster touches a receiver; `doc/erhe/shadows.md` "Shadow pass

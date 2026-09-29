@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is phases 6 to 8.
+the current gate table. The remaining work is phases 7 and 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -36,9 +36,9 @@ Vulkan on an AMD iGPU.
 - A rasterizer constant bias of -4 removes the band. For a float depth format
   Vulkan scales that bias by `2^(e - 23)`, `e` the largest exponent of the
   primitive's depth range: it is an ulp-scaled floor, which confirms the tie.
-- Point lights compare radial distance with a world-space bias of
-  `max(0.05, 0.02 * distance)`; that bias is what makes them leak through thin
-  walls and detach contact shadows (section 9).
+- Point lights compared radial distance with a world-space bias of
+  `max(0.05, 0.02 * distance)`, which leaked through thin walls and detached
+  contact shadows; D6 replaces it.
 
 The standing rule the plan is built on: wherever the stored depth and the
 reference depth come from the same surface, the comparison is a tie, and a tie
@@ -206,12 +206,39 @@ The bias, in the order it is built:
   G4 shrinks to 5 .. 12 pixels (directional) and 36 .. 417 (spot), but G2
   still fails (`contact_blocks` 6168 / 12541, `cube_seams` 1599 / 74,
   `spot_cones` 2 / 98) and G4 at 2 cm and up still fails.
-- **D6 Point-light bias.** The cube pass always rasterizes both faces
-  (`cull_none`), so the lit face is always stored and the tie is structural:
-  the D1 formula applies with the cube texel's world footprint
-  `2 * distance * tan(45 deg) / point_shadow_resolution` (the face-centre
-  upper bound; corners are smaller by `cos^2`) in place of the fixed
-  `max(0.05, 0.02 * distance)`, on the radial distance the cube stores.
+- **D6 Point-light bias.** Landed: the cube pass rasterizes both faces
+  (`cull_none`), so the tie is structural, and it is resolved the way the 2D
+  paths resolve theirs - an exact per-texel offset plus derived error bounds,
+  with no constant world floor (point_light_shadows.md "Stored distance" and
+  "Receiver bias"). The receiver fetches the texel containing its direction
+  at the texel's centre (`get_point_shadow_texel_centre()`, shared with the
+  caster) and compares the receiver plane's distance on that centre ray,
+  one-sided; the bounds are the coverage snap (the receiver's radial-distance
+  slope times 1/256 pixel), the receiver's and the caster's normal errors
+  (`shadow_bias_texel_scale`), and position rounding and fp32 evaluation
+  (`shadow_bias_origin_scale`). The caster stores its primitive plane's
+  distance on the texel centre ray instead of `length(p - L)`: tracing the
+  first version, which bounded the interpolated point by the snap, showed the
+  `head_on_floor` floor's near-clipped triangles (tens of thousands of face
+  pixels wide) put the interpolated point up to 0.0064 texel off the pixel
+  centre ray (G1 10569 pixels at the floor corners, 47110 on
+  `contact_blocks`), an error the rasterizer's precision sets and no shader
+  quantity bounds; the plane distance does not depend on where on the plane
+  the point lands. `point_shadow_resolution` has a minimum of 64
+  (`c_min_point_shadow_resolution`) so the centre ray meets every plane R1
+  admits. Measured with the core matrix: `cube_seams`, `thin_walls` and
+  `contact_blocks` pass in every config (`contact_blocks` G3 4.75 to 1.25
+  texels at Medium, 9.5 to 0.06 at High, 2.5 to 1.0 at Low; G5 worst 3.25 to
+  1.25, 6.5 to 1.13; G4 at 2048 0 on every hut, 1 cm reported 0; 1 cm at 512
+  reported 3864). The Low / 512 `grazing_fan` G1 goes from 44 to 6 pixels,
+  all on the 15 degree tile's top face within one texel of its edge with the
+  side face, which faces away from the light: the side face's snapped
+  coverage reaches the texel centre and its extended plane is 0.18 mm nearer
+  than the top face's, against a 0.08 mm bias from the top face's own slope.
+  A crease neighbour steeper than the receiver is outside the snap term (as
+  for the 2D maps, whose `cull_back` default never stores that back face);
+  bounding it by the steepest plane the caster stores would cost up to 0.75
+  texel of bias at 512.
 - **D7 Distance technique for spot lights.** The `distance` technique extends
   to spot lights by storing the radial distance from the light, with the same
   fwidth caster bias; directional keeps its linear light-space depth, point
@@ -227,6 +254,15 @@ The bias, in the order it is built:
   does not hold. The raster term is bounded by the clamped primitive's actual
   vertex depth range under depth clamp, and a `depth_range` station view with
   `depth_clamp` on joins the matrix.
+
+- **D10 Crease neighbour steeper than the receiver.** The coverage-snap
+  terms (2D `snap_bias`, point snap term) use the receiver's own slope, but
+  within a texel of a crease the map can store the neighbouring face's
+  extended plane, which may be steeper and nearer the light (Low / 512 point
+  `grazing_fan`: 15 degree tile's top face next to its away-facing side, 0.18
+  mm nearer against 0.08 mm of bias, 6 px). The bound covers the steepest
+  plane the texel can hold without charging that slope to every receiver
+  (the uniform steepest-plane bound costs up to 0.75 texel at 512).
 
 ## 4. Test scenes
 
@@ -375,8 +411,6 @@ Every gate is the worst value over all poses and runs:
 Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
-- **Phase 6 - point lights (D6).** `cube_seams`, `thin_walls` and
-  `contact_blocks` point rows to green.
 - **Phase 7 - coverage.** D7 (spot distance technique), R7 origin runs, the
   `--extra-light` variant.
 - **Phase 8 - cost and documentation.** G7; rewrite shadows.md "Shadow
@@ -390,10 +424,11 @@ section 9 rewritten to the new gate table.
 current code: 16 configs (Low, Medium, High and the one-axis variations
 around Medium; a requested `shadow_depth_bits` of 24 resolves to D32_SFLOAT
 on this device, axis 32), `--poses short`, `--runs 1`, failing cells re-run
-3 times (every listed cell failed all 3 re-runs); 9364 renders, 55.2 min
+3 times (every listed cell failed all 3 re-runs); 6934 renders, 41.5 min
 wall on the Debug headless Vulkan editor, AMD iGPU. Directional and spot pass
 every gate in every `cull_back` and `cull_none` cell of the depth technique,
-including forward-Z, 512 and 2048. Cells
+including forward-Z, 512 and 2048; point passes every gate except one Low
+cell. Cells
 not listed pass every gate
 that applies to them. Values are the worst over poses and views: failing
 pixel count and share of the gated pixels (G1, G2), texels (G3, G5 as
@@ -401,16 +436,16 @@ mean / worst), pixels (G4 per wall, G6).
 
 | Config | Failing cells |
 |---|---|
-| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 1115, 2 cm: 882 .. 20 cm: 598, spot 2 cm: 1920 .. 20 cm: 4360); `contact_blocks` G2 3945 (0.8 %) / 7754 (1.6 %), G3 2.28 / 2.25, G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1669 / 54; `spot_cones` G2 210 / 392 (29 %) |
+| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 1120, 2 cm: 886 .. 20 cm: 600, spot 2 cm: 1917 .. 20 cm: 4448); `contact_blocks` G2 3943 (0.8 %) / 7931 (1.6 %), G3 2.28 / 2.25, G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1667 / 54; `spot_cones` G2 210 / 392 (29 %) |
 | Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 898 (dir) / 676 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), spot G2 8, G1 1 / 15, G5 0.29 / 3.25 (dir) and 0.24 / 3.75 (spot), directional G6 17; directional `thin_walls` G2 1, spot `thin_walls` G1 139, spot `spot_cones` G1 1 |
-| every config, point (D6) | `contact_blocks` G2 6, G3 4.75, G5 0.15 / 3.25 (High and 2048: G2 878, G3 9.5, G5 0.40 / 6.5; Low and 512: G3 2.5, G5 0.11 / 2.75); `thin_walls` G2 1 (High and 2048: G2 2, G4 2 cm: 21002, 5 cm: 5519, 1 cm: 32581); High and 2048 `cube_seams` G2 4; Low and 512 `grazing_fan` G1 44 |
+| Low, point (D6: a crease neighbour steeper than the receiver) | `grazing_fan` G1 6 (0.0021 %) |
 
 `py -3 scripts/shadow_verify.py --matrix pairwise` on the current code: 17
-configs, 11680 renders, 67.1 min wall; no failing cells outside D5 / D6 / D7
-(99 failing cells: 44 D7, 36 D6, 19 D5), directional G6 passes in every
-depth-technique cell.
+configs, 9445 renders, 57.2 min wall; 61 failing cells: 42 D7 (the distance
+technique configs), 18 D5 (the `cull_front` depth configs) and the Low point
+`grazing_fan` G1 6 above; no point cell of a pairwise config fails, and
+directional G6 passes in every depth-technique cell.
 
-Point lights fail only through the constant world-space bias (D6): the
-contact gap and the leak through 2 and 5 cm walls. The distance technique
-keeps the head-on tie on spot `cornell`, which the depth technique's D1 bias
-resolves.
+The point light's one failing cell is the crease neighbour D6 leaves out.
+The distance technique keeps the head-on tie on spot `cornell`, which the
+depth technique's D1 bias resolves.

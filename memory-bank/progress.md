@@ -59,5 +59,8 @@
 ✓PHASE-4-DONE
 ✓D5::171f5e9ba{cull_back-default;cull_front-inherent-contact-leaks(99.4%-tap-trace);cull_none==cull_back-2x-raster}
 ✓G2-contact-gap::141da0582+slope-bias-doc::0b93e9115{slope-0-exposes-D1-gap:spot-cube_seams-hard-5761px/512-187px;slope--1-kept-for-now}
-⚡D1-gap::trace-coder-running{find-under-bounded-term;then-raster-bias-0-if-clean}
-?next::phase-6-D6-point
+✓D1-gap::fefe0b014{raster-term=4u(clipped-vertex-depth-1);exact-texel-selection(511/512-gather);depth-technique-same-at-slope-0;presets-keep--1-for-D7-distance;D9-depth-clamp-open}
+✓D6::{caster-stores-plane-distance-on-texel-centre-ray;derived-point-bias;thin_walls/contact_blocks/cube_seams-point-green;min-point-res-64}
+✓PHASE-6-DONE
+?open::D9-depth-clamp,D10-crease-neighbour(6px-Low-point-grazing_fan)
+?next::phase-7{D7-spot-distance+R7+extra-light}

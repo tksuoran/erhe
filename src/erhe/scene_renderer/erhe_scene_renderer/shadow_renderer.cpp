@@ -617,7 +617,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             }
             const std::size_t light_index = lpt->index;
             const glm::vec3   light_pos   = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-            const float       far_plane   = light->get_range();
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
@@ -670,12 +669,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 );
                 m_camera_buffer.bind(encoder, camera_range);
 
-                // The caster fragment shader reads the light world position (and
-                // far) from the light control block to store radial distance.
+                // The caster fragment shader reads the light world position and
+                // the face resolution from the light control block to store the
+                // radial distance on each texel's centre ray.
                 Ring_buffer_range control_range = m_light_buffer.update_control(
                     light_index,
                     0.0f,
-                    glm::vec4{light_pos, far_plane}
+                    glm::vec4{light_pos, static_cast<float>(parameters.point_shadow_viewport.width)}
                 );
                 m_light_buffer.bind_control_buffer(encoder, control_range);
 

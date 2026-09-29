@@ -9,6 +9,7 @@
 #include "config/generated/graphics_presets_config_serialization.hpp"
 
 #include "erhe_codegen/config_io.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <fmt/format.h>
 
@@ -201,7 +202,7 @@ void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
     graphics_preset.point_shadow_resolution  = std::min(graphics_preset.point_shadow_resolution, max_shadow_resolution);
     graphics_preset.point_shadow_resolution  = std::min(graphics_preset.point_shadow_resolution, 4096);
     graphics_preset.point_shadow_light_count = std::min(graphics_preset.point_shadow_light_count, 8);
-    graphics_preset.point_shadow_resolution  = std::max(graphics_preset.point_shadow_resolution, 1);
+    graphics_preset.point_shadow_resolution  = std::max(graphics_preset.point_shadow_resolution, erhe::scene_renderer::c_min_point_shadow_resolution);
 }
 
 void Graphics_settings::select_active_graphics_preset(App_message_bus& app_message_bus)

@@ -799,20 +799,27 @@ the per-face coordinate flip, is in
 
 - **Storage.** One R32F `texture_cube_map_array` (labelled `Point shadow cube
   array`), `6 * point_shadow_light_count` layers (layer `6*cube + face`, Vulkan
-  face order +X,-X,+Y,-Y,+Z,-Z). Each face stores the **raw radial distance**
-  from the light -- not projected/non-linear depth, and not normalized by far --
-  so neither caster nor receiver needs the far plane; unrendered texels hold a
-  large clear (`1e30`) that reads as "lit". `point_shadow_resolution` /
-  `point_shadow_light_count` are graphics-preset fields (defaults 512 / 2).
+  face order +X,-X,+Y,-Y,+Z,-Z). Each texel stores the **radial distance**
+  from the light, along its centre ray, of the nearest caster's plane -- not
+  projected/non-linear depth, and not normalized by far -- so neither caster
+  nor receiver needs the far plane; unrendered texels hold a large clear
+  (`1e30`) that reads as "lit". `point_shadow_resolution` /
+  `point_shadow_light_count` are graphics-preset fields (defaults 512 / 2;
+  the resolution is at least `c_min_point_shadow_resolution`, 64).
 - **Caster** (`Shadow_renderer` point-cube pass, `shadow_renderer.cpp`). For each
   shadow-casting point light, six render passes -- one per face -- rasterize the
   scene into that cube layer from a `create_look_at(light_pos, light_pos +
   look[f], up[f])` camera with a 90-degree perspective
   (`Light::point_light_projection_transforms()`, `perspective_z_far = light->range`). The
-  caster fragment (`standard.frag` under `VARIANT_SHADOW_CUBE`) writes
-  `length(world_pos - light_position)` to the R32F face (`cull_none`; the light
-  world position and far come from `light_control_block`). A shared 2D depth
-  scratch is reused for every face, for rasterization only (store `DONT_CARE`).
+  caster fragment (`standard.frag` under `VARIANT_SHADOW_CUBE`) writes its
+  primitive plane's distance on the texel centre ray (from the geometric
+  normal of the interpolated world position and that position) to the R32F
+  face (`cull_none`; the light world position and the face resolution come
+  from `light_control_block`), so the rasterizer's placement of the
+  interpolated point does not reach the stored value
+  ([`point_light_shadows.md`](point_light_shadows.md) "Stored distance"). A
+  shared 2D depth scratch is reused for every face, for rasterization only
+  (store `DONT_CARE`).
 - **Coordinate flip (convention-driven).** A cube face is sampled by direction
   through the fixed cube-map (s,t) convention, which is vertically inverted
   relative to the framebuffer row order, so the caster needs its clip-space Y
@@ -822,12 +829,21 @@ the per-face coordinate flip, is in
   the 2D map. Without it every stored face is mirrored in t and the shadows are
   displaced. A shader-side `gl_Position.y` negate is deliberately not used: it
   is unconditional, and so wrong on bottom_left OpenGL.
-- **Receiver.** `sample_point_light_visibility()` (`erhe_light.glsl`) samples
-  `s_shadow_cube` with the direction `world_pos - light_pos` at the light's cube
-  layer (`shadow_index_packed.y`) and compares the fragment's radial distance
-  against the stored nearest-occluder distance with a world-space slope+constant
-  bias (`max(0.05, 0.02 * current)`). The forward pass multiplies the point
-  light's contribution by this visibility (`standard.frag`). 1.0 = lit.
+- **Receiver.** `sample_point_light_visibility()` (`erhe_light.glsl`) fetches,
+  at the light's cube layer (`shadow_index_packed.y`), the texel that contains
+  the receiver direction at its centre (`get_point_shadow_texel_centre()`,
+  `erhe_point_shadow.glsl`, shared with the caster) and compares the receiver
+  plane's distance on that centre ray - one-sided, like the 2D tap offsets -
+  against the stored distance. The plane comes from the receiver's geometric
+  normal (`get_receiver_geometric_normal()`, the same argument
+  `sample_light_visibility()` takes). The reference moves toward the light by
+  the D1 error bounds restated for radial distances - the coverage snap of a
+  crease neighbour, the receiver's and the caster's normal errors, position
+  rounding and fp32 evaluation - with the same two preset scales and no
+  constant world floor
+  ([`point_light_shadows.md`](point_light_shadows.md) "Receiver bias"). The
+  forward pass multiplies the point light's contribution by this visibility
+  (`standard.frag`). 1.0 = lit.
 - **Indexing.** Shadow-casting point lights get a dense `point_shadow_index`
   (cube-array base) in `Light_projections::apply()`, written to
   `shadow_index_packed.y`; their 2D `shadow_index` stays `max()` so the 2D shadow
@@ -835,8 +851,7 @@ the per-face coordinate flip, is in
   shadow-bearing bucket, so it does not shift directional/spot 2D layer indices.
   A fallback 1x1 cube (cleared to `1e30`) is bound when no real cube exists.
 - **No frustum fitting.** The six faces are fixed 90-degree perspectives centered
-  on the light; the only tuning is `range` (the cube far plane) and the receiver
-  bias. The directional tight-fit pipeline does not apply, and lights exceeding
+  on the light; the only tuning is `range` (the cube far plane). The directional tight-fit pipeline does not apply, and lights exceeding
   `point_shadow_light_count` are dropped from the cube (same implicit cap as the
   2D `shadow_light_count`).
 
@@ -922,11 +937,12 @@ the per-face coordinate flip, is in
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + bias coeff); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
 | `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_distance_bias_coeff` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
 | `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
-| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp; `sample_point_light_visibility` (cube direction sample, radial compare) |
+| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
+| `res/shaders/erhe_point_shadow.glsl` | Point cube texel-centre selection shared by the cube caster and the receiver |
 | `src/erhe/scene_renderer/test/shadow_gpu_test_fixture.hpp` | Shadow GPU test fixture: station, poses, shadow map / forward / Shadow_tie renders |
 | `src/erhe/scene_renderer/test/test_shadow_gpu.cpp` | Shadow sampling GPU test cases |
 | `src/erhe/scene_renderer/test/shaders/shadow_tie.frag` | Shadow_tie fragment pass (reference depth offset per band) |
-| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map; `VARIANT_SHADOW_CUBE` writes radial distance to the cube face; point receiver multiplies `sample_point_light_visibility` |
+| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map; `VARIANT_SHADOW_CUBE` writes the caster plane's radial distance on the texel centre ray to the cube face; point receiver multiplies `sample_point_light_visibility` |
 | `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` passes `v_position` (world) to the cube caster fragment |
 | `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |

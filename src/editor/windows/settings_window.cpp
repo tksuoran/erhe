@@ -68,6 +68,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_xr/generated/headset_config_serialization.hpp"
 
 #include <fmt/format.h>
@@ -512,7 +513,7 @@ void Settings_window::imgui()
         add_entry("Point Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
-            if (ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, 1, std::min(graphics.max_shadow_resolution, 4096))) {
+            if (ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, erhe::scene_renderer::c_min_point_shadow_resolution, std::min(graphics.max_shadow_resolution, 4096))) {
                 on_graphics_preset_edited();
             }
         });

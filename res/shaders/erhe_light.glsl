@@ -3,6 +3,7 @@
 
 #include "erhe_camera_view.glsl"
 #include "erhe_texture.glsl"
+#include "erhe_point_shadow.glsl"
 
 #if __VERSION__ >= 450
 #   define ERHE_DFDX dFdxFine
@@ -497,22 +498,137 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
 #endif
 }
 
-// Omnidirectional point-light shadow lookup. The caster stored the raw radial
-// distance from the light into an R32F cube-map array (one cube / 6 faces per
-// shadow-casting point light); here we sample it by the fragment->light
-// direction (the samplerCubeArray selects the face automatically) at the
-// light's cube layer and compare the stored nearest-occluder distance against
-// this fragment's distance. A small world-space slope+constant bias avoids
-// self-shadow acne without detaching the contact shadow. Returns 1.0 (lit) when
-// shadow maps are disabled. See doc/forge-erhe.md / forge-point-light-shadows.
-float sample_point_light_visibility(vec3 world_position, vec3 light_position, float cube_index)
+// Omnidirectional point-light shadow lookup (derivation in
+// doc/erhe/point_light_shadows.md "Receiver bias"). The caster rasterizes
+// both faces (cull_none) and stores, per cube texel, the radial distance of
+// the nearest caster plane on the texel's centre ray (standard.frag,
+// VARIANT_SHADOW_CUBE): the lit receiver's own surface is in the cube, so
+// the comparison is a tie.
+//
+// The lookup is a single nearest fetch at the centre of the texel that
+// contains the receiver direction (get_point_shadow_texel_centre()), which
+// the hardware selects without ambiguity. The reference is the receiver
+// plane's radial distance on that same centre ray, one-sided (a centre whose
+// plane point is farther from the light already compares lit): in real
+// arithmetic it equals what the caster stored for the receiver's own
+// surface, like the tap offsets of sample_light_visibility(). The plane is
+// the receiver's geometric normal (receiver_plane, from
+// get_receiver_geometric_normal()), tilted to the R1 grazing limit
+// N . L = 0.05 below it; an undetermined plane takes the smallest centre-ray
+// distance of every plane R1 admits.
+//
+// The reference then moves toward the light by the sum of error bounds, in
+// world units along the ray (u = 2^-24, e = 2 get_world_position_rounding(P),
+// the error of one world-position derivative; |P| stands in for the
+// caster's position magnitudes):
+//  - gradient: a normal error dN moves a plane's centre-ray distance by
+//    dN . (X - X_c) / (N' . d_c), X the point the plane was taken through and
+//    X_c its point on the centre ray. Receiver: its normal's error bound over
+//    the computed |P - X_c|. Caster: its normal's error bound
+//    e (2a + e) / a^2, a = 2 r / (resolution |q|^2) the smallest world size
+//    of a cube pixel at the centre q, over half the texel diagonal on the
+//    plane, sqrt(2) r / (resolution |q| |N . d_c|); the caster stores its
+//    plane only at a computed |N . d_c| >= erhe_point_shadow_plane_cos_min,
+//    which bounds the denominator.
+//  - position: the rounding of the receiver point and of the caster's
+//    interpolated point moves each plane along its normal by up to e / 2,
+//    the centre-ray distance by that over |N . d_c|.
+//  - evaluation: each side's plane distance |N . v| / |N . d_c| (v and d_c
+//    rounded, dots gamma_3, the divide): 12u / |N . d_c| + 5u relative; the
+//    receiver's own length() when it is the reference, 13u.
+// The rasterizer's placement of the caster's interpolated point (vertex
+// snap, barycentric precision) moves it within the caster's plane only, so
+// it does not reach the stored distance; R32F stores the caster's fp32 value
+// exactly, and both passes use the same fp32 light position and the same
+// texel centre. What the vertex snap does change is coverage: a caster
+// triangle covers pixel centres up to one snap step (1/256 pixel per face
+// axis) past its true edge, and there the stored plane is that triangle's,
+// extended, not the receiver's. At a convex crease of the receiver's own
+// mesh the extended neighbour is nearer the light, by up to the step times
+// the two planes' radial-distance slopes; snap_bias covers the receiver's
+// slope, as snap_bias does for the 2D maps (a neighbour steeper than the
+// receiver is not covered). light_block.shadow_bias_scales applies as for
+// the 2D maps: x scales the gradient term, y the position + evaluation
+// terms; snap_bias is unscaled. Returns 1.0 (lit) when shadow maps are
+// disabled.
+float sample_point_light_visibility(vec3 world_position, vec3 light_position, float cube_index, vec4 receiver_plane)
 {
 #if defined(ERHE_SHADOW_MAPS)
-    vec3  light_to_frag = world_position - light_position;
-    float current       = length(light_to_frag);
-    float bias          = max(0.05, 0.02 * current);
-    float stored        = texture(s_shadow_cube, vec4(light_to_frag, cube_index)).r;
-    return (current - bias > stored) ? 0.0 : 1.0;
+    const float u            = erhe_fp32_unit_roundoff;
+    const float grazing_cos  = 0.05;
+    const float grazing_tan  = sqrt(1.0 - (grazing_cos * grazing_cos)) / grazing_cos;
+    vec3  light_to_receiver  = world_position - light_position;
+    float current            = length(light_to_receiver);
+    vec3  receiver_direction = light_to_receiver / current;
+
+    float resolution       = float(textureSize(s_shadow_cube, 0).x);
+    vec3  centre           = get_point_shadow_texel_centre(light_to_receiver, resolution);
+    float centre_length    = length(centre);
+    vec3  centre_direction = centre / centre_length;
+    float stored           = textureLod(s_shadow_cube, vec4(centre, cube_index), 0.0).r;
+
+    // Receiver plane, determined and clamped as in sample_light_visibility().
+    vec3  receiver_normal  = receiver_plane.xyz;
+    float normal_error     = receiver_plane.w;
+    float receiver_cos     = dot(receiver_normal, receiver_direction);
+    bool  plane_determined = (dot(receiver_normal, receiver_normal) > 0.0) && (normal_error < (0.5 * max(abs(receiver_cos), grazing_cos)));
+    vec3  plane_normal     = plane_determined ? receiver_normal : receiver_direction;
+    if (plane_determined && (abs(receiver_cos) < grazing_cos)) {
+        vec3  tangent_direction = normalize(receiver_normal - (receiver_cos * receiver_direction));
+        float side              = (receiver_cos < 0.0) ? -1.0 : 1.0;
+        plane_normal = ((side * grazing_cos) * receiver_direction) + (sqrt(1.0 - (grazing_cos * grazing_cos)) * tangent_direction);
+    }
+
+    // Radial distance of the plane on the centre ray. The minimum
+    // point_shadow_resolution keeps the half-texel diagonal (sqrt(2) /
+    // resolution rad at a face centre) below the grazing angle asin(0.05), so
+    // the centre ray meets every plane R1 admits in front of the light.
+    // Undetermined plane: a plane through P tilted from head-on by alpha
+    // toward the centre ray meets it at
+    // current / (d_r . d_c + tan(alpha) |d_r x d_c|), smallest at the grazing
+    // limit.
+    float centre_cos;
+    float centre_distance;
+    if (plane_determined) {
+        centre_cos      = abs(dot(plane_normal, centre_direction));
+        centre_distance = abs(dot(plane_normal, light_to_receiver)) / centre_cos;
+    } else {
+        centre_cos      = grazing_cos;
+        centre_distance = current / (dot(receiver_direction, centre_direction) + (grazing_tan * length(cross(receiver_direction, centre_direction))));
+    }
+    float reference = min(current, centre_distance);
+
+    // Caster coverage snap (see the function comment): the derivative of the
+    // plane's radial distance with respect to the face coordinates q,
+    // r (q / |q|^2 - N / (N . q)) at the centre, over the two face axes, times
+    // the 1/256 pixel step (a texel is 2 / resolution face units). An
+    // undetermined plane bounds each face-axis component by
+    // r (1 / |q| + 1 / (0.05 |q|)).
+    const float caster_snap_texels = 1.0 / 256.0;
+    float snap_step      = caster_snap_texels * (2.0 / resolution);
+    vec3  distance_slope = plane_determined
+        ? (centre_distance * abs((centre / (centre_length * centre_length)) - (plane_normal / dot(plane_normal, centre))))
+        : vec3((centre_distance * (1.0 + (1.0 / grazing_cos))) / centre_length);
+    distance_slope[get_point_shadow_major_axis(centre)] = 0.0;
+    float snap_bias      = snap_step * (distance_slope.x + distance_slope.y + distance_slope.z);
+
+    // Minimum bias (see the function comment).
+    float position_rounding  = get_world_position_rounding(world_position);
+    float derivative_error   = 2.0 * position_rounding;
+    float receiver_lateral   = length(world_position - (light_position + (centre_distance * centre_direction)));
+    // The undetermined reference already takes every admissible receiver plane.
+    float receiver_gradient  = plane_determined ? ((normal_error * receiver_lateral) / (centre_cos - normal_error)) : 0.0;
+    float cube_pixel_size    = (2.0 * centre_distance) / (resolution * centre_length * centre_length);
+    float caster_normal_error = (derivative_error * ((2.0 * cube_pixel_size) + derivative_error)) / (cube_pixel_size * cube_pixel_size);
+    float caster_lateral     = (sqrt(2.0) * centre_distance) / (resolution * centre_length * centre_cos);
+    float caster_gradient    = (caster_normal_error * caster_lateral) / max(centre_cos - caster_normal_error, erhe_point_shadow_plane_cos_min);
+    float position_error     = position_rounding / centre_cos; // receiver and caster, e / 2 each
+    float evaluation_error   = u * ((((24.0 / centre_cos) + 10.0) * centre_distance) + (13.0 * current));
+    vec2  bias_scales        = light_block.shadow_bias_scales;
+    float minimum_bias       = (bias_scales.x * (receiver_gradient + caster_gradient)) + (bias_scales.y * (position_error + evaluation_error));
+
+    // A reference no farther from the light than the stored distance is lit.
+    return ((reference - snap_bias - minimum_bias) > stored) ? 0.0 : 1.0;
 #else
     return 1.0;
 #endif

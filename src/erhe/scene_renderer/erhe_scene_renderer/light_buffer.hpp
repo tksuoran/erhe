@@ -100,6 +100,15 @@ static constexpr uint32_t c_texture_heap_slot_shadow_distance  {2};
 // shadows: an R32F cube-map array storing radial distance from the light, one
 // cube (6 faces) per shadow-casting point light. Sampled by direction.
 static constexpr uint32_t c_texture_heap_slot_shadow_cube      {3};
+// Smallest point shadow cube face resolution. sample_point_light_visibility()
+// (erhe_light.glsl) compares against the receiver plane's distance on the
+// fetched texel's centre ray; that ray meets every receiver plane R1 admits
+// (N . L >= 0.05) in front of the light only while the half-texel diagonal,
+// sqrt(2) / resolution rad at a face centre, stays below asin(0.05), which
+// needs a resolution of at least 29; 64 leaves 0.018 rad of normal error
+// between that and the caster's plane threshold (erhe_point_shadow.glsl,
+// doc/erhe/point_light_shadows.md "Receiver bias").
+static constexpr int      c_min_point_shadow_resolution        {64};
 // Color-aspect sampler2D binding for the baked lightmap atlas
 // (doc/editor/lightmap_baking.md phase 5). Bound to the Lightmap_baker's
 // atlas when a bake exists, else to a 1x1 black fallback; the fragment
@@ -137,8 +146,9 @@ public:
     // Per-pass coefficient the distance caster multiplies fwidth() by, =
     // cdd*(1+pcfRadius) (Shadow_technique_mode::distance). 0 for the depth path.
     std::size_t                     shadow_distance_bias_coeff_offset;
-    // Per-pass point light world position (xyz) + far/range (w), used by the
-    // VARIANT_SHADOW_CUBE caster to store radial distance into the cube face.
+    // Per-pass point light world position (xyz) + cube face resolution in
+    // texels (w), used by the VARIANT_SHADOW_CUBE caster to store the radial
+    // distance on each texel's centre ray into the cube face.
     std::size_t                     point_light_position_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
