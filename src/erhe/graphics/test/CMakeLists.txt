@@ -134,6 +134,7 @@ if (_gpu_tests_supported)
         test_blend_factors.cpp
         test_blend_ops.cpp
         test_sampler_modes.cpp
+        test_sampler_comparison.cpp
         test_depth_readback.cpp
         test_float32_render.cpp
         test_snorm_render.cpp
@@ -144,6 +145,8 @@ if (_gpu_tests_supported)
         test_texture_array.cpp
         test_texture_3d.cpp
         test_texture_cube.cpp
+        test_texture_gather.cpp
+        test_texel_fetch.cpp
         test_texgen_render.cpp
         test_worker_context.cpp
         test_multi_copy_buffer.cpp

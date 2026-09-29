@@ -16,11 +16,15 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -350,6 +354,266 @@ TEST_F(Gpu_test, sampler_address_modes)
     // mirrored_repeat: 1.25 -> 0.75 (green), 1.75 -> 0.25 (red).
     EXPECT_EQ(sample_with(erhe::graphics::Sampler_address_mode::mirrored_repeat, "vec2(1.25, 0.5)", "mirror_1_25"), Texel::green) << "mirror(1.25) should reflect to 0.75 (green)";
     EXPECT_EQ(sample_with(erhe::graphics::Sampler_address_mode::mirrored_repeat, "vec2(1.75, 0.5)", "mirror_1_75"), Texel::red)   << "mirror(1.75) should reflect to 0.25 (red)";
+}
+
+// Full-image sampler ports of the agfx tests SamplerFilterNearest /
+// SamplerFilterLinear and SamplerAddressModeRepeat / MirroredRepeat /
+// ClampToEdge. agfx writes its output from a compute shader; here a fullscreen
+// fragment pass samples the source at uv = IMAGE_POSITION / target size (image
+// space, row 0 = image top), so the whole output image is the sampled result
+// (doc/plans/graphics_tests_agfx_port.md 2.3). Sources are seeded by
+// copy_from_buffer with the CPU pattern's rows as texel rows (row 0 = v = 0),
+// so on every backend image row r of the output samples texel row
+// floor(v * height) of the pattern, and the CPU model below is the shader's own
+// arithmetic. Every output texel is checked against it, then the image against
+// its golden.
+
+namespace {
+
+// 16x16 filter source: red ramps with x, green with y, blue is a checker, so a
+// nearest magnification shows sharp 4x4 blocks and a linear one blends both the
+// ramps and the checker.
+constexpr int c_filter_source_size = 16;
+constexpr int c_filter_output_size = 64;
+
+[[nodiscard]] auto filter_source_texel(const int x, const int y) -> std::array<uint8_t, 4>
+{
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>((x * 16) + 8),
+        static_cast<uint8_t>((y * 16) + 8),
+        static_cast<uint8_t>((((x + y) % 2) == 0) ? 40 : 200),
+        255u
+    };
+}
+
+// 4x4 address-mode source: every texel a distinct color (red by column, green
+// by row, blue by parity).
+constexpr int c_address_source_size = 4;
+constexpr int c_address_output_size = 96;
+
+[[nodiscard]] auto address_source_texel(const int x, const int y) -> std::array<uint8_t, 4>
+{
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>(40 + (x * 60)),
+        static_cast<uint8_t>(40 + (y * 60)),
+        static_cast<uint8_t>((((x + y) % 2) == 0) ? 90 : 220),
+        255u
+    };
+}
+
+[[nodiscard]] auto make_pattern(const int size, const std::function<std::array<uint8_t, 4>(int, int)>& texel) -> std::vector<uint8_t>
+{
+    std::vector<uint8_t> pattern(static_cast<std::size_t>(size) * static_cast<std::size_t>(size) * 4u);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const std::array<uint8_t, 4> value = texel(x, y);
+            const std::size_t            index = ((static_cast<std::size_t>(y) * static_cast<std::size_t>(size)) + static_cast<std::size_t>(x)) * 4u;
+            for (std::size_t c = 0; c < 4u; ++c) {
+                pattern[index + c] = value[c];
+            }
+        }
+    }
+    return pattern;
+}
+
+// Texel index an address mode resolves for an unwrapped nearest index i of a
+// size-texel axis.
+enum class Address_mode : unsigned int { repeat, mirrored_repeat, clamp_to_edge };
+
+[[nodiscard]] auto wrap_index(const int i, const int size, const Address_mode mode) -> int
+{
+    switch (mode) {
+        case Address_mode::repeat: {
+            return ((i % size) + size) % size;
+        }
+        case Address_mode::mirrored_repeat: {
+            const int period = 2 * size;
+            const int m      = ((i % period) + period) % period;
+            return (m < size) ? m : ((period - 1) - m);
+        }
+        case Address_mode::clamp_to_edge:
+        default: {
+            return std::clamp(i, 0, size - 1);
+        }
+    }
+}
+
+constexpr const char* c_image_uv_fragment_source = R"glsl(
+void main()
+{
+    vec2 uv = IMAGE_POSITION / vec2(float(TARGET_WIDTH), float(TARGET_HEIGHT));
+    out_color = texture(s_texture, (uv * UV_SCALE) + vec2(UV_OFFSET));
+}
+)glsl";
+
+} // namespace
+
+class Sampler_mode_test : public Gpu_test
+{
+protected:
+    // Seed a size x size RGBA8 source with pattern, sample it over the whole
+    // output (uv * uv_scale + uv_offset) with the given sampler, and return the
+    // output in image rows.
+    [[nodiscard]] auto sample_pattern(
+        const std::vector<uint8_t>&                pattern,
+        const int                                  source_size,
+        const int                                  output_size,
+        const erhe::graphics::Sampler_create_info& sampler_create_info,
+        const char*                                uv_scale,
+        const char*                                uv_offset,
+        const char*                                golden_name
+    ) -> std::vector<uint8_t>
+    {
+        const std::shared_ptr<erhe::graphics::Texture> source =
+            make_sampled_texture(erhe::graphics::Texture_type::texture_2d, source_size, source_size, 1, 0, "sampler mode source");
+        seed_subresource_rgba8(*source, 0, 0, pattern);
+
+        const erhe::graphics::Sampler           sampler{device(), sampler_create_info};
+        const erhe::graphics::Bind_group_layout layout = make_sampler_layout(device(), "sampler mode layout");
+        const std::array<Sampled_image, 1>      images{ Sampled_image{ .binding_point = 0, .texture = source.get(), .sampler = &sampler } };
+
+        const std::shared_ptr<erhe::graphics::Texture> output = render_fullscreen_pass(
+            layout,
+            c_image_uv_fragment_source,
+            { { "UV_SCALE", uv_scale }, { "UV_OFFSET", uv_offset } },
+            images,
+            output_size,
+            output_size
+        );
+        const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
+        EXPECT_EQ(pixels.size(), static_cast<std::size_t>(output_size) * static_cast<std::size_t>(output_size) * 4u);
+        expect_image_matches_golden(golden_name, output_size, output_size, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+        return memory_rows_to_image_rows(pixels, static_cast<std::size_t>(output_size) * 4u, output_size);
+    }
+
+    [[nodiscard]] static auto make_sampler_info(
+        const erhe::graphics::Filter               filter,
+        const erhe::graphics::Sampler_address_mode address_mode,
+        const char*                                name
+    ) -> erhe::graphics::Sampler_create_info
+    {
+        return erhe::graphics::Sampler_create_info{
+            .min_filter   = filter,
+            .mag_filter   = filter,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = { address_mode, address_mode, address_mode },
+            .debug_label  = erhe::utility::Debug_label{name}
+        };
+    }
+
+    // uv over [-1, 2] on both axes: output pixel p samples unwrapped texel
+    // index floor(((p + 0.5) / 96 * 3 - 1) * 4) = floor(p / 8) - 4 (never on a
+    // texel boundary), wrapped by the mode under test.
+    void check_address_mode(const erhe::graphics::Sampler_address_mode address_mode, const Address_mode model, const char* golden_name)
+    {
+        const std::vector<uint8_t> pattern = make_pattern(c_address_source_size, address_source_texel);
+        const std::vector<uint8_t> image   = sample_pattern(
+            pattern,
+            c_address_source_size,
+            c_address_output_size,
+            make_sampler_info(erhe::graphics::Filter::nearest, address_mode, golden_name),
+            "3.0",
+            "-1.0",
+            golden_name
+        );
+
+        const int texel_pixels = c_address_output_size / (3 * c_address_source_size); // 8
+        const std::vector<uint8_t> expected = make_pattern(
+            c_address_output_size,
+            [&](const int x, const int y) {
+                const int i = wrap_index((x / texel_pixels) - c_address_source_size, c_address_source_size, model);
+                const int j = wrap_index((y / texel_pixels) - c_address_source_size, c_address_source_size, model);
+                return address_source_texel(i, j);
+            }
+        );
+        expect_rgba8_near(image, expected, c_address_output_size, c_address_output_size, 0, golden_name);
+    }
+};
+
+// agfx SamplerFilterNearest: 16x16 source magnified 4x to 64x64 with nearest
+// filtering; output pixel (x, y) is exactly source texel (x / 4, y / 4).
+TEST_F(Sampler_mode_test, filter_nearest)
+{
+    const std::vector<uint8_t> pattern = make_pattern(c_filter_source_size, filter_source_texel);
+    const std::vector<uint8_t> image   = sample_pattern(
+        pattern,
+        c_filter_source_size,
+        c_filter_output_size,
+        make_sampler_info(erhe::graphics::Filter::nearest, erhe::graphics::Sampler_address_mode::clamp_to_edge, "filter nearest"),
+        "1.0",
+        "0.0",
+        "sampler_filter_nearest"
+    );
+    const int scale = c_filter_output_size / c_filter_source_size;
+    const std::vector<uint8_t> expected = make_pattern(
+        c_filter_output_size,
+        [&](const int x, const int y) { return filter_source_texel(x / scale, y / scale); }
+    );
+    expect_rgba8_near(image, expected, c_filter_output_size, c_filter_output_size, 0, "filter nearest");
+}
+
+// agfx SamplerFilterLinear: the same source and magnification with linear
+// filtering and clamp_to_edge. Output pixel x samples texel coordinate
+// t = (x + 0.5) / 4 - 0.5, so the bilinear weights are multiples of 1/8 (exact
+// at the minimum 4-bit sub-texel precision); the CPU bilinear reference is
+// matched within +-2 per channel.
+TEST_F(Sampler_mode_test, filter_linear)
+{
+    const std::vector<uint8_t> pattern = make_pattern(c_filter_source_size, filter_source_texel);
+    const std::vector<uint8_t> image   = sample_pattern(
+        pattern,
+        c_filter_source_size,
+        c_filter_output_size,
+        make_sampler_info(erhe::graphics::Filter::linear, erhe::graphics::Sampler_address_mode::clamp_to_edge, "filter linear"),
+        "1.0",
+        "0.0",
+        "sampler_filter_linear"
+    );
+    const float scale = static_cast<float>(c_filter_output_size) / static_cast<float>(c_filter_source_size);
+    const std::vector<uint8_t> expected = make_pattern(
+        c_filter_output_size,
+        [&](const int x, const int y) {
+            const float tx = ((static_cast<float>(x) + 0.5f) / scale) - 0.5f;
+            const float ty = ((static_cast<float>(y) + 0.5f) / scale) - 0.5f;
+            const int   x0 = static_cast<int>(std::floor(tx));
+            const int   y0 = static_cast<int>(std::floor(ty));
+            const float fx = tx - static_cast<float>(x0);
+            const float fy = ty - static_cast<float>(y0);
+            const int   last = c_filter_source_size - 1;
+            const std::array<uint8_t, 4> t00 = filter_source_texel(std::clamp(x0,     0, last), std::clamp(y0,     0, last));
+            const std::array<uint8_t, 4> t10 = filter_source_texel(std::clamp(x0 + 1, 0, last), std::clamp(y0,     0, last));
+            const std::array<uint8_t, 4> t01 = filter_source_texel(std::clamp(x0,     0, last), std::clamp(y0 + 1, 0, last));
+            const std::array<uint8_t, 4> t11 = filter_source_texel(std::clamp(x0 + 1, 0, last), std::clamp(y0 + 1, 0, last));
+            std::array<uint8_t, 4> result{};
+            for (std::size_t c = 0; c < 4u; ++c) {
+                const float top    = (static_cast<float>(t00[c]) * (1.0f - fx)) + (static_cast<float>(t10[c]) * fx);
+                const float bottom = (static_cast<float>(t01[c]) * (1.0f - fx)) + (static_cast<float>(t11[c]) * fx);
+                result[c] = static_cast<uint8_t>(std::lround((top * (1.0f - fy)) + (bottom * fy)));
+            }
+            return result;
+        }
+    );
+    expect_rgba8_near(image, expected, c_filter_output_size, c_filter_output_size, 2, "filter linear");
+}
+
+// agfx SamplerAddressModeRepeat: uv over [-1, 2] tiles the 4x4 source 3x3.
+TEST_F(Sampler_mode_test, address_mode_repeat)
+{
+    check_address_mode(erhe::graphics::Sampler_address_mode::repeat, Address_mode::repeat, "sampler_address_mode_repeat");
+}
+
+// agfx SamplerAddressModeMirroredRepeat: uv over [-1, 2]; the tiles left of and
+// right of (above and below) the centre are mirror images of it.
+TEST_F(Sampler_mode_test, address_mode_mirrored_repeat)
+{
+    check_address_mode(erhe::graphics::Sampler_address_mode::mirrored_repeat, Address_mode::mirrored_repeat, "sampler_address_mode_mirrored_repeat");
+}
+
+// agfx SamplerAddressModeClampToEdge: uv over [-1, 2]; outside the centre tile
+// the edge texels stretch out to the image border.
+TEST_F(Sampler_mode_test, address_mode_clamp_to_edge)
+{
+    check_address_mode(erhe::graphics::Sampler_address_mode::clamp_to_edge, Address_mode::clamp_to_edge, "sampler_address_mode_clamp_to_edge");
 }
 
 } // namespace erhe::graphics::test

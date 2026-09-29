@@ -13,11 +13,14 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <glm/glm.hpp>
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <span>
@@ -483,6 +486,206 @@ void main()
     );
 
     return read_texture_rgba8(*color_target);
+}
+
+auto Gpu_test::find_depth32f_format() -> erhe::dataformat::Format
+{
+    erhe::graphics::Device& graphics_device = device();
+    const std::vector<erhe::dataformat::Format> supported = graphics_device.get_supported_depth_stencil_formats();
+    for (const erhe::dataformat::Format candidate : supported) {
+        if ((erhe::dataformat::get_depth_size_bits(candidate) == 32) &&
+            (erhe::dataformat::get_stencil_size_bits(candidate) == 0) &&
+            graphics_device.get_format_properties(candidate).depth_renderable) {
+            return candidate;
+        }
+    }
+    return erhe::dataformat::Format::format_undefined;
+}
+
+auto Gpu_test::make_sampled_texture(
+    const erhe::graphics::Texture_type type,
+    const int                          width,
+    const int                          height,
+    const int                          depth,
+    const int                          array_layer_count,
+    const char*                        debug_label
+) -> std::shared_ptr<erhe::graphics::Texture>
+{
+    erhe::graphics::Device& graphics_device = device();
+    return std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device            = graphics_device,
+            .usage_mask        =
+                erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+            .type              = type,
+            .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm,
+            .width             = width,
+            .height            = height,
+            .depth             = depth,
+            .array_layer_count = array_layer_count,
+            .debug_label       = erhe::utility::Debug_label{debug_label}
+        }
+    );
+}
+
+auto Gpu_test::render_fullscreen_pass(
+    const erhe::graphics::Bind_group_layout&                layout,
+    const std::string_view                                  fragment_source,
+    const std::vector<std::pair<std::string, std::string>>& defines,
+    const std::span<const Sampled_image>                    images,
+    const int                                               width,
+    const int                                               height,
+    const erhe::dataformat::Format                          format
+) -> std::shared_ptr<erhe::graphics::Texture>
+{
+    const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(width, height, format);
+
+    const erhe::graphics::Fragment_outputs fragment_outputs{
+        { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
+    };
+
+    static constexpr const char* vertex_source = R"glsl(
+void main()
+{
+    vec2 positions[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
+}
+)glsl";
+
+    // gl_FragCoord counts rows from the device's texture origin; image rows
+    // count from the image top (NDC +y), so a bottom-left origin flips.
+    const bool row0_is_top =
+        (device().get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::top_left);
+    std::vector<std::pair<std::string, std::string>> all_defines{
+        { "TARGET_WIDTH",   std::to_string(width)  },
+        { "TARGET_HEIGHT",  std::to_string(height) },
+        { "IMAGE_POSITION", row0_is_top ? std::string{"(gl_FragCoord.xy)"} : std::string{"vec2(gl_FragCoord.x, float(TARGET_HEIGHT) - gl_FragCoord.y)"} }
+    };
+    all_defines.insert(all_defines.end(), defines.begin(), defines.end());
+
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "fullscreen_pass",
+        .defines          = all_defines,
+        .fragment_outputs = &fragment_outputs,
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{vertex_source} },
+            { erhe::graphics::Shader_type::fragment_shader, fragment_source                 }
+        },
+        .bind_group_layout = &layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(device(), shader_create_info);
+    if (!prototype.is_valid()) {
+        ADD_FAILURE() << "render_fullscreen_pass: shader failed to compile/link";
+        return color_target;
+    }
+    erhe::graphics::Shader_stages shader_stages{device(), std::move(prototype)};
+
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.color_attachments[0].texture       = color_target.get();
+    descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 1.0 };
+    descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.render_target_width  = width;
+    descriptor.render_target_height = height;
+    descriptor.debug_label = erhe::utility::Debug_label{"fullscreen pass"};
+
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly                    = erhe::graphics::Input_assembly_state::triangle;
+    pipeline_create_info.base.rasterization                     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+    pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+    pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+    pipeline_create_info.base.bind_group_layout                 = &layout;
+    pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.shader_stages                          = &shader_stages;
+    pipeline_create_info.vertex_input                           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{device(), pipeline_create_info};
+    if (!pipeline.is_valid()) {
+        ADD_FAILURE() << "render_fullscreen_pass: pipeline is not valid";
+        return color_target;
+    }
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass            render_pass{device(), descriptor};
+            erhe::graphics::Render_command_encoder encoder = device().make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_viewport_rect(0, 0, width, height);
+            encoder.set_scissor_rect (0, 0, width, height);
+            encoder.set_bind_group_layout(&layout);
+            encoder.set_render_pipeline(pipeline);
+            for (const Sampled_image& image : images) {
+                encoder.set_sampled_image(image.binding_point, *image.texture, *image.sampler);
+            }
+            encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+        }
+    );
+    return color_target;
+}
+
+auto Gpu_test::memory_rows_to_image_rows(const std::span<const uint8_t> rows, const std::size_t bytes_per_row, const int height)
+    -> std::vector<uint8_t>
+{
+    const bool row0_is_top =
+        (device().get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::top_left);
+    if (row0_is_top) {
+        return std::vector<uint8_t>(rows.begin(), rows.end());
+    }
+    std::vector<uint8_t> out(rows.size());
+    for (int y = 0; y < height; ++y) {
+        const std::size_t source_row = static_cast<std::size_t>(height - 1 - y);
+        std::memcpy(out.data() + (static_cast<std::size_t>(y) * bytes_per_row), rows.data() + (source_row * bytes_per_row), bytes_per_row);
+    }
+    return out;
+}
+
+void Gpu_test::expect_rgba8_near(
+    const std::span<const uint8_t> actual,
+    const std::span<const uint8_t> expected,
+    const int                      width,
+    const int                      height,
+    const int                      tolerance,
+    const std::string_view         label
+)
+{
+    const std::size_t byte_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
+    ASSERT_EQ(actual.size(),   byte_count) << label << ": actual image size";
+    ASSERT_EQ(expected.size(), byte_count) << label << ": expected image size";
+    int         mismatches = 0;
+    std::size_t first      = 0;
+    for (std::size_t texel = 0; texel < (byte_count / 4u); ++texel) {
+        bool ok = true;
+        for (std::size_t c = 0; c < 4u; ++c) {
+            const int a = actual  [(texel * 4u) + c];
+            const int e = expected[(texel * 4u) + c];
+            if (std::abs(a - e) > tolerance) {
+                ok = false;
+            }
+        }
+        if (!ok) {
+            if (mismatches == 0) {
+                first = texel;
+            }
+            ++mismatches;
+        }
+    }
+    const std::size_t w = static_cast<std::size_t>(width);
+    EXPECT_EQ(mismatches, 0)
+        << label << ": " << mismatches << " of " << (byte_count / 4u) << " texels differ by more than " << tolerance
+        << "; first at (" << (first % w) << ", " << (first / w) << ") got {"
+        << static_cast<int>(actual[(first * 4u) + 0u]) << ", " << static_cast<int>(actual[(first * 4u) + 1u]) << ", "
+        << static_cast<int>(actual[(first * 4u) + 2u]) << ", " << static_cast<int>(actual[(first * 4u) + 3u]) << "} expected {"
+        << static_cast<int>(expected[(first * 4u) + 0u]) << ", " << static_cast<int>(expected[(first * 4u) + 1u]) << ", "
+        << static_cast<int>(expected[(first * 4u) + 2u]) << ", " << static_cast<int>(expected[(first * 4u) + 3u]) << "}";
 }
 
 } // namespace erhe::graphics::test

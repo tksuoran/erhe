@@ -11,19 +11,33 @@
 #include <functional>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace erhe::graphics {
+    class Bind_group_layout;
     class Buffer;
     class Color_blend_state;
     class Command_buffer;
     class Device;
     class Rasterization_state;
+    class Sampler;
     class Texture;
 }
 
 namespace erhe::graphics::test {
+
+// One combined image sampler bound for render_fullscreen_pass: the texture and
+// sampler set with set_sampled_image at binding_point of the pass's layout.
+class Sampled_image
+{
+public:
+    uint32_t                       binding_point{0};
+    const erhe::graphics::Texture* texture      {nullptr};
+    const erhe::graphics::Sampler* sampler      {nullptr};
+};
 
 // Per-test fixture over the process-wide headless Vulkan device. Provides the
 // minimal frame sequence and offscreen-readback helpers shared by the GPU
@@ -144,6 +158,71 @@ protected:
         int                                        width  = 16,
         int                                        height = 16
     ) -> std::vector<uint8_t>;
+
+    // The first supported, depth-renderable, 32-bit, stencil-free depth format
+    // (format_d32_sfloat on the test devices), or format_undefined when the
+    // device has none: a depth texture whose depth aspect reads back and
+    // samples as one float per texel.
+    [[nodiscard]] auto find_depth32f_format() -> erhe::dataformat::Format;
+
+    // format_8_vec4_unorm texture of the given type (texture_2d,
+    // texture_2d_array, texture_3d or texture_cube_map; depth only for 3D,
+    // array_layer_count 6 for a cube), one level, usage sampled | transfer_dst |
+    // transfer_src, left in its initial layout: a sampling source to fill with
+    // seed_subresource_rgba8 / copy_from_buffer, which leave it in
+    // shader_read_only_optimal.
+    [[nodiscard]] auto make_sampled_texture(
+        erhe::graphics::Texture_type type,
+        int                          width,
+        int                          height,
+        int                          depth,
+        int                          array_layer_count,
+        const char*                  debug_label
+    ) -> std::shared_ptr<erhe::graphics::Texture>;
+
+    // Render one fullscreen (oversized) triangle into a fresh width x height
+    // color target of the given format (a make_color_target texture) and return
+    // the target, left in transfer_src_optimal for the readback helpers. The
+    // fragment shader fragment_source writes out_color; it reads the images
+    // through the combined_image_sampler bindings of layout, each bound by
+    // set_sampled_image from images (the textures must already be in the layout
+    // their binding's sampler_aspect samples from). Besides defines, the shader
+    // gets TARGET_WIDTH, TARGET_HEIGHT and IMAGE_POSITION: the fragment's pixel
+    // position in image space (row 0 = image top, the row order of the goldens)
+    // as a vec2 at the pixel centre, derived from gl_FragCoord and the device's
+    // texture_origin. gl_FragCoord itself is in memory rows (row 0 at the
+    // device's texture origin). A shader that addresses a texture by
+    // IMAGE_POSITION reads texel row r for image row r on every backend; one
+    // that addresses a rendered texture of the same size by gl_FragCoord reads
+    // the texel that was rendered at that pixel.
+    [[nodiscard]] auto render_fullscreen_pass(
+        const erhe::graphics::Bind_group_layout&                layout,
+        std::string_view                                        fragment_source,
+        const std::vector<std::pair<std::string, std::string>>& defines,
+        std::span<const Sampled_image>                          images,
+        int                                                     width,
+        int                                                     height,
+        erhe::dataformat::Format                                format = erhe::dataformat::Format::format_8_vec4_unorm
+    ) -> std::shared_ptr<erhe::graphics::Texture>;
+
+    // Reorder tightly packed rows between memory order (row 0 at the device's
+    // texture origin, as the readback helpers return them) and image order
+    // (row 0 = image top). The conversion is its own inverse; bytes_per_row is
+    // width * bytes per texel.
+    [[nodiscard]] auto memory_rows_to_image_rows(std::span<const uint8_t> rows, std::size_t bytes_per_row, int height)
+        -> std::vector<uint8_t>;
+
+    // Compare two tightly packed RGBA8 images of width x height texels, per
+    // channel within +-tolerance; on mismatch reports the count of differing
+    // texels and the first one (position, actual and expected rgba).
+    void expect_rgba8_near(
+        std::span<const uint8_t> actual,
+        std::span<const uint8_t> expected,
+        int                      width,
+        int                      height,
+        int                      tolerance,
+        std::string_view         label
+    );
 
     // Golden assertions (doc/erhe/graphics_test_coverage.md "Golden
     // assertions"). Goldens live in src/erhe/graphics/test/golden/; the run's

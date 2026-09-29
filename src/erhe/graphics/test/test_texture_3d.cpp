@@ -281,4 +281,162 @@ TEST_F(Gpu_test, texture_3d_sample_voxels)
     }
 }
 
+namespace {
+
+// texture_3d_sample_image: a 16x16x4 volume; each z-slice its own base color
+// in a 4x4-texel checker (full / half intensity) with a white 2x2 marker in the
+// texel-row-0 / column-0 corner.
+constexpr int c_image_volume_size  = 16;
+constexpr int c_image_slice_count  = 4;
+constexpr int c_image_tile_size    = 64;
+constexpr int c_image_output_size  = 2 * c_image_tile_size;
+
+const std::array<std::array<int, 3>, c_image_slice_count> c_image_slice_colors{{
+    {{ 240, 120,  40 }},
+    {{  40, 200, 200 }},
+    {{ 180,  60, 220 }},
+    {{ 120, 220,  50 }}
+}};
+
+[[nodiscard]] auto image_voxel(const int x, const int y, const int z) -> std::array<uint8_t, 4>
+{
+    if ((x < 2) && (y < 2)) {
+        return std::array<uint8_t, 4>{ 255u, 255u, 255u, 255u };
+    }
+    const bool                full  = ((((x / 4) + (y / 4)) % 2) == 0);
+    const std::array<int, 3>& color = c_image_slice_colors[static_cast<std::size_t>(z)];
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>(full ? color[0] : (color[0] / 2)),
+        static_cast<uint8_t>(full ? color[1] : (color[1] / 2)),
+        static_cast<uint8_t>(full ? color[2] : (color[2] / 2)),
+        255u
+    };
+}
+
+// 2x2 tiles of 64x64 in image space: tile (tx, ty) shows slice
+// z = tx + 2 * ty, sampled at the slice centre w = (z + 0.5) / 4.
+constexpr const char* c_image_fragment_source = R"glsl(
+void main()
+{
+    vec2  tile_position = IMAGE_POSITION / float(TILE_SIZE);
+    ivec2 tile          = ivec2(floor(tile_position));
+    float slice         = float(tile.x + (2 * tile.y));
+    out_color = texture(s_texture, vec3(fract(tile_position), (slice + 0.5) / float(SLICE_COUNT)));
+}
+)glsl";
+
+} // namespace
+
+// agfx Sample3D, as a full image. A 16x16x4 texture_3d is seeded by one
+// copy_from_buffer of the whole volume (instead of agfx's compute seed;
+// pattern row 0 = texel row 0 = v 0) and sampled through a sampler3D with
+// nearest filtering in a fullscreen fragment pass
+// (doc/plans/graphics_tests_agfx_port.md 2.3) into a 128x128 image of 2x2
+// tiles: tile (tx, ty) in image space (row 0 = image top) shows z-slice
+// tx + 2 * ty, sampled at its slice centre and magnified 4x. Output pixel
+// (x, y) is exactly voxel ((x % 64) / 4, (y % 64) / 4, z); every pixel is
+// checked, then the golden.
+TEST_F(Gpu_test, texture_3d_sample_image)
+{
+    erhe::graphics::Device& graphics_device = device();
+
+    const std::shared_ptr<erhe::graphics::Texture> volume = make_sampled_texture(
+        erhe::graphics::Texture_type::texture_3d, c_image_volume_size, c_image_volume_size, c_image_slice_count, 0, "volume image source"
+    );
+
+    const std::size_t row_bytes    = static_cast<std::size_t>(c_image_volume_size) * 4u;
+    const std::size_t slice_bytes  = row_bytes * static_cast<std::size_t>(c_image_volume_size);
+    const std::size_t volume_bytes = slice_bytes * static_cast<std::size_t>(c_image_slice_count);
+    const std::shared_ptr<erhe::graphics::Buffer> volume_buffer =
+        make_host_buffer(volume_bytes, erhe::graphics::Buffer_usage::transfer_src, "volume image source data");
+    {
+        const std::span<std::byte> mapped = volume_buffer->map_bytes(0, volume_bytes);
+        for (int z = 0; z < c_image_slice_count; ++z) {
+            for (int y = 0; y < c_image_volume_size; ++y) {
+                for (int x = 0; x < c_image_volume_size; ++x) {
+                    const std::array<uint8_t, 4> voxel = image_voxel(x, y, z);
+                    const std::size_t offset =
+                        (static_cast<std::size_t>(z) * slice_bytes) +
+                        (static_cast<std::size_t>(y) * row_bytes) +
+                        (static_cast<std::size_t>(x) * 4u);
+                    std::memcpy(mapped.data() + offset, voxel.data(), 4u);
+                }
+            }
+        }
+        volume_buffer->unmap();
+    }
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(
+                volume_buffer.get(),
+                0,                                                                          // source_offset
+                static_cast<std::uintptr_t>(row_bytes),                                     // source_bytes_per_row
+                static_cast<std::uintptr_t>(slice_bytes),                                   // source_bytes_per_image
+                glm::ivec3{c_image_volume_size, c_image_volume_size, c_image_slice_count},  // source_size
+                volume.get(),
+                0,                                                                          // destination_slice
+                0,                                                                          // destination_level
+                glm::ivec3{0, 0, 0}                                                         // destination_origin
+            );
+        }
+    );
+
+    const erhe::graphics::Sampler sampler{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = erhe::graphics::Filter::nearest,
+            .mag_filter   = erhe::graphics::Filter::nearest,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .debug_label  = erhe::utility::Debug_label{"volume image nearest"}
+        }
+    };
+    const erhe::graphics::Bind_group_layout layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0,
+                    .type          = erhe::graphics::Binding_type::combined_image_sampler,
+                    .name          = "s_texture",
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_3d,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"volume image layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const std::array<Sampled_image, 1> images{ Sampled_image{ .binding_point = 0, .texture = volume.get(), .sampler = &sampler } };
+    const std::shared_ptr<erhe::graphics::Texture> output = render_fullscreen_pass(
+        layout,
+        c_image_fragment_source,
+        { { "TILE_SIZE", std::to_string(c_image_tile_size) }, { "SLICE_COUNT", std::to_string(c_image_slice_count) } },
+        images,
+        c_image_output_size,
+        c_image_output_size
+    );
+
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_image_output_size) * static_cast<std::size_t>(c_image_output_size) * 4u);
+
+    constexpr int texel_pixels = c_image_tile_size / c_image_volume_size;
+    std::vector<uint8_t> expected(pixels.size());
+    for (int y = 0; y < c_image_output_size; ++y) {
+        for (int x = 0; x < c_image_output_size; ++x) {
+            const int z = (x / c_image_tile_size) + (2 * (y / c_image_tile_size));
+            const std::array<uint8_t, 4> voxel = image_voxel((x % c_image_tile_size) / texel_pixels, (y % c_image_tile_size) / texel_pixels, z);
+            std::memcpy(expected.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_output_size)) + static_cast<std::size_t>(x)) * 4u), voxel.data(), 4u);
+        }
+    }
+    const std::vector<uint8_t> image = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_image_output_size) * 4u, c_image_output_size);
+    expect_rgba8_near(image, expected, c_image_output_size, c_image_output_size, 0, "3d image");
+    expect_image_matches_golden("texture_3d_sample_image", c_image_output_size, c_image_output_size, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+}
+
 } // namespace erhe::graphics::test

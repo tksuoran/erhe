@@ -271,4 +271,156 @@ TEST_F(Gpu_test, texture_cube_sample_faces)
     }
 }
 
+namespace {
+
+// texture_cube_sample_image: six 8x8 faces, each its own base color in a
+// 4x4-texel checker (full / half intensity) with a white 2x2 marker at face
+// texel (0, 0) (s = 0, t = 0), so the face, its orientation and the texel
+// addressing all show in the image.
+constexpr int c_image_face_count  = 6;
+constexpr int c_image_face_size   = 8;
+constexpr int c_image_tile_size   = 64;
+constexpr int c_image_tile_columns = 3;
+constexpr int c_image_width       = c_image_tile_columns * c_image_tile_size;
+constexpr int c_image_height      = 2 * c_image_tile_size;
+
+const std::array<std::array<int, 3>, c_image_face_count> c_image_face_colors{{
+    {{ 230,  50,  50 }},  // +X
+    {{  50, 210,  60 }},  // -X
+    {{  60,  80, 240 }},  // +Y
+    {{ 230, 210,  50 }},  // -Y
+    {{  50, 210, 210 }},  // +Z
+    {{ 210,  60, 210 }}   // -Z
+}};
+
+[[nodiscard]] auto image_face_texel(const int face, const int s, const int t) -> std::array<uint8_t, 4>
+{
+    if ((s < 2) && (t < 2)) {
+        return std::array<uint8_t, 4>{ 255u, 255u, 255u, 255u };
+    }
+    const bool                full  = ((((s / 4) + (t / 4)) % 2) == 0);
+    const std::array<int, 3>& color = c_image_face_colors[static_cast<std::size_t>(face)];
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>(full ? color[0] : (color[0] / 2)),
+        static_cast<uint8_t>(full ? color[1] : (color[1] / 2)),
+        static_cast<uint8_t>(full ? color[2] : (color[2] / 2)),
+        255u
+    };
+}
+
+// 3x2 tiles of 64x64 in image space: tile (tx, ty) shows face tx + 3 * ty in
+// the Vulkan (and GL) face order +X, -X, +Y, -Y, +Z, -Z, with the tile's
+// position (s, t) in [0, 1]^2 turned into the direction that the cube face
+// selection table (Vulkan spec "Cube Map Face Selection", identical in GL)
+// maps back to face coordinates (s, t). With a = 2s - 1 and b = 2t - 1:
+//   +X: ( 1, -b, -a)   -X: (-1, -b,  a)   +Y: ( a,  1,  b)
+//   -Y: ( a, -1, -b)   +Z: ( a, -b,  1)   -Z: (-a, -b, -1)
+// |a|, |b| < 1 at every pixel centre, so the major axis is never ambiguous.
+constexpr const char* c_image_fragment_source = R"glsl(
+void main()
+{
+    vec2  tile_position = IMAGE_POSITION / float(TILE_SIZE);
+    ivec2 tile          = ivec2(floor(tile_position));
+    int   face          = tile.x + (TILE_COLUMNS * tile.y);
+    vec2  ab            = (fract(tile_position) * 2.0) - vec2(1.0);
+    float a             = ab.x;
+    float b             = ab.y;
+    vec3  direction;
+    if      (face == 0) { direction = vec3( 1.0,   -b,   -a); }
+    else if (face == 1) { direction = vec3(-1.0,   -b,    a); }
+    else if (face == 2) { direction = vec3(   a,  1.0,    b); }
+    else if (face == 3) { direction = vec3(   a, -1.0,   -b); }
+    else if (face == 4) { direction = vec3(   a,   -b,  1.0); }
+    else                { direction = vec3(  -a,   -b, -1.0); }
+    out_color = texture(s_texture, direction);
+}
+)glsl";
+
+} // namespace
+
+// agfx SampleCube, as a full image. A texture_cube_map with six 8x8 faces is
+// seeded face by face through copy_from_buffer (destination_slice = face,
+// Vulkan order +X, -X, +Y, -Y, +Z, -Z, which is also GL's
+// TEXTURE_CUBE_MAP_POSITIVE_X + i order; pattern row 0 = texel row 0 = t 0)
+// and sampled through a samplerCube with nearest filtering in a fullscreen
+// fragment pass (doc/plans/graphics_tests_agfx_port.md 2.3) into a 192x128
+// image of 3x2 tiles, one face per tile, each tile covering its face's
+// (s, t) square exactly (see the direction table above). Output pixel (x, y)
+// is exactly texel ((x % 64) / 8, (y % 64) / 8) of face
+// (x / 64) + 3 * (y / 64); every pixel is checked, then the golden. The face
+// selection and (s, t) derivation are the same table in GL, so no backend
+// normalization is needed.
+TEST_F(Gpu_test, texture_cube_sample_image)
+{
+    const std::shared_ptr<erhe::graphics::Texture> cube_texture = make_sampled_texture(
+        erhe::graphics::Texture_type::texture_cube_map, c_image_face_size, c_image_face_size, 1, c_image_face_count, "cube image source"
+    );
+    for (int face = 0; face < c_image_face_count; ++face) {
+        std::vector<uint8_t> texels(static_cast<std::size_t>(c_image_face_size) * static_cast<std::size_t>(c_image_face_size) * 4u);
+        for (int t = 0; t < c_image_face_size; ++t) {
+            for (int s = 0; s < c_image_face_size; ++s) {
+                const std::array<uint8_t, 4> texel = image_face_texel(face, s, t);
+                std::memcpy(texels.data() + (((static_cast<std::size_t>(t) * static_cast<std::size_t>(c_image_face_size)) + static_cast<std::size_t>(s)) * 4u), texel.data(), 4u);
+            }
+        }
+        seed_subresource_rgba8(*cube_texture, static_cast<unsigned int>(face), 0, texels);
+    }
+
+    const erhe::graphics::Sampler sampler{
+        device(),
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = erhe::graphics::Filter::nearest,
+            .mag_filter   = erhe::graphics::Filter::nearest,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .debug_label  = erhe::utility::Debug_label{"cube image nearest"}
+        }
+    };
+    const erhe::graphics::Bind_group_layout layout{
+        device(),
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0,
+                    .type          = erhe::graphics::Binding_type::combined_image_sampler,
+                    .name          = "s_texture",
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_cube,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"cube image layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const std::array<Sampled_image, 1> images{ Sampled_image{ .binding_point = 0, .texture = cube_texture.get(), .sampler = &sampler } };
+    const std::shared_ptr<erhe::graphics::Texture> output = render_fullscreen_pass(
+        layout,
+        c_image_fragment_source,
+        { { "TILE_SIZE", std::to_string(c_image_tile_size) }, { "TILE_COLUMNS", std::to_string(c_image_tile_columns) } },
+        images,
+        c_image_width,
+        c_image_height
+    );
+
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_image_width) * static_cast<std::size_t>(c_image_height) * 4u);
+
+    constexpr int texel_pixels = c_image_tile_size / c_image_face_size;
+    std::vector<uint8_t> expected(pixels.size());
+    for (int y = 0; y < c_image_height; ++y) {
+        for (int x = 0; x < c_image_width; ++x) {
+            const int face = (x / c_image_tile_size) + (c_image_tile_columns * (y / c_image_tile_size));
+            const std::array<uint8_t, 4> texel = image_face_texel(face, (x % c_image_tile_size) / texel_pixels, (y % c_image_tile_size) / texel_pixels);
+            std::memcpy(expected.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_width)) + static_cast<std::size_t>(x)) * 4u), texel.data(), 4u);
+        }
+    }
+    const std::vector<uint8_t> image = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_image_width) * 4u, c_image_height);
+    expect_rgba8_near(image, expected, c_image_width, c_image_height, 0, "cube image");
+    expect_image_matches_golden("texture_cube_sample_image", c_image_width, c_image_height, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+}
+
 } // namespace erhe::graphics::test

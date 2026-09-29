@@ -255,4 +255,128 @@ TEST_F(Gpu_test, texture_2d_array_sample_layers)
     }
 }
 
+namespace {
+
+// texture_2d_array_sample_image: four 16x16 layers, each its own base color
+// in a 4x4-texel checker (full / half intensity) with a white 2x2 marker in the
+// texel-row-0 / column-0 corner, so the layer, its orientation and the texel
+// addressing all show in the image.
+constexpr int c_image_layer_count  = 4;
+constexpr int c_image_layer_size   = 16;
+constexpr int c_image_tile_size    = 64;
+constexpr int c_image_output_size  = 2 * c_image_tile_size;
+
+const std::array<std::array<int, 3>, c_image_layer_count> c_image_layer_colors{{
+    {{ 230,  60,  50 }},
+    {{  60, 220,  80 }},
+    {{  70,  90, 240 }},
+    {{ 230, 200,  60 }}
+}};
+
+[[nodiscard]] auto image_layer_texel(const int layer, const int x, const int y) -> std::array<uint8_t, 4>
+{
+    if ((x < 2) && (y < 2)) {
+        return std::array<uint8_t, 4>{ 255u, 255u, 255u, 255u };
+    }
+    const bool                full  = ((((x / 4) + (y / 4)) % 2) == 0);
+    const std::array<int, 3>& color = c_image_layer_colors[static_cast<std::size_t>(layer)];
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>(full ? color[0] : (color[0] / 2)),
+        static_cast<uint8_t>(full ? color[1] : (color[1] / 2)),
+        static_cast<uint8_t>(full ? color[2] : (color[2] / 2)),
+        255u
+    };
+}
+
+// 2x2 tiles of 64x64 in image space: tile (tx, ty) shows layer tx + 2 * ty,
+// its uv the position inside the tile.
+constexpr const char* c_image_fragment_source = R"glsl(
+void main()
+{
+    vec2  tile_position = IMAGE_POSITION / float(TILE_SIZE);
+    ivec2 tile          = ivec2(floor(tile_position));
+    float layer         = float(tile.x + (2 * tile.y));
+    out_color = texture(s_texture, vec3(fract(tile_position), layer));
+}
+)glsl";
+
+} // namespace
+
+// agfx Sample2DArray, as a full image. A four-layer 16x16 texture_2d_array is
+// seeded layer by layer through copy_from_buffer (instead of agfx's compute
+// seed; pattern row 0 = texel row 0 = v 0) and sampled through a
+// sampler2DArray with nearest filtering in a fullscreen fragment pass
+// (doc/plans/graphics_tests_agfx_port.md 2.3) into a 128x128 image of 2x2
+// tiles: tile (tx, ty) in image space (row 0 = image top) shows layer
+// tx + 2 * ty magnified 4x. Output pixel (x, y) is exactly texel
+// ((x % 64) / 4, (y % 64) / 4) of that layer; every pixel is checked, then the
+// golden.
+TEST_F(Gpu_test, texture_2d_array_sample_image)
+{
+    const std::shared_ptr<erhe::graphics::Texture> array_texture = make_sampled_texture(
+        erhe::graphics::Texture_type::texture_2d_array, c_image_layer_size, c_image_layer_size, 1, c_image_layer_count, "array image source"
+    );
+    for (int layer = 0; layer < c_image_layer_count; ++layer) {
+        std::vector<uint8_t> texels(static_cast<std::size_t>(c_image_layer_size) * static_cast<std::size_t>(c_image_layer_size) * 4u);
+        for (int y = 0; y < c_image_layer_size; ++y) {
+            for (int x = 0; x < c_image_layer_size; ++x) {
+                const std::array<uint8_t, 4> texel = image_layer_texel(layer, x, y);
+                std::memcpy(texels.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_layer_size)) + static_cast<std::size_t>(x)) * 4u), texel.data(), 4u);
+            }
+        }
+        seed_subresource_rgba8(*array_texture, static_cast<unsigned int>(layer), 0, texels);
+    }
+
+    const erhe::graphics::Sampler sampler{
+        device(),
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = erhe::graphics::Filter::nearest,
+            .mag_filter   = erhe::graphics::Filter::nearest,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .debug_label  = erhe::utility::Debug_label{"array image nearest"}
+        }
+    };
+    const erhe::graphics::Bind_group_layout layout{
+        device(),
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0,
+                    .type          = erhe::graphics::Binding_type::combined_image_sampler,
+                    .name          = "s_texture",
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_2d_array,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"array image layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const std::array<Sampled_image, 1> images{ Sampled_image{ .binding_point = 0, .texture = array_texture.get(), .sampler = &sampler } };
+    const std::shared_ptr<erhe::graphics::Texture> output = render_fullscreen_pass(
+        layout, c_image_fragment_source, { { "TILE_SIZE", std::to_string(c_image_tile_size) } }, images, c_image_output_size, c_image_output_size
+    );
+
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_image_output_size) * static_cast<std::size_t>(c_image_output_size) * 4u);
+
+    constexpr int texel_pixels = c_image_tile_size / c_image_layer_size;
+    std::vector<uint8_t> expected(pixels.size());
+    for (int y = 0; y < c_image_output_size; ++y) {
+        for (int x = 0; x < c_image_output_size; ++x) {
+            const int layer = (x / c_image_tile_size) + (2 * (y / c_image_tile_size));
+            const std::array<uint8_t, 4> texel = image_layer_texel(layer, (x % c_image_tile_size) / texel_pixels, (y % c_image_tile_size) / texel_pixels);
+            std::memcpy(expected.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_output_size)) + static_cast<std::size_t>(x)) * 4u), texel.data(), 4u);
+        }
+    }
+    const std::vector<uint8_t> image = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_image_output_size) * 4u, c_image_output_size);
+    expect_rgba8_near(image, expected, c_image_output_size, c_image_output_size, 0, "2d array image");
+    expect_image_matches_golden("texture_2d_array_sample_image", c_image_output_size, c_image_output_size, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
+}
+
 } // namespace erhe::graphics::test

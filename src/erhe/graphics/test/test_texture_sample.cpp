@@ -19,7 +19,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -186,6 +188,106 @@ TEST_F(Gpu_test, texture_sample_nearest)
         }
     }
     EXPECT_EQ(bad, 0) << bad << " texels did not match the sampled source color {64,128,192,255}";
+}
+
+namespace {
+
+// 16x8 (non-square) source for texture_sample_2d_image: red ramps with x,
+// green with y, blue marks a diagonal band, so a transposed, flipped or
+// stretched lookup shows in the image.
+constexpr int c_image_source_width  = 16;
+constexpr int c_image_source_height = 8;
+constexpr int c_image_output_size   = 64;
+
+[[nodiscard]] auto image_source_texel(const int x, const int y) -> std::array<uint8_t, 4>
+{
+    return std::array<uint8_t, 4>{
+        static_cast<uint8_t>((x * 15) + 20),
+        static_cast<uint8_t>((y * 30) + 20),
+        static_cast<uint8_t>((((x / 2) == y) || (((x / 2) + 1) == y)) ? 230 : 30),
+        255u
+    };
+}
+
+constexpr const char* c_image_fragment_source = R"glsl(
+void main()
+{
+    out_color = texture(s_texture, IMAGE_POSITION / vec2(float(TARGET_WIDTH), float(TARGET_HEIGHT)));
+}
+)glsl";
+
+} // namespace
+
+// agfx Sample2D, as a full image: a 16x8 texture_2d seeded by copy_from_buffer
+// (pattern row 0 = texel row 0 = v 0) is sampled with nearest filtering over a
+// 64x64 output at uv = IMAGE_POSITION / 64 (image space, row 0 = image top) in
+// a fullscreen fragment pass (agfx writes from compute; see
+// doc/plans/graphics_tests_agfx_port.md 2.3). Output pixel (x, y) is exactly
+// texel (x / 4, y / 8); every pixel is checked, then the golden.
+TEST_F(Gpu_test, texture_sample_2d_image)
+{
+    std::vector<uint8_t> pattern(static_cast<std::size_t>(c_image_source_width) * static_cast<std::size_t>(c_image_source_height) * 4u);
+    for (int y = 0; y < c_image_source_height; ++y) {
+        for (int x = 0; x < c_image_source_width; ++x) {
+            const std::array<uint8_t, 4> texel = image_source_texel(x, y);
+            std::memcpy(pattern.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_source_width)) + static_cast<std::size_t>(x)) * 4u), texel.data(), 4u);
+        }
+    }
+    const std::shared_ptr<erhe::graphics::Texture> source = make_sampled_texture(
+        erhe::graphics::Texture_type::texture_2d, c_image_source_width, c_image_source_height, 1, 0, "sample 2d image source"
+    );
+    seed_subresource_rgba8(*source, 0, 0, pattern);
+
+    const erhe::graphics::Sampler sampler{
+        device(),
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = erhe::graphics::Filter::nearest,
+            .mag_filter   = erhe::graphics::Filter::nearest,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .debug_label  = erhe::utility::Debug_label{"sample 2d image nearest"}
+        }
+    };
+    const erhe::graphics::Bind_group_layout layout{
+        device(),
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0,
+                    .type          = erhe::graphics::Binding_type::combined_image_sampler,
+                    .name          = "s_texture",
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_2d,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"sample 2d image layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const std::array<Sampled_image, 1> images{ Sampled_image{ .binding_point = 0, .texture = source.get(), .sampler = &sampler } };
+    const std::shared_ptr<erhe::graphics::Texture> output =
+        render_fullscreen_pass(layout, c_image_fragment_source, {}, images, c_image_output_size, c_image_output_size);
+
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*output);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_image_output_size) * static_cast<std::size_t>(c_image_output_size) * 4u);
+
+    std::vector<uint8_t> expected(pixels.size());
+    for (int y = 0; y < c_image_output_size; ++y) {
+        for (int x = 0; x < c_image_output_size; ++x) {
+            const std::array<uint8_t, 4> texel = image_source_texel(
+                (x * c_image_source_width)  / c_image_output_size,
+                (y * c_image_source_height) / c_image_output_size
+            );
+            std::memcpy(expected.data() + (((static_cast<std::size_t>(y) * static_cast<std::size_t>(c_image_output_size)) + static_cast<std::size_t>(x)) * 4u), texel.data(), 4u);
+        }
+    }
+    const std::vector<uint8_t> image = memory_rows_to_image_rows(pixels, static_cast<std::size_t>(c_image_output_size) * 4u, c_image_output_size);
+    expect_rgba8_near(image, expected, c_image_output_size, c_image_output_size, 0, "sample 2d image");
+    expect_image_matches_golden("texture_sample_2d_image", c_image_output_size, c_image_output_size, erhe::dataformat::Format::format_8_vec4_unorm, std::as_bytes(std::span<const uint8_t>{pixels}));
 }
 
 } // namespace erhe::graphics::test

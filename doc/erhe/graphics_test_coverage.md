@@ -3,8 +3,9 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (126 passed) and on non-headless
-OpenGL (137 passed + 1 capability skip, no failures); Metal builds but has not
+target builds and runs on headless Vulkan (149 passed) and on non-headless
+OpenGL (154 passed + 1 capability skip + 6 comparison-sampler failures from a
+driver defect, see "Known gaps"); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
@@ -37,6 +38,7 @@ limitation, not a coverage gap to fill).
 - [x] Multiple render targets / MRT (`test_mrt.cpp`)
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
+- [x] Indirect indexed draw parameters: one `Draw_indexed_primitives_indirect_command` through `multi_draw_indexed_primitives_indirect` with non-zero `first_index`, `base_vertex` and `base_instance`, per-instance vertex attributes (`Vertex_step::Step_per_instance`) placing and coloring each instance; the columns drawn and their colors asserted analytically; skips without `Device_info::use_base_instance` (`test_instanced.cpp`, `Gpu_test.draw_parameters_indirect`)
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
 - [x] Six single-texel points, exact lit count and positions; line_list from a vertex buffer, non-indexed and indexed (uint16), rasterizing identically (`test_topology.cpp`, `Topology_test`)
 - [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
@@ -61,18 +63,23 @@ limitation, not a coverage gap to fill).
 - [x] Buffer upload + copy + fill (`test_buffer_transfer.cpp`)
 - [x] Buffer -> buffer copy with zero offsets over the whole buffer and with non-zero source / destination offsets into a `fill_buffer`-prefilled buffer; bytes outside the copied range keep the fill (`test_buffer_transfer.cpp`, `Gpu_test.copy_buffer_to_buffer`)
 - [x] Texture upload roundtrip + constant clear (`test_texture_upload.cpp`)
-- [x] Texture sampling, nearest filter (`test_texture_sample.cpp`)
+- [x] Texture sampling, nearest filter; full image: a 16x8 texture magnified to 64x64, every output texel exact (`test_texture_sample.cpp`, `Gpu_test.texture_sample_2d_image`)
 - [x] Sampler linear filter, two-texel midpoint interpolation (`test_sampler_modes.cpp`)
 - [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
+- [x] Sampler filters and address modes as full images: a 16x16 source magnified 4x with nearest (exact) and linear (CPU bilinear reference, +-2) filtering; a 4x4 source over uv [-1, 2] with repeat, mirrored_repeat and clamp_to_edge, every output texel exact (`test_sampler_modes.cpp`, `Sampler_mode_test`)
+- [x] Texture gather: `textureGather` of the red component at every four-texel corner of an 8x8 texture, borders clamped, in the GLSL x / y / z / w footprint order (`test_texture_gather.cpp`)
+- [x] Comparison samplers: a format_d32_sfloat texture cleared to 0.5 sampled through a `sampler2DShadow` binding (`sampler_aspect` depth, `compare_enable`, immutable sampler) at references 0.25 / 0.5 / 0.75, for all eight compare operations (`test_sampler_comparison.cpp`, `Sampler_comparison_test`)
+- [x] texelFetch from 2D, 2D array and 3D textures with mirrored x, swizzled channels and reversed layer / slice order (`test_texel_fetch.cpp`, `Texel_fetch_test`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
 - [x] Buffer -> texture and texture -> buffer copies into / out of one subresource: a 64x64 2D texture, level 1 of a two-level 128x128 texture, layer 2 of a four-layer 64x64 array. Every subresource is seeded by a whole-surface copy and read back byte-exact; region copies use non-zero texture origins, a non-zero buffer offset and padded `bytes_per_row`; the texture -> buffer padding and leading / trailing bytes keep the destination prefill; every other subresource reads back equal to its seed (`test_copy.cpp`, `Copy_test`)
 - [x] copy_from_texture (texture -> texture): whole-image copy (byte-exact roundtrip) and a non-zero-origin sub-rect copy with correct placement; source filled via copy_from_buffer, destination read back. Validates the engine fix that reads/restores the source's tracked layout and updates the destination's tracked layout (`test_copy_texture.cpp`)
 - [x] Texture -> texture region copies at non-zero source and destination origins over a pre-seeded destination: 2D 64x64, level 1 to level 1 of two-level 128x128 textures, layer 1 to layer 2 of four-layer 64x64 arrays; the destination outside the region and every other subresource of both textures read back equal to their seeds (`test_copy_texture.cpp`, `Texture_copy_test`)
 - [x] Depth-texture readback: depth-only pass writes a known NDC depth, depth aspect copied to host (`test_depth_readback.cpp`)
+- [x] Depth texture sampled as a float: a triangle at depth 0.25 over a 1.0 clear, the depth aspect sampled through a plain `sampler2D` into format_32_vec4_float; exact corner and centre values (`test_depth_readback.cpp`, `Gpu_test.depth_texture_sample_float`)
 - [x] Mipmap generation: generate_mipmaps linear-downsamples level 0 (half-black/half-white split averages to mid-gray at the 1x1 level; the 4x4 level keeps the vertical split) (`test_mipmaps.cpp`)
-- [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified (`test_texture_array.cpp`)
-- [x] 3D texture sampling: 2x2x2 texture_3d filled in one copy_from_buffer, each voxel center sampled through a sampler3D (nearest) and verified against its distinct color (`test_texture_3d.cpp`)
-- [x] Cube map (texture_cube_map) sampling: 6-face CUBE-compatible image (1x1 per face) with a distinct per-face color filled via copy_from_buffer destination_slice (Vulkan face order +X,-X,+Y,-Y,+Z,-Z), each face sampled through a samplerCube by its center direction vector (baked as a GLSL define) and verified; set_sampled_image builds a VK_IMAGE_VIEW_TYPE_CUBE view spanning all 6 layers (`test_texture_cube.cpp`)
+- [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified; full image: four 16x16 patterned layers seeded by copy_from_buffer, shown as 2x2 tiles, every output texel exact (`test_texture_array.cpp`, `Gpu_test.texture_2d_array_sample_image`)
+- [x] 3D texture sampling: 2x2x2 texture_3d filled in one copy_from_buffer, each voxel center sampled through a sampler3D (nearest) and verified against its distinct color; full image: a 16x16x4 volume, each z-slice sampled at its centre as one of 2x2 tiles, every output texel exact (`test_texture_3d.cpp`, `Gpu_test.texture_3d_sample_image`)
+- [x] Cube map (texture_cube_map) sampling: 6-face CUBE-compatible image (1x1 per face) with a distinct per-face color filled via copy_from_buffer destination_slice (Vulkan face order +X,-X,+Y,-Y,+Z,-Z), each face sampled through a samplerCube by its center direction vector (baked as a GLSL define) and verified; set_sampled_image builds a VK_IMAGE_VIEW_TYPE_CUBE view spanning all 6 layers; full image: six patterned 8x8 faces as 3x2 tiles, each tile covering its face's (s, t) square through the cube face selection table, every output texel exact (`test_texture_cube.cpp`, `Gpu_test.texture_cube_sample_image`)
 
 ## Color formats
 
@@ -136,16 +143,48 @@ golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
 (6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3),
 the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5), and the
 render pass action and subresource target ports: `Pass_action_test` (3),
-`Render_target_subresource_test` (6), and the copy ports:
+`Render_target_subresource_test` (6), the copy ports:
 `Gpu_test.copy_buffer_to_buffer` (2 buffer goldens), `Copy_test` (3 image,
-3 buffer goldens), `Texture_copy_test` (3). The texture -> buffer tests order
-the payload rows top-down from `texture_origin` before the buffer compare, as
-the image helper does for images, so their buffer goldens are shared by every
-backend too.
+3 buffer goldens), `Texture_copy_test` (3), and the sampling ports:
+`Sampler_mode_test` (5), `Sampler_comparison_test` (8), `Texel_fetch_test`
+(3), `Gpu_test.texture_sample_2d_image`, `texture_2d_array_sample_image`,
+`texture_3d_sample_image`, `texture_cube_sample_image`,
+`texture_gather_red_corners`, `draw_parameters_indirect` and
+`depth_texture_sample_float` (the one `.pfm` golden, HDR-FLIP). The texture
+-> buffer tests order the payload rows top-down from `texture_origin` before
+the buffer compare, as the image helper does for images, so their buffer
+goldens are shared by every backend too.
+
+**Sampling passes.** `Gpu_test::render_fullscreen_pass` renders one
+fullscreen triangle whose fragment shader samples the images bound through a
+bind group layout into a fresh color target; the sampling ports write their
+whole output image this way rather than through a compute storage image. The
+shader gets `IMAGE_POSITION`, the pixel position in image space (row 0 =
+image top, the goldens' row order) derived from `gl_FragCoord` and
+`texture_origin`. A test that addresses a seeded texture by `IMAGE_POSITION`
+reads texel row r for image row r on every backend, so its CPU model is the
+shader's own arithmetic and one golden serves all backends; a test that
+samples a texture it rendered itself addresses it by `gl_FragCoord` (memory
+rows), which reads the texel rendered at that pixel. `make_sampled_texture`,
+`find_depth32f_format`, `memory_rows_to_image_rows` and `expect_rgba8_near`
+are the helpers the sampling ports share.
 
 ## Known gaps (not yet covered)
 
-None remaining.
+- Comparison samplers on OpenGL (seen with the AMD Radeon 890M driver,
+  "4.6.0 Core Profile Context 26.8.1.260810"): once
+  `Sampler_comparison_test.never` has drawn, the later cases, which compile
+  the same fragment shader source, return 0 for every reference: `less`,
+  `equal`, `less_or_equal`, `greater`, `not_equal` and `greater_or_equal`
+  read as `never` (`less` passed in one of several runs; `always` passes).
+  Each passes run alone or after any case other than `never`, and all pass
+  when the fragment source differs per case. The GL state queried just before
+  the failing draws is the requested one: the program's `s_shadow` uniform
+  is unit 0, unit 0 has the depth texture and the case's sampler bound, and
+  that sampler reads back `GL_COMPARE_REF_TO_TEXTURE` with the case's compare
+  function. Removing the immutable sampler changes nothing. erhe hands the
+  driver the right state, so the cases are left failing there rather than
+  worked around in the test.
 
 ## CI
 

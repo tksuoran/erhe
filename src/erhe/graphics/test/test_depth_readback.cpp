@@ -8,6 +8,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 
@@ -18,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -200,6 +202,210 @@ TEST_F(Gpu_test, depth_texture_readback)
     }
     EXPECT_EQ(bad, 0) << bad << " of " << depths.size() << " depth texels differed from the drawn NDC depth "
                       << draw_z << " (max diff " << max_diff << ")";
+}
+
+namespace {
+
+// depth_texture_sample_float: a triangle well inside the target, NDC x in
+// [-0.5, 0.5], y in [-0.5, 0.75], written at depth 0.25 over a 1.0 clear.
+constexpr const char* c_sample_depth_vertex_source = R"glsl(
+void main()
+{
+    vec2 positions[3] = vec2[3](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(0.0, 0.75));
+    gl_Position = vec4(positions[gl_VertexID], DRAW_Z, 1.0);
+}
+)glsl";
+
+// Plain (non-comparison) sampling of the depth aspect as a float, at the
+// texel rendered at this pixel (gl_FragCoord addresses memory rows, like the
+// depth render did).
+constexpr const char* c_sample_depth_fragment_source = R"glsl(
+void main()
+{
+    float depth = texture(s_depth, gl_FragCoord.xy / vec2(float(TARGET_WIDTH), float(TARGET_HEIGHT))).r;
+    out_color = vec4(depth, depth, depth, 1.0);
+}
+)glsl";
+
+} // namespace
+
+// agfx SampleDepthTexture. A 64x64 format_d32_sfloat texture is cleared to 1.0
+// and a triangle is drawn into it at depth 0.25 (depth test always, so the
+// result does not depend on the device's depth convention), leaving it in
+// depth_stencil_read_only_optimal. A fullscreen fragment pass (agfx samples
+// from compute; see doc/plans/graphics_tests_agfx_port.md 2.3) samples the
+// depth aspect through a plain sampler2D (sampler_aspect depth, nearest) and
+// writes the value to a format_32_vec4_float target. Asserts exact values:
+// the four corners read 1.0, the four centre texels 0.25, every texel is one
+// of the two, and the triangle covers its analytic area (0.625 of the 4.0
+// NDC square, 640 texels) within one edge row; then the .pfm golden (HDR-FLIP).
+TEST_F(Gpu_test, depth_texture_sample_float)
+{
+    constexpr int   size        = 64;
+    constexpr float draw_z      = 0.25f;
+    constexpr float clear_depth = 1.0f;
+
+    erhe::graphics::Device& graphics_device = device();
+
+    const erhe::dataformat::Format depth_format = find_depth32f_format();
+    if (depth_format == erhe::dataformat::Format::format_undefined) {
+        GTEST_SKIP() << "no pure 32-bit-float depth-renderable format available on this device";
+    }
+
+    const std::shared_ptr<erhe::graphics::Texture> depth_texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = depth_format,
+            .width       = size,
+            .height      = size,
+            .debug_label = erhe::utility::Debug_label{"depth sample source"}
+        }
+    );
+
+    const erhe::graphics::Bind_group_layout empty_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings          = {},
+            .debug_label       = erhe::utility::Debug_label{"depth sample empty layout"},
+            .uses_texture_heap = false
+        }
+    };
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "depth_sample_source",
+        .defines          = { { "DRAW_Z", std::to_string(draw_z) } },
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_sample_depth_vertex_source} },
+            { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_fragment_source}            }
+        },
+        .bind_group_layout = &empty_layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(graphics_device, shader_create_info);
+    ASSERT_TRUE(prototype.is_valid()) << "depth sample source shader failed to compile/link";
+    erhe::graphics::Shader_stages shader_stages{graphics_device, std::move(prototype)};
+
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.depth_attachment.texture        = depth_texture.get();
+    descriptor.depth_attachment.clear_value[0] = static_cast<double>(clear_depth);
+    descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
+    descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
+    descriptor.depth_attachment.usage_before   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::undefined;
+    descriptor.depth_attachment.usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
+    descriptor.render_target_width  = size;
+    descriptor.render_target_height = size;
+    descriptor.debug_label = erhe::utility::Debug_label{"depth sample source"};
+
+    erhe::graphics::Depth_stencil_state depth_stencil{};
+    depth_stencil.depth_test_enable   = true;
+    depth_stencil.depth_write_enable  = true;
+    depth_stencil.depth_compare_op    = erhe::graphics::Compare_operation::always;
+    depth_stencil.stencil_test_enable = false;
+
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly    = erhe::graphics::Input_assembly_state::triangle;
+    pipeline_create_info.base.rasterization     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil     = depth_stencil;
+    pipeline_create_info.base.bind_group_layout = &empty_layout;
+    pipeline_create_info.base.color_blend       = &erhe::graphics::Color_blend_state::color_writes_disabled;
+    pipeline_create_info.shader_stages          = &shader_stages;
+    pipeline_create_info.vertex_input           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{graphics_device, pipeline_create_info};
+    ASSERT_TRUE(pipeline.is_valid()) << "depth sample source pipeline is not valid";
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass            render_pass{graphics_device, descriptor};
+            erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_viewport_rect(0, 0, size, size);
+            encoder.set_scissor_rect (0, 0, size, size);
+            encoder.set_bind_group_layout(&empty_layout);
+            encoder.set_render_pipeline(pipeline);
+            encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+        }
+    );
+
+    const erhe::graphics::Sampler sampler{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = erhe::graphics::Filter::nearest,
+            .mag_filter   = erhe::graphics::Filter::nearest,
+            .mipmap_mode  = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .debug_label  = erhe::utility::Debug_label{"depth sample nearest"}
+        }
+    };
+    const erhe::graphics::Bind_group_layout sample_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point  = 0,
+                    .type           = erhe::graphics::Binding_type::combined_image_sampler,
+                    .sampler_aspect = erhe::graphics::Sampler_aspect::depth,
+                    .name           = "s_depth",
+                    .glsl_type      = erhe::graphics::Glsl_type::sampler_2d,
+                    .stage_flags    = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"depth sample layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const std::array<Sampled_image, 1> images{ Sampled_image{ .binding_point = 0, .texture = depth_texture.get(), .sampler = &sampler } };
+    const std::shared_ptr<erhe::graphics::Texture> output = render_fullscreen_pass(
+        sample_layout, c_sample_depth_fragment_source, {}, images, size, size, erhe::dataformat::Format::format_32_vec4_float
+    );
+
+    const std::vector<float> texels = read_texture_rgba32f(*output);
+    ASSERT_EQ(texels.size(), static_cast<std::size_t>(size) * static_cast<std::size_t>(size) * 4u);
+
+    const auto value_at = [&](const int x, const int y) -> float {
+        return texels[((static_cast<std::size_t>(y) * static_cast<std::size_t>(size)) + static_cast<std::size_t>(x)) * 4u];
+    };
+    // Corners and centre are symmetric under the row flip, so memory rows serve.
+    EXPECT_EQ(value_at(0,        0),        clear_depth);
+    EXPECT_EQ(value_at(size - 1, 0),        clear_depth);
+    EXPECT_EQ(value_at(0,        size - 1), clear_depth);
+    EXPECT_EQ(value_at(size - 1, size - 1), clear_depth);
+    EXPECT_EQ(value_at((size / 2) - 1, (size / 2) - 1), draw_z);
+    EXPECT_EQ(value_at( size / 2,      (size / 2) - 1), draw_z);
+    EXPECT_EQ(value_at((size / 2) - 1,  size / 2),      draw_z);
+    EXPECT_EQ(value_at( size / 2,       size / 2),      draw_z);
+
+    int covered = 0;
+    int other   = 0;
+    for (std::size_t i = 0; i < texels.size(); i += 4u) {
+        const float r = texels[i + 0u];
+        if (r == draw_z) {
+            ++covered;
+        } else if (r != clear_depth) {
+            ++other;
+        }
+        if ((texels[i + 1u] != r) || (texels[i + 2u] != r) || (texels[i + 3u] != 1.0f)) {
+            ++other;
+        }
+    }
+    EXPECT_EQ(other, 0) << other << " texels are neither the clear depth nor the drawn depth";
+    // Triangle area 0.5 * 1.0 * 1.25 NDC units of a 2x2 NDC square = 15.625 %
+    // of 4096 = 640 texels; the edge rasterization rule shifts that by at most
+    // about one texel row per edge.
+    EXPECT_GE(covered, 560) << "drawn-depth texel count";
+    EXPECT_LE(covered, 720) << "drawn-depth texel count";
+
+    expect_image_matches_golden("depth_texture_sample_float", size, size, erhe::dataformat::Format::format_32_vec4_float, std::as_bytes(std::span<const float>{texels}));
 }
 
 } // namespace erhe::graphics::test
