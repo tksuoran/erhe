@@ -1,5 +1,6 @@
 #include "erhe_graphics/gl/gl_compute_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
+#include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/gl/gl_context_index.hpp"
@@ -56,12 +57,12 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
 
 void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
 {
-    // No-op: the GL multi-scatter compute path reads the LUT as a storage image
-    // (set_storage_image above). Only the Vulkan KosmicKrisp workaround samples
-    // the LUT in compute (WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ).
-    static_cast<void>(binding_point);
-    static_cast<void>(texture);
-    static_cast<void>(sampler);
+    // Dedicated samplers use binding_point as the texture unit, as in
+    // Render_command_encoder_impl::set_sampled_image.
+    // Publication consumer: see Render_command_encoder_impl::set_sampled_image.
+    texture.get_impl().wait_publication();
+    gl::bind_texture_unit(binding_point, texture.get_impl().gl_name());
+    gl::bind_sampler(binding_point, sampler.get_impl().gl_name());
 }
 
 void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)

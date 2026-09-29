@@ -32,17 +32,16 @@ public:
     void set_bind_group_layout     (const Bind_group_layout* bind_group_layout);
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer) override;
-    // Bind a load/store storage image to the given binding point (must be a
-    // storage_image binding in the active Bind_group_layout). The texture must
-    // be in Image_layout::general; the caller is responsible for transitioning
-    // it (and for barriers between dispatches). Vulkan backend only; GL / Metal
-    // / Null are no-ops (the atmosphere LUT path that uses this is Vulkan-only).
+    // Bind level 0 of a 2D texture as a load/store storage image to the given
+    // binding point (must be a storage_image binding in the active
+    // Bind_group_layout). The texture must be in Image_layout::general; the
+    // caller is responsible for transitioning it (and for memory_barrier
+    // between dispatches). Vulkan, OpenGL and Metal; Null is a no-op.
     void set_storage_image         (uint32_t binding_point, const Texture& texture);
     // Bind a sampled texture + sampler to the given binding point (must be a
     // combined_image_sampler binding in the active Bind_group_layout). The
-    // texture must be in Image_layout::shader_read_only_optimal. Vulkan backend
-    // only; GL / Metal / Null are no-ops (only the KosmicKrisp storage-image
-    // read workaround uses this - those backends read the image directly).
+    // texture must be in Image_layout::shader_read_only_optimal. Vulkan,
+    // OpenGL and Metal; Null is a no-op.
     void set_sampled_image         (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
     // Bind a top level acceleration structure to the given binding point (must
     // be an acceleration_structure binding in the active Bind_group_layout;
