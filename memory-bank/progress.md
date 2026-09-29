@@ -76,3 +76,14 @@
 ✓review-issue-1::c34fe6385+b92e46610{position-bound-from-node-origin-distance;erhe_position_rounding.glsl+v_position_rounding+Light_shadow_limits::caster_vertex_rounding(shadow_limits.x);far_vertices-station(point-failed-7.9%-before);T7-Vk+GL-10/10;T8-pass;final-gate-135-cells-0-FAIL}
 ✓review-issue-3::50d26d423{Device_info::sub_pixel_precision_bits{Vk+GL;Metal-0};Shadow_renderer-ctor-logs-error<8|warn-unreported;step-stays-1/256;Vk-logs-8}
 ?review-issues-2,4..11-open{doc/reference/shadow_robustness_review_2026_09_29.md;user:future-work}
+
+[TASK::debug-line-anti-aliasing]{2026-09-29;doc/plans/debug_renderer_anti_aliasing.md}
+✓plan::1edc62ed6+eef75d41d{option-A-after-user-rejected-two-draws}
+✓tests-first::{DISABLED_->enabled-per-step;fixture-returns-row-profile}
+✓stencil::84fa70a5f{greater_or_equal;last-fragment-wins-in-bucket}
+✓coverage::8e33fde3e{fringe+hg=max(h,0.5);coverage=clamp(hg+0.5-d)*min(1,2h);off=old-path-bit-exact}
+✓hidden::bbc9c6e0b{ERHE_DEBUG_LINE_HIDDEN*view.hidden_dim;gray-bg-test}
+✓setting+docs::ea9e70241{Debug_visualizations_style-v5-anti_aliased_lines;apply-at-startup+checkbox}
+✓cost-gate::e2c1cdb43{aa_cost_benchmark;on/off-1.16..1.21x;local/debug_lines.md}
+!trade::fringe-over-fringe-double-blend{joints+line-twice;plan-sec-2;exact=two-draws}
+?follow-up::content-wide-lines+Metal-run
