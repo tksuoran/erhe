@@ -9,7 +9,8 @@ coverage, smoothness only from MSAA) with analytic coverage the way AIMD's
 `AIMD.hlsl` does it (`saturate(halfWidth + 0.5 - distance)` over a ribbon
 extended by a one-pixel fringe), while keeping erhe's stencil layering,
 visible + hidden passes, x-ray, multiview and per-endpoint width and color
-intact.
+intact. The stencil rule inside a bucket changes from first fragment wins to
+last fragment wins (section 3) so that one draw per pass suffices.
 
 ## 1. Scope
 
@@ -65,43 +66,45 @@ unaffected: corner depths are evaluated from the face planes at whatever NDC
 the corner lands on, so a wider ribbon only moves the corner along the same
 plane.
 
-## 3. Stencil: core and fringe draws
+## 3. Stencil: last fragment wins inside a bucket
 
 The buckets write their `stencil_reference` with compare `greater`
 (`debug_renderer_bucket.cpp` `make_pipeline`), which gives "first fragment
 wins" inside a bucket and "higher bucket wins" across buckets. With analytic
 coverage every non-discarded fragment still claims the stencil, so a fringe
 fragment at 10 % coverage drawn first would block a later fully covered
-fragment of the crossing or joining line and leave a dark notch. One draw per
-pass cannot fix this because the claim is made by the fixed-function stencil
-stage.
+fragment of the crossing or joining line and leave a dark notch.
 
-Each pass (visible, hidden) therefore issues two draws of the same triangle
-SSBO range with the same pipeline state and two fragment shader variants:
+The compare becomes `greater_or_equal`: inside a bucket the last fragment
+wins. Across buckets nothing changes (a lower reference still fails against
+a higher one, a higher one still overwrites). Inside a bucket, for opaque
+lines the picture is the intended one:
 
-1. **Core**: keeps fragments with `c >= 1`, discards the rest. Drawn first,
-   so fully covered pixels claim the stencil before any partial pixel can.
-2. **Fringe**: keeps fragments with `0 < c < 1`, discards the rest (a
-   zero-coverage fragment in the ribbon's cap corners must not claim a
-   pixel). Same stencil state as the core draw (compare `greater`, op
-   `replace`): a fringe fragment never draws over a pixel a core fragment of
-   this or a higher bucket claimed, and where two fringes coincide (round
-   caps of a polyline joint, a line drawn twice) the first wins with the
-   identical value instead of blending twice into a brighter edge. Where two
-   fringes of different lines cross, the pixel shows the first line's
-   coverage rather than the union; this is the same first-fragment rule the
-   bucket already applies to overlapping translucent lines.
+- a core fragment (`c = 1`) over a fringe fragment overwrites it, so a joint
+  or crossing has no notch;
+- a fringe fragment over a core fragment of the same color blends the color
+  with itself and leaves the pixel unchanged, so a line drawn twice and the
+  overlapping round caps of a polyline render as one line;
+- a fringe over a core of another color gives the later line an
+  anti-aliased edge over the earlier one at a crossing.
 
-The two variants are one source file, `line_after_compute.frag`, with the
-define `ERHE_DEBUG_LINE_FRINGE` (0 or 1) passed through
-`Shader_stages_create_info::defines`, next to the existing `ERHE_MULTIVIEW`
-variant. Draw order per bucket: hidden core, hidden fringe, visible core,
-visible fringe. The core draw is the existing draw with `discard` at `c < 1`
-instead of `alpha < 0.5`; the fringe draw is the new one.
+Two translucent lines of one bucket overlapping blend twice where today only
+the first is shown. No call site draws translucent debug lines (every
+`set_line_color` / `set_major_color` / `set_minor_color` literal and every
+line color in `editor_settings.json` has alpha 1), and the first-fragment
+result was order-dependent anyway; this is the accepted trade for one draw
+per pass. Zero-coverage fragments (the cap corners of the extended ribbon)
+are discarded so they claim no pixel.
 
-A per-bucket draw therefore costs two fragment-shader passes over the ribbon
-instead of one. The fringe draw is skipped when anti-aliasing is off (section
-5), which restores today's cost with the coverage test at `c >= 0.5`.
+Draw order stays hidden pass then visible pass. Under `greater_or_equal` the
+visible pass drawn second overwrites a hidden-pass fragment at the same
+pixel, so a visible line wins over an occluded one of the same bucket; a
+hidden fringe under a visible fringe leaves a dim tint, which is what is
+physically there. Today the hidden claim blocks the visible fragment
+instead, a quirk that goes away with the change.
+
+One draw per pass, one fragment shader per pass kind, no extra pipelines.
+The extra fragment work is the half-pixel ribbon extension only.
 
 ## 4. Hidden pass
 
@@ -116,18 +119,20 @@ shader multiplies its premultiplied output by `view.hidden_dim`. The
 compute tier; `color_blend_hidden` remains for the direct tier, which is not
 changed by this plan.
 
-Fragment shader variants: {core, fringe} x {visible, hidden} = 4 per vertex
-variant (single view and multiview), built in one loop over the two defines
-in `Debug_renderer_program_interface` and registered with the shader monitor
-each, so hot reload keeps working.
+Fragment shader variants: {visible, hidden} per vertex variant (single view
+and multiview), four `Shader_stages` in all, built in one loop over the
+define in `Debug_renderer_program_interface` and registered with the shader
+monitor each, so hot reload keeps working.
 
 ## 5. Setting
 
 `Debug_renderer::set_anti_aliasing(Anti_aliasing)` with
 `enum class Anti_aliasing { off, on }`, default `on`. Off restores the current
-behaviour: no fringe extension in the compute shader (`view.fringe`, 0.0 or
-0.5, read where the corners are offset), the core discard threshold at 0.5
-(`view.core_coverage_threshold`, 0.5 or 1.0), no fringe draw. The editor
+edge: no fringe extension in the compute shader (`view.fringe`, 0.0 or 0.5,
+read where the corners are offset) and a binary coverage test at 0.5 in the
+fragment shader (`view.coverage_threshold`, 0.5 or 0.0: fragments below it
+are discarded, fragments at or above it output coverage 1 when the threshold
+is 0.5). The stencil compare stays `greater_or_equal` in both modes. The editor
 reads it from `editor_settings.json` next to `line_bias_margin` under the
 same object and applies it at the single change site (the settings apply
 code that calls `set_line_bias_margin`; the Graphics settings UI toggles it
@@ -157,10 +162,12 @@ have coverage 0. New tests, all reading the middle row:
    within 2 % plus the 8-bit rounding of the non-zero pixels.
 3. **Sub-pixel width.** `set_thickness(-0.25)` lights exactly one or two
    pixels with peak intensity `255 * 0.25` within 2.
-4. **Idempotence.** The same line added twice produces the same image as
-   once, pixel-exact (fringe first-fragment rule, section 3).
+4. **Idempotence.** The same opaque line added twice produces the same
+   image as once within 1 per channel (self-blend of the fringe, section 3).
 5. **Crossing.** Two perpendicular 4-pixel lines: every pixel inside either
-   core is 255 (the core draw is never blocked by a fringe).
+   core is 255 (a core fragment is never blocked by a fringe).
+5b. **Translucent overlap.** The same line at alpha 0.5 added twice is
+   brighter than once (documents the last-fragment rule of section 3).
 6. **Hidden pass.** With the depth attachment cleared to the near value the
    line is behind everything and only the hidden pass draws; the profile
    equals the visible profile scaled by 0.1 within 2, and with `xray` it
@@ -180,8 +187,7 @@ around `Debug_renderer::render` in the headless editor on
 `creation_21` (physics rig with Jolt debug lines) and with the Mesh
 Component Selection tool showing all edges of a subdivided sphere, before and
 after, anti-aliasing on. Acceptance: the pass time with anti-aliasing on is
-at most 2.0x the before value (two fragment passes over the same ribbons,
-each discarding about half of its fragments early in the shader); with
+at most 1.2x the before value (the ribbon is one pixel wider); with
 anti-aliasing off it equals the before value within noise. Record the
 numbers in `memory-bank/local/` (per machine), not in this document.
 
@@ -189,17 +195,16 @@ numbers in `memory-bank/local/` (per machine), not in this document.
 
 Each step builds, runs `erhe_renderer_gpu_tests`, and is one commit.
 
-1. **Tests first.** Add tests 1 to 5 and 7 from section 7 as `DISABLED_`
+1. **Tests first.** Add tests 1 to 5b and 7 from section 7 as `DISABLED_`
    (they fail on the binary edge) and the `Anti_aliasing` setter as a no-op
    so the test file compiles; enable each test in the step that makes it
    pass.
-2. **Fringe geometry and coverage.** Compute shader: `hg`, fringe extension
+2. **Stencil compare.** `greater` to `greater_or_equal` in `make_pipeline`.
+   Existing tests unchanged; test 5b passes.
+3. **Fringe geometry and coverage.** Compute shader: `hg`, fringe extension
    from `view.fringe`; fragment shader: coverage `c`, premultiplied output,
-   discard against `view.core_coverage_threshold`. At this step there is one
-   draw per pass and joints show the notch of section 3; tests 1, 2, 3 pass
-   (single line), test 4 and 5 stay disabled.
-3. **Core and fringe draws.** `ERHE_DEBUG_LINE_FRINGE` variants, second draw
-   per pass, skipped when anti-aliasing is off. Tests 4, 5 and 7 pass.
+   discard of zero coverage, `view.coverage_threshold`. Tests 1 to 5 and 7
+   pass.
 4. **Hidden pass.** `hidden_dim` in the view UBO, `ERHE_DEBUG_LINE_HIDDEN`
    variants, premultiplied blend for the compute tier. Test 6.
 5. **Setting and docs.** `editor_settings.json` key, settings UI toggle,
@@ -207,7 +212,4 @@ Each step builds, runs `erhe_renderer_gpu_tests`, and is one commit.
    `CHANGELOG.md` line for the `erhe::renderer` API addition, this plan's
    remaining items (section 1 follow-ups) moved to their own lines in the
    doc index.
-6. **Cost gate** (section 8), numbers to the local memory bank; if the gate
-   fails, the fringe draw is restricted to a narrower ribbon (a second,
-   fringe-only triangle set written by the compute shader) before this plan
-   is called done.
+6. **Cost gate** (section 8), numbers to the local memory bank.
