@@ -54,8 +54,9 @@ auto Debug_renderer_shader_key::derive(const Debug_renderer_config& config) -> D
     return key;
 }
 
-auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Base_render_pipeline
+auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const Pass_kind pass, const Draw_kind draw) -> erhe::graphics::Base_render_pipeline
 {
+    const bool visible       = (pass == Pass_kind::visible);
     const bool reverse_depth = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     using namespace erhe::graphics;
 
@@ -93,16 +94,17 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
 
     // Stencil layering: a fragment draws only where the stencil holds a
-    // reference at or below its own, and then writes its reference. Across
-    // buckets a higher stencil_reference wins regardless of draw order and
-    // a lower one never overdraws it. Inside a bucket the compare is
-    // greater_or_equal, so the last fragment wins: with anti-aliased edges
-    // a fully covered fragment overwrites a fringe fragment drawn earlier at
-    // a joint or crossing (no notch), and a fringe over a core of the same
-    // color blends the color with itself. Translucent lines of one bucket
-    // blend where they overlap (doc/plans/debug_renderer_anti_aliasing.md
-    // section 3).
+    // reference below its own (fringe draw) or at or below it (core draw),
+    // and then writes its reference. Across buckets a higher
+    // stencil_reference wins regardless of draw order and a lower one never
+    // overdraws it. Inside a bucket the core draw's greater_or_equal makes
+    // the last fully covered fragment win (translucent lines blend where
+    // they overlap), while the fringe draw's greater makes the first
+    // partial fragment win a pixel and keeps it off every core pixel, so
+    // overlapping fringes (polyline joints) do not blend twice
+    // (doc/erhe/renderer.md "Line anti-aliasing").
     //
+    const Compare_operation stencil_compare = (draw == Draw_kind::fringe) ? Compare_operation::greater : Compare_operation::greater_or_equal;
     // Bit 7 is the selection silhouette mask, written by the "Polygon Fill
     // Selected" composition pass (app_rendering.cpp) over every pixel of a
     // selected mesh. It is not part of the debug renderer's own layering --
@@ -127,7 +129,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .stencil_fail_op = Stencil_op::keep,
                     .z_fail_op       = Stencil_op::keep,
                     .z_pass_op       = Stencil_op::replace,
-                    .function        = Compare_operation::greater_or_equal,
+                    .function        = stencil_compare,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = stencil_mask,
                     .write_mask      = stencil_mask
@@ -136,7 +138,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .stencil_fail_op = Stencil_op::keep,
                     .z_fail_op       = Stencil_op::keep,
                     .z_pass_op       = Stencil_op::replace,
-                    .function        = Compare_operation::greater_or_equal,
+                    .function        = stencil_compare,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = stencil_mask,
                     .write_mask      = stencil_mask
@@ -163,8 +165,10 @@ Debug_renderer_bucket::Debug_renderer_bucket(
         debug_renderer.get_program_interface().view_block->get_binding_point()
     }
     , m_config            {config}
-    , m_pipeline_visible  {make_pipeline(true )}
-    , m_pipeline_hidden   {make_pipeline(false)}
+    , m_pipeline_visible        {make_pipeline(Pass_kind::visible, Draw_kind::core  )}
+    , m_pipeline_hidden         {make_pipeline(Pass_kind::hidden,  Draw_kind::core  )}
+    , m_pipeline_visible_fringe {make_pipeline(Pass_kind::visible, Draw_kind::fringe)}
+    , m_pipeline_hidden_fringe  {make_pipeline(Pass_kind::hidden,  Draw_kind::fringe)}
 {
     const auto& program_interface = debug_renderer.get_program_interface();
     if (uses_compute()) {
@@ -498,13 +502,16 @@ void Debug_renderer_bucket::render(
         // -- the encoder's internal pipeline cache handles VkPipeline reuse.
         const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
 
-        auto render_compute_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
+        using Line_pass = Debug_renderer_program_interface::Line_pass;
+        using Line_draw = Debug_renderer_program_interface::Line_draw;
+        using Line_view = Debug_renderer_program_interface::Line_view;
+        auto render_compute_draws = [&](const Line_pass pass, const Line_draw draw_kind, erhe::graphics::Base_render_pipeline& pipeline) {
             // The hidden variant scales its output by view.hidden_dim (0.1,
             // or 1.0 for an xray bucket), so both passes blend premultiplied
-            // and the dim factor follows the anti-aliased coverage.
-            erhe::graphics::Shader_stages* shader_stages = multiview
-                ? (visible ? pi.multiview_graphics_shader_stages.get() : pi.multiview_hidden_graphics_shader_stages.get())
-                : (visible ? pi.graphics_shader_stages.get()           : pi.hidden_graphics_shader_stages.get());
+            // and the dim factor follows the anti-aliased coverage. The
+            // fringe variant keeps the partial-coverage fragments the core
+            // variant discards.
+            erhe::graphics::Shader_stages* shader_stages = pi.get_line_stages(pass, draw_kind, multiview ? Line_view::multiview : Line_view::single);
             if ((shader_stages == nullptr) || !shader_stages->is_valid()) {
                 return;
             }
@@ -557,11 +564,22 @@ void Debug_renderer_bucket::render(
             }
         };
 
+        // Per pass: core draw, then fringe draw (anti-aliasing on only; off
+        // has no partial fragments). Hidden before visible, so a visible core
+        // overwrites a hidden one at the same pixel and a hidden fringe is
+        // kept off every visible pixel of this bucket.
+        const bool fringe = (m_debug_renderer.get_anti_aliasing() == Anti_aliasing::on);
         if (draw_hidden && m_config.draw_hidden) {
-            render_compute_draws(false, m_pipeline_hidden);
+            render_compute_draws(Line_pass::hidden, Line_draw::core, m_pipeline_hidden);
+            if (fringe) {
+                render_compute_draws(Line_pass::hidden, Line_draw::fringe, m_pipeline_hidden_fringe);
+            }
         }
         if (draw_visible && m_config.draw_visible) {
-            render_compute_draws(true, m_pipeline_visible);
+            render_compute_draws(Line_pass::visible, Line_draw::core, m_pipeline_visible);
+            if (fringe) {
+                render_compute_draws(Line_pass::visible, Line_draw::fringe, m_pipeline_visible_fringe);
+            }
         }
     } else {
         // Direct path: close input ranges (upload CPU data to GPU), then render

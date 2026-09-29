@@ -79,22 +79,33 @@ applies it at startup and on the edit).
   discarded. The hidden pass draws the same coverage at the bucket's dim
   factor (0.1, 1.0 for x-ray) from its own fragment shader variant
   (`ERHE_DEBUG_LINE_HIDDEN`), blending premultiplied like the visible pass.
+  Each pass is two draws of the same triangle range: the core draw keeps
+  the fully covered fragments, the fringe draw (`ERHE_DEBUG_LINE_FRINGE`)
+  the partial ones. A line thinner than a pixel is fringe only.
 - **Off**: the ribbon is exactly the line width and its rasterized edge is
   the line edge (binary, smooth only under MSAA); the round caps are cut by
   the distance test.
 
-Inside a bucket the stencil compare is `greater_or_equal`, so the last
-fragment wins: a fully covered fragment overwrites a fringe fragment drawn
-earlier at a joint or crossing, and a fringe over a fully covered pixel of
-the same color leaves it unchanged. Where two fringes coincide they blend
-twice: the overlapping round caps at a polyline joint, or a line drawn
-twice, show a fringe pixel at 0.75 instead of 0.5 coverage. Translucent
-lines of one bucket blend where they overlap (the selection minor lines and
-the shadow-fit visualizations use alpha below 1), instead of the earlier
-first-fragment rule. Across buckets a higher stencil reference still wins
-regardless of draw order. The direct tier (thin one-pixel lines, filled
-triangles) is unchanged.
+Stencil inside a bucket: the core draw compares `greater_or_equal` (the last
+fully covered fragment wins, so translucent lines of one bucket blend where
+they overlap; the selection minor lines and the shadow-fit visualizations use
+alpha below 1), the fringe draw compares `greater` (the first partial
+fragment wins a pixel and none draws over a core pixel). Overlapping fringes
+therefore never blend twice: the round caps at a polyline joint and a line
+drawn twice render exactly as one line. Where the fringes of two different
+lines cross, the pixel shows the first line's coverage rather than the
+union. Draw order per bucket is hidden core, hidden fringe, visible core,
+visible fringe. Across buckets a higher stencil reference still wins
+regardless of draw order. With anti-aliasing off there are no partial
+fragments and each pass is one draw. The direct tier (thin one-pixel lines,
+filled triangles) is unchanged.
+
+Cost: `erhe_renderer_gpu_tests --gtest_filter=*aa_cost*` reports the
+render-pass GPU time of 2000 random wide lines at 1920 x 1080 with
+anti-aliasing off and on (the second draw re-rasterizes the ribbons); the
+accepted cost of the anti-aliased path is about 1.7x the binary path on the
+first machine measured.
 
 ## Future work
 
-- [plans/debug_renderer_anti_aliasing.md](../plans/debug_renderer_anti_aliasing.md) - cost gate of the anti-aliased wide lines, the fringe double-blend at joints, content wide lines.
+- [plans/debug_renderer_anti_aliasing.md](../plans/debug_renderer_anti_aliasing.md) - joined polylines for the shape outlines, content wide lines, Metal run.

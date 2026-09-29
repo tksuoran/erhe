@@ -70,27 +70,31 @@ public:
 
     std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
 
-    // line_after_compute.{vert,frag} variants. The visible pass outputs the
-    // coverage-scaled premultiplied color; the hidden pass
-    // (ERHE_DEBUG_LINE_HIDDEN) additionally scales it by view.hidden_dim,
-    // so both blend with color_blend_visible and the dim factor follows the
-    // anti-aliased coverage.
-    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_stages>   hidden_graphics_shader_stages;
-
-    // Multiview graphics stages: the same two shaders recompiled with
-    // ERHE_MULTIVIEW so c_view_index resolves to gl_ViewIndex
-    // (graphics_shader_stages uses c_view_index = 0). Built only when
-    // view_count >= 2; all variants read pre-transformed triangles from the
-    // triangle SSBO + per-eye viewport from the view UBO -- they differ only
-    // in the defines and the multiview render pass's viewMask.
+    // line_after_compute.{vert,frag} variants, indexed by
+    // [pass][draw][view mode] through get_line_stages(). The visible pass
+    // outputs the coverage-scaled premultiplied color; the hidden pass
+    // (ERHE_DEBUG_LINE_HIDDEN) additionally scales it by view.hidden_dim, so
+    // both blend with color_blend_visible and the dim factor follows the
+    // anti-aliased coverage. The core draw keeps the fully covered fragments
+    // and the fringe draw (ERHE_DEBUG_LINE_FRINGE) the partial ones
+    // (doc/erhe/renderer.md "Line anti-aliasing"). The multiview variants
+    // (ERHE_MULTIVIEW: c_view_index resolves to gl_ViewIndex instead of 0)
+    // are built only when view_count >= 2; all variants read pre-transformed
+    // triangles from the triangle SSBO + per-eye viewport from the view UBO
+    // and differ only in the defines and the multiview render pass's viewMask.
     //
     // No multiview compute stage: compute_before_line.comp is already
     // view-count agnostic (loops over view.view_count, indexes
     // view.cameras[v]) so a single compiled compute program serves
     // both paths; the C++ side just writes view_count = 1 vs N.
-    std::unique_ptr<erhe::graphics::Shader_stages>   multiview_graphics_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_stages>   multiview_hidden_graphics_shader_stages;
+    enum class Line_pass : unsigned int { visible = 0, hidden = 1 };
+    enum class Line_draw : unsigned int { core = 0, fringe = 1 };
+    enum class Line_view : unsigned int { single = 0, multiview = 1 };
+    std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stage_variants[2][2][2];
+    [[nodiscard]] auto get_line_stages(Line_pass pass, Line_draw draw, Line_view view) const -> erhe::graphics::Shader_stages*
+    {
+        return line_shader_stage_variants[static_cast<unsigned int>(pass)][static_cast<unsigned int>(draw)][static_cast<unsigned int>(view)].get();
+    }
 
     // Direct path (triangles / thin lines): vertex buffer -> GL_LINES / GL_TRIANGLES
     erhe::dataformat::Vertex_format                  line_vertex_format;

@@ -645,26 +645,25 @@ TEST_F(Debug_line_width_gpu_test, aa_sub_pixel_width_fades)
     EXPECT_LE(nonzero, 2);
 }
 
-// 4. An opaque line added twice: the fully covered pixels are unchanged (a
-// fringe over a core of the same color blends the color with itself), the
-// fringe pixels blend twice (0.5 over 0.5 = 0.75). This is the documented
-// trade of the last-fragment-wins rule (plan section 3); overlapping round
-// caps of a polyline joint show the same brighter fringe.
-TEST_F(Debug_line_width_gpu_test, aa_opaque_line_twice_brightens_fringe_only)
+// 4. An opaque line added twice renders exactly as once: the core draw
+// overwrites, and the fringe draw's greater stencil compare lets only the
+// first fringe fragment claim a pixel (so overlapping round caps of a
+// polyline joint do not blend twice either). Widths 4 and 1 (a one-pixel
+// line is fringe only).
+TEST_F(Debug_line_width_gpu_test, aa_opaque_line_twice_equals_once)
 {
-    Line_case twice = aa_case(-4.0f, 0.5f);
-    twice.repeat = 2;
-    const std::vector<uint8_t> once_row  = render_row(aa_case(-4.0f, 0.5f));
-    const std::vector<uint8_t> twice_row = render_row(twice);
-    ASSERT_EQ(once_row.size(), static_cast<std::size_t>(c_aa_width));
-    ASSERT_EQ(twice_row.size(), static_cast<std::size_t>(c_aa_width));
-    const int c = c_aa_width / 2;
-    for (std::size_t x = 0; x < once_row.size(); ++x) {
-        if ((x == static_cast<std::size_t>(c - 2)) || (x == static_cast<std::size_t>(c + 2))) {
-            EXPECT_NEAR(once_row[x],  128, 2) << "x " << x;
-            EXPECT_NEAR(twice_row[x], 191, 2) << "x " << x;
-        } else {
-            EXPECT_EQ(once_row[x], twice_row[x]) << "x " << x;
+    for (const float width : {4.0f, 1.0f}) {
+        Line_case once = aa_case(-width, 0.5f);
+        Line_case twice = once;
+        twice.repeat = 2;
+        const std::vector<uint8_t> once_row  = render_row(once);
+        const std::vector<uint8_t> twice_row = render_row(twice);
+        ASSERT_EQ(once_row.size(), static_cast<std::size_t>(c_aa_width));
+        ASSERT_EQ(twice_row.size(), static_cast<std::size_t>(c_aa_width));
+        const int c = c_aa_width / 2;
+        EXPECT_NEAR(once_row[c - 2], (width == 4.0f) ? 128 : 0, 2) << "width " << width;
+        for (std::size_t x = 0; x < once_row.size(); ++x) {
+            EXPECT_EQ(once_row[x], twice_row[x]) << "width " << width << " x " << x;
         }
     }
 }

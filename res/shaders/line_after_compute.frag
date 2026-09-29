@@ -48,9 +48,21 @@ void main(void)
         float d  = length(delta);
         float hg = max(h, view.fringe);
         coverage = clamp(hg + 0.5 - d, 0.0, 1.0) * min(1.0, 2.0 * h);
-        if (coverage <= 0.0) {
+        // Two draws per pass (doc/erhe/renderer.md "Line anti-aliasing"):
+        // the core draw keeps the fully covered fragments, the fringe draw
+        // (ERHE_DEBUG_LINE_FRINGE) the partial ones under a stencil compare
+        // that lets the first fringe fragment win a pixel and never draws
+        // over a core, so overlapping fringes (polyline joints) do not
+        // blend twice.
+#if defined(ERHE_DEBUG_LINE_FRINGE)
+        if ((coverage <= 0.0) || (coverage >= 1.0)) {
             discard;
         }
+#else
+        if (coverage < 1.0) {
+            discard;
+        }
+#endif
     }
     float alpha = v_color.a * coverage;
 #if defined(ERHE_DEBUG_LINE_HIDDEN)

@@ -141,7 +141,9 @@ public:
     void start_view      (std::span<const View> views);
 
 private:
-    [[nodiscard]] auto make_pipeline     (bool visible) -> erhe::graphics::Base_render_pipeline;
+    enum class Pass_kind : unsigned int { visible, hidden };
+    enum class Draw_kind : unsigned int { core, fringe };
+    [[nodiscard]] auto make_pipeline     (Pass_kind pass, Draw_kind draw) -> erhe::graphics::Base_render_pipeline;
     // primitive_count is the dispatched draw's line count: it feeds the
     // compute shader's tail guard, and (multiview only) the per-view SSBO
     // slab stride. The direct path has no compute and passes 0.
@@ -171,6 +173,11 @@ private:
     Debug_renderer_config                m_config;
     erhe::graphics::Base_render_pipeline m_pipeline_visible;
     erhe::graphics::Base_render_pipeline m_pipeline_hidden;
+    // Fringe draws of the compute tier (anti-aliasing on): stencil compare
+    // greater, so a fringe fragment never draws over a pixel a core or an
+    // earlier fringe of this bucket claimed.
+    erhe::graphics::Base_render_pipeline m_pipeline_visible_fringe;
+    erhe::graphics::Base_render_pipeline m_pipeline_hidden_fringe;
     std::vector<Debug_draw_entry>        m_draws;
     std::vector<Debug_draw_view_span>    m_view_spans;
     std::vector<View>                    m_span_views;

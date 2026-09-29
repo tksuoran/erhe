@@ -249,16 +249,18 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             }
         }
         // Triangle rendering shaders (read triangle vertices produced by the
-        // compute shader). Four variants of line_after_compute.{vert,frag}:
-        // {visible, hidden} x {single view, multiview}. All read
-        // pre-transformed triangles from the triangle SSBO and the per-eye
-        // viewport from the view UBO; they differ only in the defines
+        // compute shader). Eight variants of line_after_compute.{vert,frag}:
+        // {visible, hidden} x {core, fringe} x {single view, multiview}. All
+        // read pre-transformed triangles from the triangle SSBO and the
+        // per-eye viewport from the view UBO; they differ only in the defines
         // (ERHE_DEBUG_LINE_HIDDEN scales the output by view.hidden_dim;
-        // ERHE_MULTIVIEW resolves c_view_index to gl_ViewIndex vs 0u) and
-        // the multiview render pass's viewMask on the pipeline. The bind
-        // group layout and bindings are identical. The multiview variants
-        // are built only when view_count >= 2 (which implies the device
-        // exposes multiview); single-view callers never invoke them.
+        // ERHE_DEBUG_LINE_FRINGE keeps the partial-coverage fragments instead
+        // of the fully covered ones; ERHE_MULTIVIEW resolves c_view_index to
+        // gl_ViewIndex vs 0u) and the multiview render pass's viewMask on the
+        // pipeline. The bind group layout and bindings are identical. The
+        // multiview variants are built only when view_count >= 2 (which
+        // implies the device exposes multiview); single-view callers never
+        // invoke them.
         //
         // The compute side does NOT need a multiview-specific variant:
         // compute_before_line.comp's main() always loops `for (v <
@@ -269,16 +271,20 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             class Graphics_variant
             {
             public:
-                const char*                                     name;
-                bool                                            hidden;
-                bool                                            multiview;
-                std::unique_ptr<erhe::graphics::Shader_stages>* target;
+                const char* name;
+                bool        hidden;
+                bool        fringe;
+                bool        multiview;
             };
-            const Graphics_variant variants[4] = {
-                { "line_after_compute",                  false, false, &graphics_shader_stages                  },
-                { "line_after_compute_hidden",           true,  false, &hidden_graphics_shader_stages           },
-                { "line_after_compute_multiview",        false, true,  &multiview_graphics_shader_stages        },
-                { "line_after_compute_hidden_multiview", true,  true,  &multiview_hidden_graphics_shader_stages }
+            const Graphics_variant variants[8] = {
+                { "line_after_compute",                         false, false, false },
+                { "line_after_compute_fringe",                  false, true,  false },
+                { "line_after_compute_hidden",                  true,  false, false },
+                { "line_after_compute_hidden_fringe",           true,  true,  false },
+                { "line_after_compute_multiview",               false, false, true  },
+                { "line_after_compute_fringe_multiview",        false, true,  true  },
+                { "line_after_compute_hidden_multiview",        true,  false, true  },
+                { "line_after_compute_hidden_fringe_multiview", true,  true,  true  }
             };
             const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
             const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
@@ -301,14 +307,19 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
                 if (variant.hidden) {
                     create_info.defines.push_back({"ERHE_DEBUG_LINE_HIDDEN", "1"});
                 }
+                if (variant.fringe) {
+                    create_info.defines.push_back({"ERHE_DEBUG_LINE_FRINGE", "1"});
+                }
                 if (variant.multiview) {
                     create_info.view_count = view_count;
                 }
+                std::unique_ptr<erhe::graphics::Shader_stages>& target =
+                    line_shader_stage_variants[variant.hidden ? 1 : 0][variant.fringe ? 1 : 0][variant.multiview ? 1 : 0];
 
                 Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
                 if (prototype.is_valid()) {
-                    *variant.target = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
-                    graphics_device.get_shader_monitor().add(create_info, variant.target->get());
+                    target = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
+                    graphics_device.get_shader_monitor().add(create_info, target.get());
                 } else {
                     log_startup->error("Unable to load {} shader - check working directory '{}'", variant.name, std::filesystem::current_path().string());
                 }

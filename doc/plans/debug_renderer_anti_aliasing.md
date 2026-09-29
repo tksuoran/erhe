@@ -8,35 +8,31 @@ of [reference/aimd_comparison.md](../reference/aimd_comparison.md) section
 (`saturate(halfWidth + 0.5 - distance)` over a ribbon extended by a
 one-pixel fringe) on erhe's wide lines, keeping the stencil layering, the
 visible + hidden passes, x-ray, multiview and per-endpoint width and color.
-The coverage model, the hidden-pass variant, the `Anti_aliasing` setting and
-the GPU tests are built and described in `renderer.md`; this plan holds what
-is left.
+The coverage model, the core and fringe draws, the hidden-pass variant, the
+`Anti_aliasing` setting and the GPU tests are built and described in
+`renderer.md`; this plan holds what is left.
 
-## 1. Cost gate
+## 1. Cost
 
 Measured by `erhe_renderer_gpu_tests --gtest_filter=*aa_cost*`
 (`aa_cost_benchmark`: 2000 random wide lines of 1, 2 and 4 pixels at
 1920 x 1080, visible + hidden pass, render-pass `Gpu_timer`, median of 20
-frames, logged to `logs/log.txt`). Acceptance: on is at most 1.2x off (the
-ribbon is one pixel wider, one draw per pass); off is the previous binary
-path bit-exact (`aa_off_is_binary`). Passed on the first machine measured
-(Vulkan, integrated GPU); the numbers live in `memory-bank/local/` per
-machine. Re-run it after any change to the wide-line shaders.
+frames, logged to `logs/log.txt`). Off is the previous binary path bit-exact
+(`aa_off_is_binary`); on costs about 1.7x off on the first machine measured
+(Vulkan and OpenGL, integrated GPU), accepted for the visual result: the
+one-draw variant (1.17x) blended overlapping fringes twice and showed it on
+every polyline joint. Numbers live in `memory-bank/local/` per machine.
+Re-run it after any change to the wide-line shaders.
 
-## 2. Known trade: fringe double-blend at joints
+## 2. Possible refinement: joined polylines
 
-Inside a bucket the last fragment wins (`greater_or_equal`), so a fringe
-drawn over a fringe of the same line blends twice: the overlapping round caps
-of a polyline joint show their edge pixels at 0.75 instead of 0.5 coverage
-over a stretch of about the line width, and a line drawn twice has brighter
-edges (`aa_opaque_line_twice_brightens_fringe_only` in the GPU tests). AIMD
-has the same property. The exact alternative is two draws per pass over the
-same triangle range (a core draw keeping fragments with coverage 1 under
-`greater_or_equal`, then a fringe draw keeping partial fragments under
-`greater`, so the first fringe wins and never draws over a core), at about
-twice the fragment work of the debug line pass. Decide from the cost gate
-numbers and the visual result on thin polylines (sphere and circle
-outlines).
+A polyline primitive whose segments meet at the angle bisector instead of
+overlapping round caps (neighbour points in the compute shader, miter
+clamped to a bevel at sharp angles) would let the shape helpers (sphere,
+circle, cone, capsule, torus) draw their outlines without overlap, which
+improves joint shape and lets those outlines skip the fringe draw's overlap
+handling. Independent segments meeting at a point (box corners, Jolt, any
+`add_lines` caller) still rely on the two draws.
 
 ## 3. Follow-ups
 
