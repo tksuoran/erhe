@@ -2396,7 +2396,7 @@ public:
                     *m_rendergraph.get(),
                     *m_forward_renderer.get(),
                     m_app_context,
-                    *m_app_rendering.get(),
+                    *m_app_message_bus.get(),
                     *m_mesh_memory.get(),
                     *m_programs.get()
                 );

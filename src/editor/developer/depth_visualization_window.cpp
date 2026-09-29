@@ -3,6 +3,8 @@
 #include "developer/depth_visualization_window.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "app_rendering.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -172,7 +174,7 @@ Depth_visualization_window::Depth_visualization_window(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
     App_context&                            context,
-    App_rendering&                          app_rendering,
+    App_message_bus&                        app_message_bus,
     erhe::scene_renderer::Mesh_memory&      mesh_memory,
     Programs&                               programs
 )
@@ -186,6 +188,7 @@ Depth_visualization_window::Depth_visualization_window(
     }
 
     m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
+    m_depth_to_color_node->set_enabled(false);
 
     // Connect depth-to-color output to the Window_imgui_host so
     // topological sort schedules it before the swapchain render pass.
@@ -202,11 +205,24 @@ Depth_visualization_window::Depth_visualization_window(
         );
     }
 
-    const auto& shadow_nodes = app_rendering.get_all_shadow_nodes();
-    if (!shadow_nodes.empty()) {
-        const std::shared_ptr<Shadow_render_node>& shadow_node = shadow_nodes.front();
-        set_shadow_renderer_node(shadow_node);
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(message.scene_root);
+        }
+    );
+}
+
+void Depth_visualization_window::on_close_scene(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (!scene_root || (m_scene_root.lock() != scene_root)) {
+        return;
     }
+    // The closed scene's views are unbound but their shadow nodes stay; their
+    // Light_projections still name the closed scene's lights by raw pointer
+    // and the depth-to-color texture still holds its last image. Drop the
+    // scene and the input so neither is shown.
+    m_scene_root.reset();
+    set_shadow_renderer_node({});
 }
 
 void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node)
@@ -218,6 +234,9 @@ void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<
     erhe::rendergraph::Rendergraph& rendergraph = m_depth_to_color_node->get_rendergraph();
 
     std::shared_ptr<Shadow_render_node> old_shadow_renderer_node = m_shadow_renderer_node.lock();
+    if (old_shadow_renderer_node == shadow_node) {
+        return;
+    }
     if (old_shadow_renderer_node) {
         rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, old_shadow_renderer_node.get(), m_depth_to_color_node.get());
     }
@@ -225,10 +244,57 @@ void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<
     m_shadow_renderer_node = shadow_node;
     if (shadow_node) {
         rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, shadow_node.get(), m_depth_to_color_node.get());
-        m_depth_to_color_node->set_enabled(true);
-    } else {
-        m_depth_to_color_node->set_enabled(true);
     }
+    m_depth_to_color_node->set_enabled(static_cast<bool>(shadow_node));
+}
+
+auto Depth_visualization_window::find_first_shadow_node(const Scene_root* const scene_root) const -> std::shared_ptr<Shadow_render_node>
+{
+    if (scene_root == nullptr) {
+        return {};
+    }
+    for (const std::shared_ptr<Shadow_render_node>& shadow_node : m_context.app_rendering->get_all_shadow_nodes()) {
+        if (shadow_node->get_scene_view().get_scene_root().get() == scene_root) {
+            return shadow_node;
+        }
+    }
+    return {};
+}
+
+namespace {
+
+[[nodiscard]] auto get_view_label(const Shadow_render_node& shadow_node) -> const char*
+{
+    const std::string& settings_key = shadow_node.get_scene_view().get_settings_key();
+    return settings_key.empty() ? "(preview)" : settings_key.c_str();
+}
+
+}
+
+auto Depth_visualization_window::view_combo(const Scene_root* const scene_root) -> Shadow_render_node*
+{
+    const std::shared_ptr<Shadow_render_node> current = m_shadow_renderer_node.lock();
+    const char* const preview = current ? get_view_label(*current) : "(none)";
+    if (ImGui::BeginCombo("View", preview)) {
+        int id = 0;
+        for (const std::shared_ptr<Shadow_render_node>& shadow_node : m_context.app_rendering->get_all_shadow_nodes()) {
+            if (shadow_node->get_scene_view().get_scene_root().get() != scene_root) {
+                continue;
+            }
+            ImGui::PushID(id++);
+            const bool is_selected = (shadow_node == current);
+            if (ImGui::Selectable(get_view_label(*shadow_node), is_selected)) {
+                set_shadow_renderer_node(shadow_node);
+            }
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    const std::shared_ptr<Shadow_render_node> selected = m_shadow_renderer_node.lock();
+    return selected.get();
 }
 
 template <typename T>
@@ -252,32 +318,47 @@ void Depth_visualization_window::imgui()
         return;
     }
 
-    const auto& shadow_nodes = m_context.app_rendering->get_all_shadow_nodes();
-    Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(
-        m_depth_to_color_node->get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps)
-    );
-    if (!shadow_nodes.empty()) {
-        int last_index = static_cast<int>(shadow_nodes.size() - 1);
-        const bool edited = ImGui::SliderInt("Viewport", &m_selected_shadow_node, 0, last_index);
-        // Shadow_render_node is created by Scene_builder_viewport_resources_operation,
-        // which runs on the first tick -- after this window's constructor. Auto-wire
-        // here on the first frame where a shadow node exists but no input is connected.
-        const bool needs_initial_wire = (shadow_render_node == nullptr);
-        if ((edited || needs_initial_wire) && (m_selected_shadow_node >= 0) && (m_selected_shadow_node < shadow_nodes.size())) {
-            const std::shared_ptr<Shadow_render_node> shadow_node = shadow_nodes.at(m_selected_shadow_node);
-            set_shadow_renderer_node(shadow_node);
-            shadow_render_node = shadow_node.get();
+    std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (m_context.app_scenes->scene_combo("Scene", scene_root, false)) {
+        m_scene_root = scene_root;
+        set_shadow_renderer_node(find_first_shadow_node(scene_root.get()));
+    }
+    if (!scene_root) {
+        set_shadow_renderer_node({});
+        ImGui::TextUnformatted("Select a scene");
+        return;
+    }
+
+    // Views are created, destroyed and rebound to other scenes independently
+    // of this window: validate the input on access and follow to another view
+    // of the selected scene when it no longer shows that scene.
+    {
+        const std::shared_ptr<Shadow_render_node> current = m_shadow_renderer_node.lock();
+        if (!current || (current->get_scene_view().get_scene_root() != scene_root)) {
+            set_shadow_renderer_node(find_first_shadow_node(scene_root.get()));
         }
     }
+
+    Shadow_render_node* const shadow_render_node = view_combo(scene_root.get());
     if (shadow_render_node == nullptr) {
+        ImGui::TextUnformatted("The scene is not shown in any view");
         return;
     }
 
     erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
     const auto& light_projection_transforms = light_projections.light_projection_transforms;
 
+    // Depth_to_color_rendergraph_node skips rendering without a valid light,
+    // leaving its texture holding the image of the previous view / scene.
     const int count = static_cast<int>(light_projection_transforms.size());
+    if (count == 0) {
+        ImGui::TextUnformatted("The view has no lights");
+        return;
+    }
     int& light_index = m_depth_to_color_node->get_light_index();
+    if ((light_index < 0) || (light_index >= count)) {
+        light_index = 0;
+    }
     ImGui::Text("Light");
     ImGui::SameLine();
     for (int i = 0; i < count; ++i) {

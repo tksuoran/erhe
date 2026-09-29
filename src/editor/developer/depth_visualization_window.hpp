@@ -1,5 +1,7 @@
 #pragma once
 
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -16,8 +18,9 @@ namespace editor {
 class Depth_visualization_window;
 class Depth_to_color_rendergraph_node;
 class App_context;
-class App_rendering;
+class App_message_bus;
 class Programs;
+class Scene_root;
 class Shadow_render_node;
 
 // Rendergraph processor node for converting depth texture into color texture.
@@ -48,7 +51,9 @@ private:
     int                                                m_light_index{};
 };
 
-/// Rendergraph sink node for showing texture in ImGui window
+/// Rendergraph sink node for showing texture in ImGui window.
+/// Shows the shadow maps of one view (viewport, headset, ...) of the selected
+/// scene. The scene is chosen explicitly; closing it clears the selection.
 class Depth_visualization_window : public erhe::imgui::Imgui_window
 {
 public:
@@ -58,7 +63,7 @@ public:
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
         App_context&                            context,
-        App_rendering&                          app_rendering,
+        App_message_bus&                        app_message_bus,
         erhe::scene_renderer::Mesh_memory&      mesh_memory,
         Programs&                               programs
     );
@@ -68,12 +73,19 @@ public:
     void hidden() override;
 
 private:
+    void on_close_scene          (const std::shared_ptr<Scene_root>& scene_root);
     void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
+    [[nodiscard]] auto find_first_shadow_node(const Scene_root* scene_root) const -> std::shared_ptr<Shadow_render_node>;
+    [[nodiscard]] auto view_combo(const Scene_root* scene_root) -> Shadow_render_node*;
 
-    App_context&                                     m_context;
-    std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node{};
-    std::weak_ptr<Shadow_render_node>                m_shadow_renderer_node{};
-    int                                              m_selected_shadow_node{0};
+    App_context&                                         m_context;
+    std::unique_ptr<Depth_to_color_rendergraph_node>     m_depth_to_color_node{};
+    std::weak_ptr<Shadow_render_node>                    m_shadow_renderer_node{};
+    // weak_ptr so the window does not keep a closed scene alive; the
+    // close_scene subscription clears it (doc/editor/coding_rules.md
+    // "Scene-hosted references in editor parts").
+    std::weak_ptr<Scene_root>                            m_scene_root{};
+    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 };
 
 }
