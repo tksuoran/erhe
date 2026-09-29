@@ -3,9 +3,10 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (165 passed) and on non-headless
-OpenGL (170 passed + 1 capability skip + 6 comparison-sampler failures from a
-driver defect, see "Known gaps"); Metal builds but has not
+target builds and runs on headless Vulkan (176 passed) and on non-headless
+OpenGL (170 passed + 12 capability skips, `snorm_color_render_readback` and
+the 11 ray query tests, + 6 comparison-sampler failures from a driver defect,
+see "Known gaps"); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
@@ -94,6 +95,31 @@ limitation, not a coverage gap to fill).
 - [x] float32 color render + readback: out-of-[0,1] values into format_32_vec4_float survive unclamped (`test_float32_render.cpp`)
 - [x] snorm color render + readback: signed-normalized values into format_8_vec4_snorm decode to the written signs (`test_snorm_render.cpp`)
 
+## Ray query
+
+Every test here skips with "ray query not supported by this device" unless
+`Device_info::use_ray_query` (never on OpenGL). `Ray_query_test`
+(`gpu_test_fixture.hpp`) builds float3 triangle geometry into bottom and top
+level `Acceleration_structure`s in the same command buffer as the trace
+(`build()` ends with the build -> ray query barrier) and traces one ray per
+texel of a 64x64 orthographic grid down -Z in a compute shader
+(`GL_EXT_ray_query`, `Binding_type::acceleration_structure`,
+`set_acceleration_structure`). The shader writes RGBA8-packed texels into an
+SSBO in image rows, which is copied into a 64x64 texture for the image golden;
+the ray query backends have a top-left texture origin, so no row conversion is
+needed. A CPU model of the same rays checks every texel: exact for coverage
+and ids, +-1/255 for the encoded hit distance and barycentrics; texels within
+1e-4 of a triangle edge are not compared. On Vulkan a buffer with
+`Buffer_usage::acceleration_structure_build_input` is allocated 16-byte
+aligned, as instance and transform data require.
+
+- [x] Bottom level structure with one triangle geometry, and with three overlapping geometries at distinct depths: silhouette, hit distance, `rayQueryGetIntersectionGeometryIndexEXT` (`test_ray_query.cpp`, `Ray_query_silhouette_test`)
+- [x] Top level structure with one translated instance, with two bottom level structures in three instances (one rotated, tilted and scaled), and with one bottom level structure referenced by three overlapping instances: `rayQueryGetIntersectionInstanceIdEXT`, nearest hit across instances (`test_ray_query.cpp`, `Ray_query_silhouette_test`)
+- [x] Intersection attributes: `rayQueryGetIntersectionBarycentricsEXT`, `rayQueryGetIntersectionPrimitiveIndexEXT` over a four-triangle geometry, `rayQueryGetIntersectionInstanceCustomIndexEXT` for `instance_custom_index` 3 / 5 / 6 (`test_ray_query_attributes.cpp`, `Ray_query_attribute_test`)
+- [x] Geometry opacity: with `Acceleration_structure_triangles::opaque` the candidate loop sees no candidates; the hits of a non-opaque geometry arrive as `gl_RayQueryCandidateIntersectionTriangleEXT`, confirmed with `rayQueryConfirmIntersectionEXT` in one half of the image and ignored in the other, where the ray reaches the opaque geometry behind (`test_ray_query_attributes.cpp`, `Ray_query_attribute_test.opaque_geometry`, `non_opaque_candidate`)
+- [x] Instance mask: instances with `mask` 0x01 and 0x02 traced with ray cull masks 0x01, 0x02 and 0x03 (`test_ray_query_attributes.cpp`, `Ray_query_attribute_test.instance_mask`)
+- [ ] Per-instance force-opaque / force-non-opaque flags, AABB geometry, acceleration structure update / compaction / copy: not in the `Acceleration_structure` API
+
 ## Golden assertions
 
 `Gpu_test` (`src/erhe/graphics/test/gpu_test_fixture.hpp`) compares a test's
@@ -165,7 +191,9 @@ image golden), `Buffer_binding_test` (3 buffer goldens) and
 `Storage_image_test` (1 buffer golden, 1 `.pfm` golden), and the indirect
 draw ports: `Pulled_quad_test` (2 tests, 1 shared golden) and
 `Draw_indirect_test` (4 tests, 2 goldens shared by the indexed and
-identity-index variants). The texture
+identity-index variants), and the ray query ports: `Ray_query_silhouette_test`
+(5) and `Ray_query_attribute_test` (6 tests, 8 goldens; `instance_mask`
+asserts one per ray cull mask). The texture
 -> buffer tests order the payload rows top-down from `texture_origin` before
 the buffer compare, as the image helper does for images, so their buffer
 goldens are shared by every backend too.

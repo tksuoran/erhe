@@ -1,8 +1,10 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/acceleration_structure.hpp"
 #include "erhe_graphics/enums.hpp"
 
+#include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
 #include <array>
@@ -206,14 +208,18 @@ protected:
     // keeps the pointer). struct_types and interface_blocks are passed to the
     // shader stages as Shader_stages_create_info documents. On failure the
     // helper adds a test failure and returns a program whose is_valid() is
-    // false.
+    // false. extensions name GLSL extensions the shader requires (e.g.
+    // "GL_EXT_ray_query"); they are emitted in the preamble ahead of the
+    // injected declarations, where an #extension line in compute_source could
+    // not go.
     [[nodiscard]] auto make_compute_program(
         const char*                                                name,
         std::string_view                                           compute_source,
         const std::vector<std::pair<std::string, std::string>>&    defines,
         const std::vector<const erhe::graphics::Shader_resource*>& struct_types,
         const std::vector<const erhe::graphics::Shader_resource*>& interface_blocks,
-        const erhe::graphics::Bind_group_layout&                   layout
+        const erhe::graphics::Bind_group_layout&                   layout,
+        const std::vector<std::string>&                            extensions = {}
     ) -> Compute_program;
 
     // Render one fullscreen (oversized) triangle into a fresh width x height
@@ -289,6 +295,150 @@ protected:
         erhe::dataformat::Format   format,
         std::span<const std::byte> bytes,
         float                      threshold = 0.05f
+    );
+};
+
+// --- Ray query ports (doc/plans/graphics_tests_agfx_port.md phase 8) ---
+//
+// Shared by test_ray_query.cpp and test_ray_query_attributes.cpp. A test
+// builds bottom and top level acceleration structures over host-visible
+// geometry buffers and traces one ray per texel of a 64x64 grid with
+// Ray_query_test::trace_image; a CPU model of the same rays
+// (trace_model) gives the expected texels.
+
+// Triangle geometry uploaded for a bottom level build: float3 positions and a
+// uint32 triangle list, both host-visible with acceleration structure build
+// input and shader device address usage.
+class Ray_query_mesh
+{
+public:
+    std::shared_ptr<erhe::graphics::Buffer> vertex_buffer;
+    std::shared_ptr<erhe::graphics::Buffer> index_buffer;
+    std::size_t                             vertex_count{0};
+    std::size_t                             index_count {0};
+};
+
+// Acceleration_structure_triangles::opaque, spelled out at call sites.
+enum class Ray_query_opacity : unsigned int {
+    opaque,
+    non_opaque
+};
+
+// One world-space triangle of the CPU model. primitive_index is the
+// triangle's index in its geometry; id is a payload the test chooses (a
+// geometry, instance or custom index).
+class Ray_query_model_triangle
+{
+public:
+    glm::vec3 p0             {0.0f};
+    glm::vec3 p1             {0.0f};
+    glm::vec3 p2             {0.0f};
+    uint32_t  primitive_index{0};
+    uint32_t  id             {0};
+};
+
+// Nearest hit of one texel's model ray. barycentrics are the weights of p1
+// and p2 (as rayQueryGetIntersectionBarycentricsEXT reports them). ambiguous
+// is set when the ray passes within 1e-4 of an edge of a triangle it may hit,
+// where the GPU's watertight test and the model may legitimately disagree;
+// such texels are not compared.
+class Ray_query_model_hit
+{
+public:
+    bool                            hit         {false};
+    bool                            ambiguous   {false};
+    float                           t           {0.0f};
+    glm::vec2                       barycentrics{0.0f};
+    const Ray_query_model_triangle* triangle    {nullptr};
+};
+
+// What trace_image produced: the SSBO words (one RGBA8 texel each, red in the
+// low byte, texel index = y * 64 + x with row 0 = image top) and the 64x64
+// format_8_vec4_unorm texture the SSBO was copied into, read back.
+class Ray_query_image
+{
+public:
+    std::vector<uint32_t> texels;
+    std::vector<uint8_t>  pixels;
+};
+
+// Fixture for the ray query ports. SetUp skips the test with "ray query not
+// supported by this device" unless Device_info::use_ray_query (never set on
+// OpenGL).
+class Ray_query_test : public Gpu_test
+{
+protected:
+    static constexpr int   c_image_size   = 64;
+    static constexpr float c_ray_origin_z = 1.0f; // rays start at z = 1 ...
+    static constexpr float c_ray_t_max    = 2.0f; // ... and travel down -Z up to t = 2
+
+    void SetUp() override;
+
+    // Upload positions and indices into a Ray_query_mesh.
+    [[nodiscard]] auto make_mesh(std::span<const glm::vec3> positions, std::span<const uint32_t> indices, const char* debug_label)
+        -> Ray_query_mesh;
+
+    // The bottom level geometry description of mesh (format_32_vec3_float
+    // positions, no geometry transform).
+    [[nodiscard]] static auto get_triangles(const Ray_query_mesh& mesh, Ray_query_opacity opacity)
+        -> erhe::graphics::Acceleration_structure_triangles;
+
+    // Trace one ray per texel of the 64x64 grid. The ray of texel (x, y) (y =
+    // image row, 0 = top) starts at get_ray_origin(x, y) and points down -Z:
+    // an orthographic camera over [-1, 1]^2 with +Y up. trace_source defines
+    //   uint trace_texel(uvec2 texel, vec3 origin, vec3 direction)
+    // returning the packed RGBA8 texel. The prelude ahead of it declares
+    // s_tlas (accelerationStructureEXT), IMAGE_SIZE, RAY_T_MAX, RAY_CULL_MASK
+    // (0xFFu unless defines set it), encode_unorm8(float) and
+    // pack_rgba8(r, g, b, a). record_builds (may be empty) records the
+    // acceleration structure builds into the same command buffer ahead of the
+    // dispatch; Acceleration_structure::build ends with the barrier that makes
+    // the structure visible to ray queries. The SSBO is then copied into a
+    // 64x64 texture (copy_from_buffer after a pixel buffer barrier). The SSBO
+    // rows are image rows, and the texture's memory row 0 is its top row on
+    // every ray query backend (Vulkan, Metal: texture_origin top_left, which
+    // trace_image asserts), so the image golden needs no origin conversion.
+    [[nodiscard]] auto trace_image(
+        const char*                                                 name,
+        std::string_view                                            trace_source,
+        const std::vector<std::pair<std::string, std::string>>&     defines,
+        const std::function<void(erhe::graphics::Command_buffer&)>& record_builds,
+        const erhe::graphics::Acceleration_structure&               tlas
+    ) -> Ray_query_image;
+
+    // Append the triangles of positions / indices, transformed by transform,
+    // to out with the given id.
+    static void append_model_triangles(
+        std::vector<Ray_query_model_triangle>& out,
+        std::span<const glm::vec3>             positions,
+        std::span<const uint32_t>              indices,
+        const glm::mat4&                       transform,
+        uint32_t                               id
+    );
+
+    // World-space origin of the ray of texel (x, y), bit-identical to the
+    // shader's.
+    [[nodiscard]] static auto get_ray_origin(int x, int y) -> glm::vec3;
+
+    // Nearest hit of the model ray of texel (x, y) among triangles, with t in
+    // [0, c_ray_t_max].
+    [[nodiscard]] static auto trace_model(std::span<const Ray_query_model_triangle> triangles, int x, int y)
+        -> Ray_query_model_hit;
+
+    // uint(clamp(value, 0, 1) * 255 + 0.5), the prelude's encode_unorm8.
+    [[nodiscard]] static auto encode_unorm8(float value) -> uint8_t;
+
+    // Compare image against the CPU model: expected holds 64x64 RGBA8 texels
+    // in image rows, ambiguous one flag per texel (not compared); channels
+    // may differ by tolerance. Also checks that the texture readback equals
+    // the SSBO bytes and that at most 3% of the texels are ambiguous, then
+    // asserts the image golden golden_name.png.
+    void expect_image(
+        const Ray_query_image&   image,
+        std::span<const uint8_t> expected,
+        std::span<const uint8_t> ambiguous,
+        int                      tolerance,
+        std::string_view         golden_name
     );
 };
 
