@@ -122,6 +122,7 @@ if (_gpu_tests_supported)
         test_vertex_index.cpp
         test_compute_ubo.cpp
         test_instanced.cpp
+        test_draw_indirect.cpp
         test_texture_upload.cpp
         test_compute_2d.cpp
         test_topology.cpp

@@ -3,8 +3,8 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (159 passed) and on non-headless
-OpenGL (164 passed + 1 capability skip + 6 comparison-sampler failures from a
+target builds and runs on headless Vulkan (165 passed) and on non-headless
+OpenGL (170 passed + 1 capability skip + 6 comparison-sampler failures from a
 driver defect, see "Known gaps"); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
@@ -40,6 +40,8 @@ limitation, not a coverage gap to fill).
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
 - [x] Indirect indexed draw parameters: one `Draw_indexed_primitives_indirect_command` through `multi_draw_indexed_primitives_indirect` with non-zero `first_index`, `base_vertex` and `base_instance`, per-instance vertex attributes (`Vertex_step::Step_per_instance`) placing and coloring each instance; the columns drawn and their colors asserted analytically; skips without `Device_info::use_base_instance` (`test_instanced.cpp`, `Gpu_test.draw_parameters_indirect`)
+- [x] Indexed draw with uint32 and uint16 index buffers, vertices pulled from an SSBO by `gl_VertexID`: a four-color quad checked per texel against the analytic barycentric interpolation; both formats share one golden (`test_vertex_index.cpp`, `Pulled_quad_test`)
+- [x] GPU-written indirect draws: a compute shader writes one or three `Draw_indexed_primitives_indirect_command`s into an `indirect | storage` buffer, a `Memory_barrier_mask::command_barrier_bit` barrier orders them before `multi_draw_indexed_primitives_indirect` (CPU-side draw count); `ERHE_DRAW_ID` places and colors each draw's column, and non-zero `first_index` / `base_vertex` select each command's quad; the non-indexed variants go through an identity index buffer and share the indexed variants' goldens (`test_draw_indirect.cpp`, `Draw_indirect_test`)
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
 - [x] Six single-texel points, exact lit count and positions; line_list from a vertex buffer, non-indexed and indexed (uint16), rasterizing identically (`test_topology.cpp`, `Topology_test`)
 - [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
@@ -160,7 +162,10 @@ render pass action and subresource target ports: `Pass_action_test` (3),
 ports: `Gpu_test.compute_buffer_atomics`, `compute_shared_memory`,
 `multiple_render_targets_compute_sum`, `Multi_dispatch_test` (1 buffer, 1
 image golden), `Buffer_binding_test` (3 buffer goldens) and
-`Storage_image_test` (1 buffer golden, 1 `.pfm` golden). The texture
+`Storage_image_test` (1 buffer golden, 1 `.pfm` golden), and the indirect
+draw ports: `Pulled_quad_test` (2 tests, 1 shared golden) and
+`Draw_indirect_test` (4 tests, 2 goldens shared by the indexed and
+identity-index variants). The texture
 -> buffer tests order the payload rows top-down from `texture_origin` before
 the buffer compare, as the image helper does for images, so their buffer
 goldens are shared by every backend too.
