@@ -52,6 +52,30 @@ public:
     }
 };
 
+// Calls back into Commands from within dispatch, as a tool switch does
+// (Tools::set_priority_tool() -> Commands::sort_bindings()).
+class Resorting_command : public erhe::commands::Command
+{
+public:
+    Resorting_command(Commands& commands, const std::string_view name)
+        : Command{commands, name}
+        , m_commands{commands}
+    {
+    }
+
+    auto try_call_with_input(erhe::commands::Input_arguments&) -> bool override
+    {
+        ++call_count;
+        m_commands.sort_bindings();
+        return true;
+    }
+
+    int call_count{0};
+
+private:
+    Commands& m_commands;
+};
+
 auto key_event(const erhe::window::Keycode keycode, const bool pressed, const uint32_t modifier_mask = 0) -> erhe::window::Input_event
 {
     erhe::window::Input_event event{};
@@ -257,6 +281,25 @@ TEST(Binding_overrides, conflicts_are_reported)
     ASSERT_EQ(commands.get_binding_conflicts().size(), 2u);
     EXPECT_EQ(commands.get_binding_conflicts()[0].command,       &first);
     EXPECT_EQ(commands.get_binding_conflicts()[0].other_command, &second);
+}
+
+TEST(Binding_overrides, sort_bindings_from_dispatched_command)
+{
+    Commands commands;
+    Resorting_command command{commands, "Test.resort"};
+    commands.register_command(&command);
+    commands.bind_command_to_mouse_button(&command, erhe::window::Mouse_button_left, Button_trigger::Button_pressed);
+
+    // Two presses in one tick: the re-entrant sort_bindings() must neither
+    // throw (recursive lock) nor disturb the dispatch of the second event.
+    std::vector<erhe::window::Input_event> events{
+        mouse_button_event(erhe::window::Mouse_button_left, true),
+        mouse_button_event(erhe::window::Mouse_button_left, false),
+        mouse_button_event(erhe::window::Mouse_button_left, true),
+        mouse_button_event(erhe::window::Mouse_button_left, false)
+    };
+    commands.tick(0, events);
+    EXPECT_EQ(command.call_count, 2);
 }
 
 TEST(Binding_overrides, rebind_mid_drag_inactivates_command)

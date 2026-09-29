@@ -51,6 +51,12 @@ bindings, and a per-command override replaces them.
   `add_bindings_changed_callback()`; persistence form `get_binding_overrides()` /
   `apply_binding_overrides()` with `Binding_override {command_name, bindings}`.
 - Only one mouse command can be active at a time (`accept_mouse_command` gating).
+- `commands.sort_bindings()` -- Re-sort the dispatch tables by command priority after a priority
+  change (e.g. a tool switch), rebuilding them first if bindings changed. `tick()` runs commands
+  with the command mutex held, and the mutex is recursive, so a command may call back into
+  `Commands`. When `sort_bindings()` is called from a command during `tick()`, it only records the
+  request; `tick()` applies it before the next event and after the last one, so no dispatch table
+  is reordered while a loop iterates it.
 
 ## Binding model
 
@@ -88,4 +94,5 @@ The editor's Input Bindings window, the `input_bindings.json` file and the MCP b
 - XR bindings are conditionally compiled with `ERHE_XR_LIBRARY_OPENXR`.
 - The state machine prevents conflicting commands from activating simultaneously.
 - Tests: `erhe_commands_tests` (`src/erhe/commands/test/`): `Binding_desc` text form round trips,
-  overrides, input kind enforcement, conflicts, rebind during a drag.
+  overrides, input kind enforcement, conflicts, rebind during a drag, `sort_bindings()` from a
+  command dispatched by `tick()`.

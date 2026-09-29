@@ -28,7 +28,7 @@ Commands::~Commands() noexcept
 
 void Commands::register_command(Command* const command)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
 
     const std::string_view name{command->get_name()};
     ERHE_VERIFY(!name.empty());
@@ -109,7 +109,7 @@ auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 
 void Commands::bind_command_to_menu(Command* command, std::string_view menu_path, std::function<bool()> enabled_callback)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_menu_bindings.emplace_back(command, menu_path, enabled_callback);
     m_bindings_dirty = true; // shortcut label
 }
@@ -189,7 +189,7 @@ void Commands::bind_command_to_controller_button(
 void Commands::record_default_binding(Command* const command, const Binding_desc& desc)
 {
     ERHE_VERIFY(command != nullptr);
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
 
     // A command consumes one kind of input; its editable bindings (default
     // and user) are all of that kind (doc/erhe/commands.md).
@@ -242,19 +242,19 @@ auto Commands::get_input_kind_nolock(const Command& command) const -> Input_kind
 
 auto Commands::get_input_kind(const Command& command) const -> Input_kind
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     return get_input_kind_nolock(command);
 }
 
 auto Commands::has_binding_override(const Command& command) const -> bool
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     return find_override(&command) != nullptr;
 }
 
 void Commands::get_default_bindings(const Command& command, std::vector<Binding_desc>& out) const
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     out.clear();
     for (const Binding_entry& entry : m_default_bindings) {
         if (entry.command == &command) {
@@ -280,7 +280,7 @@ void Commands::get_effective_bindings_nolock(const Command& command, std::vector
 
 void Commands::get_effective_bindings(const Command& command, std::vector<Binding_desc>& out) const
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     get_effective_bindings_nolock(command, out);
 }
 
@@ -340,13 +340,13 @@ auto Commands::set_binding_override_nolock(Command& command, const std::span<con
 
 auto Commands::set_binding_override(Command& command, const std::span<const Binding_desc> bindings, std::string* const error) -> bool
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     return set_binding_override_nolock(command, bindings, error);
 }
 
 void Commands::clear_binding_override(Command& command)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     const auto i = std::find_if(
         m_overrides.begin(),
         m_overrides.end(),
@@ -361,7 +361,7 @@ void Commands::clear_binding_override(Command& command)
 
 void Commands::clear_all_binding_overrides()
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     for (const Command_override& entry : m_overrides) {
         mark_bindings_changed(entry.command);
     }
@@ -371,7 +371,7 @@ void Commands::clear_all_binding_overrides()
 
 void Commands::get_binding_overrides(std::vector<Binding_override>& out) const
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     out.clear();
     for (const Command_override& entry : m_overrides) {
         out.push_back(Binding_override{.command_name = entry.command->get_name(), .bindings = entry.bindings});
@@ -381,7 +381,7 @@ void Commands::get_binding_overrides(std::vector<Binding_override>& out) const
 
 void Commands::apply_binding_overrides(const std::span<const Binding_override> overrides)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     for (const Command_override& entry : m_overrides) {
         mark_bindings_changed(entry.command);
     }
@@ -415,7 +415,7 @@ auto Commands::get_binding_conflicts() const -> const std::vector<Binding_confli
 
 void Commands::add_bindings_changed_callback(std::function<void()> callback)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_bindings_changed_callbacks.push_back(std::move(callback));
 }
 
@@ -571,25 +571,25 @@ void Commands::bind_command_to_xr_boolean_action(
     const Button_trigger               button_trigger
 )
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_xr_boolean_bindings.emplace_back(command, xr_action, button_trigger);
 }
 
 void Commands::bind_command_to_xr_float_action(Command* const command, erhe::xr::Xr_action_float* const xr_action)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_xr_float_bindings.emplace_back(command, xr_action);
 }
 
 void Commands::bind_command_to_xr_vector2f_action(Command* const command, erhe::xr::Xr_action_vector2f* const xr_action)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_xr_vector2f_bindings.emplace_back(command, xr_action);
 }
 
 void Commands::bind_command_to_update(Command* const command)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
     m_update_bindings.emplace_back(command);
 }
 
@@ -608,9 +608,14 @@ void Commands::tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>
 
     // log_input_frame->info("Commands::tick()");
 
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
 
     rebuild_bindings_if_dirty();
+
+    // Commands called below may request sort_bindings(); the request is
+    // applied between events, never while a dispatch table is iterated.
+    m_dispatching    = true;
+    m_sort_requested = false;
 
     //if (input_events.empty()) {
     //    SPDLOG_LOGGER_TRACE(log_input_frame, "Commands - no input events");
@@ -621,6 +626,10 @@ void Commands::tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>
         /// if (input_event.timestamp_ns > timestamp_ns) {
         ///     break;
         /// }
+        if (m_sort_requested) {
+            m_sort_requested = false;
+            sort_dispatch_bindings();
+        }
         if (!input_event.handled) {
             dispatch_input_event(input_event);
             SPDLOG_LOGGER_TRACE(log_input_frame, "Commands processed {} - {}", input_event.describe(), input_event.handled ? "handled" : "stays unhandled");
@@ -669,6 +678,12 @@ void Commands::tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>
                 }
             }
         }
+    }
+
+    m_dispatching = false;
+    if (m_sort_requested) {
+        m_sort_requested = false;
+        sort_dispatch_bindings();
     }
 }
 
@@ -1205,9 +1220,23 @@ auto Commands::on_xr_vector2f_event(const erhe::window::Input_event& input_event
 
 void Commands::sort_bindings()
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::recursive_mutex)> lock{m_command_mutex};
+    if (m_dispatching) {
+        // Called by a command from within tick(): a dispatch table is being
+        // iterated further up this call stack, so reordering (or rebuilding)
+        // it now would move bindings under the loop. tick() applies the
+        // request once the current event has been dispatched.
+        m_sort_requested = true;
+        return;
+    }
     rebuild_bindings_if_dirty();
+    sort_dispatch_bindings();
+}
+
+void Commands::sort_dispatch_bindings()
+{
     sort_mouse_bindings();
+    sort_mouse_wheel_bindings();
     sort_controller_bindings();
     sort_xr_bindings();
 }

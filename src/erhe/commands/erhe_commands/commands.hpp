@@ -76,6 +76,12 @@ public:
 // from "override if present, else defaults" at the start of the next tick()
 // (or by sort_bindings()) after any change - never per frame. Menu, update and
 // XR bindings are not editable and are unaffected.
+//
+// tick() runs commands with the command mutex held, and a command may call
+// back into Commands on the same thread (e.g. a tool switch calls
+// sort_bindings()), so the mutex is recursive. While tick() dispatches, the
+// dispatch tables are being iterated: sort_bindings() then only records the
+// request, and tick() applies it between events.
 class Commands : public erhe::window::Input_event_handler
 {
 public:
@@ -231,6 +237,7 @@ private:
     auto set_binding_override_nolock(Command& command, std::span<const Binding_desc> bindings, std::string* error) -> bool;
     void get_effective_bindings_nolock(const Command& command, std::vector<Binding_desc>& out) const;
 
+    void sort_dispatch_bindings     ();
     void sort_mouse_bindings        ();
     void sort_mouse_wheel_bindings  ();
     void sort_controller_bindings   ();
@@ -238,7 +245,7 @@ private:
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
 
-    mutable ERHE_PROFILE_MUTEX(std::mutex, m_command_mutex);
+    mutable ERHE_PROFILE_MUTEX(std::recursive_mutex, m_command_mutex);
     Command*   m_active_mouse_command     {nullptr}; // does not tell if command(s) is/are ready
     uint32_t   m_last_mouse_button_bits   {0u};
     glm::vec2  m_last_mouse_position      {0.0f, 0.0f};
@@ -267,6 +274,8 @@ private:
     std::vector<Command*>                             m_changed_commands;
     std::vector<std::function<void()>>                m_bindings_changed_callbacks;
     bool                                              m_bindings_dirty{false};
+    bool                                              m_dispatching   {false};
+    bool                                              m_sort_requested{false};
 };
 
 } // namespace erhe::commands
