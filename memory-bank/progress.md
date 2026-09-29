@@ -73,3 +73,5 @@
 ✓8b::56dce4e61+c853d1279+5c7107cc6{T7-distance-cases-Vk+GL;GL-reverse-Z;final-gate-0-FAIL-10.5min;docs->shadows.md-Shadow-verification;plan=Metal+G7}
 ✓G7-accepted(user-2026-09-29)::+12%-median,+16%-max;profiling+optimization=future-work-in-plan
 ✓SHADOW-ROBUSTNESS-DONE-except-future{Metal,G7-optimization}
+✓review-issue-1::c34fe6385+b92e46610{position-bound-from-node-origin-distance;erhe_position_rounding.glsl+v_position_rounding+Light_shadow_limits::caster_vertex_rounding(shadow_limits.x);far_vertices-station(point-failed-7.9%-before);T7-Vk+GL-10/10;T8-pass;final-gate-135-cells-0-FAIL}
+?review-issues-2..11-open{doc/reference/shadow_robustness_review_2026_09_29.md}
