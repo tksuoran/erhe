@@ -18,6 +18,7 @@
 
 #include <cstdlib>
 #include <memory>
+#include <string_view>
 
 namespace erhe::graphics::test {
 
@@ -45,6 +46,11 @@ auto Gpu_test_environment::get() -> Gpu_test_environment&
 
 void Gpu_test_environment::SetUp()
 {
+    {
+        const char* const update_goldens = std::getenv("ERHE_GPU_TEST_UPDATE_GOLDENS");
+        m_update_goldens = (update_goldens != nullptr) && (std::string_view{update_goldens} == "1");
+    }
+
     // Loggers first: the Device backends log through these spdlog loggers.
     erhe::log::initialize_log_sinks();
     erhe::graphics::initialize_logging();
@@ -128,6 +134,11 @@ auto Gpu_test_environment::device() -> erhe::graphics::Device&
 auto Gpu_test_environment::is_available() const -> bool
 {
     return m_available;
+}
+
+auto Gpu_test_environment::is_update_goldens_mode() const -> bool
+{
+    return m_update_goldens;
 }
 
 auto Gpu_test_environment::setup_messages() const -> const std::vector<Message>&

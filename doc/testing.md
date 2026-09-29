@@ -126,6 +126,15 @@ Run via `ctest` from the build directory, or invoke the
 `.../bin/<config>/erhe_<name>_tests.exe` binary directly. Run suites serially
 and fix one failure at a time -- an abort hides the rest of the run.
 
+`erhe_graphics_gpu_tests` also asserts golden buffers and images. Each run
+writes `gpu_test_results/results.json` plus per-test artifacts under the
+working directory (or `ERHE_GPU_TEST_RESULTS_DIR`);
+`py -3 scripts/gpu_test_report.py gpu_test_results` renders them into a
+self-contained `report.html`, and `ERHE_GPU_TEST_UPDATE_GOLDENS=1` rewrites
+the goldens instead of comparing. The details are in
+[`erhe/graphics_test_coverage.md`](erhe/graphics_test_coverage.md) "Golden
+assertions".
+
 ## Shadow verification
 
 What is measured (requirements, stations, gates G1 to G7, matrices, current

@@ -473,13 +473,14 @@ TEST_F(Texgen_render_test, convert_rgb_to_rgba)
 // conventions (see the UV orientation note at the top of this file):
 // red increases left->right (columns), green increases bottom->top of the
 // image, with the read-back row of the image bottom given by texture_origin.
+// The whole image is also compared against a golden.
 TEST_F(Texgen_render_test, uv_gradient)
 {
     const erhe::texgen::Node_descriptor descriptor = make_uv_gradient_descriptor();
     const erhe::texgen::Compose_node    node{descriptor, 1};
     const std::string fragment = assemble(node);
 
-    constexpr int size = 8;
+    constexpr int size = 64;
     const std::vector<uint8_t> pixels = render_fragment(fragment, size, size);
     ASSERT_EQ(pixels.size(), static_cast<std::size_t>(size) * static_cast<std::size_t>(size) * 4u);
 
@@ -509,6 +510,14 @@ TEST_F(Texgen_render_test, uv_gradient)
     // Blue is always 0.
     EXPECT_LT(top_left[2],  4);
     EXPECT_LT(bottom_right[2], 4);
+
+    expect_image_matches_golden(
+        "texgen_uv_gradient",
+        size,
+        size,
+        erhe::dataformat::Format::format_8_vec4_unorm,
+        std::as_bytes(std::span<const uint8_t>{pixels})
+    );
 }
 
 // Gradient parameter (Phase 4): a black@0 -> white@1 linear gradient applied to

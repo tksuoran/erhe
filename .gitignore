@@ -86,3 +86,6 @@ res/editor/assets/*
 !res/editor/assets/vertexcolor_test_grid.glb
 res/editor/scenes/
 vk_layer_settings.txt
+
+# GPU test run output (erhe_graphics_gpu_tests results.json and artifacts)
+gpu_test_results/

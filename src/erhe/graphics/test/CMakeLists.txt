@@ -64,6 +64,13 @@ if (_gpu_tests_supported)
         gpu_test_environment.hpp
         gpu_test_fixture.cpp
         gpu_test_fixture.hpp
+        gpu_test_flip.cpp
+        gpu_test_flip.hpp
+        gpu_test_golden.cpp
+        gpu_test_pfm.cpp
+        gpu_test_pfm.hpp
+        gpu_test_results.cpp
+        gpu_test_results.hpp
     )
     target_link_libraries(${_gpu_support_target}
         PUBLIC
@@ -73,15 +80,33 @@ if (_gpu_tests_supported)
             GTest::gtest
         PRIVATE
             erhe::log
+            erhe::math
             erhe::verify
+            nlohmann_json::nlohmann_json
     )
     target_include_directories(${_gpu_support_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    # Golden files are read from and (in update mode) written to the source
+    # tree, so the binary works from any working directory.
+    target_compile_definitions(${_gpu_support_target}
+        PRIVATE
+            "ERHE_GRAPHICS_TEST_GOLDEN_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/golden\""
+    )
+    # NVIDIA FLIP single header (fetched download-only at the top level). Only
+    # gpu_test_flip.cpp includes it; that file is exempt from the project's
+    # warnings-as-errors because the warnings would be in third-party code.
+    target_include_directories(${_gpu_support_target} SYSTEM PRIVATE "${flip_SOURCE_DIR}/src/cpp")
+    if (MSVC)
+        set_source_files_properties(gpu_test_flip.cpp PROPERTIES COMPILE_OPTIONS "/WX-")
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        set_source_files_properties(gpu_test_flip.cpp PROPERTIES COMPILE_OPTIONS "-w")
+    endif ()
+    set_source_files_properties(gpu_test_flip.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
     erhe_target_settings(${_gpu_support_target} "erhe/tests")
     add_library(erhe::gpu_test_support ALIAS ${_gpu_support_target})
 
     set(_gpu_target "erhe_graphics_gpu_tests")
     add_executable(${_gpu_target}
-        main.cpp
+        gpu_test_main.cpp
         test_m1_device_up.cpp
         test_m2_clear_color.cpp
         test_m3_triangle.cpp

@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
+#include <string_view>
 #include <vector>
 
 namespace erhe::graphics {
@@ -125,6 +127,37 @@ protected:
         int                                        width  = 16,
         int                                        height = 16
     ) -> std::vector<uint8_t>;
+
+    // Golden assertions (doc/erhe/graphics_test_coverage.md "Golden
+    // assertions"). Goldens live in src/erhe/graphics/test/golden/; the run's
+    // artifacts (output, golden copy, FLIP error map) go under
+    // <results>/artifacts/<suite>.<test>/<name>/ and each assertion is recorded
+    // in <results>/results.json. With ERHE_GPU_TEST_UPDATE_GOLDENS=1 both
+    // helpers write the golden instead of comparing and the assertion passes
+    // with an "updated golden" note. Goldens complement, never replace, a
+    // test's analytic assertions: an updated golden records whatever the
+    // backend produced.
+
+    // Byte-exact comparison against golden/<name>.bin. A mismatch lists the
+    // first differing offsets and the total count of differing bytes.
+    void expect_buffer_matches_golden(std::string_view name, std::span<const std::byte> bytes);
+
+    // FLIP comparison against golden/<name>.png (format_8_vec4_unorm, LDR-FLIP)
+    // or golden/<name>.pfm (format_32_vec4_float, HDR-FLIP); alpha is dropped.
+    // Fails on a size mismatch or when the mean FLIP error exceeds threshold.
+    // bytes are texels as read back from a rendered color target
+    // (read_texture_rgba8 / read_texture_rgba32f), tightly packed, row 0 at the
+    // device's texture origin; the helper normalizes them to top-down rows, so
+    // one golden serves every backend. Skips when no PNG writer is built
+    // (ERHE_USE_FPNG=OFF).
+    void expect_image_matches_golden(
+        std::string_view           name,
+        int                        width,
+        int                        height,
+        erhe::dataformat::Format   format,
+        std::span<const std::byte> bytes,
+        float                      threshold = 0.05f
+    );
 };
 
 } // namespace erhe::graphics::test

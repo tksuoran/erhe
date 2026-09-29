@@ -36,6 +36,11 @@ public:
     [[nodiscard]] auto device      () -> erhe::graphics::Device&;
     [[nodiscard]] auto is_available() const -> bool;
 
+    // Golden update mode: true when the environment variable
+    // ERHE_GPU_TEST_UPDATE_GOLDENS is "1" at SetUp. The golden helpers then
+    // write the golden instead of comparing against it.
+    [[nodiscard]] auto is_update_goldens_mode() const -> bool;
+
     // A validation message: is_error (true = Message_severity::error, i.e. a
     // correctness VUID; false = a warning / best-practices advisory) plus the
     // text. The fixture fails the case on errors and surfaces warnings without
@@ -59,6 +64,7 @@ private:
     std::vector<Message>                          m_messages;
     std::vector<Message>                          m_setup_messages;
     bool                                          m_available{false};
+    bool                                          m_update_goldens{false};
 };
 
 } // namespace erhe::graphics::test

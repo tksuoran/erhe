@@ -1,5 +1,6 @@
 #include "gpu_test_fixture.hpp"
 #include "gpu_test_environment.hpp"
+#include "gpu_test_results.hpp"
 
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
@@ -29,6 +30,7 @@ namespace erhe::graphics::test {
 void Gpu_test::SetUp()
 {
     Gpu_test_environment::get().clear_messages();
+    Gpu_test_results::get().clear();
 }
 
 void Gpu_test::TearDown()

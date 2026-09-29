@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -224,6 +225,10 @@ TEST_F(Gpu_test, msaa_color_resolve)
     EXPECT_GT(intermediate, 0)
         << "no intermediate edge texels: the resolve produced only pure colors, "
            "which means multisampling/averaging did not occur (a 1x render)";
+
+    // The whole resolved image against its golden: catches a shifted edge, a
+    // wrong color or a missing draw that the population counts above allow.
+    expect_image_matches_golden("msaa_color_resolve", width, height, color_format, std::as_bytes(std::span<const uint8_t>{pixels}));
 }
 
 } // namespace erhe::graphics::test

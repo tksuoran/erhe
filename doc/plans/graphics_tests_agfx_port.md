@@ -1,6 +1,6 @@
 # Port agfx GPU tests to erhe_graphics_gpu_tests
 
-Status: proposed
+Status: in progress
 
 Extends [`erhe/graphics_test_coverage.md`](../erhe/graphics_test_coverage.md)
 and [`graphics_tests.md`](graphics_tests.md). The source is the agfx test

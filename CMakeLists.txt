@@ -708,6 +708,22 @@ if (ERHE_USE_FPNG)
     message(STATUS "Erhe configured to build the fpng image writer (fast PNG save).")
 endif ()
 
+# NVIDIA FLIP (https://github.com/NVlabs/flip, BSD-3) is the image difference
+# metric of the GPU tests' golden image assertions. Only the single header
+# src/cpp/FLIP.h is used, and only by erhe_gpu_test_support
+# (src/erhe/graphics/test/gpu_test_flip.cpp); no erhe::* library depends on it.
+# NVlabs/flip has no tags or releases, so the pin is the GitHub archive of a
+# main commit (2025-11-07) fetched by URL - an archive URL serves any commit
+# forever, unlike a shallow git clone of a raw SHA (see the geogram comment).
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    CPMAddPackage(
+        NAME          flip
+        URL           https://github.com/NVlabs/flip/archive/b475eb4bf394ab877c42166c9eb0a84a02cc5b14.tar.gz
+        URL_HASH      SHA256=576e9ed6e9674da8eb5af59f20abea7ce0c0d7c1f533b61cb97df4cdc71b7782
+        DOWNLOAD_ONLY YES
+    )
+endif ()
+
 # basis_universal provides the transcoder for KTX2 / Basis supercompressed
 # textures (glTF KHR_texture_basisu images, e.g. the OpenXR
 # XR_FB_render_model controller models). Fetched download-only; the
