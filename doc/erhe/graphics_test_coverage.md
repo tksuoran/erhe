@@ -3,8 +3,8 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (89 passed) and on non-headless
-OpenGL (100 passed + 1 capability skip, no failures); Metal builds but has not
+target builds and runs on headless Vulkan (107 passed) and on non-headless
+OpenGL (118 passed + 1 capability skip, no failures); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
@@ -32,6 +32,8 @@ limitation, not a coverage gap to fill).
 - [x] Depth clamp disabled / enabled: out-of-range columns clipped, or drawn with depth clamped to 0 and 1 (read back); the enabled case skips without `Device_info::use_depth_clamp` (`test_depth_clamp.cpp`)
 - [x] Color blend, straight-alpha over (`test_m5_blend.cpp`)
 - [x] Color blend, premultiplied-alpha over (`test_blend_premultiplied.cpp`)
+- [x] Blend factors zero, one, src_color, one_minus_src_color, dst_color, one_minus_dst_color, src_alpha, one_minus_src_alpha, dst_alpha, one_minus_dst_alpha, constant_color, constant_alpha (source factor, dst factor one, add) and the canonical src_alpha / one_minus_src_alpha blend, over three destination columns of distinct color and alpha plus the cleared background (`test_blend_factors.cpp`, `Blend_factor_test`)
+- [x] Blend equations add, subtract, reverse_subtract, min, max with factors one / one over the same destinations (`test_blend_ops.cpp`, `Blend_op_test`)
 - [x] Multiple render targets / MRT (`test_mrt.cpp`)
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
@@ -126,7 +128,8 @@ Golden-asserting tests: `msaa_color_resolve` (`msaa_color_resolve.png`),
 `Texgen_render_test.uv_gradient` (`texgen_uv_gradient.png`), and the
 rasterization and depth state ports of the agfx suite, each against the
 golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
-(6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3).
+(6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3),
+and the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5).
 
 ## Known gaps (not yet covered)
 

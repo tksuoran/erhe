@@ -130,6 +130,8 @@ if (_gpu_tests_supported)
         test_copy_texture.cpp
         test_load_action.cpp
         test_blend_premultiplied.cpp
+        test_blend_factors.cpp
+        test_blend_ops.cpp
         test_sampler_modes.cpp
         test_depth_readback.cpp
         test_float32_render.cpp
