@@ -92,6 +92,17 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
 
+    // Stencil layering: a fragment draws only where the stencil holds a
+    // reference at or below its own, and then writes its reference. Across
+    // buckets a higher stencil_reference wins regardless of draw order and
+    // a lower one never overdraws it. Inside a bucket the compare is
+    // greater_or_equal, so the last fragment wins: with anti-aliased edges
+    // a fully covered fragment overwrites a fringe fragment drawn earlier at
+    // a joint or crossing (no notch), and a fringe over a core of the same
+    // color blends the color with itself. Translucent lines of one bucket
+    // blend where they overlap (doc/plans/debug_renderer_anti_aliasing.md
+    // section 3).
+    //
     // Bit 7 is the selection silhouette mask, written by the "Polygon Fill
     // Selected" composition pass (app_rendering.cpp) over every pixel of a
     // selected mesh. It is not part of the debug renderer's own layering --
@@ -116,7 +127,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .stencil_fail_op = Stencil_op::keep,
                     .z_fail_op       = Stencil_op::keep,
                     .z_pass_op       = Stencil_op::replace,
-                    .function        = Compare_operation::greater, //gequal,
+                    .function        = Compare_operation::greater_or_equal,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = stencil_mask,
                     .write_mask      = stencil_mask
@@ -125,7 +136,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .stencil_fail_op = Stencil_op::keep,
                     .z_fail_op       = Stencil_op::keep,
                     .z_pass_op       = Stencil_op::replace,
-                    .function        = Compare_operation::greater, //gequal,
+                    .function        = Compare_operation::greater_or_equal,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = stencil_mask,
                     .write_mask      = stencil_mask

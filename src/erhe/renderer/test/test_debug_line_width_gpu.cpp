@@ -527,7 +527,7 @@ TEST_F(Debug_line_width_gpu_test, DISABLED_aa_crossing_core_is_never_blocked)
 
 // 5b. Translucent lines of one bucket blend on top of each other (last
 // fragment wins), so the same line at alpha 0.5 twice is brighter than once.
-TEST_F(Debug_line_width_gpu_test, DISABLED_translucent_line_twice_is_brighter_than_once)
+TEST_F(Debug_line_width_gpu_test, translucent_line_twice_is_brighter_than_once)
 {
     Line_case once = aa_case(-4.0f, 0.0f);
     once.alpha = 0.5f;
