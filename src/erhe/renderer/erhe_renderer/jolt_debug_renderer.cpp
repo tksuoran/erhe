@@ -6,6 +6,20 @@
 
 namespace erhe::renderer {
 
+namespace {
+
+[[nodiscard]] auto to_glm(const JPH::Color color) -> glm::vec4
+{
+    return glm::vec4{
+        static_cast<float>(color.r) / 255.0f,
+        static_cast<float>(color.g) / 255.0f,
+        static_cast<float>(color.b) / 255.0f,
+        static_cast<float>(color.a) / 255.0f
+    };
+}
+
+} // anonymous namespace
+
 Jolt_debug_renderer::Jolt_debug_renderer(Debug_renderer& debug_renderer)
     : JPH::DebugRenderer{}
     , m_debug_renderer{debug_renderer}
@@ -20,7 +34,7 @@ Jolt_debug_renderer::~Jolt_debug_renderer() noexcept
 void Jolt_debug_renderer::DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inTo, JPH::ColorArg inColor)
 {
     Primitive_renderer r = m_debug_renderer.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    glm::vec4 color{inColor.r / 255.0f};
+    glm::vec4 color{to_glm(inColor)};
     float     width{1.0f};
     glm::vec3 p0{inFrom.GetX(), inFrom.GetY(), inFrom.GetZ()};
     glm::vec3 p1{inTo  .GetX(), inTo  .GetY(), inTo  .GetZ()};
@@ -37,7 +51,7 @@ void Jolt_debug_renderer::DrawTriangle(
 )
 {
     Primitive_renderer r = m_debug_renderer.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    glm::vec4 color{inColor.r / 255.0f};
+    glm::vec4 color{to_glm(inColor)};
     float     width{1.0f};
     glm::vec3 p0{inV1.GetX(), inV1.GetY(), inV1.GetZ()};
     glm::vec3 p1{inV2.GetX(), inV2.GetY(), inV2.GetZ()};

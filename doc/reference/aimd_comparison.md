@@ -337,10 +337,6 @@ Ordered by value to erhe.
 
 ## 7. erhe defects noticed during the review
 
-- `Jolt_debug_renderer::DrawLine` and `DrawTriangle`
-  (`src/erhe/renderer/erhe_renderer/jolt_debug_renderer.cpp:23` and `:40`)
-  build the color as `glm::vec4{inColor.r / 255.0f}`, which sets all four
-  channels to the red value.
 - `src/erhe/renderer/erhe_renderer/line_renderer.cpp` is a stale copy of an
   older `Primitive_renderer` (it includes headers that no longer exist) and is
   not listed in the library's `CMakeLists.txt`.
