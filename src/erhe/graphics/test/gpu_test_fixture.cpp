@@ -265,6 +265,75 @@ auto Gpu_test::read_texture_level_bytes(
     return read_buffer(*readback, byte_count);
 }
 
+auto Gpu_test::read_subresource_rgba8(const erhe::graphics::Texture& texture, const unsigned int layer, const unsigned int level)
+    -> std::vector<uint8_t>
+{
+    const int         width         = texture.get_width(level);
+    const int         height        = texture.get_height(level);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+
+    const std::shared_ptr<erhe::graphics::Buffer> readback = make_readback_buffer(byte_count, "read_subresource_rgba8");
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.copy_from_texture(
+                &texture,
+                static_cast<std::uintptr_t>(layer),     // source_slice
+                static_cast<std::uintptr_t>(level),     // source_level
+                glm::ivec3{0, 0, 0},                    // source_origin
+                glm::ivec3{width, height, 1},           // source_size
+                readback.get(),                         // destination_buffer
+                0,                                      // destination_offset
+                static_cast<std::uintptr_t>(bytes_per_row),
+                static_cast<std::uintptr_t>(byte_count)
+            );
+        }
+    );
+    const std::vector<std::byte> raw = read_buffer(*readback, byte_count);
+    std::vector<uint8_t> out(byte_count);
+    std::memcpy(out.data(), raw.data(), byte_count);
+    return out;
+}
+
+void Gpu_test::seed_subresource_rgba8(
+    const erhe::graphics::Texture& texture,
+    const unsigned int             layer,
+    const unsigned int             level,
+    const std::span<const uint8_t> texels
+)
+{
+    const int         width         = texture.get_width(level);
+    const int         height        = texture.get_height(level);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+    ASSERT_EQ(texels.size(), byte_count) << "seed texel count does not match the subresource";
+
+    const std::shared_ptr<erhe::graphics::Buffer> source =
+        make_host_buffer(byte_count, erhe::graphics::Buffer_usage::transfer_src, "seed_subresource_rgba8");
+    {
+        const std::span<std::byte> mapped = source->map_bytes(0, byte_count);
+        std::memcpy(mapped.data(), texels.data(), byte_count);
+        source->unmap();
+    }
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(
+                source.get(),
+                0,                                      // source_offset
+                static_cast<std::uintptr_t>(bytes_per_row),
+                static_cast<std::uintptr_t>(byte_count),
+                glm::ivec3{width, height, 1},           // source_size
+                &texture,
+                static_cast<std::uintptr_t>(layer),     // destination_slice
+                static_cast<std::uintptr_t>(level),     // destination_level
+                glm::ivec3{0, 0, 0}                     // destination_origin
+            );
+        }
+    );
+}
+
 auto Gpu_test::read_texture_rgba32f(const erhe::graphics::Texture& texture)
     -> std::vector<float>
 {

@@ -122,4 +122,78 @@ TEST_F(Gpu_test, fill_buffer_constant)
     EXPECT_EQ(mismatches, 0) << mismatches << " of " << bytes << " bytes were not 0x" << std::hex << static_cast<int>(value);
 }
 
+// agfx CopyBufferToBuffer: Blit_command_encoder::copy_from_buffer (buffer ->
+// buffer) with zero offsets over the whole source, then with non-zero source
+// and destination offsets into a second buffer prefilled through fill_buffer
+// (in its own submission, so the fill and the copy are ordered). The whole
+// copy must equal the source; the offset copy must hold the source range at the
+// destination offset and the fill everywhere else. Offsets and size are
+// multiples of 4 (the strictest backend rule, Metal on macOS). Both
+// destinations are also asserted against buffer goldens.
+TEST_F(Gpu_test, copy_buffer_to_buffer)
+{
+    constexpr std::size_t size               = 1024;
+    constexpr std::size_t source_offset      = 200;
+    constexpr std::size_t destination_offset = 520;
+    constexpr std::size_t copy_size          = 300;
+    constexpr uint8_t     fill_value         = 0xCDu;
+
+    std::vector<uint8_t> pattern(size);
+    for (std::size_t i = 0; i < size; ++i) {
+        pattern[i] = static_cast<uint8_t>(((i * 37u) + 11u) & 0xffu);
+    }
+
+    const std::shared_ptr<erhe::graphics::Buffer> source =
+        make_host_buffer(size, erhe::graphics::Buffer_usage::transfer_src, "copy_buffer_to_buffer source");
+    const std::shared_ptr<erhe::graphics::Buffer> whole =
+        make_host_buffer(size, erhe::graphics::Buffer_usage::transfer_dst, "copy_buffer_to_buffer whole");
+    const std::shared_ptr<erhe::graphics::Buffer> offset =
+        make_host_buffer(size, erhe::graphics::Buffer_usage::transfer_dst, "copy_buffer_to_buffer offset");
+    {
+        const std::span<std::byte> mapped = source->map_bytes(0, size);
+        std::memcpy(mapped.data(), pattern.data(), size);
+        source->unmap();
+    }
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.fill_buffer(offset.get(), 0, size, fill_value);
+        }
+    );
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(source.get(), 0, whole.get(), 0, size);
+            blit.copy_from_buffer(source.get(), source_offset, offset.get(), destination_offset, copy_size);
+        }
+    );
+
+    std::vector<uint8_t> expected_offset(size, fill_value);
+    std::memcpy(expected_offset.data() + destination_offset, pattern.data() + source_offset, copy_size);
+
+    const std::vector<std::byte> whole_bytes  = read_buffer(*whole, size);
+    const std::vector<std::byte> offset_bytes = read_buffer(*offset, size);
+    std::size_t whole_differing  = 0;
+    std::size_t offset_differing = 0;
+    std::size_t first_offset     = size;
+    for (std::size_t i = 0; i < size; ++i) {
+        if (std::to_integer<uint8_t>(whole_bytes[i]) != pattern[i]) {
+            ++whole_differing;
+        }
+        if (std::to_integer<uint8_t>(offset_bytes[i]) != expected_offset[i]) {
+            if (offset_differing == 0) {
+                first_offset = i;
+            }
+            ++offset_differing;
+        }
+    }
+    EXPECT_EQ(whole_differing, 0u) << whole_differing << " of " << size << " bytes differ after the zero-offset copy";
+    EXPECT_EQ(offset_differing, 0u)
+        << offset_differing << " of " << size << " bytes differ after the offset copy, first at offset " << first_offset;
+
+    expect_buffer_matches_golden("copy_buffer_to_buffer_whole", whole_bytes);
+    expect_buffer_matches_golden("copy_buffer_to_buffer_offset", offset_bytes);
+}
+
 } // namespace erhe::graphics::test

@@ -187,70 +187,6 @@ public:
 class Render_target_subresource_test : public Gpu_test
 {
 protected:
-    // Copy one subresource (color aspect) to a mappable buffer; tightly packed
-    // RGBA8 rows, row 0 at the device's texture origin.
-    [[nodiscard]] auto read_subresource_rgba8(const erhe::graphics::Texture& texture, const Subresource& subresource) -> std::vector<uint8_t>
-    {
-        const int         width         = texture.get_width(subresource.level);
-        const int         height        = texture.get_height(subresource.level);
-        const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
-        const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
-
-        const std::shared_ptr<erhe::graphics::Buffer> readback = make_readback_buffer(byte_count, "read_subresource_rgba8");
-        submit_and_wait(
-            [&](erhe::graphics::Command_buffer& command_buffer) {
-                erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
-                blit.copy_from_texture(
-                    &texture,
-                    static_cast<std::uintptr_t>(subresource.layer),     // source_slice
-                    static_cast<std::uintptr_t>(subresource.level),     // source_level
-                    glm::ivec3{0, 0, 0},                                // source_origin
-                    glm::ivec3{width, height, 1},                       // source_size
-                    readback.get(),                                     // destination_buffer
-                    0,                                                  // destination_offset
-                    static_cast<std::uintptr_t>(bytes_per_row),
-                    static_cast<std::uintptr_t>(byte_count)
-                );
-            }
-        );
-        const std::vector<std::byte> raw = read_buffer(*readback, byte_count);
-        std::vector<uint8_t> out(byte_count);
-        std::memcpy(out.data(), raw.data(), byte_count);
-        return out;
-    }
-
-    void seed_subresource(const erhe::graphics::Texture& texture, const Subresource& subresource, const std::vector<uint8_t>& texels)
-    {
-        const int         width         = texture.get_width(subresource.level);
-        const int         height        = texture.get_height(subresource.level);
-        const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 4u;
-        const std::size_t byte_count    = texels.size();
-
-        const std::shared_ptr<erhe::graphics::Buffer> source =
-            make_host_buffer(byte_count, erhe::graphics::Buffer_usage::transfer_src, "subresource seed");
-        {
-            const std::span<std::byte> mapped = source->map_bytes(0, byte_count);
-            std::memcpy(mapped.data(), texels.data(), byte_count);
-            source->unmap();
-        }
-        submit_and_wait(
-            [&](erhe::graphics::Command_buffer& command_buffer) {
-                erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
-                blit.copy_from_buffer(
-                    source.get(),
-                    0,                                                  // source_offset
-                    static_cast<std::uintptr_t>(bytes_per_row),         // source_bytes_per_row
-                    static_cast<std::uintptr_t>(byte_count),            // source_bytes_per_image
-                    glm::ivec3{width, height, 1},                       // source_size
-                    &texture,
-                    static_cast<std::uintptr_t>(subresource.layer),     // destination_slice
-                    static_cast<std::uintptr_t>(subresource.level),     // destination_level
-                    glm::ivec3{0, 0, 0}                                 // destination_origin
-                );
-            }
-        );
-    }
-
     void run_case(const Target_kind kind, const Pass_kind pass, const char* golden_name)
     {
         erhe::graphics::Device& graphics_device = device();
@@ -283,7 +219,7 @@ protected:
             const Subresource& subresource = setup.subresources[i];
             const int          size        = level_size(setup.size, subresource.level);
             seeds.push_back(solid_texels(size, size, c_seed_colors[i]));
-            seed_subresource(*texture, subresource, seeds.back());
+            seed_subresource_rgba8(*texture, subresource.layer, subresource.level, seeds.back());
         }
 
         const Subresource& target      = setup.subresources[setup.target_index];
@@ -364,7 +300,7 @@ protected:
                 continue;
             }
             const Subresource&         subresource = setup.subresources[i];
-            const std::vector<uint8_t> pixels      = read_subresource_rgba8(*texture, subresource);
+            const std::vector<uint8_t> pixels      = read_subresource_rgba8(*texture, subresource.layer, subresource.level);
             ASSERT_EQ(pixels.size(), seeds[i].size());
             std::size_t differing = 0;
             for (std::size_t texel = 0; texel < pixels.size(); texel += 4u) {
@@ -378,7 +314,7 @@ protected:
         }
 
         // The target subresource.
-        const std::vector<uint8_t> pixels = read_subresource_rgba8(*texture, target);
+        const std::vector<uint8_t> pixels = read_subresource_rgba8(*texture, target.layer, target.level);
         ASSERT_EQ(pixels.size(), static_cast<std::size_t>(target_size) * static_cast<std::size_t>(target_size) * 4u);
         const std::vector<uint8_t>& target_seed = seeds[setup.target_index];
         auto texel_index = [target_size](const int x, const int y) -> std::size_t {

@@ -3,8 +3,8 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (116 passed) and on non-headless
-OpenGL (127 passed + 1 capability skip, no failures); Metal builds but has not
+target builds and runs on headless Vulkan (126 passed) and on non-headless
+OpenGL (137 passed + 1 capability skip, no failures); Metal builds but has not
 been run there (see
 [`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
@@ -59,12 +59,15 @@ limitation, not a coverage gap to fill).
 ## Buffers / transfer
 
 - [x] Buffer upload + copy + fill (`test_buffer_transfer.cpp`)
+- [x] Buffer -> buffer copy with zero offsets over the whole buffer and with non-zero source / destination offsets into a `fill_buffer`-prefilled buffer; bytes outside the copied range keep the fill (`test_buffer_transfer.cpp`, `Gpu_test.copy_buffer_to_buffer`)
 - [x] Texture upload roundtrip + constant clear (`test_texture_upload.cpp`)
 - [x] Texture sampling, nearest filter (`test_texture_sample.cpp`)
 - [x] Sampler linear filter, two-texel midpoint interpolation (`test_sampler_modes.cpp`)
 - [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
+- [x] Buffer -> texture and texture -> buffer copies into / out of one subresource: a 64x64 2D texture, level 1 of a two-level 128x128 texture, layer 2 of a four-layer 64x64 array. Every subresource is seeded by a whole-surface copy and read back byte-exact; region copies use non-zero texture origins, a non-zero buffer offset and padded `bytes_per_row`; the texture -> buffer padding and leading / trailing bytes keep the destination prefill; every other subresource reads back equal to its seed (`test_copy.cpp`, `Copy_test`)
 - [x] copy_from_texture (texture -> texture): whole-image copy (byte-exact roundtrip) and a non-zero-origin sub-rect copy with correct placement; source filled via copy_from_buffer, destination read back. Validates the engine fix that reads/restores the source's tracked layout and updates the destination's tracked layout (`test_copy_texture.cpp`)
+- [x] Texture -> texture region copies at non-zero source and destination origins over a pre-seeded destination: 2D 64x64, level 1 to level 1 of two-level 128x128 textures, layer 1 to layer 2 of four-layer 64x64 arrays; the destination outside the region and every other subresource of both textures read back equal to their seeds (`test_copy_texture.cpp`, `Texture_copy_test`)
 - [x] Depth-texture readback: depth-only pass writes a known NDC depth, depth aspect copied to host (`test_depth_readback.cpp`)
 - [x] Mipmap generation: generate_mipmaps linear-downsamples level 0 (half-black/half-white split averages to mid-gray at the 1x1 level; the 4x4 level keeps the vertical split) (`test_mipmaps.cpp`)
 - [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified (`test_texture_array.cpp`)
@@ -133,7 +136,12 @@ golden named in its test: `Triangle_region_test` (3), `Raster_state_test`
 (6), `Depth_compare_test` (11), `Depth_clamp_test` (2), `Topology_test` (3),
 the blending ports: `Blend_factor_test` (13), `Blend_op_test` (5), and the
 render pass action and subresource target ports: `Pass_action_test` (3),
-`Render_target_subresource_test` (6).
+`Render_target_subresource_test` (6), and the copy ports:
+`Gpu_test.copy_buffer_to_buffer` (2 buffer goldens), `Copy_test` (3 image,
+3 buffer goldens), `Texture_copy_test` (3). The texture -> buffer tests order
+the payload rows top-down from `texture_origin` before the buffer compare, as
+the image helper does for images, so their buffer goldens are shared by every
+backend too.
 
 ## Known gaps (not yet covered)
 

@@ -98,6 +98,23 @@ protected:
     [[nodiscard]] auto read_texture_level_bytes(const erhe::graphics::Texture& texture, unsigned int level, std::size_t bytes_per_texel)
         -> std::vector<std::byte>;
 
+    // Copy one subresource (color aspect: array layer or cube face `layer`,
+    // mip `level`) of a format_8_vec4_unorm texture to a mappable buffer and
+    // return the bytes, tightly packed at get_width(level) * 4 bytes per row,
+    // row 0 at the device's texture origin. The texture->buffer copy reads and
+    // restores the texture's tracked layout, so any populated subresource can
+    // be read.
+    [[nodiscard]] auto read_subresource_rgba8(const erhe::graphics::Texture& texture, unsigned int layer, unsigned int level)
+        -> std::vector<uint8_t>;
+
+    // Upload tightly packed RGBA8 texels (get_width(level) * get_height(level)
+    // texels, row 0 at the device's texture origin) over the whole of one
+    // subresource through copy_from_buffer (destination_slice = layer,
+    // destination_level = level). The copy leaves the texture tracked in
+    // shader_read_only_optimal, so the texture needs sampled usage besides
+    // transfer_dst.
+    void seed_subresource_rgba8(const erhe::graphics::Texture& texture, unsigned int layer, unsigned int level, std::span<const uint8_t> texels);
+
     // Copy a format_32_vec4_float color texture's level 0 to a mappable buffer
     // and return the texels as floats (4 floats per texel, tightly packed).
     // Same framing contract as read_texture_rgba8.
