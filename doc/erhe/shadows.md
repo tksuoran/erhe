@@ -31,7 +31,8 @@ Per frame, for each scene view:
    `Light::projection_transforms()` per light to compute the light camera
    pose, projection, `clip_from_world` and `texture_from_world`, and derives
    each light's bias limits (`Light_shadow_limits`: the raster vertex depth
-   bound of "Minimum bias"). The per-light
+   bound of "Minimum bias" and the distance technique's ray spread condition
+   of "The distance technique"). The per-light
    filtering of those casters happens inside the fit (see fit_to_casters),
    because which casters can contribute depends on the light direction.
 3. The shadow pass rasterizes each shadow casting light into its own layer of
@@ -765,9 +766,7 @@ depth coefficient of the receiver plane in texture space.
   test: two casters pancaked onto the near plane tie there, and either one
   shadows every receiver the fit covers, which lies beyond the near plane.
   On the `depth_range` station's `under_block` view the Near Block lies
-  between the light and the view frustum and `Z` is 2.65;
-  `render_scene_image` reports `raster_vertex_depth` per light in its
-  `shadow_lights` entries. This is the error of a large
+  between the light and the view frustum and `Z` is 2.65. This is the error of a large
   receiver that extends behind the light: on `cube_seams` the 6.2 m floor's
   triangles have a corner behind the spot light, are clipped at the near
   plane, and the stored depth of each triangle is the exact plane depth plus
@@ -1003,11 +1002,40 @@ plane a smaller distance than every caster, and empty texels hold `1e30`.
 
 Validity. For a directional light the taps' rays are parallel, so the
 receiver meets each at its own clamped `|N . d| >= 0.05`. A spot light's rays
-fan out by about `2 tan(fov / 2) / N` rad per texel, 0.004 at 512 texels and
-90 degrees, so over the widest reach (`pcf_6x6`, 3 texels plus the snap) the
-receiver keeps `|N . d| >= 0.038` there, above the largest normal error the
-determined-plane rule admits (0.025) and the caster's threshold 0.01; a spot
-map that is coarser for its cone than that narrows the margin.
+fan out: the texel centre rays cross the projection plane `z = 1` at points
+`2 tan(fov / 2) / N` apart, and the angle between two rays is at most the
+distance of their points there, so the taps of a lookup, at most
+`r + 1/256` texels (L-inf, `r` the filter's tap reach of "Tap offsets", plus
+the caster snap) from the receiver's own ray, deviate from it by at most
+`theta = sqrt(2) (r + 1/256) 2 tan(fov / 2) / N` rad. A receiver meets its
+own ray at `|N . d| >= c`, `c` at least the grazing limit 0.05, and the
+determined-plane rule admits a normal error below `c / 2`; the receiver
+gradient term divides by `|N . d| - error > c / 2 - theta` on each tap's ray,
+and an undetermined plane's nearest point on a tap ray needs `theta` below
+the grazing angle, so the technique holds while `theta < 0.025`. The frustum
+is the outer cone widened by the coverage margin `M`,
+`tan(fov / 2) = tan(outer / 2) N / (N - 2M)`, so the condition is a minimum
+map resolution per cone angle and filter:
+
+    N >= 2M + 2 sqrt(2) (r + 1/256) tan(outer / 2) / 0.025
+
+(`get_spot_distance_min_resolution()`, `light_buffer.hpp`): for a 90 degree
+cone 59 texels (hard), 117 (`pcf_2x2`), 234 (`pcf_4x4`), 351 (`pcf_6x6`); for
+80 degrees 297 with `pcf_6x6`; for 120 degrees 400 with `pcf_4x4`; none for a
+cone of 180 degrees. The map resolution is shared by every directional and
+spot light while the cone is per light, and no resolution serves a cone near
+180 degrees, so the condition is enforced per light, where the spot
+projection is computed: `Light_projections::apply()` evaluates it
+(`Light_shadow_limits::distance_rays_valid`, in the light block's
+`shadow_index_packed.z`), and a spot light whose map is too coarse for its
+cone is sampled with the depth technique. The distance variant of
+`sample_light_visibility()` compiles both techniques, and its caster pass
+writes the depth map as well as the distance map. `Shadow_renderer` logs each
+change of a light's state ("Spot light '<name>': outer cone 80.0 deg with a
+3.0 texel filter reach needs a 297 texel shadow map for the distance
+technique, the map has 256: shadowed with the depth technique"), and
+`render_scene_image` reports `raster_vertex_depth` and `distance_rays_valid`
+per light in its `shadow_lights` entries.
 
 The technique replaced a caster-side "bias-free" form ("bias-free shadow
 mapping", Avelina9X, r/GraphicsProgramming) that stored

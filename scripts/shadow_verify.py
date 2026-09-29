@@ -196,8 +196,10 @@ limits (not set by set_graphics_preset) must admit the extra lights. Every
 placement is its own set of cells ("<config>@<offset>m+extra=<variant>").
 Per cell the script also records, from the renders' shadow_lights entries,
 the largest raster vertex depth bound (above 1 only for a depth-clamped
-directional pass whose casters reach past the fitted near plane, plan D9),
-listed under the table.
+directional pass whose casters reach past the fitted near plane) and how many
+renders sampled a spot light with the depth technique because its map is too
+coarse for its cone under the distance technique (plan D11); both are listed
+under the table.
 Output: the table on stdout, logs/shadow_verify/<timestamp>.json
 (per cell worst values plus per pose / view detail of every failure: failing
 pixel count and example pixel coordinates with world points), and with
@@ -1968,10 +1970,12 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                                                           station_info["light"])
                             entry = find_shadow_light(reply, station_info["light"], light_type)
                             cell["slot_layer"] = list(check_extra_light(variant, light_type, entry))
-                            # The light's raster vertex depth bound as the render used it (plan D9).
+                            # The light's 2D bias limits as the render used them (plan D9 / D11).
                             if "raster_vertex_depth" in entry:
                                 cell["raster_vertex_depth"] = max(cell.get("raster_vertex_depth", 1.0),
                                                                   entry["raster_vertex_depth"])
+                            if entry.get("distance_rays_valid") is False:
+                                cell["distance_fallback_renders"] = cell.get("distance_fallback_renders", 0) + 1
                             vis = image[:, :, 0].astype(np.float32)
                             job = {"kind": "image", "key": key, "station": station, "offset": offset,
                                    "cache_dir": session.cache_dir,
@@ -2202,13 +2206,17 @@ def main():
               f"{shadow_map.get('shadow_map_format')} (ERHE_SHADOW_DEPTH_BITS {shadow_map.get('shadow_depth_bits_axis')})")
     print()
     failures = print_table(cells, order)
-    # Plan D9: cells whose light had a raster vertex depth bound above 1
-    # (depth-clamped directional passes).
+    # Plan D9 / D11: cells whose light had a raster vertex depth bound above 1
+    # (depth-clamped directional passes) or fell back from the distance
+    # technique to the depth technique (a spot map too coarse for its cone).
     for key in order:
         cell = cells[key]
         notes = []
         if cell.get("raster_vertex_depth", 1.0) > 1.0:
             notes.append(f"raster vertex depth bound {cell['raster_vertex_depth']:.4g}")
+        if cell.get("distance_fallback_renders"):
+            notes.append(f"distance technique -> depth technique in {cell['distance_fallback_renders']} of "
+                         f"{cell['images']} renders")
         if notes:
             print(f"  {cell['config']} {cell['light']} {cell['station']}: " + "; ".join(notes))
     for key, (vis, classes, context) in pending_images.items():

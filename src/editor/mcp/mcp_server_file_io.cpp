@@ -1106,6 +1106,7 @@ namespace {
             entry["texture_from_world"] = mat4_rows_json(light.texture_from_world);
             entry["clip_from_world"]    = mat4_rows_json(light.clip_from_world);
             entry["raster_vertex_depth"] = light.raster_vertex_depth;
+            entry["distance_rays_valid"] = light.distance_rays_valid;
         }
         array.push_back(entry);
     }

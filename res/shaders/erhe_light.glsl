@@ -384,7 +384,13 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
     // the light by the error bounds of get_shadow_distance_tap(). The texels
     // are picked from the sample point and fetched at their centres / shared
     // gather corners, as for the depth technique ("Tap offsets").
-    {
+    // shadow_index_packed.z is 0 for a spot light whose map is too coarse
+    // for its cone (Light_shadow_limits::distance_rays_valid: the tap rays
+    // would fan out past what the grazing limit leaves over the normal
+    // error, doc/erhe/shadows.md "The distance technique", validity); that
+    // light is sampled with the depth technique below, from the depth map
+    // the same caster pass writes.
+    if (light.shadow_index_packed.z != 0u) {
         const float caster_snap_texels = 1.0 / 256.0;
         bool  is_directional  = (light_index < light_block.directional_light_count);
         float resolution      = float(textureSize(s_shadow_distance, 0).x);
@@ -480,7 +486,7 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
         return visibility / float(K * K);
 #   endif
     }
-#else
+#endif // ERHE_SHADOW_TECHNIQUE == ERHE_SHADOW_TECHNIQUE_DISTANCE
 
     vec4 plane_in_texture = transpose(world_from_texture) * vec4(plane_normal, -dot(plane_normal, receiver_point));
     vec2 dz_dUV           = -plane_in_texture.xy / plane_in_texture.z;
@@ -725,7 +731,6 @@ float sample_light_visibility(vec3 view_relative_position, uint light_index, vec
         return visibility / float(K * K);
     }
 #   endif // ERHE_SHADOW_FILTER
-#endif // ERHE_SHADOW_TECHNIQUE
 #else // defined(ERHE_SHADOW_MAPS)
     return 1.0;
 #endif

@@ -21,6 +21,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtc/constants.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -335,6 +337,68 @@ namespace {
 
 } // anonymous namespace
 
+auto get_spot_distance_min_resolution(const float outer_spot_angle, const erhe::scene::Shadow_map_footprint footprint) -> float
+{
+    // The receiver meets its own ray at |N . d| >= 0.05 (the grazing limit)
+    // and the determined-plane rule admits a normal error of up to half of
+    // that; each tap ray has to keep |N . d| above the error, so the tap rays
+    // may deviate from the receiver's ray by less than 0.05 - 0.025.
+    constexpr float grazing_cos        = 0.05f;
+    constexpr float max_ray_deviation  = grazing_cos - (0.5f * grazing_cos);
+    constexpr float caster_snap_texels = 1.0f / 256.0f;
+    const float half_angle = 0.5f * outer_spot_angle;
+    if (half_angle >= (0.5f * glm::pi<float>())) {
+        return std::numeric_limits<float>::infinity();
+    }
+    const float tan_half_outer   = std::tan(std::max(half_angle, 0.0f));
+    const float reach_texels     = footprint.tap_reach_texels + caster_snap_texels;
+    const float margin_texels    = footprint.get_coverage_margin_texels();
+    return (2.0f * margin_texels) + ((2.0f * std::sqrt(2.0f) * reach_texels * tan_half_outer) / max_ray_deviation);
+}
+
+void Light_projections::report_distance_fallbacks()
+{
+    // Called once per shadow pass with the distance technique active; logs
+    // only the lights whose fallback state changed since the previous call.
+    std::swap(previous_distance_fallback_light_ids, distance_fallback_light_ids);
+    distance_fallback_light_ids.clear();
+    const float map_resolution = static_cast<float>(std::min(parameters.shadow_map_viewport.width, parameters.shadow_map_viewport.height));
+    for (std::size_t slot = 0, end = light_projection_transforms.size(); slot < end; ++slot) {
+        const erhe::scene::Light_projection_transforms& transforms = light_projection_transforms[slot];
+        if ((transforms.light == nullptr) || light_shadow_limits[slot].distance_rays_valid || !transforms.is_shadow_mapped()) {
+            continue;
+        }
+        const std::size_t id = transforms.light->get_id();
+        distance_fallback_light_ids.push_back(id);
+        if (std::find(previous_distance_fallback_light_ids.begin(), previous_distance_fallback_light_ids.end(), id) == previous_distance_fallback_light_ids.end()) {
+            log_render->info(
+                "Spot light '{}': outer cone {:.1f} deg with a {:.1f} texel filter reach needs a {:.0f} texel shadow map for the distance technique, the map has {:.0f}: shadowed with the depth technique",
+                transforms.light->get_name(),
+                glm::degrees(transforms.light->get_outer_spot_angle()),
+                parameters.shadow_map_footprint.tap_reach_texels,
+                std::ceil(get_spot_distance_min_resolution(transforms.light->get_outer_spot_angle(), parameters.shadow_map_footprint)),
+                map_resolution
+            );
+        }
+    }
+    for (std::size_t slot = 0, end = light_projection_transforms.size(); slot < end; ++slot) {
+        const erhe::scene::Light_projection_transforms& transforms = light_projection_transforms[slot];
+        if ((transforms.light == nullptr) || !light_shadow_limits[slot].distance_rays_valid || !transforms.is_shadow_mapped()) {
+            continue;
+        }
+        const std::size_t id = transforms.light->get_id();
+        if (std::find(previous_distance_fallback_light_ids.begin(), previous_distance_fallback_light_ids.end(), id) != previous_distance_fallback_light_ids.end()) {
+            log_render->info("Spot light '{}': shadowed with the distance technique again", transforms.light->get_name());
+        }
+    }
+}
+
+void Light_projections::reset_distance_fallbacks()
+{
+    distance_fallback_light_ids.clear();
+    previous_distance_fallback_light_ids.clear();
+}
+
 void Light_projections::clear()
 {
     light_projection_transforms.clear();
@@ -408,7 +472,8 @@ void Light_projections::apply(
     const glm::dmat4 texture_from_clip{erhe::scene::Light::get_texture_from_clip(depth_range, conventions)};
     // Depth clamp applies to the directional passes only (Shadow_renderer);
     // their raster bound then comes from the caster bounds.
-    const bool directional_depth_clamp = (fit_settings != nullptr) && fit_settings->depth_clamp;
+    const bool  directional_depth_clamp = (fit_settings != nullptr) && fit_settings->depth_clamp;
+    const float map_resolution          = static_cast<float>(std::min(light_texture_viewport.width, light_texture_viewport.height));
 
     const bool collect_fit_debug = (fit_settings != nullptr) && fit_settings->collect_debug;
     fit_debug_data.clear();
@@ -445,6 +510,9 @@ void Light_projections::apply(
             if ((light_type == erhe::scene::Light_type::directional) && directional_depth_clamp) {
                 limits.raster_vertex_depth = get_max_caster_texture_depth(texture_from_view_relative, view_relative.view_origin, in_caster_world_aabbs);
             }
+        }
+        if (light_type == erhe::scene::Light_type::spot) {
+            limits.distance_rays_valid = (map_resolution >= get_spot_distance_min_resolution(light->get_outer_spot_angle(), shadow_map_footprint));
         }
     }
     parameters.fit_debug_out        = nullptr;
@@ -650,7 +718,12 @@ auto Light_buffer::update(
         const uint32_t point_shadow_index_u32 = (light_projection_transforms.point_shadow_index <= std::numeric_limits<uint32_t>::max())
             ? static_cast<uint32_t>(light_projection_transforms.point_shadow_index)
             : std::numeric_limits<uint32_t>::max();
-        const uint32_t shadow_index_packed[4] = { shadow_index_u32, point_shadow_index_u32, 0u, 0u };
+        // packed.z = 1 when the distance technique's ray spread condition
+        // holds for this light (Light_shadow_limits::distance_rays_valid);
+        // with 0 the distance technique variant samples it with the depth
+        // technique.
+        const uint32_t distance_rays_valid_u32 = shadow_limits.distance_rays_valid ? 1u : 0u;
+        const uint32_t shadow_index_packed[4] = { shadow_index_u32, point_shadow_index_u32, distance_rays_valid_u32, 0u };
         write(light_gpu_data, light_offset + offsets.light.shadow_index_packed, as_span(shadow_index_packed));
     }
     // Fill in unused part of the array

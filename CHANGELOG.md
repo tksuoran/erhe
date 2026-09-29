@@ -15,6 +15,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   minimum bias's raster term (the largest caster-bounds depth for a
   depth-clamped directional pass, else 1; written to the light block's
   `view_origin.w`).
+- `erhe::scene_renderer`: `Light_shadow_limits::distance_rays_valid`,
+  `get_spot_distance_min_resolution(outer_spot_angle, Shadow_map_footprint)`
+  and `Light_projections::report_distance_fallbacks()` /
+  `reset_distance_fallbacks()`: the distance technique's minimum spot map
+  resolution per cone angle and filter; a spot light below it is sampled with
+  the depth technique (light block `shadow_index_packed.z` = 0).
 - `erhe::scene`: `Shadow_map_footprint` (`erhe_scene/light.hpp`, the receiver
   filter's tap reach with its border width and coverage margin) and
   `Light_projection_parameters::shadow_map_footprint`;

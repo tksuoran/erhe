@@ -53,9 +53,13 @@ public:
     // Origin of the light's shadow camera in world space: for a point light
     // the centre the shader measures the radial cube distances from.
     glm::vec3               position          {0.0f};
-    // The light's raster vertex depth bound of the minimum bias
-    // (erhe::scene_renderer::Light_shadow_limits).
+    // The light's 2D shadow bias limits (erhe::scene_renderer::
+    // Light_shadow_limits): the raster vertex depth bound of the minimum
+    // bias, and whether the distance technique's ray spread condition holds
+    // (false: a spot light the distance technique samples with the depth
+    // technique).
     float                   raster_vertex_depth{1.0f};
+    bool                    distance_rays_valid{true};
 };
 
 // Shadow map textures of the same shadow pass.

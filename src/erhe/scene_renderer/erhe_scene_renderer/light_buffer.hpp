@@ -41,8 +41,10 @@ public:
     // light's UBO `index` slot whenever a preceding type bucket has
     // non-shadow lights (those skip the shadow array layer). Read by
     // the fragment shader as `array_layer = float(shadow_index.x)`.
-    // packed[1..3] reserved for future per-light shadow metadata.
-    std::size_t shadow_index_packed;            // uvec4 (uint shadow_index, uvec3 padding)
+    // packed[1] = point shadow cube index, packed[2] = 1 when the
+    // distance technique's ray spread condition holds for the light
+    // (Light_shadow_limits::distance_rays_valid), packed[3] reserved.
+    std::size_t shadow_index_packed;            // uvec4 (shadow_index, cube index, distance rays valid, padding)
     // The light's shadow view origin and its view-relative light matrices
     // (doc/erhe/shadows.md "View-relative positions"). view_origin is the
     // position of the light camera (world_from_light_camera[3]; for spot
@@ -190,8 +192,9 @@ public:
 };
 
 // Per-light limits of the 2D shadow map receiver bias, derived once per
-// Light_projections::apply() from the light's projection and the caster
-// bounds (doc/erhe/shadows.md "Minimum bias").
+// Light_projections::apply() from the light's projection, the caster bounds
+// and the receiver filter footprint (doc/erhe/shadows.md "Minimum bias" and
+// "The distance technique").
 class Light_shadow_limits
 {
 public:
@@ -202,7 +205,26 @@ public:
     // Shadow_frustum_fit_settings::depth_clamp) the largest |depth| over the
     // caster bounds' corners, at least 1.
     float raster_vertex_depth{1.0f};
+    // The distance technique's ray spread condition holds for this light:
+    // every tap ray of the filter lies within the angle the receiver's
+    // grazing limit leaves (always for directional lights; for a spot light
+    // iff the map has get_spot_distance_min_resolution() texels). A spot
+    // light without it is sampled with the depth technique.
+    bool  distance_rays_valid{true};
 };
+
+// Smallest 2D shadow map resolution (texels per edge) at which the distance
+// technique's validity margin holds for a spot light with the given outer
+// cone (full angle, radians) and receiver filter footprint
+// (doc/erhe/shadows.md "The distance technique", validity): the taps of a
+// lookup reach (tap_reach + 1/256) texels (L-inf) from the receiver's own
+// ray, which fan out by at most sqrt(2) (tap_reach + 1/256) 2 tan(fov / 2) / N
+// rad around it, and that has to stay below 0.025, the part of the 0.05
+// grazing limit the determined-plane rule leaves over the receiver normal's
+// error. The spot frustum is the cone widened by the coverage margin M, so
+// 2 tan(fov / 2) / N = 2 tan(outer / 2) / (N - 2 M). Infinity for a cone of
+// 180 degrees or wider.
+[[nodiscard]] auto get_spot_distance_min_resolution(float outer_spot_angle, erhe::scene::Shadow_map_footprint footprint) -> float;
 
 // Selects camera for which the shadow frustums are fitted
 class Light_projections
@@ -242,6 +264,14 @@ public:
     // capacity.
     void clear();
 
+    // Shadow_renderer::render() calls one of these after apply():
+    // report_distance_fallbacks() with the distance technique active (logs
+    // each shadow-mapped spot light whose Light_shadow_limits::
+    // distance_rays_valid changed since the previous call),
+    // reset_distance_fallbacks() otherwise.
+    void report_distance_fallbacks();
+    void reset_distance_fallbacks();
+
     // Debug / tooling lookup by light (linear). Hot paths index
     // light_projection_transforms by slot instead.
     // Warning: Returns pointer to element of member vector. That pointer
@@ -263,6 +293,15 @@ public:
     // Parallel to light_projection_transforms as well: the per-light bias
     // limits (Light_shadow_limits), derived once per apply().
     std::vector<Light_shadow_limits>                      light_shadow_limits;
+    // Ids of the shadow-mapped spot lights whose distance_rays_valid was
+    // false at this / the previous report_distance_fallbacks(), for one log
+    // line per change. The validity depends jointly on the map resolution,
+    // the filter and the light's cone, which no single change notification
+    // covers, so the report compares with its previous result (a log-only
+    // comparison; the validity itself is derived with the projection);
+    // buffers keep their capacity.
+    std::vector<std::size_t>                              distance_fallback_light_ids;
+    std::vector<std::size_t>                              previous_distance_fallback_light_ids;
     Light_layer_partition                                 light_partition{};
     std::vector<std::size_t>                              shadow_map_2d_slots;
     std::vector<std::size_t>                              point_shadow_slots;

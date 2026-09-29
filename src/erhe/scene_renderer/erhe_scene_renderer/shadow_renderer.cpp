@@ -367,6 +367,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // bind_shadow_samplers then binds the fallback cube.
     parameters.light_projections.shadow_cube_texture = parameters.point_cube_texture;
 
+    // A spot light whose map is too coarse for its cone under the distance
+    // technique is sampled with the depth technique (Light_shadow_limits::
+    // distance_rays_valid); log when that changes.
+    if (parameters.use_distance) {
+        parameters.light_projections.report_distance_fallbacks();
+    } else {
+        parameters.light_projections.reset_distance_fallbacks();
+    }
+
     // The receiver-side minimum bias scales go with the shadow maps they bias.
     parameters.light_projections.shadow_bias_texel_scale  = parameters.shadow_bias_texel_scale;
     parameters.light_projections.shadow_bias_origin_scale = parameters.shadow_bias_origin_scale;

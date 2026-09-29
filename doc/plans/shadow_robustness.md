@@ -12,7 +12,7 @@ RPDB reference (D2 to D4). Fit and performance follow-ups stay in
 [`shadows.md`](shadows.md).
 
 The tooling (T1 to T8) and the test stations (section 4) exist; section 9 is
-the current gate table. The remaining work is D11 and phase 8.
+the current gate table. The remaining work is phase 8.
 
 ## 1. Evidence: the head-on tie
 
@@ -335,6 +335,31 @@ The bias, in the order it is built:
   minimum spot map resolution per cone angle and enforced where the preset's
   shadow resolution is clamped, the way D6 enforces
   `c_min_point_shadow_resolution`.
+  Landed as a per-light condition instead of a preset clamp (shadows.md "The
+  distance technique", validity): the tap rays deviate from the receiver's
+  ray by at most `sqrt(2) (r + 1/256) 2 tan(outer / 2) / (N - 2M)`, which has
+  to stay below 0.025 (the grazing limit 0.05 less the normal error the
+  determined-plane rule admits), so `N >= 2M + 2 sqrt(2) (r + 1/256)
+  tan(outer / 2) / 0.025` (`get_spot_distance_min_resolution()`; 90 degrees:
+  59 / 117 / 234 / 351 texels for hard / 2x2 / 4x4 / 6x6, 80 degrees 6x6:
+  297). The resolution is shared by all 2D shadow lights and the cone is per
+  light, and no resolution serves a cone near 180 degrees, so a preset clamp
+  cannot make the condition hold for every light, and clamping it on light
+  edits would reallocate the map on a cone drag. `Light_projections::apply()`
+  evaluates the condition per spot light where it computes the spot
+  projection (`Light_shadow_limits::distance_rays_valid`, light block
+  `shadow_index_packed.z`), and the distance variant samples a light that
+  fails it with the depth technique from the depth map the same caster pass
+  writes; `Shadow_renderer` logs each change. Measured on `spot_cones`
+  (Medium, distance, short sweep with the 45 / 5 / 45 / 80 / 80 degree
+  poses): 256 `pcf_6x6` falls back in the two 80 degree poses (4 of 10
+  renders; log "outer cone 80.0 deg with a 3.0 texel filter reach needs a
+  297 texel shadow map ..., the map has 256") and passes G1 / G2 / G5
+  (0.09 / 1.56 texels); 256 `pcf_4x4`, 512 `pcf_4x4` and 512 `pcf_6x6` keep
+  the distance technique and pass (G5 0.44 / 1.06, 0.51 / 1.00, 0.33 / 1.50).
+  With the fallback disabled the 256 `pcf_6x6` cell reads the same gates:
+  the condition is a sufficient bound, and no receiver of the station sits
+  at the grazing limit next to the 80 degree rim.
 
 - **D12 Camera-relative receiver normal.** The receiver geometric normal
   (D2 / D3) comes from screen-space derivatives of the absolute world
@@ -576,6 +601,17 @@ High 0.06. Re-measured on the D12 code (6322 renders, 35.2 min): the same
 failing cells, and the same G3 but Medium directional 0.12 -> 0.13 and High
 spot 0.23 -> 0.24 (the larger rounding bounds of the separately rounded
 caster and receiver vertices).
+Re-measured on the D9 / D11 code with the directional fit pinned per config
+(17 configs, the new `Medium/depth_clamp=false` row and the `depth_range`
+`under_block` view; 6937 renders, 38.8 min): the same failing cells with the
+same values, every cell of `Medium/depth_clamp=false` passes (G3 0.13 / 0.08
+/ 0.03, as Medium), and the G3 values above hold (forward-Z 0.12 / 0.08).
+The directional raster vertex depth bound under depth clamp reads 1 on
+`head_on_floor` and `grazing_fan`, 1.06 to 1.41 on `spot_cones`, `cornell`,
+`cube_seams` and `thin_walls`, 2.65 on `depth_range` and 10.2 on
+`contact_blocks` (reverse-Z; forward-Z 1 to 9.2); no core cell falls back
+from the distance technique (the committed presets' resolutions exceed
+every station cone's minimum).
 
 The distance technique on every core axis (`--matrix core --set
 shadow_technique=distance --light directional,spot`, 4597 renders, 29.1
