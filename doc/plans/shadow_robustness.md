@@ -572,7 +572,10 @@ section 9 rewritten to the new gate table.
   shader change of phases 2 to 7 are verified on
   Vulkan only), and on Metal where a macOS machine is available. G7; rewrite shadows.md "Shadow
   sampling" and "Bias technique" for the landed design, add the verify recipe
-  to `doc/testing.md`, run the pairwise matrix, and delete this plan's
+  to `doc/testing.md`, run the final gate (Low, Medium, High,
+  Medium/shadow_technique=distance and Medium/depth_clamp=false, short
+  sweep, about 15 min - the pairwise matrix last ran at D12 and the core
+  matrix at D11), and delete this plan's
   finished items.
 
 ## 9. Gate table
