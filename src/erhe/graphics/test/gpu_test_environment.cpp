@@ -7,14 +7,17 @@
 #include "erhe_graphics/surface.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_configuration.hpp"
 #include "erhe_window/window_log.hpp"
 
 #include <glm/glm.hpp>
+#include <spdlog/spdlog.h>
 
 #include <cstdlib>
+#include <memory>
 
 namespace erhe::graphics::test {
 
@@ -81,6 +84,22 @@ void Gpu_test_environment::SetUp()
 
     m_device = std::make_unique<erhe::graphics::Device>(surface_create_info, graphics_config, message_callback);
     m_available = true;
+
+    // The depth convention every GPU test of this process runs with: reverse-Z
+    // where the API's native clip depth range is [0, 1] (Vulkan, Metal, OpenGL
+    // with glClipControl), forward-Z otherwise. Logged at info on a logger of
+    // its own, so logs/log.txt of every GPU test run states it without the
+    // editor's logging configuration.
+    {
+        const std::shared_ptr<spdlog::logger> log_gpu_test = erhe::log::make_logger("erhe.graphics.gpu_test");
+        log_gpu_test->set_level(spdlog::level::info);
+        const bool zero_to_one = (m_device->get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+        log_gpu_test->info(
+            "GPU test device depth convention: {} (native clip depth range {})",
+            m_device->get_reverse_depth() ? "reverse-Z" : "forward-Z",
+            zero_to_one ? "[0, 1]" : "[-1, 1]"
+        );
+    }
 
     // Snapshot any messages emitted during device creation, then clear the
     // runtime list so per-test message attribution starts from empty.

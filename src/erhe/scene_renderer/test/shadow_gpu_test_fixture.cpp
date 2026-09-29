@@ -55,6 +55,24 @@ auto c_str(const Shadow_light_kind light_kind) -> const char*
     }
 }
 
+auto c_str(const Shadow_technique_case technique) -> const char*
+{
+    switch (technique) {
+        case Shadow_technique_case::depth:    return "depth";
+        case Shadow_technique_case::distance: return "distance";
+        default:                              return "?";
+    }
+}
+
+auto get_shadow_technique_cases() -> const std::vector<Shadow_technique_case>&
+{
+    static const std::vector<Shadow_technique_case> cases{
+        Shadow_technique_case::depth,
+        Shadow_technique_case::distance
+    };
+    return cases;
+}
+
 auto get_shadow_filter_cases() -> const std::vector<Shadow_filter_case>&
 {
     static const std::vector<Shadow_filter_case> cases{
@@ -240,6 +258,7 @@ void Shadow_gpu_test::TearDown()
     m_light_projections.shadow_map_texture.reset();
     m_shadow_render_passes.clear();
     m_shadow_map.reset();
+    m_distance_map.reset();
     m_light.reset();
     m_camera.reset();
     m_meshes.clear();
@@ -392,7 +411,10 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
 
     m_shadow_render_passes.clear();
     m_shadow_map.reset();
+    m_distance_map.reset();
     m_shadow_map_format = settings.depth_format;
+    m_shadow_technique  = settings.technique;
+    const bool use_distance = (settings.technique == Shadow_technique_case::distance);
     m_shadow_map = std::make_shared<erhe::graphics::Texture>(
         graphics_device,
         erhe::graphics::Texture_create_info{
@@ -410,9 +432,33 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
             .debug_label       = erhe::utility::Debug_label{"shadow test map"}
         }
     );
+    if (use_distance) {
+        // The distance map, as the editor's Shadow_render_node allocates it:
+        // an R32F array the caster pass writes as its color attachment.
+        m_distance_map = std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info{
+                .device            = graphics_device,
+                .usage_mask        =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d_array,
+                .pixelformat       = erhe::dataformat::Format::format_32_scalar_float,
+                .width             = settings.resolution,
+                .height            = settings.resolution,
+                .depth             = 1,
+                .array_layer_count = 1,
+                .debug_label       = erhe::utility::Debug_label{"shadow test distance map"}
+            }
+        );
+    }
     submit_and_wait(
         [&](erhe::graphics::Command_buffer& command_buffer) {
             command_buffer.transition_texture_layout(*m_shadow_map, erhe::graphics::Image_layout::depth_stencil_read_only_optimal);
+            if (m_distance_map) {
+                command_buffer.transition_texture_layout(*m_distance_map, erhe::graphics::Image_layout::shader_read_only_optimal);
+            }
         }
     );
 
@@ -427,6 +473,19 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
     descriptor.depth_attachment.usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
     descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
     descriptor.depth_attachment.clear_value[0] = reverse_depth ? 0.0 : 1.0;
+    if (m_distance_map) {
+        // Cleared to a large distance, so texels no caster covers read lit.
+        descriptor.color_attachments[0].texture        = m_distance_map.get();
+        descriptor.color_attachments[0].texture_level  = 0;
+        descriptor.color_attachments[0].texture_layer  = 0;
+        descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
+        descriptor.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
+        descriptor.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
+        descriptor.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
+        descriptor.color_attachments[0].clear_value[0] = 1.0e30;
+    }
     descriptor.render_target_width             = settings.resolution;
     descriptor.render_target_height            = settings.resolution;
     descriptor.debug_label                     = erhe::utility::Debug_label{"shadow test map pass"};
@@ -459,7 +518,9 @@ void Shadow_gpu_test::render_shadow_map(const Shadow_map_settings& settings)
                     .fit_settings          = nullptr,
                     .depth_bias_constant   = settings.depth_bias_constant,
                     .depth_bias_slope      = settings.depth_bias_slope,
-                    .cull_mode             = settings.cull_mode
+                    .cull_mode             = settings.cull_mode,
+                    .distance_texture      = m_distance_map,
+                    .use_distance          = use_distance
                 }
             );
             static_cast<void>(rendered);
@@ -551,7 +612,7 @@ auto Shadow_gpu_test::render_visibility(const Shadow_filter_case& filter_case) -
                     .shader_debug          = Shader_debug::shadow_visibility,
                     .shadow_filter         = filter_case.filter,
                     .shadow_bias           = filter_case.bias,
-                    .shadow_technique      = 0,
+                    .shadow_technique      = static_cast<uint32_t>(m_shadow_technique),
                     .shadow_depth_bits     = get_shadow_depth_bits_axis(m_shadow_map_format)
                 }
             );
@@ -595,7 +656,8 @@ auto Shadow_gpu_test::get_tie_stages(const Shadow_filter_case& filter_case) -> e
         }
     }
     view_relative_from_station_string += ")";
-    const std::string key = fmt::format("{} {} {} {}", filter_case.filter, filter_case.bias, depth_bits, view_relative_from_station_string);
+    const uint32_t    technique = static_cast<uint32_t>(m_shadow_technique);
+    const std::string key = fmt::format("{} {} {} {} {}", filter_case.filter, filter_case.bias, technique, depth_bits, view_relative_from_station_string);
     const auto it = m_tie_stages.find(key);
     if (it != m_tie_stages.end()) {
         return it->second.get();
@@ -606,7 +668,7 @@ auto Shadow_gpu_test::get_tie_stages(const Shadow_filter_case& filter_case) -> e
     Shader_key environment_key{};
     environment_key.set(Shader_int::SHADOW_FILTER,     filter_case.filter);
     environment_key.set(Shader_int::SHADOW_BIAS,       filter_case.bias);
-    environment_key.set(Shader_int::SHADOW_TECHNIQUE,  0u);
+    environment_key.set(Shader_int::SHADOW_TECHNIQUE,  technique);
     environment_key.set(Shader_int::SHADOW_DEPTH_BITS, depth_bits);
     std::vector<std::pair<std::string, std::string>> defines = environment_key.get_defines();
     defines.emplace_back("SHADOW_TIE_BAND_WIDTH", fmt::format("{}", c_tie_band_width));

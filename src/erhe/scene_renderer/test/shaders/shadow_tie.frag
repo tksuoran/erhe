@@ -1,5 +1,5 @@
 // Shadow_tie fragment pass (src/erhe/scene_renderer/test/test_shadow_gpu.cpp,
-// doc/plans/shadow_robustness.md T7).
+// doc/erhe/shadows.md "Shadow sampling GPU tests").
 //
 // The target is split into vertical bands SHADOW_TIE_BAND_WIDTH pixels wide.
 // Band b evaluates sample_light_visibility() of light slot 0 at receiver points

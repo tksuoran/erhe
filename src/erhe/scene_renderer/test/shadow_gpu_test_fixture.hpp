@@ -1,6 +1,7 @@
 #pragma once
 
-// Shared fixture of the shadow GPU tests (doc/plans/shadow_robustness.md T7).
+// Shared fixture of the shadow GPU tests (doc/erhe/shadows.md "Shadow sampling
+// GPU tests").
 // Sets up what Shadow_renderer and Forward_renderer need beyond the Device -
 // Mesh_memory, Program_interface, Shader_variant_cache, Material_set,
 // Scene_pass_resources, Light_set, Light_projections - plus a small analytic
@@ -57,6 +58,20 @@ enum class Shadow_light_kind : unsigned int
 
 [[nodiscard]] auto c_str(Shadow_light_kind light_kind) -> const char*;
 
+// The ERHE_SHADOW_TECHNIQUE axis (values as erhe_light.glsl defines them):
+// depth compares light-space depth against the depth map; distance stores
+// each texel's caster plane distance on the texel's centre ray in an R32F
+// map and compares the receiver plane's distance on the same ray
+// (doc/erhe/shadows.md "The distance technique").
+enum class Shadow_technique_case : unsigned int
+{
+    depth    = 0,
+    distance = 1
+};
+
+[[nodiscard]] auto c_str(Shadow_technique_case technique) -> const char*;
+[[nodiscard]] auto get_shadow_technique_cases() -> const std::vector<Shadow_technique_case>&;
+
 // One receiver-side sampling configuration: the ERHE_SHADOW_FILTER and
 // ERHE_SHADOW_BIAS variant axes (the bias axis only matters for the wide
 // filters).
@@ -80,8 +95,8 @@ public:
 // (0, spot_height, 0); the directional light's stable fit is anchored at the
 // view camera (0, 3, 0) with radius shadow_range, so its light camera sits at
 // (0, 3 + shadow_range, 0). Whether the head-on tie shows depends on where
-// last-bit rounding falls (plan section 1, R6), so the tests run several
-// poses.
+// last-bit rounding falls (doc/erhe/shadows.md "Minimum bias", R6), so the
+// tests run several poses.
 class Shadow_pose
 {
 public:
@@ -102,6 +117,7 @@ class Shadow_map_settings
 {
 public:
     erhe::dataformat::Format depth_format       {erhe::dataformat::Format::format_d32_sfloat};
+    Shadow_technique_case    technique          {Shadow_technique_case::depth};
     int                      resolution         {1024};
     Shadow_cull_mode         cull_mode          {Shadow_cull_mode::cull_back};
     float                    depth_bias_constant{0.0f};
@@ -163,13 +179,17 @@ protected:
     void add_box   (const glm::vec3& min_corner, const glm::vec3& max_corner);
     void set_light (Shadow_light_kind light_kind, const Shadow_pose& pose);
 
-    // Renders the shadow map of the current light and scene.
+    // Renders the shadow map of the current light and scene (and, for the
+    // distance technique, its distance map). The receiver passes below sample
+    // with the technique of the latest shadow map render.
     void render_shadow_map(const Shadow_map_settings& settings);
 
     // Forward pass with Shader_debug::shadow_visibility over the top-down view.
     [[nodiscard]] auto render_visibility(const Shadow_filter_case& filter_case) -> Visibility_image;
 
-    // Shadow_tie fragment pass.
+    // Shadow_tie fragment pass. The reference depth offset applies to the
+    // light-space depth, which the distance technique does not compare: with
+    // the distance technique every k band evaluates the same head-on tie.
     [[nodiscard]] auto render_tie(const Shadow_filter_case& filter_case) -> Shadow_tie_result;
 
 private:
@@ -201,6 +221,8 @@ private:
     Light_projections                                          m_light_projections;
 
     std::shared_ptr<erhe::graphics::Texture>                   m_shadow_map;
+    std::shared_ptr<erhe::graphics::Texture>                   m_distance_map;
+    Shadow_technique_case                                      m_shadow_technique{Shadow_technique_case::depth};
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>>  m_shadow_render_passes;
     erhe::dataformat::Format                                   m_shadow_map_format{erhe::dataformat::Format::format_undefined};
 };
