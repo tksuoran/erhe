@@ -204,9 +204,10 @@ void main()
     float node_handedness;
     erhe_decode_vertex_tbn(node_normal, node_tangent, node_handedness);
 
-#if defined(ERHE_VARIANT_SHADOW_CUBE)
-    // Point-light shadow cube caster: the fragment shader needs the world
-    // position to compute radial distance to the light. This is a position pass,
+#if defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_SHADOW_DISTANCE)
+    // Point-light shadow cube caster and distance-technique caster: the
+    // fragment shader needs the world position to compute the caster plane's
+    // distance from the light. This is a position pass,
     // so the lit-varying block below is skipped; assign v_position here. The
     // per-face clip-space y-flip that makes the stored face match the
     // samplerCubeArray (s,t) convention is NOT done here: it is applied on the

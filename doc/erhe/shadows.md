@@ -259,7 +259,7 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   [plans/shadow_robustness.md](../plans/shadow_robustness.md)). This is
   inherent to storing back faces, not a bias defect; closing it needs a second
   depth layer (midpoint or second-depth maps). A negative rasterizer slope
-  bias (`shadow_depth_bias_slope`, set for `cull_back`) moves the stored back
+  bias (`shadow_depth_bias_slope`, 0 in every committed preset) moves the stored back
   faces farther from the light and widens the leak. `cull_none` writes both
   sides; on closed meshes it stores the same nearest (front) surface as
   `cull_back`, rasterizing twice the faces.
@@ -351,6 +351,10 @@ cube sampling continues across faces.
   wide `pcf_4x4` / `pcf_6x6` paths do `(K/2)^2` gathers and average. The gather
   paths use the same non-strict `gequal` / `lequal` semantics as the hardware
   sampler, so all three variants agree.
+- With the `distance` shadow technique (`ERHE_SHADOW_TECHNIQUE`, from the
+  preset's `shadow_technique`), the same filters read the R32F distance map
+  `s_shadow_distance` and compare light distances on the texel rays instead of
+  depths (see "The distance technique" below).
 
 ### Shadow visibility debug view
 
@@ -447,13 +451,13 @@ and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
   5 cm inside its analytic shadow at every pose, and at the identity pose 1
   at least 10 cm outside it.
 
-## Bias technique: RPDB reference, and the distance/fwidth alternative
+## Bias technique: RPDB reference, and the distance technique
 
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from
 https://renderdiagrams.org/2024/12/18/shadowmap-bias/ (cited in
 `sample_light_visibility()`, `res/shaders/erhe_light.glsl`). This section records how the implementation
-maps onto that reference, where it goes beyond it, and the alternative
-"bias-free" technique exposed as the `distance` shadow technique. The known
+maps onto that reference, where it goes beyond it, and the `distance` shadow
+technique, which compares plane distances on the texel rays instead. The known
 deltas from the reference are listed in
 [`plans/shadow_robustness.md`](../plans/shadow_robustness.md).
 
@@ -743,51 +747,144 @@ erhe also goes beyond the article:
   skipped for D32_SFLOAT -- so it matches the actual shadow map format.
 - A complementary caster-side rasterizer depth bias (constant + slope) exists
   (`shadow_depth_bias_constant` / `_slope`, applied in `shadow_renderer.cpp` via
-  `set_depth_bias`). Its field default is 0; the Medium and High presets set
-  `shadow_depth_bias_slope` -1, Low and OpenXR 0, every preset constant 0.
-  The depth technique does not need it: with the receiver's minimum bias
+  `set_depth_bias`). Its field default is 0 and every committed preset sets
+  both to 0: neither technique needs it. With the receiver's minimum bias
   ("Minimum bias") and the texel selection of "Tap offsets", every
   `cull_back` and `cull_none` depth technique cell of the core matrix of
   [plans/shadow_robustness.md](../plans/shadow_robustness.md) reads the same
-  gates at slope 0 as at -1, with the same contact gap (G3). The distance
-  technique does: its caster pass stores `gl_FragCoord.z`, which carries the
-  rasterizer bias, so slope -1 is part of its stored distance (see "The
-  distance / fwidth alternative"). Both values are signed toward the light
+  gates at slope 0 as at -1, with the same contact gap (G3); the distance
+  technique's stored value does not contain the rasterized depth at all, so
+  the rasterizer bias only changes which of two nearly coincident casters
+  wins the depth test ("The distance technique"). Under `cull_front` a
+  negative slope bias moves the stored back faces away from the light and
+  widens that mode's leaks. Both values are signed toward the light
   under either depth convention: negative moves the stored caster depth away
   from the light. `Shadow_renderer::render()` passes them to the device as is
   for reverse-Z (the light side is the larger depth) and negated for forward-Z
   (the light side is the smaller depth), so one preset value means the same
   bias in both conventions. The article criticizes rasterizer slope
-  bias as an over-estimate, so erhe relies on RPDB for the depth technique.
+  bias as an over-estimate, so erhe relies on the receiver-side bounds.
 
-### The distance / fwidth alternative
+### The distance technique
 
-The same derivative-slope idea can be moved to the caster pass instead
-("bias-free shadow mapping", Avelina9X, r/GraphicsProgramming). Store a linear
-distance in the shadow map and have the shadow-pass fragment shader return
-`d + fwidth(d) * (1 + pcfRadius)` (`fwidth = |ddx| + |ddy|`). The bias is then
-baked per shadow texel and the receiver compares with no bias and no `dz_dUV`
-work. Trade-offs versus erhe's receiver-side RPDB:
+The `distance` value of the `shadow_technique` graphics preset field (see
+"Editor integration") stores light distances in a parallel R32F map instead
+of comparing hardware depth, for directional and spot lights; `depth` (the
+RPDB path above) remains the default. Point lights use their own distance
+cube with either value (see [Point-light cube-map shadows](#point-light-cube-map-shadows)).
+It is the 2D form of the point-light cube's stored distance and receiver bias
+([`point_light_shadows.md`](point_light_shadows.md) "Stored distance" and
+"Receiver bias"): the stored value and the reference are both the distance of
+a plane on the same ray, so they agree exactly in real arithmetic and the
+bias is the sum of derived fp32 error bounds.
 
-- The bias is computed once per shadow texel, in the cheap (under-utilized)
-  shadow pass, and is shared by every receiver and every PCF tap -- the hot
-  forward shader stays bias-free and register-light. RPDB recomputes a per-pixel
-  bias in the expensive pass every frame.
-- `fwidth` is an L1 (`|ddx| + |ddy|`) upper bound -- the very over-estimate RPDB
-  avoids with its signed gradient -- so it slightly over-biases (mild haloing
-  around texel-width features), which can be tuned down by scaling the
-  multiplier.
-- It needs a color render target plus a fragment shader in the shadow pass (the
-  erhe pass is depth-only today) and, for spot / point lights, storing radial
-  distance rather than projected depth.
+**The ray of a texel.** `get_shadow_distance_ray()`
+(`res/shaders/erhe_shadow_distance.glsl`) builds the ray through the centre
+`(i + 0.5) / N` of texel `i` (`get_shadow_distance_texel_centre()`) from the
+light's `world_from_texture`: the world point `X` of texture coordinates
+(centre, z = 0.5). For a spot light the ray starts at the light position and
+points at `X`, and a distance is the radial distance from the light. For a
+directional light the ray starts at `X` and follows the projection's depth
+axis (`world_from_texture[2]`, oriented away from the light), and a distance
+is the linear light-space depth, in world units from the map's mid-depth
+plane (negative nearer the light). Both passes evaluate these expressions as
+`precise` (no contraction or reassociation) from the same inputs, so the
+caster and the receiver get the same ray bit for bit, and the ray's own
+rounding is not an error term.
 
-erhe exposes this as the `distance` value of the `shadow_technique` graphics
-preset field (see "Editor integration"); `depth` (the RPDB path above) remains
-the default. The first implementation covers directional lights, where the
-stored radial distance specializes to the linear light-space depth the
-orthographic light projection already produces. Point lights independently use a
-true-radial-distance cube map (see [Point-light cube-map shadows](#point-light-cube-map-shadows)
-below); that is its own subsystem, not this 2D `shadow_technique` knob.
+**Stored distance.** The caster (`standard.frag` under
+`VARIANT_SHADOW_DISTANCE`) runs at its pixel centre, the texel centre. It
+finds its texel from the texture coordinates of its interpolated world
+position `p`, which lie a small fraction of a texel from that centre, and
+reads the map resolution from `light_control_block.shadow_map_resolution`.
+Its plane is the geometric normal `N` of the derivatives of `p`, through `p`,
+and it stores the farther of the plane's distance on the ray,
+`N . (p - O) / (N . d)` (`O`, `d` the ray origin and direction), and the
+distance of `p` itself (radial `|p - O|` for a spot light, `d . (p - O)` for
+a directional one). The plane distance does not depend on where the
+rasterizer puts `p` within the primitive's plane or on the rasterized depth,
+so neither barycentric precision on large near-clipped triangles nor the
+rasterizer depth bias reaches the stored value; the rasterized depth only
+picks which caster is nearest. The farther-of-two rule is for coverage: the
+rasterizer snaps vertices to 1/256 pixel, so a primitive can cover a texel
+centre up to that step past its true edge, and there its plane on the ray is
+an extension. At a convex crease the extension of the steeper face is nearer
+the light than the neighbour face on the ray by the step times the steep
+face's own slope, which no receiver-side quantity bounds (on `grazing_fan`,
+Medium, the 85 and 88 degree tiles' steep faces covered their 2 cm edge
+faces 0.6 to 2.8 mm from the crease, one `pcf_4x4` tap each: 2 directional
+and 1 spot pixel with the plane distance alone). `p` lies inside the
+primitive, on the far side of the neighbour's plane and within one snap step
+of the ray, which the receiver's coverage snap term below covers. The
+receiver's own surface stores its plane distance on the ray, and taking the
+farther value can only raise it, so the rule never shadows a lit receiver;
+an occluder's value moves away from the light by at most its slope times the
+offset of `p` from the ray. A caster within
+`erhe_shadow_distance_plane_cos_min` (0.01) of edge-on to its ray, or with no
+plane at this footprint, stores the distance of `p`. The map is cleared to
+`1e30`, which every reference compares lit.
+
+**Receiver.** `sample_light_visibility()` takes the same receiver plane as
+the depth technique (the geometric normal, tilted to the R1 grazing limit,
+and the "Undetermined receiver plane" rule), picks the texels from the sample
+point and fetches them at their centres / shared gather corners ("Tap
+offsets"), and per tap (`get_shadow_distance_tap()`) compares the receiver
+plane's distance on that tap's ray: the hard path and `pcf_2x2` one-sided
+(capped at the receiver point's own distance, like the depth technique's
+one-sided offsets), the wide paths signed for `receiver_plane` and one-sided
+for `slope_scaled`. An undetermined plane takes the nearest plane point on
+the ray over the planes within the grazing limit of head-on: for a
+directional light the receiver's distance less `tan(alpha_max)` times its
+lateral distance from the ray, for a spot light the point-light cube's
+closed form. Every reference then moves toward the light by the sum of these
+bounds (world units along the ray, `u = 2^-24`,
+`e = 2 get_world_position_rounding(P)`):
+
+- **Coverage snap.** The receiver plane's distance slope per texel,
+  `|N . l_u| / |N . d|` plus the same for `v`, times 1/256, where `l_u`,
+  `l_v` are one texel step at the receiver point perpendicular to its ray
+  (`D_u h.w / N` less its component along the ray); an undetermined plane
+  takes the grazing-limit slope. Unscaled, like `snap_bias`.
+- **Receiver gradient.** The normal's error bound from
+  `get_receiver_geometric_normal()` times the distance from `P` to the plane
+  point on the tap's ray, over `|N . d|` less the bound.
+- **Caster gradient.** The caster normal's error bound
+  `e (|l_u| + |l_v| + e) / |l_u x l_v|` (its derivatives span one map pixel;
+  the caster taken at the receiver's distance, where the tie is), times half
+  the texel diagonal on the plane, over `|N . d|` less the bound but at least
+  the caster's threshold 0.01.
+- **Position.** The rounding of the receiver point and of the caster's
+  interpolated point, `get_world_position_rounding()` each, over `|N . d|`.
+- **Evaluation.** Each side's `N . (p - O) / (N . d)`: the subtraction and
+  the three-term dot product `4u |p - O|`, the dot `N . d` `3u |s| / |N . d|`
+  and the divide `u |s|` (`s` the distance), plus the receiver's own length
+  or dot product, `13u |P - O|`.
+
+The gradient terms scale with `shadow_bias_texel_scale` and the position and
+evaluation terms with `shadow_bias_origin_scale`, as for the depth technique;
+R32F stores the caster's value exactly, so there is no format or raster term.
+The reference needs no [0, 1] clamp: a receiver beyond the fitted far plane
+has a larger distance than every caster above it, one nearer than the near
+plane a smaller distance than every caster, and empty texels hold `1e30`.
+
+Validity. For a directional light the taps' rays are parallel, so the
+receiver meets each at its own clamped `|N . d| >= 0.05`. A spot light's rays
+fan out by about `2 tan(fov / 2) / N` rad per texel, 0.004 at 512 texels and
+90 degrees, so over the widest reach (`pcf_6x6`, 3 texels plus the snap) the
+receiver keeps `|N . d| >= 0.038` there, above the largest normal error the
+determined-plane rule admits (0.025) and the caster's threshold 0.01; a spot
+map that is coarser for its cone than that narrows the margin.
+
+The technique replaced a caster-side "bias-free" form ("bias-free shadow
+mapping", Avelina9X, r/GraphicsProgramming) that stored
+`gl_FragCoord.z + fwidth(z) (1 + K / 2)` and compared unbiased. `fwidth` is
+an L1 over-estimate of the caster's slope, zero for a head-on caster, and
+`gl_FragCoord.z` carries the rasterizer depth bias; the plane comparison on
+the texel's own ray needs no slope term at all. Measured with
+[`plans/shadow_robustness.md`](../plans/shadow_robustness.md) section 6 (the
+Medium distance config, the core matrix and the pairwise matrix), the
+distance technique reads the depth technique's gates, with its contact gap
+(G3) and edge placement (G5).
 
 ## Point-light cube-map shadows
 
@@ -864,17 +961,16 @@ the per-face coordinate flip, is in
   (`Editor_settings_config` version 4). `Shadow_render_node` re-reads it
   every frame, so changes apply live.
 - **Shadow technique** - the graphics preset's `Shadow_technique_mode`
-  (`shadow_technique`, Settings window combo) selects `depth` (the RPDB path,
-  default) or `distance` (the fwidth-baked distance map). For `distance`,
+  (`shadow_technique`, Settings window combo, `set_graphics_preset`) selects
+  `depth` (the RPDB path, default) or `distance` ("The distance technique")
+  for every directional and spot light of the preset. For `distance`,
   `Shadow_render_node` allocates a parallel R32F `texture_2d_array` as a color
-  attachment of the shadow passes; the caster (`standard.frag` under
-  `VARIANT_SHADOW_DISTANCE`) writes
-  `gl_FragCoord.z + coeff*fwidth(gl_FragCoord.z)` into it (`coeff =
-  cdd*(1+pcfRadius)`, carried on the per-pass `light_control_block`), and the
-  receiver (`erhe_light.glsl`, `ERHE_SHADOW_TECHNIQUE == DISTANCE`) samples
-  `s_shadow_distance` and compares with no bias. The bundled `High (distance)`
-  preset enables it. This 2D `distance` knob covers directional lights only; spot
-  lights stay on the 2D depth path. Point lights are unaffected by it -- they
+  attachment of the 2D shadow passes, cleared to `1e30`; the caster
+  (`standard.frag` under `VARIANT_SHADOW_DISTANCE`) writes its plane's light
+  distance on each texel's centre ray into it (the map resolution on the
+  per-pass `light_control_block`), and the receiver (`erhe_light.glsl`,
+  `ERHE_SHADOW_TECHNIQUE == DISTANCE`) samples `s_shadow_distance`. No
+  committed preset enables it. Point lights are unaffected by it -- they
   always use the omnidirectional radial-distance cube path (see [Point-light
   cube-map shadows](#point-light-cube-map-shadows)).
 - **MCP** - `set_graphics_preset` sets the preset's shadow fields for the
@@ -934,16 +1030,17 @@ the per-face coordinate flip, is in
 | `src/erhe/scene/erhe_scene/light_frustum_fit.cpp` | Tight modular fit pipeline |
 | `src/erhe/scene/erhe_scene/light_frustum_fit.hpp` | `Shadow_frustum_fit_debug_data`, `Shadow_fit_step` |
 | `src/erhe/math/erhe_math/math_util.cpp` | Convex hull clip, point-in-hull, rotating calipers, F_shadow open planes (`build_shadow_caster_volume_planes`) + silhouette side planes (`build_shadow_caster_silhouette`), AABB-vs-convex-volume cull (`aabb_in_convex_volume`), half-space intersection to polyhedron (`convex_polyhedron_from_planes`) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + bias coeff); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_distance_bias_coeff` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
+| `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + map resolution); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_map_resolution` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
 | `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
-| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
+| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance path (`get_shadow_distance_tap`), reference depth clamp; `sample_point_light_visibility` (texel-centre fetch, receiver-plane reference, derived radial bias) |
 | `res/shaders/erhe_point_shadow.glsl` | Point cube texel-centre selection shared by the cube caster and the receiver |
+| `res/shaders/erhe_shadow_distance.glsl` | Distance technique texel centre and ray (`precise`) shared by the distance caster and the receiver |
 | `src/erhe/scene_renderer/test/shadow_gpu_test_fixture.hpp` | Shadow GPU test fixture: station, poses, shadow map / forward / Shadow_tie renders |
 | `src/erhe/scene_renderer/test/test_shadow_gpu.cpp` | Shadow sampling GPU test cases |
 | `src/erhe/scene_renderer/test/shaders/shadow_tie.frag` | Shadow_tie fragment pass (reference depth offset per band) |
-| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map; `VARIANT_SHADOW_CUBE` writes the caster plane's radial distance on the texel centre ray to the cube face; point receiver multiplies `sample_point_light_visibility` |
-| `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` passes `v_position` (world) to the cube caster fragment |
+| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the caster plane's light distance on the texel centre ray to the distance map; `VARIANT_SHADOW_CUBE` writes the caster plane's radial distance on the texel centre ray to the cube face; point receiver multiplies `sample_point_light_visibility` |
+| `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` and `VARIANT_SHADOW_DISTANCE` pass `v_position` (world) to the caster fragment |
 | `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |
 | `src/editor/config/definitions/shadow_frustum_fit_config.py` | Frustum fit settings codegen definition |

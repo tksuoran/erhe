@@ -5470,7 +5470,7 @@ void pin_medium_shadow_preset(Mcp_client& client, const float shadow_depth_bias_
         {"shadow_resolution",          2048},
         {"point_shadow_resolution",    1024},
         {"shadow_depth_bias_constant", shadow_depth_bias_constant},
-        {"shadow_depth_bias_slope",    -1.0f},
+        {"shadow_depth_bias_slope",    0.0f},
         {"shadow_bias_texel_scale",    1.0f},
         {"shadow_bias_origin_scale",   1.0f},
         {"use_draw_lists",             true}

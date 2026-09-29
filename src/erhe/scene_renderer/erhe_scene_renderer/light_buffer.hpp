@@ -143,9 +143,10 @@ public:
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
-    // Per-pass coefficient the distance caster multiplies fwidth() by, =
-    // cdd*(1+pcfRadius) (Shadow_technique_mode::distance). 0 for the depth path.
-    std::size_t                     shadow_distance_bias_coeff_offset;
+    // Per-pass 2D shadow map resolution in texels, used by the
+    // VARIANT_SHADOW_DISTANCE caster (Shadow_technique_mode::distance) to find
+    // its texel's centre ray. 0 outside the distance pass.
+    std::size_t                     shadow_map_resolution_offset;
     // Per-pass point light world position (xyz) + cube face resolution in
     // texels (w), used by the VARIANT_SHADOW_CUBE caster to store the radial
     // distance on each texel's centre ray into the cube face.
@@ -218,8 +219,8 @@ public:
     std::vector<std::size_t>                              shadow_map_2d_slots;
     std::vector<std::size_t>                              point_shadow_slots;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
-    // Shadow_technique_mode::distance R32F distance map (the fwidth-biased
-    // distances the caster wrote). Null for the depth technique; the receiver
+    // Shadow_technique_mode::distance R32F distance map (the caster planes'
+    // light distances on the texel centre rays). Null for the depth technique; the receiver
     // then samples shadow_map_texture through the depth samplers instead.
     std::shared_ptr<erhe::graphics::Texture>              shadow_distance_texture;
     // Omnidirectional point-light shadows: R32F cube-map array of radial
@@ -344,7 +345,7 @@ public:
 
     auto update_control(
         std::size_t      light_index,
-        float            shadow_distance_bias_coeff = 0.0f,
+        float            shadow_map_resolution      = 0.0f,
         const glm::vec4& point_light_position       = glm::vec4{0.0f}
     ) -> erhe::graphics::Ring_buffer_range;
 

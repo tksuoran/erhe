@@ -6,6 +6,9 @@
 #if defined(ERHE_VARIANT_SHADOW_CUBE)
 #include "erhe_point_shadow.glsl"
 #endif
+#if defined(ERHE_VARIANT_SHADOW_DISTANCE)
+#include "erhe_shadow_distance.glsl"
+#endif
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 #include "erhe_bxdf.glsl"
 #include "erhe_camera_view.glsl"
@@ -269,16 +272,70 @@ void main()
 #endif
 
 #if defined(ERHE_VARIANT_SHADOW_DISTANCE)
-    // Shadow_technique_mode::distance caster (the "bias-free" path). Store the
-    // light-space depth with a slope+resolution bias baked in via fwidth (=
-    // |ddx|+|ddy|), so the receiver compares with no bias.
-    // light_control_block.shadow_distance_bias_coeff is cdd*(1+pcfRadius),
-    // direction-aware (cdd = clip_depth_direction). For the orthographic
-    // directional light gl_FragCoord.z is linear, so fwidth(z) is a true slope
-    // bias; see doc/shadows.md ("distance / fwidth alternative").
-    float ls_depth = gl_FragCoord.z;
-    out_color = vec4(ls_depth + light_control_block.shadow_distance_bias_coeff * fwidth(ls_depth));
-    return;
+    // Shadow_technique_mode::distance caster for directional and spot lights:
+    // store the light distance, on this texel's centre ray, of the caster's
+    // plane into the R32F distance map (doc/erhe/shadows.md "The distance
+    // technique"). The fragment runs at its pixel centre, the texel centre;
+    // the texel is found from the interpolated world position's texture
+    // coordinates, which lie within a small fraction of a texel of that
+    // centre. The plane is the geometric normal of the interpolated world
+    // position's derivatives and the interpolated point; any point of the
+    // plane gives the same distance, so neither the rasterizer's placement of
+    // the interpolated point nor its depth (with the rasterizer depth bias)
+    // reaches the stored value. A caster within
+    // erhe_shadow_distance_plane_cos_min of edge-on to the ray, or with no
+    // plane at this footprint, stores its interpolated point's distance.
+    // Unrendered texels keep the large clear value, which the receiver reads
+    // as "lit".
+    {
+#   if __VERSION__ >= 450
+        vec3  caster_dp_dx = dFdxFine(v_position.xyz);
+        vec3  caster_dp_dy = dFdyFine(v_position.xyz);
+#   else
+        vec3  caster_dp_dx = dFdx(v_position.xyz);
+        vec3  caster_dp_dy = dFdy(v_position.xyz);
+#   endif
+        uint  light_index    = light_control_block.light_index;
+        Light light          = light_block.lights[light_index];
+        bool  is_directional = (light_index < light_block.directional_light_count);
+        float resolution     = light_control_block.shadow_map_resolution;
+        vec4  caster_in_texture_homogeneous = light.texture_from_world * vec4(v_position.xyz, 1.0);
+        vec2  caster_texel   = clamp(floor((caster_in_texture_homogeneous.xy / caster_in_texture_homogeneous.w) * resolution), vec2(0.0), vec2(resolution - 1.0));
+        vec3  ray_origin;
+        vec3  ray_direction;
+        get_shadow_distance_ray(
+            light.world_from_texture,
+            light.position_and_inner_spot_cos.xyz,
+            light.direction_and_outer_spot_cos.xyz,
+            is_directional,
+            get_shadow_distance_texel_centre(caster_texel, resolution),
+            ray_origin,
+            ray_direction
+        );
+        vec3  caster_normal   = cross(caster_dp_dx, caster_dp_dy);
+        float normal_length   = length(caster_normal);
+        float stored_distance = get_shadow_distance_of_point(v_position.xyz, ray_origin, ray_direction, is_directional);
+        if (normal_length > 0.0) {
+            vec3  plane_normal = caster_normal / normal_length;
+            float ray_cos      = dot(plane_normal, ray_direction);
+            if (abs(ray_cos) >= erhe_shadow_distance_plane_cos_min) {
+                // The farther of the plane's distance on the centre ray and
+                // the interpolated point's own distance. Coverage comes from
+                // the snapped vertices, so a primitive can cover a centre up
+                // to 1/256 pixel past its true edge; there its plane on the
+                // ray is an extension, which at a convex crease is nearer the
+                // light than the neighbour face by that step times the
+                // primitive's own slope. The interpolated point lies inside
+                // the primitive, on the far side of the neighbour's plane.
+                // The receiver compares its own plane on the ray, which the
+                // plane distance equals for its own surface, so taking the
+                // farther value never shadows a lit receiver.
+                stored_distance = max(dot(plane_normal, v_position.xyz - ray_origin) / ray_cos, stored_distance);
+            }
+        }
+        out_color = vec4(stored_distance);
+        return;
+    }
 #endif
 
 #if defined(ERHE_VARIANT_SHADOW_CUBE)
@@ -313,7 +370,12 @@ void main()
             vec3  plane_normal = caster_normal / normal_length;
             float centre_cos   = abs(dot(plane_normal, centre_direction));
             if (centre_cos >= erhe_point_shadow_plane_cos_min) {
-                stored_distance = abs(dot(plane_normal, light_to_caster)) / centre_cos;
+                // The farther of the plane's distance on the centre ray and
+                // the interpolated point's own distance, as for the 2D
+                // distance caster (VARIANT_SHADOW_DISTANCE above): a primitive
+                // whose snapped coverage reaches the centre past its true
+                // edge stores no extension nearer than its own points.
+                stored_distance = max(abs(dot(plane_normal, light_to_caster)) / centre_cos, stored_distance);
             }
         }
         out_color = vec4(stored_distance);

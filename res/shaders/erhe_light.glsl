@@ -4,6 +4,7 @@
 #include "erhe_camera_view.glsl"
 #include "erhe_texture.glsl"
 #include "erhe_point_shadow.glsl"
+#include "erhe_shadow_distance.glsl"
 
 #if __VERSION__ >= 450
 #   define ERHE_DFDX dFdxFine
@@ -28,10 +29,13 @@
 #define ERHE_SHADOW_BIAS_RECEIVER_PLANE 1
 
 // Shadow technique (ERHE_SHADOW_TECHNIQUE compile-time axis, from the graphics
-// preset's Shadow_technique_mode). depth = sample the depth map and apply the
-// receiver-plane bias here; distance = sample the R32F distance map the caster
-// already biased (fwidth) and compare with no receiver-side bias. The two share
-// the ERHE_SHADOW_FILTER kernel sizes. See doc/shadows.md.
+// preset's Shadow_technique_mode), for directional and spot lights (point
+// lights always use their distance cube). depth = sample the depth map and
+// compare the receiver plane's depth at each texel centre; distance = sample
+// the R32F distance map of caster plane distances on the texel centre rays
+// and compare the receiver plane's distance on the same rays. Both apply
+// derived error bounds and share the ERHE_SHADOW_FILTER kernel sizes. See
+// doc/erhe/shadows.md.
 #define ERHE_SHADOW_TECHNIQUE_DEPTH    0
 #define ERHE_SHADOW_TECHNIQUE_DISTANCE 1
 
@@ -113,10 +117,102 @@ vec4 get_receiver_geometric_normal(vec3 world_position) {
 }
 #endif
 
+#if defined(ERHE_SHADOW_MAPS) && (ERHE_SHADOW_TECHNIQUE == ERHE_SHADOW_TECHNIQUE_DISTANCE)
+// One tap of the distance technique (doc/erhe/shadows.md "The distance
+// technique"): the texel with integer-valued index `texel`, its centre ray
+// (get_shadow_distance_ray(), the same ray the caster stored on), and the
+// receiver plane through receiver_point (plane_normal, unit, clamped to the
+// R1 grazing limit as in sample_light_visibility(); plane_determined false:
+// every plane within the grazing limit of head-on).
+//
+// Returns x = the receiver plane's light distance on the ray (for an
+// undetermined plane the smallest over the admissible planes), y = the
+// receiver point's own light distance (the one-sided cap: a centre whose
+// plane point is farther from the light compares the point itself), z = the
+// bias: the sum of error bounds that moves the reference toward the light,
+// in world units along the ray (u = 2^-24, e = 2 get_world_position_rounding(P)):
+//  - snap (bias_terms.x, precomputed): the caster coverage snap.
+//  - receiver gradient: a normal error dN moves a plane's ray distance by
+//    dN . (P - X) / (N . d), X the plane point on the ray.
+//  - caster gradient: the caster normal's error bound (bias_terms.y) over
+//    half the texel diagonal on the plane (bias_terms.z / |N . d|), the
+//    distance from the caster's interpolated point to its ray.
+//  - position: the rounding of the receiver point and of the caster's
+//    interpolated point (bias_terms.w each) along the plane normal.
+//  - evaluation: each side's N . (p - O) / (N . d): the subtraction and the
+//    three-term dot product 4u |p - O|, the dot N . d 3u |s| / |N . d|, the
+//    divide u |s|; plus the receiver's own length() / dot, 13u |P - O|.
+// light_block.shadow_bias_scales: x scales the two gradient terms, y the
+// position and evaluation terms; the snap is unscaled. The ray itself is not
+// a term: both passes compute it bit for bit alike (`precise`), and R32F
+// stores the caster's value exactly.
+vec3 get_shadow_distance_tap(
+    vec2  texel,
+    float resolution,
+    mat4  world_from_texture,
+    vec3  light_position,
+    vec3  light_direction,
+    bool  is_directional,
+    vec3  receiver_point,
+    vec3  plane_normal,
+    bool  plane_determined,
+    float normal_error,
+    vec4  bias_terms
+)
+{
+    const float u           = erhe_fp32_unit_roundoff;
+    const float grazing_cos = 0.05;
+    const float grazing_tan = sqrt(1.0 - (grazing_cos * grazing_cos)) / grazing_cos;
+    vec3 ray_origin;
+    vec3 ray_direction;
+    get_shadow_distance_ray(world_from_texture, light_position, light_direction, is_directional, get_shadow_distance_texel_centre(texel, resolution), ray_origin, ray_direction);
+    vec3  origin_to_receiver = receiver_point - ray_origin;
+    float receiver_length    = length(origin_to_receiver);
+    float current            = is_directional ? dot(origin_to_receiver, ray_direction) : receiver_length;
+
+    float ray_cos;
+    float plane_distance;
+    float receiver_gradient;
+    if (plane_determined) {
+        float signed_cos = dot(plane_normal, ray_direction);
+        ray_cos           = abs(signed_cos);
+        plane_distance    = dot(plane_normal, origin_to_receiver) / signed_cos;
+        float lateral     = length(origin_to_receiver - (plane_distance * ray_direction));
+        receiver_gradient = (normal_error * lateral) / (ray_cos - normal_error);
+    } else {
+        // Planes through P tilted from head-on (the light ray at P) by up to
+        // the grazing limit: directional, the ray lies at lateral distance w
+        // from P, so the nearest plane point is |w| tan(alpha_max) nearer;
+        // spot, as for the point-light cube (point_light_shadows.md).
+        ray_cos = grazing_cos;
+        if (is_directional) {
+            plane_distance = current - (grazing_tan * length(origin_to_receiver - (current * ray_direction)));
+        } else {
+            vec3 receiver_direction = origin_to_receiver / receiver_length;
+            plane_distance = current / (dot(receiver_direction, ray_direction) + (grazing_tan * length(cross(receiver_direction, ray_direction))));
+        }
+        receiver_gradient = 0.0; // the reference already takes every admissible plane
+    }
+
+    float caster_lateral   = bias_terms.z / ray_cos;
+    float caster_gradient  = (bias_terms.y * caster_lateral) / max(ray_cos - bias_terms.y, erhe_shadow_distance_plane_cos_min);
+    float position_error   = (2.0 * bias_terms.w) / ray_cos;
+    float abs_distance     = abs(plane_distance);
+    float evaluation_error = u * (
+        (((4.0 * (receiver_length + abs_distance + caster_lateral)) + (6.0 * abs_distance)) / ray_cos) +
+        (2.0 * abs_distance) +
+        (13.0 * receiver_length)
+    );
+    vec2  bias_scales = light_block.shadow_bias_scales;
+    float bias        = bias_terms.x + (bias_scales.x * (receiver_gradient + caster_gradient)) + (bias_scales.y * (position_error + evaluation_error));
+    return vec3(plane_distance, current, bias);
+}
+#endif
+
 // position: receiver world position (w = 1). receiver_plane: xyz = unit
 // geometric normal of the receiver plane in world space, either orientation,
 // or 0 when undetermined; w = the normal's error bound in radians (see
-// get_receiver_geometric_normal()). Only the depth technique reads it.
+// get_receiver_geometric_normal()).
 float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_plane) {
 #if defined(ERHE_SHADOW_MAPS)
     if (light_block.shadow_texture_compare.x == max_u32) {
@@ -181,38 +277,6 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
 
     float cdd = camera.cameras[c_view_index].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
-#if ERHE_SHADOW_TECHNIQUE == ERHE_SHADOW_TECHNIQUE_DISTANCE
-    // Distance technique: the caster already baked the fwidth slope bias into
-    // the stored distances, so compare the (unbiased, range-clamped) receiver
-    // depth against the R32F distance map. No dz_dUV / receiver-plane work here.
-    {
-        float ref = clamp(position_in_light_texture.z, 0.0, 1.0);
-        vec2  res = vec2(textureSize(s_shadow_distance, 0).xy);
-#   if ERHE_SHADOW_FILTER == ERHE_SHADOW_FILTER_HARD
-        float stored = textureLod(s_shadow_distance, vec3(position_in_light_texture.xy, array_layer), 0.0).r;
-        return ((-cdd) * ref >= (-cdd) * stored) ? 1.0 : 0.0;
-#   else
-        // KxK PCF on the distance map: gather, compare unbiased, average. The
-        // 2x2 mode uses K = 2 (one gather); wider modes use ERHE_SHADOW_FILTER.
-        const int  K       = (ERHE_SHADOW_FILTER < 2) ? 2 : ERHE_SHADOW_FILTER;
-        const int  gathers = K / 2;
-        const vec2 sub[4]  = vec2[4](vec2(-0.5, 0.5), vec2(0.5, 0.5), vec2(0.5, -0.5), vec2(-0.5, -0.5));
-        float visibility = 0.0;
-        for (int gj = 0; gj < gathers; ++gj) {
-            for (int gi = 0; gi < gathers; ++gi) {
-                vec2 gather_texel = (vec2(float(gi), float(gj)) - float(gathers - 1) * 0.5) * 2.0;
-                vec2 guv          = position_in_light_texture.xy + gather_texel / res;
-                vec4 stored4      = textureGather(s_shadow_distance, vec3(guv, array_layer), 0);
-                for (int t = 0; t < 4; ++t) {
-                    visibility += ((-cdd) * ref >= (-cdd) * stored4[t]) ? 1.0 : 0.0;
-                }
-            }
-        }
-        return visibility / float(K * K);
-#   endif
-    }
-#else
-
     // Receiver depth gradient dz_dUV from the receiver plane (derivation in
     // doc/erhe/shadows.md "Receiver depth gradient"). The world plane
     // (N, -dot(N, P)) maps to the homogeneous texture-space plane
@@ -258,6 +322,114 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
         float side              = (receiver_cos < 0.0) ? -1.0 : 1.0;
         plane_normal = (side * grazing_cos) * depth_axis_in_world + sqrt(1.0 - (grazing_cos * grazing_cos)) * tangent_direction;
     }
+
+#if ERHE_SHADOW_TECHNIQUE == ERHE_SHADOW_TECHNIQUE_DISTANCE
+    // Distance technique (doc/erhe/shadows.md "The distance technique"). Each
+    // texel of the R32F distance map holds the light distance of its caster's
+    // plane on the texel's centre ray (standard.frag, VARIANT_SHADOW_DISTANCE;
+    // the ray from erhe_shadow_distance.glsl). Every tap compares the
+    // receiver plane's distance on the same ray, which equals the stored
+    // value for the receiver's own surface in real arithmetic, moved toward
+    // the light by the error bounds of get_shadow_distance_tap(). The texels
+    // are picked from the sample point and fetched at their centres / shared
+    // gather corners, as for the depth technique ("Tap offsets").
+    {
+        const float caster_snap_texels = 1.0 / 256.0;
+        bool  is_directional  = (light_index < light_block.directional_light_count);
+        float resolution      = float(textureSize(s_shadow_distance, 0).x);
+        vec2  sample_texel    = position_in_light_texture.xy * resolution;
+        vec2  nearest_texel   = floor(sample_texel);
+        vec2  gather_base     = floor(sample_texel - 0.5);
+        vec2  gather_fraction = (sample_texel - 0.5) - gather_base;
+
+        // One texel step along u / v at the receiver point, perpendicular to
+        // the light ray there: dX/du at fixed texture depth is D_u * h.w, less
+        // its component along the ray.
+        float h_w              = abs(position_in_light_texture_homogeneous.w);
+        vec3  texel_u_world    = (D_u * h_w) / resolution;
+        vec3  texel_v_world    = (D_v * h_w) / resolution;
+        vec3  lateral_u        = texel_u_world - (depth_axis_in_world * dot(depth_axis_in_world, texel_u_world));
+        vec3  lateral_v        = texel_v_world - (depth_axis_in_world * dot(depth_axis_in_world, texel_v_world));
+        float lateral_u_length = length(lateral_u);
+        float lateral_v_length = length(lateral_v);
+
+        // Coverage snap: a caster covers texel centres up to 1/256 texel past
+        // its true edge, and there the stored plane is that caster's,
+        // extended. Bounded with the receiver plane's distance slope per
+        // texel, |N . lateral| / |N . ray| per axis (an undetermined plane:
+        // the grazing-limit slope). Unscaled, like the depth technique's
+        // snap_bias.
+        float snap_bias = plane_determined
+            ? ((caster_snap_texels * (abs(dot(plane_normal, lateral_u)) + abs(dot(plane_normal, lateral_v)))) / abs(dot(plane_normal, depth_axis_in_world)))
+            : (caster_snap_texels * grazing_tan * (lateral_u_length + lateral_v_length));
+
+        // The caster's plane normal comes from the derivatives of its
+        // interpolated position over one map pixel, each off by up to
+        // e = 2 get_world_position_rounding(P), so it tilts by at most
+        // e (|l_u| + |l_v| + e) / |l_u x l_v| (l_u, l_v the pixel's extents
+        // perpendicular to the ray; the caster taken at the receiver's
+        // distance, which is where the tie is).
+        float position_rounding   = get_world_position_rounding(receiver_point);
+        float derivative_error    = 2.0 * position_rounding;
+        float caster_normal_error = (derivative_error * (lateral_u_length + lateral_v_length + derivative_error)) / length(cross(lateral_u, lateral_v));
+        float texel_half_diagonal = 0.5 * sqrt((lateral_u_length * lateral_u_length) + (lateral_v_length * lateral_v_length));
+        vec4  bias_terms          = vec4(snap_bias, caster_normal_error, texel_half_diagonal, position_rounding);
+
+        vec3 light_position  = light.position_and_inner_spot_cos.xyz;
+        vec3 light_direction = light.direction_and_outer_spot_cos.xyz;
+
+#   if ERHE_SHADOW_FILTER == ERHE_SHADOW_FILTER_HARD
+        // One nearest fetch at the centre of nearest_texel. One-sided: a
+        // centre whose plane point is farther from the light than the
+        // receiver point compares the receiver point's own distance.
+        vec3  tap    = get_shadow_distance_tap(nearest_texel, resolution, world_from_texture, light_position, light_direction, is_directional, receiver_point, plane_normal, plane_determined, normal_error, bias_terms);
+        float stored = textureLod(s_shadow_distance, vec3(get_shadow_distance_texel_centre(nearest_texel, resolution), array_layer), 0.0).r;
+        return ((min(tap.x, tap.y) - tap.z) > stored) ? 0.0 : 1.0;
+#   elif ERHE_SHADOW_FILTER == 2
+        // One textureGather() at the corner the gather_base set shares,
+        // one-sided per tap, bilinearly weighted by gather_fraction.
+        const vec2 corners[4] = vec2[4](vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.0), vec2(0.0, 0.0));
+        vec4 stored4      = textureGather(s_shadow_distance, vec3((gather_base + 1.0) / resolution, array_layer), 0);
+        vec4 attenuation4 = vec4(0.0);
+        for (int t = 0; t < 4; ++t) {
+            vec3 tap = get_shadow_distance_tap(gather_base + corners[t], resolution, world_from_texture, light_position, light_direction, is_directional, receiver_point, plane_normal, plane_determined, normal_error, bias_terms);
+            attenuation4[t] = ((min(tap.x, tap.y) - tap.z) > stored4[t]) ? 0.0 : 1.0;
+        }
+        vec2 fracCoords = clamp(gather_fraction, 0.0, 1.0);
+        return mix(
+            mix(attenuation4[3], attenuation4[2], fracCoords.x),
+            mix(attenuation4[0], attenuation4[1], fracCoords.x),
+            fracCoords.y
+        );
+#   else
+        // KxK box PCF from (K/2)^2 gathers at the shared corners of their
+        // sets, as in the depth technique's wide path. receiver_plane: the
+        // reference is the receiver plane's distance on each tap's ray
+        // (signed); slope_scaled: one-sided per tap.
+        const int  K          = ERHE_SHADOW_FILTER;
+        const int  gathers    = K / 2;
+        const vec2 corners[4] = vec2[4](vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.0), vec2(0.0, 0.0));
+        float visibility = 0.0;
+        for (int gj = 0; gj < gathers; ++gj) {
+            for (int gi = 0; gi < gathers; ++gi) {
+                vec2 gather_texel = (vec2(float(gi), float(gj)) - float(gathers - 1) * 0.5) * 2.0;
+                vec4 stored4      = textureGather(s_shadow_distance, vec3((gather_base + gather_texel + 1.0) / resolution, array_layer), 0);
+                for (int t = 0; t < 4; ++t) {
+                    vec3 tap = get_shadow_distance_tap(gather_base + gather_texel + corners[t], resolution, world_from_texture, light_position, light_direction, is_directional, receiver_point, plane_normal, plane_determined, normal_error, bias_terms);
+#       if ERHE_SHADOW_BIAS == ERHE_SHADOW_BIAS_RECEIVER_PLANE
+                    float reference = tap.x;
+#       else
+                    float reference = min(tap.x, tap.y);
+#       endif
+                    visibility += ((reference - tap.z) > stored4[t]) ? 0.0 : 1.0;
+                }
+            }
+        }
+        return visibility / float(K * K);
+#   endif
+    }
+#else
+
     vec4 plane_in_texture = transpose(world_from_texture) * vec4(plane_normal, -dot(plane_normal, receiver_point));
     vec2 dz_dUV           = -plane_in_texture.xy / plane_in_texture.z;
     vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
@@ -546,8 +718,10 @@ float sample_light_visibility(vec4 position, uint light_index, vec4 receiver_pla
 // extended, not the receiver's. At a convex crease of the receiver's own
 // mesh the extended neighbour is nearer the light, by up to the step times
 // the two planes' radial-distance slopes; snap_bias covers the receiver's
-// slope, as snap_bias does for the 2D maps (a neighbour steeper than the
-// receiver is not covered). light_block.shadow_bias_scales applies as for
+// slope, as snap_bias does for the 2D maps. A neighbour steeper than the
+// receiver is covered by the caster, which stores the farther of its plane
+// distance and its interpolated point's own distance (standard.frag,
+// VARIANT_SHADOW_CUBE). light_block.shadow_bias_scales applies as for
 // the 2D maps: x scales the gradient term, y the position + evaluation
 // terms; snap_bias is unscaled. Returns 1.0 (lit) when shadow maps are
 // disabled.

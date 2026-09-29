@@ -150,12 +150,8 @@ The bias, in the order it is built:
   flickered one `contact_blocks` pixel under G6. The core matrix at slope 0
   now fails only D5 / D6 / D7 cells, with the same G3 (Low 0.05 / 0.13,
   Medium 0.12 / 0.08, High 0.18 / 0.23 texels, directional / spot). The
-  presets keep slope -1 for the distance technique (D7), whose caster pass
-  stores `gl_FragCoord.z` with the rasterizer bias in it: at slope 0 its
-  failing cells grow (`grazing_fan` G1 898 / 676 to 1006 / 739,
-  `contact_blocks` G1 1 / 15 to 23 / 49 and G6 17 to 90, `thin_walls` G1
-  0 / 139 to 65 / 303), so the depth-technique presets could drop it only
-  together with a distance-technique bias of its own.
+  presets' rasterizer bias is 0 since D7 (the distance technique's former
+  caster stored `gl_FragCoord.z`, rasterizer bias included).
   The G1 / G2 pixels left after D1 (directional
   `grazing_fan` floor next to the 88 degree tile's shadow tip, and the 512
   resolution cells) are ideal-filter results: at every one of them the
@@ -200,9 +196,9 @@ The bias, in the order it is built:
   coplanar with the receiver (the bottom of a caster resting on the floor,
   of a wall on the floor, the roof underside at a wall) or a back face behind
   the receiver plane (the tap's plane point inside the touching box):
-  inherent to storing back faces at contacts. Medium's rasterizer slope bias
-  -1, meant for `cull_back`, moves the stored back faces away from the light
-  and widens the leak: with slope 0 `cull_front` passes G3 (0.27 / 0.72) and
+  inherent to storing back faces at contacts. A rasterizer slope bias of -1
+  (Medium's until D7) moves the stored back faces away from the light and
+  widens the leak: with slope 0 `cull_front` passes G3 (0.27 / 0.72) and
   G4 shrinks to 5 .. 12 pixels (directional) and 36 .. 417 (spot), but G2
   still fails (`contact_blocks` 6168 / 12541, `cube_seams` 1599 / 74,
   `spot_cones` 2 / 98) and G4 at 2 cm and up still fails.
@@ -235,10 +231,9 @@ The bias, in the order it is built:
   side face, which faces away from the light: the side face's snapped
   coverage reaches the texel centre and its extended plane is 0.18 mm nearer
   than the top face's, against a 0.08 mm bias from the top face's own slope.
-  A crease neighbour steeper than the receiver is outside the snap term (as
-  for the 2D maps, whose `cull_back` default never stores that back face);
+  A crease neighbour steeper than the receiver is outside the snap term;
   bounding it by the steepest plane the caster stores would cost up to 0.75
-  texel of bias at 512.
+  texel of bias at 512 (D10 resolves it in the caster instead).
 - **D7 Distance technique for spot lights.** The `distance` technique extends
   to spot lights by storing the radial distance from the light, with the same
   fwidth caster bias; directional keeps its linear light-space depth, point
@@ -248,6 +243,32 @@ The bias, in the order it is built:
   slope bias -1; D7 gives the distance technique a derived caster bias of its
   own, after which the presets' rasterizer bias goes to 0 (the depth
   technique reads the same gates at 0 as at -1).
+  Landed, with the D6 structure in place of the fwidth caster bias: each
+  texel stores its caster plane's light distance on the texel's centre ray
+  (spot: radial from the light; directional: linear depth along the light
+  axis in world units), and each tap compares the receiver plane's distance
+  on the same ray, minus derived bounds - coverage snap, receiver and caster
+  normal errors, position, fp32 evaluation (shadows.md "The distance
+  technique"). The ray is built `precise` from `world_from_texture` in both
+  passes, so it is identical bit for bit. The caster stores the farther of
+  its plane's distance and its interpolated point's own distance: with the
+  plane alone, a steep face's snapped coverage past a convex crease stored
+  its extension, nearer than the neighbouring edge face (`grazing_fan`
+  Medium, 85 / 88 degree tiles: G1 2 directional / 1 spot pixel, one
+  `pcf_4x4` tap each), a slope no receiver quantity bounds (D10's case for
+  the 2D maps). `shadow_distance_bias_coeff` is gone (the control block
+  carries `shadow_map_resolution`); the fwidth term is redundant because
+  the plane comparison is exact per texel. Medium distance, before / after:
+  spot `cornell` G1 56064 -> 0, `grazing_fan` G1 898 / 676 -> 0,
+  `contact_blocks` G3 3.25 / 3.5 -> 0.12 / 0.08 texels (the depth
+  technique's values), G5 worst 3.25 / 3.75 -> 0.94 / 0.94, spot G2 8 -> 0,
+  G1 1 / 15 -> 0, directional G6 17 -> 0, `thin_walls` G2 1 / G1 139 -> 0,
+  `spot_cones` G1 1 -> 0; identical at rasterizer slope -1 and 0. G3's
+  distance bound is 1.5 texels, as for depth. Medium and High now use
+  `shadow_depth_bias_slope` 0: the core matrix at slope 0 fails only the D5
+  cells and the D10 point cell, with every other cell's G3 / G5 equal to
+  slope -1's, and the pairwise matrix adds three 512 point D10 cells; the
+  D10 caster rule removes all four (section 9).
 - **D9 Minimum bias under depth clamp.** With
   `Shadow_frustum_fit_settings::depth_clamp` on, near / far clipping is off,
   so a caster's vertex depths are not bounded by 1 and D1's 4u raster term
@@ -263,6 +284,26 @@ The bias, in the order it is built:
   mm nearer against 0.08 mm of bias, 6 px). The bound covers the steepest
   plane the texel can hold without charging that slope to every receiver
   (the uniform steepest-plane bound costs up to 0.75 texel at 512).
+  Landed with D7, in the casters rather than the bound: the 2D distance
+  caster and the cube caster store the farther of their plane's distance on
+  the texel's ray and their interpolated point's own distance; the point
+  lies inside the primitive, on the far side of the neighbour's plane, and
+  the farther value never exceeds the reference of the receiver's own
+  surface (point_light_shadows.md "Stored distance"). The 2D depth
+  technique needs no rule: its stored plane and its coverage both come from
+  the snapped vertices. At rasterizer slope 0 without the rule the same six
+  point pixels also failed in the 512 pairwise configs `pw01`, `pw08` and
+  `pw11`, which passed at Medium's former slope -1 (the slope bias moves the
+  steep side face's rasterized depth back, so the top face wins the depth
+  test at the crease); with the rule every point cell of the core and
+  pairwise matrices passes at slope 0.
+
+- **D11 Spot distance-technique resolution floor.** The spot distance
+  path's validity margin assumes about 512 texels across a 90 degree cone; a
+  coarser spot map narrows it. The margin's condition is stated as a
+  minimum spot map resolution per cone angle and enforced where the preset's
+  shadow resolution is clamped, the way D6 enforces
+  `c_min_point_shadow_resolution`.
 
 ## 4. Test scenes
 
@@ -357,14 +398,14 @@ Every gate is the worst value over all poses and runs:
   either box of a touching pair (two station boxes with coincident opposite
   faces - a resting caster on its floor, hut and room walls on the floor and
   under the roof or ceiling, wall-wall joins, blocks under a ceiling), in
-  their contact plane, within the G3 bound (1.5 texels depth, 2.5 distance
-  technique) of an edge of their contact rectangle, the distance measured in
+  their contact plane, within the G3 bound (1.5 texels) of an edge of their
+  contact rectangle, the distance measured in
   shadow texels through the texel Jacobian at the pixel as G3 measures it.
   The edge band covers the analytic shadow boundary, not the contact line,
   so without this G2 would count the gap G3 allows.
 - **G3 Contact gap:** distance from a resting caster's footprint edge to the
-  receiver's 0.5-visibility crossing <= 1.5 shadow texels (depth technique)
-  and <= 2.5 texels (distance technique, whose fwidth bias is an L1 bound).
+  receiver's 0.5-visibility crossing <= 1.5 shadow texels, for the depth and
+  the distance technique.
 - **G4 Leaks:** walls of 2 cm and thicker at map resolution >= 2048: lit
   pixels inside the hut = 0. Thinner walls are reported, not gated.
 - **G5 Edge placement:** mean signed offset of the measured 0.5-visibility
@@ -413,7 +454,10 @@ section 9 rewritten to the new gate table.
 
 - **Phase 7 - coverage.** D7 (spot distance technique), R7 origin runs, the
   `--extra-light` variant.
-- **Phase 8 - cost and documentation.** G7; rewrite shadows.md "Shadow
+- **Phase 8 - backends, cost and documentation.** Build the shadow
+  changes on the OpenGL tree and run T7 there (the `precise` ray
+  construction of D7 and every shader change of phases 2 to 7 are verified on
+  Vulkan only), and on Metal where a macOS machine is available. G7; rewrite shadows.md "Shadow
   sampling" and "Bias technique" for the landed design, add the verify recipe
   to `doc/testing.md`, run the pairwise matrix, and delete this plan's
   finished items.
@@ -421,31 +465,38 @@ section 9 rewritten to the new gate table.
 ## 9. Gate table
 
 `py -3 scripts/shadow_verify.py --matrix core --save-images failing` on the
-current code: 16 configs (Low, Medium, High and the one-axis variations
-around Medium; a requested `shadow_depth_bits` of 24 resolves to D32_SFLOAT
-on this device, axis 32), `--poses short`, `--runs 1`, failing cells re-run
-3 times (every listed cell failed all 3 re-runs); 6934 renders, 41.5 min
-wall on the Debug headless Vulkan editor, AMD iGPU. Directional and spot pass
-every gate in every `cull_back` and `cull_none` cell of the depth technique,
-including forward-Z, 512 and 2048; point passes every gate except one Low
-cell. Cells
-not listed pass every gate
-that applies to them. Values are the worst over poses and views: failing
-pixel count and share of the gated pixels (G1, G2), texels (G3, G5 as
-mean / worst), pixels (G4 per wall, G6).
+current code with the committed presets (rasterizer bias 0 in every preset):
+16 configs (Low, Medium, High and the one-axis variations around Medium; a
+requested `shadow_depth_bits` of 24 resolves to D32_SFLOAT on this device,
+axis 32), `--poses short`, `--runs 1`, failing cells re-run 3 times (every
+listed cell failed all 3 re-runs); 6367 renders, 38.3 min wall on the Debug
+headless Vulkan editor, AMD iGPU (the point cells re-measured after the D10
+caster rule: 1771 renders, 10.9 min). Directional and spot pass every gate
+in every `cull_back` and `cull_none` cell of both techniques, including
+forward-Z, 512 and 2048; point passes every gate in every cell. Cells not
+listed pass every gate that applies to them. Values are the worst over
+poses and views: failing pixel count and share of the gated pixels (G1,
+G2), texels (G3, G5 as mean / worst), pixels (G4 per wall, G6).
 
 | Config | Failing cells |
 |---|---|
-| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 1120, 2 cm: 886 .. 20 cm: 600, spot 2 cm: 1917 .. 20 cm: 4448); `contact_blocks` G2 3943 (0.8 %) / 7931 (1.6 %), G3 2.28 / 2.25, G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1667 / 54; `spot_cones` G2 210 / 392 (29 %) |
-| Medium/shadow_technique=distance (D7) | spot `cornell` G1 56064 (9.7 %, the head-on tie); `grazing_fan` G1 898 (dir) / 676 (spot); `contact_blocks` G3 3.25 (dir) / 3.5 (spot), spot G2 8, G1 1 / 15, G5 0.29 / 3.25 (dir) and 0.24 / 3.75 (spot), directional G6 17; directional `thin_walls` G2 1, spot `thin_walls` G1 139, spot `spot_cones` G1 1 |
-| Low, point (D6: a crease neighbour steeper than the receiver) | `grazing_fan` G1 6 (0.0021 %) |
+| Medium/shadow_cull_mode=cull_front (inherent to storing back faces, D5; not the default) | G4 on every `thin_walls` hut (directional 1 cm: 9, 2 cm: 11 .. 20 cm: 4, spot 1 cm: 91, 2 cm: 39 .. 20 cm: 465); `contact_blocks` G2 1075 (0.22 %) / 4446 (0.9 %), G5 worst 8 (the spurious crossing at the contact line), directional G6 4; `cube_seams` G2 1583 (1.1 %) / 15 (0.17 %) |
+
+`contact_blocks` G3 (directional / spot, texels): Low 0.05 / 0.13, Medium
+0.12 / 0.08, High 0.18 / 0.23, 512 0.65 / 0.75; point Low 1.0, Medium 0.03,
+High 0.06.
+
+The distance technique on every core axis (`--matrix core --set
+shadow_technique=distance --light directional,spot`, 4597 renders, 29.1
+min) fails only the `cull_front` cells above (G2 1054 / 4319, G4 up to
+408 spot, `cube_seams` G2 1583 / 15); `contact_blocks` G3 matches the
+depth technique's (Low 0.05 / 0.04, Medium 0.12 / 0.08, High 0.18 / 0.23,
+512 0.65 / 0.75, forward-Z 0.13 / 0.08).
 
 `py -3 scripts/shadow_verify.py --matrix pairwise` on the current code: 17
-configs, 9445 renders, 57.2 min wall; 61 failing cells: 42 D7 (the distance
-technique configs), 18 D5 (the `cull_front` depth configs) and the Low point
-`grazing_fan` G1 6 above; no point cell of a pairwise config fails, and
-directional G6 passes in every depth-technique cell.
-
-The point light's one failing cell is the crease neighbour D6 leaves out.
-The distance technique keeps the head-on tie on spot `cornell`, which the
-depth technique's D1 bias resolves.
+configs, 7372 renders, 45.3 min wall (point cells re-measured after the D10
+caster rule: 1426 renders, 8.9 min); 18 failing cells, all in the
+`cull_front` configs (D5): `pw01`, `pw10`, `pw07` (depth) and `pw06`
+(distance, forward-Z). Every other cell of both techniques passes,
+including every point cell and directional G6 in every non-`cull_front`
+cell.

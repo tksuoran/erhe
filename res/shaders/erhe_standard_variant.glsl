@@ -29,12 +29,13 @@
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 
-// ERHE_VARIANT_SHADOW_CUBE is a position pass (no lit / debug varyings), but
-// unlike the other position-pass variants its fragment shader needs the world
-// position to compute the radial distance to the point light, so v_position is
-// kept (see standard.vert / standard.frag). Use this gate to re-enable the
-// v_position varying without pulling in the rest of the lit machinery.
-#if !defined(ERHE_VARIANT_POSITION_PASS) || defined(ERHE_VARIANT_SHADOW_CUBE)
+// ERHE_VARIANT_SHADOW_CUBE and ERHE_VARIANT_SHADOW_DISTANCE are position
+// passes (no lit / debug varyings), but unlike the other position-pass
+// variants their fragment shaders need the world position to compute the
+// caster plane's distance from the light, so v_position is kept (see
+// standard.vert / standard.frag). Use this gate to re-enable the v_position
+// varying without pulling in the rest of the lit machinery.
+#if !defined(ERHE_VARIANT_POSITION_PASS) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_SHADOW_DISTANCE)
 #  define ERHE_USE_VARYING_POSITION 1
 #endif
 

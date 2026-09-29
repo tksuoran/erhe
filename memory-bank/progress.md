@@ -62,5 +62,6 @@
 ✓D1-gap::fefe0b014{raster-term=4u(clipped-vertex-depth-1);exact-texel-selection(511/512-gather);depth-technique-same-at-slope-0;presets-keep--1-for-D7-distance;D9-depth-clamp-open}
 ✓D6::{caster-stores-plane-distance-on-texel-centre-ray;derived-point-bias;thin_walls/contact_blocks/cube_seams-point-green;min-point-res-64}
 ✓PHASE-6-DONE
-?open::D9-depth-clamp,D10-crease-neighbour(6px-Low-point-grazing_fan)
-?next::phase-7{D7-spot-distance+R7+extra-light}
+✓D7+D10::{distance=caster-plane-distance-on-texel-ray;fwidth-removed;farther-of-plane/point-for-creases;presets-slope-0;only-cull_front-fails}
+?open::D9-depth-clamp,D11-spot-distance-min-res
+?next::phase-7b{R7-origin+extra-light}->D9/D11->phase-8{GL/Metal+G7+docs}

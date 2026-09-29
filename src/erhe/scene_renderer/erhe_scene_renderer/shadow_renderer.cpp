@@ -491,7 +491,12 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         );
         m_camera_buffer.bind(encoder, camera_range);
 
-        Ring_buffer_range control_range = m_light_buffer.update_control(light_index, parameters.distance_bias_coeff);
+        // The distance caster finds its texel's centre ray from the map
+        // resolution (the light viewport covers the whole map).
+        Ring_buffer_range control_range = m_light_buffer.update_control(
+            light_index,
+            parameters.use_distance ? static_cast<float>(parameters.light_camera_viewport.width) : 0.0f
+        );
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
         material_set.bind(encoder);

@@ -115,17 +115,25 @@ exactly that texel.
 The caster fragment runs at its pixel centre, which lies on the texel centre
 ray. It takes the plane of its primitive - the geometric normal
 `cross(dFdxFine(p), dFdyFine(p))` of the interpolated world position `p`, and
-`p` itself - and stores the plane's radial distance on the centre ray,
-`|N . (p - L)| / |N . d_c|` (`L` the light position, `d_c` the unit centre
-direction; the centre is `get_point_shadow_texel_centre(p - L)`, the
-fragment's own pixel). Any point of the plane gives the same distance, so
+`p` itself - and stores the farther of the plane's radial distance on the
+centre ray, `|N . (p - L)| / |N . d_c|` (`L` the light position, `d_c` the
+unit centre direction; the centre is `get_point_shadow_texel_centre(p - L)`,
+the fragment's own pixel), and `length(p - L)`. Any point of the plane gives
+the same plane distance, so
 where the rasterizer puts the interpolated point does not reach the stored
 value: the vertex snap and the barycentric precision move `p` within the
 primitive's plane. The interpolated point itself has no usable bound:
 near-clipped primitives of a large floor span tens of thousands of face
 pixels, and on `head_on_floor` (Medium) their interpolated points lay up to
 0.0064 texel from the pixel centre ray, a radial error of up to 0.009 texel
-toward the face edges. A primitive within `erhe_point_shadow_plane_cos_min`
+toward the face edges. The farther-of-two rule is for coverage, as for the 2D
+distance technique (`shadows.md` "The distance technique"): a primitive whose
+snapped coverage reaches a centre past its true edge would otherwise store its
+plane's extension, which at a convex crease is nearer the light than the
+neighbour face by the snap step times the primitive's own slope; `p` lies
+inside the primitive, on the far side of the neighbour's plane. Taking the
+farther value never raises a receiver's own stored surface above its
+reference, since that is the plane distance. A primitive within `erhe_point_shadow_plane_cos_min`
 (0.01) of edge-on to the centre ray, or with no plane at this footprint (the
 derivatives' cross product is 0), stores `length(p - L)`: its plane is
 ill-conditioned there, and no receiver inside the R1 grazing limit reads it
@@ -214,14 +222,13 @@ inside the grazing limit meets its centre ray at `|N . d_c|` of at least
 `0.05 - sqrt(2) / resolution` (0.028 at the minimum resolution 64), which
 exceeds the caster threshold 0.01 as long as the two normal errors stay
 below 0.018 rad together - a cube pixel of at least about `100 e` wide. A
-crease neighbour steeper than the receiver is covered only up to the
-receiver's slope, as for the 2D maps. On `grazing_fan` at 512 texels (Low)
-that leaves 6 pixels of the 15 degree tile's top face, within a texel of its
-edge with the side face that faces away from the light: the side face's
-snapped coverage reaches the texel centre and its extended plane is 0.18 mm
-nearer than the top face's, against 0.08 mm of bias. `cull_none` stores
-that back face; bounding the neighbour by the steepest plane the caster
-stores (`|N . d| = 0.01`) would add up to 0.75 texel of bias at 512.
+crease neighbour steeper than the receiver is covered by the caster's
+farther-of-two rule ("Stored distance"), not by a receiver term: with the
+plane distance alone, on `grazing_fan` at 512 texels (Low, and the 512
+pairwise configs at rasterizer slope 0) 6 pixels of the 15 degree tile's top
+face, within a texel of its edge with the side face that faces away from the
+light (`cull_none` stores it), read the side face's extended plane 0.18 mm
+nearer than their own, against 0.08 mm of bias.
 
 ## Where the pieces live
 

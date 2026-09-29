@@ -123,7 +123,7 @@ public:
         // ERHE_SHADOW_BIAS variant axis (0 = slope-scaled, 1 = receiver-plane).
         uint32_t                                               shadow_bias{1};
         // Shadow technique, plumbed as the ERHE_SHADOW_TECHNIQUE variant axis
-        // (0 = depth + receiver-plane bias, 1 = distance map + baked fwidth bias).
+        // (0 = depth map, 1 = distance map of caster plane light distances).
         uint32_t                                               shadow_technique{0};
         // ERHE_SHADOW_DEPTH_BITS variant axis: get_shadow_depth_bits_axis() of
         // the format of the shadow map texture sampled by this pass (16 / 24

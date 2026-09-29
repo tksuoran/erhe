@@ -118,8 +118,9 @@ Program_interface::Program_interface(
             },
             {
                 // Color-aspect distance map for Shadow_technique_mode::distance
-                // (the caster bakes the fwidth slope bias into R32F distances).
-                // The receiver compares against it without any shader-side bias.
+                // (R32F light distances of the caster planes on the texel
+                // centre rays; the receiver compares its own plane on the
+                // same rays).
                 .binding_point     = c_texture_heap_slot_shadow_distance,
                 .type              = erhe::graphics::Binding_type::combined_image_sampler,
                 .sampler_aspect    = erhe::graphics::Sampler_aspect::color,

@@ -184,7 +184,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
     }
 
     // Distance technique (Shadow_technique_mode::distance): a parallel R32F color
-    // array the caster writes the fwidth-biased light-space depth into, sampled
+    // array the caster writes its planes' light distances into, sampled
     // by the receiver. Allocated only while the technique is active -- a
     // full-resolution R32F array is large, so it must not exist for the depth
     // technique.
@@ -232,10 +232,10 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         render_pass_descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_read_only_optimal;
         render_pass_descriptor.depth_attachment.clear_value[0] = reverse_depth ? 0.0 : 1.0;
         if (distance_technique && m_distance_texture) {
-            // Distance map color attachment: the caster writes the fwidth-biased
-            // light-space depth here. Cleared to the far value so empty texels
-            // resolve to "lit" under the receiver's non-strict compare, matching
-            // the depth attachment. Kept in shader_read_only between passes
+            // Distance map color attachment: the caster writes its plane's light
+            // distance on each texel's centre ray here. Cleared to a large
+            // distance so empty texels resolve to "lit", like the depth
+            // attachment's far clear. Kept in shader_read_only between passes
             // (sampled by the forward pass).
             render_pass_descriptor.color_attachments[0].texture       = m_distance_texture.get();
             render_pass_descriptor.color_attachments[0].texture_level = 0;
@@ -246,7 +246,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
             render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
             render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
             render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
-            render_pass_descriptor.color_attachments[0].clear_value[0] = reverse_depth ? 0.0 : 1.0;
+            render_pass_descriptor.color_attachments[0].clear_value[0] = 1.0e30;
         }
         render_pass_descriptor.render_target_width             = resolution;
         render_pass_descriptor.render_target_height            = resolution;
@@ -617,7 +617,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     float bias_origin_scale   = 1.0f;
     erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_back;
     bool  use_distance        = false;
-    float distance_bias_coeff = 0.0f;
     // The forward pass samples these maps with the preset's filter, whose
     // value is the kernel width K (0 = hard).
     erhe::scene::Shadow_map_footprint shadow_map_footprint{};
@@ -629,14 +628,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         bias_origin_scale   = preset.shadow_bias_origin_scale;
         cull_mode           = static_cast<erhe::scene_renderer::Shadow_cull_mode>(preset.shadow_cull_mode);
         use_distance        = (preset.shadow_technique == Shadow_technique_mode::distance) && static_cast<bool>(m_distance_texture);
-        // fwidth bias coefficient = cdd * (1 + pcfRadius). cdd is -1 for reverse-Z
-        // (the sign that pushes the stored occluder away from the light), +1 for
-        // forward-Z. pcfRadius = K/2 from the active Shadow_filter_mode (whose
-        // value is the PCF kernel width K), so the bake covers the receiver's PCF
-        // footprint (see doc/erhe/shadows.md).
-        const float cdd        = m_scene_view.get_reverse_depth() ? -1.0f : 1.0f;
-        const float pcf_radius = 0.5f * static_cast<float>(static_cast<uint32_t>(preset.shadow_filter));
-        distance_bias_coeff    = cdd * (1.0f + pcf_radius);
         shadow_map_footprint   = erhe::scene::Shadow_map_footprint::from_kernel_width(static_cast<unsigned int>(preset.shadow_filter));
     }
 
@@ -691,7 +682,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .cull_mode             = cull_mode,
             .distance_texture      = use_distance ? m_distance_texture : std::shared_ptr<erhe::graphics::Texture>{},
             .use_distance          = use_distance,
-            .distance_bias_coeff   = distance_bias_coeff,
             .point_cube_texture       = m_point_cube_texture,
             .point_cube_render_passes = &m_point_render_passes,
             .point_shadow_viewport    = m_point_viewport,

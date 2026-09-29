@@ -67,6 +67,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: the `distance` shadow technique covers spot lights
+  and stores, per texel of the R32F distance map, the caster plane's light
+  distance on the texel's centre ray (radial for spot, linear light-space depth
+  in world units for directional; `res/shaders/erhe_shadow_distance.glsl`),
+  compared by `sample_light_visibility()` against the receiver plane on the
+  same rays with derived bounds (`doc/erhe/shadows.md` "The distance
+  technique"). `Shadow_renderer::Render_parameters::distance_bias_coeff` is
+  removed; the second parameter of `Light_buffer::update_control()` and the
+  `light_control_block` field are now `shadow_map_resolution` (was
+  `shadow_distance_bias_coeff`), and the distance map and its fallback are
+  cleared to `1e30`. The `VARIANT_SHADOW_CUBE` caster stores the farther of
+  its plane's radial distance on the centre ray and its interpolated point's
+  own distance (`doc/erhe/point_light_shadows.md` "Stored distance").
 - `erhe::scene_renderer`: point-light cube shadows. The `VARIANT_SHADOW_CUBE`
   caster stores its primitive plane's radial distance on each texel's centre
   ray, and `sample_point_light_visibility()` (`res/shaders/erhe_light.glsl`)

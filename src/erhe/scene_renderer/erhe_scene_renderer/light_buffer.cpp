@@ -65,8 +65,8 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     , light_index_offset{
         light_control_block.add_uint("light_index")->get_offset_in_parent()
     }
-    , shadow_distance_bias_coeff_offset{
-        light_control_block.add_float("shadow_distance_bias_coeff")->get_offset_in_parent()
+    , shadow_map_resolution_offset{
+        light_control_block.add_float("shadow_map_resolution")->get_offset_in_parent()
     }
     , point_light_position_offset{
         light_control_block.add_vec4("point_light_position")->get_offset_in_parent()
@@ -273,10 +273,11 @@ Light_buffer::Light_buffer(
     // transition would discard contents and is flagged by the validation layer
     // as a best-practices error.
     init_command_buffer.clear_texture(*m_fallback_shadow_texture.get(), {1.0, 0.0, 0.0, 0.0});
-    // Same for the distance-map fallback (color R32F): clear to a far value so a
-    // stray sample resolves to "lit". The shader's max_u32 sentinel normally
+    // Same for the distance-map fallback (color R32F light distances): clear to
+    // a large distance so a stray sample resolves to "lit", like the distance
+    // map's own clear value. The shader's max_u32 sentinel normally
     // short-circuits before sampling, so the exact value only matters defensively.
-    init_command_buffer.clear_texture(*m_fallback_distance_texture.get(), {1.0, 0.0, 0.0, 0.0});
+    init_command_buffer.clear_texture(*m_fallback_distance_texture.get(), {1.0e30, 0.0, 0.0, 0.0});
     // Point-shadow cube fallback (R32F radial distance): clear to a large
     // distance so any sample reads "occluder very far away" => lit. Bound
     // whenever no point shadow cube array is active.
@@ -726,7 +727,7 @@ void Light_buffer::bind_ddgi(
     encoder.set_sampled_image(c_texture_heap_slot_ddgi_probe_data, *probe_data, m_light_interface.ddgi_sampler);
 }
 
-auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range
+auto Light_buffer::update_control(const std::size_t light_index, const float shadow_map_resolution, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -740,7 +741,7 @@ auto Light_buffer::update_control(const std::size_t light_index, const float sha
 
     const auto uint_light_index = static_cast<uint32_t>(light_index);
     write(gpu_data, m_light_interface.light_index_offset,                as_span(uint_light_index));
-    write(gpu_data, m_light_interface.shadow_distance_bias_coeff_offset, as_span(shadow_distance_bias_coeff));
+    write(gpu_data, m_light_interface.shadow_map_resolution_offset,      as_span(shadow_map_resolution));
     write(gpu_data, m_light_interface.point_light_position_offset,       as_span(point_light_position));
     write_offset += entry_size;
 

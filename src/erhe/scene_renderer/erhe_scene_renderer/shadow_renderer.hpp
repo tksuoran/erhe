@@ -160,14 +160,14 @@ public:
         Shadow_cull_mode                                                   cull_mode{Shadow_cull_mode::cull_back};
 
         // Shadow_technique_mode::distance support. When use_distance is true the
-        // caster runs a fragment shader (VARIANT_SHADOW_DISTANCE) that writes the
-        // fwidth-biased light-space depth into distance_texture (color attachment
-        // of the render passes), and the receiver compares against it with no
-        // bias. distance_bias_coeff is cdd*(1+pcfRadius), the per-pass coefficient
-        // the caster multiplies fwidth() by. Defaults keep the depth technique.
+        // caster runs a fragment shader (VARIANT_SHADOW_DISTANCE) that writes
+        // its primitive plane's light distance on each texel's centre ray into
+        // distance_texture (color attachment of the render passes), and the
+        // receiver compares its own plane on the same rays against it
+        // (doc/erhe/shadows.md "The distance technique"). Defaults keep the
+        // depth technique.
         std::shared_ptr<erhe::graphics::Texture>                           distance_texture{};
         bool                                                               use_distance{false};
-        float                                                              distance_bias_coeff{0.0f};
 
         // Omnidirectional point-light shadows. point_cube_texture is the R32F
         // texture_cube_map_array (one cube / 6 faces per shadow-casting point

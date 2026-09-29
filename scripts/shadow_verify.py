@@ -84,15 +84,15 @@ Gates (section 6; every gate is the worst value over poses, views and runs):
                  faces - resting casters, hut and room walls on the floor
                  and under the roof / ceiling, wall-wall joins, blocks under
                  the ceiling), in their contact plane, within the G3 bound
-                 (1.5 texels depth, 2.5 distance technique) of an edge of
-                 the contact rectangle, the distance through J at the pixel.
+                 (1.5 texels) of an edge of the contact rectangle, the
+                 distance through J at the pixel.
   G3 contact:    contact_blocks. Along every contact line (a resting caster's
                  footprint edge) in 16 bins, the distance from the line to
                  the nearest floor pixel with visibility <= 0.5 on the shadow
                  side (searched up to the analytic shadow extent), in shadow
                  texels through J. Only bins whose pixels are <= 0.5 texel
                  and whose analytic shadow starts at the line count. <= 1.5
-                 texels (depth), <= 2.5 (distance technique). A bin with no
+                 texels (depth and distance technique). A bin with no
                  shadowed pixel reports its analytic extent.
   G4 leaks:      thin_walls. Per hut, pixels inside the hut (analytically
                  shadowed: every interior point is behind a wall) with
@@ -232,7 +232,7 @@ G5_DIRECTIONS = 16
 G3_BINS = 16
 EXAMPLES = 5
 
-G3_LIMIT = {"depth": 1.5, "distance": 2.5}
+G3_LIMIT = 1.5
 G4_MIN_THICKNESS = 0.02 - 1.0e-9
 G4_MIN_RESOLUTION = 2048
 G6_STATIONS = ["head_on_floor", "contact_blocks"]
@@ -1605,7 +1605,7 @@ def verdicts(cell):
             out[gate] = "-"
         else:
             out[gate] = ("PASS" if v["count"] == 0 else f"FAIL {v['count']} ({100.0 * v['fraction']:.2g}%)")
-    limit = G3_LIMIT[cell["technique"]]
+    limit = G3_LIMIT
     if cell["station"] == "contact_blocks":
         out["G3"] = "-" if cell["G3"] is None else (
             f"{'PASS' if cell['G3'] <= limit else 'FAIL'} {cell['G3']:.2f}t")
@@ -1763,7 +1763,7 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                                    "world_path": world_path, "vis": vis, "light": pose_world,
                                    "texture_from_world": entry.get("texture_from_world"),
                                    "resolution": entry["resolution"], "band_radius": radius + 1.0,
-                                   "g3": station == "contact_blocks", "g3_limit": G3_LIMIT[technique],
+                                   "g3": station == "contact_blocks", "g3_limit": G3_LIMIT,
                                    "g5": station in G5_STATIONS, "return_classes": args.save_images != "none"}
                             context = {"run": run_index, "pose": pose_index, "view": view["name"],
                                        "light_pose": {k: pose[k] for k in ("position", "direction", "outer_spot_angle_deg")
@@ -1805,7 +1805,7 @@ def drain(pending, args, image_dir, pending_images, block):
                     cell["failures"].append(dict(context, gate="G6", count=r["count"], examples=r["examples"]))
                 continue
             analysis.append(result.get("analysis_s", 0.0))
-            score = fold(cell, result, context, task["radius"], G3_LIMIT[task["technique"]])
+            score = fold(cell, result, context, task["radius"], G3_LIMIT)
             if args.save_images == "all":
                 image_name = re.sub(r"[^A-Za-z0-9_.=-]+", "_", f"{key}_r{context['run']}_p{context['pose']}_{context['view']}")
                 save_worst_image(os.path.join(image_dir, image_name + ".png"), vis, result["classes"])
