@@ -384,6 +384,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 ### Reference (`reference/`)
 
 - [reference/agfx_comparison.md](reference/agfx_comparison.md): agfx vs erhe::graphics feature comparison, features to adopt, feasibility of agfx as a backend
+- [reference/aimd_comparison.md](reference/aimd_comparison.md): AIMD immediate-mode debug renderer vs erhe Debug_renderer: comparison table, strengths and weaknesses, what each could borrow
 - [reference/audit_erhe_2026_06_21.md](reference/audit_erhe_2026_06_21.md): Architecture, foundations and security audit report (2026-06-21)
 - [reference/esoterica_rendering.md](reference/esoterica_rendering.md): Esoterica vs erhe rendering comparison
 - [reference/forge_erhe.md](reference/forge_erhe.md): SDL3 GPU concepts mapped to erhe's graphics API
