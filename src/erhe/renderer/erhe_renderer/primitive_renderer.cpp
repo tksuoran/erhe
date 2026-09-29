@@ -1107,87 +1107,6 @@ auto ray_torus_intersection(const glm::dvec3 ro, const glm::dvec3 rd, const glm:
 
 } // anonymous namespace
 
-namespace {
-
-// Turns a densely sampled curve into line segments whose length follows the
-// curve: a segment ends where the curve has turned by turn_threshold since
-// the segment started, where the visibility classification of the next fine
-// sample changes, or at the end of the curve. Fine samples in between are
-// dropped, so straight-ish stretches become one chord while folds and
-// visible/hidden transitions stay exact to one fine sample. Emit is called
-// as emit(p0, p1, visible).
-template <typename Emit>
-class Curve_emitter
-{
-public:
-    Curve_emitter(const float turn_threshold, Emit& emit)
-        : m_turn_threshold{turn_threshold}
-        , m_emit          {emit}
-    {
-    }
-
-    void start(const glm::vec3& p)
-    {
-        m_last_emitted = p;
-        m_prev         = p;
-        m_turn         = 0.0f;
-        m_have_dir     = false;
-        m_run_valid    = false;
-    }
-
-    // Adds the fine sample p; visible classifies the fine segment from the
-    // previous sample to p.
-    void push(const glm::vec3& p, const bool visible)
-    {
-        if (m_run_valid && (visible != m_run_visible)) {
-            m_emit(m_last_emitted, m_prev, m_run_visible);
-            m_last_emitted = m_prev;
-            m_turn         = 0.0f;
-        }
-        m_run_visible = visible;
-        m_run_valid   = true;
-
-        const glm::vec3 delta   = p - m_prev;
-        const float     length2 = glm::dot(delta, delta);
-        if (length2 > 0.0f) {
-            const glm::vec3 dir = delta / std::sqrt(length2);
-            if (m_have_dir) {
-                m_turn += std::acos(glm::clamp(glm::dot(m_dir, dir), -1.0f, 1.0f));
-            }
-            m_dir      = dir;
-            m_have_dir = true;
-        }
-        m_prev = p;
-        if (m_turn >= m_turn_threshold) {
-            m_emit(m_last_emitted, p, visible);
-            m_last_emitted = p;
-            m_turn         = 0.0f;
-            m_run_valid    = false;
-        }
-    }
-
-    void finish()
-    {
-        if (m_run_valid && (m_prev != m_last_emitted)) {
-            m_emit(m_last_emitted, m_prev, m_run_visible);
-        }
-        m_run_valid = false;
-    }
-
-private:
-    float     m_turn_threshold;
-    Emit&     m_emit;
-    glm::vec3 m_last_emitted{0.0f};
-    glm::vec3 m_prev        {0.0f};
-    glm::vec3 m_dir         {0.0f};
-    float     m_turn        {0.0f};
-    bool      m_have_dir    {false};
-    bool      m_run_valid   {false};
-    bool      m_run_visible {false};
-};
-
-} // anonymous namespace
-
 void Primitive_renderer::add_torus(
     const erhe::scene::Transform& world_from_node,
     const glm::vec4&              major_color,
@@ -1203,14 +1122,17 @@ void Primitive_renderer::add_torus(
 )
 {
     constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
-    // Every circle (tube cross sections, rings, and the silhouette traced
-    // around the major circle) is sampled at c_fine_samples_per_circle points
-    // for the visibility classification and drawn with a chord per
-    // c_turn_threshold of turning (64 chords around a full circle), so the
-    // segment length follows the curvature instead of the step counts, which
-    // only choose how many wire circles are drawn.
-    constexpr int   c_fine_samples_per_circle = 128;
-    constexpr float c_turn_threshold          = glm::two_pi<float>() / 64.0f;
+    // Chord layout. A wire circle is c_chords_per_circle uniform chords; the
+    // silhouette is traced in as many theta intervals and subdivided where a
+    // chord deviates from the contour by more than the sagitta of such a
+    // chord (c_max_subdivision_depth halvings at most, at the folds). A chord
+    // whose ends differ in visibility is split at the transition, located by
+    // c_split_iterations bisections. The step counts only choose how many
+    // wire circles are drawn.
+    constexpr int   c_chords_per_circle     = 64;
+    constexpr int   c_split_iterations      = 5;
+    constexpr int   c_max_subdivision_depth = 6;
+    const float     flat_tolerance          = (major_radius + minor_radius) * (1.0f - std::cos(glm::pi<float>() / static_cast<float>(c_chords_per_circle)));
 
     const glm::mat4  m                       = world_from_node.get_matrix();
     const glm::mat4  node_from_world         = world_from_node.get_inverse_matrix();
@@ -1242,25 +1164,43 @@ void Primitive_renderer::add_torus(
         set_thickness(visible ? major_thickness : minor_thickness);
         add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
     };
-    Curve_emitter<decltype(emit_segment)> curve{c_turn_threshold, emit_segment};
 
     // Structural wireframe: tube cross-section circles and rings around the
-    // axis; visible parts major style, hidden parts minor style. Each fine
-    // sample segment is classified at its midpoint; back-facing points are
-    // rejected without running the quartic ray test.
-    const auto is_visible_at = [&](const Torus_point& mid) -> bool {
-        const bool facing = glm::dot(mid.n, camera_position_in_node - mid.p) > 0.0f;
-        return facing && is_unoccluded(mid.p);
+    // axis; visible parts major style, hidden parts minor style. Chord ends
+    // are classified (back-facing points are rejected without running the
+    // quartic ray test); a chord whose ends differ is split at the transition.
+    const auto is_visible_at = [&](const Torus_point& point) -> bool {
+        const bool facing = glm::dot(point.n, camera_position_in_node - point.p) > 0.0f;
+        return facing && is_unoccluded(point.p);
     };
     const auto add_wire_circle = [&](const auto& point_at) { // point_at(rel) for rel in [0, 1]
-        curve.start(point_at(0.0f).p);
-        for (int j = 1; j <= c_fine_samples_per_circle; ++j) {
-            const float rel_prev = static_cast<float>(j - 1) / static_cast<float>(c_fine_samples_per_circle);
-            const float rel      = static_cast<float>(j    ) / static_cast<float>(c_fine_samples_per_circle);
-            const bool  visible  = is_visible_at(point_at(0.5f * (rel_prev + rel)));
-            curve.push(point_at(rel).p, visible);
+        Torus_point p0 = point_at(0.0f);
+        bool        v0 = is_visible_at(p0);
+        for (int k = 1; k <= c_chords_per_circle; ++k) {
+            const float       rel0 = static_cast<float>(k - 1) / static_cast<float>(c_chords_per_circle);
+            const float       rel1 = static_cast<float>(k    ) / static_cast<float>(c_chords_per_circle);
+            const Torus_point p1   = point_at(rel1);
+            const bool        v1   = is_visible_at(p1);
+            if (v0 == v1) {
+                emit_segment(p0.p, p1.p, v0);
+            } else {
+                float lo = rel0; // visibility v0
+                float hi = rel1; // visibility v1
+                for (int i = 0; i < c_split_iterations; ++i) {
+                    const float mid = 0.5f * (lo + hi);
+                    if (is_visible_at(point_at(mid)) == v0) {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                const glm::vec3 split = point_at(0.5f * (lo + hi)).p;
+                emit_segment(p0.p, split, v0);
+                emit_segment(split, p1.p, v1);
+            }
+            p0 = p1;
+            v0 = v1;
         }
-        curve.finish();
     };
 
     for (int i = 0; i < major_step_count; ++i) {
@@ -1281,23 +1221,19 @@ void Primitive_renderer::add_torus(
     // with w = camera - ring_center(theta) - the same threshold form used by
     // add_sphere() / add_cone() / add_capsule() - giving up to two exact
     // silhouette points per cross section. The two solution branches are
-    // traced into polylines around the major circle; where the branch pair
-    // appears or disappears (grazing cross sections) the branch ends are
-    // joined, exact up to one theta step. Self-occluded silhouette parts are
-    // drawn in minor style via the same ray test. The two branches are fed
-    // as fine samples into their own Curve_emitter, so the drawn segments
-    // follow the contour's curvature.
-    const int   silhouette_step_count = c_fine_samples_per_circle;
-    const float chord_threshold       = 2.0f * glm::two_pi<float>() * (major_radius + minor_radius) / static_cast<float>(silhouette_step_count);
-
+    // traced around the major circle in c_chords_per_circle theta intervals,
+    // each subdivided until its chords are flat within flat_tolerance (the
+    // contour turns fast at the folds, where the branch pair appears or
+    // disappears; the fold itself is located by bisection on theta and the
+    // branch ends are joined there). Self-occluded silhouette parts are drawn
+    // in minor style via the same ray test, taken only at chord ends.
     class Silhouette_sample
     {
     public:
-        bool      exists{false};
-        glm::vec3 q0    {0.0f};
-        glm::vec3 q1    {0.0f};
-        bool      vis0  {false};
-        bool      vis1  {false};
+        bool      exists    {false};
+        glm::vec3 q         [2]{glm::vec3{0.0f}, glm::vec3{0.0f}};
+        bool      classified{false};
+        bool      visible   [2]{false, false};
     };
 
     const auto solve_at = [&](const float theta) -> Silhouette_sample {
@@ -1315,73 +1251,124 @@ void Primitive_renderer::add_torus(
             const auto point_at = [&](const float phi) {
                 return ring_center + minor_radius * ((std::cos(phi) * radial) + (std::sin(phi) * axis_z));
             };
-            sample.q0   = point_at(phi_mid - phi_cut);
-            sample.q1   = point_at(phi_mid + phi_cut);
-            sample.vis0 = is_unoccluded(sample.q0);
-            sample.vis1 = is_unoccluded(sample.q1);
+            sample.q[0] = point_at(phi_mid - phi_cut);
+            sample.q[1] = point_at(phi_mid + phi_cut);
         }
         return sample;
     };
-
-    Curve_emitter<decltype(emit_segment)> branch0{c_turn_threshold, emit_segment};
-    Curve_emitter<decltype(emit_segment)> branch1{c_turn_threshold, emit_segment};
-
-    const auto emit_between = [&](const Silhouette_sample& s0, const Silhouette_sample& s1) {
-        if (s0.exists && s1.exists) {
-            branch0.push(s1.q0, s0.vis0 && s1.vis0);
-            branch1.push(s1.q1, s0.vis1 && s1.vis1);
-        } else if (s0.exists && !s1.exists) {
-            // The branches fold together: close both and join their ends.
-            branch0.finish();
-            branch1.finish();
-            emit_segment(s0.q0, s0.q1, s0.vis0 && s0.vis1);
-        } else if (!s0.exists && s1.exists) {
-            emit_segment(s1.q0, s1.q1, s1.vis0 && s1.vis1);
-            branch0.start(s1.q0);
-            branch1.start(s1.q1);
+    const auto classify = [&](Silhouette_sample& sample) {
+        if (!sample.classified) {
+            sample.visible[0] = is_unoccluded(sample.q[0]);
+            sample.visible[1] = is_unoccluded(sample.q[1]);
+            sample.classified = true;
         }
     };
 
-    Silhouette_sample prev = solve_at(0.0f);
-    if (prev.exists) {
-        branch0.start(prev.q0);
-        branch1.start(prev.q1);
-    }
-    for (int i = 1; i <= silhouette_step_count; ++i) {
-        const float theta0 = glm::two_pi<float>() * static_cast<float>(i - 1) / static_cast<float>(silhouette_step_count);
-        const float theta1 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(silhouette_step_count);
-        const Silhouette_sample cur = solve_at(theta1);
+    // Distance of q from the chord q0 q1.
+    const auto chord_deviation = [](const glm::vec3& q0, const glm::vec3& q1, const glm::vec3& q) -> float {
+        const glm::vec3 d  = q1 - q0;
+        const float     l2 = glm::dot(d, d);
+        const float     t  = (l2 > 0.0f) ? glm::clamp(glm::dot(q - q0, d) / l2, 0.0f, 1.0f) : 0.0f;
+        return glm::distance(q, q0 + t * d);
+    };
 
-        // Near the folds (grazing cross sections, reach -> minor_radius) the
-        // curve moves fast in phi for small steps in theta (phi_cut behaves
-        // like a square root), so a uniform theta sampling leaves long chords
-        // exactly where the contour turns around. Refine those intervals.
-        const bool refine =
-            (prev.exists != cur.exists) ||
-            (
-                prev.exists && cur.exists &&
-                (
-                    (glm::distance(prev.q0, cur.q0) > chord_threshold) ||
-                    (glm::distance(prev.q1, cur.q1) > chord_threshold)
-                )
-            );
-        if (refine) {
-            constexpr int substep_count = 32;
-            Silhouette_sample a = prev;
-            for (int s = 1; s <= substep_count; ++s) {
-                const Silhouette_sample b = (s == substep_count)
-                    ? cur
-                    : solve_at(theta0 + ((theta1 - theta0) * static_cast<float>(s) / static_cast<float>(substep_count)));
-                emit_between(a, b);
-                a = b;
+    // Chord of one branch between two classified samples, split at the
+    // visibility transition when the ends differ.
+    const auto emit_branch_chord = [&](
+        const float theta0, const float theta1,
+        const Silhouette_sample& s0, const Silhouette_sample& s1,
+        const int branch
+    ) {
+        if (s0.visible[branch] == s1.visible[branch]) {
+            emit_segment(s0.q[branch], s1.q[branch], s0.visible[branch]);
+            return;
+        }
+        float lo = theta0; // visibility s0.visible[branch]
+        float hi = theta1;
+        for (int i = 0; i < c_split_iterations; ++i) {
+            const float mid = 0.5f * (lo + hi);
+            if (is_unoccluded(solve_at(mid).q[branch]) == s0.visible[branch]) {
+                lo = mid;
+            } else {
+                hi = mid;
             }
-        } else {
-            emit_between(prev, cur);
+        }
+        const glm::vec3 split = solve_at(0.5f * (lo + hi)).q[branch];
+        emit_segment(s0.q[branch], split, s0.visible[branch]);
+        emit_segment(split, s1.q[branch], s1.visible[branch]);
+    };
+
+    // Both branches over [theta0, theta1] where the pair exists throughout:
+    // halve the interval while a branch chord is not flat enough, emit at the
+    // leaves.
+    const auto emit_interval = [&](
+        auto& self,
+        const float theta0, const float theta1,
+        Silhouette_sample& s0, Silhouette_sample& s1,
+        const int depth
+    ) -> void {
+        if (depth < c_max_subdivision_depth) {
+            const float       theta_mid = 0.5f * (theta0 + theta1);
+            Silhouette_sample sm        = solve_at(theta_mid);
+            const bool bend =
+                sm.exists &&
+                (
+                    (chord_deviation(s0.q[0], s1.q[0], sm.q[0]) > flat_tolerance) ||
+                    (chord_deviation(s0.q[1], s1.q[1], sm.q[1]) > flat_tolerance)
+                );
+            if (bend) {
+                self(self, theta0, theta_mid, s0, sm, depth + 1);
+                self(self, theta_mid, theta1, sm, s1, depth + 1);
+                return;
+            }
+        }
+        classify(s0);
+        classify(s1);
+        emit_branch_chord(theta0, theta1, s0, s1, 0);
+        emit_branch_chord(theta0, theta1, s0, s1, 1);
+    };
+
+    // Fold join: the two branch points of the last existing sample.
+    const auto emit_fold = [&](Silhouette_sample& sample) {
+        classify(sample);
+        emit_segment(sample.q[0], sample.q[1], sample.visible[0] && sample.visible[1]);
+    };
+
+    Silhouette_sample prev = solve_at(0.0f);
+    for (int i = 1; i <= c_chords_per_circle; ++i) {
+        const float       theta0 = glm::two_pi<float>() * static_cast<float>(i - 1) / static_cast<float>(c_chords_per_circle);
+        const float       theta1 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(c_chords_per_circle);
+        Silhouette_sample cur    = solve_at(theta1);
+        if (prev.exists && cur.exists) {
+            emit_interval(emit_interval, theta0, theta1, prev, cur, 0);
+        } else if (prev.exists != cur.exists) {
+            // The pair appears or disappears inside the interval: locate the
+            // fold by bisection, trace the existing side up to it, join there.
+            float             lo    = theta0;
+            float             hi    = theta1;
+            Silhouette_sample s_lo  = prev;
+            Silhouette_sample s_hi  = cur;
+            for (int k = 0; k < c_max_subdivision_depth; ++k) {
+                const float       mid = 0.5f * (lo + hi);
+                Silhouette_sample sm  = solve_at(mid);
+                if (sm.exists == prev.exists) {
+                    lo   = mid;
+                    s_lo = sm;
+                } else {
+                    hi   = mid;
+                    s_hi = sm;
+                }
+            }
+            if (prev.exists) {
+                emit_interval(emit_interval, theta0, lo, prev, s_lo, 0);
+                emit_fold(s_lo);
+            } else {
+                emit_fold(s_hi);
+                emit_interval(emit_interval, hi, theta1, s_hi, cur, 0);
+            }
         }
         prev = cur;
     }
-    branch0.finish();
-    branch1.finish();
 }
 #pragma endregion add
 
