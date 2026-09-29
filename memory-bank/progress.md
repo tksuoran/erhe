@@ -87,3 +87,8 @@
 ✓cost-gate::e2c1cdb43{aa_cost_benchmark;on/off-1.16..1.21x;local/debug_lines.md}
 ✓two-draws::a81ebbfef{user-saw-joint-double-blend(hidden-sphere-silhouette)->core(gequal)+fringe(greater)-draws;line-twice==once-pixel-exact;on/off-1.64..1.73x-accepted}
 ?follow-up::joined-polylines(plan-sec-2)+content-wide-lines+Metal-run
+
+[TASK::agfx-test-port]{started-2026-09-29;via-harness;doc/plans/graphics_tests_agfx_port.md}
+✓plan::5ac16c1f9+8704ee38b{FLIP-from-start(user)}
+✓phase-0::6c5107fd9{expect_buffer/image_matches_golden;FLIP-via-CPM-archive-URL(no-tags);ERHE_GPU_TEST_UPDATE_GOLDENS;results.json+artifacts;gpu_test_report.py;Vk-64/64;GL-75+1skip;negative-check-mean-0.53}
+?phase-1..8{raster/depth-24;blend-16;pass-actions-9;copies-10;sampling-22;compute-10;indirect-5;ray-query-11}
