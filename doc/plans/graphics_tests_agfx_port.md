@@ -32,8 +32,8 @@ analytic check as well. That shape is the same as the existing 38
   commit. agfx goldens are not reused: shader language, NDC and texture
   coordinate conventions and the output routing (see 2.3) differ, so
   agreement with an agfx image is not a meaningful gate.
-- No agfx source is copied. If FLIP is adopted (2.2) it comes as its own
-  BSD-3 dependency from NVlabs, not from the agfx tree.
+- No agfx source is copied. FLIP (2.2) comes as its own BSD-3 dependency
+  from NVlabs, not from the agfx tree.
 
 Tests are grouped into the phases of section 3 by the erhe feature they
 cover; each phase is one commit series that ends with the coverage matrix
@@ -56,9 +56,10 @@ Two helpers on `Gpu_test`:
   lists the first differing offsets and the total count (agfx records up to
   4096); the output is written next to the artifacts (2.4).
 - `expect_image_matches_golden(name, width, height, format, bytes,
-  tolerance)`: compares an RGBA8 (or RGBA32F, see 2.2) readback against
-  `src/erhe/graphics/test/golden/<name>.png` (`.pfm` for float images), fails
-  on a size mismatch, writes output, golden copy and diff image to the
+  threshold)`: compares an RGBA8 (or RGBA32F, see 2.2) readback against
+  `src/erhe/graphics/test/golden/<name>.png` (`.pfm` for float images) with
+  FLIP, fails on a size mismatch or a mean error above `threshold` (default
+  0.05, as agfx), and writes output, golden copy and FLIP error map to the
   artifact directory.
 
 Both honour an update mode: the environment variable
@@ -76,29 +77,30 @@ keeps at least one analytic check where agfx has one.
 
 ### 2.2 Image comparison metric
 
-Phase 0 ships a tolerance compare, not FLIP:
+Image goldens are compared with NVIDIA FLIP from phase 0 on, as agfx does:
 
-- Per channel absolute difference, `max_channel_delta` (default 2 of 255 for
-  RGBA8; a relative epsilon for float images) and `max_pixels_over`
-  (default 0.5 percent of the image) so that a one-pixel edge crawl between
-  rasterizers (lavapipe against a hardware Vulkan device, GL against Vulkan)
-  passes while a wrong color, a missing draw or a shifted region fails.
-- The diff image marks each pixel over tolerance, so the triptych report
-  (2.4) shows where.
-
-The reason: erhe's tests draw flat colors and analytic patterns at 64x64 to
-128x128, where a perceptual metric adds nothing over a counted threshold and
-costs a 2.5k line dependency. If a later phase produces images whose
-legitimate cross-device variation exceeds what the counted threshold can
-absorb (the sampling and ray-tracing phases are the candidates), FLIP is
-added at that point through CPM (`NVlabs/flip`, `cpp/FLIP.h`, BSD-3) behind
-the same helper with a `Compare_metric` argument; nothing in the tests
-changes.
+- The single header `cpp/FLIP.h` of `NVlabs/flip` (BSD-3) is fetched
+  download-only through CPM at the top level, the way fpng is, and compiled
+  into `erhe_gpu_test_support` only; no `erhe::*` library depends on it.
+  `test_compare.cpp` in the agfx tree is the reference for the call:
+  `FLIP::evaluate` with default parameters, `computeMean` on, the error map
+  requested.
+- RGBA8 outputs run LDR-FLIP on the normalized bytes; float outputs run
+  HDR-FLIP (selected by the `.pfm` golden extension, agfx selects by
+  `.hdr`). Alpha is dropped before the compare.
+- The verdict is the mean error against `threshold` (default 0.05). The
+  helper also records the maximum error and writes the magma-colored error
+  map as the third image of the triptych (2.4).
+- A one-pixel edge crawl between rasterizers (lavapipe against a hardware
+  Vulkan device, GL against Vulkan) stays far under the threshold at 64x64
+  to 128x128; a wrong color, a missing draw or a shifted region does not.
+  Where a test needs an exact answer, its analytic assertion (2.1) gives it.
 
 Golden images are read with the existing wuffs PNG loader and written with
-the existing fpng writer (`Image_writer::create`), so the support library
-gains no new dependency. The `ERHE_USE_FPNG=OFF` configuration has no writer,
-so the golden helpers `GTEST_SKIP` there with that reason.
+the existing fpng writer (`Image_writer::create`); float goldens use a small
+PFM reader/writer in the support library. The `ERHE_USE_FPNG=OFF`
+configuration has no PNG writer, so the golden helpers `GTEST_SKIP` there
+with that reason.
 
 ### 2.3 Output routing for compute-produced images
 
@@ -125,16 +127,16 @@ Only the two tests that exist to exercise storage images themselves
 A GoogleTest event listener installed by the test `main.cpp` writes
 `<build>/gpu_test_results/results.json` after the run: device name, backend,
 timestamp, summary counts and one entry per test (name, status, duration,
-message, and for golden tests the artifact paths, the metric values and the
-threshold). Per-test artifacts go to
+message, and for golden tests the artifact paths, the FLIP mean and maximum
+error and the threshold). Per-test artifacts go to
 `<build>/gpu_test_results/artifacts/<test name>/` as `output.png`,
-`golden.png`, `diff.png` or `output.bin`, `golden.bin`. The listener is the
+`golden.png`, `flip.png` or `output.bin`, `golden.bin`. The listener is the
 only writer of the JSON; the helpers only fill the per-test record.
 
 `scripts/gpu_test_report.py <results dir>` renders `results.json` into one
 self-contained `report.html` (images embedded as data URIs, no HTTP server):
 header with device and counts, filter by status, and for each golden test an
-output / golden / diff triptych; buffer tests show the differing offsets as
+output / golden / FLIP error map triptych; buffer tests show the differing offsets as
 a hex view. It is Python because repository tooling is Python; agfx's
 `tools/test_report/index.html` is the reference for what the page shows.
 
@@ -295,7 +297,7 @@ Per phase, in this order, once at the end of the phase:
 Phase 0 is verified by converting the two existing image tests with the
 widest output (`test_texgen_render.cpp`, `test_msaa_resolve.cpp`) to also
 assert a golden, running once to generate, editing one shader constant, and
-confirming the failure shows in `report.html` with a correct diff image.
+confirming the failure shows in `report.html` with a correct FLIP error map.
 
 The whole port adds about 107 tests to the 38 present.
 
