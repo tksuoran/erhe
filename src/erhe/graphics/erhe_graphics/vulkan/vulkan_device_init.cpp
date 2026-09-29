@@ -1335,6 +1335,7 @@ Device_impl::Device_impl(
     log_startup->info("Vulkan device features:");
     log_startup->info("  vertexPipelineStoresAndAtomics = {}", qf.vertexPipelineStoresAndAtomics == VK_TRUE);
     log_startup->info("  multiDrawIndirect              = {}", qf.multiDrawIndirect  == VK_TRUE);
+    log_startup->info("  drawIndirectFirstInstance      = {}", qf.drawIndirectFirstInstance == VK_TRUE);
     log_startup->info("  samplerAnisotropy              = {}", qf.samplerAnisotropy  == VK_TRUE);
     log_startup->info("  shaderClipDistance             = {}", qf.shaderClipDistance == VK_TRUE);
     log_startup->info("  shaderCullDistance             = {}", qf.shaderCullDistance == VK_TRUE);
@@ -1360,7 +1361,10 @@ Device_impl::Device_impl(
             .dualSrcBlend                            = VK_FALSE,
             .logicOp                                 = VK_FALSE,
             .multiDrawIndirect                       = qf.multiDrawIndirect,
-            .drawIndirectFirstInstance               = VK_FALSE,
+            // A non-zero firstInstance in an indirect draw command requires
+            // this feature (VUID-VkDrawIndexedIndirectCommand-firstInstance-00554);
+            // Device_info::use_base_instance reports it.
+            .drawIndirectFirstInstance               = qf.drawIndirectFirstInstance,
             .depthClamp                              = qf.depthClamp,
             .depthBiasClamp                          = VK_FALSE,
             .fillModeNonSolid                        = VK_FALSE,
@@ -1980,6 +1984,7 @@ Device_impl::Device_impl(
     m_info.use_integer_polygon_ids = true;
     m_info.texture_heap_path       = Texture_heap_path::vulkan_descriptor_indexing;
     m_info.use_sparse_texture      = false;
+    m_info.use_base_instance = (query_device_features.features.drawIndirectFirstInstance == VK_TRUE);
     const bool has_multi_draw_indirect    = (query_device_features.features.multiDrawIndirect == VK_TRUE);
     const bool has_shader_draw_parameters = (query_vulkan_11_features.shaderDrawParameters == VK_TRUE);
     // MoltenVK advertises shaderDrawParameters = VK_TRUE to stay Vulkan 1.1 conformant, but Metal

@@ -248,6 +248,9 @@ public:
     // VK_EXT_conservative_rasterization present: pipelines may set
     // Rasterization_state::conservative_enable (ignored elsewhere).
     bool use_conservative_rasterization{false};
+    // Draws may start at a non-zero base instance: GL 4.2 /
+    // ARB_base_instance, Vulkan drawIndirectFirstInstance (a non-zero
+    // base_instance in a Draw_*_indirect_command).
     bool use_base_instance           {false};
     bool use_clear_texture           {false};
     bool use_texture_view            {false};
