@@ -1371,7 +1371,11 @@ Device_impl::Device_impl(
             .multiViewport                           = VK_FALSE,
             .samplerAnisotropy                       = qf.samplerAnisotropy,
             .textureCompressionETC2                  = VK_FALSE,
-            .textureCompressionASTC_LDR              = VK_FALSE,
+            // ASTC 4x4 sampled images: the KTX2 loader transcodes to ASTC when
+            // get_format_properties(format_astc_4x4_srgb) reports support, which
+            // comes from the physical device regardless of enabled features, so
+            // the feature must be on whenever the device has it.
+            .textureCompressionASTC_LDR              = qf.textureCompressionASTC_LDR,
             // BC1..BC7 sampled images (e.g. DDS textures from glTF MSFT_texture_dds)
             .textureCompressionBC                    = qf.textureCompressionBC,
             .occlusionQueryPrecise                   = VK_FALSE,
