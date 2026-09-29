@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Alpha_mode` (`premultiplied` | `straight`) and a trailing
+  `alpha_mode` parameter on both `Image_loader::open()` overloads (default
+  `premultiplied`, the previous behavior): `straight` makes PNG / JPEG decode
+  return the stored RGBA bytes without multiplying RGB by alpha.
 - `erhe::graphics`: `Device_info::use_depth_clamp`: whether
   `Rasterization_state::depth_clamp_enable` is honoured (Vulkan: the
   `depthClamp` device feature; always true on OpenGL and Metal).

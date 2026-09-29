@@ -41,6 +41,18 @@ enum class Transcode_format_preference : unsigned int {
     astc_4x4   // ASTC 4x4 blocks (mobile GPUs)
 };
 
+// How the wuffs path (PNG / JPEG) delivers the color channels of an image
+// with an alpha channel. premultiplied (the default) multiplies RGB by alpha
+// while decoding, which is what textures sampled with filtering and
+// premultiplied blending want. straight returns the stored bytes unchanged,
+// for byte-exact round trips (for example comparing a written PNG against
+// the texels it was written from). KTX2 and DDS containers ignore it.
+enum class Alpha_mode : unsigned int
+{
+    premultiplied = 0,
+    straight
+};
+
 class Image_loader_impl;
 class Image_loader_ktx2;
 class Image_loader_dds;
@@ -55,8 +67,8 @@ public:
     Image_loader  (Image_loader&&)      = delete;
     auto operator=(Image_loader&&)      = delete;
 
-    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8) -> bool;
-    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8) -> bool;
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Alpha_mode alpha_mode = Alpha_mode::premultiplied) -> bool;
+    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Alpha_mode alpha_mode = Alpha_mode::premultiplied) -> bool;
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
     void close();
 

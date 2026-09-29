@@ -346,7 +346,7 @@ void Gpu_test::expect_image_matches_golden(
     if (is_rgba8) {
         erhe::graphics::Image_info   info{};
         erhe::graphics::Image_loader loader;
-        const bool opened = loader.open(golden_path, info, true);
+        const bool opened = loader.open(golden_path, info, true, erhe::graphics::Transcode_format_preference::rgba8, erhe::graphics::Alpha_mode::straight);
         std::vector<std::uint8_t> golden_rgba8;
         bool loaded = false;
         if (opened && (info.format == erhe::dataformat::Format::format_8_vec4_unorm) && (info.row_stride == (info.width * 4))) {

@@ -119,8 +119,8 @@ public:
     Image_loader_impl (Image_loader_impl&&)      = delete;
     auto operator=    (Image_loader_impl&&)      = delete;
 
-    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool;
-    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool;
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, const bool linear, Alpha_mode alpha_mode) -> bool;
+    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, Alpha_mode alpha_mode) -> bool;
 
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
 
@@ -129,6 +129,7 @@ public:
 private:
     std::unique_ptr<mango::filesystem::File> m_file;
     Image_info                               m_info;
+    Alpha_mode                               m_alpha_mode{Alpha_mode::premultiplied};
     wuffs_base__io_buffer                    m_io_buffer;
     wuffs_base__io_buffer_meta               m_io_buffer_meta;
     wuffs_base__image_decoder*               m_image_decoder{nullptr};
@@ -165,7 +166,7 @@ Image_loader_impl::~Image_loader_impl() noexcept
     close();
 }
 
-auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info, const bool linear) -> bool
+auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info, const bool linear, const Alpha_mode alpha_mode) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -175,12 +176,14 @@ auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info
     mango::filesystem::File& file = *m_file;
 
     const std::span<const std::uint8_t>& buffer_view{const_cast<uint8_t*>(file.data()), file.size()};
-    return open(buffer_view, info, linear);
+    return open(buffer_view, info, linear, alpha_mode);
 }
 
-auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info, const bool linear) -> bool
+auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info, const bool linear, const Alpha_mode alpha_mode) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+
+    m_alpha_mode = alpha_mode;
 
     wuffs_base__slice_u8 file_data{
         .ptr = const_cast<uint8_t*>(buffer_view.data()),
@@ -312,7 +315,10 @@ auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
     uint32_t width = wuffs_base__pixel_config__width(&m_image_config.pixcfg);
     uint32_t height = wuffs_base__pixel_config__height(&m_image_config.pixcfg);
 
-    wuffs_base__pixel_config__set(&m_image_config.pixcfg, WUFFS_BASE__PIXEL_FORMAT__RGBA_PREMUL, WUFFS_BASE__PIXEL_SUBSAMPLING__NONE, width, height);
+    const uint32_t destination_pixel_format = (m_alpha_mode == Alpha_mode::straight)
+        ? WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL
+        : WUFFS_BASE__PIXEL_FORMAT__RGBA_PREMUL;
+    wuffs_base__pixel_config__set(&m_image_config.pixcfg, destination_pixel_format, WUFFS_BASE__PIXEL_SUBSAMPLING__NONE, width, height);
 
     //uint64_t pixel_count = static_cast<uint64_t>(m_info.width) * static_cast<uint64_t>(m_info.height);
     uint64_t pixel_buffer_length = wuffs_base__pixel_config__pixbuf_len(&m_image_config.pixcfg);
@@ -374,7 +380,7 @@ Image_loader::~Image_loader() noexcept
     close();
 }
 
-auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
+auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode) -> bool
 {
     // Route .ktx2 / .dds files by extension: the wuffs path memory-maps the
     // file itself, and sniffing the magic here would open the file twice.
@@ -392,10 +398,10 @@ auto Image_loader::open(const std::filesystem::path& path, Image_info& image_inf
         }
         return m_dds->open(path, image_info, linear);
     }
-    return m_impl->open(path, image_info, linear);
+    return m_impl->open(path, image_info, linear, alpha_mode);
 }
 
-auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
+auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Alpha_mode alpha_mode) -> bool
 {
     m_use_ktx2 = Image_loader_ktx2::is_ktx2(buffer_view);
     m_use_dds  = !m_use_ktx2 && Image_loader_dds::is_dds(buffer_view);
@@ -411,7 +417,7 @@ auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_
         }
         return m_dds->open(buffer_view, image_info, linear);
     }
-    return m_impl->open(buffer_view, image_info, linear);
+    return m_impl->open(buffer_view, image_info, linear, alpha_mode);
 }
 
 auto Image_loader::load(std::span<std::uint8_t> transfer_buffer) -> bool
