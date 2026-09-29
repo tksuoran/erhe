@@ -93,4 +93,5 @@
 ✓phase-0::6c5107fd9{expect_buffer/image_matches_golden;FLIP-via-CPM-archive-URL(no-tags);ERHE_GPU_TEST_UPDATE_GOLDENS;results.json+artifacts;gpu_test_report.py;Vk-64/64;GL-75+1skip;negative-check-mean-0.53}
 ✓phase-1::b395b5e53{25-tests;Device_info::use_depth_clamp;image-space-coords+native_depth_range->one-golden-set;Vk-89/89;GL-100+1skip}
 ✓phase-2::b11d49cd1+d42ab3d05{18-tests;root-cause:Image_loader-always-RGBA_PREMUL->Alpha_mode(premultiplied|straight);golden-helper-reads-straight;Vk-107/107;GL-118+1skip}
-?phase-3..8{pass-actions-9;copies-10;sampling-22;compute-10;indirect-5;ray-query-11}
+✓phase-3::2fb81325f+00c7d4fb9{9-tests;engine-fixes:Vk-EXTERNAL->0-dependency-adds-attachment-READ(loadOp-LOAD-sync-hazard)+GL-tex->buffer-layer-count+GL-cube-is_layered;renderer+scene_renderer-gpu-tests-pass;Vk-116/116;GL-127+1skip}
+?phase-4..8{copies-10;sampling-22;compute-10;indirect-5;ray-query-11}
