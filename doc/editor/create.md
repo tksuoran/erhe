@@ -22,7 +22,7 @@ Provides the Create tool and shape generator classes for interactively creating 
 
 - **`Create_box`** -- Box generator with configurable dimensions and subdivision.
 
-- **`Create_preview_settings`** -- Settings for preview rendering (ideal shape vs. subdivided shape).
+- **`Create_preview_settings`** -- Settings for preview rendering (ideal shape vs. subdivided shape; `draw_hidden`, the window's "Preview Hidden Lines" checkbox, draws the parts occluded by scene geometry as dimmed hidden lines, off draws only the unoccluded parts).
 
 ## Public API / Integration Points
 
