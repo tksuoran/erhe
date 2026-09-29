@@ -324,6 +324,9 @@ Fixed:
 - GL: texture-to-buffer `copy_from_texture` passed the slice index as the
   layer count; `is_layered()` did not count a cube map as layered, so a face
   could not be a framebuffer attachment (phase 3).
+- Vulkan: `drawIndirectFirstInstance` was enabled as `VK_FALSE`, so a
+  non-zero `base_instance` in an indirect draw was invalid usage (phase 5,
+  enabled when the device has it, `Device_info::use_base_instance`).
 
 Open:
 
@@ -335,3 +338,10 @@ Open:
   per-subresource layout tracking, since the texture tracks one layout for
   all levels and layers. The phase 4 copy tests would catch a discarding
   driver.
+- OpenGL on the AMD Radeon 890M driver 26.8.1.260810: after a comparison
+  sampler draw with `never`, later draws of the identical shader source with
+  a different compare function read as `never` although the sampler and
+  program state queried at the draw is correct (phase 5,
+  `Sampler_comparison_test`, six cases fail on that driver; see
+  [`erhe/graphics_test_coverage.md`](../erhe/graphics_test_coverage.md)
+  "Known gaps"). Not reproduced on Vulkan.

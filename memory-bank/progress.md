@@ -95,4 +95,5 @@
 ✓phase-2::b11d49cd1+d42ab3d05{18-tests;root-cause:Image_loader-always-RGBA_PREMUL->Alpha_mode(premultiplied|straight);golden-helper-reads-straight;Vk-107/107;GL-118+1skip}
 ✓phase-3::2fb81325f+00c7d4fb9{9-tests;engine-fixes:Vk-EXTERNAL->0-dependency-adds-attachment-READ(loadOp-LOAD-sync-hazard)+GL-tex->buffer-layer-count+GL-cube-is_layered;renderer+scene_renderer-gpu-tests-pass;Vk-116/116;GL-127+1skip}
 ✓phase-4::85ff0c263{10-tests;buffer-goldens-first-use;read/seed_subresource_rgba8->Gpu_test;Vk-126/126;GL-137+1skip;OPEN:Vk-blit-dst-transition-from-UNDEFINED-needs-per-subresource-layout-tracking(plan-sec-7)}
-?phase-5..8{sampling-22;compute-10;indirect-5;ray-query-11}
+✓phase-5::7ac1c2996+c217a74b6{23-tests;fix:Vk-drawIndirectFirstInstance-enabled+use_base_instance;fixture:render_fullscreen_pass(IMAGE_POSITION)+make_sampled_texture;Vk-149/149;GL-154+1skip+6-FAIL(AMD-GL-driver:comparison-sampler-reads-never-after-never-case;state-probed-correct;documented)}
+?phase-6..8{compute-10;indirect-5;ray-query-11}
