@@ -74,4 +74,5 @@
 ✓G7-accepted(user-2026-09-29)::+12%-median,+16%-max;profiling+optimization=future-work-in-plan
 ✓SHADOW-ROBUSTNESS-DONE-except-future{Metal,G7-optimization}
 ✓review-issue-1::c34fe6385+b92e46610{position-bound-from-node-origin-distance;erhe_position_rounding.glsl+v_position_rounding+Light_shadow_limits::caster_vertex_rounding(shadow_limits.x);far_vertices-station(point-failed-7.9%-before);T7-Vk+GL-10/10;T8-pass;final-gate-135-cells-0-FAIL}
-?review-issues-2..11-open{doc/reference/shadow_robustness_review_2026_09_29.md}
+✓review-issue-3::50d26d423{Device_info::sub_pixel_precision_bits{Vk+GL;Metal-0};Shadow_renderer-ctor-logs-error<8|warn-unreported;step-stays-1/256;Vk-logs-8}
+?review-issues-2,4..11-open{doc/reference/shadow_robustness_review_2026_09_29.md;user:future-work}
