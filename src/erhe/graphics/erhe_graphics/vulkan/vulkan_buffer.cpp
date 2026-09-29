@@ -67,7 +67,17 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         .priority       = 0.0f
     };
 
-	result = vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &m_vk_buffer, &m_vma_allocation, nullptr);
+    // Acceleration structure build inputs read by device address must start
+    // 16-byte aligned (instance data: VUID-vkCmdBuildAccelerationStructuresKHR-
+    // pInfos-03715; transform data: -03810), which the buffer's memory
+    // requirements alone do not guarantee: a small host-visible buffer may be
+    // suballocated at any multiple of the reported alignment.
+    const VkDeviceSize min_alignment = erhe::utility::test_bit_set(create_info.usage, Buffer_usage::acceleration_structure_build_input)
+        ? VkDeviceSize{16}
+        : VkDeviceSize{0};
+    result = vmaCreateBufferWithAlignment(
+        allocator, &buffer_create_info, &allocation_create_info, min_alignment, &m_vk_buffer, &m_vma_allocation, nullptr
+    );
     if (result != VK_SUCCESS) {
         log_buffer->error(
             "vmaCreateBuffer() failed with {} {} (capacity_byte_count = {}, debug_label = {})",
