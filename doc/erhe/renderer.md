@@ -44,6 +44,15 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
   helpers (`add_sphere`, `add_cone`, `add_capsule`, `add_torus`) emit only
   their self-visible, major-style lines and skip the minor-style parts behind
   the shape's own silhouette (default `draw`).
+- `Primitive_renderer::set_minor_line_renderer(other)` routes those
+  minor-style lines through `other`'s bucket (only the bucket is kept, so
+  `other` may go out of scope). With that bucket one stencil reference below
+  the renderer's own, the major-style lines win every pixel they share with
+  a minor-style line whatever order the helper emits them in; in a single
+  bucket the first fringe to land on a pixel keeps it ("Line anti-aliasing"
+  below), so a self-occluded segment emitted first cuts the visible outline
+  at their shared pixels. The Create window previews use references 2 and
+  1 (`Create_shape::get_line_renderer`).
 
 ## Line widths
 `Primitive_renderer::set_thickness(t)` sets the width of the wide lines that

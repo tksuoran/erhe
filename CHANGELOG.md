@@ -12,6 +12,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::renderer`: `Minor_lines` and `Primitive_renderer::set_minor_lines()`
   (default `draw`): `skip` makes `add_sphere`, `add_cone`, `add_capsule` and
   `add_torus` emit only their self-visible major-style lines.
+- `erhe::renderer`: `Primitive_renderer::set_minor_line_renderer(other)`:
+  the shape helpers emit their minor-style lines through `other`'s bucket,
+  so a bucket one stencil reference below lets the major-style lines win
+  every shared pixel regardless of emission order.
 - `erhe::renderer`: `Anti_aliasing` and
   `Debug_renderer::set_anti_aliasing()` / `get_anti_aliasing()` (default
   `on`): wide debug lines are drawn with analytic, energy-conserving

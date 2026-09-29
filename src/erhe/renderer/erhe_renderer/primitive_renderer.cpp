@@ -22,6 +22,7 @@ Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_ren
 Primitive_renderer::Primitive_renderer(Primitive_renderer&& old) noexcept
     : m_debug_renderer              {std::exchange(old.m_debug_renderer, nullptr)}
     , m_bucket                      {std::exchange(old.m_bucket,         nullptr)}
+    , m_minor_bucket                {std::exchange(old.m_minor_bucket,   nullptr)}
     , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
     , m_last_allocate_gpu_float_data{nullptr}
     , m_last_allocate_word_offset   {0}
@@ -40,6 +41,7 @@ auto Primitive_renderer::operator=(Primitive_renderer&& old) noexcept -> Primiti
 {
     m_debug_renderer = std::exchange(old.m_debug_renderer, nullptr);
     m_bucket         = std::exchange(old.m_bucket, nullptr);
+    m_minor_bucket   = std::exchange(old.m_minor_bucket, nullptr);
     m_line_color     = old.m_line_color;
     m_half_line_thickness = old.m_half_line_thickness;
     m_minor_lines    = old.m_minor_lines;
@@ -114,6 +116,17 @@ void Primitive_renderer::set_thickness(const float thickness)
 void Primitive_renderer::set_minor_lines(const Minor_lines minor_lines)
 {
     m_minor_lines = minor_lines;
+}
+
+void Primitive_renderer::set_minor_line_renderer(const Primitive_renderer& minor_line_renderer)
+{
+    ERHE_VERIFY(minor_line_renderer.m_bucket != nullptr);
+    m_minor_bucket = minor_line_renderer.m_bucket;
+}
+
+auto Primitive_renderer::make_minor_line_renderer() -> Primitive_renderer
+{
+    return Primitive_renderer{*m_debug_renderer, (m_minor_bucket != nullptr) ? *m_minor_bucket : *m_bucket};
 }
 
 #pragma region add
@@ -423,6 +436,8 @@ void Primitive_renderer::add_sphere(
     }
     const glm::vec3 w = camera_position - center;
 
+    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
+
     // Great circles in the world XY, YZ and XZ planes. With a camera outside
     // the sphere, each circle is split at the exact horizon: the point
     // q(t) = center + radius (cos(t) u + sin(t) v) is visible iff
@@ -431,16 +446,16 @@ void Primitive_renderer::add_sphere(
     // the horizon condition, i.e. the visible arc endpoints lie exactly on
     // the silhouette circle drawn below.
     const auto add_great_circle = [&](const glm::vec3& u, const glm::vec3& v) {
-        const auto add_arc = [&](const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
+        const auto add_arc = [&](Primitive_renderer& target, const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
             if (t_span <= 0.0f) {
                 return;
             }
-            set_thickness(thickness);
+            target.set_thickness(thickness);
             const int segment_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(step_count) * t_span / glm::two_pi<float>())));
             for (int i = 0; i < segment_count; ++i) {
                 const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(segment_count));
                 const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(segment_count));
-                add_lines(
+                target.add_lines(
                     color,
                     {{
                         center + radius * ((std::cos(t0) * u) + (std::sin(t0) * v)),
@@ -458,15 +473,15 @@ void Primitive_renderer::add_sphere(
             // No camera, camera inside the sphere, or the whole circle is at
             // or behind the horizon
             if (draw_minor) {
-                add_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+                add_arc(minor_line_renderer, 0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
             }
             return;
         }
         const float t_mid = std::atan2(b, a);
         const float t_cut = std::acos(glm::clamp(radius / radial, -1.0f, 1.0f));
-        add_arc(t_mid - t_cut, 2.0f * t_cut, major_color, major_thickness);
+        add_arc(*this, t_mid - t_cut, 2.0f * t_cut, major_color, major_thickness);
         if (draw_minor) {
-            add_arc(t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
+            add_arc(minor_line_renderer, t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
         }
     };
     add_great_circle(axis_x, axis_y);
@@ -561,10 +576,11 @@ void Primitive_renderer::add_cone(
     const glm::vec3 top_v          = glm::normalize(camera_position_in_node - top_center);
     const bool      top_visible    = glm::dot(top_normal, top_v) >= 0.0f;
 
-    const bool draw_minor = (m_minor_lines == Minor_lines::draw);
-    set_thickness(minor_thickness);
+    const bool         draw_minor          = (m_minor_lines == Minor_lines::draw);
+    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
+    minor_line_renderer.set_thickness(minor_thickness);
     if (draw_minor) {
-        add_lines(
+        minor_line_renderer.add_lines(
             m,
             minor_color,
             {
@@ -613,16 +629,16 @@ void Primitive_renderer::add_cone(
         if (rim_radius <= 0.0f) {
             return;
         }
-        const auto add_rim_arc = [&](const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
+        const auto add_rim_arc = [&](Primitive_renderer& target, const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
             if (t_span <= 0.0f) {
                 return;
             }
-            set_thickness(thickness);
+            target.set_thickness(thickness);
             const int step_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(side_count) * t_span / glm::two_pi<float>())));
             for (int i = 0; i < step_count; ++i) {
                 const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(step_count));
                 const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(step_count));
-                add_lines(
+                target.add_lines(
                     m,
                     color,
                     {{
@@ -633,15 +649,15 @@ void Primitive_renderer::add_cone(
             }
         };
         if (cap_visible || facing_all) {
-            add_rim_arc(0.0f, glm::two_pi<float>(), major_color, major_thickness);
+            add_rim_arc(*this, 0.0f, glm::two_pi<float>(), major_color, major_thickness);
         } else if (facing_none) {
             if (draw_minor) {
-                add_rim_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+                add_rim_arc(minor_line_renderer, 0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
             }
         } else {
-            add_rim_arc(phi_mid - phi_delta, 2.0f * phi_delta, major_color, major_thickness);
+            add_rim_arc(*this, phi_mid - phi_delta, 2.0f * phi_delta, major_color, major_thickness);
             if (draw_minor) {
-                add_rim_arc(phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
+                add_rim_arc(minor_line_renderer, phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
             }
         }
     };
@@ -696,14 +712,15 @@ void Primitive_renderer::add_capsule(
 
     // Structural lines: junction (tangency) rings, cap profile arcs with the
     // connecting cone generatrices in the XY / ZY planes, and the axis
-    set_thickness(minor_thickness);
+    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
+    minor_line_renderer.set_thickness(minor_thickness);
     if (m_minor_lines == Minor_lines::draw) {
         for (int i = 0; i < side_count; ++i) {
             const float phi0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(side_count);
             const float phi1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(side_count);
             const glm::vec3 d0 = (std::cos(phi0) * axis_x) + (std::sin(phi0) * axis_z);
             const glm::vec3 d1 = (std::cos(phi1) * axis_x) + (std::sin(phi1) * axis_z);
-            add_lines(
+            minor_line_renderer.add_lines(
                 m,
                 minor_color,
                 {
@@ -722,7 +739,7 @@ void Primitive_renderer::add_capsule(
                 const float bottom_theta1 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel1);
                 const float top_theta0    = alpha + ((glm::half_pi<float>() - alpha) * rel0);
                 const float top_theta1    = alpha + ((glm::half_pi<float>() - alpha) * rel1);
-                add_lines(
+                minor_line_renderer.add_lines(
                     m,
                     minor_color,
                     {
@@ -737,13 +754,13 @@ void Primitive_renderer::add_capsule(
                     }
                 );
             }
-            add_lines(
+            minor_line_renderer.add_lines(
                 m,
                 minor_color,
                 { { bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial } }
             );
         }
-        add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
+        minor_line_renderer.add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
     }
 
     // Silhouette: the capsule is convex and tangent continuous, so the view
@@ -1157,12 +1174,15 @@ void Primitive_renderer::add_torus(
         return (d < static_cast<double>(epsilon)) || (d > glm::distance(glm::dvec3{p}, camera));
     };
 
+    Primitive_renderer minor_line_renderer = make_minor_line_renderer();
     const auto emit_segment = [&](const glm::vec3& p0, const glm::vec3& p1, const bool visible) {
-        if (!visible && (m_minor_lines == Minor_lines::skip)) {
-            return;
+        if (visible) {
+            set_thickness(major_thickness);
+            add_lines(m, major_color, { { p0, p1 } });
+        } else if (m_minor_lines == Minor_lines::draw) {
+            minor_line_renderer.set_thickness(minor_thickness);
+            minor_line_renderer.add_lines(m, minor_color, { { p0, p1 } });
         }
-        set_thickness(visible ? major_thickness : minor_thickness);
-        add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
     };
 
     // Structural wireframe: tube cross-section circles and rings around the

@@ -62,6 +62,16 @@ public:
     void set_thickness (float thickness);
     void set_minor_lines(Minor_lines minor_lines);
 
+    // Routes the minor-style lines of the shape helpers through the bucket of
+    // minor_line_renderer instead of this renderer's own bucket. Give that
+    // bucket a lower stencil reference than this one and the major-style
+    // lines win every pixel they share with a minor line, whatever order the
+    // helper emits them in; in one bucket the first fringe to land on a
+    // pixel keeps it (doc/erhe/renderer.md "Line anti-aliasing"), so a
+    // self-occluded segment emitted first would cut the visible outline.
+    // Only the bucket is taken, so minor_line_renderer may go out of scope.
+    void set_minor_line_renderer(const Primitive_renderer& minor_line_renderer);
+
     void add_lines(const std::vector<Line>& lines);
     void add_lines(const std::initializer_list<Line> lines);
 
@@ -231,6 +241,12 @@ public:
 #pragma endregion Draw API
 
 private:
+    // The renderer the shape helpers emit their minor-style lines through:
+    // over the minor bucket when one is set, else over this renderer's own
+    // bucket. Line color and thickness are set per emission, so a fresh
+    // renderer carries no state that matters.
+    [[nodiscard]] auto make_minor_line_renderer() -> Primitive_renderer;
+
     void reserve_lines  (std::size_t line_count);
     void make_lines     (std::size_t line_count);
     // Allocate space for primitive_count primitives of vertices_per_primitive
@@ -274,6 +290,7 @@ private:
 
     Debug_renderer*        m_debug_renderer{nullptr};
     Debug_renderer_bucket* m_bucket{nullptr};
+    Debug_renderer_bucket* m_minor_bucket{nullptr}; // see set_minor_line_renderer()
 
     // offset (in lines), relative to vertex buffer range in Line_renderer
     // initialized in Primitive_renderer constructor

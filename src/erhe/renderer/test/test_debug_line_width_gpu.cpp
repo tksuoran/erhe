@@ -76,6 +76,16 @@ enum class Cross_line : unsigned int
     before  // ... drawn before it
 };
 
+// A black opaque line of the same width and position drawn before the white
+// one, the way a shape helper emits a self-occluded (minor) segment that
+// shares pixels with a visible (major) one.
+enum class Minor_line : unsigned int
+{
+    none,
+    same_bucket,   // through the white line's own bucket
+    lower_bucket   // through a bucket one stencil reference below
+};
+
 class Line_case
 {
 public:
@@ -90,6 +100,7 @@ public:
     Occlusion       occlusion      {Occlusion::none};
     bool            xray           {false};
     Cross_line      cross          {Cross_line::none};
+    Minor_line      minor          {Minor_line::none};
     Anti_aliasing   anti_aliasing  {Anti_aliasing::on};
     float           background     {0.0f};   // clear color gray level
 };
@@ -278,16 +289,40 @@ protected:
                 debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
                 {
                     // Stencil reference 1 passes the debug pipeline's
-                    // stencil test against the cleared 0.
+                    // stencil test against the cleared 0. The minor line
+                    // always uses 1; with Minor_line::lower_bucket the
+                    // white line goes one above.
+                    const unsigned int stencil_reference = (line_case.minor == Minor_line::lower_bucket) ? 2u : 1u;
                     Primitive_renderer line_renderer = debug_renderer.get(
                         Debug_renderer_config{
                             .primitive_type    = erhe::graphics::Primitive_type::line,
-                            .stencil_reference = 1,
+                            .stencil_reference = stencil_reference,
                             .draw_visible      = true,
                             .draw_hidden       = occluded,
                             .xray              = line_case.xray
                         }
                     );
+                    if (line_case.minor != Minor_line::none) {
+                        Primitive_renderer minor_renderer = debug_renderer.get(
+                            Debug_renderer_config{
+                                .primitive_type    = erhe::graphics::Primitive_type::line,
+                                .stencil_reference = 1,
+                                .draw_visible      = true,
+                                .draw_hidden       = occluded,
+                                .xray              = line_case.xray
+                            }
+                        );
+                        minor_renderer.set_line_color(glm::vec4{0.0f, 0.0f, 0.0f, 1.0f});
+                        minor_renderer.set_thickness(line_case.thickness);
+                        minor_renderer.add_lines(
+                            {
+                                Line{
+                                    .p0 = glm::vec3{line_x, -line_half_height, -5.0f},
+                                    .p1 = glm::vec3{line_x,  line_half_height, -5.0f}
+                                }
+                            }
+                        );
+                    }
                     line_renderer.set_line_color(glm::vec4{1.0f, 1.0f, 1.0f, line_case.alpha});
                     line_renderer.set_thickness(line_case.thickness);
                     const float cross_half_width = 0.5f * frame_width_in_world;
@@ -681,6 +716,33 @@ TEST_F(Debug_line_width_gpu_test, aa_crossing_core_is_never_blocked)
         for (std::size_t x = 0; x < row.size(); ++x) {
             EXPECT_GE(row[x], 254u) << "cross " << static_cast<unsigned int>(cross) << " x " << x;
         }
+    }
+}
+
+// 5a. A minor (black) line drawn first at the same place: through the same
+// bucket its fringe claims the edge pixels and the white line's fringe fails
+// the stencil test there (the torus preview lost its visible outline where
+// a self-occluded segment had landed first, RenderDoc stencil failure);
+// through a bucket one stencil reference below, the white line wins the
+// whole profile, core and fringe alike.
+TEST_F(Debug_line_width_gpu_test, aa_minor_line_in_lower_bucket_never_blocks_major)
+{
+    Line_case same = aa_case(-4.0f, 0.5f);
+    same.minor = Minor_line::same_bucket;
+    Line_case lower = same;
+    lower.minor = Minor_line::lower_bucket;
+    const std::vector<uint8_t> alone_row = render_row(aa_case(-4.0f, 0.5f));
+    const std::vector<uint8_t> same_row  = render_row(same);
+    const std::vector<uint8_t> lower_row = render_row(lower);
+    ASSERT_EQ(alone_row.size(), static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(same_row.size(),  static_cast<std::size_t>(c_aa_width));
+    ASSERT_EQ(lower_row.size(), static_cast<std::size_t>(c_aa_width));
+    const int c = c_aa_width / 2;
+    EXPECT_NEAR(alone_row[c - 2], 128, 2);
+    EXPECT_EQ(same_row[c - 2], 0u);   // the first fringe keeps the pixel inside one bucket
+    EXPECT_EQ(same_row[c    ], 255u); // the core is overwritten (greater_or_equal)
+    for (std::size_t x = 0; x < alone_row.size(); ++x) {
+        EXPECT_EQ(lower_row[x], alone_row[x]) << "x " << x;
     }
 }
 

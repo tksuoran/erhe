@@ -22,7 +22,7 @@ Provides the Create tool and shape generator classes for interactively creating 
 
 - **`Create_box`** -- Box generator with configurable dimensions and subdivision.
 
-- **`Create_preview_settings`** -- Settings for preview rendering (ideal shape vs. subdivided shape; `draw_hidden`, the window's "Preview Hidden Lines" checkbox, draws the parts occluded by scene geometry as dimmed hidden lines, off draws only the unoccluded parts; `self_occluded_lines`, the "Preview Self-occluded Lines" checkbox, draws the parts behind the shape's own silhouette as thin minor lines, off draws only the self-visible parts).
+- **`Create_preview_settings`** -- Settings for preview rendering (ideal shape vs. subdivided shape; `draw_hidden`, the window's "Preview Hidden Lines" checkbox, draws the parts occluded by scene geometry as dimmed hidden lines, off draws only the unoccluded parts; `self_occluded_lines`, the "Preview Self-occluded Lines" checkbox, draws the parts behind the shape's own silhouette as thin minor lines, off draws only the self-visible parts). `Create_shape::get_line_renderer` draws the visible lines at stencil reference 2 and the self-occluded lines through a second bucket at reference 1 (`Primitive_renderer::set_minor_line_renderer`), so a visible line always wins the pixels it shares with a self-occluded one.
 
 ## Public API / Integration Points
 
