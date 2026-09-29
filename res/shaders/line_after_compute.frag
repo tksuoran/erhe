@@ -53,5 +53,11 @@ void main(void)
         }
     }
     float alpha = v_color.a * coverage;
+#if defined(ERHE_DEBUG_LINE_HIDDEN)
+    // Hidden (occluded) pass: dimmed by the bucket's strength (0.1, or 1.0
+    // for xray). Scaling the premultiplied output keeps the coverage-scaled
+    // "over" blend, which a constant blend factor could not.
+    alpha *= view.hidden_dim;
+#endif
     out_color = vec4(v_color.rgb * alpha, alpha);
 }

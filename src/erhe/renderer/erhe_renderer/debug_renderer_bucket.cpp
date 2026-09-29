@@ -273,6 +273,10 @@ auto Debug_renderer_bucket::update_view_buffer(
     write(view_gpu_data, program_interface.fringe_offset,      as_span(fringe));
     write(view_gpu_data, program_interface.binary_edge_offset, as_span(binary_edge));
 
+    // Hidden-pass strength for the compute tier's fragment shader variant.
+    const float hidden_dim = m_config.xray ? 1.0f : Debug_renderer_program_interface::c_hidden_dim;
+    write(view_gpu_data, program_interface.hidden_dim_offset, as_span(hidden_dim));
+
     view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
     return view_buffer_range;
@@ -493,14 +497,17 @@ void Debug_renderer_bucket::render(
         // stages, so both compiles bypass it via set_render_pipeline_state()
         // -- the encoder's internal pipeline cache handles VkPipeline reuse.
         const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
-        erhe::graphics::Shader_stages* shader_stages = multiview
-            ? pi.multiview_graphics_shader_stages.get()
-            : pi.graphics_shader_stages.get();
-        if ((shader_stages == nullptr) || !shader_stages->is_valid()) {
-            return;
-        }
 
         auto render_compute_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
+            // The hidden variant scales its output by view.hidden_dim (0.1,
+            // or 1.0 for an xray bucket), so both passes blend premultiplied
+            // and the dim factor follows the anti-aliased coverage.
+            erhe::graphics::Shader_stages* shader_stages = multiview
+                ? (visible ? pi.multiview_graphics_shader_stages.get() : pi.multiview_hidden_graphics_shader_stages.get())
+                : (visible ? pi.graphics_shader_stages.get()           : pi.hidden_graphics_shader_stages.get());
+            if ((shader_stages == nullptr) || !shader_stages->is_valid()) {
+                return;
+            }
             // Temp pipeline state mirrors the cached pipeline's
             // depth/stencil/blend etc. but overrides shader_stages.
             // pipeline.data is Render_pipeline_create_info (the cache
@@ -520,7 +527,7 @@ void Debug_renderer_bucket::render(
                     .viewport_depth_range = pipeline.data.viewport_depth_range,
                     .rasterization        = pipeline.data.rasterization,
                     .depth_stencil        = pipeline.data.depth_stencil,
-                    .color_blend          = (visible || m_config.xray) ? pi.color_blend_visible : pi.color_blend_hidden
+                    .color_blend          = pi.color_blend_visible
                 }
             };
 

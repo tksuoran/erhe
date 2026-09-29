@@ -76,7 +76,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
             .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
         },
-        .constant = { 0.1f, 0.1f, 0.1f, 0.1f },
+        .constant = { c_hidden_dim, c_hidden_dim, c_hidden_dim, c_hidden_dim },
     }
 {
     // Line vertex struct defines the per-vertex data layout: position (xyz + width) and color.
@@ -131,7 +131,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
     window_to_ndc_scale_offset  = view_block->add_float("window_to_ndc_scale" )->get_offset_in_parent();
     // Line count of the dispatched draw, for the compute shader's tail guard.
     line_count_offset           = view_block->add_uint ("line_count"          )->get_offset_in_parent();
-    view_block->add_float("_padding1");
+    hidden_dim_offset           = view_block->add_float("hidden_dim"          )->get_offset_in_parent();
     // Anti-aliasing controls; a third trailing vec4 with two pad words.
     fringe_offset               = view_block->add_float("fringe"              )->get_offset_in_parent();
     binary_edge_offset          = view_block->add_float("binary_edge"         )->get_offset_in_parent();
@@ -248,81 +248,69 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
                 log_startup->error("Unable to load compute_before_line shader - check working directory '{}'", std::filesystem::current_path().string());
             }
         }
-        // Triangle rendering shader (reads triangle vertices produced by compute shader)
-        //
-        // Both the single-view and multiview compiles read pre-transformed
-        // triangles from the triangle SSBO and the per-eye viewport from
-        // the view UBO. They differ only in ERHE_MULTIVIEW (which resolves
-        // c_view_index to gl_ViewIndex vs 0u) and the multiview render
-        // pass's viewMask on the pipeline; the bind group layout and
-        // bindings are identical.
-        {
-            const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
-            const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
-            Shader_stages_create_info create_info{
-                .name             = "line_after_compute",
-                .struct_types     = { triangle_vertex_struct.get(), view_camera_struct.get() },
-                .interface_blocks = { triangle_vertex_buffer_read_block.get(), view_block.get() },
-                .fragment_outputs = &fragment_outputs,
-                .no_vertex_input  = true, // reads the triangle SSBO, not the input assembler
-                .shaders = {
-                    { Shader_type::vertex_shader,   vert_path },
-                    { Shader_type::fragment_shader, frag_path }
-                },
-                .bind_group_layout = graphics_bind_group_layout.get(),
-            };
-
-            Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
-            if (prototype.is_valid()) {
-                graphics_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
-                graphics_device.get_shader_monitor().add(create_info, graphics_shader_stages.get());
-            } else {
-                log_startup->error("Unable to load line_after_compute shader - check working directory '{}'", std::filesystem::current_path().string());
-            }
-        }
-
-        // Multiview graphics variant. Built only when view_count >= 2
-        // (which implies the device exposes multiview); single-view
-        // callers never invoke it. Phase 3 wires Headset_view's
-        // multiview callback to use this stage; until then it exists
-        // but is unreachable in production.
+        // Triangle rendering shaders (read triangle vertices produced by the
+        // compute shader). Four variants of line_after_compute.{vert,frag}:
+        // {visible, hidden} x {single view, multiview}. All read
+        // pre-transformed triangles from the triangle SSBO and the per-eye
+        // viewport from the view UBO; they differ only in the defines
+        // (ERHE_DEBUG_LINE_HIDDEN scales the output by view.hidden_dim;
+        // ERHE_MULTIVIEW resolves c_view_index to gl_ViewIndex vs 0u) and
+        // the multiview render pass's viewMask on the pipeline. The bind
+        // group layout and bindings are identical. The multiview variants
+        // are built only when view_count >= 2 (which implies the device
+        // exposes multiview); single-view callers never invoke them.
         //
         // The compute side does NOT need a multiview-specific variant:
         // compute_before_line.comp's main() always loops `for (v <
         // view.view_count)` and indexes view.cameras[v], so a single
         // compiled compute program serves both paths -- the C++ side
         // just writes the right view_count at runtime.
-        if (view_count >= 2) {
-            // Multiview graphics: vertex stage reads pre-transformed
-            // triangles from the read-only triangle SSBO (binding 1) at
-            // gl_VertexID + gl_ViewIndex * stride_per_view; fragment
-            // stage reads view.cameras[gl_ViewIndex].viewport.xy. The
-            // create_info has no vertex_format because the input
-            // assembler is not used; vertex_input is set to nullptr at
-            // pipeline construction time.
+        {
+            class Graphics_variant
             {
-                const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
-                const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
+            public:
+                const char*                                     name;
+                bool                                            hidden;
+                bool                                            multiview;
+                std::unique_ptr<erhe::graphics::Shader_stages>* target;
+            };
+            const Graphics_variant variants[4] = {
+                { "line_after_compute",                  false, false, &graphics_shader_stages                  },
+                { "line_after_compute_hidden",           true,  false, &hidden_graphics_shader_stages           },
+                { "line_after_compute_multiview",        false, true,  &multiview_graphics_shader_stages        },
+                { "line_after_compute_hidden_multiview", true,  true,  &multiview_hidden_graphics_shader_stages }
+            };
+            const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
+            const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
+            for (const Graphics_variant& variant : variants) {
+                if (variant.multiview && (view_count < 2)) {
+                    continue;
+                }
                 Shader_stages_create_info create_info{
-                    .name             = "line_after_compute_multiview",
+                    .name             = variant.name,
                     .struct_types     = { triangle_vertex_struct.get(), view_camera_struct.get() },
                     .interface_blocks = { triangle_vertex_buffer_read_block.get(), view_block.get() },
                     .fragment_outputs = &fragment_outputs,
-                    .no_vertex_input  = true, // multiview vert reads the SSBO, not the input assembler
+                    .no_vertex_input  = true, // reads the triangle SSBO, not the input assembler
                     .shaders = {
                         { Shader_type::vertex_shader,   vert_path },
                         { Shader_type::fragment_shader, frag_path }
                     },
                     .bind_group_layout = graphics_bind_group_layout.get(),
                 };
-                create_info.view_count = view_count;
+                if (variant.hidden) {
+                    create_info.defines.push_back({"ERHE_DEBUG_LINE_HIDDEN", "1"});
+                }
+                if (variant.multiview) {
+                    create_info.view_count = view_count;
+                }
 
                 Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
                 if (prototype.is_valid()) {
-                    multiview_graphics_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
-                    graphics_device.get_shader_monitor().add(create_info, multiview_graphics_shader_stages.get());
+                    *variant.target = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
+                    graphics_device.get_shader_monitor().add(create_info, variant.target->get());
                 } else {
-                    log_startup->error("Unable to load multiview line_after_compute shader");
+                    log_startup->error("Unable to load {} shader - check working directory '{}'", variant.name, std::filesystem::current_path().string());
                 }
             }
         }

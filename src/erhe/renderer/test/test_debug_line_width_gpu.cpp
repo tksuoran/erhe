@@ -88,6 +88,7 @@ public:
     bool            xray           {false};
     Cross_line      cross          {Cross_line::none};
     Anti_aliasing   anti_aliasing  {Anti_aliasing::on};
+    float           background     {0.0f};   // clear color gray level
 };
 
 // Row profile helpers: values are the red channel (0..255) of the middle row.
@@ -237,7 +238,8 @@ protected:
 
         erhe::graphics::Render_pass_descriptor descriptor{};
         descriptor.color_attachments[0].texture       = color_target.get();
-        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 1.0 };
+        const double background = static_cast<double>(line_case.background);
+        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ background, background, background, 1.0 };
         descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
         descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
         descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
@@ -552,22 +554,32 @@ TEST_F(Debug_line_width_gpu_test, translucent_line_twice_is_brighter_than_once)
     EXPECT_NEAR(twice_row[c], 191, 2);
 }
 
-// 6. Behind everything, the hidden pass draws the same profile dimmed to
-// 0.1; an xray bucket draws it at full strength.
-TEST_F(Debug_line_width_gpu_test, DISABLED_aa_hidden_pass_is_dimmed_and_anti_aliased)
+// 6. Behind everything, the hidden pass draws the same coverage profile at
+// strength 0.1 ("over" the background, so a fringe pixel darkens the
+// background only by 0.1 * coverage); an xray bucket draws it at full
+// strength. The gray background tells this apart from a constant-factor
+// blend, which would darken every ribbon pixel by the full 10 %.
+TEST_F(Debug_line_width_gpu_test, aa_hidden_pass_is_dimmed_and_anti_aliased)
 {
-    Line_case hidden = aa_case(-4.0f, 0.5f);
+    constexpr float background = 0.5f;
+    Line_case visible = aa_case(-4.0f, 0.5f);
+    visible.background = background;
+    Line_case hidden = visible;
     hidden.occlusion = Occlusion::behind;
     Line_case xray = hidden;
     xray.xray = true;
-    const std::vector<uint8_t> visible_row = render_row(aa_case(-4.0f, 0.5f));
+    const std::vector<uint8_t> visible_row = render_row(visible);
     const std::vector<uint8_t> hidden_row  = render_row(hidden);
     const std::vector<uint8_t> xray_row    = render_row(xray);
     ASSERT_EQ(visible_row.size(), static_cast<std::size_t>(c_aa_width));
     ASSERT_EQ(hidden_row.size(),  static_cast<std::size_t>(c_aa_width));
     ASSERT_EQ(xray_row.size(),    static_cast<std::size_t>(c_aa_width));
+    const float bg = 255.0f * background;
     for (std::size_t x = 0; x < visible_row.size(); ++x) {
-        EXPECT_NEAR(static_cast<float>(hidden_row[x]), 0.1f * static_cast<float>(visible_row[x]), 2.0f) << "x " << x;
+        // Coverage recovered from the visible row: visible = c * 255 + (1 - c) * bg.
+        const float c        = (static_cast<float>(visible_row[x]) - bg) / (255.0f - bg);
+        const float expected = (0.1f * c * 255.0f) + ((1.0f - (0.1f * c)) * bg);
+        EXPECT_NEAR(static_cast<float>(hidden_row[x]), expected, 2.0f) << "x " << x;
         EXPECT_NEAR(xray_row[x], visible_row[x], 1) << "x " << x;
     }
 }

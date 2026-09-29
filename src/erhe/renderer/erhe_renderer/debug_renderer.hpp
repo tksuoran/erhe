@@ -69,21 +69,28 @@ public:
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_read_block;
 
     std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
 
-    // Multiview graphics stage: line_after_compute.{vert,frag}
-    // recompiled with ERHE_MULTIVIEW so c_view_index resolves to
-    // gl_ViewIndex (graphics_shader_stages uses c_view_index = 0).
-    // Built only when view_count >= 2; both variants read pre-transformed
-    // triangles from the triangle SSBO + per-eye viewport from the view
-    // UBO -- they differ only in the ERHE_MULTIVIEW define and the
-    // multiview render pass's viewMask.
+    // line_after_compute.{vert,frag} variants. The visible pass outputs the
+    // coverage-scaled premultiplied color; the hidden pass
+    // (ERHE_DEBUG_LINE_HIDDEN) additionally scales it by view.hidden_dim,
+    // so both blend with color_blend_visible and the dim factor follows the
+    // anti-aliased coverage.
+    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   hidden_graphics_shader_stages;
+
+    // Multiview graphics stages: the same two shaders recompiled with
+    // ERHE_MULTIVIEW so c_view_index resolves to gl_ViewIndex
+    // (graphics_shader_stages uses c_view_index = 0). Built only when
+    // view_count >= 2; all variants read pre-transformed triangles from the
+    // triangle SSBO + per-eye viewport from the view UBO -- they differ only
+    // in the defines and the multiview render pass's viewMask.
     //
     // No multiview compute stage: compute_before_line.comp is already
     // view-count agnostic (loops over view.view_count, indexes
     // view.cameras[v]) so a single compiled compute program serves
     // both paths; the C++ side just writes view_count = 1 vs N.
     std::unique_ptr<erhe::graphics::Shader_stages>   multiview_graphics_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   multiview_hidden_graphics_shader_stages;
 
     // Direct path (triangles / thin lines): vertex buffer -> GL_LINES / GL_TRIANGLES
     erhe::dataformat::Vertex_format                  line_vertex_format;
@@ -95,9 +102,15 @@ public:
     // headset pass.
     std::unique_ptr<erhe::graphics::Shader_stages>   multiview_line_shader_stages;
 
+    // Strength of the hidden (occluded) pass: 0.1 dims it, an xray bucket
+    // draws it at 1.0. The compute tier applies it in the fragment shader
+    // (view.hidden_dim); the direct tier through color_blend_hidden.
+    static constexpr float                           c_hidden_dim{0.1f};
+
     erhe::graphics::Color_blend_state                color_blend_visible;
-    // Dim constant-factor blend for the hidden (occluded) pass; buckets with
-    // Debug_renderer_config::xray use color_blend_visible for that pass instead.
+    // Dim constant-factor blend for the hidden pass of the direct tier
+    // (triangles, thin lines); buckets with Debug_renderer_config::xray use
+    // color_blend_visible for that pass instead.
     erhe::graphics::Color_blend_state                color_blend_hidden;
 
     // View UBO. Layout:
@@ -153,6 +166,9 @@ public:
     // round caps by distance.
     std::size_t                                      fringe_offset              {0};
     std::size_t                                      binary_edge_offset         {0};
+    // Strength of the hidden pass for this bucket (c_hidden_dim, or 1.0 for
+    // an xray bucket), applied by the ERHE_DEBUG_LINE_HIDDEN fragment variant.
+    std::size_t                                      hidden_dim_offset          {0};
 };
 
 class Primitive_renderer;
