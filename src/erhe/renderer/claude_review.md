@@ -15,13 +15,12 @@ A substantial rendering utility library providing debug line/primitive rendering
 ## Issues
 - **[moderate]** `renderer_message.hpp` defines `App_message`, `Message_flag_bit`, and `Scene_view` forward declaration -- these are editor-level concepts that do not belong in a low-level renderer library. This creates an upward dependency concern.
 - **[moderate]** `texture_renderer.cpp` and `renderer_message_bus.cpp` are empty (1-byte files). These likely represent abandoned features; the corresponding headers still exist.
-- **[moderate]** `line_renderer.cpp` appears to be a stale/old version of `primitive_renderer.cpp` (references `scoped_line_renderer.hpp`, `line_renderer.hpp`, `Line_renderer_bucket` which don't exist in the current tree). This file likely doesn't compile and may be excluded from CMake.
 - **[minor]** `debug_renderer.cpp:211` calls `set_compute_pipeline_state` twice with the same pipeline in `compute()`.
 - **[minor]** `renderer_config.hpp` is an empty namespace stub with no content.
 - **[minor]** `debug_renderer_bucket.cpp:128-129` declares `gpu_float_data` and `gpu_uint32_data` spans but they are never used (only `view_gpu_data` is used via `write()`).
 
 ## Suggestions
 - Move `renderer_message.hpp` and related types to the editor layer where they belong, or at minimum rename to reflect they're editor-specific
-- Remove or properly integrate `line_renderer.cpp`, `texture_renderer.cpp`, `renderer_message_bus.cpp`, and `renderer_config.hpp` -- they appear to be dead code
+- Remove or properly integrate `texture_renderer.cpp`, `renderer_message_bus.cpp`, and `renderer_config.hpp` -- they appear to be dead code
 - Remove the duplicate `set_compute_pipeline_state` call in `Debug_renderer::compute()`
 - Remove the unused `gpu_float_data`/`gpu_uint32_data` spans in `update_view_buffer()`

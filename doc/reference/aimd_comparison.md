@@ -337,9 +337,6 @@ Ordered by value to erhe.
 
 ## 7. erhe defects noticed during the review
 
-- `src/erhe/renderer/erhe_renderer/line_renderer.cpp` is a stale copy of an
-  older `Primitive_renderer` (it includes headers that no longer exist) and is
-  not listed in the library's `CMakeLists.txt`.
 - `Debug_renderer_bucket::start_view` allocates a `std::vector<View>` per view
   span per frame, and `Debug_renderer::begin_frame` refills
   `m_multiview_views` with `assign`; both run in the steady-state frame (see
