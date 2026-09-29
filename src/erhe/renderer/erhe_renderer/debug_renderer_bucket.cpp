@@ -308,21 +308,12 @@ void Debug_renderer_bucket::clear()
 {
     m_draws.clear();
     m_view_spans.clear();
+    m_span_views.clear();
 }
 
 void Debug_renderer_bucket::start_view(const View& view)
 {
-    if (!m_view_spans.empty()) {
-        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
-    }
-    m_view_spans.push_back(
-        {
-            .views = std::vector<View>{view},
-            .begin = m_draws.size(),
-            .end   = m_draws.size()
-        }
-    );
-    m_start_new_draw = true;
+    start_view(std::span<const View>{&view, 1});
 }
 
 void Debug_renderer_bucket::start_view(std::span<const View> views)
@@ -330,14 +321,22 @@ void Debug_renderer_bucket::start_view(std::span<const View> views)
     if (!m_view_spans.empty()) {
         ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
     }
+    const std::size_t first_view = m_span_views.size();
+    m_span_views.insert(m_span_views.end(), views.begin(), views.end());
     m_view_spans.push_back(
-        {
-            .views = std::vector<View>{views.begin(), views.end()},
-            .begin = m_draws.size(),
-            .end   = m_draws.size()
+        Debug_draw_view_span{
+            .first_view = first_view,
+            .view_count = views.size(),
+            .begin      = m_draws.size(),
+            .end        = m_draws.size()
         }
     );
     m_start_new_draw = true;
+}
+
+auto Debug_renderer_bucket::get_span_views(const Debug_draw_view_span& view_span) const -> std::span<const View>
+{
+    return std::span<const View>{m_span_views}.subspan(view_span.first_view, view_span.view_count);
 }
 
 [[nodiscard]] auto vertex_count_from_primitive_count(
@@ -368,8 +367,9 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
-    for (Debug_draw_view_span& view_span : m_view_spans) {
-        const std::size_t view_count = view_span.views.size();
+    for (const Debug_draw_view_span& view_span : m_view_spans) {
+        const std::span<const View> views      = get_span_views(view_span);
+        const std::size_t           view_count = views.size();
 
         // Always populate a per-draw view UBO range and hold it on the
         // Debug_draw_entry. Single-view fills stride_per_view with the
@@ -382,7 +382,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
             Debug_draw_entry& draw = m_draws[i];
             ERHE_VERIFY(draw.primitive_count > 0);
 
-            draw.view_buffer_range = update_view_buffer(view_span.views, draw.primitive_count);
+            draw.view_buffer_range = update_view_buffer(views, draw.primitive_count);
             m_view_buffer.bind(encoder, draw.view_buffer_range);
 
             draw.input_buffer_range.close();
@@ -579,12 +579,12 @@ void Debug_renderer_bucket::render(
                 const float bias_sign     = reverse_depth ? 1.0f : -1.0f;
                 render_encoder.set_depth_bias(bias_sign * 4.0f, bias_sign * 1.0f, 0.0f);
             }
-            for (Debug_draw_view_span& view_span : m_view_spans) {
+            for (const Debug_draw_view_span& view_span : m_view_spans) {
                 // Writes cameras[0..N-1]; the vertex shader picks its eye
                 // via c_view_index. stride_per_view is a compute-path
                 // concept (SSBO slab offset); the direct path fetches
                 // vertices through the input assembler, so 0 is passed.
-                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.views, /*primitive_count*/ 0);
+                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(get_span_views(view_span), /*primitive_count*/ 0);
                 m_view_buffer.bind(render_encoder, view_buffer_range);
 
                 for (size_t i = view_span.begin; i < view_span.end; ++i) {

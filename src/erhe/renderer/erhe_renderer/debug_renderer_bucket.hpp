@@ -99,14 +99,19 @@ public:
 class Debug_draw_view_span
 {
 public:
-    // Single-view: views.size() == 1, cameras[0] only is populated in
-    // the UBO and view_count = 1 at runtime. Multiview: views.size() ==
-    // view_count, cameras[0..N-1] are populated and view_count = N
-    // so the compute shader loops over all eyes and the multiview
-    // vertex shader can slab-index by gl_ViewIndex.
-    std::vector<View> views;
-    std::size_t       begin;
-    std::size_t       end;
+    // The span's views are Debug_renderer_bucket::m_span_views
+    // [first_view, first_view + view_count): a flat per-bucket store that is
+    // cleared (capacity kept) every frame, so starting a view span does not
+    // allocate in steady state.
+    // Single-view: view_count == 1, cameras[0] only is populated in
+    // the UBO and view_count = 1 at runtime. Multiview: view_count ==
+    // Debug_renderer view_count, cameras[0..N-1] are populated and
+    // view_count = N so the compute shader loops over all eyes and the
+    // multiview vertex shader can slab-index by gl_ViewIndex.
+    std::size_t first_view;
+    std::size_t view_count;
+    std::size_t begin;
+    std::size_t end;
 };
 
 class Debug_renderer_bucket
@@ -141,6 +146,7 @@ private:
         std::span<const View> views,
         std::size_t           primitive_count
     ) -> erhe::graphics::Ring_buffer_range;
+    [[nodiscard]] auto get_span_views(const Debug_draw_view_span& view_span) const -> std::span<const View>;
 
     // Tier helper derived from m_shader_key. uses_compute() == false means
     // the bucket takes the direct (vertex-buffer) draw path -- the case for
@@ -164,6 +170,7 @@ private:
     erhe::graphics::Base_render_pipeline m_pipeline_hidden;
     std::vector<Debug_draw_entry>        m_draws;
     std::vector<Debug_draw_view_span>    m_view_spans;
+    std::vector<View>                    m_span_views;
     bool                                 m_start_new_draw{true};
 };
 

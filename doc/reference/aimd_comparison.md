@@ -172,7 +172,7 @@ draw visible / draw hidden, thin lines, x-ray) selects one of up to 32
 | Text | Projected anchors to user callback (UI draws) | Separate `Text_renderer` with own atlas |
 | GPU-driven emission | Yes: HLSL API, atomics, indirect draws, auto-grow | No |
 | Stats | `aimdGetStats` | None |
-| Steady-state allocations | None once vectors reach high water (capacity kept) | `start_view` allocates a `std::vector<View>` per bucket view span per frame |
+| Steady-state allocations | None once vectors reach high water (capacity kept) | None once buckets reach high water (draw entries, view spans and span views live in flat vectors cleared with capacity kept) |
 | Shader hot reload | No | Yes (shader monitor) |
 | Tests | Demo only | GPU pixel-width test (`erhe_renderer_gpu_tests`) |
 | Physics integration | None | Jolt `DebugRenderer` adapter |
@@ -254,10 +254,6 @@ Weaknesses:
 - **API ergonomics.** Many positional parameters per shape (major/minor color
   and thickness, camera position, step counts); state is split between the
   config and the `Primitive_renderer`; float RGBA colors (16 bytes) per vertex.
-- **Allocation discipline.** `Debug_renderer_bucket::start_view` builds a
-  `std::vector<View>` for every view span of every bucket each frame
-  (`debug_renderer_bucket.cpp`), and every `get()` call starts a new span.
-
 ## 5. What erhe could borrow from AIMD
 
 Ordered by value to erhe.
@@ -337,10 +333,6 @@ Ordered by value to erhe.
 
 ## 7. erhe defects noticed during the review
 
-- `Debug_renderer_bucket::start_view` allocates a `std::vector<View>` per view
-  span per frame, and `Debug_renderer::begin_frame` refills
-  `m_multiview_views` with `assign`; both run in the steady-state frame (see
-  AGENTS.md "Run-time Memory Allocation Discipline").
 - The point bucket is reachable through `Debug_renderer_config` but
   `line_simple.vert` never writes `gl_PointSize`; Vulkan (without
   `maintenance5`) leaves the point size undefined in that case and Metal
