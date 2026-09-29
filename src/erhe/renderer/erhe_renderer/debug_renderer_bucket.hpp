@@ -26,7 +26,9 @@ class Debug_renderer;
 class Debug_renderer_config
 {
 public:
-    erhe::graphics::Primitive_type primitive_type   {0};
+    // line or triangle; other primitive types are rejected when the bucket is
+    // created (Debug_renderer_shader_key::derive).
+    erhe::graphics::Primitive_type primitive_type   {erhe::graphics::Primitive_type::line};
     unsigned int                   stencil_reference{0};
     bool                           draw_visible     {true};
     bool                           draw_hidden      {false};
@@ -50,7 +52,7 @@ class Debug_renderer_shader_key
 public:
     // Shader tier that produces the final on-screen primitives:
     //   simple   - direct vertex buffer -> line_simple.{vert,frag}; the draw
-    //              topology is primitive_type (line / triangle / point).
+    //              topology is primitive_type (line / triangle).
     //   compute  - SSBO lines -> compute_before_line.comp -> triangle SSBO ->
     //              graphics (wide lines; line only).
     enum class Tier : uint8_t { simple = 0, compute = 1 };
@@ -67,8 +69,9 @@ public:
                 static_cast<std::uint64_t>(tier);
     }
 
-    // Only the line primitive uses the wide-line compute tier; triangles,
-    // points and thin lines always render directly via the simple tier.
+    // Only the line primitive uses the wide-line compute tier; triangles
+    // and thin lines always render directly via the simple tier. Verifies
+    // that the config's primitive type is line or triangle.
     [[nodiscard]] static auto derive(const Debug_renderer_config& config) -> Debug_renderer_shader_key;
 };
 
@@ -150,7 +153,7 @@ private:
 
     // Tier helper derived from m_shader_key. uses_compute() == false means
     // the bucket takes the direct (vertex-buffer) draw path -- the case for
-    // triangle / point primitives and for thin lines.
+    // triangle primitives and for thin lines.
     [[nodiscard]] auto uses_compute() const -> bool { return m_shader_key.tier == Debug_renderer_shader_key::Tier::compute; }
 
     erhe::graphics::Device&            m_graphics_device;
@@ -162,7 +165,7 @@ private:
     std::optional<erhe::graphics::Ring_buffer_client> m_vertex_ssbo_buffer;
     std::optional<erhe::graphics::Ring_buffer_client> m_triangle_vertex_buffer;
 
-    // Direct path: line / triangle / point vertices -> render GL_LINES / GL_TRIANGLES / GL_POINTS directly
+    // Direct path: line / triangle vertices -> render GL_LINES / GL_TRIANGLES directly
     std::optional<erhe::graphics::Ring_buffer_client> m_line_vertex_buffer;
 
     Debug_renderer_config                m_config;

@@ -100,6 +100,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::renderer`: `Debug_renderer_config::primitive_type` defaults to
+  `Primitive_type::line` (was `Primitive_type{0}`, i.e. `point`) and must be
+  `line` or `triangle`; any other type fails an `ERHE_VERIFY` when its bucket
+  is created. The point path, which never set a point size, is removed.
 - `erhe::scene_renderer`: `Shadow_frustum_fit_settings::depth_clamp` selects
   the depth-clamp pipelines for the directional light passes only; spot
   passes always clip. `Shadow_renderer::render()` gathers the caster bounds

@@ -34,13 +34,20 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
 
 auto Debug_renderer_shader_key::derive(const Debug_renderer_config& config) -> Debug_renderer_shader_key
 {
+    // Only lines and triangles have a shader path: points would need a
+    // point-size output (undefined on Vulkan and invalid on Metal without it)
+    // and strips do not fit the per-primitive vertex allocation.
+    ERHE_VERIFY(
+        (config.primitive_type == erhe::graphics::Primitive_type::line) ||
+        (config.primitive_type == erhe::graphics::Primitive_type::triangle)
+    );
     Debug_renderer_shader_key key;
     key.primitive_type = config.primitive_type;
     if ((config.primitive_type == erhe::graphics::Primitive_type::line) && !config.thin_lines) {
         // Wide lines are expanded to triangles by the compute shader.
         key.tier = Tier::compute;
     } else {
-        // Triangles, points and thin lines render directly; there is no
+        // Triangles and thin lines render directly; there is no
         // wide-line expansion to do, so the compute tier does not apply.
         key.tier = Tier::simple;
     }
@@ -65,7 +72,6 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
         default: {
             switch (m_shader_key.primitive_type) {
                 case erhe::graphics::Primitive_type::triangle: input_assembly = Input_assembly_state::triangle; break;
-                case erhe::graphics::Primitive_type::point:    input_assembly = Input_assembly_state::point;    break;
                 case erhe::graphics::Primitive_type::line:
                 default:                                       input_assembly = Input_assembly_state::line;     break;
             }
@@ -345,7 +351,6 @@ auto Debug_renderer_bucket::get_span_views(const Debug_draw_view_span& view_span
 ) -> std::size_t
 {
     switch (primitive_type) {
-        case erhe::graphics::Primitive_type::point:    return primitive_count;
         case erhe::graphics::Primitive_type::line:     return 2 * primitive_count;
         case erhe::graphics::Primitive_type::triangle: return 3 * primitive_count;
         default: {
@@ -362,7 +367,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
     }
 
     // The compute tier is only ever derived for the line primitive (the
-    // wide-line expansion); triangle / point buckets never reach here.
+    // wide-line expansion); triangle buckets never reach here.
     ERHE_VERIFY(m_config.primitive_type == erhe::graphics::Primitive_type::line);
 
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
@@ -533,8 +538,8 @@ void Debug_renderer_bucket::render(
         }
     } else {
         // Direct path: close input ranges (upload CPU data to GPU), then render
-        // GL_LINES / GL_TRIANGLES / GL_POINTS directly from the vertex buffer.
-        // This serves every triangle / point / thin-line bucket (which never
+        // GL_LINES / GL_TRIANGLES directly from the vertex buffer.
+        // This serves every triangle / thin-line bucket (which never
         // use compute).
         // Multiview draws the same world-space vertex buffer once into the
         // layered render pass with the line_simple_multiview stages, whose
@@ -550,8 +555,8 @@ void Debug_renderer_bucket::render(
         auto render_line_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
             const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
             // The simple shader (line_simple.{vert,frag}) only transforms
-            // position and passes color through, so it serves line, triangle
-            // and point topologies alike from the shared line_vertex_format.
+            // position and passes color through, so it serves line and
+            // triangle topologies alike from the shared line_vertex_format.
             erhe::graphics::Shader_stages* line_shader_stages = multiview
                 ? pi.multiview_line_shader_stages.get()
                 : pi.line_shader_stages.get();

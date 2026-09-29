@@ -323,7 +323,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
         }
     }
 
-    // Direct-path shader: triangle / point / thin-line buckets render their
+    // Direct-path shader: triangle / thin-line buckets render their
     // vertex buffer directly (no wide-line expansion, so no compute involved).
     {
         using namespace erhe::graphics;
@@ -351,7 +351,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             log_startup->error("Unable to load line_simple shader - check working directory '{}'", std::filesystem::current_path().string());
         }
 
-        // Multiview variant for the direct path (triangle / point / thin-line
+        // Multiview variant for the direct path (triangle / thin-line
         // buckets in the headset pass). Same sources; ERHE_MULTIVIEW makes
         // c_view_index resolve to gl_ViewIndex, so the vertex shader picks
         // the per-eye camera while the shared world-space vertex buffer is

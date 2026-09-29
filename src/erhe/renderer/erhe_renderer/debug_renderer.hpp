@@ -85,13 +85,13 @@ public:
     // both paths; the C++ side just writes view_count = 1 vs N.
     std::unique_ptr<erhe::graphics::Shader_stages>   multiview_graphics_shader_stages;
 
-    // Direct path (triangles / points / thin lines): vertex buffer → GL_LINES / GL_TRIANGLES / GL_POINTS
+    // Direct path (triangles / thin lines): vertex buffer -> GL_LINES / GL_TRIANGLES
     erhe::dataformat::Vertex_format                  line_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
     // Multiview compile of line_simple (built when view_count >= 2): same
     // vertex-buffer direct path, but c_view_index resolves to gl_ViewIndex
     // so one draw inside a multiview render pass transforms per eye. Serves
-    // the direct-path buckets (triangles, points, thin lines) in the
+    // the direct-path buckets (triangles, thin lines) in the
     // headset pass.
     std::unique_ptr<erhe::graphics::Shader_stages>   multiview_line_shader_stages;
 

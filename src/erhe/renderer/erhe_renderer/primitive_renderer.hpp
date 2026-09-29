@@ -220,7 +220,7 @@ private:
     void reserve_lines  (std::size_t line_count);
     void make_lines     (std::size_t line_count);
     // Allocate space for primitive_count primitives of vertices_per_primitive
-    // vertices each (2 = line, 3 = triangle, 1 = point) and reset the put()
+    // vertices each (2 = line, 3 = triangle) and reset the put()
     // write cursor to the start of the allocation.
     void make_primitives(std::size_t primitive_count, std::size_t vertices_per_primitive);
 

@@ -7,8 +7,7 @@ geometry renderer, `erhe::renderer::Debug_renderer` and its draw API
 [erhe/debug_renderer_multiview.md](../erhe/debug_renderer_multiview.md)).
 Reviewed from a local clone of AIMD at commit `4c4ad82` ("ADD: Cleanup",
 2026-09) and erhe `main` on 2026-09-29. Section 5 lists what erhe could adopt
-from AIMD, section 6 the reverse, section 7 erhe defects noticed during the
-review.
+from AIMD, section 6 the reverse.
 
 ## 1. What AIMD is
 
@@ -90,7 +89,7 @@ draw visible / draw hidden, thin lines, x-ray) selects one of up to 32
   written straight into a mapped ring-buffer range, `compute_before_line.comp`
   expands each line into a 4-triangle "tent" (12 vertices of 48 bytes, per
   view) in a triangle SSBO, and `line_after_compute.{vert,frag}` pulls those
-  triangles. Triangles, thin lines and the point bucket take the simple tier:
+  triangles. Triangles and thin lines take the simple tier:
   the vertex buffer is drawn directly with its own topology by
   `line_simple.{vert,frag}`.
 - **Frame protocol.** `begin_frame(viewport, views)`, `get(...)` + `add_*`
@@ -157,7 +156,7 @@ draw visible / draw hidden, thin lines, x-ray) selects one of up to 32
 | Line anti-aliasing | Analytic coverage, 1 px fringe, sub-pixel fade | Binary (discard < 0.5); relies on MSAA |
 | Line caps | Square (polyline joins) | Round |
 | Clipping | Near plane (vertex shader) | Near and far planes (compute shader) |
-| Points | Pixel size, square or round, AA | No point API in `Primitive_renderer`; `line_simple.vert` writes no `gl_PointSize` |
+| Points | Pixel size, square or round, AA | None: `Debug_renderer_config` accepts only line and triangle primitives |
 | Filled shapes | All closed shapes, winding-independent back-face cull | Triangles only (`add_triangle(s)`), flat |
 | Shading | Optional key + hemisphere light | None |
 | Silhouette accuracy | UV-sphere / segment tessellation | Exact silhouettes for sphere, cone, capsule, torus |
@@ -330,10 +329,3 @@ Ordered by value to erhe.
    records in place instead of pushing to a vector and copying at execute.
 9. **Automated pixel tests.** An offscreen test that measures line widths and
    coverage across viewport sizes, projections and scales.
-
-## 7. erhe defects noticed during the review
-
-- The point bucket is reachable through `Debug_renderer_config` but
-  `line_simple.vert` never writes `gl_PointSize`; Vulkan (without
-  `maintenance5`) leaves the point size undefined in that case and Metal
-  requires `[[point_size]]`, so point topology draws are not portable.
