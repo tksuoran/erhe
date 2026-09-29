@@ -192,6 +192,11 @@ verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clea
 ✓verify::erhe_commands_tests-14+Mcp_test.set_command_bindings+headless-UI-driving{capture,Delete-in-modal-safe,remove,reset}+non-AI-save/load-roundtrip{config/editor-restored}
 ?open::user-interactive-check{windowed-capture-modal}
 
+[2026-09-29::commands-reentrant-sort_bindings]
+>fixed::f6d9ac720-std::system_error-in-sort_bindings{Hotbar-rotate(mouse)->Tools::set_priority_tool->Commands::sort_bindings-relocked-m_command_mutex-held-by-tick;regression-from-c742928cf}
+>changed::m_command_mutex->recursive_mutex+sort_bindings-during-tick-dispatch=deferred{m_dispatching+m_sort_requested;applied-before-next-event+after-last}
+✓verify::erhe_commands_tests-15{new-test-fails-on-old-code}+headless-editor-builds;¬windowed-hotbar-click-repro
+
 ## 2026-09-04 archive of activeContext (superseded by property-system focus)
 §MBEL:5.0
 
