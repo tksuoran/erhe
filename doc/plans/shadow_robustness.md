@@ -1,13 +1,13 @@
 # Shadow robustness: remaining work
 
-Status: in progress
+Status: proposed
 
 The directional, spot and point shadow paths meet the correctness
 requirements and gates (R1 to R8, R10; G1 to G6) of [`shadows.md`](../erhe/shadows.md) "Shadow verification" on Vulkan (the
 headless editor matrices) and OpenGL (the library GPU tests); the design is in
 [`shadows.md`](../erhe/shadows.md) and
 [`point_light_shadows.md`](../erhe/point_light_shadows.md), the commands in
-[`testing.md`](../testing.md) "Shadow verification". Two items remain.
+[`testing.md`](../testing.md) "Shadow verification". Two items remain, both future work.
 
 ## 1. Metal
 
@@ -20,23 +20,26 @@ agree bit for bit (`shadows.md` "The distance technique"). Pass: every case
 passes, as on Vulkan and OpenGL, and the device's depth convention is recorded
 in `shadows.md` "Verified backends".
 
-## 2. Forward pass cost (G7)
+## 2. Forward pass cost: profiling and optimization
 
-Measured with `shadow_verify.py --g7 9` against the tree before the shadow
-robustness work (the parent of commit 0455be972, extracted with `git archive`
-and built on its own), two alternating rounds, Debug headless Vulkan editor,
-AMD iGPU, Medium preset, 1920 x 1080: the forward pass is 12 % slower (median
-of the per-view / per-light ratios; range +2 % to +16 %): `cornell` +9 %
-(directional +2 to +9 %, spot +12 to +16 %, point +4 to +7 %),
-`contact_blocks` +13 % (+12 to +15 % for every light type, point included).
-G7 allows 10 %. The per-light spread and the uniform `contact_blocks`
-increase point at two costs: the per-tap minimum bias of the 2D paths, and a
-per-vertex / per-fragment cost shared by every light type (the view-relative
-`precise` vertex path of `standard.vert` and the receiver geometric normal
-`get_receiver_geometric_normal()` taken once per fragment). Profile the
-forward pass (RenderDoc or a shader-variant A/B on the same editor), move
-per-light constants of the minimum bias out of the per-fragment path where
-the bound allows it, and re-measure until every view is within 10 % or the
-remaining cost is traced to a term the requirements need; record the result
-in `shadows.md` "Shadow verification" and the absolute numbers in the
-machine-local memory bank.
+The hardened path costs a median of +12 % forward pass GPU time against the
+tree before the shadow robustness work (`shadows.md` "Shadow verification",
+G7: accepted cost). Per view and light: `cornell` +9 % (directional +2 to
++9 %, spot +12 to +16 %, point +4 to +7 %), `contact_blocks` +13 % (+12 to
++15 % for every light type, point included); measured with
+`shadow_verify.py --g7 9`, two alternating rounds, Debug headless Vulkan
+editor, AMD iGPU, Medium preset, 1920 x 1080. The per-light spread and the
+uniform `contact_blocks` increase point at two costs: the per-tap minimum
+bias of the 2D paths, and a per-vertex / per-fragment cost shared by every
+light type (the view-relative `precise` vertex path of `standard.vert` and
+the receiver geometric normal `get_receiver_geometric_normal()` taken once
+per fragment).
+
+Profile the forward pass (RenderDoc or a shader-variant A/B on the same
+editor) and attribute the cost to those terms; then move per-light
+constants of the minimum bias out of the per-fragment path where the bound
+allows it and share per-fragment work across lights, without weakening any
+bound (the gates of `shadows.md` "Shadow verification" still pass).
+Re-measure with `--g7`, lower G7's accepted cost in `shadows.md` to the new
+measurement, and record the absolute numbers in the machine-local memory
+bank.

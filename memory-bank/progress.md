@@ -71,5 +71,5 @@
 !incident::coder-stash-pop-applied-user-stash@{0};reset-22-files-to-HEAD;stash-intact-verified
 ✓8a::b880a2ffd{GL-T7-30/30;precise-gate-400}
 ✓8b::56dce4e61+c853d1279+5c7107cc6{T7-distance-cases-Vk+GL;GL-reverse-Z;final-gate-0-FAIL-10.5min;docs->shadows.md-Shadow-verification;plan=Metal+G7}
-!G7-FAILS::forward-pass+12%(cornell+8.7,contact_blocks+13.2)vs-10%-budget;unprofiled
-?next::G7-decision(user)+Metal
+✓G7-accepted(user-2026-09-29)::+12%-median,+16%-max;profiling+optimization=future-work-in-plan
+✓SHADOW-ROBUSTNESS-DONE-except-future{Metal,G7-optimization}
