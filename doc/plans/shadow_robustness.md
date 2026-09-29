@@ -567,10 +567,8 @@ Each phase ends with the core matrix, one commit per logical change, and
 section 9 rewritten to the new gate table.
 
 - **Phase 8 - backends, cost and documentation.** Build the shadow
-  changes on the OpenGL tree and run T7 there (the `precise` ray
-  construction of D7, D12's `precise` view-relative translation and every
-  shader change of phases 2 to 7 are verified on
-  Vulkan only), and on Metal where a macOS machine is available. G7; rewrite shadows.md "Shadow
+  changes on Metal and run T7 there where a macOS machine is available
+  (OpenGL: T7 passes, shadows.md "Verified backends"). G7; rewrite shadows.md "Shadow
   sampling" and "Bias technique" for the landed design, add the verify recipe
   to `doc/testing.md`, run the final gate (Low, Medium, High,
   Medium/shadow_technique=distance and Medium/depth_clamp=false, short

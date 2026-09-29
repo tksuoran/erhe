@@ -161,7 +161,8 @@ vec3 erhe_min_axis(vec3 v)
 }
 #endif
 
-#if __VERSION__ >= 450
+// `precise` is core GLSL from 4.00.
+#if __VERSION__ >= 400
 #   define ERHE_VIEW_RELATIVE_PRECISE precise
 #else
 #   define ERHE_VIEW_RELATIVE_PRECISE

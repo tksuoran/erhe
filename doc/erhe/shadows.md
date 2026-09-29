@@ -544,6 +544,18 @@ and filter (`hard`, `pcf_2x2`, `pcf_4x4` and `pcf_6x6` with each
   5 cm inside its analytic shadow at every pose, and at the identity pose 1
   at least 10 cm outside it.
 
+### Verified backends
+
+The shadow path is verified on Vulkan (these cases, and
+`scripts/shadow_verify.py` on the headless Vulkan editor) and on OpenGL
+(these cases on a non-ASAN OpenGL test tree, `scripts\configure_tests.bat`).
+The OpenGL editor has no headless build, so `shadow_verify.py` runs on
+Vulkan only. The cases above use the depth technique, so on OpenGL the
+distance technique (its caster and receiver) is not exercised.
+Metal is not verified. The `precise` qualifiers (`ERHE_SHADOW_DISTANCE_PRECISE`,
+`ERHE_VIEW_RELATIVE_PRECISE`) apply from GLSL 4.00, where `precise` is core;
+only `dFdxFine` / `dFdyFine` need GLSL 4.50.
+
 ## Bias technique: RPDB reference, and the distance technique
 
 erhe's receiver-side bias is the receiver-plane depth bias (RPDB) method from

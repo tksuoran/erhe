@@ -14,7 +14,9 @@
 // expressions, and the computations are `precise` (no contraction or
 // reassociation), so both passes get the same ray bit for bit.
 
-#if __VERSION__ >= 450
+// `precise` is core GLSL from 4.00 (not gated on 4.50 like dFdxFine), so
+// OpenGL 4.1 contexts get the bit-exact ray too.
+#if __VERSION__ >= 400
 #   define ERHE_SHADOW_DISTANCE_PRECISE precise
 #else
 #   define ERHE_SHADOW_DISTANCE_PRECISE
