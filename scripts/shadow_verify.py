@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Measure the shadow paths against analytic ground truth on the shadow test stations.
 
-doc/plans/shadow_robustness.md sections 5 to 7 (T6): loads each station asset
+doc/erhe/shadows.md "Shadow verification" (requirements, stations, gates,
+matrices; commands in doc/testing.md "Shadow verification"): loads each station asset
 of scripts/creations/creation_25_shadow_test_rooms.py (imported: every box,
 light pose, view, pose sweep and contact line comes from that module) in a
 headless editor, walks the test matrix with the MCP tool `set_graphics_preset`
 and the pose sweep with `edit_light` (the module's apply_light_pose()), renders
-each view with `render_scene_image`, applies the section 6 gates, prints a
+each view with `render_scene_image`, applies the gates, prints a
 PASS / FAIL table, writes logs/shadow_verify/<timestamp>.json and exits
 non-zero on a FAIL with --enforce.
 
@@ -19,6 +20,7 @@ Usage:
                                    [--runs N] [--rerun-failing N] [--enforce] [--no-g6]
                                    [--save-images none|failing|all] [--workers N]
                                    [--list-configs] [--reuse] [--port N] [--editor PATH]
+    py -3 scripts/shadow_verify.py --g7 RUNS [--editor PATH] [--editor-root DIR] [--port N]
 
 Renders (all `output: "linear"`, `msaa_samples: 0`, so pixels of the two
 renders of one camera correspond 1:1; PNG output is never measured, it has
@@ -62,7 +64,7 @@ are the in-plane world displacements that move one texel along u / v,
 solved in the receiver's face plane (tangent basis T: (J T) x = texel step);
 G3 / G5 measure through them.
 
-Edge band (section 6). The filter reads the texels whose centres lie within
+Edge band. The filter reads the texels whose centres lie within
 the filter radius of the sample point in texel space (L-inf: hard 0.5,
 pcf_2x2 1, pcf_4x4 2, pcf_6x6 3, the distance technique the same K; point
 lights 0.5, the cube lookup is a single compare), and each stored texel is
@@ -85,7 +87,7 @@ shadow can lie between any finite set of samples of the square (and, seen
 from the camera, behind the caster that casts it). The hut interiors of
 thin_walls belong to G4 and get no band.
 
-Gates (section 6; every gate is the worst value over poses, views and runs):
+Gates (every gate is the worst value over poses, views and runs):
   G1 acne:       band-free lit pixels with visibility < 0.999: count = 0.
   G2 occlusion:  band-free shadowed pixels with visibility > 0.001: count = 0.
                  Shadowed pixels inside the contact gap G3 allows are G3's,
@@ -127,9 +129,9 @@ Gates (section 6; every gate is the worst value over poses, views and runs):
                  excluded set in both renders, on the same box and the same
                  analytic side in both, whose visibility changed by > 0.001:
                  count = 0.
-  G7 cost:       n/a (phase 3).
+  G7 cost:       measured by --g7 (below), not per cell.
 
-Matrix (section 5). The configs of every committed preset of
+Matrix. The configs of every committed preset of
 config/editor/graphics_presets.json are set field by field with
 set_graphics_preset (plus use_draw_lists true, the committed default), so the
 editor's active preset does not matter. --matrix core adds one-axis-at-a-time
@@ -144,12 +146,12 @@ forward-Z (a second editor launched with ERHE_FORCE_DISABLE_REVERSE_DEPTH=1;
 skipped with --reuse), use_draw_lists, shadow_resolution and
 point_shadow_resolution (both 512, both 2048), and depth_clamp=false (the
 directional fit's depth_clamp and near_from_main_frustum off: the directional
-passes clip at the fitted depth planes, plan D9). Every config sets the
+passes clip at the fitted depth planes, shadows.md "Minimum bias"). Every config sets the
 directional fit (FIT_SETTINGS, the committed editor_settings.json values, with
 depth_clamp on) as a session-only per-scene override of the loaded station
 with set_scene_settings, so the editor's own settings do not matter either.
 --matrix pairwise adds a
-deterministic all-pairs covering array over the section 5 axes around the
+deterministic all-pairs covering array over the matrix axes around the
 --around preset (shadow_filter, shadow_bias, shadow_technique,
 shadow_depth_bits 16 / 24 / 32, shadow_cull_mode, depth convention,
 use_draw_lists, shadow_resolution = point_shadow_resolution 512 / 2048):
@@ -164,25 +166,24 @@ is a per-cell dimension of every matrix. The distance technique covers direction
 point light path samples its distance cube for both techniques); point x
 distance cells are reported as unsupported.
 
-Re-runs (section 5): after the --runs, every cell with a FAIL verdict is
+Re-runs: after the --runs, every cell with a FAIL verdict is
 re-run --rerun-failing times (default 3) before it counts; its gates are the
 worst over all runs and the table's rerun column gives in how many of the
 re-runs it failed again.
 
 Poses: --poses short (default) = the module's "short" sweep (5 poses per
-station and light type), full = section 5's sweep. head_on_floor directional
+station and light type), full = the 425-pose sweep. head_on_floor directional
 poses move the camera with the lateral light offset (the directional fit
-follows the camera). Measured on a Debug headless Vulkan editor (AMD iGPU):
-see doc/plans/shadow_robustness.md section 9 for the wall time of the
-default core run.
+follows the camera). Wall times on a Debug headless Vulkan editor (AMD
+iGPU): doc/testing.md "Shadow verification".
 
 Analysis runs in --workers processes (default: half the CPUs; more slow the
 editor's renders) while the editor renders; occlusion and band masks are
 cached per world image and light pose, so configs that differ only in how the
 shader uses the map share them.
 Placements: --root-offset translates the station root (R7: 1000,0,1000
-10000,0,10000; a single number moves it along x). --extra-light (plan
-section 4) puts extra lights ahead of the station light in the scene's light
+10000,0,10000; a single number moves it along x). --extra-light (shadows.md
+"Test stations") puts extra lights ahead of the station light in the scene's light
 order (the station light is deleted and created again after them):
 unshadowed = a non-shadow directional light, which takes a slot of the
 directional bucket, so a spot or point station light's UBO slot differs
@@ -198,7 +199,7 @@ Per cell the script also records, from the renders' shadow_lights entries,
 the largest raster vertex depth bound (above 1 only for a depth-clamped
 directional pass whose casters reach past the fitted near plane) and how many
 renders sampled a spot light with the depth technique because its map is too
-coarse for its cone under the distance technique (plan D11); both are listed
+coarse for its cone under the distance technique (shadows.md "The distance technique"); both are listed
 under the table.
 Output: the table on stdout, logs/shadow_verify/<timestamp>.json
 (per cell worst values plus per pose / view detail of every failure: failing
@@ -211,6 +212,17 @@ Without --reuse the script launches its own headless editor(s)
 (ERHE_AI_DRIVER=1, empty startup commands, preferred MCP port --port),
 backs up every file under config/ and restores changed ones byte-exactly
 afterwards, and stops only the editor processes it launched.
+
+--g7 RUNS measures cost (gate G7) instead of the gates: the forward pass GPU
+time of render_scene_image (the MCP tool get_gpu_timers, timer "render_scene_image
+forward pass") on the cornell and contact_blocks station views, 1920 x 1080,
+normal shading with the active preset (set_graphics_preset is not called, so
+an editor without it can be timed), for each light type at the station's
+default pose; per view and light the median of RUNS renders after 2 warm-up
+renders. --editor-root runs the editor with that directory as its working
+directory (its config/ and res/), e.g. a `git archive` of an older commit
+built on its own, to time before / after on the same machine; the station
+assets are loaded by absolute path from this checkout.
 """
 
 import argparse
@@ -238,7 +250,6 @@ sys.path.insert(0, os.path.join(SCRIPTS_DIR, "creations"))
 import creation_25_shadow_test_rooms as rooms  # noqa: E402
 
 DEFAULT_EDITOR = os.path.join("build_vs2026_vulkan_headless", "bin", "Debug", "editor.exe")
-LOG_PATH = os.path.join(REPO_ROOT, "logs", "log.txt")
 OUT_DIR = os.path.join(REPO_ROOT, "logs", "shadow_verify")
 PRESETS_PATH = os.path.join(REPO_ROOT, "config", "editor", "graphics_presets.json")
 LIGHT_TYPES = ["directional", "spot", "point"]
@@ -285,7 +296,7 @@ G4_MIN_THICKNESS = 0.02 - 1.0e-9
 G4_MIN_RESOLUTION = 2048
 G6_STATIONS = ["head_on_floor", "contact_blocks"]
 G5_STATIONS = ["contact_blocks", "spot_cones"]
-# --extra-light variants (plan section 4).
+# --extra-light variants (shadows.md "Test stations").
 EXTRA_LIGHT_VARIANTS = ["none", "unshadowed", "shadowed"]
 EXTRA_UNSHADOWED_LIGHT = "Extra Unshadowed Light"
 EXTRA_SHADOW_LIGHT = "Extra Shadow Light"
@@ -298,21 +309,22 @@ class Config_backup:
     """Byte-exact copies of every file under config/ (an editor run rewrites
     window / settings files); restore() writes back the changed ones."""
 
-    def __init__(self):
+    def __init__(self, root_dir=REPO_ROOT):
+        self.root_dir = root_dir
         self.directory = tempfile.mkdtemp(prefix="shadow_verify_config_")
         self.saved = []
-        root = os.path.join(REPO_ROOT, "config")
+        root = os.path.join(root_dir, "config")
         for folder, _, files in os.walk(root):
             for name in files:
                 source = os.path.join(folder, name)
-                relative = os.path.relpath(source, REPO_ROOT)
+                relative = os.path.relpath(source, root_dir)
                 target = os.path.join(self.directory, relative.replace(os.sep, "__"))
                 shutil.copyfile(source, target)
                 self.saved.append((relative, target))
 
     def restore(self):
         for relative, target in self.saved:
-            destination = os.path.join(REPO_ROOT, relative)
+            destination = os.path.join(self.root_dir, relative)
             with open(target, "rb") as handle:
                 data = handle.read()
             current = None
@@ -324,18 +336,20 @@ class Config_backup:
                     handle.write(data)
                 print(f"restored {relative}")
         known = {relative for relative, _ in self.saved}
-        for folder, _, files in os.walk(os.path.join(REPO_ROOT, "config")):
+        for folder, _, files in os.walk(os.path.join(self.root_dir, "config")):
             for name in files:
-                relative = os.path.relpath(os.path.join(folder, name), REPO_ROOT)
+                relative = os.path.relpath(os.path.join(folder, name), self.root_dir)
                 if relative not in known:
                     print(f"note: {relative} appeared during the run (left in place)")
         shutil.rmtree(self.directory, ignore_errors=True)
 
 
-def launch_editor(editor_exe, port, forward_z):
-    """Launch a headless editor without a default scene; return (process, port).
-    The editor is identified by its pid in its 'MCP server: listening' log line."""
+def launch_editor(editor_exe, port, forward_z, root_dir=REPO_ROOT):
+    """Launch a headless editor without a default scene, working directory
+    root_dir; return (process, port). The editor is identified by its pid in
+    its 'MCP server: listening' log line."""
     exe = editor_exe if os.path.isabs(editor_exe) else os.path.join(REPO_ROOT, editor_exe)
+    log_path = os.path.join(root_dir, "logs", "log.txt")
     if not os.path.isfile(exe):
         raise RuntimeError(f"no editor at {exe}")
     env = dict(os.environ, ERHE_AI_DRIVER="1", ERHE_MCP_PORT=str(port))
@@ -347,7 +361,7 @@ def launch_editor(editor_exe, port, forward_z):
     if os.name == "nt":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
     process = subprocess.Popen([exe, "--commands", os.path.join("config", "editor", "commands_empty.json")],
-                               cwd=REPO_ROOT, env=env, creationflags=flags,
+                               cwd=root_dir, env=env, creationflags=flags,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     pattern = re.compile(r"MCP server: listening on 127\.0\.0\.1:(\d+) \(pid (\d+)")
     deadline = time.monotonic() + 300.0
@@ -355,7 +369,7 @@ def launch_editor(editor_exe, port, forward_z):
         if process.poll() is not None:
             raise RuntimeError(f"editor exited with {process.returncode} during startup; see logs/log.txt")
         try:
-            with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as handle:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as handle:
                 text = handle.read()
         except OSError:
             text = ""
@@ -428,7 +442,7 @@ def core_variations(base):
         if (value != f["shadow_resolution"]) or (value != f["point_shadow_resolution"]):
             add(f"resolution={value}", shadow_resolution=value, point_shadow_resolution=value)
     # The directional passes clip at the fitted near / far planes instead of
-    # clamping depth (plan D9): the other side of the minimum bias's raster
+    # clamping depth (shadows.md "Minimum bias"): the other side of the minimum bias's raster
     # term. near_from_main_frustum goes with it (FIT_SETTINGS).
     if base["fit"]["depth_clamp"]:
         add("depth_clamp=false", fit={"depth_clamp": False, "near_from_main_frustum": False})
@@ -452,7 +466,7 @@ def full_matrix(base):
     return out
 
 
-# The section 5 axes of the pairwise and full matrices (light type is a
+# The matrix axes of the pairwise and full matrices (light type is a
 # per-cell dimension: every config measures all three).
 PAIRWISE_AXES = [
     ("shadow_filter", FILTERS),
@@ -1842,7 +1856,7 @@ def verdicts(cell):
         out["G6"] = "PASS" if cell["G6"]["count"] == 0 else f"FAIL {cell['G6']['count']}"
     else:
         out["G6"] = "-"
-    out["G7"] = "n/a (phase 3)"
+    out["G7"] = "see --g7"
     return out
 
 
@@ -1850,7 +1864,7 @@ TABLE_WIDTHS = {"G1": 20, "G2": 20, "G3": 12, "G4": 40, "G5": 18, "G6": 10}
 
 
 def rerun_text(cell):
-    """'failed / re-runs' of a failing cell's section 5 re-runs, '-' without."""
+    """'failed / re-runs' of a failing cell's re-runs, '-' without."""
     if not cell.get("reruns"):
         return "-"
     return f"{cell.get('reruns_failed', 0)}/{cell['reruns']}"
@@ -1970,7 +1984,7 @@ def measure_editor(session, pool, configs, args, cells, order, overrides, run_in
                                                           station_info["light"])
                             entry = find_shadow_light(reply, station_info["light"], light_type)
                             cell["slot_layer"] = list(check_extra_light(variant, light_type, entry))
-                            # The light's 2D bias limits as the render used them (plan D9 / D11).
+                            # The light's 2D bias limits as the render used them (shadows.md "Minimum bias", "The distance technique").
                             if "raster_vertex_depth" in entry:
                                 cell["raster_vertex_depth"] = max(cell.get("raster_vertex_depth", 1.0),
                                                                   entry["raster_vertex_depth"])
@@ -2071,6 +2085,99 @@ def g6_jobs(session, pool, station, view, offset, pose, radius, key, light_name,
     return futures
 
 
+# --- G7 cost -------------------------------------------------------------------------------
+
+G7_STATIONS = ["cornell", "contact_blocks"]
+G7_TIMER = "render_scene_image forward pass"
+G7_WIDTH = 1920
+G7_HEIGHT = 1080
+G7_WARMUP = 2
+
+
+def read_g7_timer(c):
+    for timer in c.call("get_gpu_timers").get("timers", []):
+        if timer.get("label") == G7_TIMER:
+            return float(timer.get("ms", 0.0))
+    return 0.0
+
+
+def measure_g7(c, runs, tmp_dir):
+    """Median forward pass GPU time per station, light type and view."""
+    results = []
+    path = os.path.join(tmp_dir, "g7.pfm")
+    for station in G7_STATIONS:
+        info = rooms.STATIONS[station]
+        c.close_all_scenes()
+        c.load(os.path.join(REPO_ROOT, info["asset"]))
+        c.settle()
+        for light_type in LIGHT_TYPES:
+            rooms.apply_light_pose(c, c.scene, info["light"], info["lights"][light_type])
+            c.settle()
+            for view in info["views"]:
+                args = {"scene": c.scene, "camera": rooms.render_camera(view), "width": G7_WIDTH,
+                        "height": G7_HEIGHT, "output": "linear", "path": path}
+                samples = []
+                for index in range(G7_WARMUP + runs):
+                    previous = read_g7_timer(c)
+                    c.call("render_scene_image", args)
+                    # The timer result lands frames after the readback: wait
+                    # until it changes (a repeat of the exact value within the
+                    # deadline is taken as the new sample).
+                    deadline = time.time() + 3.0
+                    value = previous
+                    while time.time() < deadline:
+                        time.sleep(0.1)
+                        value = read_g7_timer(c)
+                        if value != previous:
+                            break
+                    if index >= G7_WARMUP:
+                        samples.append(value)
+                median = float(np.median(samples))
+                results.append({"station": station, "light": light_type, "view": view["name"],
+                                "median_ms": round(median, 4), "samples_ms": [round(v, 4) for v in samples]})
+                print(f"G7 {station:15s} {light_type:12s} {view['name']:8s} median {median:.3f} ms "
+                      f"(min {min(samples):.3f}, max {max(samples):.3f}, n {len(samples)})", flush=True)
+    total = float(np.sum([r["median_ms"] for r in results]))
+    print(f"G7 sum of medians {total:.3f} ms", flush=True)
+    return results, total
+
+
+def run_g7(args):
+    root_dir = os.path.abspath(args.editor_root) if args.editor_root else REPO_ROOT
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    tmp_dir = tempfile.mkdtemp(prefix="shadow_verify_g7_")
+    backup = Config_backup(root_dir)
+    process = None
+    c = None
+    from common import Creation  # noqa: E402 - after sys.path
+    try:
+        process, port = launch_editor(args.editor, args.port, False, root_dir)
+        print(f"launched editor pid {process.pid} on port {port} (working directory {root_dir})", flush=True)
+        c = Creation("shadow_verify_g7", port=port, pause_s=0.0, reuse=True, manage_windows=False)
+        info = c.call("get_server_info")
+        if info.get("pid") != process.pid:
+            raise RuntimeError(f"port {port} is served by pid {info.get('pid')}, not {process.pid}")
+        c.call("set_graphics_settings", {"headlight_when_unlit": False, "sky_enabled": False, "grid_visible": False})
+        try:
+            c.call("set_indirect_diffuse", {"source": "ambient"})
+        except RuntimeError:
+            pass
+        results, total = measure_g7(c, args.g7, tmp_dir)
+        c.close_all_scenes()
+    finally:
+        if process is not None:
+            stop_editor(c, process)
+        backup.restore()
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    json_path = os.path.join(OUT_DIR, f"{stamp}_g7.json")
+    with open(json_path, "w", encoding="utf-8") as handle:
+        json.dump({"editor": args.editor, "editor_root": root_dir, "runs": args.g7, "width": G7_WIDTH,
+                   "height": G7_HEIGHT, "results": results, "sum_of_medians_ms": total}, handle, indent=1)
+    print(f"wrote {json_path}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--matrix", default="core", choices=["core", "pairwise", "full"],
@@ -2087,12 +2194,12 @@ def main():
                         metavar="X[,Y,Z]",
                         help="station root offsets in metres, X alone = along x (R7: 1000,0,1000 10000,0,10000)")
     parser.add_argument("--extra-light", nargs="*", default=["none"], choices=EXTRA_LIGHT_VARIANTS,
-                        help="extra lights ahead of the station light (plan section 4): unshadowed = a "
+                        help="extra lights ahead of the station light (shadows.md 'Test stations'): unshadowed = a "
                              "non-shadow directional light; shadowed = that plus a second shadow-casting "
                              "light of the measured type")
     parser.add_argument("--runs", type=int, default=1, help="full runs; every gate is the worst over the runs")
     parser.add_argument("--rerun-failing", type=int, default=3, metavar="N",
-                        help="re-run every failing cell N times after the runs (section 5; default 3)")
+                        help="re-run every failing cell N times after the runs (default 3)")
     parser.add_argument("--enforce", action="store_true", help="exit non-zero when a gate FAILs")
     parser.add_argument("--no-g6", action="store_true", help="skip the G6 camera translation renders")
     parser.add_argument("--save-images", default="none", choices=["none", "failing", "all"],
@@ -2103,7 +2210,13 @@ def main():
     parser.add_argument("--reuse", action="store_true", help="drive the editor already running on --port")
     parser.add_argument("--port", type=int, default=3771, help="MCP port (preferred port of a launched editor)")
     parser.add_argument("--editor", default=DEFAULT_EDITOR)
+    parser.add_argument("--g7", type=int, default=0, metavar="RUNS",
+                        help="measure the G7 forward pass GPU time (RUNS renders per view and light) instead of the gates")
+    parser.add_argument("--editor-root", default=None, metavar="DIR",
+                        help="--g7: working directory of the launched editor (its config/ and res/)")
     args = parser.parse_args()
+    if args.g7 > 0:
+        return run_g7(args)
     if args.poses is None:
         args.poses = "short"
     overrides = parse_overrides(args.set)

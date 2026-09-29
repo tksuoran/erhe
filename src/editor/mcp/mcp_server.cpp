@@ -25,6 +25,7 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_window.hpp"
@@ -575,6 +576,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_server_info",                &Mcp_server::query_server_info                    },
         { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
         { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },
+        { "get_gpu_timers",                 &Mcp_server::query_gpu_timers                     },
         { "get_frame_pacing_frames",        &Mcp_server::query_frame_pacing_frames            },
         { "set_frame_pacing_min_vsyncs",    &Mcp_server::action_set_frame_pacing_min_vsyncs   },
         { "set_frame_pacing_workload",      &Mcp_server::action_set_frame_pacing_workload     },

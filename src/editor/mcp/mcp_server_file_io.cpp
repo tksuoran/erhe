@@ -34,6 +34,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -1386,6 +1387,9 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         shadow_debug_light_json = json{{"name", shadow_debug_light->get_name()}, {"id", shadow_debug_light->get_id()}};
     }
 
+    if (!m_scene_image_forward_timer) {
+        m_scene_image_forward_timer = std::make_unique<erhe::graphics::Gpu_timer>(*m_context.graphics_device, "render_scene_image forward pass");
+    }
     m_scene_image_capture = std::make_unique<Scene_image_capture>(
         m_context,
         Scene_image_capture_create_info{
@@ -1398,7 +1402,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .color_format      = color_format,
             .background        = background,
             .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value),
-            .shadow_debug_light = shadow_debug_light
+            .shadow_debug_light = shadow_debug_light,
+            .forward_pass_timer = m_scene_image_forward_timer.get()
         }
     );
     m_scene_image_header = json{

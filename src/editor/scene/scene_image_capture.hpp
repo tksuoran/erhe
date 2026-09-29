@@ -22,6 +22,7 @@
 namespace erhe::graphics {
     class Buffer;
     class Command_buffer;
+    class Gpu_timer;
 }
 namespace erhe::scene {
     class Camera;
@@ -106,7 +107,8 @@ public:
         erhe::dataformat::Format                    color_format,
         Render_content                              content,
         erhe::scene_renderer::Shader_debug          shader_debug,
-        const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
+        const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
+        erhe::graphics::Gpu_timer*                  forward_pass_timer
     );
     ~Scene_image_view() noexcept override;
 
@@ -147,6 +149,8 @@ private:
     erhe::scene_renderer::Shader_debug    m_shader_debug{erhe::scene_renderer::Shader_debug::none};
     // Light Shader_debug::shadow_visibility shows; null = slot 0.
     std::shared_ptr<erhe::scene::Light>   m_shadow_debug_light;
+    // Explicit-range timer bracketing the forward render pass; null = untimed.
+    erhe::graphics::Gpu_timer*            m_forward_pass_timer{nullptr};
     std::optional<uint32_t>               m_shadow_debug_light_index;
     std::vector<Scene_image_shadow_light> m_shadow_lights;
     Scene_image_shadow_maps               m_shadow_maps;
@@ -203,6 +207,10 @@ public:
     // to its light slot by the render itself, from the light set that render's
     // shadow pass built; null keeps slot 0.
     std::shared_ptr<erhe::scene::Light>  shadow_debug_light;
+    // Explicit-range Gpu_timer the view brackets its forward render pass with
+    // (null: untimed). Owned by the caller, which keeps it alive until the
+    // result is read, frames after the capture itself is gone.
+    erhe::graphics::Gpu_timer*           forward_pass_timer{nullptr};
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->

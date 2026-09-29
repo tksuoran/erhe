@@ -34,6 +34,9 @@ namespace erhe {
     class Hierarchy;
     class Item_base;
 }
+namespace erhe::graphics {
+    class Gpu_timer;
+}
 namespace erhe::imgui {
     class Imgui_host;
 }
@@ -209,6 +212,7 @@ private:
     auto query_server_info      (const nlohmann::json& args) -> std::string;
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
     auto query_frame_pacing_status  (const nlohmann::json& args) -> std::string;
+    auto query_gpu_timers           (const nlohmann::json& args) -> std::string;
     auto query_frame_pacing_frames  (const nlohmann::json& args) -> std::string;
     auto action_set_frame_pacing_min_vsyncs(const nlohmann::json& args) -> std::string;
     auto action_set_frame_pacing_workload  (const nlohmann::json& args) -> std::string;
@@ -768,6 +772,11 @@ private:
     const Queued_request*                            m_scene_image_request{nullptr};
     std::chrono::steady_clock::time_point            m_scene_image_enqueued_at{};
     nlohmann::json                                   m_scene_image_header;
+    // Explicit-range timer of every render_scene_image forward pass
+    // ("render_scene_image forward pass"), created on the first request. It
+    // outlives each capture: its result lands frames after the capture's
+    // readback, and get_gpu_timers reads it.
+    std::unique_ptr<erhe::graphics::Gpu_timer>       m_scene_image_forward_timer;
 };
 
 } // namespace editor

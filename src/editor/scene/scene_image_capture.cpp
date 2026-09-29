@@ -21,6 +21,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -55,7 +56,8 @@ Scene_image_view::Scene_image_view(
     const erhe::dataformat::Format              color_format,
     const Render_content                        content,
     const erhe::scene_renderer::Shader_debug    shader_debug,
-    const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light
+    const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
+    erhe::graphics::Gpu_timer* const            forward_pass_timer
 )
     // No settings store: nothing about this view persists.
     : Scene_view{context, nullptr, "", viewport_config}
@@ -74,6 +76,7 @@ Scene_image_view::Scene_image_view(
     , m_content     {content}
     , m_shader_debug{shader_debug}
     , m_shadow_debug_light{shadow_debug_light}
+    , m_forward_pass_timer{forward_pass_timer}
 {
     set_scene_root(scene_root);
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
@@ -230,14 +233,22 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
     m_render_target.update(m_viewport.width, m_viewport.height, nullptr);
     ERHE_VERIFY(m_render_target.get_render_pass() != nullptr);
 
-    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass(), command_buffer};
-    context.encoder     = &encoder;
-    context.render_pass = m_render_target.get_render_pass();
+    if (m_forward_pass_timer != nullptr) {
+        m_forward_pass_timer->begin(command_buffer);
+    }
+    {
+        erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass(), command_buffer};
+        context.encoder     = &encoder;
+        context.render_pass = m_render_target.get_render_pass();
 
-    // Content passes only; the overlay passes (tool / rendertarget meshes)
-    // are editor UI.
-    m_context.app_rendering->render_viewport_main(context, false);
+        // Content passes only; the overlay passes (tool / rendertarget meshes)
+        // are editor UI.
+        m_context.app_rendering->render_viewport_main(context, false);
+    }
+    if (m_forward_pass_timer != nullptr) {
+        m_forward_pass_timer->end(command_buffer);
+    }
     m_has_rendered = true;
 }
 
@@ -299,7 +310,8 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         // (alpha 0), which the readback turns into the NaN marker.
         (create_info.background == Scene_image_background::marked) ? Render_content::scene_surfaces : Render_content::scene_only,
         create_info.shader_debug,
-        create_info.shadow_debug_light
+        create_info.shadow_debug_light,
+        create_info.forward_pass_timer
     );
 
     m_shadow_render_node = m_context.app_rendering->create_shadow_node_for_scene_view(

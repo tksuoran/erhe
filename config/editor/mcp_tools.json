@@ -324,6 +324,14 @@
     "name": "get_frame_pacing_status"
   },
   {
+    "description": "Every live GPU timer (erhe::graphics::Gpu_timer: render passes, DDGI / radiance cascades passes, the render_scene_image forward pass) with its last completed measurement in milliseconds. A measurement lands one or more frames after the frame that recorded it; 0 = no result yet. 'render_scene_image forward pass' times the forward render pass of the latest render_scene_image capture.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_gpu_timers"
+  },
+  {
     "description": "Per-frame samples from the Frame Pacing window's persistent capture (decision + frame time record joined). Times are absolute reference-clock seconds; 0 = not (yet) recorded. Use for offline analysis: achieved present deltas vs refresh period, grid residuals, latency, clamp waits.",
     "inputSchema": {
       "properties": {
