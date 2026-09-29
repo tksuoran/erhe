@@ -79,3 +79,6 @@ target does not (the runners have no GPU; the target carries the ctest label
 
 - [Graphics tests](../plans/graphics_tests.md) - GPU tests in CI under a software
   Vulkan, and running the suite on Metal.
+- [Port agfx GPU tests](../plans/graphics_tests_agfx_port.md) - golden buffer
+  and image assertions with an HTML report, and about 107 single-feature
+  tests re-authored from the agfx suite.

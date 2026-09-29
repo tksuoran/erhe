@@ -3,7 +3,9 @@
 Status: proposed
 
 Extends `doc/erhe/graphics_test_coverage.md` and
-`doc/erhe/graphics_test_nonheadless_port.md`.
+`doc/erhe/graphics_test_nonheadless_port.md`. The golden-image machinery and
+the tests ported from the agfx suite are planned separately in
+[`graphics_tests_agfx_port.md`](graphics_tests_agfx_port.md).
 
 ## GPU tests in CI under a software Vulkan
 
