@@ -308,3 +308,30 @@ may run in any order; 7 needs nothing beyond phase 0; 8 needs a ray-query
 device. Run the phases one at a time and commit each phase's tests, goldens
 and matrix rows together, so a golden change is always in the commit that
 caused it.
+
+## 7. Findings
+
+Engine defects the port exposed. Fixed ones are listed so the phase that
+found them is on record; open ones are outstanding work.
+
+Fixed:
+
+- `Image_loader` always decoded PNG to premultiplied RGBA; a golden with
+  alpha below 1 was compared as rgb*a (phase 2, `Alpha_mode::straight`).
+- Vulkan: the canonical incoming subpass dependency carried attachment write
+  access only, so `loadOp` LOAD after an initial layout transition was a
+  read-after-write hazard (phase 3, attachment read access added).
+- GL: texture-to-buffer `copy_from_texture` passed the slice index as the
+  layer count; `is_layered()` did not count a cube map as layered, so a face
+  could not be a framebuffer attachment (phase 3).
+
+Open:
+
+- Vulkan `copy_from_buffer` and texture-to-texture `copy_from_texture`
+  (`vulkan_blit_command_encoder.cpp`) transition the destination subresource
+  from `VK_IMAGE_LAYOUT_UNDEFINED`, which permits the driver to discard its
+  contents; region copies over a seeded destination keep the other texels
+  only by driver leniency. Using the tracked layout as `oldLayout` needs
+  per-subresource layout tracking, since the texture tracks one layout for
+  all levels and layers. The phase 4 copy tests would catch a discarding
+  driver.
