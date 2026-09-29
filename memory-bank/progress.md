@@ -91,4 +91,5 @@
 [TASK::agfx-test-port]{started-2026-09-29;via-harness;doc/plans/graphics_tests_agfx_port.md}
 ✓plan::5ac16c1f9+8704ee38b{FLIP-from-start(user)}
 ✓phase-0::6c5107fd9{expect_buffer/image_matches_golden;FLIP-via-CPM-archive-URL(no-tags);ERHE_GPU_TEST_UPDATE_GOLDENS;results.json+artifacts;gpu_test_report.py;Vk-64/64;GL-75+1skip;negative-check-mean-0.53}
-?phase-1..8{raster/depth-24;blend-16;pass-actions-9;copies-10;sampling-22;compute-10;indirect-5;ray-query-11}
+✓phase-1::b395b5e53{25-tests;Device_info::use_depth_clamp;image-space-coords+native_depth_range->one-golden-set;Vk-89/89;GL-100+1skip}
+?phase-2..8{blend-16;pass-actions-9;copies-10;sampling-22;compute-10;indirect-5;ray-query-11}
