@@ -14,11 +14,14 @@ is left.
 
 ## 1. Cost gate
 
-Measure the wide-line pass GPU time with `erhe::graphics::Gpu_timer`, with
-anti-aliasing on and off, on a line-heavy frame. Acceptance: on is at most
-1.2x off (the ribbon is one pixel wider, one draw per pass); off equals the
-previous binary path within noise. Record the numbers in
-`memory-bank/local/` (per machine), not in this document.
+Measured by `erhe_renderer_gpu_tests --gtest_filter=*aa_cost*`
+(`aa_cost_benchmark`: 2000 random wide lines of 1, 2 and 4 pixels at
+1920 x 1080, visible + hidden pass, render-pass `Gpu_timer`, median of 20
+frames, logged to `logs/log.txt`). Acceptance: on is at most 1.2x off (the
+ribbon is one pixel wider, one draw per pass); off is the previous binary
+path bit-exact (`aa_off_is_binary`). Passed on the first machine measured
+(Vulkan, integrated GPU); the numbers live in `memory-bank/local/` per
+machine. Re-run it after any change to the wide-line shaders.
 
 ## 2. Known trade: fringe double-blend at joints
 

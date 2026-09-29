@@ -26,15 +26,18 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <array>
@@ -348,6 +351,151 @@ protected:
         return result;
     }
 
+    // Cost benchmark (plan section "Cost gate"): draws line_count random
+    // wide lines (widths 1, 2 and 4 pixels, visible + hidden pass) into a
+    // 1920 x 1080 target and returns the median GPU time of the render pass
+    // over frame_count frames, in nanoseconds. The compute expansion is the
+    // same in both modes and is outside the measured pass.
+    [[nodiscard]] auto measure_pass_ns(const Anti_aliasing anti_aliasing, const int line_count, const int frame_count) -> uint64_t
+    {
+        erhe::graphics::Device& graphics_device = device();
+        constexpr int width  = 1920;
+        constexpr int height = 1080;
+        const float   aspect = static_cast<float>(width) / static_cast<float>(height);
+
+        const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(width, height);
+        const std::shared_ptr<erhe::graphics::Texture> depth_stencil_target = std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info{
+                .device      = graphics_device,
+                .usage_mask  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+                .type        = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat = m_depth_stencil_format,
+                .width       = width,
+                .height      = height,
+                .debug_label = erhe::utility::Debug_label{"line cost depth+stencil target"}
+            }
+        );
+
+        const bool  reverse_depth = (graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+        const float fov_y         = 1.0f;
+        const float half_fov_y    = 0.5f * fov_y;
+        const float half_fov_x    = std::atan(std::tan(half_fov_y) * aspect);
+        const glm::mat4 clip_from_world = glm::perspectiveRH_ZO(fov_y, aspect, 0.1f, 100.0f);
+        const View view{
+            .clip_from_world        = clip_from_world,
+            .viewport               = glm::vec4{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)},
+            .fov_sides              = glm::vec4{-half_fov_x, half_fov_x, half_fov_y, -half_fov_y},
+            .view_position_in_world = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f},
+            .pixel_scale            = 1.0f
+        };
+        const erhe::math::Viewport viewport{0, 0, width, height};
+
+        // Deterministic random endpoints covering the view at z = -5 (+-1).
+        const float half_w = 5.0f * std::tan(half_fov_x);
+        const float half_h = 5.0f * std::tan(half_fov_y);
+        uint32_t state = 12345u;
+        const auto next_unit = [&state]() -> float {
+            state = (state * 1664525u) + 1013904223u;
+            return static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+        };
+        std::vector<Line> lines;
+        lines.reserve(static_cast<std::size_t>(line_count));
+        for (int i = 0; i < line_count; ++i) {
+            lines.push_back(
+                Line{
+                    .p0 = glm::vec3{(next_unit() * 2.0f - 1.0f) * half_w, (next_unit() * 2.0f - 1.0f) * half_h, -5.0f + (next_unit() * 2.0f - 1.0f)},
+                    .p1 = glm::vec3{(next_unit() * 2.0f - 1.0f) * half_w, (next_unit() * 2.0f - 1.0f) * half_h, -5.0f + (next_unit() * 2.0f - 1.0f)}
+                }
+            );
+        }
+
+        erhe::graphics::Render_pass_descriptor descriptor{};
+        descriptor.color_attachments[0].texture       = color_target.get();
+        descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 1.0 };
+        descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+        descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+        descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+        descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+        descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+        descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+        descriptor.depth_attachment.texture           = depth_stencil_target.get();
+        descriptor.depth_attachment.clear_value[0]    = reverse_depth ? 0.0 : 1.0;
+        descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
+        descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
+        descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.depth_attachment.layout_before     = erhe::graphics::Image_layout::undefined;
+        descriptor.depth_attachment.usage_after       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.depth_attachment.layout_after      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+        descriptor.stencil_attachment.texture         = depth_stencil_target.get();
+        descriptor.stencil_attachment.clear_value[0]  = 0.0;
+        descriptor.stencil_attachment.load_action     = erhe::graphics::Load_action::Clear;
+        descriptor.stencil_attachment.store_action    = erhe::graphics::Store_action::Dont_care;
+        descriptor.stencil_attachment.usage_before    = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.stencil_attachment.layout_before   = erhe::graphics::Image_layout::undefined;
+        descriptor.stencil_attachment.usage_after     = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        descriptor.stencil_attachment.layout_after    = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+        descriptor.render_target_width  = width;
+        descriptor.render_target_height = height;
+        descriptor.debug_label = erhe::utility::Debug_label{"line cost"};
+
+        Debug_renderer& debug_renderer = *m_debug_renderer;
+        debug_renderer.set_anti_aliasing(anti_aliasing);
+
+        erhe::graphics::Render_pass render_pass{graphics_device, descriptor};
+        erhe::graphics::Gpu_timer   timer{render_pass, "line cost"};
+        std::vector<uint64_t> samples;
+        for (int frame = 0; frame < frame_count; ++frame) {
+            submit_and_wait(
+                [&](erhe::graphics::Command_buffer& command_buffer) {
+                    debug_renderer.begin_frame(viewport, std::span<const View>{&view, 1});
+                    {
+                        Primitive_renderer line_renderer = debug_renderer.get(
+                            Debug_renderer_config{
+                                .primitive_type    = erhe::graphics::Primitive_type::line,
+                                .stencil_reference = 1,
+                                .draw_visible      = true,
+                                .draw_hidden       = true
+                            }
+                        );
+                        line_renderer.set_line_color(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
+                        const float widths[3] = { -1.0f, -2.0f, -4.0f };
+                        for (std::size_t w = 0; w < 3; ++w) {
+                            line_renderer.set_thickness(widths[w]);
+                            const std::size_t begin = (w * lines.size()) / 3;
+                            const std::size_t end   = ((w + 1) * lines.size()) / 3;
+                            line_renderer.add_lines(glm::mat4{1.0f}, std::span<Line>{lines}.subspan(begin, end - begin));
+                        }
+                    }
+                    {
+                        erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                        debug_renderer.compute(compute_encoder);
+                    }
+                    command_buffer.memory_barrier(
+                        erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                        erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
+                    );
+                    {
+                        erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+                        const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+                        encoder.set_scissor_rect(0, 0, width, height);
+                        debug_renderer.render(encoder, render_pass, viewport);
+                    }
+                    debug_renderer.end_frame();
+                }
+            );
+            const uint64_t ns = timer.last_result();
+            if ((frame > 0) && (ns > 0u)) { // first frame warms pipelines
+                samples.push_back(ns);
+            }
+        }
+        if (samples.empty()) {
+            return 0u;
+        }
+        std::sort(samples.begin(), samples.end());
+        return samples[samples.size() / 2];
+    }
+
     std::unique_ptr<Debug_renderer> m_debug_renderer;
     erhe::dataformat::Format        m_depth_stencil_format{erhe::dataformat::Format::format_undefined};
 };
@@ -594,6 +742,31 @@ TEST_F(Debug_line_width_gpu_test, aa_off_is_binary)
     ASSERT_EQ(row.size(), static_cast<std::size_t>(c_aa_width));
     EXPECT_EQ(count_lit(row), 4);
     EXPECT_EQ(count_partial(row), 0);
+}
+
+// Cost gate (plan section "Cost gate"): median render-pass GPU time of 2000
+// random wide lines at 1920 x 1080, anti-aliasing off and on, logged to
+// logs/log.txt of the repository root. The numbers are machine-dependent and recorded in the local
+// memory bank; the test only checks that both modes produced a measurement.
+TEST_F(Debug_line_width_gpu_test, aa_cost_benchmark)
+{
+    constexpr int line_count  = 2000;
+    constexpr int frame_count = 21;
+    const uint64_t off_ns = measure_pass_ns(Anti_aliasing::off, line_count, frame_count);
+    const uint64_t on_ns  = measure_pass_ns(Anti_aliasing::on,  line_count, frame_count);
+    EXPECT_GT(off_ns, 0u);
+    EXPECT_GT(on_ns,  0u);
+    const double ratio = (off_ns > 0u) ? (static_cast<double>(on_ns) / static_cast<double>(off_ns)) : 0.0;
+    // Own info-level logger, as the GPU test environment does for the depth
+    // convention, so logs/log.txt states the numbers without the editor's
+    // logging configuration.
+    const std::shared_ptr<spdlog::logger> log_gpu_test = erhe::log::make_logger("erhe.renderer.gpu_test");
+    log_gpu_test->set_level(spdlog::level::info);
+    log_gpu_test->info(
+        "Debug line anti-aliasing cost: {} lines at 1920x1080, visible + hidden pass, median of {} frames: off {:.3f} ms, on {:.3f} ms, ratio {:.3f}",
+        line_count, frame_count - 1,
+        static_cast<double>(off_ns) * 1e-6, static_cast<double>(on_ns) * 1e-6, ratio
+    );
 }
 
 } // namespace erhe::renderer::test
