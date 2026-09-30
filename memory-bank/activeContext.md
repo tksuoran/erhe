@@ -1,6 +1,7 @@
 §MBEL:5.0
 
 [FOCUS]
+@mesh-modeling::PLANNED-2026-09-30{doc/plans/mesh_modeling.md;M0-M21-scored-catalog+6-phases;foundation-first=fan-order-early-return-bug(geometry.cpp:build_extra_connectivity)+topology-walkers+edge_sharpness-through-post_processing;await-user-direction-on-phase-1}
 @agfx-test-port::DONE-2026-09-29{38->176-Vk-tests;8-engine-fixes;remaining->doc/plans/graphics_tests_agfx_port.md;state->memory-bank/topics/graphics_tests.md}+Metal+macOS-Vk-runs-2026-09-30{175/1-skip;165/11-skip;2-test-fixes}
 @debug-line-aa::DONE-2026-09-29{doc/plans/debug_renderer_anti_aliasing.md;core+fringe-draws/pass(a81ebbfef;user-saw-joint-double-blend-on-hidden-sphere-silhouette->accepted-cost);on/off~1.7x;tests-13-Vk+GL;follow-up=joined-polylines+content-wide-lines+Metal}
 @shadow-robustness::DONE-2026-09-29{future:Metal+G7-profiling;review-issue-1-fixed-2026-09-29(node-origin-vertex-bound,far_vertices-station);review-issue-3-checked-at-runtime;review-issues-2,4..11-open}{doc/plans/shadow_robustness.md;via-harness{user-asked};root-cause=head-on-tie{all-presets-cull_back+dz_dUV=0->zero-bias;1-ulp-ref-vs-stored};phases-0..7}
