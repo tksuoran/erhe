@@ -22,7 +22,10 @@
 ?follow-up::Edit-menu-Delete-declines-while-component-selection-live(route-to-component-delete);limited-dissolve-no-op-still-records-undo-entry
 ✓M4::{merge_vertices.hpp(at_center/at_position/at_first/at_last/collapse)+merge_by_distance(octree);166-geometry-tests;editor-Merge-commands(M=at-center;no-popup-menus)+MCP;verify-90/90}
 ✓crash-2-fixed::{empty-Geometry->empty-Primitive(no-ranges,no-IGeometry);glTF-export-skips-facetless-primitives;erhe_primitive_tests-48}
-⚡M8::subdivide-edges(4.5)->M7-inset->M9-split/rip/separate(Mesh-is-its-own-Node;Merge_operation=template-for-custom-op-with-removal+undo)
+✓M8::{subdivide_edges.hpp(patterns:opposite/path/3-edge/grid/tri-fan/lattice/2-run;smoothness=Hermite);177-geometry-tests;editor+MCP-subdivide_mesh_edges;verify-119/119}
+!gap::component-transform-has-NO-pointer-driven-scalar-drag(gizmo-handle-required)+NO-cancel-path+no-G-key->needed-by-M6-slide/M7-inset/M5-loop-cut->commit-'scalar-drag+cancel'-first
+⚡scalar-drag::Mesh_component_transform-scalar-modes+pointer-drag-command+Escape-cancel
+?M6-slide->M7-inset(scalar-mode)->M5-loop-cut->M9
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
