@@ -12,8 +12,9 @@
 !trap::configure_vs2026_vulkan_headless.bat-leaves-ERHE_BUILD_TESTS=OFF(windows.md-claims-ON)->pass--DERHE_BUILD_TESTS=ON-via-VsDevCmd-shell(works-there;cmd-=-split-only-hits-ninja-wrappers?)->fix-wrapper/doc-later
 ✓M1b::{vertex/edge-box+paint-select-CPU-projection;debug_region_select.mode;verify-25/25}
 ✓M1-DONE
-⚡crash::set_node_transform-on-object-selected-mesh-while-face-mode-active-crashes-headless-editor(pre-existing-at-589b4748b;logs/editor_crash_*.dmp;verify-script-reordered-to-avoid)->root-cause-before-M2
-?M2::loop/ring/face-loop/boundary-select{Alt+click,Ctrl+Alt+click;mouse-bindings-take-exact-modifier-mask}
+✓crash-fixed::{root=Transform_tool-conflated-shared.component_mode(anchor-exists)-with-gizmo-ownership;m_component_source=mesh_components-while-any-component-mode-active;is_node_selection_driving();Mcp_-93/93}
+!trap::cpptrace-crash-stack-goes-to-stderr{verify-scripts-discard-it->capture-stderr-when-diagnosing}
+⚡M2::loop/ring/face-loop/boundary-select{Alt+click,Ctrl+Alt+click;mouse-bindings-take-exact-modifier-mask}
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
