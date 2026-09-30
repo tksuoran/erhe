@@ -16,6 +16,7 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -374,6 +375,37 @@ auto Component_shrink_selection_command::try_call() -> bool
     }
     return m_context.mesh_component_selection_tool->shrink_selection();
 }
+
+auto c_str(const Component_selection_action action) -> const char*
+{
+    switch (action) {
+        case Component_selection_action::select_all:                   return "Mesh_component_selection.select_all";
+        case Component_selection_action::select_none:                  return "Mesh_component_selection.select_none";
+        case Component_selection_action::invert:                       return "Mesh_component_selection.invert";
+        case Component_selection_action::select_linked_under_cursor:   return "Mesh_component_selection.select_linked_under_cursor";
+        case Component_selection_action::select_linked_from_selection: return "Mesh_component_selection.select_linked_from_selection";
+        default:                                                       return "?";
+    }
+}
+
+Component_selection_action_command::Component_selection_action_command(
+    erhe::commands::Commands&        commands,
+    App_context&                     context,
+    const Component_selection_action action
+)
+    : Command  {commands, c_str(action)}
+    , m_context{context}
+    , m_action {action}
+{
+}
+
+auto Component_selection_action_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->run_selection_action(m_action);
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -394,6 +426,11 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_paint_hotkey_command    {commands, context, "Mesh_component_selection.hotkey_paint", Component_gesture_mode::paint}
     , m_grow_selection_command  {commands, context}
     , m_shrink_selection_command{commands, context}
+    , m_select_all_command                  {commands, context, Component_selection_action::select_all}
+    , m_select_none_command                 {commands, context, Component_selection_action::select_none}
+    , m_invert_command                      {commands, context, Component_selection_action::invert}
+    , m_select_linked_under_cursor_command  {commands, context, Component_selection_action::select_linked_under_cursor}
+    , m_select_linked_from_selection_command{commands, context, Component_selection_action::select_linked_from_selection}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -450,6 +487,23 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     commands.register_command(&m_shrink_selection_command);
     commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_kp_subtract, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+
+    // Blender selection keys. Each consumes the key only in a component mode.
+    // Ctrl+A / Alt+A carry a modifier mask, so they dispatch before the fly
+    // camera's mask-less A (erhe::commands orders masked key bindings first).
+    using erhe::commands::Button_trigger;
+    const std::pair<Component_selection_action_command*, std::pair<erhe::window::Keycode, uint32_t>> selection_keys[] = {
+        {&m_select_all_command,                   {erhe::window::Key_a, erhe::window::Key_modifier_bit_ctrl}},
+        {&m_select_none_command,                  {erhe::window::Key_a, erhe::window::Key_modifier_bit_menu}},
+        {&m_invert_command,                       {erhe::window::Key_i, erhe::window::Key_modifier_bit_ctrl}},
+        {&m_select_linked_under_cursor_command,   {erhe::window::Key_l, 0u}},
+        {&m_select_linked_from_selection_command, {erhe::window::Key_l, erhe::window::Key_modifier_bit_ctrl}}
+    };
+    for (const auto& [command, key] : selection_keys) {
+        command->set_host(this);
+        commands.register_command(command);
+        commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
+    }
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
@@ -662,6 +716,7 @@ auto Mesh_component_selection_tool::on_select() -> bool
             return false;
         }
     }
+    selection.flush();
     return true;
 }
 
@@ -1023,10 +1078,13 @@ void Mesh_component_selection_tool::viewport_toolbar()
     int               mode_index = static_cast<int>(selection.get_mode());
     const char* const items[]    = {"Object", "Vertex", "Edge", "Face", "Bone"};
     if (erhe::imgui::combo_fit_width("##mesh_component_mode", &mode_index, items, IM_ARRAYSIZE(items))) {
-        selection.set_mode(static_cast<Mesh_component_mode>(mode_index));
+        // Ctrl held while choosing the mode expands the selection instead of
+        // flushing it (Blender's Ctrl+click on a mode button).
+        const Mode_conversion conversion = ImGui::GetIO().KeyCtrl ? Mode_conversion::expand : Mode_conversion::flush;
+        selection.set_mode(static_cast<Mesh_component_mode>(mode_index), conversion);
     }
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Mesh Component Selection Mode");
+        ImGui::SetTooltip("Mesh Component Selection Mode (hold Ctrl while choosing to expand the selection)");
     }
 
     // Gesture sub-mode (Click / Box / Paint). Box and Paint scan the id-buffer
@@ -1092,6 +1150,30 @@ void Mesh_component_selection_tool::viewport_toolbar()
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Clear mesh component selection");
+    }
+
+    if (is_mesh_component_mode(selection.get_mode())) {
+        class Selection_button
+        {
+        public:
+            const char*                label;
+            Component_selection_action action;
+            const char*                tooltip;
+        };
+        static constexpr Selection_button selection_buttons[] = {
+            {"All",    Component_selection_action::select_all,                   "Select all (Ctrl+A)"},
+            {"None",   Component_selection_action::select_none,                  "Select none (Alt+A)"},
+            {"Invert", Component_selection_action::invert,                       "Invert the selection in the current mode (Ctrl+I)"},
+            {"Linked", Component_selection_action::select_linked_from_selection, "Select linked from the selection (Ctrl+L; L selects linked under the cursor)"}
+        };
+        for (const Selection_button& button : selection_buttons) {
+            if (ImGui::Button(button.label)) {
+                static_cast<void>(run_selection_action(button.action));
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", button.tooltip);
+            }
+        }
     }
 
     // Crease sharpness painting (edge mode): apply / clear the semi-sharp
@@ -1274,6 +1356,7 @@ void apply_scan_hits_to_selection(
             entry.add_facet(facet);
         }
     }
+    selection.flush();
 }
 
 } // anonymous namespace
@@ -1318,6 +1401,120 @@ auto Mesh_component_selection_tool::shrink_selection() -> bool
     }
     m_mesh_component_selection.shrink();
     return true;
+}
+
+void Mesh_component_selection_tool::collect_select_all_targets(std::vector<Mesh_component_target>& out_targets)
+{
+    out_targets.clear();
+    const auto append_mesh = [&out_targets](const std::shared_ptr<erhe::scene::Mesh>& mesh) {
+        const std::size_t first = out_targets.size();
+        append_mesh_component_targets(mesh, out_targets);
+        // Drop the new targets already present (a mesh reached both as a
+        // live entry and through the object Selection). The targets of one
+        // mesh differ in primitive index, so only [0, first) is searched.
+        std::size_t write = first;
+        for (std::size_t read = first; read < out_targets.size(); ++read) {
+            bool duplicate = false;
+            for (std::size_t i = 0; i < first; ++i) {
+                if (
+                    (out_targets[i].mesh            == out_targets[read].mesh)            &&
+                    (out_targets[i].primitive_index == out_targets[read].primitive_index) &&
+                    (out_targets[i].geometry        == out_targets[read].geometry)
+                ) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                if (write != read) {
+                    out_targets[write] = std::move(out_targets[read]);
+                }
+                ++write;
+            }
+        }
+        out_targets.resize(write);
+    };
+
+    for (const Mesh_component_entry& entry : m_mesh_component_selection.get_entries()) {
+        if (!m_mesh_component_selection.is_live(entry)) {
+            continue;
+        }
+        append_mesh(entry.mesh.lock());
+    }
+    if (m_context.selection != nullptr) {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            append_mesh(erhe::scene::get_mesh(item));
+        }
+    }
+    if (out_targets.empty()) {
+        Scene_view* const scene_view = get_hover_scene_view();
+        if (scene_view != nullptr) {
+            const Pick_result pick_result = pick(*scene_view);
+            if (pick_result.valid) {
+                append_mesh(pick_result.mesh);
+            }
+        }
+    }
+}
+
+auto Mesh_component_selection_tool::run_selection_action(const Component_selection_action action) -> bool
+{
+    Mesh_component_selection& selection = m_mesh_component_selection;
+    if (!is_mesh_component_mode(selection.get_mode())) {
+        return false;
+    }
+    switch (action) {
+        case Component_selection_action::select_all: {
+            collect_select_all_targets(m_select_all_targets);
+            selection.select_all(m_select_all_targets);
+            m_select_all_targets.clear();
+            return true;
+        }
+        case Component_selection_action::select_none: {
+            // As the Clear button: an in-flight gesture scan must not
+            // re-populate the selection after this.
+            cancel_pending_scans();
+            selection.select_none();
+            return true;
+        }
+        case Component_selection_action::invert: {
+            selection.invert();
+            return true;
+        }
+        case Component_selection_action::select_linked_under_cursor: {
+            Scene_view* const scene_view = get_hover_scene_view();
+            if (scene_view == nullptr) {
+                return false;
+            }
+            const Pick_result pick_result = pick(*scene_view);
+            if (!pick_result.valid) {
+                return false;
+            }
+            const GEO::Mesh& geo_mesh = pick_result.geometry->get_mesh();
+            m_linked_seed_vertices.clear();
+            for (GEO::index_t i = 0, corner_count = geo_mesh.facets.nb_corners(pick_result.facet); i < corner_count; ++i) {
+                m_linked_seed_vertices.push_back(geo_mesh.facet_corners.vertex(geo_mesh.facets.corner(pick_result.facet, i)));
+            }
+            static_cast<void>(
+                selection.select_linked(
+                    Mesh_component_target{
+                        .mesh            = pick_result.mesh,
+                        .primitive_index = pick_result.primitive_index,
+                        .geometry        = pick_result.geometry
+                    },
+                    m_linked_seed_vertices
+                )
+            );
+            return true;
+        }
+        case Component_selection_action::select_linked_from_selection: {
+            selection.select_linked_from_selection();
+            return true;
+        }
+        default: {
+            return false;
+        }
+    }
 }
 
 auto Mesh_component_selection_tool::box_select_try_ready() const -> bool

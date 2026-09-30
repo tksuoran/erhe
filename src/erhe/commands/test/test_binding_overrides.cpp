@@ -322,3 +322,25 @@ TEST(Binding_overrides, rebind_mid_drag_inactivates_command)
     EXPECT_EQ(commands.get_active_mouse_command(), nullptr);
     send(commands, mouse_button_event(erhe::window::Mouse_button_left, false));
 }
+
+TEST(Binding_overrides, modifier_key_binding_dispatches_before_mask_less_binding)
+{
+    Commands commands;
+    Counting_command plain{commands, "Test.plain"};
+    Counting_command ctrl {commands, "Test.ctrl"};
+    commands.register_command(&plain);
+    commands.register_command(&ctrl);
+    // The mask-less binding is declared first and matches any modifiers.
+    commands.bind_command_to_key(&plain, erhe::window::Key_a, Button_trigger::Any);
+    commands.bind_command_to_key(&ctrl,  erhe::window::Key_a, Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+
+    send(commands, key_event(erhe::window::Key_a, true, erhe::window::Key_modifier_bit_ctrl));
+    EXPECT_EQ(ctrl.call_count,  1);
+    EXPECT_EQ(plain.call_count, 0) << "Ctrl+A is consumed by the Ctrl+A binding";
+    send(commands, key_event(erhe::window::Key_a, false, erhe::window::Key_modifier_bit_ctrl));
+    EXPECT_EQ(plain.call_count, 1) << "a release reaches every binding";
+
+    press_and_release(commands, erhe::window::Key_a);
+    EXPECT_EQ(ctrl.call_count,  1);
+    EXPECT_EQ(plain.call_count, 3);
+}

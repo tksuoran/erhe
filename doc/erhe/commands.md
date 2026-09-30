@@ -72,8 +72,10 @@ bindings, and a per-command override replaces them.
 - The dispatch tables (`get_key_bindings()`, `get_mouse_bindings()`, ...) are derived state,
   rebuilt from "override if present, else defaults" at the start of the next `tick()` or by
   `sort_bindings()` after any declaration or edit, never in the steady state. Declaration order is
-  kept (key bindings dispatch in that order); an overridden command's bindings take the place of
-  its first default. A command whose bindings changed is made inactive first, so a rebind during a
+  kept, and key bindings dispatch in that order with every binding that has a modifier mask ahead
+  of every binding without one, so Ctrl+A reaches a Ctrl+A binding before a mask-less A binding
+  (which matches any modifiers) can consume it; an overridden command's bindings take the place
+  of its first default. A command whose bindings changed is made inactive first, so a rebind during a
   drag leaves no active mouse command behind. The rebuild also recomputes the conflict list, the
   menu shortcut labels, and then calls the bindings-changed callbacks.
 - `apply_binding_overrides()` replaces all overrides at once. Entries naming commands this build
@@ -95,4 +97,4 @@ The editor's Input Bindings window, the `input_bindings.json` file and the MCP b
 - The state machine prevents conflicting commands from activating simultaneously.
 - Tests: `erhe_commands_tests` (`src/erhe/commands/test/`): `Binding_desc` text form round trips,
   overrides, input kind enforcement, conflicts, rebind during a drag, `sort_bindings()` from a
-  command dispatched by `tick()`.
+  command dispatched by `tick()`, masked key bindings dispatching before mask-less ones.

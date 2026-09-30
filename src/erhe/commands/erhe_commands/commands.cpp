@@ -493,8 +493,9 @@ void Commands::rebuild_bindings_if_dirty()
     m_controller_axis_bindings  .clear();
     m_controller_button_bindings.clear();
 
-    // Declaration order is kept: key bindings dispatch in that order. An
-    // overridden command's bindings take the place of its first default.
+    // Declaration order is kept (key bindings dispatch in that order, those
+    // with a modifier mask first, see below). An overridden command's
+    // bindings take the place of its first default.
     std::vector<const Command*> emitted_overrides;
     for (const Binding_entry& entry : m_default_bindings) {
         const Command_override* const override_entry = find_override(entry.command);
@@ -522,6 +523,19 @@ void Commands::rebuild_bindings_if_dirty()
             m_effective_bindings.push_back(Binding_entry{.command = override_entry.command, .desc = desc});
         }
     }
+
+    // A key binding with a modifier mask dispatches before every binding
+    // without one; declaration order holds within each group. A mask-less
+    // binding matches any modifiers, so without this Ctrl+A would reach a
+    // plain A binding (the fly camera's strafe) first whenever that binding
+    // was declared earlier, and the Ctrl+A binding would never see the press.
+    std::stable_partition(
+        m_key_bindings.begin(),
+        m_key_bindings.end(),
+        [](const Key_binding& binding) -> bool {
+            return binding.get_modifier_mask().has_value();
+        }
+    );
 
     update_binding_conflicts();
     update_menu_shortcut_labels();

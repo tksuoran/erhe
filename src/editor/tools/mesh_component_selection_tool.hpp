@@ -156,6 +156,31 @@ private:
     App_context& m_context;
 };
 
+// The selection commands of doc/editor/mesh_component_selection.md section 2.
+enum class Component_selection_action : unsigned int {
+    select_all                   = 0, // Ctrl+A
+    select_none                  = 1, // Alt+A
+    invert                       = 2, // Ctrl+I
+    select_linked_under_cursor   = 3, // L
+    select_linked_from_selection = 4  // Ctrl+L
+};
+
+[[nodiscard]] auto c_str(Component_selection_action action) -> const char*;
+
+// Key command running one Component_selection_action. Consumes the key only
+// while a mesh component mode is active (returns false otherwise, so the key
+// falls through to other bindings).
+class Component_selection_action_command : public erhe::commands::Command
+{
+public:
+    Component_selection_action_command(erhe::commands::Commands& commands, App_context& context, Component_selection_action action);
+    auto try_call() -> bool override;
+
+private:
+    App_context&               m_context;
+    Component_selection_action m_action;
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -199,6 +224,16 @@ public:
     // while a component mode is active, so in Object mode the key falls through.
     [[nodiscard]] auto grow_selection  () -> bool;
     [[nodiscard]] auto shrink_selection() -> bool;
+
+    // Called by Component_selection_action_command and the toolbar buttons.
+    // Runs `action` and returns true only while a mesh component mode is
+    // active (and, for select_linked_under_cursor, a component is hovered).
+    [[nodiscard]] auto run_selection_action(Component_selection_action action) -> bool;
+
+    // Select all targets: the meshes of the live entries plus the meshes of
+    // the object Selection that component selection can address; when both
+    // are empty, the hovered mesh. Clears and fills out_targets.
+    void collect_select_all_targets(std::vector<Mesh_component_target>& out_targets);
 
     // Called by Component_box_select_command.
     [[nodiscard]] auto box_select_try_ready() const -> bool;
@@ -314,6 +349,16 @@ private:
     Component_gesture_hotkey_command                          m_paint_hotkey_command;
     Component_grow_selection_command                          m_grow_selection_command;
     Component_shrink_selection_command                        m_shrink_selection_command;
+    Component_selection_action_command                        m_select_all_command;
+    Component_selection_action_command                        m_select_none_command;
+    Component_selection_action_command                        m_invert_command;
+    Component_selection_action_command                        m_select_linked_under_cursor_command;
+    Component_selection_action_command                        m_select_linked_from_selection_command;
+
+    // Select all target scratch (cleared at use, capacity kept).
+    std::vector<Mesh_component_target>                        m_select_all_targets;
+    // Select linked (L) seed scratch: the hovered facet's vertices.
+    std::vector<GEO::index_t>                                 m_linked_seed_vertices;
 
     // Gesture sub-mode + box-select state (faces only). The box is stored in
     // window coordinates (for the ImGui overlay) and converted to viewport

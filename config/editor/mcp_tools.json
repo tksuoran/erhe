@@ -5456,9 +5456,17 @@
     "name": "get_joint_constraint_state"
   },
   {
-    "description": "Set the selection granularity (object / vertex / edge / face / bone). vertex/edge/face are required before select_mesh_components and Align / Add Joint. bone makes skeleton bones pickable in the viewport: a click selects the joint Node the bone stands for, through the ordinary selection.",
+    "description": "Set the selection granularity (object / vertex / edge / face / bone). vertex/edge/face are required before select_mesh_components and Align / Add Joint. bone makes skeleton bones pickable in the viewport: a click selects the joint Node the bone stands for, through the ordinary selection. Switching into vertex / edge / face converts the component selection: flush (default) keeps the new mode's elements and derives the rest; expand selects every element touching the selection going up (vertex -> edge -> face) and keeps only elements completely surrounded by it going down.",
     "inputSchema": {
       "properties": {
+        "conversion": {
+          "description": "How the component selection converts when switching into vertex / edge / face: flush (default) or expand",
+          "enum": [
+            "flush",
+            "expand"
+          ],
+          "type": "string"
+        },
         "mode": {
           "description": "Selection granularity: object, vertex, edge, face, or bone (skeleton bones)",
           "enum": [
@@ -5479,7 +5487,7 @@
     "name": "set_mesh_component_mode"
   },
   {
-    "description": "Select sub-components (vertices / edges / faces) of a node's mesh, addressed by Geogram indices into its render geometry. extend=false (default) replaces the whole component selection first; extend=true accumulates (use it to add a second node's component for Align / Add Joint). Indices are validated against the geometry. Edges are [v0, v1] vertex-index pairs.",
+    "description": "Select sub-components (vertices / edges / faces) of a node's mesh, addressed by Geogram indices into its render geometry. extend=false (default) replaces the whole component selection first; extend=true accumulates (use it to add a second node's component for Align / Add Joint). Indices are validated against the geometry. Edges are [v0, v1] vertex-index pairs. The selection is then flushed from the active mode: in face mode the facets' edges and vertices are selected too, in edge mode the edges' vertices, in vertex mode the edges and facets whose vertices are all selected (elements of another kind than the mode are replaced by the derived ones).",
     "inputSchema": {
       "properties": {
         "edges": {
@@ -5569,6 +5577,75 @@
       "type": "object"
     },
     "name": "shrink_mesh_selection"
+  },
+  {
+    "description": "Select every element of the target meshes in the active mode (vertex / edge / face), then flush (edges and facets follow from vertices, vertices and edges from facets). Targets: the given node's mesh when scene_name + node_id / node_name are given; otherwise the meshes of the current component selection plus the object-selected meshes that are component-selectable (content, not skinned, not lock_edit). Errors in object mode. Returns the resulting selection (same shape as get_mesh_component_selection).",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given); restricts the targets to this node's mesh",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent); restricts the targets to this node's mesh",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene holding the node (with node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "select_all_mesh_components"
+  },
+  {
+    "description": "Invert the mesh-component selection of every live entry in the active mode (vertex / edge / face), then flush. Errors in object mode. Returns the resulting selection (same shape as get_mesh_component_selection).",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "invert_mesh_selection"
+  },
+  {
+    "description": "Blender Select Linked: add the connected region (flood across edges) to the selection, then flush. from_selection=true floods from the vertices of every selected element; otherwise give scene_name + node_id / node_name + vertices (seed vertex indices, e.g. a facet's vertices for 'linked under the cursor'). Face mode adds the facets whose vertices all lie in the region. delimit_crease=true does not cross crease edges (edge_sharpness > 0). Errors in object mode and when the geometry has no connectivity. Returns the resulting selection (same shape as get_mesh_component_selection).",
+    "inputSchema": {
+      "properties": {
+        "delimit_crease": {
+          "description": "Do not flood across crease edges (default false)",
+          "type": "boolean"
+        },
+        "from_selection": {
+          "description": "Flood from the current selection (default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "vertices": {
+          "description": "Seed vertex indices (required unless from_selection)",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "name": "select_linked_mesh_components"
   },
   {
     "description": "Report the GPU ID-buffer range mapping from the most recently resolved region scan: for each drawn primitive, its id_offset, length (index count), triangle_count, base_vertex, and the owning mesh/node/primitive_index. A decoded pixel id in [id_offset, id_offset+length) selects that primitive and (id - id_offset) is its 0-based facet index. Run a box/paint select (or debug_region_select) first to populate it.",

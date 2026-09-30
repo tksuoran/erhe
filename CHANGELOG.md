@@ -148,6 +148,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::commands`: key bindings with a modifier mask dispatch before key
+  bindings without one (declaration order within each group), so a chord
+  such as Ctrl+A reaches its binding even when a mask-less A binding, which
+  matches any modifiers, was declared first.
 - `erhe::renderer`: `Primitive_renderer::add_cone` and `add_capsule` classify
   their structural surface lines exactly instead of drawing them all in
   minor style: cone cap cross lines follow their cap's visibility and

@@ -1,11 +1,17 @@
 #include "tools/mesh_component_selection.hpp"
 
 #include "app_message_bus.hpp"
+#include "editor_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/topology.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_utility/bit_helpers.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 #include <set>
 #include <vector>
@@ -35,6 +41,255 @@ auto make_edge_key(const GEO::index_t a, const GEO::index_t b) -> Mesh_edge_key
 {
     return (a <= b) ? Mesh_edge_key{a, b} : Mesh_edge_key{b, a};
 }
+
+auto c_str(const Mode_conversion conversion) -> const char*
+{
+    switch (conversion) {
+        case Mode_conversion::flush:  return "flush";
+        case Mode_conversion::expand: return "expand";
+        default:                      return "?";
+    }
+}
+
+auto append_mesh_component_targets(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    std::vector<Mesh_component_target>&       out_targets
+) -> std::size_t
+{
+    if (!mesh) {
+        return 0;
+    }
+    // The same filters as the interactive pick (Mesh_component_selection_tool::pick)
+    // and is_live(), so every target yields a live entry.
+    if (!erhe::utility::test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::content)) {
+        return 0;
+    }
+    if (mesh->skin || mesh->is_lock_edit()) {
+        return 0;
+    }
+    std::size_t count = 0;
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    for (std::size_t primitive_index = 0; primitive_index < primitives.size(); ++primitive_index) {
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[primitive_index].primitive;
+        if (!primitive || primitive->collision_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive->get_shape_for_raytrace();
+        if (!shape) {
+            continue;
+        }
+        std::shared_ptr<erhe::geometry::Geometry> geometry = shape->get_geometry_const();
+        if (!geometry) {
+            continue;
+        }
+        out_targets.push_back(
+            Mesh_component_target{
+                .mesh            = mesh,
+                .primitive_index = primitive_index,
+                .geometry        = std::move(geometry)
+            }
+        );
+        ++count;
+    }
+    return count;
+}
+
+namespace {
+
+// Flush and mode conversion read the facet corners only: an edge is the
+// canonical vertex pair of two consecutive corners of a facet (erhe meshes
+// have no wire edges), so no connectivity is needed. Cold path (mode switch,
+// selection command), so the transient sets here are acceptable.
+
+template <typename Key>
+void assign_if_changed(Component_set<Key>& target, std::set<Key>&& keys)
+{
+    if (target.get() != keys) {
+        target = std::move(keys);
+    }
+}
+
+[[nodiscard]] auto next_corner_vertex(const GEO::Mesh& mesh, const GEO::index_t facet, const GEO::index_t local_corner, const GEO::index_t corner_count) -> GEO::index_t
+{
+    return mesh.facet_corners.vertex(mesh.facets.corner(facet, (local_corner + 1) % corner_count));
+}
+
+[[nodiscard]] auto corner_vertex(const GEO::Mesh& mesh, const GEO::index_t facet, const GEO::index_t local_corner) -> GEO::index_t
+{
+    return mesh.facet_corners.vertex(mesh.facets.corner(facet, local_corner));
+}
+
+[[nodiscard]] auto mode_rank(const Mesh_component_mode mode) -> int
+{
+    switch (mode) {
+        case Mesh_component_mode::vertex: return 0;
+        case Mesh_component_mode::edge:   return 1;
+        case Mesh_component_mode::face:   return 2;
+        default:                          return -1;
+    }
+}
+
+// Derive the two sets other than `mode`'s from `mode`'s set.
+void flush_entry(const GEO::Mesh& mesh, const Mesh_component_mode mode, Mesh_component_entry& entry)
+{
+    switch (mode) {
+        case Mesh_component_mode::vertex: {
+            const std::set<GEO::index_t>& vertices = entry.vertices;
+            std::set<Mesh_edge_key> edges;
+            std::set<GEO::index_t>  facets;
+            for (GEO::index_t facet = 0, facet_end = mesh.facets.nb(); facet < facet_end; ++facet) {
+                const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+                bool all_selected = true;
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    const GEO::index_t vertex = corner_vertex(mesh, facet, i);
+                    if (!vertices.contains(vertex)) {
+                        all_selected = false;
+                        continue;
+                    }
+                    const GEO::index_t next = next_corner_vertex(mesh, facet, i, corner_count);
+                    if (vertices.contains(next)) {
+                        edges.insert(make_edge_key(vertex, next));
+                    }
+                }
+                if (all_selected) {
+                    facets.insert(facets.end(), facet);
+                }
+            }
+            assign_if_changed(entry.edges,  std::move(edges));
+            assign_if_changed(entry.facets, std::move(facets));
+            break;
+        }
+        case Mesh_component_mode::edge: {
+            const std::set<Mesh_edge_key>& edges = entry.edges;
+            std::set<GEO::index_t> vertices;
+            std::set<GEO::index_t> facets;
+            for (const Mesh_edge_key& key : edges) {
+                vertices.insert(key.first);
+                vertices.insert(key.second);
+            }
+            for (GEO::index_t facet = 0, facet_end = mesh.facets.nb(); facet < facet_end; ++facet) {
+                const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+                bool all_selected = true;
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    const GEO::index_t vertex = corner_vertex(mesh, facet, i);
+                    const GEO::index_t next   = next_corner_vertex(mesh, facet, i, corner_count);
+                    if (!edges.contains(make_edge_key(vertex, next))) {
+                        all_selected = false;
+                        break;
+                    }
+                }
+                if (all_selected) {
+                    facets.insert(facets.end(), facet);
+                }
+            }
+            assign_if_changed(entry.vertices, std::move(vertices));
+            assign_if_changed(entry.facets,   std::move(facets));
+            break;
+        }
+        case Mesh_component_mode::face: {
+            std::set<GEO::index_t>  vertices;
+            std::set<Mesh_edge_key> edges;
+            for (const GEO::index_t facet : entry.facets) {
+                const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    const GEO::index_t vertex = corner_vertex(mesh, facet, i);
+                    vertices.insert(vertex);
+                    edges.insert(make_edge_key(vertex, next_corner_vertex(mesh, facet, i, corner_count)));
+                }
+            }
+            assign_if_changed(entry.vertices, std::move(vertices));
+            assign_if_changed(entry.edges,    std::move(edges));
+            break;
+        }
+        case Mesh_component_mode::object:
+        default: {
+            break;
+        }
+    }
+}
+
+// Mode_conversion::expand from `from` to `to` (both component modes): writes
+// `to`'s set only; the caller flushes from `to` afterwards.
+void expand_entry(const GEO::Mesh& mesh, const Mesh_component_mode from, const Mesh_component_mode to, Mesh_component_entry& entry)
+{
+    const int from_rank = mode_rank(from);
+    const int to_rank   = mode_rank(to);
+    if ((from_rank < 0) || (to_rank < 0) || (from_rank == to_rank)) {
+        return;
+    }
+    if (to_rank > from_rank) {
+        // Going up: every element touching the selection.
+        std::set<Mesh_edge_key> edges;
+        std::set<GEO::index_t>  facets;
+        for (GEO::index_t facet = 0, facet_end = mesh.facets.nb(); facet < facet_end; ++facet) {
+            const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+            bool touches = false;
+            for (GEO::index_t i = 0; i < corner_count; ++i) {
+                const GEO::index_t  vertex = corner_vertex(mesh, facet, i);
+                const GEO::index_t  next   = next_corner_vertex(mesh, facet, i, corner_count);
+                const Mesh_edge_key key    = make_edge_key(vertex, next);
+                const bool edge_touches = (from == Mesh_component_mode::vertex)
+                    ? (entry.vertices.contains(vertex) || entry.vertices.contains(next))
+                    : entry.edges.contains(key);
+                if (edge_touches) {
+                    touches = true;
+                    edges.insert(key);
+                }
+            }
+            if (touches) {
+                facets.insert(facets.end(), facet);
+            }
+        }
+        if (to == Mesh_component_mode::edge) {
+            assign_if_changed(entry.edges, std::move(edges));
+        } else {
+            assign_if_changed(entry.facets, std::move(facets));
+        }
+        return;
+    }
+
+    // Going down: only the elements completely surrounded by the selection,
+    // that is, not part of any unselected element of the old mode.
+    std::set<GEO::index_t>  excluded_vertices;
+    std::set<Mesh_edge_key> excluded_edges;
+    std::set<GEO::index_t>  vertices;
+    std::set<Mesh_edge_key> edges;
+    for (GEO::index_t facet = 0, facet_end = mesh.facets.nb(); facet < facet_end; ++facet) {
+        const GEO::index_t corner_count   = mesh.facets.nb_corners(facet);
+        const bool         facet_selected = entry.facets.contains(facet);
+        for (GEO::index_t i = 0; i < corner_count; ++i) {
+            const GEO::index_t  vertex = corner_vertex(mesh, facet, i);
+            const GEO::index_t  next   = next_corner_vertex(mesh, facet, i, corner_count);
+            const Mesh_edge_key key    = make_edge_key(vertex, next);
+            if (from == Mesh_component_mode::face) {
+                if (facet_selected) {
+                    vertices.insert(vertex);
+                    edges.insert(key);
+                } else {
+                    excluded_vertices.insert(vertex);
+                    excluded_edges.insert(key);
+                }
+            } else { // from edge, to vertex
+                if (entry.edges.contains(key)) {
+                    vertices.insert(key.first);
+                    vertices.insert(key.second);
+                } else {
+                    excluded_vertices.insert(key.first);
+                    excluded_vertices.insert(key.second);
+                }
+            }
+        }
+    }
+    if (to == Mesh_component_mode::vertex) {
+        std::erase_if(vertices, [&excluded_vertices](const GEO::index_t vertex) { return excluded_vertices.contains(vertex); });
+        assign_if_changed(entry.vertices, std::move(vertices));
+    } else {
+        std::erase_if(edges, [&excluded_edges](const Mesh_edge_key& key) { return excluded_edges.contains(key); });
+        assign_if_changed(entry.edges, std::move(edges));
+    }
+}
+
+} // anonymous namespace
 
 #pragma region Mesh_component_entry
 auto Mesh_component_entry::is_empty() const -> bool
@@ -136,12 +391,27 @@ auto Mesh_component_selection::get_mode() const -> Mesh_component_mode
     return m_mode;
 }
 
-void Mesh_component_selection::set_mode(const Mesh_component_mode mode)
+void Mesh_component_selection::set_mode(const Mesh_component_mode mode, const Mode_conversion conversion)
 {
     if (m_mode == mode) {
         return;
     }
+    const Mesh_component_mode old_mode = m_mode;
     m_mode = mode;
+    if (is_mesh_component_mode(mode)) {
+        const bool expand = (conversion == Mode_conversion::expand) && is_mesh_component_mode(old_mode);
+        for (Mesh_component_entry& entry : m_entries) {
+            if (!is_live(entry)) {
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+            const GEO::Mesh& geo_mesh = geometry->get_mesh();
+            if (expand) {
+                expand_entry(geo_mesh, old_mode, mode, entry);
+            }
+            flush_entry(geo_mesh, mode, entry);
+        }
+    }
     // Announce after the assignment: the message carries no payload, so
     // subscribers read the new mode back through get_mode().
     m_app_message_bus.mesh_component_mode_changed.send_message(Mesh_component_mode_changed_message{});
@@ -191,6 +461,249 @@ void Mesh_component_selection::clear_all()
         on_components_changed();
     }
 }
+
+#pragma region Selection commands
+void Mesh_component_selection::flush()
+{
+    if (!is_mesh_component_mode(m_mode)) {
+        return;
+    }
+    for (Mesh_component_entry& entry : m_entries) {
+        if (!is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        flush_entry(geometry->get_mesh(), m_mode, entry);
+    }
+}
+
+void Mesh_component_selection::select_all(const std::span<const Mesh_component_target> targets)
+{
+    if (!is_mesh_component_mode(m_mode)) {
+        return;
+    }
+    for (const Mesh_component_target& target : targets) {
+        const GEO::Mesh&      geo_mesh = target.geometry->get_mesh();
+        Mesh_component_entry& entry    = find_or_create_entry(target.mesh, target.primitive_index, target.geometry);
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: {
+                std::set<GEO::index_t> vertices;
+                for (GEO::index_t vertex = 0, end = geo_mesh.vertices.nb(); vertex < end; ++vertex) {
+                    vertices.insert(vertices.end(), vertex);
+                }
+                assign_if_changed(entry.vertices, std::move(vertices));
+                break;
+            }
+            case Mesh_component_mode::edge: {
+                std::set<Mesh_edge_key> edges;
+                for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                    for (GEO::index_t i = 0; i < corner_count; ++i) {
+                        edges.insert(make_edge_key(corner_vertex(geo_mesh, facet, i), next_corner_vertex(geo_mesh, facet, i, corner_count)));
+                    }
+                }
+                assign_if_changed(entry.edges, std::move(edges));
+                break;
+            }
+            case Mesh_component_mode::face: {
+                std::set<GEO::index_t> facets;
+                for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                    facets.insert(facets.end(), facet);
+                }
+                assign_if_changed(entry.facets, std::move(facets));
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
+            }
+        }
+        flush_entry(geo_mesh, m_mode, entry);
+    }
+}
+
+void Mesh_component_selection::select_none()
+{
+    clear_all();
+}
+
+void Mesh_component_selection::invert()
+{
+    if (!is_mesh_component_mode(m_mode)) {
+        return;
+    }
+    for (Mesh_component_entry& entry : m_entries) {
+        if (!is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: {
+                std::set<GEO::index_t> vertices;
+                for (GEO::index_t vertex = 0, end = geo_mesh.vertices.nb(); vertex < end; ++vertex) {
+                    if (!entry.vertices.contains(vertex)) {
+                        vertices.insert(vertices.end(), vertex);
+                    }
+                }
+                assign_if_changed(entry.vertices, std::move(vertices));
+                break;
+            }
+            case Mesh_component_mode::edge: {
+                std::set<Mesh_edge_key> edges;
+                for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                    for (GEO::index_t i = 0; i < corner_count; ++i) {
+                        const Mesh_edge_key key = make_edge_key(corner_vertex(geo_mesh, facet, i), next_corner_vertex(geo_mesh, facet, i, corner_count));
+                        if (!entry.edges.contains(key)) {
+                            edges.insert(key);
+                        }
+                    }
+                }
+                assign_if_changed(entry.edges, std::move(edges));
+                break;
+            }
+            case Mesh_component_mode::face: {
+                std::set<GEO::index_t> facets;
+                for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                    if (!entry.facets.contains(facet)) {
+                        facets.insert(facets.end(), facet);
+                    }
+                }
+                assign_if_changed(entry.facets, std::move(facets));
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
+            }
+        }
+        flush_entry(geo_mesh, m_mode, entry);
+    }
+}
+
+auto Mesh_component_selection::add_linked_region(
+    Mesh_component_entry&                entry,
+    const erhe::geometry::Geometry&      geometry,
+    const erhe::geometry::Region_delimit delimit
+) -> bool
+{
+    // The walk needs vertex -> edge adjacency. It is built by whoever owns
+    // the Geometry (process flags at creation); the selection never builds
+    // connectivity on a shared scene Geometry.
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        log_selection->warn("Select linked: geometry '{}' has no connectivity; skipped", geometry.get_name());
+        return false;
+    }
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
+    erhe::geometry::walk_connected_region(geometry, m_seed_vertices, delimit, m_region_vertices);
+    m_region_marks.assign(geo_mesh.vertices.nb(), std::uint8_t{0});
+    for (const GEO::index_t vertex : m_region_vertices) {
+        m_region_marks[vertex] = 1;
+    }
+    const auto in_region = [this](const GEO::index_t vertex) -> bool {
+        return m_region_marks[vertex] != 0;
+    };
+
+    switch (m_mode) {
+        case Mesh_component_mode::vertex: {
+            std::set<GEO::index_t> vertices = entry.vertices;
+            vertices.insert(m_region_vertices.begin(), m_region_vertices.end());
+            assign_if_changed(entry.vertices, std::move(vertices));
+            break;
+        }
+        case Mesh_component_mode::edge: {
+            std::set<Mesh_edge_key> edges = entry.edges;
+            for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    const GEO::index_t vertex = corner_vertex(geo_mesh, facet, i);
+                    const GEO::index_t next   = next_corner_vertex(geo_mesh, facet, i, corner_count);
+                    if (in_region(vertex) && in_region(next)) {
+                        edges.insert(make_edge_key(vertex, next));
+                    }
+                }
+            }
+            assign_if_changed(entry.edges, std::move(edges));
+            break;
+        }
+        case Mesh_component_mode::face: {
+            // Facets whose vertices all lie in the region: the vertex flood
+            // across non-delimit edges stands in for a facet flood.
+            std::set<GEO::index_t> facets = entry.facets;
+            for (GEO::index_t facet = 0, facet_end = geo_mesh.facets.nb(); facet < facet_end; ++facet) {
+                const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                bool all_in_region = true;
+                for (GEO::index_t i = 0; i < corner_count; ++i) {
+                    if (!in_region(corner_vertex(geo_mesh, facet, i))) {
+                        all_in_region = false;
+                        break;
+                    }
+                }
+                if (all_in_region) {
+                    facets.insert(facet);
+                }
+            }
+            assign_if_changed(entry.facets, std::move(facets));
+            break;
+        }
+        case Mesh_component_mode::object:
+        default: {
+            break;
+        }
+    }
+    flush_entry(geo_mesh, m_mode, entry);
+    return true;
+}
+
+void Mesh_component_selection::select_linked_from_selection(const erhe::geometry::Region_delimit delimit)
+{
+    if (!is_mesh_component_mode(m_mode)) {
+        return;
+    }
+    for (Mesh_component_entry& entry : m_entries) {
+        if (!is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        m_seed_vertices.clear();
+        m_seed_vertices.insert(m_seed_vertices.end(), entry.vertices.begin(), entry.vertices.end());
+        for (const Mesh_edge_key& key : entry.edges) {
+            m_seed_vertices.push_back(key.first);
+            m_seed_vertices.push_back(key.second);
+        }
+        for (const GEO::index_t facet : entry.facets) {
+            for (GEO::index_t i = 0, corner_count = geo_mesh.facets.nb_corners(facet); i < corner_count; ++i) {
+                m_seed_vertices.push_back(corner_vertex(geo_mesh, facet, i));
+            }
+        }
+        if (m_seed_vertices.empty()) {
+            continue;
+        }
+        static_cast<void>(add_linked_region(entry, *geometry, delimit));
+    }
+}
+
+auto Mesh_component_selection::select_linked(
+    const Mesh_component_target&         target,
+    const std::span<const GEO::index_t>  seed_vertices,
+    const erhe::geometry::Region_delimit delimit
+) -> bool
+{
+    if (!is_mesh_component_mode(m_mode) || !target.mesh || !target.geometry) {
+        return false;
+    }
+    const erhe::geometry::Geometry& geometry = *target.geometry;
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        log_selection->warn("Select linked: geometry '{}' has no connectivity; skipped", geometry.get_name());
+        return false;
+    }
+    m_seed_vertices.assign(seed_vertices.begin(), seed_vertices.end());
+    Mesh_component_entry& entry = find_or_create_entry(target.mesh, target.primitive_index, target.geometry);
+    return add_linked_region(entry, geometry, delimit);
+}
+#pragma endregion Selection commands
 
 #pragma region Grow / Shrink
 namespace {
@@ -340,6 +853,10 @@ void Mesh_component_selection::grow()
         if (!geometry) {
             continue;
         }
+        if (!geometry->has_connectivity() || !geometry->has_edge_connectivity()) {
+            log_selection->warn("Grow selection: geometry '{}' has no connectivity; skipped", geometry->get_name());
+            continue;
+        }
         switch (m_mode) {
             case Mesh_component_mode::vertex: grow_vertices(*geometry, entry); break;
             case Mesh_component_mode::edge:   grow_edges   (*geometry, entry); break;
@@ -347,6 +864,7 @@ void Mesh_component_selection::grow()
             case Mesh_component_mode::object: break;
             default:                          break;
         }
+        flush_entry(geometry->get_mesh(), m_mode, entry);
     }
 }
 
@@ -363,6 +881,10 @@ void Mesh_component_selection::shrink()
         if (!geometry) {
             continue;
         }
+        if (!geometry->has_connectivity() || !geometry->has_edge_connectivity()) {
+            log_selection->warn("Shrink selection: geometry '{}' has no connectivity; skipped", geometry->get_name());
+            continue;
+        }
         switch (m_mode) {
             case Mesh_component_mode::vertex: shrink_vertices(*geometry, entry); break;
             case Mesh_component_mode::edge:   shrink_edges   (*geometry, entry); break;
@@ -370,6 +892,7 @@ void Mesh_component_selection::shrink()
             case Mesh_component_mode::object: break;
             default:                          break;
         }
+        flush_entry(geometry->get_mesh(), m_mode, entry);
     }
 }
 #pragma endregion Grow / Shrink

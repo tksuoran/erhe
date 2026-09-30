@@ -358,6 +358,9 @@ private:
     auto action_select_mesh_components        (const nlohmann::json& args) -> std::string;
     auto action_grow_mesh_selection           (const nlohmann::json& args) -> std::string;
     auto action_shrink_mesh_selection         (const nlohmann::json& args) -> std::string;
+    auto action_select_all_mesh_components    (const nlohmann::json& args) -> std::string;
+    auto action_invert_mesh_selection         (const nlohmann::json& args) -> std::string;
+    auto action_select_linked_mesh_components (const nlohmann::json& args) -> std::string;
     auto query_mesh_component_selection       (const nlohmann::json& args) -> std::string;
     auto query_id_range_mapping               (const nlohmann::json& args) -> std::string;
     auto action_debug_region_select           (const nlohmann::json& args) -> std::string;

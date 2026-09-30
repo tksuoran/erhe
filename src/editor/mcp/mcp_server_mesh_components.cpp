@@ -257,8 +257,15 @@ auto Mcp_server::action_set_mesh_component_mode(const json& args) -> std::string
     if (!is_valid_mesh_component_mode(mode_str)) {
         return make_error_content("mode is required (object, vertex, edge, face)");
     }
-    m_context.mesh_component_selection->set_mode(parse_mesh_component_mode(mode_str, Mesh_component_mode::object));
-    return make_json_content({{"mode", mode_str}}).dump();
+    const std::string conversion_str = args.value("conversion", "flush");
+    Mode_conversion conversion = Mode_conversion::flush;
+    if (conversion_str == "expand") {
+        conversion = Mode_conversion::expand;
+    } else if (conversion_str != "flush") {
+        return make_error_content("conversion must be flush or expand: " + conversion_str);
+    }
+    m_context.mesh_component_selection->set_mode(parse_mesh_component_mode(mode_str, Mesh_component_mode::object), conversion);
+    return make_json_content({{"mode", mode_str}, {"conversion", conversion_str}}).dump();
 }
 
 auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
@@ -341,6 +348,9 @@ auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
             entry.add_facet(facet);
         }
     }
+    // As every selection command: derive the other two sets from the current
+    // mode's set (an edge selects its vertices, a facet its edges and vertices).
+    selection->flush();
 
     return make_json_content({
         {"node",            node->get_name()},
@@ -416,6 +426,107 @@ auto Mcp_server::action_shrink_mesh_selection(const json& args) -> std::string
     }
     // Blender Select Less. No-op in object mode (see Mesh_component_selection::shrink).
     m_context.mesh_component_selection->shrink();
+    return query_mesh_component_selection(args);
+}
+
+auto Mcp_server::action_select_all_mesh_components(const json& args) -> std::string
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if ((selection == nullptr) || (m_context.mesh_component_selection_tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("select_all_mesh_components needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    std::vector<Mesh_component_target> targets;
+    if (args.contains("node_id") || args.contains("node_name")) {
+        const std::string scene_name = args.value("scene_name", "");
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+        if (!node) {
+            return make_error_content("Node not found (give node_id or node_name)");
+        }
+        if (append_mesh_component_targets(erhe::scene::get_mesh(node.get()), targets) == 0) {
+            return make_error_content("Node has no component-selectable mesh primitive (content, not skinned, not lock_edit): " + node->get_name());
+        }
+    } else {
+        m_context.mesh_component_selection_tool->collect_select_all_targets(targets);
+    }
+    selection->select_all(targets);
+    return query_mesh_component_selection(args);
+}
+
+auto Mcp_server::action_invert_mesh_selection(const json& args) -> std::string
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("invert_mesh_selection needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    selection->invert();
+    return query_mesh_component_selection(args);
+}
+
+auto Mcp_server::action_select_linked_mesh_components(const json& args) -> std::string
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("select_linked_mesh_components needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    const erhe::geometry::Region_delimit delimit = args.value("delimit_crease", false)
+        ? erhe::geometry::Region_delimit::crease
+        : erhe::geometry::Region_delimit::none;
+
+    if (args.value("from_selection", false)) {
+        selection->select_linked_from_selection(delimit);
+        return query_mesh_component_selection(args);
+    }
+
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Give from_selection=true, or scene_name + node + vertices. Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::vector<Mesh_component_target> targets;
+    append_mesh_component_targets(erhe::scene::get_mesh(node.get()), targets);
+    const Mesh_component_target* target = nullptr;
+    for (const Mesh_component_target& candidate : targets) {
+        if (candidate.primitive_index == primitive_index) {
+            target = &candidate;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        return make_error_content("Node has no component-selectable mesh primitive at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+    if (!args.contains("vertices") || !args["vertices"].is_array() || args["vertices"].empty()) {
+        return make_error_content("vertices (a non-empty seed vertex index list) is required unless from_selection is true");
+    }
+    const GEO::index_t vertex_count = target->geometry->get_mesh().vertices.nb();
+    std::vector<GEO::index_t> seed_vertices;
+    for (const json& v : args["vertices"]) {
+        const GEO::index_t vertex = v.get<GEO::index_t>();
+        if (vertex >= vertex_count) {
+            return make_error_content("Vertex index out of range: " + std::to_string(vertex) + " >= " + std::to_string(vertex_count));
+        }
+        seed_vertices.push_back(vertex);
+    }
+    if (!selection->select_linked(*target, seed_vertices, delimit)) {
+        return make_error_content("Select linked needs the geometry's connectivity, which is not built: " + node->get_name());
+    }
     return query_mesh_component_selection(args);
 }
 

@@ -466,6 +466,62 @@ TEST_F(Mcp_test, get_node_details_finds_a_node_by_id)
     EXPECT_TRUE(missing.is_error) << "an unknown id was answered with a node";
 }
 
+// Mesh component selection commands (doc/editor/mesh_component_selection.md):
+// selecting a facet flushes to its edges and vertices, switching to vertex
+// mode keeps the vertices and derives the rest, and select all fills the box.
+TEST_F(Mcp_test, mesh_component_flush_and_select_all)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "component flush box"},
+        {"steps",       {0, 0, 0}},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    advance_frames(client, 2);
+
+    // (vertices, edges, facets) of the box's live entry.
+    const auto counts = [](const json& selection) -> std::array<std::size_t, 3> {
+        for (const json& entry : selection.at("entries")) {
+            if ((entry.value("node_name", "") == "component flush box") && entry.value("live", false)) {
+                return {entry.at("vertices").size(), entry.at("edges").size(), entry.at("facets").size()};
+            }
+        }
+        return {0, 0, 0};
+    };
+    using Counts = std::array<std::size_t, 3>;
+
+    Mcp_client::Tool_result selected = client.call_tool("select_mesh_components", json{
+        {"scene_name", env.scene_name()},
+        {"node_name",  "component flush box"},
+        {"mode",       "face"},
+        {"facets",     {0}}
+    });
+    ASSERT_FALSE(selected.is_error) << selected.text;
+    Mcp_client::Tool_result face = client.call_tool("get_mesh_component_selection", json::object());
+    ASSERT_FALSE(face.is_error) << face.text;
+    EXPECT_EQ(counts(face.payload), (Counts{4, 4, 1})) << "a facet selects its edges and vertices";
+
+    ASSERT_FALSE(client.call_tool("set_mesh_component_mode", json{{"mode", "vertex"}}).is_error);
+    Mcp_client::Tool_result vertex = client.call_tool("get_mesh_component_selection", json::object());
+    ASSERT_FALSE(vertex.is_error) << vertex.text;
+    EXPECT_EQ(counts(vertex.payload), (Counts{4, 4, 1})) << "vertex mode keeps the vertices and derives edges and facets";
+
+    Mcp_client::Tool_result all = client.call_tool("select_all_mesh_components", json{
+        {"scene_name", env.scene_name()},
+        {"node_name",  "component flush box"}
+    });
+    ASSERT_FALSE(all.is_error) << all.text;
+    EXPECT_EQ(counts(all.payload), (Counts{8, 12, 6})) << "select all selects the whole box";
+
+    client.call_tool("clear_mesh_component_selection", json::object());
+    client.call_tool("set_mesh_component_mode", json{{"mode", "object"}});
+}
+
 // reset_editor_state takes the editor back to no scenes, no selection and
 // no undo history - and returns only once the scene closes have run.
 TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)

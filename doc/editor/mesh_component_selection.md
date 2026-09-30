@@ -52,6 +52,66 @@ Plain click replaces the selection (clear, then add the picked component);
 Ctrl / Shift extend it (toggle the picked component). These mirror the object
 `Selection` modifiers (read from `App_context::input_state`).
 
+The mode combo in the viewport toolbar switches the mode with
+`Mode_conversion::flush`; holding Ctrl while choosing the mode switches with
+`Mode_conversion::expand` (section 3).
+
+### Selection commands
+
+Each command is a `Component_selection_action_command` hosted by the tool,
+bound through the Commands system (so `doc/editor/input_bindings.md` overrides
+apply), and consumes its key only in a mesh component mode; in Object and
+Bone mode the key falls through to other bindings.
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Mesh_component_selection.select_all` | Ctrl+A | Select every element of the targets in the current mode |
+| `Mesh_component_selection.select_none` | Alt+A | Deselect everything (as the Clear button, cancelling pending region scans) |
+| `Mesh_component_selection.invert` | Ctrl+I | Replace the current mode's set of every live entry with its complement |
+| `Mesh_component_selection.select_linked_under_cursor` | L | Add the connected region grown from the hovered facet's vertices |
+| `Mesh_component_selection.select_linked_from_selection` | Ctrl+L | Add the connected region grown from the vertices of every selected element |
+| `Mesh_component_selection.grow` | Ctrl+Numpad+ / Ctrl+= | Grow the selection by one border ring |
+| `Mesh_component_selection.shrink` | Ctrl+Numpad- / Ctrl+- | Shrink the selection by one border ring |
+
+The toolbar has All / None / Invert / Linked buttons (Linked is the
+from-selection form) beside Clear while a component mode is active. Ctrl+A
+and Alt+A share the A key with the fly camera's strafe binding, which has no
+modifier mask; `erhe::commands` dispatches key bindings with a modifier mask
+first (`doc/erhe/commands.md`), so the selection commands see the chord.
+
+Select all targets the meshes of the live entries plus the meshes of the
+object `Selection` that component selection can address (scene content, not
+skinned, not lock_edit, no separate collision shape:
+`append_mesh_component_targets()`); when both are empty, the hovered mesh.
+Select linked floods with `erhe::geometry::walk_connected_region()`
+(`doc/erhe/geometry.md`) from the seed vertices; face mode adds the facets
+whose vertices all lie in the region. The walk needs the Geometry's vertex
+and edge connectivity; an entry whose Geometry lacks it is skipped with a
+`log_selection` warning (grow and shrink skip it the same way). Every
+command ends with a flush (section 3).
+
+### MCP tools
+
+`src/editor/mcp/mcp_server_mesh_components.cpp` (schemas in
+`config/editor/mcp_tools.json`):
+
+- `set_mesh_component_mode` - `mode`, optional `conversion` (`flush`, the
+  default, or `expand`).
+- `select_mesh_components` - adds vertices / edges / facets of one node's
+  primitive (replacing the selection unless `extend`), then flushes.
+- `get_mesh_component_selection` - mode and every entry's sets.
+- `select_all_mesh_components` - select all; `scene_name` + `node_id` /
+  `node_name` restrict the targets to that node's mesh.
+- `invert_mesh_selection`, `grow_mesh_selection`, `shrink_mesh_selection`.
+- `select_linked_mesh_components` - `from_selection: true`, or `scene_name`
+  + node + `primitive_index` + `vertices` (seed list); optional
+  `delimit_crease` stops the flood at crease edges.
+- `clear_mesh_component_selection` - select none.
+
+The mutating tools return the same JSON as `get_mesh_component_selection`,
+except `select_mesh_components` (the entry's counts) and
+`clear_mesh_component_selection`.
+
 ## 3. Data model
 
 `Mesh_component_selection` (`src/editor/tools/mesh_component_selection.*`) is a
@@ -80,7 +140,37 @@ Liveness instead of invalidation:
 - `prune()` drops the entries whose mesh or `Geometry` is gone or that hold
   nothing.
 
-Change announcement: the three sets are `Component_set<Key>`, a `std::set`
+### Flush and mode conversion
+
+The three sets of an entry are kept consistent with the current mode's set:
+`Mesh_component_selection::flush()` derives the other two from it for every
+live entry, and every selection command (click, region and brush select,
+grow / shrink, select all / invert / linked, the MCP tools) calls it after its
+write.
+
+- Vertex mode keeps the vertices; the edges are those with both vertices
+  selected, the facets those with all vertices selected.
+- Edge mode keeps the edges; the vertices are their end points, the facets
+  those with all edges selected.
+- Face mode keeps the facets and selects their edges and vertices.
+
+`set_mode(mode, conversion)` converts every live entry before it sends
+`Mesh_component_mode_changed_message`. `Mode_conversion::flush` (the default)
+is the flush above for the new mode. `Mode_conversion::expand` (from one
+component mode to another) first rewrites the new mode's set from the old
+mode's: going up (vertex to edge to face) it selects every element touching
+the selection; going down it keeps only the elements completely surrounded
+by it (not part of any unselected element of the old mode); then it flushes.
+Flush and conversion read the facet corners only (an edge is two consecutive
+corners of a facet), so they need no connectivity.
+
+The Geometry Spreadsheet's row selection and the operations that install a
+post-operation selection (`set_after_operation()`, extrude) write their sets
+as given, without a flush.
+
+### Change announcement
+
+The three sets are `Component_set<Key>`, a `std::set`
 wrapper whose every write (insert, erase, clear, assignment of new keys)
 calls `Mesh_component_selection::on_components_changed()`, and `clear_all()` /
 `prune()` do the same for the entry list. That queues one
@@ -234,6 +324,11 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 - Confirm existing line debug rendering (grid, fly-camera, physics) is
   unchanged, and that the headset / XR viewport still renders (the tool is
   inactive there).
+- `py -3 scripts/mesh_modeling_verify.py [--editor <editor.exe>]` launches a
+  headless editor and checks the flush rules, both mode conversions, invert,
+  select all / none, select linked and their keys on a box; the `Mcp_test`
+  case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
+  and select all in CI.
 
 ## 9. Future work
 

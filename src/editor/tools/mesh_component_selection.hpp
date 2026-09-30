@@ -2,14 +2,17 @@
 
 #include "app_message.hpp"
 
+#include "erhe_geometry/topology.hpp" // Region_delimit
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <geogram/basic/numeric.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <set>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -45,6 +48,19 @@ enum class Mesh_component_mode {
 // Guards must test this rather than `== object`, or bone would fall through into
 // the mesh-component machinery.
 [[nodiscard]] auto is_mesh_component_mode(Mesh_component_mode mode) -> bool;
+
+// How a mode switch converts the selection (doc/editor/mesh_component_selection.md
+// "Flush and mode conversion").
+//   flush  - keep the new mode's set and derive the other two from it
+//   expand - going up (vertex -> edge -> face) select every element touching the
+//            old mode's selection; going down keep only the elements completely
+//            surrounded by it; then flush
+enum class Mode_conversion : unsigned int {
+    flush  = 0,
+    expand = 1
+};
+
+[[nodiscard]] auto c_str(Mode_conversion conversion) -> const char*;
 
 // Canonical undirected edge key: (min vertex, max vertex), so the same edge
 // reached from either adjacent facet maps to a single entry.
@@ -133,6 +149,24 @@ public:
     void toggle_edge  (GEO::index_t a, GEO::index_t b);
 };
 
+// One (mesh, primitive, Geometry) the selection commands act on (select all).
+class Mesh_component_target
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh>        mesh           {};
+    std::size_t                               primitive_index{0};
+    std::shared_ptr<erhe::geometry::Geometry> geometry       {};
+};
+
+// Appends one target per primitive of `mesh` that component selection can
+// address: scene content, not skinned, not lock_edit, no separate collision
+// shape, and a Geometry already published on its raytrace shape (never built
+// here). Returns the number of targets appended.
+auto append_mesh_component_targets(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    std::vector<Mesh_component_target>&       out_targets
+) -> std::size_t;
+
 // Editor-side, content-addressed store of mesh sub-component selections. Entries
 // are keyed by per-instance content identity (mesh + primitive index + Geometry),
 // so a selection survives geometry swaps and scene add/remove through undo/redo
@@ -149,7 +183,40 @@ public:
     [[nodiscard]] auto get_mode() const -> Mesh_component_mode;
     // Publishes Mesh_component_mode_changed_message when the mode actually
     // changes (Bone_visualization gates proxy visibility / pickability on it).
-    void               set_mode(Mesh_component_mode mode);
+    // Switching into a component mode converts every live entry first (flush:
+    // keep the new mode's set and derive the rest; expand: see
+    // Mode_conversion), so subscribers see the converted selection.
+    void               set_mode(Mesh_component_mode mode, Mode_conversion conversion = Mode_conversion::flush);
+
+    // Derive, for every live entry, the two sets other than the current mode's
+    // from the current mode's set: vertex mode keeps the vertices, edges are
+    // those with both vertices selected, facets those with all vertices
+    // selected; edge mode keeps the edges, vertices are their end points,
+    // facets those with all edges selected; face mode keeps the facets and
+    // selects their edges and vertices. No-op outside component modes. Every
+    // selection command calls it after its write.
+    void               flush();
+
+    // Select every element of every target in the current mode, then flush.
+    void               select_all(std::span<const Mesh_component_target> targets);
+    // Deselect everything (every entry, live or not).
+    void               select_none();
+    // Replace the current mode's set of every live entry with its complement,
+    // then flush.
+    void               invert();
+    // Add the connected region (erhe::geometry::walk_connected_region) grown
+    // from the vertices of every selected element of every live entry, then
+    // flush. Face mode adds the facets whose vertices all lie in the region.
+    // Entries whose Geometry lacks connectivity are skipped with a warning.
+    void               select_linked_from_selection(erhe::geometry::Region_delimit delimit = erhe::geometry::Region_delimit::none);
+    // Add the connected region grown from seed_vertices of one target, as
+    // select_linked_from_selection does for each entry. Returns false (and
+    // changes nothing) when the target's Geometry lacks connectivity.
+    auto               select_linked(
+        const Mesh_component_target&   target,
+        std::span<const GEO::index_t>  seed_vertices,
+        erhe::geometry::Region_delimit delimit = erhe::geometry::Region_delimit::none
+    ) -> bool;
 
     // Entry lookup keyed by (mesh, primitive_index, geometry).
     [[nodiscard]] auto find_entry(
@@ -211,6 +278,12 @@ public:
 
 private:
     void on_mesh_geometry_changed(Mesh_geometry_changed_message& message);
+    // Adds the region grown from m_seed_vertices to the entry's current mode set.
+    auto add_linked_region(
+        Mesh_component_entry&           entry,
+        const erhe::geometry::Geometry& geometry,
+        erhe::geometry::Region_delimit  delimit
+    ) -> bool;
 
     erhe::message_bus::Subscription<Mesh_geometry_changed_message>             m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Mesh_component_selection_changed_message> m_selection_changed_subscription;
@@ -218,6 +291,11 @@ private:
     Mesh_component_mode               m_mode   {Mesh_component_mode::object};
     std::vector<Mesh_component_entry> m_entries{};
     bool                              m_change_pending{false};
+
+    // Select linked scratch (cleared at use, capacity kept).
+    std::vector<GEO::index_t>         m_seed_vertices  {};
+    std::vector<GEO::index_t>         m_region_vertices{};
+    std::vector<std::uint8_t>         m_region_marks   {};
 };
 
 template <typename Key>
