@@ -7306,6 +7306,31 @@
     "name": "inset_mesh_faces"
   },
   {
+    "description": "Blender bevel edges, first version (Ctrl+B, doc/editor/mesh_modeling.md) without the pointer: bevel the live edge selection (vertex mode: the edges between selected vertices) of one mesh primitive (the first live entry with such edges) by amount with one segment, and commit it as ONE undo entry (\"Bevel\"). Each beveled edge becomes a quad (an edge facet), each end vertex with three or more new vertices a vertex facet, and the facets around are rebuilt around the new vertices. The edge facets become the selection (with their edges and vertices). A boundary edge (one facet) or a non-manifold edge is skipped; a selection without a bevelable edge changes nothing: changed false, nothing queued. Needs edge or vertex mode; refused while a loop cut, inset, bevel, knife, slide or other component edit is active. Option defaults are fixed here (Blender's): offset_type offset, loop_slide true. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, beveled_edges, boundary_vertices, edge_facets, vertex_facets and the mesh's vertex_count / edge_count / facet_count.",
+    "inputSchema": {
+      "properties": {
+        "amount": {
+          "description": "Bevel amount in mesh units (default 0): the offset of each new edge from the beveled edge in its facets (offset_type offset) or the width of the bevel facet (offset_type width)",
+          "type": "number"
+        },
+        "loop_slide": {
+          "description": "Where one unbeveled edge lies between two beveled edges at a vertex, place the new vertex on that edge (default true); off, at the meet of the two offset lines",
+          "type": "boolean"
+        },
+        "offset_type": {
+          "description": "How amount is measured (default offset)",
+          "enum": [
+            "offset",
+            "width"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "bevel_mesh_edges"
+  },
+  {
     "description": "Blender knife (K, doc/editor/mesh_modeling.md) without the pointer: cut one polyline of points (mesh-local) into one node's mesh primitive and commit it as ONE undo entry (\"Knife\"). Each point names the element it lies on (snap vertex: vertex; edge: edge [v0, v1], position projected onto the edge, default its midpoint; facet: facet, position required). Consecutive points cut along the plane through them and the eye (perspective) or the view direction (orthographic): the crossed edges split, the crossed facets split along the cut; without cut_through only the hits a ray toward the eye reaches unoccluded are kept. close adds the segment from the last point back to the first (three points or more). The cut edges become the selection in edge mode. Points that make no cut edge change nothing (changed false, nothing queued). The view is the given view object or, when omitted, the camera of the last hovered viewport. Needs a vertex, edge or face mode; refused while a loop cut, inset, knife, slide or other component edit is active. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, cut_vertices, cut_edges and the mesh's vertex_count / edge_count / facet_count.",
     "inputSchema": {
       "properties": {

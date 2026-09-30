@@ -11,6 +11,7 @@ CPMAddPackage(
 set(_target "erhe_geometry_tests")
 add_executable(${_target}
     main.cpp
+    test_bevel_edges.cpp
     test_capsule.cpp
     test_catmull_clark_crease.cpp
     test_catmull_clark_texcoord_seam.cpp

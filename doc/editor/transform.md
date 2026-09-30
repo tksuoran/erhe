@@ -146,6 +146,10 @@ the first step that moves a vertex, as for a move.
   and `commit_scalar_edit()` (`cancel_component_edit()` cancels) rather
   than the pointer scalar drag, and its step's `rebuild` replaces the
   edited geometry at commit.
+- **Bevel** (`Scalar_edit_kind::bevel`) is the inset path with the bevel
+  mode's topology step (`doc/editor/mesh_modeling.md`): the step carries the
+  new vertices with their directions per unit amount (zero depth
+  directions), and `Scalar_input::factor` is the amount.
 - MCP `slide_mesh_components` (`kind` edge | vertex, `factor`, `even`,
   `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
   commit through `Transform_tool::run_scalar_edit()`.

@@ -4,9 +4,9 @@ Stability: experimental
 
 The modal mesh modeling tools of the editor: gestures that change a mesh's
 topology interactively in a viewport, in a mesh component mode
-(`doc/editor/mesh_component_selection.md`). Loop cut, inset and knife exist;
-bevel follows the same gesture lifecycle (`doc/plans/mesh_modeling.md`,
-which holds its design and the Blender behaviour each tool follows). The discrete operations (delete, dissolve, merge,
+(`doc/editor/mesh_component_selection.md`): loop cut, inset, bevel (its
+first version) and knife (`doc/plans/mesh_modeling.md` holds their design
+and the Blender behaviour each tool follows). The discrete operations (delete, dissolve, merge,
 subdivide) are Operations window buttons and are described in
 `doc/editor/operations.md`; the slides in `doc/editor/transform.md` "Scalar
 edits".
@@ -44,8 +44,8 @@ A modal tool runs in four steps, following `doc/plans/mesh_modeling.md` D3:
 mesh, the primitive index, the before and after `Mesh_primitive`, the undo
 label and the mode to restore; with it, `Mesh_component_transform` edits only
 that mesh primitive and treats it as an extruded group for commit and cancel.
-For inset it also carries the vertices the edit moves with their thickness
-and depth directions, and a `rebuild` function: commit then re-runs the
+For inset and bevel it also carries the vertices the edit moves with their
+thickness (bevel: amount) and depth directions, and a `rebuild` function: commit then re-runs the
 topology step from the before geometry with the final values and commits
 that geometry (every attribute interpolated by the operation, the selection
 entry carried onto it) in place of the edited one.
@@ -185,6 +185,72 @@ returns the selection plus `changed`, `inset_vertices`, `inset_facets`,
 `rim_facets` and the mesh's vertex, edge and facet counts. It needs face
 mode.
 
+## Bevel
+
+Blender's bevel, first version (`doc/plans/mesh_modeling.md` section 4.9,
+M13a): edges only, one segment, offset types `offset` and `width`, loop
+slide. Segments, profile, clamp overlap, vertex bevel, miters and the other
+options of section 4.9 are the plan's second version (M13b). The rules are in
+`erhe_geometry/operation/bevel_edges.hpp` and `doc/erhe/geometry.md`.
+
+- **Start.** Ctrl+B in edge mode (the selected edges) or vertex mode (the
+  edges between selected vertices), with the pointer over a viewport, starts
+  the bevel mode on the first live entry with such edges (one mesh
+  primitive). It is refused while a loop cut, inset, knife, slide or another
+  component edit runs. There is no preview step: the topology step runs at
+  once.
+- **Topology step.** `erhe::geometry::operation::bevel_edges()` of the edges
+  with amount 0 builds the result Geometry (valid topology, the new vertices
+  at their original vertices), swapped in as above; the edge facets with
+  their edges and vertices become the selection (the mode stays). A
+  selection with only boundary or non-manifold edges ends the mode with
+  nothing changed.
+- **Slide.** A `Scalar_edit_kind::bevel` edit
+  (`Transform_tool::begin_scalar_edit()`) moves each new vertex to its
+  original vertex's position plus the amount times its direction
+  (`Bevel_edges_result`; every placement rule is linear in the amount, so
+  the directions are exact). The pointer drives the amount: the pointer's
+  distance from the press position times the mesh units per pixel at the
+  centroid of the new vertices, as for inset.
+- **Options.** The mode starts from the library defaults (offset type
+  `offset`, loop slide on). W cycles the offset type (offset, width) and L
+  toggles loop slide; each cancels the running edit and re-runs the
+  topology step, keeping the amount. S stays unbound until the segments of
+  M13b.
+- **Confirm / cancel.** Enter or a left click commits one
+  `Fork_geometry_operation` "Bevel": the step's rebuild re-runs the bevel
+  from the before geometry with the final amount, so the result equals the
+  numeric form's. Escape or a right click cancels: the before primitive and
+  the selection come back and nothing is queued. Undo and redo decline
+  while the mode runs.
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Mesh_component_selection.bevel` | Ctrl+B | Start the bevel mode |
+| `Mesh_component_selection.bevel_cycle_offset_type` | W | Cycle the offset type |
+| `Mesh_component_selection.bevel_toggle_loop_slide` | L | Toggle loop slide |
+| `Mesh_component_selection.modal_confirm` / `modal_confirm_click` | Enter, left press | Commit |
+| `Mesh_component_selection.modal_cancel` / `modal_cancel_click` | Escape, right press | Cancel |
+
+W and L carry the exact modifier mask 0 and consume their key only while the
+mode runs, falling through otherwise (W to the fly camera, L to select
+linked; the bevel's L is declared first, so it sees the key before select
+linked while the mode runs).
+
+### Numeric form
+
+`Mesh_component_selection_tool::bevel(options, result, error)` bevels the
+live edge (vertex) selection with the options' amount and queues one
+`Fork_geometry_operation` "Bevel" (D6); a selection without a bevelable edge
+changes nothing (`Bevel_result::changed` false, nothing queued). The
+Operations window's "Bevel" button (Components section) runs it with the
+window's amount, offset type and loop slide. MCP `bevel_mesh_edges`
+(`amount` default 0, `offset_type` `offset` | `width` default `offset`,
+`loop_slide` default true; schema in `config/editor/mcp_tools.json`) calls
+it and returns the selection plus `changed`, `beveled_edges`,
+`boundary_vertices`, `edge_facets`, `vertex_facets` and the mesh's vertex,
+edge and facet counts. It needs edge or vertex mode.
+
 ## Knife
 
 Blender's knife (`doc/plans/mesh_modeling.md` section 4.7; the cut rules
@@ -311,6 +377,7 @@ for its cut points and the move transform mode for its vertex / edge snap
 
 - `loop_cut_mesh` - the numeric loop cut (above).
 - `inset_mesh_faces` - the numeric inset (above).
+- `bevel_mesh_edges` - the numeric bevel (above).
 - `knife_cut_mesh` - the numeric knife (above).
 - `cancel_component_edit` - cancels the knife mode, the G slide or the
   mesh component edit of a gizmo drag.
@@ -325,7 +392,11 @@ the single edge case on an octahedron, and through Ctrl+R in a viewport
 inset through `inset_mesh_faces` on the box (one facet with an inset vertex
 position, two adjacent facets, every facet, individual on two facets, each
 with the selection and one undo step) and through I in a viewport (move +
-Enter, move + Escape, the I and E option keys); the knife through
+Enter, move + Escape, the I and E option keys); bevel through
+`bevel_mesh_edges` on the box (one edge with the edge quad selected at the
+offset, every edge, width on one edge, each with one undo step) and through
+Ctrl+B in a viewport (move + Enter: one "Bevel" entry; W, L, Escape:
+unchanged, no entry); the knife through
 `knife_cut_mesh` on the box (two edge midpoints across the top face, a
 vertex to vertex diagonal, three points over two faces with and without cut
 through, each with the selection and one undo step) and through K in a

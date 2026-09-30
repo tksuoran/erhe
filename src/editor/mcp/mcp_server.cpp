@@ -755,6 +755,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "cancel_component_edit",          &Mcp_server::action_cancel_component_edit         },
         { "loop_cut_mesh",                  &Mcp_server::action_loop_cut_mesh                 },
         { "inset_mesh_faces",               &Mcp_server::action_inset_mesh_faces              },
+        { "bevel_mesh_edges",               &Mcp_server::action_bevel_mesh_edges              },
         { "knife_cut_mesh",                 &Mcp_server::action_knife_cut_mesh                },
         { "split_mesh_components",          &Mcp_server::action_split_mesh_components         },
         { "rip_mesh_vertices",              &Mcp_server::action_rip_mesh_vertices             },

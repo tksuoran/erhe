@@ -39,7 +39,8 @@ class Viewport_scene_view;
 enum class Scalar_edit_kind : unsigned int {
     edge_slide   = 0, // the vertices of the selected edge loops slide along their rails
     vertex_slide = 1, // each selected vertex slides toward one of its neighbours
-    inset        = 2  // the inset vertices of a topology step move by thickness and depth
+    inset        = 2, // the inset vertices of a topology step move by thickness and depth
+    bevel        = 3  // the boundary vertices of a bevel topology step move by the amount
 };
 
 [[nodiscard]] auto c_str(Scalar_edit_kind kind) -> const char*;
@@ -50,7 +51,7 @@ class Scalar_input
 public:
     // Edge slide: [-1, 1] when clamped, positive toward the first rail side,
     // negative toward the second. Vertex slide: [0, 1] when clamped, 1 lands
-    // on the chosen neighbour. Inset: the thickness (mesh units, unclamped).
+    // on the chosen neighbour. Inset: the thickness (mesh units, unclamped). Bevel: the amount (mesh units).
     float     factor {0.0f};
     // Inset only: the depth (mesh units).
     float     depth  {0.0f};
@@ -95,10 +96,11 @@ public:
     std::string                        description    {};
     Mesh_component_mode                mode_before    {};
 
-    // Scalar_edit_kind::inset: the vertices the edit moves (indices into the
-    // `after` geometry) and, parallel to them, their mesh-local thickness and
-    // depth directions; a vertex sits at its start position plus thickness
-    // times its direction plus depth times its depth direction.
+    // Scalar_edit_kind::inset and bevel: the vertices the edit moves (indices
+    // into the `after` geometry) and, parallel to them, their mesh-local
+    // thickness (bevel: amount) and depth directions; a vertex sits at its
+    // start position plus thickness times its direction plus depth times its
+    // depth direction (bevel: the depth directions are zero).
     std::vector<GEO::index_t>          inset_vertices        {};
     std::vector<glm::vec3>             inset_directions      {};
     std::vector<glm::vec3>             inset_depth_directions{};

@@ -481,7 +481,7 @@ auto Mesh_component_transform::begin_scalar(
     if (m_active) {
         return false;
     }
-    if ((kind == Scalar_edit_kind::inset) && ((topology_step == nullptr) || topology_step->inset_vertices.empty())) {
+    if (((kind == Scalar_edit_kind::inset) || (kind == Scalar_edit_kind::bevel)) && ((topology_step == nullptr) || topology_step->inset_vertices.empty())) {
         return false;
     }
     if (!gather(context, topology_step)) {
@@ -717,7 +717,7 @@ void Mesh_component_transform::commit(App_context& context)
             continue;
         }
 
-        // A topology step with a rebuild (inset): the step re-run with the
+        // A topology step with a rebuild (inset, bevel): the step re-run with the
         // final values replaces the edited geometry, and the selection entry
         // follows it.
         bool rebuilt = false;
@@ -1426,6 +1426,7 @@ auto c_str(const Scalar_edit_kind kind) -> const char*
         case Scalar_edit_kind::edge_slide:   return "edge_slide";
         case Scalar_edit_kind::vertex_slide: return "vertex_slide";
         case Scalar_edit_kind::inset:        return "inset";
+        case Scalar_edit_kind::bevel:        return "bevel";
         default:                             return "?";
     }
 }
@@ -1773,7 +1774,8 @@ auto Mesh_component_transform::build_scalar(
         switch (kind) {
             case Scalar_edit_kind::edge_slide:   ok = build_edge_slide  (context, group_index); break;
             case Scalar_edit_kind::vertex_slide: ok = build_vertex_slide(context, group_index); break;
-            case Scalar_edit_kind::inset:        ok = (topology_step != nullptr) && build_inset(group_index, *topology_step); break;
+            case Scalar_edit_kind::inset:
+            case Scalar_edit_kind::bevel:        ok = (topology_step != nullptr) && build_inset(group_index, *topology_step); break;
             default: break;
         }
         if (!ok) {
@@ -2033,7 +2035,7 @@ auto Mesh_component_transform::build_inset(const std::size_t group_index, const 
     for (std::size_t i = 0; i < count; ++i) {
         const GEO::index_t vertex = topology_step.inset_vertices[i];
         if (vertex >= geo_mesh.vertices.nb()) {
-            log_trs_tool->warn("Inset refused: vertex {} is not a vertex of '{}'", vertex, mesh->get_name());
+            log_trs_tool->warn("{} refused: vertex {} is not a vertex of '{}'", c_str(m_scalar_kind), vertex, mesh->get_name());
             return false;
         }
         Slide_vertex slide_vertex{};
@@ -2284,7 +2286,7 @@ auto Mesh_component_transform::get_active_slide_screen_frame(const Viewport_scen
 
 auto Mesh_component_transform::factor_from_translation(const glm::vec3& translation) -> float
 {
-    if ((m_slide_active >= m_slide_vertices.size()) || (m_scalar_kind == Scalar_edit_kind::inset)) {
+    if ((m_slide_active >= m_slide_vertices.size()) || (m_scalar_kind == Scalar_edit_kind::inset) || (m_scalar_kind == Scalar_edit_kind::bevel)) {
         return 0.0f;
     }
     if (m_scalar_kind == Scalar_edit_kind::vertex_slide) {
@@ -2312,7 +2314,7 @@ void Mesh_component_transform::apply_scalar(App_context& context, const Scalar_i
         return;
     }
     m_last_scalar_input = input;
-    if (m_scalar_kind == Scalar_edit_kind::inset) {
+    if ((m_scalar_kind == Scalar_edit_kind::inset) || (m_scalar_kind == Scalar_edit_kind::bevel)) {
         apply_inset(context, input);
         return;
     }

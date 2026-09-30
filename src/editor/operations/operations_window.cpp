@@ -1476,6 +1476,28 @@ void Operations::imgui()
             ImGui::Checkbox ("Interpolate",     &m_inset_options.interpolate);
             ImGui::PopID();
         }
+        if (visible("Bevel")) {
+            const auto bevel_component_mode =
+                (component_selection_non_empty && ((current_component_mode == Mesh_component_mode::edge) || (current_component_mode == Mesh_component_mode::vertex)))
+                    ? erhe::imgui::Item_mode::normal
+                    : erhe::imgui::Item_mode::disabled;
+            if (make_button("Bevel", bevel_component_mode, button_size)) {
+                bevel_edges();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Bevels the selected edges (vertex mode: the edges between selected vertices) by the amount below, one segment (Ctrl+B in a viewport runs it interactively)");
+            }
+            ImGui::PushID("bevel");
+            ImGui::DragFloat("Amount", &m_bevel_options.amount, 0.001f, 0.0f, 1000.0f, "%.4f");
+            int offset_type = (m_bevel_options.offset_type == erhe::geometry::operation::Bevel_offset_type::width) ? 1 : 0;
+            if (ImGui::Combo("Offset Type", &offset_type, "Offset\0Width\0")) {
+                m_bevel_options.offset_type = (offset_type == 1)
+                    ? erhe::geometry::operation::Bevel_offset_type::width
+                    : erhe::geometry::operation::Bevel_offset_type::offset;
+            }
+            ImGui::Checkbox("Loop Slide", &m_bevel_options.loop_slide);
+            ImGui::PopID();
+        }
         if (visible("Split")) {
             if (make_button("Split", merge_component_mode, button_size)) {
                 split_components();
@@ -3055,6 +3077,21 @@ auto Operations::inset_faces() -> bool
     std::string  error;
     if (!tool->inset(m_inset_options, result, error)) {
         log_operations->info("Inset: {}", error);
+        return false;
+    }
+    return result.changed;
+}
+
+auto Operations::bevel_edges() -> bool
+{
+    Mesh_component_selection_tool* const tool = m_context.mesh_component_selection_tool;
+    if (tool == nullptr) {
+        return false;
+    }
+    Bevel_result result{};
+    std::string  error;
+    if (!tool->bevel(m_bevel_options, result, error)) {
+        log_operations->info("Bevel: {}", error);
         return false;
     }
     return result.changed;

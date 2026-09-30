@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/bevel_edges.hpp`: `bevel_edges()`
+  with `Bevel_edges_options` (`Bevel_offset_type` offset / width, amount,
+  loop slide) and `Bevel_edges_result`: the first version of the edge bevel of
+  `doc/plans/mesh_modeling.md` section 4.9 (M13a: edges only, one segment),
+  composed on `Edit_mesh`, reporting the new vertices with their directions
+  per unit amount, the edge facets and the vertex facets, and selecting the
+  edge facets through `Component_remap`.
 - `erhe::geometry`: `Knife_cut::end_polyline()`, `Knife_cut::close_polyline()`
   and `Knife_cut::get_polyline_count()`: several polylines per knife cut, each
   ended or closed on its own; `undo_last_point()` reopens the polyline of the

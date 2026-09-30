@@ -17,6 +17,7 @@
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
+#include "erhe_geometry/operation/bevel_edges.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
@@ -253,6 +254,11 @@ public:
     // numeric form of Mesh_component_selection_tool::inset() on the live face
     // selection. False when refused (logged).
     auto inset_faces() -> bool;
+    // Bevel (doc/editor/mesh_modeling.md) with the window's amount, offset
+    // type and loop slide: the numeric form of
+    // Mesh_component_selection_tool::bevel() on the live edge (vertex)
+    // selection. False when refused (logged).
+    auto bevel_edges() -> bool;
     // Split (Y), rip (V) and separate (P) of doc/plans/mesh_modeling.md catalog
     // M9 on the mesh-component selection; each returns false (separate: an
     // empty pointer), queueing nothing, without a live selection in a mode it
@@ -479,6 +485,10 @@ private:
     // Inset options edited in the "Components" section (the MCP tool takes
     // its own arguments).
     erhe::geometry::operation::Inset_faces_options       m_inset_options{.thickness = 0.1f};
+
+    // Bevel options edited in the "Components" section (the MCP tool takes its
+    // own arguments).
+    erhe::geometry::operation::Bevel_edges_options       m_bevel_options{.amount = 0.1f};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

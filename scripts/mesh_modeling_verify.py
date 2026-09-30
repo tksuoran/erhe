@@ -34,6 +34,12 @@ two adjacent facets, every facet, individual on two facets), each with the
 selection afterwards and one undo step, and through the I key in a viewport
 (move + Enter: one "Inset" undo entry; move + Escape: unchanged, no entry;
 the I and E option keys re-running the topology step).
+Bevel, first version (section 4.9 M13a, doc/editor/mesh_modeling.md) is
+checked through bevel_mesh_edges on the plain box (one edge with the edge
+quad selected and its vertices at the offset, every edge, width on one edge
+with the quad width), each with one undo step, and through Ctrl+B in a
+viewport (move + Enter: one "Bevel" undo entry; W and L re-running the
+topology step, then Escape: unchanged, no entry).
 Split, rip and separate (catalog M9) are checked on the plain box:
 split_mesh_components of one face and of one edge (edge split), rip_mesh_vertices
 of one vertex and of one edge, separate_mesh_selection of one face (the new
@@ -1354,6 +1360,140 @@ def run_inset(e):
     e.advance(2)
 
 
+def distance_to_line(p, a, b):
+    d = [b[i] - a[i] for i in range(3)]
+    length = math.sqrt(sum(c * c for c in d))
+    d = [c / length for c in d]
+    w = [p[i] - a[i] for i in range(3)]
+    t = sum(w[i] * d[i] for i in range(3))
+    return math.sqrt(sum((w[i] - t * d[i]) ** 2 for i in range(3)))
+
+
+def run_bevel(e):
+    """Bevel, first version (doc/plans/mesh_modeling.md section 4.9 M13a,
+    doc/editor/mesh_modeling.md): bevel_mesh_edges and the Ctrl+B key."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("bevel: plain box at its base counts", geometry_counts(e, BOX), base)
+    first = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": [0]
+    })["elements"][0]["vertices"]
+    edge = [first[0], first[1]]
+    p = vertex_positions(e, BOX, range(base[0]))
+    a = p[edge[0]]
+    b = p[edge[1]]
+
+    def bevel(select_all=False, **kwargs):
+        e.call("set_mesh_component_mode", {"mode": "edge"})
+        if select_all:
+            e.call("select_all_mesh_components", {"scene_name": e.scene, "node_name": BOX})
+        else:
+            select_on(e, BOX, edges=[edge])
+        result = e.call("bevel_mesh_edges", kwargs)
+        wait_idle(e)
+        return result
+
+    def selected_quad():
+        facets = entry_of(e.call("get_mesh_component_selection"), BOX)["facets"]
+        if len(facets) != 1:
+            return None, facets
+        vertices = e.call("get_mesh_attribute_values", {
+            "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": facets
+        })["elements"][0]["vertices"]
+        return vertex_positions(e, BOX, vertices), facets
+
+    before_undo = undo_count(e)
+
+    # One edge, offset 0.25: each end becomes two vertices, the edge a quad.
+    result = bevel(amount=0.25)
+    expect("bevel_mesh_edges one edge: changed", result.get("changed"), True)
+    expect("bevel one edge -> (10, 15, 7)", geometry_counts(e, BOX), (10, 15, 7))
+    quad, facets = selected_quad()
+    check_true("bevel one edge: the edge quad is the one selected facet", quad is not None, str(facets))
+    if quad is not None:
+        check_true("bevel one edge: the quad's vertices are 0.25 from the beveled edge",
+                   len(quad) == 4 and all(abs(distance_to_line(q, a, b) - 0.25) < 1e-4 for q in quad.values()),
+                   str(list(quad.values())))
+    expect("bevel one edge: one undo entry", undo_count(e), before_undo + 1)
+    expect("bevel one edge: the undo entry is the bevel", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Bevel")
+    undo_and_check(e, "bevel one edge", BOX, base)
+    expect("bevel one edge: one undo step removes it", undo_count(e), before_undo)
+
+    # Every edge: the classic beveled cube.
+    result = bevel(select_all=True, amount=0.25)
+    expect("bevel every edge -> (24, 48, 26)", geometry_counts(e, BOX), (24, 48, 26))
+    expect("bevel every edge: 12 edge facets", result.get("edge_facets"), 12)
+    expect("bevel every edge: 8 vertex facets", result.get("vertex_facets"), 8)
+    undo_and_check(e, "bevel every edge", BOX, base)
+
+    # Width 0.25 on one edge (a right angle): the quad is 0.25 wide at each end.
+    bevel(amount=0.25, offset_type="width")
+    expect("bevel width one edge -> (10, 15, 7)", geometry_counts(e, BOX), (10, 15, 7))
+    quad, facets = selected_quad()
+    if quad is None:
+        check_true("bevel width: the edge quad is selected", False, str(facets))
+    else:
+        near_a = [q for q in quad.values() if distance(q, a) < distance(q, b)]
+        check_true("bevel width: the quad is 0.25 wide at the edge's end",
+                   len(near_a) == 2 and abs(distance(near_a[0], near_a[1]) - 0.25) < 1e-4,
+                   str(near_a))
+    undo_and_check(e, "bevel width one edge", BOX, base)
+    expect("bevel: no undo entries left", undo_count(e), before_undo)
+
+    # The Ctrl+B key in a viewport: Ctrl+B over the selection, move, Enter.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[edge])
+    before_undo = undo_count(e)
+    e.key("b", ["ctrl"])
+    expect("Ctrl+B: the bevel topology is in place", geometry_counts(e, BOX), (10, 15, 7))
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30.0, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("enter", [])
+    wait_idle(e)
+    expect("Ctrl+B, move, Enter -> (10, 15, 7)", geometry_counts(e, BOX), (10, 15, 7))
+    expect("Ctrl+B, move, Enter: one undo entry", undo_count(e), before_undo + 1)
+    expect("Ctrl+B, move, Enter: the undo entry is the bevel", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Bevel")
+    quad, facets = selected_quad()
+    if quad is None:
+        check_true("Ctrl+B, move, Enter: the edge quad is selected", False, str(facets))
+    else:
+        check_true("Ctrl+B, move, Enter: the quad's vertices moved off the edge",
+                   all(distance_to_line(q, a, b) > 1e-4 for q in quad.values()), str(list(quad.values())))
+    undo_and_check(e, "Ctrl+B, move, Enter", BOX, base)
+
+    # Ctrl+B, move, W, L, Escape: nothing changes, nothing is queued.
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[edge])
+    before_undo = undo_count(e)
+    e.key("b", ["ctrl"])
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30.0, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("w", [])
+    expect("Ctrl+B, W (width): the bevel topology is in place", geometry_counts(e, BOX), (10, 15, 7))
+    e.key("l", [])
+    expect("Ctrl+B, W, L (loop slide off): the bevel topology is in place", geometry_counts(e, BOX), (10, 15, 7))
+    e.key("escape", [])
+    wait_idle(e)
+    expect("Ctrl+B, move, Escape: the box unchanged", geometry_counts(e, BOX), base)
+    expect("Ctrl+B, move, Escape: no undo entry", undo_count(e), before_undo)
+    restored = vertex_positions(e, BOX, range(base[0]))
+    check_true("Ctrl+B, move, Escape: positions back", all(near(restored[v], p[v], 0.0) for v in range(base[0])))
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX,
+                                  "translation": [0.0, 1.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    e.advance(2)
+
+
 def scene_node_order(e):
     """(parent id, name) of every node, in scene tree walk order."""
     nodes = e.call("get_scene_nodes", {"scene_name": e.scene})["nodes"]
@@ -1807,6 +1947,8 @@ def run(e):
     run_loop_cut(e)
 
     run_inset(e)
+
+    run_bevel(e)
 
     run_split_rip_separate(e)
 

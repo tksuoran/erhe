@@ -7,6 +7,7 @@
 #include "tools/screen_snap.hpp"
 #include "transform/mesh_component_transform.hpp" // Scalar_input, Scalar_topology_step
 #include "erhe_commands/command.hpp"
+#include "erhe_geometry/operation/bevel_edges.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/knife_cut.hpp"
 #include "erhe_geometry/topology.hpp"
@@ -353,6 +354,34 @@ private:
     Inset_action m_action;
 };
 
+// The bevel keys (doc/editor/mesh_modeling.md): Ctrl+B starts the bevel mode
+// in edge or vertex mode; while it runs W cycles the offset type (offset,
+// width) and L toggles loop slide (Enter / left click confirm and Escape /
+// right click cancel through Component_modal_command). S is left for the
+// segment count of the second bevel version (doc/plans/mesh_modeling.md
+// section 4.9, M13b).
+enum class Bevel_action : unsigned int {
+    start              = 0, // Ctrl+B
+    cycle_offset_type  = 1, // W
+    toggle_loop_slide  = 2  // L
+};
+
+[[nodiscard]] auto c_str(Bevel_action action) -> const char*;
+
+// Key command running one Bevel_action. start consumes the key only when the
+// bevel mode starts, the others only while it runs, so the keys fall through
+// to their other bindings (fly camera W, select linked L) otherwise.
+class Component_bevel_command : public erhe::commands::Command
+{
+public:
+    Component_bevel_command(erhe::commands::Commands& commands, App_context& context, const char* name, Bevel_action action);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+    Bevel_action m_action;
+};
+
 // The knife keys (doc/editor/mesh_modeling.md): K starts the knife mode;
 // while it runs Space confirms, Ctrl+Z removes the last cut point, A cycles
 // the angle constraint and X / Y / Z lock an axis. Enter confirms, Escape
@@ -445,6 +474,17 @@ public:
     std::size_t rim_facets    {0};
 };
 
+// What a bevel did (Mesh_component_selection_tool::bevel()).
+class Bevel_result
+{
+public:
+    bool        changed          {false}; // false: no selected edge could be beveled, nothing was done
+    std::size_t beveled_edges    {0};
+    std::size_t boundary_vertices{0};
+    std::size_t edge_facets      {0};
+    std::size_t vertex_facets    {0};
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -517,7 +557,7 @@ public:
     [[nodiscard]] auto run_modal_action(Component_modal_action action) -> bool;
     // True while a pointer slide runs.
     [[nodiscard]] auto is_slide_active () const -> bool;
-    // True while a pointer slide, the loop cut, inset or knife mode runs:
+    // True while a pointer slide, the loop cut, inset, bevel or knife mode runs:
     // the selection gestures stand down and the modal click commands own the
     // clicks.
     [[nodiscard]] auto is_modal_active () const -> bool;
@@ -568,6 +608,29 @@ public:
     auto inset(
         const erhe::geometry::operation::Inset_faces_options& options,
         Inset_result&                                         result,
+        std::string&                                          error
+    ) -> bool;
+
+    // Bevel (doc/editor/mesh_modeling.md). begin_bevel() (Ctrl+B) starts the
+    // bevel mode on the live edge selection (vertex mode: the edges between
+    // selected vertices) of one mesh primitive: the topology step runs at once
+    // with amount 0, then the pointer drags the amount. run_bevel_action()
+    // runs a modal key while it runs (false when it does not run, so the key
+    // falls through).
+    [[nodiscard]] auto begin_bevel      () -> bool;
+    [[nodiscard]] auto run_bevel_action (Bevel_action action) -> bool;
+    [[nodiscard]] auto is_bevel_active  () const -> bool { return m_bevel.active; }
+    [[nodiscard]] auto get_bevel_options() const -> const erhe::geometry::operation::Bevel_edges_options& { return m_bevel.options; }
+
+    // The numeric bevel (MCP bevel_mesh_edges, Operations window "Bevel",
+    // doc/plans/mesh_modeling.md D6): bevel the live edge selection (vertex
+    // mode: the edges between selected vertices) of one mesh primitive with
+    // the options' amount and commit it as one undo entry "Bevel". A selection
+    // without a bevelable edge changes nothing (result.changed false, nothing
+    // queued). False (error set) when refused.
+    auto bevel(
+        const erhe::geometry::operation::Bevel_edges_options& options,
+        Bevel_result&                                         result,
         std::string&                                          error
     ) -> bool;
 
@@ -866,6 +929,51 @@ private:
     void end_inset();
     Inset_state                       m_inset{};
 
+    // Bevel mode (Ctrl+B): the options the modal keys set, the live amount
+    // (in options), the target and its edges, the running topology step, and
+    // the pointer drag: the amount follows the change of the pointer's
+    // distance from the press position, times mesh units per pixel at the
+    // boundary vertices' centroid.
+    class Bevel_state
+    {
+    public:
+        bool                                            active         {false};
+        erhe::geometry::operation::Bevel_edges_options  options        {};
+        Mesh_component_target                           target         {};
+        std::set<std::pair<GEO::index_t, GEO::index_t>> edges          {};
+        Scalar_topology_step                            step           {};
+        Viewport_scene_view*                            view           {nullptr};
+        glm::vec2                                       press_position {0.0f};
+        bool                                            applied        {false};
+        glm::vec2                                       last_position  {0.0f};
+        float                                           units_per_pixel{0.0f};
+    };
+    // Builds the bevel of `edges` with `options` into a new Geometry, swaps
+    // its primitive in and installs the edge facets as the selection; fills
+    // out_step (with the boundary directions and the rebuild) and out_result.
+    // Nothing is swapped when no edge could be beveled (out_result.changed
+    // false).
+    auto perform_bevel(
+        const Mesh_component_target&                           target,
+        const std::set<std::pair<GEO::index_t, GEO::index_t>>& edges,
+        const erhe::geometry::operation::Bevel_edges_options&  options,
+        Scalar_topology_step&                                  out_step,
+        Bevel_result&                                          out_result,
+        std::string&                                           error
+    ) -> bool;
+    // The first live edge (vertex) mode entry with selected edges (vertices
+    // with an edge between them); out_edges receives the edges.
+    [[nodiscard]] auto find_bevel_target(Mesh_component_target& out_target, std::set<std::pair<GEO::index_t, GEO::index_t>>& out_edges) const -> bool;
+    // Runs the topology step for the current options and starts the scalar
+    // edit at the current amount. False when refused.
+    [[nodiscard]] auto start_bevel_step() -> bool;
+    void update_bevel_drag ();
+    void apply_bevel_values();
+    void confirm_bevel     ();
+    void cancel_bevel      ();
+    void end_bevel         ();
+    Bevel_state                       m_bevel{};
+
     // Knife mode (K). The record replays the session into a new Knife_cut
     // when cut through changes (occlusion changes every segment); Ctrl+Z
     // drops the last point record (and the end / close records after it).
@@ -1034,6 +1142,9 @@ private:
     Component_inset_command                                   m_inset_individual_command;
     Component_inset_command                                   m_inset_boundary_command;
     Component_inset_command                                   m_inset_relative_command;
+    Component_bevel_command                                   m_bevel_command;
+    Component_bevel_command                                   m_bevel_cycle_offset_type_command;
+    Component_bevel_command                                   m_bevel_toggle_loop_slide_command;
     Component_knife_command                                   m_knife_command;
     Component_knife_command                                   m_knife_confirm_command;
     Component_knife_command                                   m_knife_undo_point_command;

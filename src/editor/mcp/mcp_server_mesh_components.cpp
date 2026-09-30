@@ -2207,6 +2207,67 @@ auto Mcp_server::action_inset_mesh_faces(const json& args) -> std::string
     return make_json_content(out).dump();
 }
 
+auto Mcp_server::action_bevel_mesh_edges(const json& args) -> std::string
+{
+    // The numeric bevel (doc/plans/mesh_modeling.md D6, section 4.9 M13a;
+    // doc/editor/mesh_modeling.md): topology, placement and commit in one
+    // call, one undo entry. Explicit-state rule (doc/agents/mcp_api_guidelines.md):
+    // the option defaults are the library defaults, never the Operations
+    // window's widgets.
+    Mesh_component_selection*      selection = m_context.mesh_component_selection;
+    Mesh_component_selection_tool* tool      = m_context.mesh_component_selection_tool;
+    if ((selection == nullptr) || (tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    const Mesh_component_mode mode = selection->get_mode();
+    if ((mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::vertex)) {
+        return make_error_content("bevel_mesh_edges needs edge or vertex mode (set_mesh_component_mode)");
+    }
+    erhe::geometry::operation::Bevel_edges_options options{};
+    options.amount     = args.value("amount",     options.amount);
+    options.loop_slide = args.value("loop_slide", options.loop_slide);
+    const std::string offset_type = args.value("offset_type", std::string{"offset"});
+    if (offset_type == "offset") {
+        options.offset_type = erhe::geometry::operation::Bevel_offset_type::offset;
+    } else if (offset_type == "width") {
+        options.offset_type = erhe::geometry::operation::Bevel_offset_type::width;
+    } else {
+        return make_error_content("bevel_mesh_edges: offset_type must be 'offset' or 'width'");
+    }
+
+    Bevel_result result{};
+    std::string  error;
+    if (!tool->bevel(options, result, error)) {
+        return make_error_content(error);
+    }
+    json out = mesh_component_selection_json(*selection);
+    out["amount"]            = options.amount;
+    out["offset_type"]       = offset_type;
+    out["loop_slide"]        = options.loop_slide;
+    out["changed"]           = result.changed;
+    out["beveled_edges"]     = result.beveled_edges;
+    out["boundary_vertices"] = result.boundary_vertices;
+    out["edge_facets"]       = result.edge_facets;
+    out["vertex_facets"]     = result.vertex_facets;
+    out["queued"]            = result.changed;
+    // The counts of the live entry's mesh primitive (the result when changed).
+    for (const Mesh_component_entry& entry : selection->get_entries()) {
+        if (!selection->is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry) {
+            continue;
+        }
+        const GEO::Mesh& mesh = geometry->get_mesh();
+        out["vertex_count"] = mesh.vertices.nb();
+        out["edge_count"]   = mesh.edges.nb();
+        out["facet_count"]  = mesh.facets.nb();
+        break;
+    }
+    return make_json_content(out).dump();
+}
+
 auto Mcp_server::action_set_gizmo_visibility(const json& args) -> std::string
 {
     // Headless-scriptable equivalent of activating the Move/Rotate/Scale tool (or clicking

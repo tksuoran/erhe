@@ -31,6 +31,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_geometry/operation/bevel_edges.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item_host.hpp"
@@ -620,6 +621,39 @@ auto Component_inset_command::try_call() -> bool
     return m_context.mesh_component_selection_tool->run_inset_action(m_action);
 }
 
+auto c_str(const Bevel_action action) -> const char*
+{
+    switch (action) {
+        case Bevel_action::start:             return "start";
+        case Bevel_action::cycle_offset_type: return "cycle_offset_type";
+        case Bevel_action::toggle_loop_slide: return "toggle_loop_slide";
+        default:                              return "?";
+    }
+}
+
+Component_bevel_command::Component_bevel_command(
+    erhe::commands::Commands& commands,
+    App_context&              context,
+    const char*               name,
+    const Bevel_action        action
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_action {action}
+{
+}
+
+auto Component_bevel_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    if (m_action == Bevel_action::start) {
+        return m_context.mesh_component_selection_tool->begin_bevel();
+    }
+    return m_context.mesh_component_selection_tool->run_bevel_action(m_action);
+}
+
 auto c_str(const Knife_action action) -> const char*
 {
     switch (action) {
@@ -709,6 +743,9 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_inset_individual_command            {commands, context, "Mesh_component_selection.inset_toggle_individual", Inset_action::toggle_individual}
     , m_inset_boundary_command              {commands, context, "Mesh_component_selection.inset_toggle_boundary",   Inset_action::toggle_boundary}
     , m_inset_relative_command              {commands, context, "Mesh_component_selection.inset_toggle_relative",   Inset_action::toggle_relative}
+    , m_bevel_command                       {commands, context, "Mesh_component_selection.bevel",                   Bevel_action::start}
+    , m_bevel_cycle_offset_type_command     {commands, context, "Mesh_component_selection.bevel_cycle_offset_type", Bevel_action::cycle_offset_type}
+    , m_bevel_toggle_loop_slide_command     {commands, context, "Mesh_component_selection.bevel_toggle_loop_slide", Bevel_action::toggle_loop_slide}
     , m_knife_command                       {commands, context, "Mesh_component_selection.knife",              Knife_action::start}
     , m_knife_confirm_command               {commands, context, "Mesh_component_selection.knife_confirm",      Knife_action::confirm}
     , m_knife_undo_point_command            {commands, context, "Mesh_component_selection.knife_undo_point",   Knife_action::undo_point}
@@ -772,6 +809,27 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     commands.register_command(&m_shrink_selection_command);
     commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_kp_subtract, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
+
+    // Bevel (doc/editor/mesh_modeling.md): Ctrl+B starts it in edge or vertex
+    // mode; while it runs W cycles the offset type and L toggles loop slide.
+    // The exact masks dispatch them before the mask-less bindings of the same
+    // keys (fly camera W), which they fall through to while the mode does not
+    // run; L is declared before select linked (L, the same exact mask) so the
+    // toggle sees the key first. S stays unbound until the segments of the
+    // second bevel version (doc/plans/mesh_modeling.md section 4.9, M13b).
+    {
+        using erhe::commands::Button_trigger;
+        const std::pair<Component_bevel_command*, std::pair<erhe::window::Keycode, uint32_t>> bevel_keys[] = {
+            {&m_bevel_command,                   {erhe::window::Key_b, erhe::window::Key_modifier_bit_ctrl}},
+            {&m_bevel_cycle_offset_type_command, {erhe::window::Key_w, 0u}},
+            {&m_bevel_toggle_loop_slide_command, {erhe::window::Key_l, 0u}}
+        };
+        for (const auto& [command, key] : bevel_keys) {
+            command->set_host(this);
+            commands.register_command(command);
+            commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
+        }
+    }
 
     // Blender selection keys. Each consumes the key only in a component mode.
     // Ctrl+A / Alt+A carry a modifier mask, so they dispatch before the fly
@@ -1246,7 +1304,7 @@ auto Mesh_component_selection_tool::edge_world_normal(
 auto Mesh_component_selection_tool::begin_slide() -> bool
 {
     const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
-    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active || m_inset.active || m_knife.active) {
+    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active || m_inset.active || m_bevel.active || m_knife.active) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -1277,7 +1335,7 @@ auto Mesh_component_selection_tool::is_slide_active() const -> bool
 
 auto Mesh_component_selection_tool::is_modal_active() const -> bool
 {
-    return m_loop_cut.active || m_inset.active || m_knife.active || is_slide_active();
+    return m_loop_cut.active || m_inset.active || m_bevel.active || m_knife.active || is_slide_active();
 }
 
 auto Mesh_component_selection_tool::run_modal_action(const Component_modal_action action) -> bool
@@ -1333,6 +1391,21 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
             m_modal_cancel_click_command.set_inactive();
         }
         return inset_consumed;
+    }
+    // The bevel mode: confirm commits, cancel restores the mesh; the toggles
+    // fall through.
+    if (m_bevel.active) {
+        bool bevel_consumed = false;
+        switch (modal_action) {
+            case Component_modal_action::confirm: confirm_bevel(); bevel_consumed = true; break;
+            case Component_modal_action::cancel:  cancel_bevel();  bevel_consumed = true; break;
+            default: break;
+        }
+        if (!is_modal_active()) {
+            m_modal_confirm_click_command.set_inactive();
+            m_modal_cancel_click_command.set_inactive();
+        }
+        return bevel_consumed;
     }
     // The loop cut mode: confirm cuts (and chains into the slide), cancel
     // ends the mode with the mesh untouched; the toggles fall through.
@@ -3095,7 +3168,7 @@ void Mesh_component_selection_tool::apply_inset_values()
 
 auto Mesh_component_selection_tool::begin_inset() -> bool
 {
-    if (m_inset.active || m_loop_cut.active || m_knife.active || (m_context.transform_tool == nullptr)) {
+    if (m_inset.active || m_bevel.active || m_loop_cut.active || m_knife.active || (m_context.transform_tool == nullptr)) {
         return false;
     }
     if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
@@ -3312,6 +3385,474 @@ auto Mesh_component_selection_tool::inset(
     return true;
 }
 #pragma endregion Inset
+
+#pragma region Bevel
+namespace {
+
+// The bevel of doc/plans/mesh_modeling.md section 4.9 (M13a) into a new
+// Geometry, processed like an inset result; out_selection receives the
+// remapped selection (the edge facets with their edges and vertices). Null
+// (error set) when the result fails validation.
+[[nodiscard]] auto build_bevel_geometry(
+    const erhe::geometry::Geometry&                          before,
+    const std::set<std::pair<GEO::index_t, GEO::index_t>>&   edges,
+    const erhe::geometry::operation::Bevel_edges_options&    options,
+    erhe::geometry::operation::Bevel_edges_result&           result,
+    erhe::geometry::operation::Geometry_component_selection& out_selection,
+    std::string&                                             error
+) -> std::shared_ptr<erhe::geometry::Geometry>
+{
+    std::shared_ptr<erhe::geometry::Geometry> after = std::make_shared<erhe::geometry::Geometry>(before.get_name());
+    erhe::geometry::operation::Geometry_component_selection remap_source;
+    remap_source.edges = edges;
+    out_selection = erhe::geometry::operation::Geometry_component_selection{};
+    erhe::geometry::operation::Component_remap remap{&remap_source, &out_selection};
+    erhe::geometry::operation::bevel_edges(before, *after, edges, options, &result, &remap);
+    for (const std::string& warning : after->sanitize()) {
+        log_selection->warn("Bevel on '{}' sanitized: {}", before.get_name(), warning);
+    }
+    const std::string validation_error = after->validate();
+    if (!validation_error.empty()) {
+        error = "bevel result failed validation: " + validation_error;
+        return {};
+    }
+    after->process({.flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+    });
+    return after;
+}
+
+[[nodiscard]] auto bevel_vec3(const GEO::vec3f& v) -> glm::vec3
+{
+    return glm::vec3{v.x, v.y, v.z};
+}
+
+[[nodiscard]] auto c_str(const erhe::geometry::operation::Bevel_offset_type offset_type) -> const char*
+{
+    switch (offset_type) {
+        case erhe::geometry::operation::Bevel_offset_type::offset: return "offset";
+        case erhe::geometry::operation::Bevel_offset_type::width:  return "width";
+        default:                                                   return "?";
+    }
+}
+
+} // anonymous namespace
+
+auto Mesh_component_selection_tool::find_bevel_target(
+    Mesh_component_target&                           out_target,
+    std::set<std::pair<GEO::index_t, GEO::index_t>>& out_edges
+) const -> bool
+{
+    const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
+    if ((mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::vertex)) {
+        return false;
+    }
+    for (const Mesh_component_entry& entry : m_mesh_component_selection.get_entries()) {
+        if (!m_mesh_component_selection.is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry || !geometry->has_edge_connectivity()) {
+            continue;
+        }
+        // The active mode's set only, as get_selection_edges() derives it.
+        erhe::geometry::operation::Geometry_component_selection selection;
+        if (mode == Mesh_component_mode::edge) {
+            selection.edges.insert(entry.edges.begin(), entry.edges.end());
+        } else {
+            selection.vertices.insert(entry.vertices.begin(), entry.vertices.end());
+        }
+        erhe::geometry::operation::get_selection_edges(*geometry, selection, out_edges);
+        if (out_edges.empty()) {
+            continue;
+        }
+        out_target = Mesh_component_target{
+            .mesh            = entry.mesh.lock(),
+            .primitive_index = entry.primitive_index,
+            .geometry        = geometry
+        };
+        return static_cast<bool>(out_target.mesh);
+    }
+    return false;
+}
+
+auto Mesh_component_selection_tool::perform_bevel(
+    const Mesh_component_target&                           target,
+    const std::set<std::pair<GEO::index_t, GEO::index_t>>& edges,
+    const erhe::geometry::operation::Bevel_edges_options&  options,
+    Scalar_topology_step&                                  out_step,
+    Bevel_result&                                          out_result,
+    std::string&                                           error
+) -> bool
+{
+    out_result = Bevel_result{};
+    Mesh_component_selection& selection   = m_mesh_component_selection;
+    const Mesh_component_mode mode_before = selection.get_mode();
+    if ((mode_before != Mesh_component_mode::edge) && (mode_before != Mesh_component_mode::vertex)) {
+        error = "bevel needs edge or vertex mode";
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& mesh = target.mesh;
+    if (!mesh || !target.geometry || (mesh->get_item_host() == nullptr) || (m_context.mesh_memory == nullptr)) {
+        error = "bevel needs a mesh in a scene";
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if (
+        (target.primitive_index >= primitives.size())               ||
+        !primitives[target.primitive_index].primitive               ||
+        !primitives[target.primitive_index].primitive->render_shape ||
+        (primitives[target.primitive_index].primitive->render_shape->get_geometry_const() != target.geometry)
+    ) {
+        error = "bevel target is not the mesh primitive's current geometry";
+        return false;
+    }
+    const erhe::scene::Mesh_primitive               before_mesh_primitive = primitives[target.primitive_index];
+    const std::shared_ptr<erhe::geometry::Geometry> before_geometry       = target.geometry;
+    if (!before_geometry->has_connectivity() || !before_geometry->has_edge_connectivity()) {
+        error = "bevel needs the geometry's connectivity, which is not built: " + mesh->get_name();
+        return false;
+    }
+
+    erhe::geometry::operation::Bevel_edges_result           bevel_result;
+    erhe::geometry::operation::Geometry_component_selection selected;
+    const std::shared_ptr<erhe::geometry::Geometry> after_geometry = build_bevel_geometry(*before_geometry, edges, options, bevel_result, selected, error);
+    if (!after_geometry) {
+        return false;
+    }
+    out_result.beveled_edges     = bevel_result.edge_facets.size();
+    out_result.boundary_vertices = bevel_result.boundary_vertices.size();
+    out_result.edge_facets       = bevel_result.edge_facets.size();
+    out_result.vertex_facets     = bevel_result.vertex_facets.size();
+    out_result.changed           = !bevel_result.edge_facets.empty();
+    if (!out_result.changed) {
+        log_selection->info("Bevel: no selected edge of '{}' can be beveled (boundary or non-manifold)", mesh->get_name());
+        return true;
+    }
+
+    const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
+    std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
+    const bool raytrace_ok   = after_primitive->make_raytrace();
+    if (!renderable_ok || !raytrace_ok) {
+        error = "bevel: building the result primitive failed";
+        return false;
+    }
+    erhe::scene::Mesh_primitive after_mesh_primitive = before_mesh_primitive;
+    after_mesh_primitive.primitive = after_primitive;
+
+    // Swap the bevel in place (D3: the topology step of the gesture). The
+    // pre-bevel selection entry goes dormant with the before geometry; the
+    // edge facets (with their edges and vertices) become the selection.
+    {
+        erhe::Item_host* const item_host = mesh->get_item_host();
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+        std::vector<erhe::scene::Mesh_primitive> new_primitives = primitives;
+        new_primitives[target.primitive_index] = after_mesh_primitive;
+        swap_mesh_primitives(mesh, new_primitives);
+    }
+    m_context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = mesh});
+    std::set<Mesh_edge_key> selected_edges;
+    for (const std::pair<GEO::index_t, GEO::index_t>& edge : selected.edges) {
+        selected_edges.insert(make_edge_key(edge.first, edge.second));
+    }
+    selection.set_after_operation(mesh, target.primitive_index, after_geometry, selected.vertices, selected.facets, selected_edges);
+
+    out_step = Scalar_topology_step{
+        .mesh            = mesh,
+        .primitive_index = target.primitive_index,
+        .before          = before_mesh_primitive,
+        .after           = after_mesh_primitive,
+        .description     = "Bevel",
+        .mode_before     = mode_before
+    };
+    out_step.inset_vertices = bevel_result.boundary_vertices;
+    out_step.inset_directions.reserve(bevel_result.boundary_directions.size());
+    out_step.inset_depth_directions.assign(bevel_result.boundary_vertices.size(), glm::vec3{0.0f});
+    for (const GEO::vec3f& direction : bevel_result.boundary_directions) {
+        out_step.inset_directions.push_back(bevel_vec3(direction));
+    }
+    // The commit re-runs the bevel from the before geometry with the final
+    // amount, so the committed result equals the numeric form's.
+    const std::string mesh_name = mesh->get_name();
+    out_step.rebuild = [before_geometry, edges, options, mesh_name](const Scalar_input& input) -> std::shared_ptr<erhe::geometry::Geometry> {
+        erhe::geometry::operation::Bevel_edges_options final_options = options;
+        final_options.amount = input.factor;
+        erhe::geometry::operation::Bevel_edges_result           result;
+        erhe::geometry::operation::Geometry_component_selection rebuild_selection;
+        std::string                                             rebuild_error;
+        std::shared_ptr<erhe::geometry::Geometry> geometry = build_bevel_geometry(*before_geometry, edges, final_options, result, rebuild_selection, rebuild_error);
+        if (!geometry) {
+            log_selection->warn("Bevel on '{}': {}", mesh_name, rebuild_error);
+        }
+        return geometry;
+    };
+    log_selection->info(
+        "Bevel: '{}' {} edges (amount {}, {}, loop slide {}) -> {} vertices, {} facets, {} edge facets, {} vertex facets",
+        mesh->get_name(), edges.size(), options.amount, c_str(options.offset_type), options.loop_slide ? "on" : "off",
+        after_geometry->get_mesh().vertices.nb(), after_geometry->get_mesh().facets.nb(), out_result.edge_facets, out_result.vertex_facets
+    );
+    return true;
+}
+
+auto Mesh_component_selection_tool::start_bevel_step() -> bool
+{
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return false;
+    }
+    // A running step is dropped first: its before primitive comes back, and
+    // with it the pre-bevel selection entry.
+    if (transform_tool->is_scalar_edit_active()) {
+        transform_tool->cancel_component_edit();
+    }
+    m_bevel.step = Scalar_topology_step{};
+    erhe::geometry::operation::Bevel_edges_options topology_options = m_bevel.options;
+    topology_options.amount = 0.0f;
+    Bevel_result result;
+    std::string  error;
+    if (!perform_bevel(m_bevel.target, m_bevel.edges, topology_options, m_bevel.step, result, error)) {
+        log_selection->warn("Bevel refused: {}", error);
+        return false;
+    }
+    if (!result.changed) {
+        return false;
+    }
+    if (!transform_tool->begin_scalar_edit(Scalar_edit_kind::bevel, m_bevel.step)) {
+        // Put the before primitive back: nothing edits the swapped-in step.
+        const std::shared_ptr<erhe::scene::Mesh>& mesh = m_bevel.step.mesh;
+        std::vector<erhe::scene::Mesh_primitive> primitives = mesh->get_primitives();
+        if (m_bevel.step.primitive_index < primitives.size()) {
+            primitives[m_bevel.step.primitive_index] = m_bevel.step.before;
+            swap_mesh_primitives(mesh, primitives);
+        }
+        log_selection->warn("Bevel refused: another transform or component edit is active");
+        return false;
+    }
+    apply_bevel_values();
+    return true;
+}
+
+void Mesh_component_selection_tool::apply_bevel_values()
+{
+    if (m_context.transform_tool == nullptr) {
+        return;
+    }
+    Scalar_input input{};
+    input.factor = m_bevel.options.amount;
+    m_context.transform_tool->apply_scalar_edit(input);
+}
+
+auto Mesh_component_selection_tool::begin_bevel() -> bool
+{
+    if (m_bevel.active || m_inset.active || m_loop_cut.active || m_knife.active || (m_context.transform_tool == nullptr)) {
+        return false;
+    }
+    if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
+        return false;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    Viewport_scene_view* const viewport_scene_view = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+    if (viewport_scene_view == nullptr) {
+        return false;
+    }
+    const std::optional<glm::vec2> position = viewport_scene_view->get_position_in_viewport();
+    if (!position.has_value()) {
+        return false;
+    }
+    Bevel_state state{};
+    if (!find_bevel_target(state.target, state.edges)) {
+        return false;
+    }
+    state.active         = true;
+    state.options        = erhe::geometry::operation::Bevel_edges_options{};
+    state.view           = viewport_scene_view;
+    state.press_position = position.value();
+    m_bevel = std::move(state);
+    if (!start_bevel_step()) {
+        end_bevel();
+        return true; // the key was for the bevel: consumed
+    }
+
+    // Mesh units per pixel at the centroid of the boundary vertices: one
+    // world unit along the camera's right axis, projected.
+    m_bevel.units_per_pixel = 0.0f;
+    const std::shared_ptr<erhe::scene::Camera>      camera   = viewport_scene_view->get_camera();
+    const std::shared_ptr<erhe::scene::Mesh>&       mesh     = m_bevel.step.mesh;
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = m_bevel.step.after.primitive->render_shape->get_geometry_const();
+    if (camera && mesh && geometry && !m_bevel.step.inset_vertices.empty()) {
+        const glm::mat4  world_from_node = mesh->world_from_node();
+        const GEO::Mesh& geo_mesh        = geometry->get_mesh();
+        glm::vec3 centroid{0.0f};
+        for (const GEO::index_t vertex : m_bevel.step.inset_vertices) {
+            const GEO::vec3f p = erhe::geometry::get_pointf(geo_mesh.vertices, vertex);
+            centroid += glm::vec3{world_from_node * glm::vec4{p.x, p.y, p.z, 1.0f}};
+        }
+        centroid /= static_cast<float>(m_bevel.step.inset_vertices.size());
+        const glm::vec3 right = glm::normalize(glm::vec3{camera->world_from_node() * glm::vec4{1.0f, 0.0f, 0.0f, 0.0f}});
+        const std::optional<glm::vec3> a = viewport_scene_view->project_to_viewport(centroid);
+        const std::optional<glm::vec3> b = viewport_scene_view->project_to_viewport(centroid + right);
+        if (a.has_value() && b.has_value()) {
+            const float pixels_per_world_unit = glm::length(glm::vec2{b.value()} - glm::vec2{a.value()});
+            // Mesh units per world unit: the inverse of the node's mean scale.
+            const float node_scale = std::cbrt(std::abs(glm::determinant(glm::mat3{world_from_node})));
+            if ((pixels_per_world_unit > 0.0f) && (node_scale > 0.0f)) {
+                m_bevel.units_per_pixel = 1.0f / (pixels_per_world_unit * node_scale);
+            }
+        }
+    }
+
+    // Ready for the length of the mode: the click commands out-rank the other
+    // press commands of their buttons.
+    m_modal_confirm_click_command.set_ready();
+    m_modal_cancel_click_command.set_ready();
+    log_selection->info("Bevel started on '{}': {} edges", mesh->get_name(), m_bevel.edges.size());
+    return true;
+}
+
+auto Mesh_component_selection_tool::run_bevel_action(const Bevel_action action) -> bool
+{
+    if (!m_bevel.active) {
+        return false;
+    }
+    erhe::geometry::operation::Bevel_edges_options& options = m_bevel.options;
+    switch (action) {
+        case Bevel_action::cycle_offset_type: {
+            options.offset_type = (options.offset_type == erhe::geometry::operation::Bevel_offset_type::offset)
+                ? erhe::geometry::operation::Bevel_offset_type::width
+                : erhe::geometry::operation::Bevel_offset_type::offset;
+            break;
+        }
+        case Bevel_action::toggle_loop_slide: {
+            options.loop_slide = !options.loop_slide;
+            break;
+        }
+        case Bevel_action::start:
+        default: {
+            return false;
+        }
+    }
+    log_selection->info("Bevel: {} (offset type {}, loop slide {})", c_str(action), c_str(options.offset_type), options.loop_slide ? "on" : "off");
+    // The option changes the directions: the step is re-run from the before
+    // primitive.
+    if (!start_bevel_step()) {
+        end_bevel();
+    }
+    return true;
+}
+
+void Mesh_component_selection_tool::update_bevel_drag()
+{
+    if (!m_bevel.active) {
+        return;
+    }
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if ((transform_tool == nullptr) || !transform_tool->is_scalar_edit_active()) {
+        // Ended elsewhere (a scene close or MCP cancel_component_edit
+        // cancelled the edit), checked where the drag already runs once per
+        // frame while the mode is active, like update_inset_drag().
+        log_selection->info("Bevel ended: its edit is no longer active");
+        end_bevel();
+        return;
+    }
+    // The start view is dereferenced only while it is the hovered view.
+    Viewport_scene_view* const view = m_bevel.view;
+    if ((view == nullptr) || (get_hover_scene_view() != static_cast<Scene_view*>(view))) {
+        return;
+    }
+    const std::optional<glm::vec2> position = view->get_position_in_viewport();
+    if (!position.has_value()) {
+        return;
+    }
+    if (m_bevel.applied && (m_bevel.last_position == position.value())) {
+        return; // nothing changed since the last step
+    }
+    m_bevel.applied        = true;
+    m_bevel.last_position  = position.value();
+    m_bevel.options.amount = glm::length(position.value() - m_bevel.press_position) * m_bevel.units_per_pixel;
+    apply_bevel_values();
+}
+
+void Mesh_component_selection_tool::confirm_bevel()
+{
+    if (!m_bevel.active) {
+        return;
+    }
+    update_bevel_drag();
+    if (m_bevel.active && (m_context.transform_tool != nullptr)) {
+        log_selection->info("Bevel confirmed: amount {} ({})", m_bevel.options.amount, c_str(m_bevel.options.offset_type));
+        m_context.transform_tool->commit_scalar_edit();
+    }
+    end_bevel();
+}
+
+void Mesh_component_selection_tool::cancel_bevel()
+{
+    if (!m_bevel.active) {
+        return;
+    }
+    if (m_context.transform_tool != nullptr) {
+        m_context.transform_tool->cancel_component_edit();
+    }
+    log_selection->info("Bevel cancelled");
+    end_bevel();
+}
+
+void Mesh_component_selection_tool::end_bevel()
+{
+    // Drops the references to the mesh, its geometries and the view.
+    m_bevel = Bevel_state{};
+}
+
+auto Mesh_component_selection_tool::bevel(
+    const erhe::geometry::operation::Bevel_edges_options& options,
+    Bevel_result&                                         result,
+    std::string&                                          error
+) -> bool
+{
+    if ((m_context.transform_tool == nullptr) || (m_context.operation_stack == nullptr)) {
+        error = "Transform tool not available";
+        return false;
+    }
+    if (is_modal_active() || m_context.transform_tool->is_component_edit_active()) {
+        error = "a loop cut, inset, bevel, knife, slide or other component edit is active";
+        return false;
+    }
+    const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
+    if ((mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::vertex)) {
+        error = "bevel needs edge or vertex mode";
+        return false;
+    }
+    Mesh_component_target                           target;
+    std::set<std::pair<GEO::index_t, GEO::index_t>> edges;
+    if (!find_bevel_target(target, edges)) {
+        error = "bevel needs a live edge selection (vertex mode: selected vertices with an edge between them)";
+        return false;
+    }
+    Scalar_topology_step step;
+    if (!perform_bevel(target, edges, options, step, result, error)) {
+        return false;
+    }
+    if (!result.changed) {
+        return true;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Fork_geometry_operation>(
+            Fork_geometry_operation::Parameters{
+                .mesh            = step.mesh,
+                .primitive_index = step.primitive_index,
+                .before          = step.before,
+                .after           = step.after,
+                .description     = step.description
+            }
+        )
+    );
+    return true;
+}
+#pragma endregion Bevel
 
 auto Mesh_component_selection_tool::try_ready() const -> bool
 {
@@ -4546,6 +5087,9 @@ void Mesh_component_selection_tool::gesture_update()
     // The inset thickness / depth follow the pointer (a no-op unless the
     // inset mode runs and the pointer or Ctrl changed).
     update_inset_drag();
+    // The bevel amount follows the pointer (a no-op unless the bevel mode
+    // runs and the pointer changed).
+    update_bevel_drag();
     // The knife takes many clicks: a press leaves the click commands
     // inactive, so they are re-armed Ready (ranking them above the other
     // press commands of their buttons) for the length of the mode.

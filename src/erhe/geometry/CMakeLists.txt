@@ -56,6 +56,8 @@ erhe_target_sources_grouped(
 
     erhe_geometry/operation/bake_transform.cpp
     erhe_geometry/operation/bake_transform.hpp
+    erhe_geometry/operation/bevel_edges.cpp
+    erhe_geometry/operation/bevel_edges.hpp
     erhe_geometry/operation/clip_tile_tree.cpp
     erhe_geometry/operation/clip_tile_tree.hpp
     erhe_geometry/operation/dissolve.cpp

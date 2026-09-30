@@ -205,6 +205,14 @@ toggles cut through, A and X / Y / Z constrain the point, and Enter / Space
 cut and Escape cancels. The whole list and the gesture are in
 `doc/editor/mesh_modeling.md`.
 
+### Bevel keys
+
+Ctrl+B (`Mesh_component_selection.bevel`) starts the bevel mode on the live
+edge selection in edge mode (vertex mode: the edges between selected
+vertices); while it runs W cycles the offset type, L toggles loop slide, and
+the modal commands above confirm and cancel. The whole list and the gesture
+are in `doc/editor/mesh_modeling.md`.
+
 ### Inset keys
 
 I (`Mesh_component_selection.inset`, mask 0) starts the inset mode on the
@@ -305,6 +313,9 @@ command ends with a flush (section 3).
 - `inset_mesh_faces` - `thickness`, `depth` and the option booleans: the
   numeric inset of `doc/editor/mesh_modeling.md` on the live face
   selection (topology, placement, one undo entry).
+- `bevel_mesh_edges` - `amount`, `offset_type` (`offset` | `width`),
+  `loop_slide`: the numeric bevel of `doc/editor/mesh_modeling.md` on the
+  live edge (vertex) selection (topology, placement, one undo entry).
 - `split_mesh_components` - no options; needs a live selection in vertex,
   edge or face mode (`Split_components_operation`, `doc/editor/operations.md`).
 - `rip_mesh_vertices` - optional `direction` ([x, y, z] in the mesh's local

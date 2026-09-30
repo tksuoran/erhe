@@ -397,6 +397,7 @@ private:
     auto action_cancel_component_edit         (const nlohmann::json& args) -> std::string;
     auto action_loop_cut_mesh                 (const nlohmann::json& args) -> std::string;
     auto action_inset_mesh_faces              (const nlohmann::json& args) -> std::string;
+    auto action_bevel_mesh_edges              (const nlohmann::json& args) -> std::string;
     auto action_knife_cut_mesh                (const nlohmann::json& args) -> std::string;
     auto action_split_mesh_components         (const nlohmann::json& args) -> std::string;
     auto action_rip_mesh_vertices             (const nlohmann::json& args) -> std::string;
