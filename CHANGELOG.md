@@ -9,6 +9,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/knife_cut.hpp`: `Knife_cut` (an
+  `Edit_mesh_operation` driven point by point: `add_point()`,
+  `undo_last_point()`, `get_preview_segments()`, `finish()`) and the one-shot
+  `knife_cut()`, with `Knife_view`, `Knife_point` / `Knife_snap`,
+  `Knife_options` and `Knife_result`: the geometric core of the knife of
+  `doc/plans/mesh_modeling.md` section 4.7 (segment-to-cuts through the
+  view's cut plane with pixel tolerances, occlusion unless cut through,
+  per-facet pairing with the concave midpoint rule, apply through
+  `split_facet_edgenet()`), carrying a component selection through
+  `Component_remap`.
 - `erhe::geometry`: `erhe_geometry/operation/split_components.hpp`:
   `split_facets()`, `split_edges()`, `rip_vertices()` with `Rip_options`,
   `extract_facets()` and `get_selection_facets()`: split, rip and separate of

@@ -70,6 +70,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/inset_faces.cpp
     erhe_geometry/operation/inset_faces.hpp
+    erhe_geometry/operation/knife_cut.cpp
+    erhe_geometry/operation/knife_cut.hpp
     erhe_geometry/operation/lattice_deform.cpp
     erhe_geometry/operation/lattice_deform.hpp
     erhe_geometry/operation/make_atlas.cpp
