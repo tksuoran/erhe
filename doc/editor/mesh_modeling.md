@@ -5,9 +5,10 @@ Stability: experimental
 The modal mesh modeling tools of the editor: gestures that change a mesh's
 topology interactively in a viewport, in a mesh component mode
 (`doc/editor/mesh_component_selection.md`): loop cut, inset, bevel and
-knife (`doc/plans/mesh_modeling.md` holds their design
-and the Blender behaviour each tool follows). The discrete operations (delete, dissolve, merge,
-subdivide) are Operations window buttons and are described in
+knife (`doc/plans/mesh_modeling.md` holds the remaining work and the
+Blender files each tool's rules were read from). The discrete operations
+(delete, dissolve, merge, subdivide, split, rip, separate, fill, connect,
+bridge, normals, smooth) are Operations window buttons and are described in
 `doc/editor/operations.md`; the slides in `doc/editor/transform.md` "Scalar
 edits".
 

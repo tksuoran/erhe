@@ -139,7 +139,8 @@ Bone mode the key falls through to other bindings.
 Delete and Ctrl+X act on the components while a mesh component mode has a
 live, non-empty selection of its own set
 (`Mesh_component_selection::has_live_mode_selection()`), following
-`doc/plans/mesh_modeling.md` D7:
+`doc/plans/mesh_modeling.md` D7 (Blender's keys where the editor's
+bindings allow it, exact modifier masks):
 
 | Command | Key | Action |
 |---------|-----|--------|
@@ -617,6 +618,6 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 - [plans/mesh_component_selection.md](../plans/mesh_component_selection.md) -
   editing the selection, skinned meshes, and compute selection over the
   vertex and index buffers.
-- [plans/mesh_modeling.md](../plans/mesh_modeling.md) - Blender-style
-  modeling operations: loop cut, knife, slide, merge,
-  dissolve, inset, bevel.
+- [plans/mesh_modeling.md](../plans/mesh_modeling.md) - the remaining
+  modeling work: grid fill, the rest of bevel, knife project and bisect,
+  proportional and symmetry editing, compute box select.
