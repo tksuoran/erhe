@@ -240,3 +240,6 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
 - [plans/mesh_component_selection.md](../plans/mesh_component_selection.md) -
   editing the selection, skinned meshes, and compute selection over the
   vertex and index buffers.
+- [plans/mesh_modeling.md](../plans/mesh_modeling.md) - Blender-style
+  modeling operations: loop and ring select, loop cut, knife, slide, merge,
+  dissolve, inset, bevel.

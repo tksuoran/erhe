@@ -357,6 +357,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
+- [plans/mesh_modeling.md](plans/mesh_modeling.md) (proposed): Blender-style mesh modeling operations: scored catalog and build order
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
