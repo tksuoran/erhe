@@ -17,7 +17,15 @@ about what the non-headless backends need from the engine.
   `format_8_vec4_snorm` is not color-renderable on this GL device, and the
   test `GTEST_SKIP`s with that reason. OpenGL 4.5 + DSA is a hard requirement,
   so there is one OpenGL path and no mode matrix.
-- **Metal** builds but has not been run; see Future work.
+- **Metal** (`build_xcode_metal`): 175 passed, 1 skipped, 0 failures. The skip
+  is `draw_parameters_indirect`: the device reports no support for a non-zero
+  base instance in indirect draws (`Device_info::use_base_instance`). The
+  suite needed no Metal-specific engine change; the one failure it found was
+  the `compute_atomics` golden carrying the Vulkan device's SSBO padding
+  (`graphics_test_coverage.md` "Golden assertions").
+- **macOS Vulkan** (`build_xcode_vulkan`): 165 passed, 11 skipped, 0 failures.
+  The skips are the ray query tests - the driver reports no ray query
+  support.
 
 The test device is built from a default `Graphics_config{}` and does **not**
 read `config/editor/erhe_graphics.json`, so it uses native device capabilities
@@ -82,5 +90,5 @@ abstraction promises, and each was a suite failure before it did.
 
 ## Future work
 
-- [Graphics tests](../plans/graphics_tests.md) - running the suite on Metal, and
-  GPU tests in CI under a software Vulkan.
+- [Graphics tests](../plans/graphics_tests.md) - GPU tests in CI under a
+  software Vulkan.

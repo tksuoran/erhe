@@ -4,7 +4,7 @@
 @docs::doc/erhe/graphics_test_coverage.md+doc/plans/graphics_tests_agfx_port.md+doc/plans/graphics_tests.md+doc/reference/agfx_comparison.md
 
 [STATE]
-@suite::Vk-headless-176-pass{build_vs2026_vulkan_headless}|GL-170-pass+12-skip(snorm+11-ray-query)+6-FAIL(AMD-GL-driver-comparison-sampler){build_tests}|Metal-not-run
+@suite::Vk-headless-176-pass{build_vs2026_vulkan_headless}|Metal-175-pass+1-skip(draw_parameters_indirect:no-base-instance){build_xcode_metal}|macOS-Vk-165-pass+11-skip(ray-query-unsupported){build_xcode_vulkan}|GL-170-pass+12-skip(snorm+11-ray-query)+6-FAIL(AMD-GL-driver-comparison-sampler){build_tests}
 @goldens::src/erhe/graphics/test/golden/{png+pfm+bin};update::ERHE_GPU_TEST_UPDATE_GOLDENS=1;report::py -3 scripts/gpu_test_report.py gpu_test_results
 @FLIP::NVlabs/flip-single-header-via-CPM-archive-URL(no-tags)->erhe_gpu_test_support-only
 @remaining::doc/plans/graphics_tests_agfx_port.md{52-blocked-tests-by-feature;open-findings}
@@ -15,6 +15,7 @@
 !AMD-GL-driver::comparison-sampler-reads-never-after-a-never-draw-of-identical-source{state-probed-correct;not-erhe}
 !Vk-blit-dst-transition-from-UNDEFINED::latent-discard-risk{needs-per-subresource-layout-tracking;open}
 !agfx_comparison.md-premise-stale::set_storage_image-works-on-Vk+GL+Metal(image_2d-level-0-only)
+!buffer-goldens-¬device-padding::Shader_resource::get_size_bytes(block)-pads-to-uniform_buffer_offset_alignment{Vk-iGPU-32|Metal-256}->golden-the-members-only{compute_atomics}
 
 [PROGRESS]{done-2026-09-29;via-harness;one-opus-coder-per-phase}
 ✓plan::5ac16c1f9+8704ee38b(FLIP-from-start,user)
@@ -27,3 +28,4 @@
 ✓phase-6::b1bd453d7+392dff56e{10;GL-compute-set_sampled_image-no-op-fixed}
 ✓phase-7::4998557b3{6;GPU-written-indirect+command_barrier_bit}
 ✓phase-8::59462f723+1c3a87bc3{11;Vk-AS-build-input-16B-alignment}
+✓metal-run::2026-09-30{175-pass+1-skip;2-fixes:compute_atomics-golden-members-only(540B,old-544B-minus-padding)+Results_listener-m_tests-brace-init->[[]]-json-305-no-results.json-ever-written;macOS-Vk-165-pass-cross-checks-golden;report.py-ok}

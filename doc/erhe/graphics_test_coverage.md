@@ -3,12 +3,13 @@
 Stability: stable
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
-target builds and runs on headless Vulkan (176 passed) and on non-headless
-OpenGL (170 passed + 12 capability skips, `snorm_color_render_readback` and
-the 11 ray query tests, + 6 comparison-sampler failures from a driver defect,
-see "Known gaps"); Metal builds but has not
-been run there (see
-[`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md)). Each
+target builds and runs on headless Vulkan (176 passed), on Metal (175 passed +
+1 capability skip, `draw_parameters_indirect`), on macOS Vulkan (165 passed +
+11 capability skips, the ray query tests) and on non-headless OpenGL (170
+passed + 12 capability skips, `snorm_color_render_readback` and the 11 ray
+query tests, + 6 comparison-sampler failures from a driver defect, see "Known
+gaps"); the backend-specific requirements are in
+[`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md). Each
 row maps to one or more `TEST_F` cases on `Gpu_test` or a file-local
 fixture derived from it.
 `[x]` = covered, `[ ]` = gap, `[-]` = not testable on this device (a device/engine
@@ -140,6 +141,12 @@ output against a committed golden in `src/erhe/graphics/test/golden/`:
   serves every backend. Without a PNG writer (`ERHE_USE_FPNG=OFF`) the image
   helper skips the test with that reason.
 
+A golden holds only bytes the abstraction defines: a block's reported size is
+padded to the device's buffer offset alignment, so a test that goldens an SSBO
+slices the members out of the read-back bytes (`compute_atomics` goldens
+`off_cas + sizeof(uint32_t)` bytes of its result block, not the block size the
+device reports) and leaves the padding out.
+
 Goldens complement the analytic assertions a test makes (specific texel
 values, region equality, lit-pixel counts), they never replace them: a golden
 records whatever the backend produced when it was written, so only an
@@ -247,7 +254,7 @@ target does not (the runners have no GPU; the target carries the ctest label
 ## Future work
 
 - [Graphics tests](../plans/graphics_tests.md) - GPU tests in CI under a software
-  Vulkan, and running the suite on Metal.
+  Vulkan.
 - [Port agfx GPU tests](../plans/graphics_tests_agfx_port.md) - the agfx
   tests that wait on an erhe feature, and the engine findings the port left
   open.

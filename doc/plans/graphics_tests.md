@@ -25,10 +25,3 @@ and skip: `probe_image_format_support`, `get_format_properties`,
 when no Vulkan device can be created. Keep targets tiny (16x16, N ~ 1000).
 Optionally enable `VK_LAYER_KHRONOS_validation` in CI to keep the zero-VUID
 guarantee under software.
-
-## Run the suite on Metal
-
-The CMake gate enables the Metal build of `erhe_graphics_gpu_tests`, but the
-suite has not been run on it. Validate on macOS (Xcode); the classes of issue
-the OpenGL port hit - format-capability reporting, layered copy slice counts,
-cube-map addressing, coordinate conventions - are the ones to expect.

@@ -83,4 +83,3 @@ Engine issues the port exposed that are not fixed.
 - `scripts/gpu_test_report.py` previews a `.pfm` golden clamped to [0, 1],
   so an HDR golden with values above 1 shows white; the preview needs a
   tone map or an exposure control.
-- The suite has not run on Metal ([`graphics_tests.md`](graphics_tests.md)).
