@@ -22,7 +22,13 @@ middle edge loop slid halfway to either side, even and even + flipped, the
 corner texcoords re-interpolated at the slid positions, a refused selection,
 a vertex slid onto a neighbour, each followed by undo, and the G key slide in
 a viewport cancelled (MCP cancel_component_edit and Escape, positions back and
-no undo entry) and confirmed (Enter, one undo entry). Operations whose result has no facet (merge by distance of the whole
+no undo entry) and confirmed (Enter, one undo entry). Loop cut (section 4.5,
+doc/editor/mesh_modeling.md) is checked through loop_cut_mesh on the plain box
+(one and two cuts, a slide factor), a ring closing across a quad on the
+Catmull-Clark box and the single edge case on an octahedron, each with the
+selection afterwards and one undo step, and through Ctrl+R in a viewport:
+Escape in the preview, wheel + click + move + click, and Escape in the slide.
+Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
 logs/editor_stderr.txt.
@@ -962,6 +968,186 @@ def run_slide(e):
     e.advance(2)
 
 
+OCTAHEDRON = "mm_octahedron"
+
+
+def run_loop_cut(e):
+    """Loop cut (doc/plans/mesh_modeling.md section 4.5,
+    doc/editor/mesh_modeling.md): loop_cut_mesh and the Ctrl+R gesture."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("loop cut: plain box at its base counts", geometry_counts(e, BOX), base)
+    p = vertex_positions(e, BOX, range(base[0]))
+    y_min = min(v[1] for v in p.values())
+    y_max = max(v[1] for v in p.values())
+    vertical = None
+    for a in range(base[0]):
+        for b in range(a + 1, base[0]):
+            if near([p[a][0], p[a][2]], [p[b][0], p[b][2]], 1e-6) and abs(p[a][1] - p[b][1]) > 1e-3:
+                vertical = [a, b]
+                break
+        if vertical is not None:
+            break
+    check_true("the box has a vertical edge", vertical is not None)
+    if vertical is None:
+        return
+
+    def loop_cut(node_name, edge, **kwargs):
+        args = {"scene_name": e.scene, "node_name": node_name, "edge": edge}
+        args.update(kwargs)
+        result = e.call("loop_cut_mesh", args)
+        wait_idle(e)
+        return result
+
+    def new_vertex_heights():
+        after = vertex_positions(e, BOX, range(8, geometry_counts(e, BOX)[0]))
+        return [(v[1] - y_min) / (y_max - y_min) for v in after.values()]
+
+    # Cuts 1 from a vertical edge: the ring is the 4 vertical edges (closed),
+    # one horizontal loop around the sides: (8 + 4, 12 + 4 + 4, 6 + 4).
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    before_undo = undo_count(e)
+    result = loop_cut(BOX, vertical)
+    expect("loop_cut_mesh from a vertical box edge: a closed ring of 4",
+           (result.get("ring_length"), result.get("ring_closed")), (4, True))
+    expect("loop_cut_mesh cuts 1 -> (12, 20, 10)", geometry_counts(e, BOX), (12, 20, 10))
+    selection = e.call("get_mesh_component_selection")
+    expect("loop cut switches to edge mode", selection.get("mode"), "edge")
+    edges = entry_of(selection, BOX)["edges"]
+    expect("loop cut cuts 1: the selection is the 4 inner edges", len(edges), 4)
+    check_true("loop cut cuts 1: the inner edges join new vertices", all(min(edge) >= 8 for edge in edges), str(edges))
+    heights = new_vertex_heights()
+    check_true("loop cut factor 0: the new loop at half height", all(abs(h - 0.5) < 1e-4 for h in heights), str(heights))
+    expect("loop cut: one undo entry", undo_count(e), before_undo + 1)
+    expect("loop cut: the undo entry is the loop cut", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Loop Cut")
+    undo_and_check(e, "loop cut cuts 1", BOX, base)
+    expect("loop cut: one undo step removes it", undo_count(e), before_undo)
+
+    # Cuts 2: two loops, (8 + 8, 12 + 8 + 8, 6 + 8).
+    loop_cut(BOX, vertical, cuts=2)
+    expect("loop_cut_mesh cuts 2 -> (16, 28, 14)", geometry_counts(e, BOX), (16, 28, 14))
+    expect("loop cut cuts 2: the selection is the 8 inner edges",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["edges"]), 8)
+    undo_and_check(e, "loop cut cuts 2", BOX, base)
+
+    # Factor 0.5: the new loop slides halfway to one rail end, 3/4 (or 1/4)
+    # of the height; every loop vertex at the same height.
+    result = loop_cut(BOX, vertical, factor=0.5)
+    expect("loop cut factor 0.5: 4 slide vertices in 1 loop, 4 moved",
+           (result.get("slide_vertices"), result.get("loops"), result.get("moved_vertices")), (4, 1, 4))
+    heights = new_vertex_heights()
+    check_true("loop cut factor 0.5: the new loop at 3/4 (or 1/4) of the height",
+               (len(heights) == 4) and all(abs(abs(h - 0.5) - 0.25) < 1e-4 for h in heights) and (max(heights) - min(heights) < 1e-4),
+               str(heights))
+    expect("loop cut factor 0.5: cut and slide are one undo entry", undo_count(e), before_undo + 1)
+    undo_and_check(e, "loop cut factor 0.5", BOX, base)
+
+    # The Catmull-Clark box: the ring from a middle edge closes across a quad
+    # around the box (8 edges): (26 + 8, 48 + 16, 24 + 8).
+    cc_base = geometry_counts(e, CC_BOX)
+    expect("loop cut: Catmull-Clark box at its base counts", cc_base, (26, 48, 24))
+    cc_p = vertex_positions(e, CC_BOX, range(cc_base[0]))
+    e.call("select_all_mesh_components", {"scene_name": e.scene, "node_name": CC_BOX})
+    cc_edges = entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"]
+    middle = [edge for edge in cc_edges if abs(cc_p[edge[0]][1]) < 1e-5 and abs(cc_p[edge[1]][1]) < 1e-5]
+    e.call("clear_mesh_component_selection")
+    check_true("the Catmull-Clark box has a middle edge", len(middle) > 0)
+    if len(middle) > 0:
+        result = loop_cut(CC_BOX, middle[0])
+        expect("loop_cut_mesh on the Catmull-Clark box: a closed ring of 8",
+               (result.get("ring_length"), result.get("ring_closed")), (8, True))
+        expect("loop cut on the Catmull-Clark box -> (34, 64, 32)", geometry_counts(e, CC_BOX), (34, 64, 32))
+        expect("loop cut on the Catmull-Clark box: the selection is the 8 inner edges",
+               len(entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"]), 8)
+        undo_and_check(e, "loop cut on the Catmull-Clark box", CC_BOX, cc_base)
+
+    # A seed without a quad facet (an all-triangle octahedron): the edge
+    # alone is cut, its two triangles fan: (6 + 1, 12 + 3, 8 + 2).
+    e.call("create_shape", {"scene_name": e.scene, "shape": "regular_polyhedron", "kind": "octahedron",
+                            "name": OCTAHEDRON, "motion_mode": "none"})
+    e.advance(4)
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": OCTAHEDRON, "translation": [0.0, 300.0, 0.0]})
+    e.advance(2)
+    tri_base = geometry_counts(e, OCTAHEDRON)
+    expect("loop cut: octahedron at its base counts", tri_base, (6, 12, 8))
+    tri_face = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": OCTAHEDRON, "domain": "facet", "indices": [0]
+    })["elements"][0]["vertices"]
+    result = loop_cut(OCTAHEDRON, [tri_face[0], tri_face[1]], factor=0.5)
+    expect("loop cut of a triangle edge: the ring is the edge alone, no inner edges, no slide",
+           (result.get("ring_length"), result.get("inner_edges"), result.get("slide_vertices")), (1, 0, 0))
+    expect("loop cut of a triangle edge -> (7, 15, 10)", geometry_counts(e, OCTAHEDRON), (7, 15, 10))
+    expect("loop cut of a triangle edge selects nothing",
+           counts_of(e.call("get_mesh_component_selection"), OCTAHEDRON), (0, 0, 0))
+    undo_and_check(e, "loop cut of a triangle edge", OCTAHEDRON, tri_base)
+
+    # Ctrl+R in a viewport, over the box's left (vertical) edge.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    check_pick(e, viewport, BOX, x, y)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    before_undo = undo_count(e)
+
+    e.key("r", ["ctrl"])
+    e.key("escape", [])
+    wait_idle(e)
+    expect("Ctrl+R, Escape in the preview: the box unchanged", geometry_counts(e, BOX), base)
+    expect("Ctrl+R, Escape in the preview: no undo entry", undo_count(e), before_undo)
+    expect("Ctrl+R, Escape in the preview: face mode kept", e.call("get_mesh_component_selection").get("mode"), "face")
+
+    e.key("r", ["ctrl"])
+    e.call("mouse_wheel", {"x": x, "y": y, "dy": 1.0})
+    e.advance(2)
+    e.call("mouse_click", {"x": x, "y": y})
+    e.advance(3)
+    expect("Ctrl+R, wheel, click: two loops cut", geometry_counts(e, BOX), (16, 28, 14))
+    try:
+        e.call("undo")
+        check_true("undo over MCP during the loop cut slide is refused", False, "no error")
+    except RuntimeError as error:
+        check_true("undo over MCP during the loop cut slide is refused", "slide" in str(error), str(error))
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y + 20.0, "frame": 0}]})
+    e.advance(3)
+    e.call("mouse_click", {"x": x, "y": y + 20.0})
+    wait_idle(e)
+    expect("Ctrl+R, wheel, click, move, click: two loops cut", geometry_counts(e, BOX), (16, 28, 14))
+    expect("Ctrl+R gesture: one undo entry", undo_count(e), before_undo + 1)
+    expect("Ctrl+R gesture: the undo entry is the loop cut", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Loop Cut")
+    heights = new_vertex_heights()
+    check_true("Ctrl+R gesture: the loops slid with the pointer",
+               (len(heights) == 8) and any((abs(h - (1.0 / 3.0)) > 1e-3) and (abs(h - (2.0 / 3.0)) > 1e-3) for h in heights),
+               str([round(h, 4) for h in heights]))
+    undo_and_check(e, "Ctrl+R gesture", BOX, base)
+    expect("Ctrl+R gesture: one undo step removes it", undo_count(e), before_undo)
+
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("r", ["ctrl"])
+    e.call("mouse_click", {"x": x, "y": y})
+    e.advance(3)
+    expect("Ctrl+R, click: the loop is cut while sliding", geometry_counts(e, BOX), (12, 20, 10))
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y + 20.0, "frame": 0}]})
+    e.advance(3)
+    e.key("escape", [])
+    wait_idle(e)
+    expect("Escape in the loop cut slide: the box unchanged", geometry_counts(e, BOX), base)
+    expect("Escape in the loop cut slide: no undo entry", undo_count(e), before_undo)
+    expect("Escape in the loop cut slide: face mode back", e.call("get_mesh_component_selection").get("mode"), "face")
+    restored = vertex_positions(e, BOX, range(base[0]))
+    check_true("Escape in the loop cut slide: positions back", all(near(restored[v], p[v], 0.0) for v in range(base[0])))
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX,
+                                  "translation": [0.0, 1.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    e.advance(2)
+
+
 def run_empty_results(e, process):
     """Operations whose result has no facet: the mesh keeps an empty
     primitive that renders and raytraces nothing (doc/erhe/primitive.md
@@ -1095,6 +1281,8 @@ def run(e):
     run_subdivide_edges(e)
 
     run_slide(e)
+
+    run_loop_cut(e)
 
 
 def main():

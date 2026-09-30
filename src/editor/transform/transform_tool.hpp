@@ -379,7 +379,10 @@ public:
     // when the pointer or an option changed); confirm commits, and
     // cancel_component_edit() restores the start state. Refused while a
     // gizmo drag, a scripted drag or another component edit is active.
-    auto begin_scalar_drag        (Scalar_edit_kind kind, Viewport_scene_view& view) -> bool;
+    // With a topology_step (loop cut) the edit covers the step's mesh
+    // primitive only and its confirm / cancel commit / cancel the step too
+    // (Mesh_component_transform::begin_scalar()).
+    auto begin_scalar_drag        (Scalar_edit_kind kind, Viewport_scene_view& view, const Scalar_topology_step* topology_step = nullptr) -> bool;
     void update_scalar_drag       ();
     void confirm_scalar_drag      ();
     auto toggle_scalar_drag_option(Scalar_drag_option option) -> bool;
@@ -390,7 +393,13 @@ public:
     auto cancel_component_edit    () -> bool;
     // Numeric scalar edit (MCP slide_mesh_components): begin, one step with
     // `input`, commit. False (error set) when refused.
-    auto run_scalar_edit(Scalar_edit_kind kind, const Scalar_input& input, Scalar_edit_result& result, std::string& error) -> bool;
+    auto run_scalar_edit(
+        Scalar_edit_kind            kind,
+        const Scalar_input&         input,
+        Scalar_edit_result&         result,
+        std::string&                error,
+        const Scalar_topology_step* topology_step = nullptr
+    ) -> bool;
 
     Transform_tool_shared shared;
 

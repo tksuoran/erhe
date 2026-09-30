@@ -182,6 +182,15 @@ component click, box, paint and loop select gestures stand down meanwhile.
 | `Mesh_component_selection.modal_toggle_flipped` | F | Toggle flipped |
 | `Mesh_component_selection.modal_toggle_clamp` | C | Toggle clamp (Alt held: unclamped while held) |
 
+### Loop cut keys
+
+Ctrl+R (`Mesh_component_selection.loop_cut`) starts the loop cut mode over
+the hovered mesh in any component mode; while it runs PageUp / PageDown,
+numpad plus / minus, the wheel and the digits set the cut count (with Alt the
+smoothness), and the modal commands above confirm (cut, then the slide of the
+new loops) and cancel. The whole list, the preview and the gesture are in
+`doc/editor/mesh_modeling.md`.
+
 The toolbar has All / None / Invert / Linked buttons (Linked is the
 from-selection form) beside Clear while a component mode is active. Ctrl+A
 and Alt+A share the A key with the fly camera's strafe binding, which has no
@@ -264,6 +273,10 @@ command ends with a flush (section 3).
 - `cancel_component_edit` - cancels the running G slide or the mesh
   component edit of a gizmo drag like Escape; `cancelled` is false when
   none was active.
+- `loop_cut_mesh` - `scene_name` + node + `primitive_index` + `edge`
+  ([v0, v1]), `cuts` (default 1), `smoothness` (default 0), `factor`
+  (default 0), `even`, `flipped`: the numeric loop cut of
+  `doc/editor/mesh_modeling.md` (cut, slide, one undo entry).
 
 The six geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
@@ -522,7 +535,8 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
   face loop select (`select_mesh_loop` and Alt / Ctrl+Alt clicks) on the
   box, a torus and a one-sided rectangle, including the boundary cycle, and
   the edge and vertex slides (`slide_mesh_components`, the `edge_slide`
-  transform mode, the G key with cancel and confirm) on a Catmull-Clark box; it
+  transform mode, the G key with cancel and confirm) on a Catmull-Clark box, and
+  loop cut (`doc/editor/mesh_modeling.md` "Verification"); it
   writes the editor's stderr to `logs/editor_stderr.txt`; the `Mcp_test`
   case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
   and select all in CI.

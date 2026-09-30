@@ -11,6 +11,8 @@
 #include "graphics/gradients.hpp"
 #include "input_state.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/fork_geometry_operation.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/set_edge_sharpness_operation.hpp"
 #include "renderers/id_renderer.hpp"
@@ -28,7 +30,10 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/subdivide_edges.hpp"
+#include "erhe_item/item_host.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
@@ -51,6 +56,8 @@
 #include <cmath>
 #include <limits>
 #include <mutex>
+#include <set>
+#include <string>
 
 using erhe::geometry::get_pointf;
 using erhe::geometry::to_glm_vec3;
@@ -491,7 +498,7 @@ Component_modal_command::Component_modal_command(
 
 void Component_modal_command::try_ready()
 {
-    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_slide_active()) {
+    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_modal_active()) {
         set_ready();
     }
 }
@@ -502,6 +509,58 @@ auto Component_modal_command::try_call() -> bool
         return false;
     }
     return m_context.mesh_component_selection_tool->run_modal_action(m_action);
+}
+
+auto c_str(const Loop_cut_action action) -> const char*
+{
+    switch (action) {
+        case Loop_cut_action::start:           return "start";
+        case Loop_cut_action::more_cuts:       return "more_cuts";
+        case Loop_cut_action::fewer_cuts:      return "fewer_cuts";
+        case Loop_cut_action::more_smoothness: return "more_smoothness";
+        case Loop_cut_action::less_smoothness: return "less_smoothness";
+        case Loop_cut_action::type_digit:      return "type_digit";
+        default:                               return "?";
+    }
+}
+
+Component_loop_cut_command::Component_loop_cut_command(
+    erhe::commands::Commands& commands,
+    App_context&              context,
+    const char*               name,
+    const Loop_cut_action     action,
+    const int                 digit
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_action {action}
+    , m_digit  {digit}
+{
+}
+
+auto Component_loop_cut_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    if (m_action == Loop_cut_action::start) {
+        return m_context.mesh_component_selection_tool->begin_loop_cut();
+    }
+    return m_context.mesh_component_selection_tool->run_loop_cut_action(m_action, m_digit);
+}
+
+Component_loop_cut_wheel_command::Component_loop_cut_wheel_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Mesh_component_selection.loop_cut_wheel"}
+    , m_context{context}
+{
+}
+
+auto Component_loop_cut_wheel_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->adjust_loop_cut_wheel(input.variant.vector2.relative_value.y, input.modifier_mask);
 }
 #pragma endregion Commands
 
@@ -538,6 +597,12 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_modal_toggle_clamp_command          {commands, context, "Mesh_component_selection.modal_toggle_clamp",   Component_modal_action::toggle_clamp}
     , m_modal_confirm_click_command         {commands, context, "Mesh_component_selection.modal_confirm_click",  Component_modal_action::confirm}
     , m_modal_cancel_click_command          {commands, context, "Mesh_component_selection.modal_cancel_click",   Component_modal_action::cancel}
+    , m_loop_cut_command                    {commands, context, "Mesh_component_selection.loop_cut",                 Loop_cut_action::start,           0}
+    , m_loop_cut_more_cuts_command          {commands, context, "Mesh_component_selection.loop_cut_more_cuts",       Loop_cut_action::more_cuts,       0}
+    , m_loop_cut_fewer_cuts_command         {commands, context, "Mesh_component_selection.loop_cut_fewer_cuts",      Loop_cut_action::fewer_cuts,      0}
+    , m_loop_cut_more_smoothness_command    {commands, context, "Mesh_component_selection.loop_cut_more_smoothness", Loop_cut_action::more_smoothness, 0}
+    , m_loop_cut_less_smoothness_command    {commands, context, "Mesh_component_selection.loop_cut_less_smoothness", Loop_cut_action::less_smoothness, 0}
+    , m_loop_cut_wheel_command              {commands, context}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -664,27 +729,86 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     commands.bind_command_to_mouse_button(&m_modal_confirm_click_command, erhe::window::Mouse_button_left,  Button_trigger::Button_pressed);
     commands.bind_command_to_mouse_button(&m_modal_cancel_click_command,  erhe::window::Mouse_button_right, Button_trigger::Button_pressed);
 
+    // Loop cut (doc/editor/mesh_modeling.md): Ctrl+R starts it; while it runs
+    // PageUp / PageDown / numpad plus / minus change the cut count (with Alt
+    // the smoothness), digits type the count and the wheel does either. The
+    // keys carry exact masks so they dispatch before the mask-less bindings
+    // of the same keys (fly camera PageUp / PageDown, hotbar digits), which
+    // they fall through to while the mode does not run. Enter / Escape and
+    // the clicks are the modal commands above.
+    const uint32_t alt_mask = erhe::window::Key_modifier_bit_menu;
+    const std::pair<Component_loop_cut_command*, std::pair<erhe::window::Keycode, uint32_t>> loop_cut_keys[] = {
+        {&m_loop_cut_command,                 {erhe::window::Key_r,           erhe::window::Key_modifier_bit_ctrl}},
+        {&m_loop_cut_more_cuts_command,       {erhe::window::Key_page_up,     0u}},
+        {&m_loop_cut_more_cuts_command,       {erhe::window::Key_kp_add,      0u}},
+        {&m_loop_cut_fewer_cuts_command,      {erhe::window::Key_page_down,   0u}},
+        {&m_loop_cut_fewer_cuts_command,      {erhe::window::Key_kp_subtract, 0u}},
+        {&m_loop_cut_more_smoothness_command, {erhe::window::Key_page_up,     alt_mask}},
+        {&m_loop_cut_more_smoothness_command, {erhe::window::Key_kp_add,      alt_mask}},
+        {&m_loop_cut_less_smoothness_command, {erhe::window::Key_page_down,   alt_mask}},
+        {&m_loop_cut_less_smoothness_command, {erhe::window::Key_kp_subtract, alt_mask}}
+    };
+    for (Component_loop_cut_command* command : {
+        &m_loop_cut_command, &m_loop_cut_more_cuts_command, &m_loop_cut_fewer_cuts_command,
+        &m_loop_cut_more_smoothness_command, &m_loop_cut_less_smoothness_command
+    }) {
+        command->set_host(this);
+        commands.register_command(command);
+    }
+    for (const auto& [command, key] : loop_cut_keys) {
+        commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
+    }
+    static constexpr const char* c_loop_cut_digit_names[10] = {
+        "Mesh_component_selection.loop_cut_digit_0", "Mesh_component_selection.loop_cut_digit_1",
+        "Mesh_component_selection.loop_cut_digit_2", "Mesh_component_selection.loop_cut_digit_3",
+        "Mesh_component_selection.loop_cut_digit_4", "Mesh_component_selection.loop_cut_digit_5",
+        "Mesh_component_selection.loop_cut_digit_6", "Mesh_component_selection.loop_cut_digit_7",
+        "Mesh_component_selection.loop_cut_digit_8", "Mesh_component_selection.loop_cut_digit_9"
+    };
+    m_loop_cut_digit_commands.reserve(10);
+    for (int digit = 0; digit < 10; ++digit) {
+        m_loop_cut_digit_commands.push_back(
+            std::make_unique<Component_loop_cut_command>(commands, context, c_loop_cut_digit_names[digit], Loop_cut_action::type_digit, digit)
+        );
+        Component_loop_cut_command* const command = m_loop_cut_digit_commands.back().get();
+        command->set_host(this);
+        commands.register_command(command);
+        commands.bind_command_to_key(command, static_cast<erhe::window::Keycode>(erhe::window::Key_0    + digit), Button_trigger::Button_pressed, 0u);
+        commands.bind_command_to_key(command, static_cast<erhe::window::Keycode>(erhe::window::Key_kp_0 + digit), Button_trigger::Button_pressed, 0u);
+    }
+    m_loop_cut_wheel_command.set_host(this);
+    commands.register_command           (&m_loop_cut_wheel_command);
+    commands.bind_command_to_mouse_wheel(&m_loop_cut_wheel_command);
+
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
             Tool::on_message(message);
             update_loop_preview();
+            update_loop_cut_preview();
         }
     );
-    // The loop preview follows the hover: Hover_mesh_message is sent when the
-    // hovered mesh or the pointer ray changes.
+    // The loop and loop cut previews follow the hover: Hover_mesh_message is
+    // sent when the hovered mesh or the pointer ray changes.
     m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
         [this](Hover_mesh_message&) {
             update_loop_preview();
+            update_loop_cut_preview();
         }
     );
     m_mode_changed_subscription = app_message_bus.mesh_component_mode_changed.subscribe(
         [this](Mesh_component_mode_changed_message&) {
             invalidate_loop_preview();
+            // Leaving the component modes ends the loop cut mode.
+            if (m_loop_cut.active && !is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
+                end_loop_cut();
+            }
+            invalidate_loop_cut_preview();
         }
     );
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
         [this](Mesh_geometry_changed_message&) {
             invalidate_loop_preview();
+            invalidate_loop_cut_preview();
         }
     );
 }
@@ -955,7 +1079,7 @@ auto Mesh_component_selection_tool::edge_world_normal(
 auto Mesh_component_selection_tool::begin_slide() -> bool
 {
     const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
-    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr)) {
+    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -984,11 +1108,33 @@ auto Mesh_component_selection_tool::is_slide_active() const -> bool
     return (m_context.transform_tool != nullptr) && m_context.transform_tool->is_scalar_drag_active();
 }
 
+auto Mesh_component_selection_tool::is_modal_active() const -> bool
+{
+    return m_loop_cut.active || is_slide_active();
+}
+
 auto Mesh_component_selection_tool::run_modal_action(const Component_modal_action action) -> bool
 {
     Transform_tool* const transform_tool = m_context.transform_tool;
     if (transform_tool == nullptr) {
         return false;
+    }
+    // The loop cut mode: confirm cuts (and chains into the slide), cancel
+    // ends the mode with the mesh untouched; the toggles fall through.
+    if (m_loop_cut.active) {
+        bool loop_cut_consumed = false;
+        if (action == Component_modal_action::confirm) {
+            loop_cut_consumed = confirm_loop_cut();
+        } else if (action == Component_modal_action::cancel) {
+            log_selection->info("Loop cut cancelled");
+            end_loop_cut();
+            loop_cut_consumed = true;
+        }
+        if (!is_modal_active()) {
+            m_modal_confirm_click_command.set_inactive();
+            m_modal_cancel_click_command.set_inactive();
+        }
+        return loop_cut_consumed;
     }
     bool consumed = false;
     switch (action) {
@@ -1018,13 +1164,602 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
     return consumed;
 }
 
+#pragma region Loop cut
+namespace {
+
+[[nodiscard]] auto is_quad(const GEO::Mesh& mesh, const GEO::index_t facet) -> bool
+{
+    return mesh.facets.nb_vertices(facet) == 4;
+}
+
+[[nodiscard]] auto has_quad_facet(const erhe::geometry::Geometry& geometry, const GEO::index_t edge) -> bool
+{
+    const GEO::Mesh& mesh = geometry.get_mesh();
+    for (const GEO::index_t facet : geometry.get_edge_facets(edge)) {
+        if (is_quad(mesh, facet)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A quad holding both edges other than the excluded facets; GEO::NO_INDEX
+// when there is none.
+[[nodiscard]] auto find_shared_quad(
+    const erhe::geometry::Geometry& geometry,
+    const GEO::index_t              edge_a,
+    const GEO::index_t              edge_b,
+    const GEO::index_t              exclude_0,
+    const GEO::index_t              exclude_1
+) -> GEO::index_t
+{
+    const GEO::Mesh& mesh = geometry.get_mesh();
+    for (const GEO::index_t facet_a : geometry.get_edge_facets(edge_a)) {
+        if ((facet_a == exclude_0) || (facet_a == exclude_1) || !is_quad(mesh, facet_a)) {
+            continue;
+        }
+        for (const GEO::index_t facet_b : geometry.get_edge_facets(edge_b)) {
+            if (facet_a == facet_b) {
+                return facet_a;
+            }
+        }
+    }
+    return GEO::NO_INDEX;
+}
+
+// In `facet`, the endpoint of the edge (edge_v0, edge_v1) next to `vertex`
+// along the facet boundary; GEO::NO_INDEX when neither is.
+[[nodiscard]] auto find_paired_vertex(
+    const GEO::Mesh&   mesh,
+    const GEO::index_t facet,
+    const GEO::index_t vertex,
+    const GEO::index_t edge_v0,
+    const GEO::index_t edge_v1
+) -> GEO::index_t
+{
+    const GEO::index_t corner_count = mesh.facets.nb_vertices(facet);
+    for (GEO::index_t local = 0; local < corner_count; ++local) {
+        if (mesh.facets.vertex(facet, local) != vertex) {
+            continue;
+        }
+        const GEO::index_t next = mesh.facets.vertex(facet, (local + 1) % corner_count);
+        const GEO::index_t prev = mesh.facets.vertex(facet, (local + corner_count - 1) % corner_count);
+        if ((next == edge_v0) || (next == edge_v1)) {
+            return next;
+        }
+        if ((prev == edge_v0) || (prev == edge_v1)) {
+            return prev;
+        }
+    }
+    return GEO::NO_INDEX;
+}
+
+constexpr int   c_loop_cut_min_cuts         = 1;
+constexpr int   c_loop_cut_max_cuts         = 500;
+constexpr float c_loop_cut_smoothness_step  = 0.05f;
+constexpr float c_loop_cut_smoothness_limit = 1.0f;
+
+} // anonymous namespace
+
+auto Mesh_component_selection_tool::compute_loop_cut_ring(
+    const erhe::geometry::Geometry& geometry,
+    const GEO::index_t              edge,
+    std::vector<GEO::index_t>&      out_edges
+) const -> erhe::geometry::Walk_shape
+{
+    if (!has_quad_facet(geometry, edge)) {
+        out_edges.clear();
+        out_edges.push_back(edge);
+        return erhe::geometry::Walk_shape::open;
+    }
+    return erhe::geometry::walk_edge_ring(geometry, edge, out_edges);
+}
+
+void Mesh_component_selection_tool::invalidate_loop_cut_preview()
+{
+    m_loop_cut_preview.valid = false;
+    m_loop_cut_lines.clear();
+    m_loop_cut_line_normals.clear();
+    m_loop_cut_points.clear();
+    update_loop_cut_preview();
+}
+
+void Mesh_component_selection_tool::update_loop_cut_preview()
+{
+    const auto clear_preview = [this]() {
+        m_loop_cut_preview = Loop_cut_preview{};
+        m_loop_cut_lines.clear();
+        m_loop_cut_line_normals.clear();
+        m_loop_cut_points.clear();
+    };
+    Scene_view* const scene_view = get_hover_scene_view();
+    if (!m_loop_cut.active || (scene_view == nullptr) || !is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
+        clear_preview();
+        return;
+    }
+    const Pick_result pick_result = pick(*scene_view);
+    if (!pick_result.valid || (pick_result.edge_v0 == pick_result.edge_v1)) {
+        clear_preview();
+        return;
+    }
+    const erhe::geometry::Geometry& geometry = *pick_result.geometry;
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        clear_preview();
+        return;
+    }
+    const Mesh_edge_key edge_key = make_edge_key(pick_result.edge_v0, pick_result.edge_v1);
+    if (
+        m_loop_cut_preview.valid                                            &&
+        (m_loop_cut_preview.scene_view      == scene_view)                  &&
+        (m_loop_cut_preview.mesh.lock()     == pick_result.mesh)            &&
+        (m_loop_cut_preview.primitive_index == pick_result.primitive_index) &&
+        (m_loop_cut_preview.geometry.lock() == pick_result.geometry)        &&
+        (m_loop_cut_preview.edge_key        == edge_key)                    &&
+        (m_loop_cut_preview.cuts            == m_loop_cut.cuts)
+    ) {
+        return;
+    }
+    clear_preview();
+    const GEO::index_t edge = geometry.get_edge(edge_key.first, edge_key.second);
+    if (edge == GEO::NO_EDGE) {
+        return;
+    }
+
+    // The cut points: `cuts` points at i / (cuts + 1) along every ring edge.
+    const GEO::Mesh&                 mesh  = geometry.get_mesh();
+    const erhe::geometry::Walk_shape shape = compute_loop_cut_ring(geometry, edge, m_loop_cut_ring);
+    const int                        cuts  = m_loop_cut.cuts;
+    const float                      step  = 1.0f / static_cast<float>(cuts + 1);
+    const auto position = [&mesh](const GEO::index_t vertex) -> glm::vec3 {
+        return to_glm_vec3(get_pointf(mesh.vertices, vertex));
+    };
+    for (const GEO::index_t ring_edge : m_loop_cut_ring) {
+        const glm::vec3 p0 = position(mesh.edges.vertex(ring_edge, 0));
+        const glm::vec3 p1 = position(mesh.edges.vertex(ring_edge, 1));
+        for (int k = 1; k <= cuts; ++k) {
+            m_loop_cut_points.push_back(glm::mix(p0, p1, static_cast<float>(k) * step));
+        }
+    }
+
+    // The cut segments between consecutive ring edges. The endpoints of the
+    // next edge pair with the current edge's through the quad holding both
+    // (each endpoint with its neighbour along the quad boundary), so the
+    // segments at the same fraction never cross.
+    const auto add_segments = [&](const GEO::index_t facet, const GEO::index_t a0, const GEO::index_t a1, const GEO::index_t b0, const GEO::index_t b1) {
+        const glm::vec3 normal = to_glm_vec3(mesh_facet_normalf(mesh, facet));
+        const glm::vec3 pa0    = position(a0);
+        const glm::vec3 pa1    = position(a1);
+        const glm::vec3 pb0    = position(b0);
+        const glm::vec3 pb1    = position(b1);
+        for (int k = 1; k <= cuts; ++k) {
+            const float t = static_cast<float>(k) * step;
+            m_loop_cut_lines.push_back(erhe::renderer::Line{glm::mix(pa0, pa1, t), glm::mix(pb0, pb1, t)});
+            m_loop_cut_line_normals.push_back(normal);
+        }
+    };
+    const std::size_t ring_size = m_loop_cut_ring.size();
+    if (ring_size >= 2) {
+        GEO::index_t a0             = mesh.edges.vertex(m_loop_cut_ring[0], 0);
+        GEO::index_t a1             = mesh.edges.vertex(m_loop_cut_ring[0], 1);
+        GEO::index_t first_facet    = GEO::NO_INDEX;
+        GEO::index_t previous_facet = GEO::NO_INDEX;
+        bool         paired_all     = true;
+        for (std::size_t i = 0; (i + 1) < ring_size; ++i) {
+            const GEO::index_t next_edge = m_loop_cut_ring[i + 1];
+            const GEO::index_t facet     = find_shared_quad(geometry, m_loop_cut_ring[i], next_edge, GEO::NO_INDEX, GEO::NO_INDEX);
+            if (facet == GEO::NO_INDEX) {
+                paired_all = false;
+                break;
+            }
+            const GEO::index_t n0 = mesh.edges.vertex(next_edge, 0);
+            const GEO::index_t n1 = mesh.edges.vertex(next_edge, 1);
+            const GEO::index_t b0 = find_paired_vertex(mesh, facet, a0, n0, n1);
+            if (b0 == GEO::NO_INDEX) {
+                paired_all = false;
+                break;
+            }
+            const GEO::index_t b1 = (b0 == n0) ? n1 : n0;
+            add_segments(facet, a0, a1, b0, b1);
+            if (i == 0) {
+                first_facet = facet;
+            }
+            previous_facet = facet;
+            a0 = b0;
+            a1 = b1;
+        }
+        // A closed ring: the last and the first edge share one more quad.
+        if (paired_all && (shape == erhe::geometry::Walk_shape::closed)) {
+            const GEO::index_t first_edge = m_loop_cut_ring[0];
+            const GEO::index_t facet      = find_shared_quad(geometry, m_loop_cut_ring[ring_size - 1], first_edge, first_facet, previous_facet);
+            if (facet != GEO::NO_INDEX) {
+                const GEO::index_t n0 = mesh.edges.vertex(first_edge, 0);
+                const GEO::index_t n1 = mesh.edges.vertex(first_edge, 1);
+                const GEO::index_t b0 = find_paired_vertex(mesh, facet, a0, n0, n1);
+                if (b0 != GEO::NO_INDEX) {
+                    add_segments(facet, a0, a1, b0, (b0 == n0) ? n1 : n0);
+                }
+            }
+        }
+    }
+
+    m_loop_cut_preview = Loop_cut_preview{
+        .valid           = true,
+        .scene_view      = scene_view,
+        .mesh            = pick_result.mesh,
+        .primitive_index = pick_result.primitive_index,
+        .geometry        = pick_result.geometry,
+        .edge_key        = edge_key,
+        .cuts            = cuts
+    };
+}
+
+auto Mesh_component_selection_tool::begin_loop_cut() -> bool
+{
+    if (m_loop_cut.active) {
+        return true;
+    }
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode()) || (m_context.transform_tool == nullptr)) {
+        return false;
+    }
+    if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
+        return false;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    if ((scene_view == nullptr) || (scene_view->as_viewport_scene_view() == nullptr) || !pick(*scene_view).valid) {
+        return false;
+    }
+    m_loop_cut = Loop_cut_state{
+        .active     = true,
+        .cuts       = c_loop_cut_min_cuts,
+        .smoothness = 0.0f,
+        .typed_cuts = 0
+    };
+    // Ready for the length of the mode: the wheel out-ranks the fly-camera
+    // zoom, the click commands the other press commands of their buttons.
+    m_loop_cut_wheel_command.set_ready();
+    m_modal_confirm_click_command.set_ready();
+    m_modal_cancel_click_command.set_ready();
+    invalidate_loop_cut_preview();
+    log_selection->info("Loop cut started");
+    return true;
+}
+
+void Mesh_component_selection_tool::end_loop_cut()
+{
+    m_loop_cut.active     = false;
+    m_loop_cut.typed_cuts = 0;
+    m_loop_cut_preview    = Loop_cut_preview{};
+    m_loop_cut_lines.clear();
+    m_loop_cut_line_normals.clear();
+    m_loop_cut_points.clear();
+    m_loop_cut_wheel_command.set_inactive();
+}
+
+void Mesh_component_selection_tool::set_loop_cut_cuts(const int cuts)
+{
+    const int clamped = std::clamp(cuts, c_loop_cut_min_cuts, c_loop_cut_max_cuts);
+    if (clamped == m_loop_cut.cuts) {
+        return;
+    }
+    m_loop_cut.cuts = clamped;
+    log_selection->trace("Loop cut: {} cuts", clamped);
+    invalidate_loop_cut_preview();
+}
+
+auto Mesh_component_selection_tool::run_loop_cut_action(const Loop_cut_action action, const int digit) -> bool
+{
+    if (!m_loop_cut.active) {
+        return false;
+    }
+    switch (action) {
+        case Loop_cut_action::more_cuts: {
+            m_loop_cut.typed_cuts = 0;
+            set_loop_cut_cuts(m_loop_cut.cuts + 1);
+            break;
+        }
+        case Loop_cut_action::fewer_cuts: {
+            m_loop_cut.typed_cuts = 0;
+            set_loop_cut_cuts(m_loop_cut.cuts - 1);
+            break;
+        }
+        case Loop_cut_action::more_smoothness:
+        case Loop_cut_action::less_smoothness: {
+            const float delta = (action == Loop_cut_action::more_smoothness) ? c_loop_cut_smoothness_step : -c_loop_cut_smoothness_step;
+            m_loop_cut.smoothness = std::clamp(m_loop_cut.smoothness + delta, -c_loop_cut_smoothness_limit, c_loop_cut_smoothness_limit);
+            log_selection->trace("Loop cut: smoothness {}", m_loop_cut.smoothness);
+            break;
+        }
+        case Loop_cut_action::type_digit: {
+            // Typed digits accumulate into the count; a count past the
+            // maximum starts over from the digit.
+            int typed = (m_loop_cut.typed_cuts * 10) + digit;
+            if (typed > c_loop_cut_max_cuts) {
+                typed = digit;
+            }
+            m_loop_cut.typed_cuts = typed;
+            if (typed >= c_loop_cut_min_cuts) {
+                set_loop_cut_cuts(typed);
+            }
+            break;
+        }
+        case Loop_cut_action::start:
+        default: {
+            break;
+        }
+    }
+    return true;
+}
+
+auto Mesh_component_selection_tool::adjust_loop_cut_wheel(const float wheel_delta, const uint32_t modifier_mask) -> bool
+{
+    if (!m_loop_cut.active) {
+        return false;
+    }
+    if (wheel_delta == 0.0f) {
+        return true;
+    }
+    const bool alt = (modifier_mask & erhe::window::Key_modifier_bit_menu) != 0;
+    const bool up  = (wheel_delta > 0.0f);
+    if (alt) {
+        return run_loop_cut_action(up ? Loop_cut_action::more_smoothness : Loop_cut_action::less_smoothness, 0);
+    }
+    return run_loop_cut_action(up ? Loop_cut_action::more_cuts : Loop_cut_action::fewer_cuts, 0);
+}
+
+auto Mesh_component_selection_tool::perform_loop_cut(
+    const Mesh_component_target& target,
+    const Mesh_edge_key          edge_key,
+    const int                    cuts,
+    const float                  smoothness,
+    Loop_cut_step&               out_step,
+    std::string&                 error
+) -> bool
+{
+    Mesh_component_selection& selection   = m_mesh_component_selection;
+    const Mesh_component_mode mode_before = selection.get_mode();
+    if (!is_mesh_component_mode(mode_before)) {
+        error = "loop cut needs a vertex, edge or face mode";
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& mesh = target.mesh;
+    if (!mesh || !target.geometry || (mesh->get_item_host() == nullptr) || (m_context.mesh_memory == nullptr)) {
+        error = "loop cut needs a mesh in a scene";
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if (
+        (target.primitive_index >= primitives.size())               ||
+        !primitives[target.primitive_index].primitive               ||
+        !primitives[target.primitive_index].primitive->render_shape ||
+        (primitives[target.primitive_index].primitive->render_shape->get_geometry_const() != target.geometry)
+    ) {
+        error = "loop cut target is not the mesh primitive's current geometry";
+        return false;
+    }
+    const erhe::scene::Mesh_primitive before_mesh_primitive = primitives[target.primitive_index];
+    const erhe::geometry::Geometry&   geometry              = *target.geometry;
+    if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+        error = "loop cut needs the geometry's connectivity, which is not built: " + mesh->get_name();
+        return false;
+    }
+    const GEO::index_t edge = geometry.get_edge(edge_key.first, edge_key.second);
+    if (edge == GEO::NO_EDGE) {
+        error = "(" + std::to_string(edge_key.first) + ", " + std::to_string(edge_key.second) + ") is not an edge of " + mesh->get_name();
+        return false;
+    }
+
+    // The ring, and the single edge case: a seed without a quad facet cuts
+    // itself only and selects nothing.
+    const erhe::geometry::Walk_shape shape       = compute_loop_cut_ring(geometry, edge, m_loop_cut_ring);
+    const bool                       single_edge = !has_quad_facet(geometry, edge);
+    const GEO::Mesh&                 source_mesh = geometry.get_mesh();
+    std::set<std::pair<GEO::index_t, GEO::index_t>> ring_edges;
+    for (const GEO::index_t ring_edge : m_loop_cut_ring) {
+        ring_edges.insert(make_edge_key(source_mesh.edges.vertex(ring_edge, 0), source_mesh.edges.vertex(ring_edge, 1)));
+    }
+
+    std::shared_ptr<erhe::geometry::Geometry> after_geometry = std::make_shared<erhe::geometry::Geometry>(geometry.get_name());
+    erhe::geometry::operation::Subdivide_edges_result subdivide_result;
+    erhe::geometry::operation::subdivide_edges(
+        geometry,
+        *after_geometry,
+        ring_edges,
+        erhe::geometry::operation::Subdivide_edges_options{
+            .cuts       = std::clamp(cuts, c_loop_cut_min_cuts, c_loop_cut_max_cuts),
+            .smoothness = smoothness,
+            .only_quads = false
+        },
+        &subdivide_result
+    );
+    for (const std::string& warning : after_geometry->sanitize()) {
+        log_selection->warn("Loop cut on '{}' sanitized: {}", mesh->get_name(), warning);
+    }
+    const std::string validation_error = after_geometry->validate();
+    if (!validation_error.empty()) {
+        error = "loop cut result failed validation: " + validation_error;
+        return false;
+    }
+    after_geometry->process({.flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+    });
+
+    const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
+    std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
+    const bool raytrace_ok   = after_primitive->make_raytrace();
+    if (!renderable_ok || !raytrace_ok) {
+        error = "loop cut: building the result primitive failed";
+        return false;
+    }
+    erhe::scene::Mesh_primitive after_mesh_primitive = before_mesh_primitive;
+    after_mesh_primitive.primitive = after_primitive;
+
+    // Swap the cut in place (D3: the topology step of the gesture). The
+    // pre-cut selection entry goes dormant with the before geometry.
+    {
+        erhe::Item_host* const item_host = mesh->get_item_host();
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+        std::vector<erhe::scene::Mesh_primitive> new_primitives = primitives;
+        new_primitives[target.primitive_index] = after_mesh_primitive;
+        swap_mesh_primitives(mesh, new_primitives);
+    }
+    m_context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = mesh});
+
+    // Edge mode after the swap, so the conversion only touches live entries
+    // and the dormant pre-cut entry stays as it was for a cancel or an undo;
+    // then the inner edges (the new loops) are the selection.
+    selection.set_mode(Mesh_component_mode::edge);
+    std::size_t inner_edges = 0;
+    if (!single_edge && !subdivide_result.inner_edges.empty()) {
+        std::set<GEO::index_t>  vertices;
+        std::set<Mesh_edge_key> edges;
+        for (const std::pair<GEO::index_t, GEO::index_t>& inner_edge : subdivide_result.inner_edges) {
+            edges.insert(make_edge_key(inner_edge.first, inner_edge.second));
+            vertices.insert(inner_edge.first);
+            vertices.insert(inner_edge.second);
+        }
+        selection.set_after_operation(mesh, target.primitive_index, after_geometry, vertices, std::set<GEO::index_t>{}, edges);
+        inner_edges = edges.size();
+    }
+
+    out_step = Loop_cut_step{
+        .topology = Scalar_topology_step{
+            .mesh            = mesh,
+            .primitive_index = target.primitive_index,
+            .before          = before_mesh_primitive,
+            .after           = after_mesh_primitive,
+            .description     = "Loop Cut",
+            .mode_before     = mode_before
+        },
+        .ring_length = m_loop_cut_ring.size(),
+        .ring_shape  = shape,
+        .inner_edges = inner_edges
+    };
+    log_selection->info(
+        "Loop cut: '{}' ring of {} edges ({}), {} cuts -> {} vertices, {} facets, {} inner edges",
+        mesh->get_name(), out_step.ring_length, (shape == erhe::geometry::Walk_shape::closed) ? "closed" : "open",
+        cuts, after_geometry->get_mesh().vertices.nb(), after_geometry->get_mesh().facets.nb(), inner_edges
+    );
+    return true;
+}
+
+void Mesh_component_selection_tool::queue_loop_cut(const Scalar_topology_step& topology)
+{
+    m_context.operation_stack->queue(
+        std::make_shared<Fork_geometry_operation>(
+            Fork_geometry_operation::Parameters{
+                .mesh            = topology.mesh,
+                .primitive_index = topology.primitive_index,
+                .before          = topology.before,
+                .after           = topology.after,
+                .description     = topology.description
+            }
+        )
+    );
+}
+
+auto Mesh_component_selection_tool::confirm_loop_cut() -> bool
+{
+    update_loop_cut_preview();
+    if (!m_loop_cut_preview.valid) {
+        return true; // nothing under the pointer: the mode keeps running
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    const std::shared_ptr<erhe::scene::Mesh>        mesh     = m_loop_cut_preview.mesh.lock();
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = m_loop_cut_preview.geometry.lock();
+    if (
+        (scene_view == nullptr) ||
+        (scene_view != m_loop_cut_preview.scene_view) ||
+        !m_mesh_component_selection.is_live(mesh, m_loop_cut_preview.primitive_index, geometry)
+    ) {
+        return true;
+    }
+    Viewport_scene_view* const viewport_scene_view = scene_view->as_viewport_scene_view();
+    const Mesh_component_target target{
+        .mesh            = mesh,
+        .primitive_index = m_loop_cut_preview.primitive_index,
+        .geometry        = geometry
+    };
+    const Mesh_edge_key edge_key   = m_loop_cut_preview.edge_key;
+    const int           cuts       = m_loop_cut.cuts;
+    const float         smoothness = m_loop_cut.smoothness;
+    end_loop_cut();
+
+    Loop_cut_step step;
+    std::string   error;
+    if (!perform_loop_cut(target, edge_key, cuts, smoothness, step, error)) {
+        log_selection->warn("Loop cut refused: {}", error);
+        return true;
+    }
+    // Chain into the edge slide of the new loops, from the pointer position
+    // at the click; its confirm / cancel commit / cancel the whole gesture.
+    if (
+        (step.inner_edges > 0) &&
+        (viewport_scene_view != nullptr) &&
+        m_context.transform_tool->begin_scalar_drag(Scalar_edit_kind::edge_slide, *viewport_scene_view, &step.topology)
+    ) {
+        m_modal_confirm_click_command.set_ready();
+        m_modal_cancel_click_command.set_ready();
+        return true;
+    }
+    queue_loop_cut(step.topology);
+    return true;
+}
+
+auto Mesh_component_selection_tool::loop_cut(
+    const Mesh_component_target& target,
+    const Mesh_edge_key          edge_key,
+    const int                    cuts,
+    const float                  smoothness,
+    const Scalar_input&          slide,
+    Loop_cut_result&             result,
+    std::string&                 error
+) -> bool
+{
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        error = "Transform tool not available";
+        return false;
+    }
+    if (is_modal_active() || transform_tool->is_component_edit_active()) {
+        error = "another loop cut, slide or component edit is active";
+        return false;
+    }
+    Loop_cut_step step;
+    if (!perform_loop_cut(target, edge_key, cuts, smoothness, step, error)) {
+        return false;
+    }
+    result = Loop_cut_result{
+        .ring_length = step.ring_length,
+        .ring_shape  = step.ring_shape,
+        .inner_edges = step.inner_edges
+    };
+    if (step.inner_edges > 0) {
+        Scalar_edit_result slide_result{};
+        std::string        slide_error;
+        if (transform_tool->run_scalar_edit(Scalar_edit_kind::edge_slide, slide, slide_result, slide_error, &step.topology)) {
+            result.slide_vertices = slide_result.slide_vertices;
+            result.moved_vertices = slide_result.moved_vertices;
+            result.loops          = slide_result.loops;
+            return true;
+        }
+        log_selection->warn("Loop cut: the slide was refused ({}); the cut is committed alone", slide_error);
+    }
+    queue_loop_cut(step.topology);
+    return true;
+}
+#pragma endregion Loop cut
+
 auto Mesh_component_selection_tool::try_ready() const -> bool
 {
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
-    // A running slide owns the clicks (confirm / cancel).
-    if (is_slide_active()) {
+    // A running slide or loop cut owns the clicks (confirm / cancel).
+    if (is_modal_active()) {
         return false;
     }
     // In Paint gesture sub-mode the paint command handles clicks (one dab); the
@@ -1324,7 +2059,8 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // does not linger on a stale hover in the previously hovered view.
     // The pointer hover wins; otherwise the external hover (a Geometry
     // Spreadsheet row) is drawn, in its own component kind.
-    Pick_result         hover      = (component_mode && (get_hover_scene_view() == &context.scene_view))
+    // The loop cut mode draws its own preview instead of the pointer hover.
+    Pick_result         hover      = (component_mode && !m_loop_cut.active && (get_hover_scene_view() == &context.scene_view))
         ? pick(context.scene_view)
         : Pick_result{};
     Mesh_component_mode hover_mode = mode;
@@ -1422,6 +2158,42 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                         std::span<const glm::vec3>{m_scratch_normals}
                     );
                 }
+            }
+        }
+    }
+
+    // Loop cut preview: the cut segments and cut points of the ring under the
+    // pointer, computed by update_loop_cut_preview() on change; drawn only in
+    // the view it was picked in and only while its target is live.
+    if (component_mode && m_loop_cut.active && m_loop_cut_preview.valid && (m_loop_cut_preview.scene_view == &context.scene_view)) {
+        const std::shared_ptr<erhe::scene::Mesh>        preview_mesh     = m_loop_cut_preview.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> preview_geometry = m_loop_cut_preview.geometry.lock();
+        if (m_mesh_component_selection.is_live(preview_mesh, m_loop_cut_preview.primitive_index, preview_geometry)) {
+            const glm::mat4 world_from_node = preview_mesh->world_from_node();
+            const glm::mat3 normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
+            m_scratch_normals.clear();
+            for (const glm::vec3& normal : m_loop_cut_line_normals) {
+                const glm::vec3 world  = normal_matrix * normal;
+                const float     length = glm::length(world);
+                m_scratch_normals.push_back((length > 1e-6f) ? (world / length) : glm::vec3{0.0f});
+            }
+            if (!m_loop_cut_lines.empty()) {
+                line_renderer.set_thickness(style.edge_thickness - 1.0f);
+                line_renderer.add_lines(
+                    world_from_node, style.hover_color,
+                    std::span<const erhe::renderer::Line>{m_loop_cut_lines},
+                    std::span<const glm::vec3>{m_scratch_normals}
+                );
+            }
+            m_scratch_positions.clear();
+            m_scratch_indices.clear();
+            for (const glm::vec3& point_local : m_loop_cut_points) {
+                const glm::vec3 point_world = glm::vec3{world_from_node * glm::vec4{point_local, 1.0f}};
+                const float     half        = style.vertex_size * glm::distance(camera_position, point_world);
+                append_vertex_quad(point_world, camera_right, camera_up, half);
+            }
+            if (!m_scratch_indices.empty()) {
+                triangle_renderer.add_triangles(glm::mat4{1.0f}, style.hover_color, m_scratch_positions, m_scratch_indices);
             }
         }
     }
@@ -1969,7 +2741,7 @@ auto Mesh_component_selection_tool::run_selection_action(const Component_selecti
 
 auto Mesh_component_selection_tool::box_select_try_ready() const -> bool
 {
-    if ((m_gesture_mode != Component_gesture_mode::box) || is_slide_active()) {
+    if ((m_gesture_mode != Component_gesture_mode::box) || is_modal_active()) {
         return false;
     }
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
@@ -2053,7 +2825,7 @@ void Mesh_component_selection_tool::box_select_release()
 
 auto Mesh_component_selection_tool::paint_select_try_ready() const -> bool
 {
-    if ((m_gesture_mode != Component_gesture_mode::paint) || is_slide_active()) {
+    if ((m_gesture_mode != Component_gesture_mode::paint) || is_modal_active()) {
         return false;
     }
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
@@ -2339,6 +3111,7 @@ void Mesh_component_selection_tool::gesture_update()
     // set Inactive otherwise so the wheel zooms the camera as usual.
     Scene_view* const hover_scene_view = get_hover_scene_view();
     const bool paint_wheel_active =
+        !m_loop_cut.active &&
         (m_gesture_mode == Component_gesture_mode::paint) &&
         is_mesh_component_mode(m_mesh_component_selection.get_mode()) &&
         (hover_scene_view != nullptr) &&
@@ -2347,6 +3120,13 @@ void Mesh_component_selection_tool::gesture_update()
         m_brush_radius_command.set_ready();
     } else {
         m_brush_radius_command.set_inactive();
+    }
+    // The loop cut wheel (cut count / smoothness) out-ranks the fly-camera
+    // zoom the same way while the loop cut mode runs.
+    if (m_loop_cut.active) {
+        m_loop_cut_wheel_command.set_ready();
+    } else {
+        m_loop_cut_wheel_command.set_inactive();
     }
 }
 

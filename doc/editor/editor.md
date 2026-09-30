@@ -133,6 +133,7 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `animation/` -- Animation timeline / curve graph editor (Animation_window), playback (Animation_player), keyframe edit helpers
 - `developer/` -- Developer-only windows (clipboard, commands, composer, rendergraph, etc.)
 - `experiments/` -- Experimental features (gradient editor, network, sheet)
+- Mesh modeling (experimental; `tools/mesh_component_selection_tool.*`, `transform/mesh_component_transform.*`) -- the modal topology tools in a mesh component mode (loop cut): preview, topology step, chained slide, one undo entry. Described in `doc/editor/mesh_modeling.md`; component selection in `doc/editor/mesh_component_selection.md`
 - Lightmap baking (experimental; `renderers/lightmap_*`) -- progressive GPU lightmap baker built on Vulkan ray query: automatic lightmap UV unwrap, world-space tile partitioning with per-tile atlases, denoise and seam handling, tiles streamed from disk. Described in `doc/editor/lightmap_baking.md`; the atlas viewer in `doc/editor/lightmap_texture_viewer.md`
 
 ## Component Construction Rules

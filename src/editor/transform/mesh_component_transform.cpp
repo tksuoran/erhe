@@ -59,36 +59,6 @@ auto to_extrude_normal_mode(const Mesh_transform_mode mode) -> Extrude_normal_mo
     }
 }
 
-// Build_info for rebuilding a primitive of `geometry`, choosing the packed
-// vertex format from the geometry's own joint attributes. Buffer_info decides
-// the format (it is NOT derived from the attributes at build time), so the
-// plain make_primitive_buffer_info would rebuild a skinned mesh into the
-// non-skinned format, silently dropping joints/weights from the GPU streams -
-// the mesh would stop deforming after a vertex edit, fork or extrude. Same
-// rule as Weight_paint_tool::end_stroke.
-[[nodiscard]] auto make_rebuild_build_info(
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    const erhe::geometry::Geometry&    geometry
-) -> erhe::primitive::Build_info
-{
-    const GEO::AttributesManager& vertex_attrs = geometry.get_mesh().vertices.attributes();
-    const bool skinned =
-        vertex_attrs.is_defined(erhe::geometry::c_joint_indices_0) &&
-        vertex_attrs.is_defined(erhe::geometry::c_joint_weights_0);
-    return erhe::primitive::Build_info{
-        .primitive_types = {
-            .fill_triangles          = true,
-            .fill_triangles_expanded = true,
-            .edge_lines              = true,
-            .corner_points           = true,
-            .centroid_points         = true
-        },
-        .buffer_info = skinned
-            ? mesh_memory.make_skinned_primitive_buffer_info()
-            : mesh_memory.make_primitive_buffer_info()
-    };
-}
-
 // Has the gizmo actually moved? Used to defer fork-on-edit to the first real drag
 // (a click on a handle without dragging passes an identity delta and must not fork).
 auto is_nontrivial_delta(const glm::mat4& m) -> bool
@@ -269,9 +239,47 @@ auto compute_selection_frame_rotation(Mesh_component_selection& selection, const
     return false;
 }
 
+// Writes re-sampled corner texcoords into the geometry (the after state of
+// each change).
+void apply_corner_texcoords(erhe::geometry::Geometry& geometry, const std::vector<Corner_texcoord_change>& changes)
+{
+    erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+    for (const Corner_texcoord_change& change : changes) {
+        attributes.corner_texcoord(change.set).set(change.corner, GEO::vec2f{change.after.x, change.after.y});
+    }
+}
+
 } // anonymous namespace
 
-auto Mesh_component_transform::gather(App_context& context) -> bool
+// Buffer_info decides the vertex format (it is NOT derived from the attributes
+// at build time), so the plain make_primitive_buffer_info would rebuild a
+// skinned mesh into the non-skinned format, silently dropping joints/weights
+// from the GPU streams - the mesh would stop deforming after a vertex edit,
+// fork or extrude. Same rule as Weight_paint_tool::end_stroke.
+auto make_rebuild_build_info(
+    erhe::scene_renderer::Mesh_memory& mesh_memory,
+    const erhe::geometry::Geometry&    geometry
+) -> erhe::primitive::Build_info
+{
+    const GEO::AttributesManager& vertex_attrs = geometry.get_mesh().vertices.attributes();
+    const bool skinned =
+        vertex_attrs.is_defined(erhe::geometry::c_joint_indices_0) &&
+        vertex_attrs.is_defined(erhe::geometry::c_joint_weights_0);
+    return erhe::primitive::Build_info{
+        .primitive_types = {
+            .fill_triangles          = true,
+            .fill_triangles_expanded = true,
+            .edge_lines              = true,
+            .corner_points           = true,
+            .centroid_points         = true
+        },
+        .buffer_info = skinned
+            ? mesh_memory.make_skinned_primitive_buffer_info()
+            : mesh_memory.make_primitive_buffer_info()
+    };
+}
+
+auto Mesh_component_transform::gather(App_context& context, const Scalar_topology_step* const topology_step) -> bool
 {
     m_groups.clear();
 
@@ -291,6 +299,9 @@ auto Mesh_component_transform::gather(App_context& context) -> bool
         }
         const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
         const std::size_t                        primitive_index = entry.primitive_index;
+        if ((topology_step != nullptr) && ((mesh != topology_step->mesh) || (primitive_index != topology_step->primitive_index))) {
+            continue;
+        }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
         const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[primitive_index].primitive;
 
@@ -461,12 +472,16 @@ void Mesh_component_transform::begin(App_context& context)
     capture_start();
 }
 
-auto Mesh_component_transform::begin_scalar(App_context& context, const Scalar_edit_kind kind) -> bool
+auto Mesh_component_transform::begin_scalar(
+    App_context&                      context,
+    const Scalar_edit_kind            kind,
+    const Scalar_topology_step* const topology_step
+) -> bool
 {
     if (m_active) {
         return false;
     }
-    if (!gather(context)) {
+    if (!gather(context, topology_step)) {
         return false;
     }
     m_transform_mode = (kind == Scalar_edit_kind::edge_slide) ? Mesh_transform_mode::edge_slide : Mesh_transform_mode::vertex_slide;
@@ -479,6 +494,21 @@ auto Mesh_component_transform::begin_scalar(App_context& context, const Scalar_e
         return false;
     }
     capture_start();
+
+    // A topology step the caller already swapped in: the group runs on the
+    // step's primitive, and commit / cancel treat it as an extruded group
+    // (one primitive swap from the step's before primitive).
+    m_has_topology_step = (topology_step != nullptr);
+    m_topology_description.clear();
+    if (topology_step != nullptr) {
+        m_topology_description = topology_step->description;
+        m_topology_mode_before = topology_step->mode_before;
+        for (Group& group : m_groups) {
+            group.extruded       = true;
+            group.extrude_before = topology_step->before;
+            group.extrude_after  = topology_step->after;
+        }
+    }
     return m_active;
 }
 
@@ -643,6 +673,9 @@ void Mesh_component_transform::commit(App_context& context)
     m_active = false;
     const bool scalar = m_scalar;
     m_scalar = false;
+    const bool        topology_step        = m_has_topology_step;
+    const std::string topology_description = m_topology_description;
+    m_has_topology_step = false;
 
     // Release the optimization holds begin() took (transferred by fork /
     // extrude), one per group, before the commit operations run - their
@@ -682,17 +715,32 @@ void Mesh_component_transform::commit(App_context& context)
         // rebuild a clean primitive, and queue a primitive swap (before = original
         // geometry, after = extruded geometry) - undo removes the extrusion entirely.
         if (group.extruded) {
-            finalize_extrude_normals(*group.geometry);
+            if (topology_step) {
+                // A slide after a topology step (loop cut): the corner
+                // texcoords around the slid vertices are re-sampled into the
+                // geometry itself, and the normals follow the final positions
+                // only when something moved (an unmoved cut keeps the normals
+                // the step interpolated).
+                std::vector<Corner_texcoord_change> corner_texcoords;
+                collect_corrected_texcoords(group, corner_texcoords);
+                apply_corner_texcoords(*group.geometry, corner_texcoords);
+                if (has_moved_vertex(group)) {
+                    finalize_extrude_normals(*group.geometry);
+                }
+            } else {
+                finalize_extrude_normals(*group.geometry);
+            }
             std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(group.geometry);
             const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, primitive.render_shape->get_normal_style());
             const bool raytrace_ok   = after_primitive->make_raytrace();
             ERHE_VERIFY(renderable_ok && raytrace_ok);
             group.extrude_after.primitive = after_primitive;
 
-            const char* description =
-                (m_transform_mode == Mesh_transform_mode::extrude_group_normal)  ? "Extrude (Group Normal)"  :
-                (m_transform_mode == Mesh_transform_mode::extrude_vertex_normal) ? "Extrude (Vertex Normal)" :
-                                                                                   "Extrude";
+            const std::string description =
+                topology_step                                                    ? topology_description                    :
+                (m_transform_mode == Mesh_transform_mode::extrude_group_normal)  ? std::string{"Extrude (Group Normal)"}  :
+                (m_transform_mode == Mesh_transform_mode::extrude_vertex_normal) ? std::string{"Extrude (Vertex Normal)"} :
+                                                                                   std::string{"Extrude"};
             operations.push_back(
                 std::make_shared<Fork_geometry_operation>(
                     Fork_geometry_operation::Parameters{
@@ -2269,6 +2317,8 @@ void Mesh_component_transform::cancel(App_context& context)
     }
     m_active = false;
     m_scalar = false;
+    const bool topology_step = m_has_topology_step;
+    m_has_topology_step = false;
 
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
@@ -2311,6 +2361,28 @@ void Mesh_component_transform::cancel(App_context& context)
     // Drop the edit's references (a fork / extrude copy and its primitive) so
     // the dormant selection entry keyed on the copy expires.
     m_groups.clear();
+
+    // A topology step switched the mode (loop cut: to edge mode) after its
+    // swap, so the pre-step entry was never converted: with the before
+    // primitive back, switching to the before mode makes it the selection
+    // again.
+    if (topology_step && (context.mesh_component_selection != nullptr)) {
+        context.mesh_component_selection->set_mode(m_topology_mode_before);
+    }
+}
+
+auto Mesh_component_transform::has_moved_vertex(const Group& group) const -> bool
+{
+    if (!group.geometry || (group.before_local.size() != group.vertices.size())) {
+        return false;
+    }
+    const GEO::Mesh& geo_mesh = group.geometry->get_mesh();
+    for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
+        if (position_of(geo_mesh, group.vertices[i]) != group.before_local[i]) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Mesh_component_transform::count_moved_vertices() const -> std::size_t

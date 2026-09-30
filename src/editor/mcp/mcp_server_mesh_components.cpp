@@ -1896,6 +1896,90 @@ auto Mcp_server::action_cancel_component_edit(const json& args) -> std::string
     return make_json_content(json{{"cancelled", cancelled}}).dump();
 }
 
+auto Mcp_server::action_loop_cut_mesh(const json& args) -> std::string
+{
+    // The numeric loop cut (doc/plans/mesh_modeling.md D6, section 4.5;
+    // doc/editor/mesh_modeling.md): cut the edge ring through edge, slide the
+    // new loops by factor, commit - one undo entry. Explicit-state rule
+    // (doc/agents/mcp_api_guidelines.md): the option defaults are fixed here.
+    Mesh_component_selection*      selection = m_context.mesh_component_selection;
+    Mesh_component_selection_tool* tool      = m_context.mesh_component_selection_tool;
+    if ((selection == nullptr) || (tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("loop_cut_mesh needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::vector<Mesh_component_target> targets;
+    append_mesh_component_targets(erhe::scene::get_mesh(node.get()), targets);
+    const Mesh_component_target* target = nullptr;
+    for (const Mesh_component_target& candidate : targets) {
+        if (candidate.primitive_index == primitive_index) {
+            target = &candidate;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        return make_error_content("Node has no component-selectable mesh primitive at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+    if (!args.contains("edge") || !args["edge"].is_array() || (args["edge"].size() != 2)) {
+        return make_error_content("edge (a [v0, v1] vertex-index pair) is required");
+    }
+    const GEO::index_t v0           = args["edge"][0].get<GEO::index_t>();
+    const GEO::index_t v1           = args["edge"][1].get<GEO::index_t>();
+    const GEO::index_t vertex_count = target->geometry->get_mesh().vertices.nb();
+    if ((v0 >= vertex_count) || (v1 >= vertex_count) || (v0 == v1)) {
+        return make_error_content("edge vertices must be two distinct indices below vertex_count " + std::to_string(vertex_count));
+    }
+    const int cuts = args.value("cuts", 1);
+    if ((cuts < 1) || (cuts > 500)) {
+        return make_error_content("cuts must be in [1, 500]");
+    }
+    const float  smoothness = args.value("smoothness", 0.0f);
+    Scalar_input slide{};
+    slide.factor  = args.value("factor",  0.0f);
+    slide.even    = args.value("even",    false);
+    slide.flipped = args.value("flipped", false);
+    slide.clamp   = true;
+    if ((slide.factor < -1.0f) || (slide.factor > 1.0f)) {
+        return make_error_content("factor must be in [-1, 1]");
+    }
+
+    Loop_cut_result result{};
+    std::string     error;
+    if (!tool->loop_cut(*target, make_edge_key(v0, v1), cuts, smoothness, slide, result, error)) {
+        return make_error_content(error);
+    }
+    const GEO::Mesh& after_mesh = target->mesh->get_primitives()[primitive_index].primitive->render_shape->get_geometry_const()->get_mesh();
+    json out = mesh_component_selection_json(*selection);
+    out["cuts"]           = cuts;
+    out["smoothness"]     = smoothness;
+    out["factor"]         = slide.factor;
+    out["even"]           = slide.even;
+    out["flipped"]        = slide.flipped;
+    out["ring_length"]    = result.ring_length;
+    out["ring_closed"]    = (result.ring_shape == erhe::geometry::Walk_shape::closed);
+    out["inner_edges"]    = result.inner_edges;
+    out["slide_vertices"] = result.slide_vertices;
+    out["moved_vertices"] = result.moved_vertices;
+    out["loops"]          = result.loops;
+    out["vertex_count"]   = after_mesh.vertices.nb();
+    out["edge_count"]     = after_mesh.edges.nb();
+    out["facet_count"]    = after_mesh.facets.nb();
+    out["queued"]         = true;
+    return make_json_content(out).dump();
+}
+
 auto Mcp_server::action_set_gizmo_visibility(const json& args) -> std::string
 {
     // Headless-scriptable equivalent of activating the Move/Rotate/Scale tool (or clicking

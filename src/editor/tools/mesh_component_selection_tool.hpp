@@ -4,7 +4,9 @@
 
 #include "app_message.hpp"
 #include "tools/mesh_component_selection.hpp" // Mesh_component_mode
+#include "transform/mesh_component_transform.hpp" // Scalar_input, Scalar_topology_step
 #include "erhe_commands/command.hpp"
+#include "erhe_geometry/topology.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 
@@ -16,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
@@ -256,6 +259,62 @@ private:
     Component_modal_action m_action;
 };
 
+// The loop cut keys (doc/editor/mesh_modeling.md): Ctrl+R starts the loop cut
+// mode; while it runs the others change the preview's cut count and
+// smoothness. Enter / left click confirm and Escape / right click cancel
+// through Component_modal_command.
+enum class Loop_cut_action : unsigned int {
+    start           = 0, // Ctrl+R
+    more_cuts       = 1, // PageUp, numpad plus
+    fewer_cuts      = 2, // PageDown, numpad minus
+    more_smoothness = 3, // Alt+PageUp, Alt+numpad plus
+    less_smoothness = 4, // Alt+PageDown, Alt+numpad minus
+    type_digit      = 5  // 0 .. 9 (main row and numpad): typed cut count
+};
+
+[[nodiscard]] auto c_str(Loop_cut_action action) -> const char*;
+
+// Key command running one Loop_cut_action. start consumes the key only when
+// the loop cut mode starts; the others only while it runs, so the keys fall
+// through to their other bindings (fly camera PageUp / PageDown, hotbar
+// digits) otherwise.
+class Component_loop_cut_command : public erhe::commands::Command
+{
+public:
+    Component_loop_cut_command(erhe::commands::Commands& commands, App_context& context, const char* name, Loop_cut_action action, int digit);
+    auto try_call() -> bool override;
+
+private:
+    App_context&    m_context;
+    Loop_cut_action m_action;
+    int             m_digit;
+};
+
+// Mouse wheel while the loop cut mode runs: the cut count, or with Alt the
+// smoothness. Kept Ready while the mode runs so it out-ranks the fly-camera
+// zoom; inactive otherwise.
+class Component_loop_cut_wheel_command : public erhe::commands::Command
+{
+public:
+    Component_loop_cut_wheel_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// What a loop cut did (Mesh_component_selection_tool::loop_cut()).
+class Loop_cut_result
+{
+public:
+    std::size_t                 ring_length   {0};
+    erhe::geometry::Walk_shape  ring_shape    {erhe::geometry::Walk_shape::open};
+    std::size_t                 inner_edges   {0}; // the selection afterwards (0: the single edge case)
+    std::size_t                 slide_vertices{0};
+    std::size_t                 moved_vertices{0};
+    std::size_t                 loops         {0};
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -326,8 +385,38 @@ public:
     // while the slide runs.
     [[nodiscard]] auto begin_slide     () -> bool;
     [[nodiscard]] auto run_modal_action(Component_modal_action action) -> bool;
-    // True while a pointer slide runs: the selection gestures stand down.
+    // True while a pointer slide runs.
     [[nodiscard]] auto is_slide_active () const -> bool;
+    // True while a pointer slide or the loop cut mode runs: the selection
+    // gestures stand down and the modal click commands own the clicks.
+    [[nodiscard]] auto is_modal_active () const -> bool;
+
+    // Loop cut (doc/editor/mesh_modeling.md). begin_loop_cut() (Ctrl+R)
+    // starts the loop cut mode over a hovered content mesh in a component
+    // mode; run_loop_cut_action() / adjust_loop_cut_wheel() change the preview
+    // while it runs (false when it does not run, so the input falls through).
+    [[nodiscard]] auto begin_loop_cut       () -> bool;
+    [[nodiscard]] auto run_loop_cut_action  (Loop_cut_action action, int digit) -> bool;
+    [[nodiscard]] auto adjust_loop_cut_wheel(float wheel_delta, uint32_t modifier_mask) -> bool;
+    [[nodiscard]] auto is_loop_cut_active   () const -> bool { return m_loop_cut.active; }
+    [[nodiscard]] auto get_loop_cut_cuts      () const -> int   { return m_loop_cut.cuts; }
+    [[nodiscard]] auto get_loop_cut_smoothness() const -> float { return m_loop_cut.smoothness; }
+
+    // The numeric loop cut (MCP loop_cut_mesh, doc/plans/mesh_modeling.md
+    // D6): cut the edge ring through edge_key of target with `cuts` cuts and
+    // `smoothness`, then slide the new loops by `slide` (edge slide, factor in
+    // [-1, 1]) and commit the whole gesture as one undo entry. The single
+    // edge case (a seed without a quad facet) cuts that edge only. False
+    // (error set) when refused.
+    auto loop_cut(
+        const Mesh_component_target& target,
+        Mesh_edge_key                edge_key,
+        int                          cuts,
+        float                        smoothness,
+        const Scalar_input&          slide,
+        Loop_cut_result&             result,
+        std::string&                 error
+    ) -> bool;
 
     // Select all targets: the meshes of the live entries plus the meshes of
     // the object Selection that component selection can address; when both
@@ -491,6 +580,69 @@ private:
     };
     Boundary_cycle m_boundary_cycle{};
 
+    // Loop cut mode (Ctrl+R): the cut count and smoothness the modal keys set,
+    // and the typed digits (0: none typed yet).
+    class Loop_cut_state
+    {
+    public:
+        bool  active    {false};
+        int   cuts      {1};
+        float smoothness{0.0f};
+        int   typed_cuts{0};
+    };
+    // The loop cut preview: the ring through the nearest edge of the hovered
+    // facet and the cut segments / points of `cuts` cuts, in mesh-local space.
+    // Recomputed by update_loop_cut_preview() only when its key (scene view,
+    // mesh, primitive, geometry, edge, cuts) changes - on hover, cut count,
+    // mode and geometry changes - never per frame. Drawn only while its
+    // target is live.
+    class Loop_cut_preview
+    {
+    public:
+        bool                                    valid          {false};
+        const Scene_view*                       scene_view     {nullptr};
+        std::weak_ptr<erhe::scene::Mesh>        mesh           {};
+        std::size_t                             primitive_index{0};
+        std::weak_ptr<erhe::geometry::Geometry> geometry       {};
+        Mesh_edge_key                           edge_key       {0, 0};
+        int                                     cuts           {0};
+    };
+    // A cut built and swapped in by perform_loop_cut(), before its slide.
+    class Loop_cut_step
+    {
+    public:
+        Scalar_topology_step       topology   {};
+        std::size_t                ring_length{0};
+        erhe::geometry::Walk_shape ring_shape {erhe::geometry::Walk_shape::open};
+        std::size_t                inner_edges{0};
+    };
+    void update_loop_cut_preview    ();
+    void invalidate_loop_cut_preview();
+    void end_loop_cut               ();
+    void set_loop_cut_cuts          (int cuts);
+    [[nodiscard]] auto confirm_loop_cut() -> bool;
+    // The ring a loop cut through `edge` cuts: the edge ring when the edge has
+    // a quad facet, else the edge alone. Fills out_edges (edge indices).
+    [[nodiscard]] auto compute_loop_cut_ring(const erhe::geometry::Geometry& geometry, GEO::index_t edge, std::vector<GEO::index_t>& out_edges) const -> erhe::geometry::Walk_shape;
+    // Cuts the ring into a new Geometry, swaps its primitive in, switches to
+    // edge mode and installs the inner edges as the selection.
+    auto perform_loop_cut(
+        const Mesh_component_target& target,
+        Mesh_edge_key                edge_key,
+        int                          cuts,
+        float                        smoothness,
+        Loop_cut_step&               out_step,
+        std::string&                 error
+    ) -> bool;
+    // Queues the cut alone as one undo entry (no slide followed).
+    void queue_loop_cut(const Scalar_topology_step& topology);
+    Loop_cut_state                    m_loop_cut{};
+    Loop_cut_preview                  m_loop_cut_preview{};
+    std::vector<GEO::index_t>         m_loop_cut_ring{};         // edge indices (cleared at use, capacity kept)
+    std::vector<erhe::renderer::Line> m_loop_cut_lines{};        // mesh-local cut segments
+    std::vector<glm::vec3>            m_loop_cut_line_normals{}; // mesh-local facet normal per segment
+    std::vector<glm::vec3>            m_loop_cut_points{};       // mesh-local cut points
+
     class External_hover
     {
     public:
@@ -545,6 +697,13 @@ private:
     Component_modal_command                                   m_modal_toggle_clamp_command;
     Component_modal_command                                   m_modal_confirm_click_command;
     Component_modal_command                                   m_modal_cancel_click_command;
+    Component_loop_cut_command                                m_loop_cut_command;
+    Component_loop_cut_command                                m_loop_cut_more_cuts_command;
+    Component_loop_cut_command                                m_loop_cut_fewer_cuts_command;
+    Component_loop_cut_command                                m_loop_cut_more_smoothness_command;
+    Component_loop_cut_command                                m_loop_cut_less_smoothness_command;
+    std::vector<std::unique_ptr<Component_loop_cut_command>>  m_loop_cut_digit_commands; // 0 .. 9
+    Component_loop_cut_wheel_command                          m_loop_cut_wheel_command;
 
     // Select all target scratch (cleared at use, capacity kept).
     std::vector<Mesh_component_target>                        m_select_all_targets;

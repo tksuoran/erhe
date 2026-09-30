@@ -7203,6 +7203,64 @@
     "name": "cancel_component_edit"
   },
   {
+    "description": "Blender loop cut (Ctrl+R, doc/editor/mesh_modeling.md) without the pointer: walk the edge ring through edge [v0, v1] of one node's mesh primitive (the edge alone when it has no quad facet), subdivide the ring's edges with cuts cuts and smoothness (grid fill on), switch to edge mode with the new inner edges (the new loops) as the selection, edge-slide them by factor (in [-1, 1], positive toward the first rail side; even / flipped as slide_mesh_components) and commit the cut and the slide as ONE undo entry (\"Loop Cut\"). The single edge case cuts that edge only, selects nothing and does not slide. Needs a vertex, edge or face mode; refused while a loop cut, slide or other component edit is active, when [v0, v1] is not an edge and when the geometry has no connectivity. Returns the resulting selection (same shape as get_mesh_component_selection) plus ring_length, ring_closed, inner_edges, slide_vertices, moved_vertices, loops and the result's vertex_count / edge_count / facet_count.",
+    "inputSchema": {
+      "properties": {
+        "cuts": {
+          "description": "Number of cuts, 1 .. 500 (default 1)",
+          "type": "integer"
+        },
+        "edge": {
+          "description": "The seed edge as a [v0, v1] vertex-index pair",
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "even": {
+          "description": "Even slide: every vertex moves the same distance (default false)",
+          "type": "boolean"
+        },
+        "factor": {
+          "description": "Edge slide factor of the new loops in [-1, 1] (default 0: the cuts stay where subdivide put them)",
+          "type": "number"
+        },
+        "flipped": {
+          "description": "With even: measure the distance from the far rail end (default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "smoothness": {
+          "description": "Subdivide smoothness of the cuts (default 0: on the straight edges)",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scene_name",
+        "edge"
+      ],
+      "type": "object"
+    },
+    "name": "loop_cut_mesh"
+  },
+  {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",
     "inputSchema": {
       "properties": {

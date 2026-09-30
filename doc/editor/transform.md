@@ -129,6 +129,14 @@ the first step that moves a vertex, as for a move.
   `can_redo()` are false and `undo()` / `redo()` return without acting, so
   the Undo / Redo commands (Ctrl+Z / Ctrl+Y), the Operations window buttons
   and the MCP `undo` / `redo` (an error naming the edit) all decline.
+- **Topology step**: `begin_scalar()` (and `Transform_tool::begin_scalar_drag()`
+  / `run_scalar_edit()`) take an optional `Scalar_topology_step`, a
+  primitive a modal tool built and swapped in before the slide (loop cut,
+  `doc/editor/mesh_modeling.md`). The edit then covers that mesh primitive
+  only; `commit()` writes the re-sampled corner texcoords into the geometry
+  and queues one `Fork_geometry_operation` from the step's before primitive
+  (labelled by the step), and `cancel()` swaps the before primitive back and
+  restores the step's mode.
 - MCP `slide_mesh_components` (`kind` edge | vertex, `factor`, `even`,
   `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
   commit through `Transform_tool::run_scalar_edit()`.

@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -20,7 +21,12 @@ namespace erhe::geometry { class Geometry; }
 // pulling in the generated header.
 enum class Mesh_transform_mode : unsigned int;
 
+namespace erhe::scene_renderer { class Mesh_memory; }
+namespace erhe::primitive      { class Build_info; }
+
 namespace editor {
+
+enum class Mesh_component_mode;
 
 class App_context;
 class Corner_texcoord_change;
@@ -70,6 +76,30 @@ public:
     glm::vec2 side_b{0.0f};
 };
 
+// A topology step a caller built and swapped in before a scalar edit (loop cut,
+// doc/editor/mesh_modeling.md): begin_scalar() then edits only this mesh
+// primitive, commit() queues one Fork_geometry_operation from `before` to the
+// edited result (labelled `description`), and cancel() swaps `before` back and
+// restores `mode_before`, so the whole gesture is one undo entry or nothing.
+class Scalar_topology_step
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh> mesh           {};
+    std::size_t                        primitive_index{0};
+    erhe::scene::Mesh_primitive        before         {}; // the primitive before the topology step
+    erhe::scene::Mesh_primitive        after          {}; // the swapped-in primitive the edit runs on
+    std::string                        description    {};
+    Mesh_component_mode                mode_before    {};
+};
+
+// Build_info for rebuilding a primitive of `geometry`, choosing the packed
+// vertex format from the geometry's own joint attributes (a skinned mesh keeps
+// its joint streams).
+[[nodiscard]] auto make_rebuild_build_info(
+    erhe::scene_renderer::Mesh_memory& mesh_memory,
+    const erhe::geometry::Geometry&    geometry
+) -> erhe::primitive::Build_info;
+
 // Drives the transform gizmo when a mesh component selection (vertex/edge/face) is
 // active. The selection can span multiple meshes (one Group per live selection
 // entry); the gizmo anchors to the combined centroid of all selected components and
@@ -111,8 +141,9 @@ public:
     // on one or two selected edges and every selected edge manifold or
     // boundary; vertex slide needs a neighbour for every selected vertex. The
     // active slide vertex is the first one until select_active_slide_vertex()
-    // picks another.
-    auto begin_scalar (App_context& context, Scalar_edit_kind kind) -> bool;
+    // picks another. With a topology_step the edit covers that mesh
+    // primitive only and commits / cancels the step with it.
+    auto begin_scalar (App_context& context, Scalar_edit_kind kind, const Scalar_topology_step* topology_step = nullptr) -> bool;
     void apply_scalar (App_context& context, const Scalar_input& input);
 
     // Pointer drags: the slide vertex nearest to position_in_viewport becomes
@@ -199,8 +230,9 @@ private:
     };
 
     // Resolve the live component-selection entries into editable groups (one per
-    // single-geometry, in-scene mesh). Returns false when no editable target exists.
-    auto gather(App_context& context) -> bool;
+    // single-geometry, in-scene mesh; only the step's mesh primitive when
+    // topology_step is set). Returns false when no editable target exists.
+    auto gather(App_context& context, const Scalar_topology_step* topology_step = nullptr) -> bool;
 
     // Snapshot the drag-start state of every group (transforms, before_local)
     // and take the optimization holds. Shared by begin() and begin_scalar().
@@ -226,6 +258,8 @@ private:
     // Re-samples the corner texcoords of the facets around this group's slid
     // vertices at their new positions (section 4.6 "correct UVs") into out.
     void collect_corrected_texcoords(const Group& group, std::vector<Corner_texcoord_change>& out);
+    // True when a vertex of the group is off its captured start position.
+    [[nodiscard]] auto has_moved_vertex(const Group& group) const -> bool;
 
     // True if any mesh OTHER than `mesh` references `geometry` in the scene.
     [[nodiscard]] auto is_geometry_shared(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::geometry::Geometry* geometry) const -> bool;
@@ -264,6 +298,11 @@ private:
     Mesh_transform_mode m_transform_mode{};     // captured at begin(): the exact transform mode (value-inits to move)
     bool                m_scalar{false};        // the edit runs the scalar path (begin_scalar(), or a slide transform mode)
     Scalar_edit_kind    m_scalar_kind{Scalar_edit_kind::edge_slide};
+    // Set by begin_scalar() with a topology step: the commit's undo label and
+    // the mode cancel() restores.
+    std::string         m_topology_description{};
+    bool                m_has_topology_step{false};
+    Mesh_component_mode m_topology_mode_before{};
     std::size_t         m_slide_active{0};      // index into m_slide_vertices
     unsigned int        m_slide_last_side{0};   // edge slide: the side of the last clamped step
     bool                m_slide_neighbours_picked{false}; // vertex slide: a pick has run

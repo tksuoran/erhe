@@ -23,6 +23,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
@@ -1365,6 +1366,10 @@ auto Transform_tool::on_drag_ready() -> bool
         log_trs_tool->trace("Transform tool cannot start drag - a scalar component edit is active");
         return false;
     }
+    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_loop_cut_active()) {
+        log_trs_tool->trace("Transform tool cannot start drag - the loop cut mode owns the clicks");
+        return false;
+    }
 
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
@@ -2501,7 +2506,11 @@ auto Transform_tool::is_component_edit_active() const -> bool
     return m_component_transform.is_active() || m_lattice_point_transform.is_active();
 }
 
-auto Transform_tool::begin_scalar_drag(const Scalar_edit_kind kind, Viewport_scene_view& view) -> bool
+auto Transform_tool::begin_scalar_drag(
+    const Scalar_edit_kind            kind,
+    Viewport_scene_view&              view,
+    const Scalar_topology_step* const topology_step
+) -> bool
 {
     if (m_scalar_drag.active || is_component_edit_active() || is_transform_tool_active() || m_scripted_drag_active) {
         return false;
@@ -2513,7 +2522,7 @@ auto Transform_tool::begin_scalar_drag(const Scalar_edit_kind kind, Viewport_sce
     if (!position.has_value()) {
         return false;
     }
-    if (!m_component_transform.begin_scalar(m_context, kind)) {
+    if (!m_component_transform.begin_scalar(m_context, kind, topology_step)) {
         return false;
     }
     // The active slide vertex is the one nearest to the pointer; edge slide
@@ -2636,17 +2645,18 @@ auto Transform_tool::cancel_component_edit() -> bool
 }
 
 auto Transform_tool::run_scalar_edit(
-    const Scalar_edit_kind kind,
-    const Scalar_input&    input,
-    Scalar_edit_result&    result,
-    std::string&           error
+    const Scalar_edit_kind            kind,
+    const Scalar_input&               input,
+    Scalar_edit_result&               result,
+    std::string&                      error,
+    const Scalar_topology_step* const topology_step
 ) -> bool
 {
     if (m_scalar_drag.active || is_component_edit_active() || is_transform_tool_active() || m_scripted_drag_active) {
         error = "another transform or component edit is active";
         return false;
     }
-    if (!m_component_transform.begin_scalar(m_context, kind)) {
+    if (!m_component_transform.begin_scalar(m_context, kind, topology_step)) {
         error = (kind == Scalar_edit_kind::edge_slide)
             ? "edge slide refused: needs a live selection whose vertices are each on one or two selected edges, every selected edge manifold or boundary"
             : "vertex slide refused: needs a live selection of vertices with neighbours";
