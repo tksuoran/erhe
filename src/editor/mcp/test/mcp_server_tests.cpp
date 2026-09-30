@@ -522,6 +522,62 @@ TEST_F(Mcp_test, mesh_component_flush_and_select_all)
     client.call_tool("set_mesh_component_mode", json{{"mode", "object"}});
 }
 
+// A mesh component mode owns the transform gizmo even while its component
+// selection is empty: a node transform of the object-selected box must not
+// refresh node gizmo entries that the component mode emptied (it threw
+// std::out_of_range from Transform_tool::update_target_nodes), and leaving
+// the component mode hands the gizmo back to the node selection.
+TEST_F(Mcp_test, node_transform_in_component_mode_with_empty_component_selection)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "component mode transform box"},
+        {"steps",       {0, 0, 0}},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    advance_frames(client, 2);
+
+    client.call_tool("clear_mesh_component_selection", json::object());
+    Mcp_client::Tool_result selected = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      {"component mode transform box"}}
+    });
+    ASSERT_FALSE(selected.is_error) << selected.text;
+    advance_frames(client, 2);
+    ASSERT_FALSE(client.call_tool("set_mesh_component_mode", json{{"mode", "face"}}).is_error);
+    advance_frames(client, 2);
+
+    Mcp_client::Tool_result face_state = client.call_tool("get_transform_state", json::object());
+    ASSERT_FALSE(face_state.is_error) << face_state.text;
+    EXPECT_FALSE(face_state.payload.at("component_mode").get<bool>()) << "no facet selected, so no component anchor";
+    EXPECT_EQ(face_state.payload.at("selected_node_count").get<std::size_t>(), 0u) << "face mode keeps the node entries empty";
+
+    Mcp_client::Tool_result moved = client.call_tool("set_node_transform", json{
+        {"scene_name",  env.scene_name()},
+        {"node_name",   "component mode transform box"},
+        {"translation", {0.0, 1.0, 0.0}}
+    });
+    ASSERT_FALSE(moved.is_error) << moved.text;
+    advance_frames(client, 2);
+
+    Mcp_client::Tool_result selection = client.call_tool("get_mesh_component_selection", json::object());
+    ASSERT_FALSE(selection.is_error) << selection.text;
+    EXPECT_EQ(selection.payload.value("mode", ""), "face");
+
+    ASSERT_FALSE(client.call_tool("set_mesh_component_mode", json{{"mode", "object"}}).is_error);
+    advance_frames(client, 2);
+    Mcp_client::Tool_result object_state = client.call_tool("get_transform_state", json::object());
+    ASSERT_FALSE(object_state.is_error) << object_state.text;
+    EXPECT_EQ(object_state.payload.at("selected_node_count").get<std::size_t>(), 1u) << "object mode restores the node gizmo";
+
+    client.call_tool("select_items", json{{"scene_name", env.scene_name()}, {"paths", json::array()}});
+}
+
 // reset_editor_state takes the editor back to no scenes, no selection and
 // no undo history - and returns only once the scene closes have run.
 TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)

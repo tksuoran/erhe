@@ -173,6 +173,32 @@ def run_region_select(e):
     e.call("clear_mesh_component_selection")
 
 
+def run_transform_in_component_mode(e):
+    """A node transform while a mesh component mode is active and the box is
+    object-selected with no component selected (the gizmo is owned by the
+    empty component selection, so the node-touched refresh must not run
+    against the emptied node entries)."""
+    e.call("clear_mesh_component_selection")
+    e.call("select_items", {"scene_name": e.scene, "paths": [BOX]})
+    e.advance()
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    e.advance()
+    state = e.call("get_transform_state")
+    expect("face mode, box object-selected, no facets -> gizmo unanchored, no node entries",
+           (state["component_mode"], state["selected_node_count"]), (False, 0))
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX, "translation": [0.0, 1.0, 0.0]})
+    e.advance(2)
+    selection = e.call("get_mesh_component_selection")
+    expect("set_node_transform in face mode keeps the editor alive (empty component selection)",
+           (selection.get("mode"), e.counts(selection)), ("face", (0, 0, 0)))
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.advance()
+    expect("back to object mode -> the node gizmo drives the box again",
+           e.call("get_transform_state")["selected_node_count"], 1)
+    e.call("select_items", {"scene_name": e.scene, "paths": []})
+    e.advance()
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -248,6 +274,9 @@ def run(e):
 
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})
+
+    # Last: it moves the box.
+    run_transform_in_component_mode(e)
 
 
 def main():

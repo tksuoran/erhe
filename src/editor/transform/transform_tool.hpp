@@ -456,11 +456,18 @@ private:
 
     Edit_state m_edit_state;
 
-    // Which producer owns the gizmo when shared.component_mode is set: the mesh
-    // component selection or a designated lattice node's control point. Decided
-    // each idle frame in update_for_view; the façade methods dispatch on it.
+    // Which producer owns the gizmo, decided each idle frame in update_for_view:
+    // none - the node selection; shared.entries is index-aligned with the
+    //        selection's transform targets (update_target_nodes() relies on it).
+    // mesh_components - a mesh component mode is active, whether or not its
+    //        selection currently anchors the gizmo (shared.component_mode says);
+    //        shared.entries stays empty.
+    // lattice_point - a designated lattice node's selected control point.
+    // The node-selection message handlers act only while it is none; the
+    // facade methods dispatch on it.
     enum class Component_source { none, mesh_components, lattice_point };
     Component_source m_component_source{Component_source::none};
+    [[nodiscard]] auto is_node_selection_driving() const -> bool { return m_component_source == Component_source::none; }
 
     Mesh_component_transform m_component_transform;
     Lattice_point_transform  m_lattice_point_transform;

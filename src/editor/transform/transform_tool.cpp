@@ -294,7 +294,7 @@ void Transform_tool::on_selection(Selection_message&)
 {
     // In component mode the gizmo tracks the mesh component selection, not the node
     // selection; the anchor is recomputed each idle frame in update_for_view().
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     update_target_nodes(nullptr);
@@ -304,7 +304,7 @@ void Transform_tool::on_active_scene(Active_scene_changed_message&)
 {
     // Rebind the gizmo to the new active scene's selection (window-focus
     // activation changes the active scene without a selection change).
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     update_target_nodes(nullptr);
@@ -317,7 +317,7 @@ void Transform_tool::on_active_item(Active_item_changed_message&)
     // update_target_nodes), so a Ctrl-click that only changes the active item
     // must re-anchor the gizmo. Same guard as on_selection(): in component mode
     // the gizmo tracks the mesh component selection instead.
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     // Entries are captured at drag start (world_from_node_before) and consumed
@@ -331,7 +331,7 @@ void Transform_tool::on_active_item(Active_item_changed_message&)
 
 void Transform_tool::on_animation_update(Animation_update_message&)
 {
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     update_target_nodes(nullptr);
@@ -339,7 +339,7 @@ void Transform_tool::on_animation_update(Animation_update_message&)
 
 void Transform_tool::on_node_touched(Node_touched_message& message)
 {
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     update_target_nodes(message.node);
@@ -532,7 +532,7 @@ void Transform_tool::on_reference_settings_changed()
     // update_for_view -> Mesh_component_transform::update_anchor), so only the
     // node-selection path needs an explicit refresh when the mode or reference
     // node changes.
-    if (shared.component_mode) {
+    if (!is_node_selection_driving()) {
         return;
     }
     update_target_nodes(nullptr);
@@ -2381,16 +2381,19 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
             (mesh_component_selection != nullptr) &&
             is_mesh_component_mode(mesh_component_selection->get_mode());
         if (want_component) {
-            m_component_source = m_component_transform.update_anchor(m_context, shared)
-                ? Component_source::mesh_components
-                : Component_source::none;
+            // The mesh component selection owns the gizmo for as long as a
+            // mesh component mode is active, anchored or not: an empty
+            // component selection leaves shared.entries empty (gizmo hidden),
+            // and the node-selection handlers must not rebuild it meanwhile.
+            m_component_transform.update_anchor(m_context, shared);
+            m_component_source = Component_source::mesh_components;
         } else if (m_lattice_point_transform.update_anchor(m_context, shared)) {
             // A display/ghost designated Lattice_node is bound into the active
             // scene: its selected control point owns the gizmo (viewport lattice
             // editing). Clearing the designation returns the gizmo to the node
             // selection below.
             m_component_source = Component_source::lattice_point;
-        } else if (shared.component_mode) {
+        } else if (!is_node_selection_driving()) {
             // Left component / lattice mode: restore the node gizmo.
             m_component_source = Component_source::none;
             shared.component_mode = false;
