@@ -61,8 +61,9 @@ void main()
 // agfx ComputeBufferAtomics: 128 threads apply atomicAdd / And / Or / Xor /
 // Min / Max / CompSwap to the members of one SSBO, and record in a second SSBO
 // which thread won the compare-and-swap. The expected buffers are computed on
-// the CPU and compared member by member, then byte-exact (result block
-// followed by the winner flags) against the buffer golden compute_atomics.bin.
+// the CPU and compared member by member, then byte-exact (the result block's
+// members followed by the winner flags) against the buffer golden
+// compute_atomics.bin.
 TEST_F(Gpu_test, compute_buffer_atomics)
 {
     erhe::graphics::Shader_resource result_block{
@@ -81,6 +82,11 @@ TEST_F(Gpu_test, compute_buffer_atomics)
     const std::size_t off_max = result_block.add_uint("v_max")->get_offset_in_parent();
     const std::size_t off_cas = result_block.add_uint("v_cas")->get_offset_in_parent();
     const std::size_t byte_count = result_block.get_size_bytes(erhe::graphics::Shader_resource::Layout::std430);
+    // The block's reported size is padded to the device's buffer offset
+    // alignment, so only the members reach the golden: the padding past v_cas
+    // is as wide as the device wants it, and would make the golden device
+    // specific.
+    const std::size_t member_bytes = off_cas + sizeof(uint32_t);
 
     erhe::graphics::Shader_resource won_block{
         device(),
@@ -202,7 +208,7 @@ TEST_F(Gpu_test, compute_buffer_atomics)
     }
     EXPECT_EQ(won_mismatches, 0) << "compare-and-swap winner flags differ from the CPU model (only thread " << c_compare_winner << " may win)";
 
-    std::vector<std::byte> all_bytes = raw;
+    std::vector<std::byte> all_bytes{raw.begin(), raw.begin() + member_bytes};
     all_bytes.insert(all_bytes.end(), won_raw.begin(), won_raw.end());
     expect_buffer_matches_golden("compute_atomics", std::span<const std::byte>{all_bytes});
 }

@@ -199,7 +199,10 @@ public:
 private:
     std::chrono::system_clock::time_point m_start;
     std::string                           m_device;
-    nlohmann::ordered_json                m_tests{nlohmann::ordered_json::array()};
+    // Copy-initialized, not brace-initialized: brace initialization picks
+    // nlohmann's initializer_list constructor and would make m_tests an array
+    // holding one empty array.
+    nlohmann::ordered_json                m_tests = nlohmann::ordered_json::array();
 };
 
 } // anonymous namespace
