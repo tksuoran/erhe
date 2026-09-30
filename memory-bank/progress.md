@@ -35,9 +35,8 @@
 ✓PHASE-5-DONE
 ✓M13a::{bevel_edges.hpp(1-segment,offset/width,loop-slide;linear-directions)+Ctrl+B-scalar-mode(W/L)+MCP-bevel_mesh_edges;217-geometry-tests;verify-all-pass}
 ✓M15+M16::{fill.hpp(contextual-order;no-wire-edges)+connect_vertices.hpp(set+pair-cutting-plane-search)+F/J+MCP;231-geometry-tests;grid-fill-remains}
-?follow-up::modal-guard(has_component_mode_selection)-covers-split/separate/fill/connect-only;rip/delete/dissolve/merge/subdivide-commands-lack-it
-⚡M14::bridge-edge-loops
-?M13b-bevel-segments
+✓M14::{bridge_loops.hpp(open/closed/pairs,merge,twist,cuts)+MCP;241-geometry-tests;verify-406/406;all-component-commands-share-modal-guard}
+⚡M13b::bevel-segments+profile+vertex-bevel+clamp+miters
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
