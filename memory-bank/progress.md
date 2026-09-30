@@ -2,6 +2,12 @@
 
 @rule::active-tasks-only;DONE-task-sections-move-to-memory-bank/topics/<topic>.md[PROGRESS]
 
+[TASK::mesh-modeling]{started-2026-09-30;via-harness;doc/plans/mesh_modeling.md;no-build-tree-existed-on-machine->coder-configures-build_ninja_win_vulkan-with-ERHE_BUILD_TESTS=ON}
+⚡M0a::walkers+fan-order-fix+get_corner_edge+test_topology_walkers{coder-running}
+?M0b::Edit_mesh-scratch+primitives+emission+test_edit_mesh
+?M0c::edge_sharpness-through-post_processing
+?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
+
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
 ✓pole-target-slice{484bac408+67aafe503+c59ba15b3+08a7a73e0;ik_pole_verify.py-all-pass;solver-tests-22;roundtrip-418/421}
 ✓effector-orientation{ebf606ff2;verify-5/5}+chain-visualization{edaf10d98;solver-tests-26;visual-check-interactive-only}
