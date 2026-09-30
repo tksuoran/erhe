@@ -1,13 +1,13 @@
 §MBEL:5.0
 
 [FOCUS]
-@mesh-modeling::IN-PROGRESS-2026-09-30{doc/plans/mesh_modeling.md;via-harness{user-asked;opus-coders};PHASES-1-4-DONE{M0-M9:walkers,Edit_mesh,selection-cmds,loop/ring-select,delete/dissolve,merge,subdivide,slide+scalar-drag+cancel,loop-cut,inset,split/rip/separate;2-pre-existing-crashes-fixed;doc/editor/mesh_modeling.md;scripts/mesh_modeling_verify.py;197-geometry-tests};phase-5=knife(M12a-library->M12b-tool+snap);phase-6=bevel-M13a,fill,bridge,connect;user-interactive-checks-pending{preview-look,rail-drawing};state->progress.md}
+@mesh-modeling::DONE-2026-10-01{plan-build-order-M0-M16-complete;26-commits;state->memory-bank/topics/mesh_modeling.md;remaining->doc/plans/mesh_modeling.md;user-interactive-checks-pending}
 @agfx-test-port::DONE-2026-09-29{38->176-Vk-tests;8-engine-fixes;remaining->doc/plans/graphics_tests_agfx_port.md;state->memory-bank/topics/graphics_tests.md}+Metal+macOS-Vk-runs-2026-09-30{175/1-skip;165/11-skip;2-test-fixes}
 @debug-line-aa::DONE-2026-09-29{doc/plans/debug_renderer_anti_aliasing.md;core+fringe-draws/pass(a81ebbfef;user-saw-joint-double-blend-on-hidden-sphere-silhouette->accepted-cost);on/off~1.7x;tests-13-Vk+GL;follow-up=joined-polylines+content-wide-lines+Metal}
 @shadow-robustness::DONE-2026-09-29{future:Metal+G7-profiling;review-issue-1-fixed-2026-09-29(node-origin-vertex-bound,far_vertices-station);review-issue-3-checked-at-runtime;review-issues-2,4..11-open}{doc/plans/shadow_robustness.md;via-harness{user-asked};root-cause=head-on-tie{all-presets-cull_back+dz_dUV=0->zero-bias;1-ulp-ref-vs-stored};phases-0..7}
 @radiance-cascades::PHASES-0-7-BUILT-2026-09-28{user-defaults-s0-1.5-q0-8}{doc/plans/radiance_cascades.md;via-harness{user-asked};world-space-3D-cascades->reduced-into-DDGI-probe-field-format{shared-consumer:heap-slots-5-7+Light_block-ddgi_*+USE_DDGI};Indirect_diffuse_source-enum{ambient|ddgi|radiance_cascades};test-scene=creation_24_gi_test_rooms{stations;no-Sponza};perf-budget=relative-to-measured-DDGI{iGPU;abs-numbers->memory-bank/local};phase-0{a:compute-Gpu_timer+DDGI-timings+get_indirect_diffuse_stats|b:creation_24|c:gi_verify.py+DDGI-baseline|d:DDGI-placement-fixes-if-sweep-finds}}
 @rigging::PAUSED{state->memory-bank/topics/rigging.md[PAUSED_FOCUS_2026-09-27]}
-NEXT=mesh-modeling-phase-1{progress.md};then-await-user-direction{agfx-port-open-findings:Vk-per-subresource-layout-tracking;AMD-GL-comparison-sampler}{shadow-future:Metal+G7-optimization;RC-remaining-work};RC-remaining-work{doc/plans/radiance_cascades.md;await-user-direction}->0c2-gi_verify+baseline->0d-DDGI-placement-fixes
+NEXT=await-user-direction{mesh-modeling-remaining:doc/plans/mesh_modeling.md;agfx-port-open-findings:Vk-per-subresource-layout-tracking;AMD-GL-comparison-sampler}{shadow-future:Metal+G7-optimization;RC-remaining-work};RC-remaining-work{doc/plans/radiance_cascades.md;await-user-direction}->0c2-gi_verify+baseline->0d-DDGI-placement-fixes
 [TOPICS]{memory-bank/topics/<name>.md;¬auto-loaded;read-the-ones-matching-the-session;DONE-work+traps+open-items-per-topic}
 usd::USD compatibility: LightUSD fork, import/export, composition arcs, DrawModes, USD physics/animation, WG asset survey
 property_system::erhe::property dependency properties: node values, styles, folders, migrations, Properties window
@@ -22,6 +22,7 @@ geometry::Geometry / geogram threading, geometry graph payload and pin rules
 graphics_tests::erhe_graphics_gpu_tests goldens (FLIP), agfx port state, per-backend results, traps
 build::CMake conventions and dependency gotchas (all platforms)
 windows::Windows-only build/clangd/VS-MCP/minidump facts
+mesh_modeling::Blender-style mesh modeling tools and operations (DONE 2026-10-01; traps; remaining work pointer)
 input_bindings::User-editable persistent input bindings: Commands overrides, Input Bindings window, input_bindings.json, MCP tools (DONE 2026-09-26)
 
 [STATE]
