@@ -133,6 +133,9 @@ public:
     // Writes a captured version's physics state back onto `node`: the shape
     // first, then the key value, so a body is never made from a stale shape.
     static void restore_physics(erhe::scene::Node& node, const Entry::Version& version);
+    // The convex hull collision shape of a geometry's vertices; empty when the
+    // geometry has no volume (make_convex_hull() logs the reason).
+    [[nodiscard]] static auto make_convex_hull_collision_shape(const erhe::geometry::Geometry& geometry) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
     void add_entry   (Entry&& entry);
 

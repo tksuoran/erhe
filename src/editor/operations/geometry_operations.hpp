@@ -8,6 +8,7 @@
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 
 #include <glm/glm.hpp>
@@ -180,6 +181,37 @@ class Subdivide_edges_operation : public Mesh_operation
 {
 public:
     Subdivide_edges_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Subdivide_edges_options options);
+};
+
+// Split (doc/plans/mesh_modeling.md catalog M9,
+// erhe_geometry/operation/split_components.hpp) on the component selection
+// snapshot. Face mode: the selected facets are split off the rest (region
+// split); vertex mode: the facets whose vertices are all selected; edge mode:
+// the facets whose edges are all selected, or, when the selected edges hold no
+// complete facet, an edge split along the selected edges. The selection
+// afterwards is the region (or the torn side's copies of the edges). A
+// primitive without a selection is emitted unchanged.
+class Split_components_operation : public Mesh_operation
+{
+public:
+    explicit Split_components_operation(Mesh_operation_parameters&& context);
+};
+
+// Rip (catalog M9) on a vertex or edge mode selection snapshot
+// (erhe::geometry::operation::rip_vertices()). With world_position, each
+// mesh rips the side toward that point: the direction is the point in the
+// mesh's local space minus the centroid of the torn vertices; without it,
+// options.direction (mesh-local) is used as given. The selection afterwards
+// is the ripped vertices (vertex mode) or the ripped copies of the edges
+// (edge mode).
+class Rip_vertices_operation : public Mesh_operation
+{
+public:
+    Rip_vertices_operation(
+        Mesh_operation_parameters&&            context,
+        erhe::geometry::operation::Rip_options options,
+        std::optional<glm::vec3>               world_position = std::nullopt
+    );
 };
 
 class Reverse_operation : public Mesh_operation

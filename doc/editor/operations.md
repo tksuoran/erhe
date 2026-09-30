@@ -61,6 +61,18 @@ Implements the undo/redo operation system and all concrete editor operations.
     general remap when no fill ran; in vertex and face mode the general
     remap stays (the selected vertices, the facets descended from the
     selected facets).
+  - Split and rip (`doc/plans/mesh_modeling.md` catalog M9,
+    `erhe_geometry/operation/split_components.hpp`) on the mesh-component
+    selection: `Split_components_operation` splits the region (face mode:
+    the selected facets; vertex / edge mode: the facets fully selected) off
+    the rest, and in edge mode, when the selected edges hold no complete
+    facet, tears the mesh along them (edge split); the region (or the torn
+    side's edge copies) is the selection afterwards.
+    `Rip_vertices_operation` (a `Rip_options` direction, or a world point
+    converted per mesh into the direction from the torn vertices' centroid)
+    rips in vertex and edge mode and selects the ripped vertices or edges.
+    Positions do not change; the editor has no grab after the rip, so the
+    user moves the ripped selection with the transform gizmo or a slide.
 
 - **Binary operations** (extend `Compound_operation`): `Union`, `Intersection`, `Difference` -- CSG operations.
 
@@ -71,12 +83,29 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Node_transform_operation` -- undo/redo node transforms
   - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
   - `Merge_operation` -- merge multiple meshes
+  - `Separate_selection_operation` (`operations/separate_operation.hpp`) --
+    Blender's separate selection (P): the facets of each mesh's component
+    selection (`get_selection_facets()`) become a new `Mesh` named
+    `<original> separated` under the original's parent, at the sibling index
+    after it, with its transform, material per primitive, persistent flags
+    and layer; the original keeps the rest
+    (`erhe::geometry::operation::extract_facets()`). The constructor builds
+    both geometries and primitives on the main thread from a
+    `snapshot_component_selection()` (`items.hpp`); execute swaps the kept
+    primitives in and inserts the node, undo removes the node (remembering
+    its parent and index for redo) and swaps the original's primitives
+    back, one undo entry. The original's rigid body follows the kept
+    geometry's convex hull (`Mesh_operation::make_convex_hull_collision_shape()`)
+    with its motion mode; the new mesh gets a static body only when the
+    original's is static. The object selection is unchanged and the
+    original's new geometry has no component selection. Separate by loose
+    parts and by material are not implemented.
 
 - **In-place vertex edits** (NOT `Mesh_operation`: they mutate and reuse the SAME `Geometry` object so `Mesh_component_selection` entries keyed on the Geometry pointer survive, then rebuild one `Primitive` and share it across every mesh referencing the Geometry):
   - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit) and, for a slide, sets the corner texcoords the slide re-interpolated (`doc/editor/transform.md` "Scalar edits"); refreshes normals, rebuilds static physics.
   - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
 
-- **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered. The Subdivide Edges button (enabled with a selection in vertex, edge or face mode) comes with the cuts, smoothness and only-quads widgets as `Operations` members; its command is `Geometry.Subdivide.Edges` (no key: Blender reaches it from a menu). The Inset button (enabled with a face mode selection) comes with the thickness and depth drags and the boundary, even offset, relative offset, edge rail, outset, individual and interpolate checkboxes (`Operations::m_inset_options`); it runs the numeric inset `Mesh_component_selection_tool::inset()` (one `Fork_geometry_operation` "Inset", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`.
+- **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered. The Subdivide Edges button (enabled with a selection in vertex, edge or face mode) comes with the cuts, smoothness and only-quads widgets as `Operations` members; its command is `Geometry.Subdivide.Edges` (no key: Blender reaches it from a menu). The Split and Separate buttons (enabled with a selection in vertex, edge or face mode) and the Rip button (vertex or edge mode) run `Geometry.Split.Selected` (Y), `Geometry.Separate.Selection` (P) and `Geometry.Rip.Selected` (V; toward the component tool's last hovered content point); each declines without a live selection in a mode it reads. The Inset button (enabled with a face mode selection) comes with the thickness and depth drags and the boundary, even offset, relative offset, edge rail, outset, individual and interpolate checkboxes (`Operations::m_inset_options`); it runs the numeric inset `Mesh_component_selection_tool::inset()` (one `Fork_geometry_operation` "Inset", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`.
 
 ## Primitive swaps keep the node in place
 
@@ -103,10 +132,14 @@ saved scene records.
 - `Merge_operation` records each removed source's sibling index when it
   removes it and undo re-inserts the sources in reverse removal order at
   those indices.
+- `Separate_selection_operation` swaps the original's primitives in place
+  and inserts its new node right after the original; undo takes the node
+  out and redo puts it back at the parent and index it had.
 
 `scripts/geometry_edit_node_order_verify.py` checks the sibling order after
 Catmull-Clark, attribute and position edits, vertex-selection transforms
-(including the fork of shared geometry) and merge, each with its undo.
+(including the fork of shared geometry), merge and separate, each with its
+undo.
 
 ## Threading and re-entrancy
 

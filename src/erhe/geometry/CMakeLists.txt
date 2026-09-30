@@ -80,6 +80,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/merge_vertices.hpp
     erhe_geometry/operation/subdivide_edges.cpp
     erhe_geometry/operation/subdivide_edges.hpp
+    erhe_geometry/operation/split_components.cpp
+    erhe_geometry/operation/split_components.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
     erhe_geometry/operation/smooth_normals.cpp

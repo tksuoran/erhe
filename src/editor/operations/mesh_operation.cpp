@@ -314,32 +314,12 @@ void Mesh_operation::make_entries(
                 }
 
                 if (m_parameters.context.editor_settings->physics.static_enable) {
-
-                    GEO::Mesh convex_hull{};
-                    // A result geometry with no volume has no convex hull;
-                    // make_convex_hull() logs the reason and the result mesh
-                    // is left without a rigid body.
-                    const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);
-                    if (convex_hull_ok) {
-                        std::vector<float> coordinates;
-                        coordinates.resize(convex_hull.vertices.nb() * 3);
-                        for (GEO::index_t vertex : convex_hull.vertices) {
-                            const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
-                            coordinates[3 * vertex + 0] = p.x;
-                            coordinates[3 * vertex + 1] = p.y;
-                            coordinates[3 * vertex + 2] = p.z;
-                        }
-
-                        auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                            coordinates.data(),
-                            static_cast<int>(convex_hull.vertices.nb()),
-                            static_cast<int>(3 * sizeof(float))
-                        );
-
-                        if (motion_mode != erhe::physics::Motion_mode::e_none) {
-                            entry.after.collision_shape = collision_shape;
-                            entry.after.motion_mode     = motion_mode;
-                        }
+                    // A result geometry with no volume has no convex hull and
+                    // the result mesh is left without a rigid body.
+                    std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = make_convex_hull_collision_shape(*after_geometry);
+                    if (collision_shape && (motion_mode != erhe::physics::Motion_mode::e_none)) {
+                        entry.after.collision_shape = collision_shape;
+                        entry.after.motion_mode     = motion_mode;
                     }
                 }
 
@@ -420,6 +400,28 @@ void Mesh_operation::make_entries(
 #if !defined(NDEBUG)
     scene.sanity_check();
 #endif
+}
+
+auto Mesh_operation::make_convex_hull_collision_shape(const erhe::geometry::Geometry& geometry) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    GEO::Mesh convex_hull{};
+    // make_convex_hull() logs the reason when the geometry has no volume.
+    if (!make_convex_hull(geometry.get_mesh(), convex_hull)) {
+        return {};
+    }
+    std::vector<float> coordinates;
+    coordinates.resize(convex_hull.vertices.nb() * 3);
+    for (GEO::index_t vertex : convex_hull.vertices) {
+        const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+        coordinates[3 * vertex + 0] = p.x;
+        coordinates[3 * vertex + 1] = p.y;
+        coordinates[3 * vertex + 2] = p.z;
+    }
+    return erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+        coordinates.data(),
+        static_cast<int>(convex_hull.vertices.nb()),
+        static_cast<int>(3 * sizeof(float))
+    );
 }
 
 auto Mesh_operation::capture_physics(const erhe::scene::Node& node) -> Mesh_operation::Entry::Version

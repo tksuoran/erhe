@@ -146,6 +146,9 @@ live, non-empty selection of its own set
 | `Geometry.Delete.Selected` | Delete | Delete the selection: vertices in vertex mode, edges in edge mode, faces in face mode |
 | `Geometry.Dissolve.Selected` | Ctrl+X | Dissolve the selection: vertices, edges or faces by mode, with the Operations window's dissolve options |
 | `Geometry.Merge.AtCenter` | M | Merge the selection's vertices at their center (any of vertex, edge, face mode) |
+| `Geometry.Split.Selected` | Y | Split the selection off the rest (face mode: the faces; vertex / edge mode: the faces fully selected; edge mode without a complete face: tear along the edges) |
+| `Geometry.Rip.Selected` | V | Rip the selected vertices (vertex mode) or edges (edge mode), ripping the side toward the last hovered content point |
+| `Geometry.Separate.Selection` | P | Move the selection's faces into a new mesh beside the original |
 
 The object `Selection` binds the same keys (`Selection.delete`,
 `Selection.cut`); both of its commands decline in that state and the two
@@ -155,7 +158,9 @@ buttons and `Geometry.Delete.*` / `Geometry.Dissolve.*` commands
 (`doc/editor/operations.md`). Blender's M opens a merge menu; the editor has
 no popup menu, so M merges at center and the other merge types are the
 Operations window's Components buttons and `Geometry.Merge.*` commands. M
-declines (the key falls through) without a live component selection.
+declines (the key falls through) without a live component selection. Y, V
+and P are bound with the modifier mask 0 (Ctrl+Y is redo, Ctrl+V paste) and
+decline the same way (V also outside vertex and edge mode).
 
 ### Slide keys
 
@@ -288,8 +293,17 @@ command ends with a flush (section 3).
 - `inset_mesh_faces` - `thickness`, `depth` and the option booleans: the
   numeric inset of `doc/editor/mesh_modeling.md` on the live face
   selection (topology, placement, one undo entry).
+- `split_mesh_components` - no options; needs a live selection in vertex,
+  edge or face mode (`Split_components_operation`, `doc/editor/operations.md`).
+- `rip_mesh_vertices` - optional `direction` ([x, y, z] in the mesh's local
+  space; the side toward it is ripped, omitted: the library's deterministic
+  side); needs a live selection in vertex or edge mode.
+- `separate_mesh_selection` - no options; needs a live selection holding a
+  complete face; returns `node_id` and `node_name` of the new node (`nodes`
+  lists one per separated mesh), which joins the scene when the queued
+  operation runs.
 
-The six geometry tools queue an undoable operation and return
+The geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
 / `node_id` / `node_name` + `scene_name`) override the object selection as
 for `merge_faces`.

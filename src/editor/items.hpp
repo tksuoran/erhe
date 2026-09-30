@@ -1,15 +1,19 @@
 #include "content_library/content_library.hpp"
 
+#include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <cstddef>
 #include <memory>
+#include <set>
+#include <unordered_map>
 #include <vector>
 
 namespace editor {
 
+class App_context;
 class Mesh_operation_parameters;
 
 template <typename T>
@@ -78,6 +82,17 @@ void async_for_nodes_with_mesh(
     const std::vector<std::shared_ptr<erhe::Item_base>>& items,
     std::function<void(Mesh_operation_parameters&&)>     op,
     bool                                                 op_builds_gpu_meshes = true
+);
+
+// Snapshots the live mesh-component selection of the active component mode,
+// keyed by the Geometry its indices index into (main thread only: the
+// Mesh_component_selection store is mutated there). selected_facets receives
+// the face mode facets, component_selection the active mode's set. Both are
+// cleared first; outside the component modes they stay empty.
+void snapshot_component_selection(
+    const App_context&                                                                                             context,
+    std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>>&                                  selected_facets,
+    std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection>& component_selection
 );
 
 // Drops the handles of completed async tasks. A retained tf::AsyncTask

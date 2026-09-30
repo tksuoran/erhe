@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/split_components.hpp`:
+  `split_facets()`, `split_edges()`, `rip_vertices()` with `Rip_options`,
+  `extract_facets()` and `get_selection_facets()`: split, rip and separate of
+  `doc/plans/mesh_modeling.md` catalog M9, composed on `Edit_mesh`, carrying a
+  component selection through `Component_remap` (split and rip select the
+  duplicated side).
 - `erhe::geometry`: `erhe_geometry/operation/inset_faces.hpp`: `inset_faces()`
   with `Inset_faces_options` and `Inset_faces_result`: inset faces of
   `doc/plans/mesh_modeling.md` section 4.8 (region and individual, boundary,

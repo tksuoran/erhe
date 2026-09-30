@@ -20,6 +20,7 @@
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
+#include "operations/separate_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/usd.hpp"
 #include "parsers/physics_export.hpp"
@@ -778,6 +779,9 @@ Operations::Operations(
     , m_merge_collapse_command             {commands, "Geometry.Merge.Collapse",           [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::collapse); } }
     , m_merge_by_distance_command          {commands, "Geometry.Merge.ByDistance",         [this]() -> bool { return merge_by_distance(); } }
     , m_subdivide_edges_command            {commands, "Geometry.Subdivide.Edges",          [this]() -> bool { return subdivide_edges(); } }
+    , m_split_selected_command             {commands, "Geometry.Split.Selected",           [this]() -> bool { return split_components(); } }
+    , m_rip_selected_command               {commands, "Geometry.Rip.Selected",             [this]() -> bool { return rip_vertices(); } }
+    , m_separate_selection_command         {commands, "Geometry.Separate.Selection",       [this]() -> bool { return static_cast<bool>(separate_selection()); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -845,6 +849,9 @@ Operations::Operations(
     commands.register_command(&m_merge_collapse_command);
     commands.register_command(&m_merge_by_distance_command);
     commands.register_command(&m_subdivide_edges_command);
+    commands.register_command(&m_split_selected_command);
+    commands.register_command(&m_rip_selected_command);
+    commands.register_command(&m_separate_selection_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -909,6 +916,9 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_merge_collapse_command,              "Geometry.Merge Vertices.Collapse");
     commands.bind_command_to_menu(&m_merge_by_distance_command,           "Geometry.Merge Vertices.By Distance");
     commands.bind_command_to_menu(&m_subdivide_edges_command,             "Geometry.Subdivide Edges");
+    commands.bind_command_to_menu(&m_split_selected_command,              "Geometry.Split");
+    commands.bind_command_to_menu(&m_rip_selected_command,                "Geometry.Rip");
+    commands.bind_command_to_menu(&m_separate_selection_command,          "Geometry.Separate Selection");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -942,6 +952,12 @@ Operations::Operations(
     // merge at center and the Components section offers the other types.
     // Declines (falls through) without a live component selection.
     commands.bind_command_to_key(&m_merge_at_center_command, erhe::window::Key_m, erhe::commands::Button_trigger::Button_pressed);
+    // Y split, V rip, P separate (doc/plans/mesh_modeling.md D7), without
+    // modifiers (Ctrl+Y is redo, Ctrl+V paste). Each declines (falls through)
+    // without a live component selection in a mode it reads.
+    commands.bind_command_to_key(&m_split_selected_command,     erhe::window::Key_y, erhe::commands::Button_trigger::Button_pressed, 0u);
+    commands.bind_command_to_key(&m_rip_selected_command,       erhe::window::Key_v, erhe::commands::Button_trigger::Button_pressed, 0u);
+    commands.bind_command_to_key(&m_separate_selection_command, erhe::window::Key_p, erhe::commands::Button_trigger::Button_pressed, 0u);
 
     // Parameterized invokers for operations that can be dragged into / invoked from
     // an inventory slot. Each thunk runs its operation with the explicit snapshot
@@ -1459,6 +1475,34 @@ void Operations::imgui()
             ImGui::Checkbox ("Individual",      &m_inset_options.individual);
             ImGui::Checkbox ("Interpolate",     &m_inset_options.interpolate);
             ImGui::PopID();
+        }
+        if (visible("Split")) {
+            if (make_button("Split", merge_component_mode, button_size)) {
+                split_components();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Disconnects the selected faces from the rest (edge mode without a complete face: tears along the edges) (Y)");
+            }
+        }
+        if (visible("Rip")) {
+            const erhe::imgui::Item_mode rip_mode =
+                ((vertex_component_mode == erhe::imgui::Item_mode::normal) || (edge_component_mode == erhe::imgui::Item_mode::normal))
+                    ? erhe::imgui::Item_mode::normal
+                    : erhe::imgui::Item_mode::disabled;
+            if (make_button("Rip", rip_mode, button_size)) {
+                rip_vertices();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Tears the selected vertices / edges apart, ripping the side toward the last hovered point (V)");
+            }
+        }
+        if (visible("Separate")) {
+            if (make_button("Separate", merge_component_mode, button_size)) {
+                separate_selection();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Moves the selected faces into a new mesh beside the original (P)");
+            }
         }
     }
 
@@ -3042,6 +3086,114 @@ auto Operations::subdivide_edges(const erhe::geometry::operation::Subdivide_edge
         true
     );
     return true;
+}
+
+namespace {
+
+// True when a vertex, edge or face mode is active with a live selection;
+// logs the reason otherwise.
+[[nodiscard]] auto has_component_mode_selection(const App_context& context, const char* operation_name) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
+        log_operations->info("{} needs a mesh component mode (vertex, edge or face)", operation_name);
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
+        return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+auto Operations::split_components() -> bool
+{
+    if (!has_component_mode_selection(m_context, "Split")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Split_components_operation>(std::move(params))
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::rip_vertices() -> bool
+{
+    std::optional<glm::vec3> world_position{};
+    if (m_context.mesh_component_selection_tool != nullptr) {
+        world_position = m_context.mesh_component_selection_tool->get_hovered_content_position();
+    }
+    return rip_vertices(erhe::geometry::operation::Rip_options{}, world_position);
+}
+
+auto Operations::rip_vertices(
+    const erhe::geometry::operation::Rip_options options,
+    const std::optional<glm::vec3>               world_position
+) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge)) {
+        log_operations->info("Rip needs vertex or edge mode");
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("Rip: nothing selected in {} mode", c_str(mode));
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options, world_position](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Rip_vertices_operation>(std::move(params), options, world_position)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::separate_selection() -> std::shared_ptr<Separate_selection_operation>
+{
+    if (!has_component_mode_selection(m_context, "Separate")) {
+        return {};
+    }
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(true, Operation_reference::operands_only, items) || items.empty()) {
+        log_operations->info("Separate: no mesh to act on");
+        return {};
+    }
+    Separate_selection_operation::Parameters parameters{
+        .context    = m_context,
+        .items      = std::move(items),
+        .build_info = {
+            .primitive_types{
+                .fill_triangles  = true,
+                .fill_triangles_expanded = true,
+                .edge_lines      = true,
+                .corner_points   = true,
+                .centroid_points = true
+            },
+            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+        },
+        .component_selection = {}
+    };
+    std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets;
+    snapshot_component_selection(m_context, selected_facets, parameters.component_selection);
+    std::shared_ptr<Separate_selection_operation> operation = std::make_shared<Separate_selection_operation>(std::move(parameters));
+    if (operation->is_empty()) {
+        log_operations->info("Separate: the selection holds no complete face");
+        return {};
+    }
+    m_context.operation_stack->queue(operation);
+    return operation;
 }
 
 auto Operations::get_target_scene_root() -> std::shared_ptr<Scene_root>

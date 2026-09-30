@@ -14,6 +14,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
+#include "operations/separate_operation.hpp"
 #include "operations/set_edge_sharpness_operation.hpp"
 #include "operations/set_geometry_attribute_operation.hpp"
 #include "renderers/id_renderer.hpp"
@@ -31,6 +32,7 @@
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
@@ -2311,6 +2313,88 @@ auto Mcp_server::query_mesh_buffer_data(const json& args) -> std::string
     };
     if (buffer_kind == "vertex") {
         result["stream"] = stream_index;
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_split_mesh_components(const json& args) -> std::string
+{
+    // Split (Y, doc/plans/mesh_modeling.md catalog M9) on the live component
+    // selection of the current mode.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->split_components();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Split needs a live selection in a mesh component mode (vertex, edge or face)");
+    }
+    return make_json_content({{"queued", true}}).dump();
+}
+
+auto Mcp_server::action_rip_mesh_vertices(const json& args) -> std::string
+{
+    // Rip (V, catalog M9) on the live vertex or edge mode selection. The
+    // optional direction is mesh-local (the side toward it is ripped); without
+    // it the library picks the side (erhe::geometry::operation::rip_vertices()).
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Rip_options options{};
+    if (args.contains("direction")) {
+        const json& direction = args["direction"];
+        if (!direction.is_array() || (direction.size() != 3)) {
+            return make_error_content("direction must be [x, y, z] (mesh-local)");
+        }
+        options.direction = GEO::vec3f{direction[0].get<float>(), direction[1].get<float>(), direction[2].get<float>()};
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->rip_vertices(options, std::nullopt);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Rip needs a live selection in vertex or edge mode");
+    }
+    return make_json_content({
+        {"queued",    true},
+        {"direction", {options.direction.x, options.direction.y, options.direction.z}}
+    }).dump();
+}
+
+auto Mcp_server::action_separate_mesh_selection(const json& args) -> std::string
+{
+    // Separate (P, catalog M9): the selected faces become a new mesh node
+    // beside the original. The operation is queued; the new node joins the
+    // scene when the operation stack runs it (the next frame).
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    std::shared_ptr<Separate_selection_operation> operation;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        operation = m_context.operations->separate_selection();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!operation) {
+        return make_error_content("Separate needs a live selection in a mesh component mode holding at least one complete face");
+    }
+    json nodes = json::array();
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : operation->get_separated_meshes()) {
+        nodes.push_back({{"node_id", mesh->get_id()}, {"node_name", mesh->get_name()}});
+    }
+    json result = {{"queued", true}, {"nodes", nodes}};
+    if (nodes.size() == 1) {
+        result["node_id"]   = nodes[0]["node_id"];
+        result["node_name"] = nodes[0]["node_name"];
     }
     return make_json_content(result).dump();
 }

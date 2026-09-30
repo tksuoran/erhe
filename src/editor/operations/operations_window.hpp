@@ -21,6 +21,7 @@
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "windows/property_editor.hpp"
 
@@ -85,6 +86,7 @@ struct Tool_slot
 class App_context;
 class App_message_bus;
 class Scene_root;
+class Separate_selection_operation;
 
 // Obstacles the Add Joint initial-orientation search treats as blocking when
 // looking for a non-intersecting placement.
@@ -251,6 +253,20 @@ public:
     // numeric form of Mesh_component_selection_tool::inset() on the live face
     // selection. False when refused (logged).
     auto inset_faces() -> bool;
+    // Split (Y), rip (V) and separate (P) of doc/plans/mesh_modeling.md catalog
+    // M9 on the mesh-component selection; each returns false (separate: an
+    // empty pointer), queueing nothing, without a live selection in a mode it
+    // reads. Split reads vertex, edge and face mode (Split_components_operation);
+    // rip vertex and edge mode, the no-argument form ripping toward the
+    // component tool's last hovered content point (Rip_options::direction
+    // zero when there is none), the options form taking world_position or,
+    // without it, options.direction in mesh-local space; separate reads
+    // vertex, edge and face mode and returns the queued operation (its
+    // get_separated_meshes() names the new meshes).
+    auto split_components() -> bool;
+    auto rip_vertices() -> bool;
+    auto rip_vertices(erhe::geometry::operation::Rip_options options, std::optional<glm::vec3> world_position) -> bool;
+    auto separate_selection() -> std::shared_ptr<Separate_selection_operation>;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -440,6 +456,9 @@ private:
     erhe::commands::Lambda_command m_merge_collapse_command;
     erhe::commands::Lambda_command m_merge_by_distance_command;
     erhe::commands::Lambda_command m_subdivide_edges_command;
+    erhe::commands::Lambda_command m_split_selected_command;
+    erhe::commands::Lambda_command m_rip_selected_command;
+    erhe::commands::Lambda_command m_separate_selection_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).

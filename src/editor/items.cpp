@@ -52,6 +52,57 @@ void purge_completed_item_async_tasks()
     purge_completed_tasks();
 }
 
+void snapshot_component_selection(
+    const App_context&                                                                                             context,
+    std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>>&                                  selected_facets,
+    std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection>& component_selection
+)
+{
+    selected_facets.clear();
+    component_selection.clear();
+    if (context.mesh_component_selection != nullptr) {
+        const Mesh_component_mode mode = context.mesh_component_selection->get_mode();
+        if (is_mesh_component_mode(mode)) {
+            for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
+                if (!context.mesh_component_selection->is_live(entry)) {
+                    continue;
+                }
+                const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+                if (!geometry) {
+                    continue;
+                }
+                switch (mode) {
+                    case Mesh_component_mode::face: {
+                        if (entry.facets.empty()) {
+                            continue;
+                        }
+                        selected_facets[geometry.get()]            = entry.facets;
+                        component_selection[geometry.get()].facets = entry.facets;
+                        break;
+                    }
+                    case Mesh_component_mode::vertex: {
+                        if (entry.vertices.empty()) {
+                            continue;
+                        }
+                        component_selection[geometry.get()].vertices = entry.vertices;
+                        break;
+                    }
+                    case Mesh_component_mode::edge: {
+                        if (entry.edges.empty()) {
+                            continue;
+                        }
+                        component_selection[geometry.get()].edges = entry.edges;
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void async_for_nodes_with_mesh(
     App_context&                                                context,
     const std::vector<std::shared_ptr<erhe::Item_base>>&        input_items,
@@ -128,47 +179,7 @@ void async_for_nodes_with_mesh(
     // components of the active mode so the operation can remap them onto its result.
     std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets;
     std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection> component_selection;
-    if (context.mesh_component_selection != nullptr) {
-        const Mesh_component_mode mode = context.mesh_component_selection->get_mode();
-        if (is_mesh_component_mode(mode)) {
-            for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
-                if (!context.mesh_component_selection->is_live(entry)) {
-                    continue;
-                }
-                const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
-                if (!geometry) {
-                    continue;
-                }
-                switch (mode) {
-                    case Mesh_component_mode::face: {
-                        if (entry.facets.empty()) {
-                            continue;
-                        }
-                        selected_facets[geometry.get()]            = entry.facets;
-                        component_selection[geometry.get()].facets = entry.facets;
-                        break;
-                    }
-                    case Mesh_component_mode::vertex: {
-                        if (entry.vertices.empty()) {
-                            continue;
-                        }
-                        component_selection[geometry.get()].vertices = entry.vertices;
-                        break;
-                    }
-                    case Mesh_component_mode::edge: {
-                        if (entry.edges.empty()) {
-                            continue;
-                        }
-                        component_selection[geometry.get()].edges = entry.edges;
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    snapshot_component_selection(context, selected_facets, component_selection);
 
     ++context.pending_async_ops;
     auto run_operation =

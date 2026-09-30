@@ -527,7 +527,7 @@ feature needs to matter a lot to rank. Dependencies name the catalog id;
 | M6 | Edge slide and vertex slide transform modes (4.6) | 4 | 3 | 5 | M0 |
 | M5 | Loop cut with ring preview, cut count, chained edge slide (4.5) | 5 | 2 | 8 | M2, M6, M8 |
 | M7 | Inset region and individual with every option (4.8) | 4 | 2 | 6 | M0 |
-| M9 | Split (Y), rip (V, `separate_vertex`), separate selection into a new mesh (P) | 3 | 2 | 4 | M0 |
+| M9 | Split (Y), rip (V, `separate_vertex`), separate selection into a new mesh (P); separate by loose parts and by material are not implemented | 3 | 2 | 4 | M0 |
 | M10 | Flip selected facets, recalculate normals outside, smooth selected vertices | 2 | 1 | 3 | - |
 | M11 | `Screen_snap`: vertex, edge and midpoint snap for the knife and the move mode (D5) | 3 | 2 | 4 | - |
 | M12 | Knife (4.7), without knife project | 4 | 5 | 3 | M0, M11 |

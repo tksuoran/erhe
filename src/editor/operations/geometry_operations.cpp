@@ -21,6 +21,7 @@
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
+#include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
 #include "erhe_geometry/operation/csg/union.hpp"
@@ -530,6 +531,87 @@ Subdivide_edges_operation::Subdivide_edges_operation(
         }
     );
     set_description(fmt::format("Subdivide Edges ({} cuts) {}", options.cuts, describe_entries()));
+}
+
+Split_components_operation::Split_components_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Split");
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            // The snapshot holds the active mode's set only: edges => edge
+            // mode, where edges holding no complete facet split as edges.
+            if (!selection.edges.empty()) {
+                std::set<GEO::index_t> facets;
+                erhe::geometry::operation::get_selection_facets(before_geometry, selection, facets);
+                if (facets.empty()) {
+                    erhe::geometry::operation::split_edges(before_geometry, after_geometry, selection.edges, &remap);
+                    return;
+                }
+            }
+            erhe::geometry::operation::split_facets(before_geometry, after_geometry, selection, &remap);
+        }
+    );
+    set_description(fmt::format("Split {}", describe_entries()));
+}
+
+Rip_vertices_operation::Rip_vertices_operation(
+    Mesh_operation_parameters&&                  context,
+    const erhe::geometry::operation::Rip_options options,
+    const std::optional<glm::vec3>               world_position
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Rip");
+    make_entries(
+        [options, world_position](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              node,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            erhe::geometry::operation::Rip_options entry_options = options;
+            if (world_position.has_value() && (node != nullptr)) {
+                // Toward the point from the centroid of the torn vertices.
+                std::set<GEO::index_t> torn = selection.vertices;
+                if (torn.empty()) {
+                    for (const std::pair<GEO::index_t, GEO::index_t>& edge : selection.edges) {
+                        torn.insert(edge.first);
+                        torn.insert(edge.second);
+                    }
+                }
+                const GEO::Mesh& mesh = before_geometry.get_mesh();
+                GEO::vec3f centroid{0.0f, 0.0f, 0.0f};
+                std::size_t count = 0;
+                for (const GEO::index_t vertex : torn) {
+                    if (vertex < mesh.vertices.nb()) {
+                        centroid += erhe::geometry::get_pointf(mesh.vertices, vertex);
+                        ++count;
+                    }
+                }
+                if (count > 0) {
+                    centroid = centroid / static_cast<float>(count);
+                    const glm::vec3 local_position = node->transform_point_from_world_to_local(world_position.value());
+                    entry_options.direction = GEO::vec3f{local_position.x, local_position.y, local_position.z} - centroid;
+                }
+            }
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::rip_vertices(before_geometry, after_geometry, selection, entry_options, &remap);
+        }
+    );
+    set_description(fmt::format("Rip {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

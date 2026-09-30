@@ -415,6 +415,8 @@ erhe_target_sources_grouped(
     operations/paint_colors_operation.hpp
     operations/paint_weights_operation.cpp
     operations/paint_weights_operation.hpp
+    operations/separate_operation.cpp
+    operations/separate_operation.hpp
     operations/flip_joint_operation.cpp
     operations/flip_joint_operation.hpp
     operations/fork_geometry_operation.cpp

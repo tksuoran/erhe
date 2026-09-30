@@ -4,7 +4,9 @@
 doc/editor/operations.md "Primitive swaps keep the node in place": the
 operations that swap a mesh's primitives (Mesh_operation,
 Set_geometry_attribute, Move_mesh_vertices, Fork_geometry, Merge) leave the
-Scene Hierarchy's sibling order as it was, on execute and on undo.
+Scene Hierarchy's sibling order as it was, on execute and on undo. Separate
+(Separate_selection_operation) inserts its new node right after the original
+and undo takes it out again.
 
 Launches a headless editor (ERHE_AI_DRIVER=1), creates three boxes and after
 every operation and every undo compares the get_scene_nodes order against the
@@ -132,8 +134,15 @@ def run_checks(e):
     e.call("set_window_visibility", {"title": "Operations", "visible": True, "focus": True})
     e.advance(3)
     e.select([BOXES[0], BOXES[2]])
+    # The Components section is tall enough to push the later sections below
+    # the window's visible area (items there are not submitted); collapse it
+    # for the click and open it again after.
+    e.call("imgui_click", {"window": "Operations", "label": "Components"})
+    e.advance(3)
     e.call("imgui_click", {"window": "Operations", "label": "Merge"})
     e.advance(5)
+    e.call("imgui_click", {"window": "Operations", "label": "Components"})
+    e.advance(3)
     merged = e.order()
     remaining = [entry for entry in merged if entry[1] in BOXES]
     check_true(f"Merge removed one source ({e.top_undo()})", len(remaining) == 2, f"{remaining}")
@@ -142,6 +151,24 @@ def run_checks(e):
                "" if kept else f"baseline {[n for _, n in baseline]}, merged {[n for _, n in merged]}")
     e.undo()
     check_order(e, "Merge undo restores the sources at their places", baseline)
+
+    # Separate one face of the middle box: the new node goes right after it,
+    # under the same parent; undo takes it out.
+    e.select([])
+    e.call("select_mesh_components", {"scene_name": e.scene, "node_name": middle, "mode": "face", "facets": [0]})
+    e.advance(3)
+    result = e.call("separate_mesh_selection", {})
+    e.advance(5)
+    new_name = result.get("node_name", "")
+    middle_entry = next(entry for entry in baseline if entry[1] == middle)
+    expected = list(baseline)
+    expected.insert(baseline.index(middle_entry) + 1, (middle_entry[0], new_name))
+    check_order(e, f"Separate inserts '{new_name}' right after the original ({e.top_undo()})", expected)
+    e.undo()
+    check_order(e, "Separate undo removes the new node", baseline)
+    e.call("clear_mesh_component_selection", {})
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.advance(3)
 
 
 def main():

@@ -34,6 +34,11 @@ two adjacent facets, every facet, individual on two facets), each with the
 selection afterwards and one undo step, and through the I key in a viewport
 (move + Enter: one "Inset" undo entry; move + Escape: unchanged, no entry;
 the I and E option keys re-running the topology step).
+Split, rip and separate (catalog M9) are checked on the plain box:
+split_mesh_components of one face and of one edge (edge split), rip_mesh_vertices
+of one vertex and of one edge, separate_mesh_selection of one face (the new
+node's place in the hierarchy, its counts, undo and redo), each with undo, and
+the Y, V and P keys in a viewport.
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -1343,6 +1348,139 @@ def run_inset(e):
     e.advance(2)
 
 
+def scene_node_order(e):
+    """(parent id, name) of every node, in scene tree walk order."""
+    nodes = e.call("get_scene_nodes", {"scene_name": e.scene})["nodes"]
+    return [(node.get("parent_id"), node["name"]) for node in nodes]
+
+
+def run_split_rip_separate(e):
+    """Split (Y), rip (V) and separate (P), doc/plans/mesh_modeling.md catalog M9."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("split / rip / separate: plain box at its base counts", geometry_counts(e, BOX), base)
+
+    # Split one face: its 4 vertices and 4 edges duplicate.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    e.call("split_mesh_components")
+    wait_idle(e)
+    expect("split one face -> (12, 16, 6)", geometry_counts(e, BOX), (12, 16, 6))
+    expect("split one face: the face stays selected",
+           entry_of(e.call("get_mesh_component_selection"), BOX)["facets"], [0])
+    undo_and_check(e, "split one face", BOX, base)
+
+    # Edge mode without a complete face: edge split. Each endpoint (a corner
+    # of valence 3) tears along one more edge: +2 vertices, +3 edges.
+    select_on(e, BOX, facets=[0])
+    seed_edge = entry_of(e.call("get_mesh_component_selection"), BOX)["edges"][0]
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[seed_edge])
+    e.call("split_mesh_components")
+    wait_idle(e)
+    expect("edge split of one edge -> (10, 15, 6)", geometry_counts(e, BOX), (10, 15, 6))
+    expect("edge split: one edge selected (the torn side's copy)",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["edges"]), 1)
+    undo_and_check(e, "edge split", BOX, base)
+
+    # Rip one vertex (vertex mode, no selected edge): it tears along its two
+    # edges nearest to the direction.
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=[0])
+    result = e.call("rip_mesh_vertices", {"direction": [1.0, 1.0, 1.0]})
+    expect("rip_mesh_vertices echoes the direction", result.get("direction"), [1.0, 1.0, 1.0])
+    wait_idle(e)
+    expect("rip one vertex along two edges -> (9, 14, 6)", geometry_counts(e, BOX), (9, 14, 6))
+    expect("rip one vertex: one ripped vertex selected",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["vertices"]), 1)
+    undo_and_check(e, "rip one vertex", BOX, base)
+
+    # Rip one edge (edge mode): same tear as the edge split.
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[seed_edge])
+    e.call("rip_mesh_vertices")
+    wait_idle(e)
+    expect("rip one edge -> (10, 15, 6)", geometry_counts(e, BOX), (10, 15, 6))
+    undo_and_check(e, "rip one edge", BOX, base)
+
+    # Rip is refused in face mode.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    try:
+        e.call("rip_mesh_vertices")
+        check_true("rip in face mode is refused", False, "no error")
+    except RuntimeError:
+        check_true("rip in face mode is refused", True)
+
+    # Separate one face into a new node right after the box.
+    order_before = scene_node_order(e)
+    undo_before = undo_count(e)
+    select_on(e, BOX, facets=[0])
+    result = e.call("separate_mesh_selection")
+    new_name = result.get("node_name", "")
+    expect("separate_mesh_selection names the new node", new_name, f"{BOX} separated")
+    wait_idle(e)
+    expect("separate: one undo entry", undo_count(e), undo_before + 1)
+    expect("separate: the original -> (8, 12, 5)", geometry_counts(e, BOX), (8, 12, 5))
+    expect("separate: the new node -> (4, 4, 1)", geometry_counts(e, new_name), (4, 4, 1))
+    order = scene_node_order(e)
+    box_entry = next((entry for entry in order if entry[1] == BOX), None)
+    new_index = next((i for i, entry in enumerate(order) if entry[1] == new_name), None)
+    box_index = order.index(box_entry) if box_entry is not None else None
+    check_true("separate: the new node is right after the original, same parent",
+               (new_index is not None) and (box_index is not None) and (new_index == box_index + 1)
+               and (order[new_index][0] == box_entry[0]), str(order))
+    check_true("separate: the other nodes keep their order",
+               [entry for entry in order if entry[1] != new_name] == order_before, str(order))
+    expect("separate: the original's component selection is empty",
+           counts_of(e.call("get_mesh_component_selection"), BOX), (0, 0, 0))
+    e.call("undo")
+    wait_idle(e)
+    expect("separate undo: the original -> (8, 12, 6)", geometry_counts(e, BOX), base)
+    expect("separate undo: the new node is gone, the order restored", scene_node_order(e), order_before)
+    e.call("redo")
+    wait_idle(e)
+    expect("separate redo: the original -> (8, 12, 5)", geometry_counts(e, BOX), (8, 12, 5))
+    expect("separate redo: the new node -> (4, 4, 1)", geometry_counts(e, new_name), (4, 4, 1))
+    expect("separate redo: the new node is back at its place", scene_node_order(e), order)
+    e.call("undo")
+    wait_idle(e)
+    expect("separate undo after redo: the order restored", scene_node_order(e), order_before)
+
+    # The keys, with the pointer over the box in a viewport.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    e.key("y", [])
+    wait_idle(e)
+    expect("Y in face mode splits the face -> (12, 16, 6)", geometry_counts(e, BOX), (12, 16, 6))
+    undo_and_check(e, "Y", BOX, base)
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, BOX, vertices=[0])
+    e.key("v", [])
+    wait_idle(e)
+    expect("V in vertex mode rips the vertex -> (9, 14, 6)", geometry_counts(e, BOX), (9, 14, 6))
+    undo_and_check(e, "V", BOX, base)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    e.key("p", [])
+    wait_idle(e)
+    expect("P in face mode separates the face -> (8, 12, 5)", geometry_counts(e, BOX), (8, 12, 5))
+    undo_and_check(e, "P", BOX, base)
+    expect("P undo: the order restored", scene_node_order(e), order_before)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX,
+                                  "translation": [0.0, 1.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    e.advance(2)
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -1436,6 +1574,8 @@ def run(e):
     run_loop_cut(e)
 
     run_inset(e)
+
+    run_split_rip_separate(e)
 
 
 def main():

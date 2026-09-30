@@ -7306,6 +7306,97 @@
     "name": "inset_mesh_faces"
   },
   {
+    "description": "Blender split (Y, doc/plans/mesh_modeling.md catalog M9), queued and undoable: the faces of the active mesh-component selection are disconnected from the rest of the mesh (face mode: the selected faces; vertex mode: the faces whose vertices are all selected; edge mode: the faces whose edges are all selected). Every vertex the region shares with the rest is duplicated, the region keeps the copies, positions stay. In edge mode, when the selected edges hold no complete face, the mesh is torn along the selected edges instead (edge split: each endpoint separated, a run end along the edge's continuation). The region (or the torn side's copies of the edges) is selected afterwards. An error without a live selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "split_mesh_components"
+  },
+  {
+    "description": "Blender rip (V, catalog M9), queued and undoable: tears the mesh at the selected vertices (vertex mode; the cut is the edges between two selected vertices) or at the endpoints of the selected edges (edge mode; the cut is the selected edges). Each torn vertex separates into one vertex per fan of faces between cut edges; a run end is cut along the edge's continuation, and a vertex without a cut edge along its two edges nearest to direction. The side toward direction is ripped and selected afterwards (vertex mode: the ripped vertices; edge mode: the ripped copies of the edges); positions stay. An error without a live vertex or edge mode selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "direction": {
+          "description": "Mesh-local direction toward the side that is ripped off, [x, y, z]. Omitted: a deterministic side (the walk direction of each cut run; for a vertex without selected edges, toward its first facet)",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "rip_mesh_vertices"
+  },
+  {
+    "description": "Blender separate selection (P, catalog M9), queued and undoable as one entry: the faces of the active mesh-component selection (face mode: the selected faces; vertex / edge mode: the faces whose vertices / edges are all selected) move into a new mesh node '<original> separated' under the same parent, right after the original, with the same transform, material per primitive and flags; the original loses them (with their edges and vertices no other face uses). Both keep every attribute. The object selection is unchanged; the component selection of the original is empty afterwards. Separate by loose parts and by material are not offered. Returns node_id and node_name of the new node (nodes lists every new node when several meshes were separated); the node joins the scene when the queued operation runs (the next frame). An error without a live selection holding a complete face. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "separate_mesh_selection"
+  },
+  {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",
     "inputSchema": {
       "properties": {
