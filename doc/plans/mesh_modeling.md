@@ -177,8 +177,17 @@ buffer in end-to-end order:
     otherwise stop. Facet size plays no part, so triangles and n-gons at a
     valence-4 vertex still yield the opposite edge. Stop at a vertex of any
     other valence, at an already visited edge, and at a crease delimit: a
-    crease (`edge_sharpness` present) edge continues only onto crease
-    edges, and a plain edge stops when any edge at `v` is a crease.
+    crease (`edge_sharpness` above 0) edge continues only onto crease
+    edges, and a plain edge stops when any edge at `v` is a crease. So on
+    a cube, whose vertices all have valence 3, the loop is the seed edge
+    alone.
+  - Hub seed: an interior seed with an end vertex of valence 3 and exactly
+    three facets takes the largest facet of the seed edge as its hub when
+    that facet has more than four corners. With a hub, every step continues
+    only at a vertex of valence 3, onto the edge from it to its other
+    neighbour in the hub facet, and that edge is not a boundary edge; the
+    hub is fixed by the seed for both directions. A pentagon cap on a prism
+    is a hub, so the loop from a cap edge is the cap's five edges.
   - Boundary seed: follow boundary edges. Stop at a convex corner (valence
     2, "outer corners" delimit, the default) and at a non-manifold edge;
     a vertex of valence 3 or more continues onto the next boundary edge
