@@ -393,6 +393,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [reference/agfx_comparison.md](reference/agfx_comparison.md): agfx vs erhe::graphics feature comparison, features to adopt, feasibility of agfx as a backend
 - [reference/aimd_comparison.md](reference/aimd_comparison.md): AIMD immediate-mode debug renderer vs erhe Debug_renderer: comparison table, strengths and weaknesses, what each could borrow
 - [reference/audit_erhe_2026_06_21.md](reference/audit_erhe_2026_06_21.md): Architecture, foundations and security audit report (2026-06-21)
+- [reference/audit_erhe_2026_09_30.md](reference/audit_erhe_2026_09_30.md): Architecture and API audit synthesis (2026-09-30); six slice reports next to it (editor, rendering, infra, roadmap, graphics, scene)
 - [reference/esoterica_rendering.md](reference/esoterica_rendering.md): Esoterica vs erhe rendering comparison
 - [reference/forge_erhe.md](reference/forge_erhe.md): SDL3 GPU concepts mapped to erhe's graphics API
 - [reference/geogram_atlas_packing_feature_request.md](reference/geogram_atlas_packing_feature_request.md): Feature request to Geogram / xatlas maintainers
