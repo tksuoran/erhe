@@ -18,6 +18,7 @@ add_executable(${_target}
     test_material_prim.cpp
     test_mesh_optimizer.cpp
     test_optimized_variant_build.cpp
+    test_empty_geometry_build.cpp
 )
 
 target_link_libraries(${_target}

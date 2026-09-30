@@ -326,6 +326,13 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh)
     const std::size_t vertex_stride = vertex_stream.stride;
     const std::size_t index_stride = 4;
     const erhe::geometry::Mesh_info mesh_info = erhe::geometry::get_mesh_info(mesh);
+    if (mesh_info.index_count_fill_triangles == 0) {
+        // A mesh with no facets (e.g. a Geometry left with no facets by a
+        // delete or merge operation) has nothing to trace: its raytrace is the
+        // empty one - no buffers, no IGeometry, has_raytrace_triangles() false.
+        // Cpu_buffer has no zero-size state, so none is created.
+        return;
+    }
     // Tail padding of 16 bytes is required by Embree 4 for shared buffers
     static constexpr std::size_t raytrace_buffer_tail_padding = 16;
     m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride, raytrace_buffer_tail_padding);
@@ -776,11 +783,10 @@ auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
 auto Primitive_shape::make_raytrace_build_locked(const GEO::Mesh& mesh) -> bool
 {
     // Build aside, install under the state lock: the BVH build is one of the
-    // long steps the state lock must never be held across.
+    // long steps the state lock must never be held across. A mesh with no
+    // fill triangles builds to the empty raytrace (no IGeometry), which is the
+    // raytrace of that mesh and is installed like any other.
     Primitive_raytrace raytrace{mesh};
-    if (!raytrace.has_raytrace_triangles()) {
-        return false;
-    }
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     m_raytrace = std::move(raytrace);
     return true;

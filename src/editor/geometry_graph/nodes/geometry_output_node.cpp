@@ -236,10 +236,9 @@ void Geometry_output_node::evaluate(Geometry_graph& graph)
 
     // A facet-less geometry (e.g. an out-of-range Conway operation index,
     // a boolean of empty inputs) has nothing to render; treat it like a
-    // disconnected input rather than asking the primitive builder to
-    // build zero-index buffers (which it refuses with a VERIFY abort).
-    // A valid-but-empty result makes apply_evaluated_to_scene() clear
-    // the scene mesh. The ghost bake below still runs.
+    // disconnected input: a valid-but-empty result makes
+    // apply_evaluated_to_scene() clear the scene mesh rather than keep a
+    // mesh with an empty primitive. The ghost bake below still runs.
     if (source && (source->get_mesh().facets.nb() > 0)) {
         const std::shared_ptr<erhe::geometry::Geometry> render_geometry = prepare_render_geometry(source);
 

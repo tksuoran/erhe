@@ -5391,7 +5391,34 @@ private:
     // the Primitive shared_ptrs).
     using Mesh_content_key = std::pair<std::string, std::vector<std::pair<const void*, const void*>>>;
     std::map<Mesh_content_key, std::size_t> m_mesh_content_to_gltf_mesh_index;
-    [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::size_t
+    // Resolves what a Mesh_primitive would export from: the triangle soup
+    // when present (source of truth for imported primitives), else the
+    // geometry; nullptr = the primitive is skipped. Must match the
+    // emission loop in process_mesh(). A Geometry with no facets (a legal
+    // mesh operation result that renders nothing, see doc/erhe/primitive.md)
+    // is skipped: glTF has no empty primitive, every accessor needs a count
+    // of at least one.
+    [[nodiscard]] static auto primitive_export_source(const erhe::scene::Mesh_primitive& erhe_mesh_primitive) -> const void*
+    {
+        const erhe::primitive::Primitive_render_shape* render_shape = erhe_mesh_primitive.primitive ? erhe_mesh_primitive.primitive->render_shape.get() : nullptr;
+        if (render_shape == nullptr) {
+            return nullptr;
+        }
+        const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
+        if (soup) {
+            return soup.get();
+        }
+        const erhe::geometry::Geometry* geometry = render_shape->get_geometry_const().get();
+        if ((geometry == nullptr) || (geometry->get_mesh().facets.nb() == 0)) {
+            return nullptr;
+        }
+        return geometry;
+    }
+
+    // Returns nullopt when no primitive of the mesh exports (see
+    // primitive_export_source()): a glTF mesh needs at least one primitive,
+    // so such a mesh is not exported and its node is written without one.
+    [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::optional<std::size_t>
     {
         ERHE_VERIFY(erhe_mesh != nullptr);
 
@@ -5401,23 +5428,17 @@ private:
             return fi->second;
         }
 
-        // Resolves what a Mesh_primitive would export from: the triangle soup
-        // when present (source of truth for imported primitives), else the
-        // geometry; nullptr = the primitive is skipped. Must match the
-        // emission loop below.
-        const auto primitive_export_source = [](const erhe::scene::Mesh_primitive& erhe_mesh_primitive) -> const void* {
-            const erhe::primitive::Primitive_render_shape* render_shape = erhe_mesh_primitive.primitive ? erhe_mesh_primitive.primitive->render_shape.get() : nullptr;
-            if (render_shape == nullptr) {
-                return nullptr;
-            }
-            const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
-            if (soup) {
-                return soup.get();
-            }
-            return render_shape->get_geometry_const().get();
-        };
-
         const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
+        const bool has_exportable_primitive = std::any_of(
+            erhe_primitives.begin(), erhe_primitives.end(),
+            [](const erhe::scene::Mesh_primitive& erhe_mesh_primitive) {
+                return primitive_export_source(erhe_mesh_primitive) != nullptr;
+            }
+        );
+        if (!has_exportable_primitive) {
+            log_gltf->info("glTF export: mesh '{}' has no exportable primitive - node written without a mesh", erhe_mesh->get_name());
+            return std::nullopt;
+        }
 
         // Meshes carrying caller extension payloads keep a private glTF mesh:
         // collapsing them could merge distinct payloads onto one object.
@@ -5470,6 +5491,10 @@ private:
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive_render_shape->get_geometry_const();
             if (!geometry && !triangle_soup) {
                 log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");
+                continue;
+            }
+            if (primitive_export_source(erhe_mesh_primitive) == nullptr) {
+                log_gltf->info("glTF export: mesh '{}' primitive {} has no facets - skipped", erhe_mesh->get_name(), primitive_index);
                 continue;
             }
             // The triangle soup, when present, is the primitive's source of
@@ -6519,7 +6544,10 @@ private:
             erhe_mesh.reset();
         }
         if (erhe_mesh) {
-            gltf_node.meshIndex = process_mesh(erhe_mesh.get());
+            const std::optional<std::size_t> gltf_mesh_index = process_mesh(erhe_mesh.get());
+            if (gltf_mesh_index.has_value()) {
+                gltf_node.meshIndex = gltf_mesh_index.value();
+            }
         }
 
         // A Camera / Light prim is written as one glTF node with `camera` /
@@ -6646,7 +6674,12 @@ private:
         if (geometry.shape_index.has_value()) {
             out.shape = geometry.shape_index.value();
         } else if (geometry.mesh) {
-            out.mesh = process_mesh(geometry.mesh.get());
+            const std::optional<std::size_t> gltf_mesh_index = process_mesh(geometry.mesh.get());
+            if (!gltf_mesh_index.has_value()) {
+                log_gltf->warn("glTF physics export: '{}' collider geometry mesh has no exportable primitive - skipping", owner_name);
+                return std::nullopt;
+            }
+            out.mesh = gltf_mesh_index.value();
         } else if (geometry.node) {
             const std::optional<std::size_t> node_index = find_gltf_node_index(geometry.node);
             if (!node_index.has_value()) {

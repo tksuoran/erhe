@@ -40,6 +40,31 @@ volume computation, and PBR material definitions.
 - Where the base color and the fragment alpha come from is a material property of its own: `base_color_source` and `opacity_source`, each an `erhe::primitive::Material_input_source`. `value` is the material's own - the factor, times the slot's texture where one is bound, times the mesh's vertex color where the mesh carries one - and is what every glTF material and every plain `UsdPreviewSurface` wants; it is the default and the multiply is unchanged by this property. `vertex_color` is the mesh's color attribute alone: the factor and the texture of that input are not read at all. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` of `displayColor` / `displayOpacity` is what names it (`doc/erhe/usd.md`); glTF has no form for it, so a glTF material never authors one and the exporter writes nothing new. The pair travels to the shader as the `uvec2 input_sources` of the material record.
 - A bound normal texture is decoded as `texel * normal_texture_decode_scale + normal_texture_decode_bias`, two `vec4` properties whose defaults `(2, 2, 2, 2)` and `(-1, -1, -1, -1)` are the mapping glTF fixes and UsdPreviewSurface's fallbacks, so a material that authors neither decodes a 0..1 map into -1..1. USD carries them as the normal slot's `UsdUVTexture` `inputs:scale` and `inputs:bias`; glTF has no field for either, so a glTF import and export leave both at the defaults. The scalar `normal_texture_scale` is a different thing and stays what glTF's `normalTexture.scale` is: the bumpiness multiplier the shader applies to the decoded X and Y.
 
+## Empty primitives
+
+A `Geometry` with no facets is a legal source: mesh operations produce one when
+every face is deleted or a merge by distance collapses the whole mesh, and the
+mesh keeps it as its primitive (the way Blender keeps an empty mesh object).
+A `Primitive` built from it is a valid empty primitive that renders and
+raytraces nothing:
+
+- `build_buffer_mesh()` (and so `Primitive::make_renderable_mesh()`) succeeds
+  with an empty `Buffer_mesh`: no vertex or index buffer ranges, no
+  allocations, every `Index_range` empty. Its bounding box and sphere cover the
+  mesh vertices (a lone vertex left by a merge gives a point box; no vertices
+  give the point box at the origin). Draw lists, the ID renderer, the lightmap
+  baker and the ray trace TLAS read the empty ranges as "nothing to draw".
+- `Primitive_raytrace` of a mesh with no fill triangles holds no buffers and no
+  `IGeometry`; `Primitive::make_raytrace()` succeeds and installs it, and
+  `erhe::scene::Mesh::update_rt_primitives()` creates no raytrace instance for
+  it. `has_renderable_triangles()` and `has_raytrace_triangles()` are false.
+- `Cpu_buffer` has no zero-size state (its constructor verifies a non-zero
+  capacity), so the empty builds create none; no pool allocation of zero
+  elements is made either.
+- The glTF exporter writes no primitive for such a geometry, and a mesh left
+  with no exportable primitive is written as a node without a mesh
+  (`doc/erhe/gltf.md`).
+
 ## Dependencies
 - `erhe::geometry` -- source `Geometry` type
 - `erhe::dataformat` -- `Vertex_format`, `Format` enums

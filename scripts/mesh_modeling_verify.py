@@ -14,7 +14,9 @@ MCP tool and the Delete / Ctrl+X keys, each followed by undo, comparing
 get_mesh_geometry_info counts. Merge (section 4.4) is checked on the
 Catmull-Clark box (at center, collapse, at position with the survivor's
 position read back, the M key) and merge by distance on the plain box, each followed by
-undo. The editor's stderr (where a crash stack goes) is written to
+undo. Operations whose result has no facet (merge by distance of the whole
+box, delete of every face) are checked to leave an empty mesh the editor keeps
+rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
 logs/editor_stderr.txt.
 
 Usage:
@@ -620,8 +622,8 @@ def run_merge(e):
     # The four vertices of one box face, with a threshold above the face
     # diagonal: they form one cluster and collapse to one vertex. The face
     # goes, its four neighbours become triangles, the four side edges stay:
-    # (8 - 3, 12 - 4, 6 - 1). (A threshold that merges the whole box leaves no
-    # facet at all, which the editor cannot hold as a mesh primitive.)
+    # (8 - 3, 12 - 4, 6 - 1). A threshold that merges the whole box is
+    # checked by run_empty_results().
     face_vertices = e.call("get_mesh_attribute_values", {
         "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": [0]
     })["elements"][0]["vertices"]
@@ -633,6 +635,50 @@ def run_merge(e):
     wait_idle(e)
     expect("merge by distance of one face's vertices above its diagonal -> (5, 8, 5)", geometry_counts(e, BOX), (5, 8, 5))
     undo_and_check(e, "merge by distance", BOX, (8, 12, 6))
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
+def run_empty_results(e, process):
+    """Operations whose result has no facet: the mesh keeps an empty
+    primitive that renders and raytraces nothing (doc/erhe/primitive.md
+    "Empty primitives"), the editor keeps running, and undo restores the box."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    expect("empty results: plain box at its base counts", geometry_counts(e, BOX), (8, 12, 6))
+    e.call("select_items", {"scene_name": e.scene, "paths": [BOX]})
+    e.advance()
+
+    def check_alive_and_rendering(label):
+        check_true(f"{label}: editor alive", process.poll() is None, f"exit code {process.poll()}")
+        shot = e.call("capture_screenshot", {})
+        check_true(f"{label}: capture_screenshot works", int(shot.get("width", 0)) > 0, str(shot))
+        image = e.call("render_scene_image", {
+            "camera": {"eye": [0.0, 2.0, 8.0], "target": [0.0, 0.0, 0.0]},
+            "width": 128, "height": 128, "path": "logs/mesh_modeling_empty_result.png"
+        })
+        check_true(f"{label}: render_scene_image works", int(image.get("width", 0)) == 128, str(image)[:200])
+
+    # Merge by distance of the whole box with a threshold above its diagonal:
+    # every vertex joins one cluster, every facet and edge degenerates.
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    e.call("select_all_mesh_components")
+    e.call("merge_mesh_by_distance", {"scene_name": e.scene, "node_name": BOX, "threshold": 2.5})
+    wait_idle(e)
+    expect("merge by distance of the whole box -> (1, 0, 0)", geometry_counts(e, BOX), (1, 0, 0))
+    check_alive_and_rendering("merge to a lone vertex")
+    undo_and_check(e, "merge to a lone vertex", BOX, (8, 12, 6))
+
+    # Delete every face: the now unused vertices and edges go with them.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    e.call("select_all_mesh_components")
+    e.call("delete_mesh_components", {"context": "faces"})
+    wait_idle(e)
+    expect("delete every face -> (0, 0, 0)", geometry_counts(e, BOX), (0, 0, 0))
+    check_alive_and_rendering("delete every face")
+    undo_and_check(e, "delete every face", BOX, (8, 12, 6))
+    check_alive_and_rendering("after undo")
+
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})
 
@@ -737,6 +783,7 @@ def main():
         e.call("create_shape", {"scene_name": scene, "shape": "box", "name": BOX, "steps": [0, 0, 0], "motion_mode": "none"})
         e.advance(4)
         run(e)
+        run_empty_results(e, process)
     finally:
         process.kill()
     return report()

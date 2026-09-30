@@ -515,6 +515,18 @@ auto Primitive_builder::build() -> bool
 
     m_buffer_mesh.vertex_input_key = m_build_info.buffer_info.vertex_input_key;
 
+    if (build_context.is_empty()) {
+        // A mesh with nothing to draw - no facets, so no corner vertices and
+        // no indices of any requested type (e.g. a Geometry left with no
+        // facets by a delete or merge operation) - is a legal source. It builds
+        // to an empty Buffer_mesh: no vertex or index ranges, no allocations,
+        // every Index_range empty, and the bounding volume of the mesh
+        // vertices set by the Build_context constructor. Zero-size pool
+        // allocations do not exist, so nothing is allocated.
+        log_primitive_builder->debug("Primitive_builder::build(): mesh has nothing to draw, built an empty buffer mesh");
+        return true;
+    }
+
     if (!build_context.is_ready()) {
         log_primitive_builder->debug("Primitive_builder::build() aborted because build_context is not ready");
         return false;
@@ -1432,6 +1444,14 @@ auto Build_context::allocate_and_bind_writers() -> bool
         );
     }
     return true;
+}
+
+auto Build_context::is_empty() const -> bool
+{
+    return
+        !root.build_failed &&
+        (root.total_index_count  == 0) &&
+        (root.total_vertex_count == 0);
 }
 
 auto Build_context::is_ready() const -> bool

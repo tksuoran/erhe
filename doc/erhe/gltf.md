@@ -88,6 +88,12 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   skipped with a warning. Two erhe meshes of identical content share one glTF
   mesh, and the extension is per glTF primitive, so the first binding written
   to a primitive wins (the second is warned about).
+- A mesh primitive whose geometry has no facets (an empty primitive, see
+  `doc/erhe/primitive.md` "Empty primitives") is not exported: glTF has no
+  empty primitive (every accessor needs a count of at least one). A mesh left
+  with no exportable primitive is not exported either (a glTF mesh needs at
+  least one primitive); its node is written without `mesh`, and a physics
+  collider whose geometry is such a mesh is skipped with a warning.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,

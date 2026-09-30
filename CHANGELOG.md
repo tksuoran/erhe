@@ -167,6 +167,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::primitive`: a `GEO::Mesh` / `Geometry` with no facets builds to a
+  valid empty primitive instead of failing or aborting: `build_buffer_mesh()`
+  and `Primitive::make_renderable_mesh()` succeed with an empty `Buffer_mesh`
+  (no ranges, no allocations), and `Primitive_raytrace(const GEO::Mesh&)` /
+  `Primitive::make_raytrace()` succeed with no `IGeometry` (previously a
+  zero-size `Cpu_buffer` aborted). `Build_context::is_empty()` added.
+- `erhe::gltf`: `export_gltf()` skips a mesh primitive whose geometry has no
+  facets, and writes a node whose mesh has no exportable primitive without a
+  `mesh` (previously an empty glTF mesh, which fails to re-import).
 - `erhe::commands`: key bindings with a modifier mask dispatch before key
   bindings without one (declaration order within each group), so a chord
   such as Ctrl+A reaches its binding even when a mask-less A binding, which

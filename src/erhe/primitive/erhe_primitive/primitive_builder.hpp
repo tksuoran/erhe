@@ -98,6 +98,10 @@ public:
     );
     ~Build_context() noexcept;
 
+    // True when the mesh has nothing to build for the requested primitive
+    // types: no vertices and no indices. Such a build succeeds with an empty
+    // Buffer_mesh (see Primitive_builder::build()).
+    auto is_empty() const -> bool;
     auto is_ready() const -> bool;
 
     // What the optimized variant is built from: the CORNER-VERTEX PREFIX of
@@ -263,7 +267,8 @@ private:
 // build - see Primitive_builder::take_optimized_render_shape(). It is left
 // null when Buffer_info::optimize_meshes is off or the optimizer refused the
 // mesh; the build itself succeeds either way. `name` only appears in the
-// optimization log line.
+// optimization log line. A mesh with nothing to draw (no facets) builds
+// successfully to an empty Buffer_mesh with no ranges and no allocations.
 auto build_buffer_mesh(
     Buffer_mesh&                             buffer_mesh,
     const GEO::Mesh&                         source_mesh,
