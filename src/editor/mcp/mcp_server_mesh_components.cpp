@@ -1980,6 +1980,63 @@ auto Mcp_server::action_loop_cut_mesh(const json& args) -> std::string
     return make_json_content(out).dump();
 }
 
+auto Mcp_server::action_inset_mesh_faces(const json& args) -> std::string
+{
+    // The numeric inset (doc/plans/mesh_modeling.md D6, section 4.8;
+    // doc/editor/mesh_modeling.md): topology, placement and commit in one
+    // call, one undo entry. Explicit-state rule (doc/agents/mcp_api_guidelines.md):
+    // the option defaults are the library defaults, never the Operations
+    // window's widgets.
+    Mesh_component_selection*      selection = m_context.mesh_component_selection;
+    Mesh_component_selection_tool* tool      = m_context.mesh_component_selection_tool;
+    if ((selection == nullptr) || (tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (selection->get_mode() != Mesh_component_mode::face) {
+        return make_error_content("inset_mesh_faces needs face mode (set_mesh_component_mode)");
+    }
+    erhe::geometry::operation::Inset_faces_options options{};
+    options.thickness       = args.value("thickness",       options.thickness);
+    options.depth           = args.value("depth",           options.depth);
+    options.boundary        = args.value("boundary",        options.boundary);
+    options.even_offset     = args.value("even_offset",     options.even_offset);
+    options.relative_offset = args.value("relative_offset", options.relative_offset);
+    options.edge_rail       = args.value("edge_rail",       options.edge_rail);
+    options.outset          = args.value("outset",          options.outset);
+    options.individual      = args.value("individual",      options.individual);
+    options.interpolate     = args.value("interpolate",     options.interpolate);
+
+    Inset_result result{};
+    std::string  error;
+    if (!tool->inset(options, result, error)) {
+        return make_error_content(error);
+    }
+    json out = mesh_component_selection_json(*selection);
+    out["thickness"]      = options.thickness;
+    out["depth"]          = options.depth;
+    out["changed"]        = result.changed;
+    out["inset_vertices"] = result.inset_vertices;
+    out["inset_facets"]   = result.inset_facets;
+    out["rim_facets"]     = result.rim_facets;
+    out["queued"]         = result.changed;
+    // The counts of the live entry's mesh primitive (the result when changed).
+    for (const Mesh_component_entry& entry : selection->get_entries()) {
+        if (!selection->is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry) {
+            continue;
+        }
+        const GEO::Mesh& mesh = geometry->get_mesh();
+        out["vertex_count"] = mesh.vertices.nb();
+        out["edge_count"]   = mesh.edges.nb();
+        out["facet_count"]  = mesh.facets.nb();
+        break;
+    }
+    return make_json_content(out).dump();
+}
+
 auto Mcp_server::action_set_gizmo_visibility(const json& args) -> std::string
 {
     // Headless-scriptable equivalent of activating the Move/Rotate/Scale tool (or clicking

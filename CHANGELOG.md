@@ -9,6 +9,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/inset_faces.hpp`: `inset_faces()`
+  with `Inset_faces_options` and `Inset_faces_result`: inset faces of
+  `doc/plans/mesh_modeling.md` section 4.8 (region and individual, boundary,
+  even and relative offset, edge rail, thickness, depth, outset,
+  interpolate), composed on `Edit_mesh`, reporting the inset vertices with
+  their thickness and depth directions, the inset facets and the rim facets,
+  and carrying a component selection through `Component_remap`.
+  `Edit_mesh::create_facet_from_corners()`, `set_facet_vertices()` and
+  `set_corner_sources()`, and the free functions
+  `compute_mean_value_weights()` and `compute_newell_normal()`
+  (`erhe_geometry/edit_mesh.hpp`).
 - `erhe::geometry`: `erhe_geometry/operation/subdivide_edges.hpp`:
   `subdivide_edges()` with `Subdivide_edges_options` and
   `Subdivide_edges_result`, and `get_selection_edges()`: subdivide edges of

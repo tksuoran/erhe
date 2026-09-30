@@ -6,6 +6,7 @@
 #include "tools/mesh_component_selection.hpp" // Mesh_component_mode
 #include "transform/mesh_component_transform.hpp" // Scalar_input, Scalar_topology_step
 #include "erhe_commands/command.hpp"
+#include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/topology.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -18,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -315,6 +317,44 @@ public:
     std::size_t                 loops         {0};
 };
 
+// The inset keys (doc/editor/mesh_modeling.md): I starts the inset mode in
+// face mode; while it runs O, I, B and R toggle outset, individual, boundary
+// and relative offset (E toggles even offset through Component_modal_command,
+// Enter / left click confirm and Escape / right click cancel).
+enum class Inset_action : unsigned int {
+    start             = 0, // I
+    toggle_outset     = 1, // O
+    toggle_individual = 2, // I
+    toggle_boundary   = 3, // B
+    toggle_relative   = 4  // R
+};
+
+[[nodiscard]] auto c_str(Inset_action action) -> const char*;
+
+// Key command running one Inset_action. start consumes the key only when the
+// inset mode starts, the toggles only while it runs, so the keys fall through
+// to their other bindings (B box gesture) otherwise.
+class Component_inset_command : public erhe::commands::Command
+{
+public:
+    Component_inset_command(erhe::commands::Commands& commands, App_context& context, const char* name, Inset_action action);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+    Inset_action m_action;
+};
+
+// What an inset did (Mesh_component_selection_tool::inset()).
+class Inset_result
+{
+public:
+    bool        changed       {false}; // false: the region has no boundary edges, nothing was done
+    std::size_t inset_vertices{0};
+    std::size_t inset_facets  {0};
+    std::size_t rim_facets    {0};
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -387,8 +427,9 @@ public:
     [[nodiscard]] auto run_modal_action(Component_modal_action action) -> bool;
     // True while a pointer slide runs.
     [[nodiscard]] auto is_slide_active () const -> bool;
-    // True while a pointer slide or the loop cut mode runs: the selection
-    // gestures stand down and the modal click commands own the clicks.
+    // True while a pointer slide, the loop cut mode or the inset mode runs:
+    // the selection gestures stand down and the modal click commands own the
+    // clicks.
     [[nodiscard]] auto is_modal_active () const -> bool;
 
     // Loop cut (doc/editor/mesh_modeling.md). begin_loop_cut() (Ctrl+R)
@@ -416,6 +457,28 @@ public:
         const Scalar_input&          slide,
         Loop_cut_result&             result,
         std::string&                 error
+    ) -> bool;
+
+    // Inset (doc/editor/mesh_modeling.md). begin_inset() (I) starts the inset
+    // mode on the live face selection of one mesh primitive: the topology
+    // step runs at once with thickness 0, then the pointer drags the
+    // thickness (Ctrl held: the depth). run_inset_action() toggles an option
+    // while it runs (false when it does not run, so the key falls through).
+    [[nodiscard]] auto begin_inset      () -> bool;
+    [[nodiscard]] auto run_inset_action (Inset_action action) -> bool;
+    [[nodiscard]] auto is_inset_active  () const -> bool { return m_inset.active; }
+    [[nodiscard]] auto get_inset_options() const -> const erhe::geometry::operation::Inset_faces_options& { return m_inset.options; }
+
+    // The numeric inset (MCP inset_mesh_faces, Operations window "Inset",
+    // doc/plans/mesh_modeling.md D6): inset the live face selection of one
+    // mesh primitive with the options' thickness and depth and commit it as
+    // one undo entry "Inset". A region without boundary edges changes
+    // nothing (result.changed false, nothing queued). False (error set) when
+    // refused.
+    auto inset(
+        const erhe::geometry::operation::Inset_faces_options& options,
+        Inset_result&                                         result,
+        std::string&                                          error
     ) -> bool;
 
     // Select all targets: the meshes of the live entries plus the meshes of
@@ -636,6 +699,55 @@ private:
     ) -> bool;
     // Queues the cut alone as one undo entry (no slide followed).
     void queue_loop_cut(const Scalar_topology_step& topology);
+    // Inset mode (I): the options the modal keys set, the live thickness and
+    // depth (in options), the target and its selected facets, the running
+    // topology step, and the pointer drag: the thickness (Ctrl: the depth)
+    // follows the change of the pointer's distance from the press position
+    // since the current segment started (a Ctrl press or release starts a
+    // new segment from the value reached), times mesh units per pixel at
+    // the inset vertices' centroid.
+    class Inset_state
+    {
+    public:
+        bool                                           active        {false};
+        erhe::geometry::operation::Inset_faces_options options       {};
+        Mesh_component_target                          target        {};
+        std::set<GEO::index_t>                         facets        {};
+        Scalar_topology_step                           step          {};
+        Viewport_scene_view*                           view          {nullptr};
+        glm::vec2                                      press_position{0.0f};
+        glm::vec2                                      segment_start {0.0f};
+        float                                          segment_base  {0.0f};
+        bool                                           depth_mode    {false};
+        bool                                           applied       {false};
+        glm::vec2                                      last_position {0.0f};
+        float                                          units_per_pixel{0.0f};
+    };
+    // Builds the inset of `facets` with `options` into a new Geometry, swaps
+    // its primitive in and installs the inset facets as the selection; fills
+    // out_step (with the inset directions and the rebuild) and out_result.
+    // Nothing is swapped when the region has no boundary edges
+    // (out_result.changed false).
+    auto perform_inset(
+        const Mesh_component_target&                          target,
+        const std::set<GEO::index_t>&                         facets,
+        const erhe::geometry::operation::Inset_faces_options& options,
+        Scalar_topology_step&                                 out_step,
+        Inset_result&                                         out_result,
+        std::string&                                          error
+    ) -> bool;
+    // The first live face mode entry with selected facets.
+    [[nodiscard]] auto find_inset_target(Mesh_component_target& out_target, std::set<GEO::index_t>& out_facets) const -> bool;
+    // Runs the topology step for the current options and starts the scalar
+    // edit at the current thickness and depth. False when refused.
+    [[nodiscard]] auto start_inset_step() -> bool;
+    void update_inset_drag();
+    void apply_inset_values();
+    void confirm_inset();
+    void cancel_inset();
+    void end_inset();
+    Inset_state                       m_inset{};
+
     Loop_cut_state                    m_loop_cut{};
     Loop_cut_preview                  m_loop_cut_preview{};
     std::vector<GEO::index_t>         m_loop_cut_ring{};         // edge indices (cleared at use, capacity kept)
@@ -704,6 +816,11 @@ private:
     Component_loop_cut_command                                m_loop_cut_less_smoothness_command;
     std::vector<std::unique_ptr<Component_loop_cut_command>>  m_loop_cut_digit_commands; // 0 .. 9
     Component_loop_cut_wheel_command                          m_loop_cut_wheel_command;
+    Component_inset_command                                   m_inset_command;
+    Component_inset_command                                   m_inset_outset_command;
+    Component_inset_command                                   m_inset_individual_command;
+    Component_inset_command                                   m_inset_boundary_command;
+    Component_inset_command                                   m_inset_relative_command;
 
     // Select all target scratch (cleared at use, capacity kept).
     std::vector<Mesh_component_target>                        m_select_all_targets;

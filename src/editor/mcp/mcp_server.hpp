@@ -396,6 +396,7 @@ private:
     auto action_slide_mesh_components         (const nlohmann::json& args) -> std::string;
     auto action_cancel_component_edit         (const nlohmann::json& args) -> std::string;
     auto action_loop_cut_mesh                 (const nlohmann::json& args) -> std::string;
+    auto action_inset_mesh_faces              (const nlohmann::json& args) -> std::string;
     auto action_set_gizmo_visibility          (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
 

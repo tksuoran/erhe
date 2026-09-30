@@ -52,15 +52,27 @@ void push_unique(std::vector<GEO::index_t>& values, const GEO::index_t value)
     }
 }
 
-// Mean value coordinates of p with respect to a planar polygon (positions in
-// order), signed through the polygon normal so they reproduce linear
-// functions on the polygon's plane. p on a vertex takes that vertex, p on an
-// edge the edge's linear weights.
+// Proper crossing of 2D segments (p0, p1) and (q0, q1).
+auto segments_cross(const GEO::vec2f& p0, const GEO::vec2f& p1, const GEO::vec2f& q0, const GEO::vec2f& q1) -> bool
+{
+    const auto orient = [](const GEO::vec2f& a, const GEO::vec2f& b, const GEO::vec2f& c) -> float {
+        return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
+    };
+    const float o1 = orient(p0, p1, q0);
+    const float o2 = orient(p0, p1, q1);
+    const float o3 = orient(q0, q1, p0);
+    const float o4 = orient(q0, q1, p1);
+    return (((o1 > 0.0f) && (o2 < 0.0f)) || ((o1 < 0.0f) && (o2 > 0.0f))) &&
+           (((o3 > 0.0f) && (o4 < 0.0f)) || ((o3 < 0.0f) && (o4 > 0.0f)));
+}
+
+} // anonymous namespace
+
 void compute_mean_value_weights(
-    const std::vector<GEO::vec3f>& polygon,
-    const GEO::vec3f&              normal,
-    const GEO::vec3f&              p,
-    std::vector<float>&            out_weights
+    const std::span<const GEO::vec3f> polygon,
+    const GEO::vec3f&                 normal,
+    const GEO::vec3f&                 p,
+    std::vector<float>&               out_weights
 )
 {
     const std::size_t n = polygon.size();
@@ -104,7 +116,7 @@ void compute_mean_value_weights(
     }
 }
 
-auto newell_normal(const std::vector<GEO::vec3f>& polygon) -> GEO::vec3f
+auto compute_newell_normal(const std::span<const GEO::vec3f> polygon) -> GEO::vec3f
 {
     GEO::vec3f normal{0.0f, 0.0f, 0.0f};
     const std::size_t n = polygon.size();
@@ -118,22 +130,6 @@ auto newell_normal(const std::vector<GEO::vec3f>& polygon) -> GEO::vec3f
     const float length = GEO::length(normal);
     return (length > 0.0f) ? (normal / length) : GEO::vec3f{0.0f, 0.0f, 1.0f};
 }
-
-// Proper crossing of 2D segments (p0, p1) and (q0, q1).
-auto segments_cross(const GEO::vec2f& p0, const GEO::vec2f& p1, const GEO::vec2f& q0, const GEO::vec2f& q1) -> bool
-{
-    const auto orient = [](const GEO::vec2f& a, const GEO::vec2f& b, const GEO::vec2f& c) -> float {
-        return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
-    };
-    const float o1 = orient(p0, p1, q0);
-    const float o2 = orient(p0, p1, q1);
-    const float o3 = orient(q0, q1, p0);
-    const float o4 = orient(q0, q1, p1);
-    return (((o1 > 0.0f) && (o2 < 0.0f)) || ((o1 < 0.0f) && (o2 > 0.0f))) &&
-           (((o3 > 0.0f) && (o4 < 0.0f)) || ((o3 < 0.0f) && (o4 > 0.0f)));
-}
-
-} // anonymous namespace
 
 auto Edit_mesh::make_edge_key(const GEO::index_t vertex_a, const GEO::index_t vertex_b) -> std::uint64_t
 {
@@ -609,7 +605,7 @@ auto Edit_mesh::split_facet_edgenet(
     for (std::size_t i = 0; i < n; ++i) {
         polygon[i] = m_vertices[original[i].vertex].position;
     }
-    const GEO::vec3f normal = newell_normal(polygon);
+    const GEO::vec3f normal = compute_newell_normal(polygon);
     const GEO::vec3f axis_u = GEO::normalize(
         (std::abs(normal.x) < 0.9f)
             ? GEO::cross(normal, GEO::vec3f{1.0f, 0.0f, 0.0f})
@@ -1385,6 +1381,65 @@ auto Edit_mesh::create_facet(const std::span<const GEO::index_t> vertices, const
     }
     const GEO::index_t source_facet = has_reference ? m_facets[reference_facet].source_facet : GEO::NO_INDEX;
     return make_facet(std::move(corners), source_facet);
+}
+
+void Edit_mesh::set_facet_vertices(const GEO::index_t facet, const std::span<const GEO::index_t> vertices)
+{
+    ERHE_VERIFY(is_facet_alive(facet));
+    std::vector<Edit_corner>& corners = m_facets[facet].corners;
+    ERHE_VERIFY(vertices.size() == corners.size());
+    for (const GEO::index_t vertex : vertices) {
+        ERHE_VERIFY(is_vertex_alive(vertex));
+    }
+    // The edges the facet uses now; any of them left without facets goes.
+    const std::size_t n = corners.size();
+    std::vector<GEO::index_t> old_edges;
+    old_edges.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const GEO::index_t edge = find_edge(corners[i].vertex, corners[(i + 1) % n].vertex);
+        if (edge != GEO::NO_INDEX) {
+            old_edges.push_back(edge);
+        }
+    }
+    unlink_facet(facet);
+    for (std::size_t i = 0; i < n; ++i) {
+        corners[i].vertex = vertices[i];
+    }
+    link_facet(facet);
+    for (const GEO::index_t edge : old_edges) {
+        if (!m_edges[edge].deleted && m_edges[edge].facets.empty()) {
+            remove_edge(edge);
+        }
+    }
+}
+
+void Edit_mesh::set_corner_sources(const GEO::index_t facet, const GEO::index_t local_corner, const std::span<const Edit_source> sources)
+{
+    ERHE_VERIFY(is_facet_alive(facet));
+    ERHE_VERIFY(local_corner < m_facets[facet].corners.size());
+    m_facets[facet].corners[local_corner].sources.assign(sources.begin(), sources.end());
+}
+
+auto Edit_mesh::create_facet_from_corners(const std::span<const Edit_corner> corners, const GEO::index_t source_facet) -> GEO::index_t
+{
+    const std::size_t n = corners.size();
+    if (n < 3) {
+        return GEO::NO_INDEX;
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        if (!is_vertex_alive(corners[i].vertex)) {
+            return GEO::NO_INDEX;
+        }
+        for (std::size_t j = i + 1; j < n; ++j) {
+            if (corners[i].vertex == corners[j].vertex) {
+                return GEO::NO_INDEX;
+            }
+        }
+    }
+    if (has_facet_with_vertex_set(corners, GEO::NO_INDEX)) {
+        return GEO::NO_INDEX;
+    }
+    return make_facet(std::vector<Edit_corner>{corners.begin(), corners.end()}, source_facet);
 }
 
 } // namespace erhe::geometry

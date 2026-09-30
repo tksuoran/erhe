@@ -30,6 +30,8 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item_host.hpp"
 #include "erhe_math/math_util.hpp"
@@ -562,6 +564,41 @@ auto Component_loop_cut_wheel_command::try_call_with_input(erhe::commands::Input
     }
     return m_context.mesh_component_selection_tool->adjust_loop_cut_wheel(input.variant.vector2.relative_value.y, input.modifier_mask);
 }
+
+auto c_str(const Inset_action action) -> const char*
+{
+    switch (action) {
+        case Inset_action::start:             return "start";
+        case Inset_action::toggle_outset:     return "toggle_outset";
+        case Inset_action::toggle_individual: return "toggle_individual";
+        case Inset_action::toggle_boundary:   return "toggle_boundary";
+        case Inset_action::toggle_relative:   return "toggle_relative";
+        default:                              return "?";
+    }
+}
+
+Component_inset_command::Component_inset_command(
+    erhe::commands::Commands& commands,
+    App_context&              context,
+    const char*               name,
+    const Inset_action        action
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_action {action}
+{
+}
+
+auto Component_inset_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    if (m_action == Inset_action::start) {
+        return m_context.mesh_component_selection_tool->begin_inset();
+    }
+    return m_context.mesh_component_selection_tool->run_inset_action(m_action);
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -603,6 +640,11 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_loop_cut_more_smoothness_command    {commands, context, "Mesh_component_selection.loop_cut_more_smoothness", Loop_cut_action::more_smoothness, 0}
     , m_loop_cut_less_smoothness_command    {commands, context, "Mesh_component_selection.loop_cut_less_smoothness", Loop_cut_action::less_smoothness, 0}
     , m_loop_cut_wheel_command              {commands, context}
+    , m_inset_command                       {commands, context, "Mesh_component_selection.inset",                   Inset_action::start}
+    , m_inset_outset_command                {commands, context, "Mesh_component_selection.inset_toggle_outset",     Inset_action::toggle_outset}
+    , m_inset_individual_command            {commands, context, "Mesh_component_selection.inset_toggle_individual", Inset_action::toggle_individual}
+    , m_inset_boundary_command              {commands, context, "Mesh_component_selection.inset_toggle_boundary",   Inset_action::toggle_boundary}
+    , m_inset_relative_command              {commands, context, "Mesh_component_selection.inset_toggle_relative",   Inset_action::toggle_relative}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -779,6 +821,26 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     m_loop_cut_wheel_command.set_host(this);
     commands.register_command           (&m_loop_cut_wheel_command);
     commands.bind_command_to_mouse_wheel(&m_loop_cut_wheel_command);
+
+    // Inset (doc/editor/mesh_modeling.md): I starts it in face mode; while it
+    // runs O / I / B / R toggle outset / individual / boundary / relative
+    // offset (E even offset is the modal toggle above). The exact mask 0
+    // dispatches them before the mask-less bindings of the same keys (B box
+    // gesture), which they fall through to while the mode does not run; I
+    // starts the mode only while it does not run and toggles individual only
+    // while it runs.
+    const std::pair<Component_inset_command*, erhe::window::Keycode> inset_keys[] = {
+        {&m_inset_command,            erhe::window::Key_i},
+        {&m_inset_outset_command,     erhe::window::Key_o},
+        {&m_inset_individual_command, erhe::window::Key_i},
+        {&m_inset_boundary_command,   erhe::window::Key_b},
+        {&m_inset_relative_command,   erhe::window::Key_r}
+    };
+    for (const auto& [command, key] : inset_keys) {
+        command->set_host(this);
+        commands.register_command(command);
+        commands.bind_command_to_key(command, key, Button_trigger::Button_pressed, 0u);
+    }
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
@@ -1079,7 +1141,7 @@ auto Mesh_component_selection_tool::edge_world_normal(
 auto Mesh_component_selection_tool::begin_slide() -> bool
 {
     const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
-    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active) {
+    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active || m_inset.active) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -1110,7 +1172,7 @@ auto Mesh_component_selection_tool::is_slide_active() const -> bool
 
 auto Mesh_component_selection_tool::is_modal_active() const -> bool
 {
-    return m_loop_cut.active || is_slide_active();
+    return m_loop_cut.active || m_inset.active || is_slide_active();
 }
 
 auto Mesh_component_selection_tool::run_modal_action(const Component_modal_action action) -> bool
@@ -1118,6 +1180,30 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
     Transform_tool* const transform_tool = m_context.transform_tool;
     if (transform_tool == nullptr) {
         return false;
+    }
+    // The inset mode: confirm commits, cancel restores the mesh, E toggles
+    // even offset; the other toggles fall through.
+    if (m_inset.active) {
+        bool inset_consumed = false;
+        switch (action) {
+            case Component_modal_action::confirm: confirm_inset(); inset_consumed = true; break;
+            case Component_modal_action::cancel:  cancel_inset();  inset_consumed = true; break;
+            case Component_modal_action::toggle_even: {
+                m_inset.options.even_offset = !m_inset.options.even_offset;
+                log_selection->info("Inset: even offset {}", m_inset.options.even_offset ? "on" : "off");
+                if (!start_inset_step()) {
+                    end_inset();
+                }
+                inset_consumed = true;
+                break;
+            }
+            default: break;
+        }
+        if (!is_modal_active()) {
+            m_modal_confirm_click_command.set_inactive();
+            m_modal_cancel_click_command.set_inactive();
+        }
+        return inset_consumed;
     }
     // The loop cut mode: confirm cuts (and chains into the slide), cancel
     // ends the mode with the mesh untouched; the toggles fall through.
@@ -1752,6 +1838,461 @@ auto Mesh_component_selection_tool::loop_cut(
     return true;
 }
 #pragma endregion Loop cut
+
+#pragma region Inset
+namespace {
+
+// The inset of doc/plans/mesh_modeling.md section 4.8 into a new Geometry,
+// processed like a loop cut result; out_selected_facets receives the remapped
+// selection (the inset facets). Null (error set) when the result fails
+// validation.
+[[nodiscard]] auto build_inset_geometry(
+    const erhe::geometry::Geometry&                       before,
+    const std::set<GEO::index_t>&                         facets,
+    const erhe::geometry::operation::Inset_faces_options& options,
+    erhe::geometry::operation::Inset_faces_result&        result,
+    std::set<GEO::index_t>&                               out_selected_facets,
+    std::string&                                          error
+) -> std::shared_ptr<erhe::geometry::Geometry>
+{
+    std::shared_ptr<erhe::geometry::Geometry> after = std::make_shared<erhe::geometry::Geometry>(before.get_name());
+    erhe::geometry::operation::Geometry_component_selection remap_source;
+    erhe::geometry::operation::Geometry_component_selection remap_destination;
+    remap_source.facets = facets;
+    erhe::geometry::operation::Component_remap remap{&remap_source, &remap_destination};
+    erhe::geometry::operation::inset_faces(before, *after, facets, options, &result, &remap);
+    for (const std::string& warning : after->sanitize()) {
+        log_selection->warn("Inset on '{}' sanitized: {}", before.get_name(), warning);
+    }
+    const std::string validation_error = after->validate();
+    if (!validation_error.empty()) {
+        error = "inset result failed validation: " + validation_error;
+        return {};
+    }
+    after->process({.flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+    });
+    out_selected_facets = remap_destination.facets;
+    return after;
+}
+
+[[nodiscard]] auto to_glm(const GEO::vec3f& v) -> glm::vec3
+{
+    return glm::vec3{v.x, v.y, v.z};
+}
+
+} // anonymous namespace
+
+auto Mesh_component_selection_tool::find_inset_target(Mesh_component_target& out_target, std::set<GEO::index_t>& out_facets) const -> bool
+{
+    if (m_mesh_component_selection.get_mode() != Mesh_component_mode::face) {
+        return false;
+    }
+    for (const Mesh_component_entry& entry : m_mesh_component_selection.get_entries()) {
+        if (entry.facets.empty() || !m_mesh_component_selection.is_live(entry)) {
+            continue;
+        }
+        out_target = Mesh_component_target{
+            .mesh            = entry.mesh.lock(),
+            .primitive_index = entry.primitive_index,
+            .geometry        = entry.geometry.lock()
+        };
+        out_facets.clear();
+        out_facets.insert(entry.facets.begin(), entry.facets.end());
+        return static_cast<bool>(out_target.mesh) && static_cast<bool>(out_target.geometry);
+    }
+    return false;
+}
+
+auto Mesh_component_selection_tool::perform_inset(
+    const Mesh_component_target&                          target,
+    const std::set<GEO::index_t>&                         facets,
+    const erhe::geometry::operation::Inset_faces_options& options,
+    Scalar_topology_step&                                 out_step,
+    Inset_result&                                         out_result,
+    std::string&                                          error
+) -> bool
+{
+    out_result = Inset_result{};
+    Mesh_component_selection& selection   = m_mesh_component_selection;
+    const Mesh_component_mode mode_before = selection.get_mode();
+    if (mode_before != Mesh_component_mode::face) {
+        error = "inset needs face mode";
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& mesh = target.mesh;
+    if (!mesh || !target.geometry || (mesh->get_item_host() == nullptr) || (m_context.mesh_memory == nullptr)) {
+        error = "inset needs a mesh in a scene";
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if (
+        (target.primitive_index >= primitives.size())               ||
+        !primitives[target.primitive_index].primitive               ||
+        !primitives[target.primitive_index].primitive->render_shape ||
+        (primitives[target.primitive_index].primitive->render_shape->get_geometry_const() != target.geometry)
+    ) {
+        error = "inset target is not the mesh primitive's current geometry";
+        return false;
+    }
+    const erhe::scene::Mesh_primitive before_mesh_primitive = primitives[target.primitive_index];
+    const std::shared_ptr<erhe::geometry::Geometry> before_geometry = target.geometry;
+    if (!before_geometry->has_connectivity() || !before_geometry->has_edge_connectivity()) {
+        error = "inset needs the geometry's connectivity, which is not built: " + mesh->get_name();
+        return false;
+    }
+
+    erhe::geometry::operation::Inset_faces_result inset_result;
+    std::set<GEO::index_t>                        selected_facets;
+    const std::shared_ptr<erhe::geometry::Geometry> after_geometry = build_inset_geometry(*before_geometry, facets, options, inset_result, selected_facets, error);
+    if (!after_geometry) {
+        return false;
+    }
+    out_result.inset_vertices = inset_result.inset_vertices.size();
+    out_result.inset_facets   = inset_result.inset_facets.size();
+    out_result.rim_facets     = inset_result.rim_facets.size();
+    out_result.changed        = !inset_result.rim_facets.empty();
+    if (!out_result.changed) {
+        log_selection->info("Inset: the selected region of '{}' has no boundary edges; nothing to inset", mesh->get_name());
+        return true;
+    }
+
+    const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
+    std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
+    const bool raytrace_ok   = after_primitive->make_raytrace();
+    if (!renderable_ok || !raytrace_ok) {
+        error = "inset: building the result primitive failed";
+        return false;
+    }
+    erhe::scene::Mesh_primitive after_mesh_primitive = before_mesh_primitive;
+    after_mesh_primitive.primitive = after_primitive;
+
+    // Swap the inset in place (D3: the topology step of the gesture). The
+    // pre-inset selection entry goes dormant with the before geometry; the
+    // inset facets become the selection.
+    {
+        erhe::Item_host* const item_host = mesh->get_item_host();
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+        std::vector<erhe::scene::Mesh_primitive> new_primitives = primitives;
+        new_primitives[target.primitive_index] = after_mesh_primitive;
+        swap_mesh_primitives(mesh, new_primitives);
+    }
+    m_context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = mesh});
+    selection.set_after_operation(mesh, target.primitive_index, after_geometry, std::set<GEO::index_t>{}, selected_facets, std::set<Mesh_edge_key>{});
+
+    out_step = Scalar_topology_step{
+        .mesh            = mesh,
+        .primitive_index = target.primitive_index,
+        .before          = before_mesh_primitive,
+        .after           = after_mesh_primitive,
+        .description     = "Inset",
+        .mode_before     = mode_before
+    };
+    out_step.inset_vertices = inset_result.inset_vertices;
+    out_step.inset_directions.reserve(inset_result.inset_directions.size());
+    out_step.inset_depth_directions.reserve(inset_result.depth_directions.size());
+    for (std::size_t i = 0, end = inset_result.inset_vertices.size(); i < end; ++i) {
+        out_step.inset_directions      .push_back(to_glm(inset_result.inset_directions[i]));
+        out_step.inset_depth_directions.push_back(to_glm(inset_result.depth_directions[i]));
+    }
+    // The commit re-runs the inset from the before geometry with the final
+    // thickness and depth, so the committed result equals the numeric form's.
+    const std::string mesh_name = mesh->get_name();
+    out_step.rebuild = [before_geometry, facets, options, mesh_name](const Scalar_input& input) -> std::shared_ptr<erhe::geometry::Geometry> {
+        erhe::geometry::operation::Inset_faces_options final_options = options;
+        final_options.thickness = input.factor;
+        final_options.depth     = input.depth;
+        erhe::geometry::operation::Inset_faces_result result;
+        std::set<GEO::index_t>                        selected;
+        std::string                                   rebuild_error;
+        std::shared_ptr<erhe::geometry::Geometry>     geometry = build_inset_geometry(*before_geometry, facets, final_options, result, selected, rebuild_error);
+        if (!geometry) {
+            log_selection->warn("Inset on '{}': {}", mesh_name, rebuild_error);
+        }
+        return geometry;
+    };
+    log_selection->info(
+        "Inset: '{}' {} facets (thickness {}, depth {}{}{}) -> {} vertices, {} facets, {} rim facets",
+        mesh->get_name(), facets.size(), options.thickness, options.depth,
+        options.individual ? ", individual" : "", options.outset ? ", outset" : "",
+        after_geometry->get_mesh().vertices.nb(), after_geometry->get_mesh().facets.nb(), out_result.rim_facets
+    );
+    return true;
+}
+
+auto Mesh_component_selection_tool::start_inset_step() -> bool
+{
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return false;
+    }
+    // A running step is dropped first: its before primitive comes back, and
+    // with it the pre-inset selection entry.
+    if (transform_tool->is_scalar_edit_active()) {
+        transform_tool->cancel_component_edit();
+    }
+    m_inset.step = Scalar_topology_step{};
+    erhe::geometry::operation::Inset_faces_options topology_options = m_inset.options;
+    topology_options.thickness = 0.0f;
+    topology_options.depth     = 0.0f;
+    Inset_result result;
+    std::string  error;
+    if (!perform_inset(m_inset.target, m_inset.facets, topology_options, m_inset.step, result, error)) {
+        log_selection->warn("Inset refused: {}", error);
+        return false;
+    }
+    if (!result.changed) {
+        return false;
+    }
+    if (!transform_tool->begin_scalar_edit(Scalar_edit_kind::inset, m_inset.step)) {
+        // Put the before primitive back: nothing edits the swapped-in step.
+        const std::shared_ptr<erhe::scene::Mesh>& mesh = m_inset.step.mesh;
+        std::vector<erhe::scene::Mesh_primitive> primitives = mesh->get_primitives();
+        if (m_inset.step.primitive_index < primitives.size()) {
+            primitives[m_inset.step.primitive_index] = m_inset.step.before;
+            swap_mesh_primitives(mesh, primitives);
+        }
+        log_selection->warn("Inset refused: another transform or component edit is active");
+        return false;
+    }
+    apply_inset_values();
+    return true;
+}
+
+void Mesh_component_selection_tool::apply_inset_values()
+{
+    if (m_context.transform_tool == nullptr) {
+        return;
+    }
+    Scalar_input input{};
+    input.factor = m_inset.options.thickness;
+    input.depth  = m_inset.options.depth;
+    m_context.transform_tool->apply_scalar_edit(input);
+}
+
+auto Mesh_component_selection_tool::begin_inset() -> bool
+{
+    if (m_inset.active || m_loop_cut.active || (m_context.transform_tool == nullptr)) {
+        return false;
+    }
+    if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
+        return false;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    Viewport_scene_view* const viewport_scene_view = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+    if (viewport_scene_view == nullptr) {
+        return false;
+    }
+    const std::optional<glm::vec2> position = viewport_scene_view->get_position_in_viewport();
+    if (!position.has_value()) {
+        return false;
+    }
+    Inset_state state{};
+    if (!find_inset_target(state.target, state.facets)) {
+        return false;
+    }
+    state.active         = true;
+    state.options        = erhe::geometry::operation::Inset_faces_options{};
+    state.view           = viewport_scene_view;
+    state.press_position = position.value();
+    state.segment_start  = position.value();
+    m_inset = std::move(state);
+    if (!start_inset_step()) {
+        end_inset();
+        return true; // the key was for the inset: consumed
+    }
+
+    // Mesh units per pixel at the centroid of the inset vertices: one world
+    // unit along the camera's right axis, projected.
+    m_inset.units_per_pixel = 0.0f;
+    const std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
+    const std::shared_ptr<erhe::scene::Mesh>&  mesh   = m_inset.step.mesh;
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = m_inset.step.after.primitive->render_shape->get_geometry_const();
+    if (camera && mesh && geometry && !m_inset.step.inset_vertices.empty()) {
+        const glm::mat4  world_from_node = mesh->world_from_node();
+        const GEO::Mesh& geo_mesh        = geometry->get_mesh();
+        glm::vec3 centroid{0.0f};
+        for (const GEO::index_t vertex : m_inset.step.inset_vertices) {
+            const GEO::vec3f p = erhe::geometry::get_pointf(geo_mesh.vertices, vertex);
+            centroid += glm::vec3{world_from_node * glm::vec4{p.x, p.y, p.z, 1.0f}};
+        }
+        centroid /= static_cast<float>(m_inset.step.inset_vertices.size());
+        const glm::vec3 right = glm::normalize(glm::vec3{camera->world_from_node() * glm::vec4{1.0f, 0.0f, 0.0f, 0.0f}});
+        const std::optional<glm::vec3> a = viewport_scene_view->project_to_viewport(centroid);
+        const std::optional<glm::vec3> b = viewport_scene_view->project_to_viewport(centroid + right);
+        if (a.has_value() && b.has_value()) {
+            const float pixels_per_world_unit = glm::length(glm::vec2{b.value()} - glm::vec2{a.value()});
+            // Mesh units per world unit: the inverse of the node's mean scale.
+            const float node_scale = std::cbrt(std::abs(glm::determinant(glm::mat3{world_from_node})));
+            if ((pixels_per_world_unit > 0.0f) && (node_scale > 0.0f)) {
+                m_inset.units_per_pixel = 1.0f / (pixels_per_world_unit * node_scale);
+            }
+        }
+    }
+
+    // Ready for the length of the mode: the click commands out-rank the other
+    // press commands of their buttons.
+    m_modal_confirm_click_command.set_ready();
+    m_modal_cancel_click_command.set_ready();
+    log_selection->info("Inset started on '{}': {} facets", mesh->get_name(), m_inset.facets.size());
+    return true;
+}
+
+auto Mesh_component_selection_tool::run_inset_action(const Inset_action action) -> bool
+{
+    if (!m_inset.active) {
+        return false;
+    }
+    erhe::geometry::operation::Inset_faces_options& options = m_inset.options;
+    switch (action) {
+        case Inset_action::toggle_outset:     options.outset          = !options.outset;          break;
+        case Inset_action::toggle_individual: options.individual      = !options.individual;      break;
+        case Inset_action::toggle_boundary:   options.boundary        = !options.boundary;        break;
+        case Inset_action::toggle_relative:   options.relative_offset = !options.relative_offset; break;
+        case Inset_action::start:
+        default: {
+            return false;
+        }
+    }
+    log_selection->info(
+        "Inset: {} (outset {}, individual {}, boundary {}, relative {})",
+        c_str(action), options.outset, options.individual, options.boundary, options.relative_offset
+    );
+    // The option changes the topology or the directions: the step is re-run
+    // from the before primitive.
+    if (!start_inset_step()) {
+        end_inset();
+    }
+    return true;
+}
+
+void Mesh_component_selection_tool::update_inset_drag()
+{
+    if (!m_inset.active) {
+        return;
+    }
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if ((transform_tool == nullptr) || !transform_tool->is_scalar_edit_active()) {
+        // Ended elsewhere (a scene close or MCP cancel_component_edit
+        // cancelled the edit). Checked here, where the drag already runs
+        // once per frame while the mode is active, like the pointer slide's
+        // update_scalar_drag().
+        log_selection->info("Inset ended: its edit is no longer active");
+        end_inset();
+        return;
+    }
+    // The start view is dereferenced only while it is the hovered view.
+    Viewport_scene_view* const view = m_inset.view;
+    if ((view == nullptr) || (get_hover_scene_view() != static_cast<Scene_view*>(view))) {
+        return;
+    }
+    const std::optional<glm::vec2> position = view->get_position_in_viewport();
+    if (!position.has_value()) {
+        return;
+    }
+    const bool depth_mode = (m_context.input_state != nullptr) && m_context.input_state->control;
+    if (m_inset.applied && (m_inset.last_position == position.value()) && (m_inset.depth_mode == depth_mode)) {
+        return; // nothing changed since the last step
+    }
+    if (depth_mode != m_inset.depth_mode) {
+        m_inset.depth_mode    = depth_mode;
+        m_inset.segment_start = position.value();
+        m_inset.segment_base  = depth_mode ? m_inset.options.depth : m_inset.options.thickness;
+    }
+    m_inset.applied       = true;
+    m_inset.last_position = position.value();
+    const float distance_change =
+        glm::length(position.value() - m_inset.press_position) -
+        glm::length(m_inset.segment_start - m_inset.press_position);
+    const float value = m_inset.segment_base + (distance_change * m_inset.units_per_pixel);
+    if (depth_mode) {
+        m_inset.options.depth = value;
+    } else {
+        m_inset.options.thickness = std::max(value, 0.0f);
+    }
+    apply_inset_values();
+}
+
+void Mesh_component_selection_tool::confirm_inset()
+{
+    if (!m_inset.active) {
+        return;
+    }
+    update_inset_drag();
+    if (m_inset.active && (m_context.transform_tool != nullptr)) {
+        log_selection->info("Inset confirmed: thickness {}, depth {}", m_inset.options.thickness, m_inset.options.depth);
+        m_context.transform_tool->commit_scalar_edit();
+    }
+    end_inset();
+}
+
+void Mesh_component_selection_tool::cancel_inset()
+{
+    if (!m_inset.active) {
+        return;
+    }
+    if (m_context.transform_tool != nullptr) {
+        m_context.transform_tool->cancel_component_edit();
+    }
+    log_selection->info("Inset cancelled");
+    end_inset();
+}
+
+void Mesh_component_selection_tool::end_inset()
+{
+    // Drops the references to the mesh, its geometries and the view.
+    m_inset = Inset_state{};
+}
+
+auto Mesh_component_selection_tool::inset(
+    const erhe::geometry::operation::Inset_faces_options& options,
+    Inset_result&                                         result,
+    std::string&                                          error
+) -> bool
+{
+    if ((m_context.transform_tool == nullptr) || (m_context.operation_stack == nullptr)) {
+        error = "Transform tool not available";
+        return false;
+    }
+    if (is_modal_active() || m_context.transform_tool->is_component_edit_active()) {
+        error = "another loop cut, inset, slide or component edit is active";
+        return false;
+    }
+    if (m_mesh_component_selection.get_mode() != Mesh_component_mode::face) {
+        error = "inset needs face mode";
+        return false;
+    }
+    Mesh_component_target  target;
+    std::set<GEO::index_t> facets;
+    if (!find_inset_target(target, facets)) {
+        error = "inset needs a live face selection";
+        return false;
+    }
+    Scalar_topology_step step;
+    if (!perform_inset(target, facets, options, step, result, error)) {
+        return false;
+    }
+    if (!result.changed) {
+        return true;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Fork_geometry_operation>(
+            Fork_geometry_operation::Parameters{
+                .mesh            = step.mesh,
+                .primitive_index = step.primitive_index,
+                .before          = step.before,
+                .after           = step.after,
+                .description     = step.description
+            }
+        )
+    );
+    return true;
+}
+#pragma endregion Inset
 
 auto Mesh_component_selection_tool::try_ready() const -> bool
 {
@@ -2954,6 +3495,9 @@ void Mesh_component_selection_tool::gesture_update()
     if (m_context.transform_tool != nullptr) {
         m_context.transform_tool->update_scalar_drag();
     }
+    // The inset thickness / depth follow the pointer (a no-op unless the
+    // inset mode runs and the pointer or Ctrl changed).
+    update_inset_drag();
     const bool have_devices = (m_context.id_renderer != nullptr) && (m_context.graphics_device != nullptr);
 
     // Debug/test (MCP debug_region_select): drive a region scan over an explicit

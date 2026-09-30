@@ -241,7 +241,7 @@ under `## [Unreleased]`, grouped as `Added`, `Changed`, `Deprecated`,
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
-- [editor/mesh_modeling.md](editor/mesh_modeling.md) (experimental): Modal mesh modeling tools (loop cut): gesture lifecycle, keys, MCP tools
+- [editor/mesh_modeling.md](editor/mesh_modeling.md) (experimental): Modal mesh modeling tools (loop cut, inset): gesture lifecycle, keys, MCP tools
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
 - [editor/joint_constraint_test_asset.md](editor/joint_constraint_test_asset.md) (stable): Joint constraint test scene: stations, what to look for, verification script

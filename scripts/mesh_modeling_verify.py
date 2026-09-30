@@ -28,6 +28,12 @@ doc/editor/mesh_modeling.md) is checked through loop_cut_mesh on the plain box
 Catmull-Clark box and the single edge case on an octahedron, each with the
 selection afterwards and one undo step, and through Ctrl+R in a viewport:
 Escape in the preview, wheel + click + move + click, and Escape in the slide.
+Inset (section 4.8, doc/editor/mesh_modeling.md) is checked through
+inset_mesh_faces on the plain box (one facet with an inset vertex position,
+two adjacent facets, every facet, individual on two facets), each with the
+selection afterwards and one undo step, and through the I key in a viewport
+(move + Enter: one "Inset" undo entry; move + Escape: unchanged, no entry;
+the I and E option keys re-running the topology step).
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -1192,6 +1198,151 @@ def run_empty_results(e, process):
     e.call("set_mesh_component_mode", {"mode": "object"})
 
 
+def run_inset(e):
+    """Inset (doc/plans/mesh_modeling.md section 4.8,
+    doc/editor/mesh_modeling.md): inset_mesh_faces and the I key."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("inset: plain box at its base counts", geometry_counts(e, BOX), base)
+    facets = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": list(range(base[2]))
+    })["elements"]
+    facet_vertices = {element["index"]: element["vertices"] for element in facets}
+    first = facet_vertices[0]
+    adjacent = None
+    for facet, vertices in facet_vertices.items():
+        if (facet != 0) and (len(set(vertices) & set(first)) == 2):
+            adjacent = facet
+            break
+    check_true("the box has a facet adjacent to facet 0", adjacent is not None)
+    p = vertex_positions(e, BOX, range(base[0]))
+
+    def inset(facet_list, **kwargs):
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        select_on(e, BOX, facets=facet_list)
+        result = e.call("inset_mesh_faces", kwargs)
+        wait_idle(e)
+        return result
+
+    before_undo = undo_count(e)
+
+    # One facet, thickness 0.25 (even offset): 4 inset vertices, 4 rim quads.
+    result = inset([0], thickness=0.25)
+    expect("inset_mesh_faces one facet: changed", result.get("changed"), True)
+    expect("inset one facet -> (12, 20, 10)", geometry_counts(e, BOX), (12, 20, 10))
+    selected = entry_of(e.call("get_mesh_component_selection"), BOX)["facets"]
+    expect("inset one facet: 1 selected facet", len(selected), 1)
+    inset_facet = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": selected
+    })["elements"][0]["vertices"]
+    check_true("inset one facet: the selected facet is the inset one (its vertices are new)",
+               all(v >= base[0] for v in inset_facet), str(inset_facet))
+    # Corner c of a rectangle moves 0.25 along each of its two edges.
+    c = p[first[0]]
+    n1 = p[first[1]]
+    n2 = p[first[-1]]
+    expected = [c[i] + 0.25 * (((n1[i] - c[i]) / distance(n1, c)) + ((n2[i] - c[i]) / distance(n2, c))) for i in range(3)]
+    new_positions = vertex_positions(e, BOX, range(base[0], base[0] + 4))
+    check_true("inset one facet: the inset vertex of the facet's first corner at 0.25 from both edges",
+               any(near(q, expected) for q in new_positions.values()),
+               f"expected {expected}, got {list(new_positions.values())}")
+    expect("inset one facet: one undo entry", undo_count(e), before_undo + 1)
+    expect("inset one facet: the undo entry is the inset", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Inset")
+    undo_and_check(e, "inset one facet", BOX, base)
+    expect("inset one facet: one undo step removes it", undo_count(e), before_undo)
+
+    # Two adjacent facets: one region, the shared edge interior.
+    if adjacent is not None:
+        inset([0, adjacent], thickness=0.25)
+        expect("inset two adjacent facets -> (14, 24, 12)", geometry_counts(e, BOX), (14, 24, 12))
+        expect("inset two adjacent facets: 2 selected facets",
+               len(entry_of(e.call("get_mesh_component_selection"), BOX)["facets"]), 2)
+        undo_and_check(e, "inset two adjacent facets", BOX, base)
+
+        # Individual: each facet on its own.
+        inset([0, adjacent], thickness=0.25, individual=True)
+        expect("inset individual two facets -> (16, 28, 14)", geometry_counts(e, BOX), (16, 28, 14))
+        undo_and_check(e, "inset individual two facets", BOX, base)
+
+    # Every facet: a closed region has no boundary edges.
+    result = inset(list(range(base[2])), thickness=0.25)
+    expect("inset every facet: not changed", result.get("changed"), False)
+    expect("inset every facet: the box unchanged", geometry_counts(e, BOX), base)
+    expect("inset every facet: no undo entry", undo_count(e), before_undo)
+
+    # The I key in a viewport: I over the selection, move, Enter.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    x, y = left_of_centre(viewport)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    before_undo = undo_count(e)
+    e.key("i", [])
+    expect("I: the inset topology is in place", geometry_counts(e, BOX), (12, 20, 10))
+    try:
+        e.call("undo")
+        check_true("undo over MCP during the inset is refused", False, "no error")
+    except RuntimeError as error:
+        check_true("undo over MCP during the inset is refused", True, str(error))
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30.0, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("enter", [])
+    wait_idle(e)
+    expect("I, move, Enter -> (12, 20, 10)", geometry_counts(e, BOX), (12, 20, 10))
+    expect("I, move, Enter: one undo entry", undo_count(e), before_undo + 1)
+    expect("I, move, Enter: the undo entry is the inset", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Inset")
+    expect("I, move, Enter: 1 selected facet",
+           len(entry_of(e.call("get_mesh_component_selection"), BOX)["facets"]), 1)
+    moved = vertex_positions(e, BOX, range(base[0], base[0] + 4))
+    corners = [p[v] for v in first]
+    check_true("I, move, Enter: the inset vertices moved off the facet's corners",
+               all(min(distance(q, corner) for corner in corners) > 1e-4 for q in moved.values()),
+               str(list(moved.values())))
+    undo_and_check(e, "I, move, Enter", BOX, base)
+
+    # I, move, Escape: nothing changes, nothing is queued.
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    before_undo = undo_count(e)
+    e.key("i", [])
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30.0, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("escape", [])
+    wait_idle(e)
+    expect("I, move, Escape: the box unchanged", geometry_counts(e, BOX), base)
+    expect("I, move, Escape: no undo entry", undo_count(e), before_undo)
+    expect("I, move, Escape: the facet selected again",
+           entry_of(e.call("get_mesh_component_selection"), BOX)["facets"], [0])
+    restored = vertex_positions(e, BOX, range(base[0]))
+    check_true("I, move, Escape: positions back", all(near(restored[v], p[v], 0.0) for v in range(base[0])))
+
+    # The modal option keys re-run the topology step: I on two adjacent
+    # facets (one region), I again toggles individual, E even offset.
+    if adjacent is not None:
+        select_on(e, BOX, facets=[0, adjacent])
+        e.key("i", [])
+        expect("I on two adjacent facets -> (14, 24, 12)", geometry_counts(e, BOX), (14, 24, 12))
+        e.key("i", [])
+        expect("I, I (individual) -> (16, 28, 14)", geometry_counts(e, BOX), (16, 28, 14))
+        e.key("e", [])
+        expect("I, I, E (even offset off) -> (16, 28, 14)", geometry_counts(e, BOX), (16, 28, 14))
+        e.key("escape", [])
+        wait_idle(e)
+        expect("I, I, E, Escape: the box unchanged", geometry_counts(e, BOX), base)
+        expect("I, I, E, Escape: no undo entry", undo_count(e), before_undo)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX,
+                                  "translation": [0.0, 1.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    e.advance(2)
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -1283,6 +1434,8 @@ def run(e):
     run_slide(e)
 
     run_loop_cut(e)
+
+    run_inset(e)
 
 
 def main():

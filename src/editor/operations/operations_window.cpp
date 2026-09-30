@@ -1441,6 +1441,25 @@ void Operations::imgui()
             ImGui::Checkbox   ("Only Quads", &m_subdivide_edges_options.only_quads);
             ImGui::PopID();
         }
+        if (visible("Inset")) {
+            if (make_button("Inset", face_component_mode, button_size)) {
+                inset_faces();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Insets the selected faces by the thickness and depth below (I in a viewport runs it interactively)");
+            }
+            ImGui::PushID("inset");
+            ImGui::DragFloat("Thickness", &m_inset_options.thickness, 0.001f, 0.0f, 1000.0f, "%.4f");
+            ImGui::DragFloat("Depth",     &m_inset_options.depth,     0.001f, -1000.0f, 1000.0f, "%.4f");
+            ImGui::Checkbox ("Boundary",        &m_inset_options.boundary);
+            ImGui::Checkbox ("Even Offset",     &m_inset_options.even_offset);
+            ImGui::Checkbox ("Relative Offset", &m_inset_options.relative_offset);
+            ImGui::Checkbox ("Edge Rail",       &m_inset_options.edge_rail);
+            ImGui::Checkbox ("Outset",          &m_inset_options.outset);
+            ImGui::Checkbox ("Individual",      &m_inset_options.individual);
+            ImGui::Checkbox ("Interpolate",     &m_inset_options.interpolate);
+            ImGui::PopID();
+        }
     }
 
     if (section("Transform & Joints")) {
@@ -2980,6 +2999,21 @@ auto Operations::merge_by_distance(const erhe::geometry::operation::Merge_by_dis
         }
     );
     return true;
+}
+
+auto Operations::inset_faces() -> bool
+{
+    Mesh_component_selection_tool* const tool = m_context.mesh_component_selection_tool;
+    if (tool == nullptr) {
+        return false;
+    }
+    Inset_result result{};
+    std::string  error;
+    if (!tool->inset(m_inset_options, result, error)) {
+        log_operations->info("Inset: {}", error);
+        return false;
+    }
+    return result.changed;
 }
 
 auto Operations::subdivide_edges() -> bool

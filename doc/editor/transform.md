@@ -137,6 +137,15 @@ the first step that moves a vertex, as for a move.
   and queues one `Fork_geometry_operation` from the step's before primitive
   (labelled by the step), and `cancel()` swaps the before primitive back and
   restores the step's mode.
+- **Inset** (`Scalar_edit_kind::inset`) runs only with a topology step
+  that carries its vertices and their mesh-local thickness and depth
+  directions (the inset mode, `doc/editor/mesh_modeling.md`);
+  `Scalar_input::factor` is the thickness and `Scalar_input::depth` the
+  depth, each vertex at its start plus both offsets. The inset mode drives
+  it through `Transform_tool::begin_scalar_edit()`, `apply_scalar_edit()`
+  and `commit_scalar_edit()` (`cancel_component_edit()` cancels) rather
+  than the pointer scalar drag, and its step's `rebuild` replaces the
+  edited geometry at commit.
 - MCP `slide_mesh_components` (`kind` edge | vertex, `factor`, `even`,
   `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
   commit through `Transform_tool::run_scalar_edit()`.

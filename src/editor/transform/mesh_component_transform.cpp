@@ -462,7 +462,7 @@ void Mesh_component_transform::begin(App_context& context)
         m_scalar_kind = (m_transform_mode == Mesh_transform_mode::edge_slide)
             ? Scalar_edit_kind::edge_slide
             : Scalar_edit_kind::vertex_slide;
-        if (!build_scalar(context, m_scalar_kind)) {
+        if (!build_scalar(context, m_scalar_kind, nullptr)) {
             m_scalar = false;
             m_active = false;
             m_groups.clear();
@@ -481,14 +481,21 @@ auto Mesh_component_transform::begin_scalar(
     if (m_active) {
         return false;
     }
+    if ((kind == Scalar_edit_kind::inset) && ((topology_step == nullptr) || topology_step->inset_vertices.empty())) {
+        return false;
+    }
     if (!gather(context, topology_step)) {
         return false;
     }
-    m_transform_mode = (kind == Scalar_edit_kind::edge_slide) ? Mesh_transform_mode::edge_slide : Mesh_transform_mode::vertex_slide;
-    m_extrude        = false;
-    m_scalar         = true;
-    m_scalar_kind    = kind;
-    if (!build_scalar(context, kind)) {
+    m_transform_mode =
+        (kind == Scalar_edit_kind::edge_slide)   ? Mesh_transform_mode::edge_slide   :
+        (kind == Scalar_edit_kind::vertex_slide) ? Mesh_transform_mode::vertex_slide :
+                                                   Mesh_transform_mode::move;
+    m_extrude           = false;
+    m_scalar            = true;
+    m_scalar_kind       = kind;
+    m_last_scalar_input = Scalar_input{};
+    if (!build_scalar(context, kind, topology_step)) {
         m_scalar = false;
         m_groups.clear();
         return false;
@@ -500,9 +507,11 @@ auto Mesh_component_transform::begin_scalar(
     // (one primitive swap from the step's before primitive).
     m_has_topology_step = (topology_step != nullptr);
     m_topology_description.clear();
+    m_topology_rebuild = {};
     if (topology_step != nullptr) {
         m_topology_description = topology_step->description;
         m_topology_mode_before = topology_step->mode_before;
+        m_topology_rebuild     = topology_step->rebuild;
         for (Group& group : m_groups) {
             group.extruded       = true;
             group.extrude_before = topology_step->before;
@@ -676,6 +685,8 @@ void Mesh_component_transform::commit(App_context& context)
     const bool        topology_step        = m_has_topology_step;
     const std::string topology_description = m_topology_description;
     m_has_topology_step = false;
+    const std::function<std::shared_ptr<erhe::geometry::Geometry>(const Scalar_input&)> topology_rebuild = std::move(m_topology_rebuild);
+    m_topology_rebuild = {};
 
     // Release the optimization holds begin() took (transferred by fork /
     // extrude), one per group, before the commit operations run - their
@@ -706,6 +717,31 @@ void Mesh_component_transform::commit(App_context& context)
             continue;
         }
 
+        // A topology step with a rebuild (inset): the step re-run with the
+        // final values replaces the edited geometry, and the selection entry
+        // follows it.
+        bool rebuilt = false;
+        if (group.extruded && topology_step && topology_rebuild) {
+            const std::shared_ptr<erhe::geometry::Geometry> rebuilt_geometry = topology_rebuild(m_last_scalar_input);
+            if (rebuilt_geometry) {
+                Mesh_component_selection* selection = context.mesh_component_selection;
+                if (selection != nullptr) {
+                    // Created first: find_or_create_entry() may reallocate the entries.
+                    Mesh_component_entry&       rebuilt_entry = selection->find_or_create_entry(mesh, group.primitive_index, rebuilt_geometry);
+                    const Mesh_component_entry* edited        = selection->find_entry(mesh, group.primitive_index, group.geometry);
+                    if (edited != nullptr) {
+                        rebuilt_entry.vertices = edited->vertices;
+                        rebuilt_entry.facets   = edited->facets;
+                        rebuilt_entry.edges    = edited->edges;
+                    }
+                }
+                group.geometry = rebuilt_geometry;
+                rebuilt        = true;
+            } else {
+                log_trs_tool->warn("{}: the rebuild failed; committing the edited geometry", topology_description);
+            }
+        }
+
         // Per group: the vertex format follows this group's geometry (skinned
         // meshes keep their joint attributes through the rebuild).
         const erhe::primitive::Build_info build_info = make_rebuild_build_info(*context.mesh_memory, *group.geometry);
@@ -715,7 +751,10 @@ void Mesh_component_transform::commit(App_context& context)
         // rebuild a clean primitive, and queue a primitive swap (before = original
         // geometry, after = extruded geometry) - undo removes the extrusion entirely.
         if (group.extruded) {
-            if (topology_step) {
+            if (rebuilt) {
+                // The rebuild interpolated every attribute and computed the
+                // normals itself.
+            } else if (topology_step) {
                 // A slide after a topology step (loop cut): the corner
                 // texcoords around the slid vertices are re-sampled into the
                 // geometry itself, and the normals follow the final positions
@@ -1386,6 +1425,7 @@ auto c_str(const Scalar_edit_kind kind) -> const char*
     switch (kind) {
         case Scalar_edit_kind::edge_slide:   return "edge_slide";
         case Scalar_edit_kind::vertex_slide: return "vertex_slide";
+        case Scalar_edit_kind::inset:        return "inset";
         default:                             return "?";
     }
 }
@@ -1714,22 +1754,34 @@ void Mesh_component_transform::fork_shared_groups(App_context& context)
     }
 }
 
-auto Mesh_component_transform::build_scalar(App_context& context, const Scalar_edit_kind kind) -> bool
+auto Mesh_component_transform::build_scalar(
+    App_context&                      context,
+    const Scalar_edit_kind            kind,
+    const Scalar_topology_step* const topology_step
+) -> bool
 {
     m_slide_vertices.clear();
     m_slide_neighbours.clear();
     m_slide_loop_swapped.clear();
+    m_inset_directions.clear();
+    m_inset_depth_directions.clear();
     m_slide_active            = 0;
     m_slide_last_side         = 0;
     m_slide_neighbours_picked = false;
     for (std::size_t group_index = 0, end = m_groups.size(); group_index < end; ++group_index) {
-        const bool ok = (kind == Scalar_edit_kind::edge_slide)
-            ? build_edge_slide  (context, group_index)
-            : build_vertex_slide(context, group_index);
+        bool ok = false;
+        switch (kind) {
+            case Scalar_edit_kind::edge_slide:   ok = build_edge_slide  (context, group_index); break;
+            case Scalar_edit_kind::vertex_slide: ok = build_vertex_slide(context, group_index); break;
+            case Scalar_edit_kind::inset:        ok = (topology_step != nullptr) && build_inset(group_index, *topology_step); break;
+            default: break;
+        }
         if (!ok) {
             m_slide_vertices.clear();
             m_slide_neighbours.clear();
             m_slide_loop_swapped.clear();
+            m_inset_directions.clear();
+            m_inset_depth_directions.clear();
             return false;
         }
     }
@@ -1958,6 +2010,42 @@ auto Mesh_component_transform::build_edge_slide(App_context& context, const std:
                 group.vertices.push_back(vertex);
             }
         }
+    }
+    return true;
+}
+
+auto Mesh_component_transform::build_inset(const std::size_t group_index, const Scalar_topology_step& topology_step) -> bool
+{
+    Group&                                   group = m_groups[group_index];
+    const std::shared_ptr<erhe::scene::Mesh> mesh  = group.mesh.lock();
+    if (!mesh || !group.geometry) {
+        return false;
+    }
+    const std::size_t count = topology_step.inset_vertices.size();
+    if ((topology_step.inset_directions.size() != count) || (topology_step.inset_depth_directions.size() != count)) {
+        return false;
+    }
+    const GEO::Mesh& geo_mesh        = group.geometry->get_mesh();
+    const glm::mat4  world_from_node = mesh->world_from_node();
+    const glm::mat3  world_from_node_3x3{world_from_node};
+    group.vertices.clear();
+    group.slide_offset = m_slide_vertices.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        const GEO::index_t vertex = topology_step.inset_vertices[i];
+        if (vertex >= geo_mesh.vertices.nb()) {
+            log_trs_tool->warn("Inset refused: vertex {} is not a vertex of '{}'", vertex, mesh->get_name());
+            return false;
+        }
+        Slide_vertex slide_vertex{};
+        slide_vertex.group       = group_index;
+        slide_vertex.vertex      = vertex;
+        slide_vertex.start_world = transform_point(world_from_node, position_of(geo_mesh, vertex));
+        slide_vertex.side[0]     = world_from_node_3x3 * topology_step.inset_directions[i];
+        slide_vertex.side[1]     = world_from_node_3x3 * topology_step.inset_depth_directions[i];
+        m_slide_vertices.push_back(slide_vertex);
+        m_inset_directions.push_back(topology_step.inset_directions[i]);
+        m_inset_depth_directions.push_back(topology_step.inset_depth_directions[i]);
+        group.vertices.push_back(vertex);
     }
     return true;
 }
@@ -2196,7 +2284,7 @@ auto Mesh_component_transform::get_active_slide_screen_frame(const Viewport_scen
 
 auto Mesh_component_transform::factor_from_translation(const glm::vec3& translation) -> float
 {
-    if (m_slide_active >= m_slide_vertices.size()) {
+    if ((m_slide_active >= m_slide_vertices.size()) || (m_scalar_kind == Scalar_edit_kind::inset)) {
         return 0.0f;
     }
     if (m_scalar_kind == Scalar_edit_kind::vertex_slide) {
@@ -2221,6 +2309,11 @@ auto Mesh_component_transform::factor_from_translation(const glm::vec3& translat
 void Mesh_component_transform::apply_scalar(App_context& context, const Scalar_input& input)
 {
     if (!is_scalar_active() || (m_slide_active >= m_slide_vertices.size())) {
+        return;
+    }
+    m_last_scalar_input = input;
+    if (m_scalar_kind == Scalar_edit_kind::inset) {
+        apply_inset(context, input);
         return;
     }
     const bool edge_slide = (m_scalar_kind == Scalar_edit_kind::edge_slide);
@@ -2310,6 +2403,27 @@ void Mesh_component_transform::apply_scalar(App_context& context, const Scalar_i
     }
 }
 
+void Mesh_component_transform::apply_inset(App_context& context, const Scalar_input& input)
+{
+    const bool moved = (input.factor != 0.0f) || (input.depth != 0.0f);
+    for (Group& group : m_groups) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+        if (!mesh || !group.geometry || (group.before_local.size() != group.vertices.size())) {
+            continue;
+        }
+        for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
+            const std::size_t slide_index = group.slide_offset + i;
+            // Mesh-local; the exact start position when nothing moves.
+            glm::vec3 local_after = group.before_local[i];
+            if (moved) {
+                local_after += (input.factor * m_inset_directions[slide_index]) + (input.depth * m_inset_depth_directions[slide_index]);
+            }
+            write_vertex(context, group, group.vertices[i], local_after);
+        }
+        update_group_normals(context, group, moved ? Normal_source::live_positions : Normal_source::stored_attributes);
+    }
+}
+
 void Mesh_component_transform::cancel(App_context& context)
 {
     if (!m_active) {
@@ -2319,6 +2433,7 @@ void Mesh_component_transform::cancel(App_context& context)
     m_scalar = false;
     const bool topology_step = m_has_topology_step;
     m_has_topology_step = false;
+    m_topology_rebuild  = {};
 
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();

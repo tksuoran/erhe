@@ -391,6 +391,15 @@ public:
     // the edit of a gizmo drag - restoring its start state and queueing no
     // operation. False when no mesh component edit is active.
     auto cancel_component_edit    () -> bool;
+    // A scalar edit the caller drives itself (the inset mode of
+    // Mesh_component_selection_tool, doc/editor/mesh_modeling.md): begin with
+    // a topology step, apply steps, commit; cancel_component_edit() cancels.
+    // begin_scalar_edit() is refused (false) while a pointer scalar drag, a
+    // gizmo drag, a scripted drag or another component edit is active.
+    auto begin_scalar_edit (Scalar_edit_kind kind, const Scalar_topology_step& topology_step) -> bool;
+    void apply_scalar_edit (const Scalar_input& input);
+    void commit_scalar_edit();
+    [[nodiscard]] auto is_scalar_edit_active() const -> bool;
     // Numeric scalar edit (MCP slide_mesh_components): begin, one step with
     // `input`, commit. False (error set) when refused.
     auto run_scalar_edit(

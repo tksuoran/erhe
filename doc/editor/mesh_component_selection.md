@@ -191,6 +191,14 @@ smoothness), and the modal commands above confirm (cut, then the slide of the
 new loops) and cancel. The whole list, the preview and the gesture are in
 `doc/editor/mesh_modeling.md`.
 
+### Inset keys
+
+I (`Mesh_component_selection.inset`, mask 0) starts the inset mode on the
+live face selection in face mode; while it runs O / I / B / R toggle
+outset / individual / boundary / relative offset, E even offset, Ctrl held
+drags the depth, and the modal commands above confirm and cancel. The whole
+list and the gesture are in `doc/editor/mesh_modeling.md`.
+
 The toolbar has All / None / Invert / Linked buttons (Linked is the
 from-selection form) beside Clear while a component mode is active. Ctrl+A
 and Alt+A share the A key with the fly camera's strafe binding, which has no
@@ -277,6 +285,9 @@ command ends with a flush (section 3).
   ([v0, v1]), `cuts` (default 1), `smoothness` (default 0), `factor`
   (default 0), `even`, `flipped`: the numeric loop cut of
   `doc/editor/mesh_modeling.md` (cut, slide, one undo entry).
+- `inset_mesh_faces` - `thickness`, `depth` and the option booleans: the
+  numeric inset of `doc/editor/mesh_modeling.md` on the live face
+  selection (topology, placement, one undo entry).
 
 The six geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`

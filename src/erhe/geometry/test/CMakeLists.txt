@@ -26,6 +26,7 @@ add_executable(${_target}
     test_edit_mesh.cpp
     test_geometry_operation.cpp
     test_geometry_serialization.cpp
+    test_inset_faces.cpp
     test_lattice_deform.cpp
     test_merge_vertices.cpp
     test_plane_intersection.cpp

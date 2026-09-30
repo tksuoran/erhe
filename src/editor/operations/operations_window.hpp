@@ -17,6 +17,7 @@
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
+#include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
@@ -246,6 +247,10 @@ public:
     // cuts / smoothness / only-quads options.
     auto subdivide_edges() -> bool;
     auto subdivide_edges(erhe::geometry::operation::Subdivide_edges_options options) -> bool;
+    // Inset (doc/editor/mesh_modeling.md) with the window's options: the
+    // numeric form of Mesh_component_selection_tool::inset() on the live face
+    // selection. False when refused (logged).
+    auto inset_faces() -> bool;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -451,6 +456,10 @@ private:
     // Subdivide edges options edited in the "Components" section and read by
     // Geometry.Subdivide.Edges (the MCP tool takes its own arguments).
     erhe::geometry::operation::Subdivide_edges_options   m_subdivide_edges_options{};
+
+    // Inset options edited in the "Components" section (the MCP tool takes
+    // its own arguments).
+    erhe::geometry::operation::Inset_faces_options       m_inset_options{.thickness = 0.1f};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

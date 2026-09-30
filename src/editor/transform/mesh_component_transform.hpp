@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -37,7 +38,8 @@ class Viewport_scene_view;
 // the scalar path of Mesh_component_transform.
 enum class Scalar_edit_kind : unsigned int {
     edge_slide   = 0, // the vertices of the selected edge loops slide along their rails
-    vertex_slide = 1  // each selected vertex slides toward one of its neighbours
+    vertex_slide = 1, // each selected vertex slides toward one of its neighbours
+    inset        = 2  // the inset vertices of a topology step move by thickness and depth
 };
 
 [[nodiscard]] auto c_str(Scalar_edit_kind kind) -> const char*;
@@ -48,8 +50,10 @@ class Scalar_input
 public:
     // Edge slide: [-1, 1] when clamped, positive toward the first rail side,
     // negative toward the second. Vertex slide: [0, 1] when clamped, 1 lands
-    // on the chosen neighbour.
+    // on the chosen neighbour. Inset: the thickness (mesh units, unclamped).
     float     factor {0.0f};
+    // Inset only: the depth (mesh units).
+    float     depth  {0.0f};
     // Every vertex moves the same distance: the factor times the active
     // vertex's rail (edge slide) or edge (vertex slide) length.
     bool      even   {false};
@@ -77,7 +81,7 @@ public:
 };
 
 // A topology step a caller built and swapped in before a scalar edit (loop cut,
-// doc/editor/mesh_modeling.md): begin_scalar() then edits only this mesh
+// inset, doc/editor/mesh_modeling.md): begin_scalar() then edits only this mesh
 // primitive, commit() queues one Fork_geometry_operation from `before` to the
 // edited result (labelled `description`), and cancel() swaps `before` back and
 // restores `mode_before`, so the whole gesture is one undo entry or nothing.
@@ -90,6 +94,23 @@ public:
     erhe::scene::Mesh_primitive        after          {}; // the swapped-in primitive the edit runs on
     std::string                        description    {};
     Mesh_component_mode                mode_before    {};
+
+    // Scalar_edit_kind::inset: the vertices the edit moves (indices into the
+    // `after` geometry) and, parallel to them, their mesh-local thickness and
+    // depth directions; a vertex sits at its start position plus thickness
+    // times its direction plus depth times its depth direction.
+    std::vector<GEO::index_t>          inset_vertices        {};
+    std::vector<glm::vec3>             inset_directions      {};
+    std::vector<glm::vec3>             inset_depth_directions{};
+
+    // Optional. commit() calls it with the last Scalar_input and commits the
+    // Geometry it returns - the topology step re-run from the `before`
+    // geometry with the final values, so the same topology as `after` with
+    // every attribute interpolated by the operation - instead of the edited
+    // geometry with its re-sampled corner texcoords; the selection entry of
+    // the edited geometry is carried onto it. A null result falls back to the
+    // edited geometry.
+    std::function<std::shared_ptr<erhe::geometry::Geometry>(const Scalar_input&)> rebuild{};
 };
 
 // Build_info for rebuilding a primitive of `geometry`, choosing the packed
@@ -139,7 +160,9 @@ public:
     // Scalar path. begin_scalar() returns false (and leaves no edit active)
     // when the selection cannot slide: edge slide needs every selected vertex
     // on one or two selected edges and every selected edge manifold or
-    // boundary; vertex slide needs a neighbour for every selected vertex. The
+    // boundary; vertex slide needs a neighbour for every selected vertex;
+    // inset needs a topology_step with inset vertices (the selection is not
+    // read: the step names the vertices and their directions). The
     // active slide vertex is the first one until select_active_slide_vertex()
     // picks another. With a topology_step the edit covers that mesh
     // primitive only and commits / cancels the step with it.
@@ -243,7 +266,10 @@ private:
     // selection cannot slide.
     auto build_edge_slide  (App_context& context, std::size_t group_index) -> bool;
     auto build_vertex_slide(App_context& context, std::size_t group_index) -> bool;
-    auto build_scalar      (App_context& context, Scalar_edit_kind kind) -> bool;
+    auto build_inset       (std::size_t group_index, const Scalar_topology_step& topology_step) -> bool;
+    auto build_scalar      (App_context& context, Scalar_edit_kind kind, const Scalar_topology_step* topology_step) -> bool;
+    // Inset: each inset vertex at start + thickness * direction + depth * depth direction.
+    void apply_inset       (App_context& context, const Scalar_input& input);
     // World-space orientation of the loops against the active vertex's rails.
     void align_slide_loops_world();
     // The factor a gizmo translation maps to (slide transform modes).
@@ -303,6 +329,8 @@ private:
     std::string         m_topology_description{};
     bool                m_has_topology_step{false};
     Mesh_component_mode m_topology_mode_before{};
+    std::function<std::shared_ptr<erhe::geometry::Geometry>(const Scalar_input&)> m_topology_rebuild{};
+    Scalar_input        m_last_scalar_input{};  // the last apply_scalar() input (the rebuild's argument)
     std::size_t         m_slide_active{0};      // index into m_slide_vertices
     unsigned int        m_slide_last_side{0};   // edge slide: the side of the last clamped step
     bool                m_slide_neighbours_picked{false}; // vertex slide: a pick has run
@@ -311,6 +339,8 @@ private:
     std::vector<Slide_vertex>  m_slide_vertices;
     std::vector<glm::vec3>     m_slide_neighbours;
     std::vector<std::uint8_t>  m_slide_loop_swapped;
+    std::vector<glm::vec3>     m_inset_directions;       // inset: mesh-local, parallel to m_slide_vertices
+    std::vector<glm::vec3>     m_inset_depth_directions; // inset: mesh-local, parallel to m_slide_vertices
     // Scalar path build scratch (cleared at use, capacity kept).
     std::vector<std::pair<GEO::index_t, GEO::index_t>> m_slide_edge_pairs;      // selected edges, both directions, sorted
     std::vector<GEO::index_t>                          m_slide_unique_vertices; // sorted

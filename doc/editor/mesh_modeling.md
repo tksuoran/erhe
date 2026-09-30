@@ -4,10 +4,9 @@ Stability: experimental
 
 The modal mesh modeling tools of the editor: gestures that change a mesh's
 topology interactively in a viewport, in a mesh component mode
-(`doc/editor/mesh_component_selection.md`). Loop cut is the one tool that
-exists; inset, knife and bevel follow the same gesture lifecycle
-(`doc/plans/mesh_modeling.md`, which holds their design and the Blender
-behaviour each follows). The discrete operations (delete, dissolve, merge,
+(`doc/editor/mesh_component_selection.md`). Loop cut and inset exist; knife
+and bevel follow the same gesture lifecycle (`doc/plans/mesh_modeling.md`,
+which holds their design and the Blender behaviour each follows). The discrete operations (delete, dissolve, merge,
 subdivide) are Operations window buttons and are described in
 `doc/editor/operations.md`; the slides in `doc/editor/transform.md` "Scalar
 edits".
@@ -45,6 +44,11 @@ A modal tool runs in four steps, following `doc/plans/mesh_modeling.md` D3:
 mesh, the primitive index, the before and after `Mesh_primitive`, the undo
 label and the mode to restore; with it, `Mesh_component_transform` edits only
 that mesh primitive and treats it as an extruded group for commit and cancel.
+For inset it also carries the vertices the edit moves with their thickness
+and depth directions, and a `rebuild` function: commit then re-runs the
+topology step from the before geometry with the final values and commits
+that geometry (every attribute interpolated by the operation, the selection
+entry carried onto it) in place of the edited one.
 
 ## Loop cut
 
@@ -110,10 +114,90 @@ the selection plus `ring_length`, `ring_closed`, `inner_edges`,
 `slide_vertices`, `moved_vertices`, `loops` and the result's vertex, edge and
 facet counts. It needs a mesh component mode.
 
+## Inset
+
+Blender's inset faces (`doc/plans/mesh_modeling.md` section 4.8; the rules
+are in `erhe_geometry/operation/inset_faces.hpp` and `doc/erhe/geometry.md`).
+
+- **Start.** I in face mode, with the pointer over a viewport and a live
+  face selection, starts the inset mode on the first live entry with
+  selected facets (one mesh primitive). It is refused while a loop cut, a
+  slide or another component edit runs. There is no preview step: the
+  topology step runs at once.
+- **Topology step.** `erhe::geometry::operation::inset_faces()` of the
+  selected facets with thickness and depth 0 builds the result Geometry,
+  swapped in as above; the inset facets become the selection (face mode
+  stays). A region without boundary edges (every facet of a closed mesh)
+  ends the mode with nothing changed.
+- **Slide.** A `Scalar_edit_kind::inset` edit
+  (`Transform_tool::begin_scalar_edit()`) moves each inset vertex to its
+  start position plus thickness times its thickness direction plus depth
+  times its depth direction (`Inset_faces_result`). The pointer drives the
+  thickness: the change of its distance from the press position times the
+  mesh units per pixel at the centroid of the inset vertices (one world
+  unit along the camera's right axis, projected; divided by the node's mean
+  scale), never below 0. With Ctrl held it drives the depth instead; a Ctrl
+  press or release starts a new segment from the value reached, so neither
+  value jumps.
+- **Options.** The mode starts from the library defaults (boundary, even
+  offset and interpolate on; relative offset, edge rail, outset and
+  individual off). O, I, B, E and R toggle outset, individual, boundary,
+  even offset and relative offset; each toggle cancels the running edit
+  (the before primitive back) and re-runs the topology step with the new
+  options, keeping the thickness and depth.
+- **Confirm / cancel.** Enter or a left click commits one
+  `Fork_geometry_operation` "Inset": the step's rebuild re-runs the inset
+  from the before geometry with the final thickness and depth, so the
+  result equals the numeric form's. Escape or a right click cancels: the
+  before primitive and the selection come back and nothing is queued.
+  Undo and redo decline while the mode runs.
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Mesh_component_selection.inset` | I | Start the inset mode |
+| `Mesh_component_selection.inset_toggle_outset` | O | Toggle outset |
+| `Mesh_component_selection.inset_toggle_individual` | I | Toggle individual |
+| `Mesh_component_selection.inset_toggle_boundary` | B | Toggle boundary |
+| `Mesh_component_selection.inset_toggle_relative` | R | Toggle relative offset |
+| `Mesh_component_selection.modal_toggle_even` | E | Toggle even offset |
+| `Mesh_component_selection.modal_confirm` / `modal_confirm_click` | Enter, left press | Commit |
+| `Mesh_component_selection.modal_cancel` / `modal_cancel_click` | Escape, right press | Cancel |
+
+The keys carry the exact modifier mask 0 and consume their input only while
+they apply: I starts the mode only while it does not run and toggles
+individual only while it does, and O, B and R fall through otherwise (B to
+the box gesture). While the mode runs the modal click commands own the
+clicks and the selection gestures, the G slide and the gizmo drag stand
+down.
+
+### Numeric form
+
+`Mesh_component_selection_tool::inset(options, result, error)` insets the
+live face selection with the options' thickness and depth and queues one
+`Fork_geometry_operation` "Inset" (D6); a region without boundary edges
+changes nothing (`Inset_result::changed` false, nothing queued). The
+Operations window's "Inset" button (Components section) runs it with the
+window's thickness, depth and option checkboxes. MCP `inset_mesh_faces`
+(`thickness`, `depth` default 0; `boundary`, `even_offset`, `interpolate`
+default true; `relative_offset`, `edge_rail`, `outset`, `individual`
+default false; schema in `config/editor/mcp_tools.json`) calls it and
+returns the selection plus `changed`, `inset_vertices`, `inset_facets`,
+`rim_facets` and the mesh's vertex, edge and facet counts. It needs face
+mode.
+
+## MCP tools
+
+- `loop_cut_mesh` - the numeric loop cut (above).
+- `inset_mesh_faces` - the numeric inset (above).
+
 ## Verification
 
 `py -3 scripts/mesh_modeling_verify.py` checks loop cut through
 `loop_cut_mesh` on a box (one and two cuts, a slide factor, the selection and
 a single undo step), a ring closing across a quad on a Catmull-Clark box and
 the single edge case on an octahedron, and through Ctrl+R in a viewport
-(Escape in the preview, wheel + click + move + click, Escape in the slide).
+(Escape in the preview, wheel + click + move + click, Escape in the slide);
+inset through `inset_mesh_faces` on the box (one facet with an inset vertex
+position, two adjacent facets, every facet, individual on two facets, each
+with the selection and one undo step) and through I in a viewport (move +
+Enter, move + Escape, the I and E option keys).

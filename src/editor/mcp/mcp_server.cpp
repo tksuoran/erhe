@@ -754,6 +754,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "slide_mesh_components",          &Mcp_server::action_slide_mesh_components         },
         { "cancel_component_edit",          &Mcp_server::action_cancel_component_edit         },
         { "loop_cut_mesh",                  &Mcp_server::action_loop_cut_mesh                 },
+        { "inset_mesh_faces",               &Mcp_server::action_inset_mesh_faces              },
         { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
         { "get_transform_state",            &Mcp_server::query_transform_state                },
         { "get_editor_references",          &Mcp_server::query_editor_references              },

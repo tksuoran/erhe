@@ -7261,6 +7261,51 @@
     "name": "loop_cut_mesh"
   },
   {
+    "description": "Blender inset faces (I, doc/editor/mesh_modeling.md) without the pointer: inset the live face selection of one mesh primitive (the first live face mode entry with selected facets) by thickness and depth with the given options, and commit it as ONE undo entry (\"Inset\"). The inset facets become the selection (the rim facets are not selected; with outset the selected facets stay selected). A selected region without boundary edges (every facet of a closed mesh) changes nothing: changed false, nothing queued. Needs face mode; refused while a loop cut, inset, slide or other component edit is active. Option defaults are fixed here (Blender's): boundary true, even_offset true, relative_offset false, edge_rail false, outset false, individual false, interpolate true. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, inset_vertices, inset_facets, rim_facets and the mesh's vertex_count / edge_count / facet_count.",
+    "inputSchema": {
+      "properties": {
+        "boundary": {
+          "description": "Mesh boundary edges of the region get a rim facet; off, the inset slides flush along them (default true)",
+          "type": "boolean"
+        },
+        "depth": {
+          "description": "Depth along the averaged region normals (individual: the facet normal) in mesh units (default 0)",
+          "type": "number"
+        },
+        "edge_rail": {
+          "description": "Move along the one region edge at a vertex between two region facets, when there is exactly one (default false)",
+          "type": "boolean"
+        },
+        "even_offset": {
+          "description": "Scale the offset so the inset edges lie at the thickness from the boundary edges (default true)",
+          "type": "boolean"
+        },
+        "individual": {
+          "description": "Inset every selected facet on its own (default false)",
+          "type": "boolean"
+        },
+        "interpolate": {
+          "description": "Re-sample the moved facets' corner attributes from their pre-inset shape (default true)",
+          "type": "boolean"
+        },
+        "outset": {
+          "description": "Inset the complement of the selection instead (default false)",
+          "type": "boolean"
+        },
+        "relative_offset": {
+          "description": "Scale the offset by the mean length of the boundary edges at each vertex (default false)",
+          "type": "boolean"
+        },
+        "thickness": {
+          "description": "Inset thickness in mesh units (default 0)",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "name": "inset_mesh_faces"
+  },
+  {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",
     "inputSchema": {
       "properties": {

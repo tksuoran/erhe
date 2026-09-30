@@ -100,6 +100,21 @@ enum class Edgenet_result : unsigned int
     invalid_edges // an edge is degenerate, names a deleted vertex, or the net yields an invalid facet
 };
 
+// Mean value coordinates of p with respect to a planar polygon (positions in
+// order, unit normal), signed through the normal so they reproduce linear
+// functions on the polygon's plane. p on a vertex takes that vertex, p on an
+// edge the edge's linear weights. out_weights receives one weight per polygon
+// vertex, summing to 1.
+void compute_mean_value_weights(
+    std::span<const GEO::vec3f> polygon,
+    const GEO::vec3f&           normal,
+    const GEO::vec3f&           p,
+    std::vector<float>&         out_weights
+);
+
+// The unit Newell normal of a polygon (+Z for a degenerate one).
+[[nodiscard]] auto compute_newell_normal(std::span<const GEO::vec3f> polygon) -> GEO::vec3f;
+
 class Edit_mesh
 {
 public:
@@ -219,6 +234,21 @@ public:
     // corner provenance from the first facet using it. Returns
     // GEO::NO_INDEX (mesh unchanged) when the vertices are invalid.
     auto create_facet(std::span<const GEO::index_t> vertices, GEO::index_t reference_facet) -> GEO::index_t;
+
+    // Creates a facet from explicit corners (vertex and corner provenance
+    // each) with the given source facet (GEO::NO_INDEX for none). The vertex
+    // rules of create_facet() apply; GEO::NO_INDEX (mesh unchanged) when the
+    // corners are invalid.
+    auto create_facet_from_corners(std::span<const Edit_corner> corners, GEO::index_t source_facet) -> GEO::index_t;
+
+    // Moves the facet's corners onto other vertices: vertices[i] becomes the
+    // vertex of local corner i (as many as the facet has corners; the corner
+    // provenance stays). An edge the facet used before that no facet uses
+    // afterwards is removed; a vertex left without facets is kept.
+    void set_facet_vertices(GEO::index_t facet, std::span<const GEO::index_t> vertices);
+
+    // Replaces the provenance (weighted source corners) of one corner.
+    void set_corner_sources(GEO::index_t facet, GEO::index_t local_corner, std::span<const Edit_source> sources);
 
 private:
     [[nodiscard]] static auto make_edge_key(GEO::index_t vertex_a, GEO::index_t vertex_b) -> std::uint64_t;

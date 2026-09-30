@@ -2644,6 +2644,35 @@ auto Transform_tool::cancel_component_edit() -> bool
     return true;
 }
 
+auto Transform_tool::begin_scalar_edit(const Scalar_edit_kind kind, const Scalar_topology_step& topology_step) -> bool
+{
+    if (m_scalar_drag.active || is_component_edit_active() || is_transform_tool_active() || m_scripted_drag_active) {
+        return false;
+    }
+    if (!m_component_transform.begin_scalar(m_context, kind, &topology_step)) {
+        return false;
+    }
+    log_trs_tool->info("{} started: {} vertices", c_str(kind), m_component_transform.get_slide_vertex_count());
+    return true;
+}
+
+void Transform_tool::apply_scalar_edit(const Scalar_input& input)
+{
+    m_component_transform.apply_scalar(m_context, input);
+}
+
+void Transform_tool::commit_scalar_edit()
+{
+    if (m_component_transform.is_scalar_active()) {
+        m_component_transform.commit(m_context);
+    }
+}
+
+auto Transform_tool::is_scalar_edit_active() const -> bool
+{
+    return m_component_transform.is_scalar_active();
+}
+
 auto Transform_tool::run_scalar_edit(
     const Scalar_edit_kind            kind,
     const Scalar_input&               input,
