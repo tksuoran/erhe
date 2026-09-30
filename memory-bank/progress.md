@@ -36,7 +36,10 @@
 ✓M13a::{bevel_edges.hpp(1-segment,offset/width,loop-slide;linear-directions)+Ctrl+B-scalar-mode(W/L)+MCP-bevel_mesh_edges;217-geometry-tests;verify-all-pass}
 ✓M15+M16::{fill.hpp(contextual-order;no-wire-edges)+connect_vertices.hpp(set+pair-cutting-plane-search)+F/J+MCP;231-geometry-tests;grid-fill-remains}
 ✓M14::{bridge_loops.hpp(open/closed/pairs,merge,twist,cuts)+MCP;241-geometry-tests;verify-406/406;all-component-commands-share-modal-guard}
-⚡M13b::bevel-segments+profile+vertex-bevel+clamp+miters
+✓M13b-part::{segments+profile(superellipse)+cutoff-patch+crease-kept-on-shortened-edges;251-geometry-tests;verify-423/423;remaining:ADJ-patch,offset-adjustment,clamp-overlap,vertex-bevel,miters}
+✓PHASE-6-DONE
+⚡M10::flip-facets+recalc-outside+smooth-selected(phase-1-leftover)
+?then::plan-status-rewrite+final-report+user-interactive-checks
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
