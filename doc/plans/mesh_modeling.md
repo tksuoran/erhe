@@ -406,8 +406,9 @@ buffer in end-to-end order:
 - **Apply on confirm**: split each original edge at its cut vertices in
   distance order, then split each facet along its edge network
   (`split_facet_edgenet`): a network with a floating island (a closed cut
-  inside a facet) is joined to the boundary with a connecting edge first;
-  a dangling cut edge no facet uses afterwards is removed. Nothing touches
+  inside a facet) is joined to the boundary with two non-crossing
+  connecting edges first, so no ring facet repeats a vertex; a dangling
+  cut edge no facet uses afterwards is removed. Nothing touches
   the mesh before confirm; undo during the gesture only edits the scratch.
 - **Knife project** (later): the boundary edges of another selected mesh,
   projected to the view, replayed as cuts with snapping off; the facets

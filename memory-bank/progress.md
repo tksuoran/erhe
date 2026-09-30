@@ -5,8 +5,8 @@
 [TASK::mesh-modeling]{started-2026-09-30;via-harness;doc/plans/mesh_modeling.md;no-build-tree-existed-on-machine->coder-configures-build_ninja_win_vulkan-with-ERHE_BUILD_TESTS=ON}
 ✓M0a::{walkers+fan-order-fix+get_corner_edge+test_topology_walkers;128-geometry-tests;review-fix:coder-invented-cube-single-facet-rule->replaced-by-Blender-hub-rule(plan-4.1-updated)}
 !trap::configure_*.bat-pass-through-of--DX=Y-fails-from-cmd(=-splits-args;quoting-fails-too)->seed-CMakeCache.txt-with-ERHE_BUILD_TESTS:STRING=ON-then-configure;doc/building.md-claims-pass-through-works->fix-later
-⚡M0b::Edit_mesh-scratch+primitives+emission+test_edit_mesh
-?M0c::edge_sharpness-through-post_processing
+✓M0b::{Edit_mesh+10-primitives+Edit_mesh_operation::emit;145-geometry-tests;islands-connect-with-2-edges(plan-4.7-updated);edge-selection-does-not-follow-split_edge-through-remap(open)}
+⚡M0c::edge_sharpness-through-post_processing
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
