@@ -28,6 +28,7 @@ add_executable(${_target}
     test_edge_sharpness.cpp
     test_edit_mesh.cpp
     test_fill.cpp
+    test_flip_facets.cpp
     test_geometry_operation.cpp
     test_geometry_serialization.cpp
     test_inset_faces.cpp
@@ -36,6 +37,7 @@ add_executable(${_target}
     test_merge_vertices.cpp
     test_plane_intersection.cpp
     test_selective_operation_normals.cpp
+    test_smooth_vertices.cpp
     test_split_components.cpp
     test_subdivide_edges.cpp
     test_subdivision_chain.cpp

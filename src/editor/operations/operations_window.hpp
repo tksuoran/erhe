@@ -19,10 +19,12 @@
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/bevel_edges.hpp"
 #include "erhe_geometry/operation/bridge_loops.hpp"
+#include "erhe_geometry/operation/flip_facets.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/smooth_vertices.hpp"
 #include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "windows/property_editor.hpp"
@@ -288,6 +290,23 @@ public:
     // selection or while a modal component edit runs.
     auto bridge_loops() -> bool;
     auto bridge_loops(erhe::geometry::operation::Bridge_loops_options options) -> bool;
+    // Flip (Flip_facets_operation, catalog M10) on the facets of a vertex,
+    // edge or face mode selection. Returns false, queueing nothing, without
+    // a live selection or while a modal component edit runs.
+    auto flip_normals() -> bool;
+    // Recalculate normals (Recalculate_normals_operation, catalog M10): in a
+    // mesh component mode on the facets of the live selection (declining as
+    // flip_normals() does), in object mode on every facet of the selected
+    // meshes (declining without a selected mesh).
+    auto recalculate_normals(erhe::geometry::operation::Normal_side side) -> bool;
+    // Smooth vertices (catalog M10) on the vertices of a vertex, edge or face
+    // mode selection: computes the positions on the calling thread and
+    // queues one Move_mesh_vertices_operation "Smooth Vertices" per affected
+    // primitive (one Compound_operation for several), so the Geometry and
+    // the selection survive. The no-argument form uses the window's factor
+    // and repeat. Declines as flip_normals() does.
+    auto smooth_vertices() -> bool;
+    auto smooth_vertices(erhe::geometry::operation::Smooth_vertices_options options) -> bool;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -483,6 +502,10 @@ private:
     erhe::commands::Lambda_command m_fill_selected_command;
     erhe::commands::Lambda_command m_connect_selected_command;
     erhe::commands::Lambda_command m_bridge_loops_command;
+    erhe::commands::Lambda_command m_flip_normals_command;
+    erhe::commands::Lambda_command m_recalculate_normals_outside_command;
+    erhe::commands::Lambda_command m_recalculate_normals_inside_command;
+    erhe::commands::Lambda_command m_smooth_vertices_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).
@@ -511,6 +534,11 @@ private:
     // Bridge edge loops options edited in the "Components" section and read by
     // Geometry.Bridge.Loops (the MCP tool takes its own arguments).
     erhe::geometry::operation::Bridge_loops_options      m_bridge_loops_options{};
+
+    // Smooth vertices factor and repeat edited in the "Components" section
+    // and read by Geometry.Smooth.Vertices (the MCP tool takes its own
+    // arguments).
+    erhe::geometry::operation::Smooth_vertices_options   m_smooth_vertices_options{};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

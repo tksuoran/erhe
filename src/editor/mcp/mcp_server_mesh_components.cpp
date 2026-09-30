@@ -34,6 +34,8 @@
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/bridge_loops.hpp"
+#include "erhe_geometry/operation/flip_facets.hpp"
+#include "erhe_geometry/operation/smooth_vertices.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
@@ -2697,6 +2699,78 @@ auto Mcp_server::action_bridge_mesh_loops(const json& args) -> std::string
         {"twist_offset", options.twist_offset},
         {"cuts",         options.cuts}
     }).dump();
+}
+
+auto Mcp_server::action_flip_mesh_facets(const json& args) -> std::string
+{
+    // Flip (catalog M10) on the facets of the live component selection.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->flip_normals();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Flip needs a live selection in a mesh component mode (vertex, edge or face) and no running component edit");
+    }
+    return make_json_content({{"queued", true}}).dump();
+}
+
+auto Mcp_server::action_recalculate_mesh_normals(const json& args) -> std::string
+{
+    // Recalculate normals (catalog M10): the facets of the live component
+    // selection, or in object mode every facet of the selected meshes.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const std::string side_name = args.value("side", std::string{"outside"});
+    erhe::geometry::operation::Normal_side side{erhe::geometry::operation::Normal_side::outside};
+    if (side_name == "outside") {
+        side = erhe::geometry::operation::Normal_side::outside;
+    } else if (side_name == "inside") {
+        side = erhe::geometry::operation::Normal_side::inside;
+    } else {
+        return make_error_content("side must be outside or inside");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->recalculate_normals(side);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Recalculate normals needs a live selection in a mesh component mode and no running component edit, or a selected mesh in object mode");
+    }
+    return make_json_content({{"queued", true}, {"side", side_name}}).dump();
+}
+
+auto Mcp_server::action_smooth_mesh_vertices(const json& args) -> std::string
+{
+    // Smooth vertices (catalog M10) on the vertices of the live component
+    // selection: one in-place vertex move per primitive (the Geometry and
+    // the selection survive). Explicit-state rule: options not given take
+    // the library defaults, never the Operations window's widgets.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Smooth_vertices_options options{};
+    options.factor = args.value("factor", options.factor);
+    options.repeat = args.value("repeat", options.repeat);
+    if ((options.factor < 0.0f) || (options.factor > 1.0f)) {
+        return make_error_content("factor must be in [0, 1]");
+    }
+    if ((options.repeat < 1) || (options.repeat > 1000)) {
+        return make_error_content("repeat must be in [1, 1000]");
+    }
+    if (!m_context.operations->smooth_vertices(options)) {
+        return make_error_content("Smooth vertices needs a live selection in a mesh component mode (vertex, edge or face) with a vertex that moves, and no running component edit");
+    }
+    return make_json_content({{"queued", true}, {"factor", options.factor}, {"repeat", options.repeat}}).dump();
 }
 
 auto Mcp_server::action_separate_mesh_selection(const json& args) -> std::string

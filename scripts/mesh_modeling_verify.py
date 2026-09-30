@@ -66,6 +66,14 @@ along y the top and bottom faces are deleted and their rims bridged through
 the inside (plain, with one cut, and merged at factor 0.25), each with undo.
 The Delete key during a G slide deletes nothing (the component commands
 decline while a modal component edit runs).
+Flip, recalculate normals and smooth vertices (catalog M10) are checked on the
+plain box: flip_mesh_facets of one face (its winding normal, read back through
+get_mesh_attribute_values, reversed; the counts and the selection kept),
+recalculate_mesh_normals outside on the box with two flipped faces (face mode
+and object mode; every face outward) and inside, each with undo; the Shift+N
+key recalculates (no frame node) and N alone still creates a frame node with
+the mesh counts unchanged; smooth_mesh_vertices of one vertex of the
+Catmull-Clark box with factor 1 lands it on its neighbours' average, with undo.
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -2145,6 +2153,194 @@ def run_bridge(e):
     e.call("set_mesh_component_mode", {"mode": "object"})
 
 
+def facet_winding(e, node_name, facet):
+    """(Newell normal, centre, corner normals) of one facet, read back through
+    get_mesh_attribute_values in the facet's corner order."""
+    element = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": node_name, "domain": "facet", "indices": [facet]
+    })["elements"][0]
+    vertices = element["vertices"]
+    p = vertex_positions(e, node_name, vertices)
+    points = [p[v] for v in vertices]
+    normal = [0.0, 0.0, 0.0]
+    for i, a in enumerate(points):
+        b = points[(i + 1) % len(points)]
+        normal[0] += (a[1] - b[1]) * (a[2] + b[2])
+        normal[1] += (a[2] - b[2]) * (a[0] + b[0])
+        normal[2] += (a[0] - b[0]) * (a[1] + b[1])
+    centre = [sum(point[k] for point in points) / len(points) for k in range(3)]
+    corners = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": node_name, "domain": "corner", "indices": element["corners"]
+    })["elements"]
+    corner_normals = []
+    for corner in corners:
+        value = corner.get("attributes", {}).get("corner_normal")
+        if isinstance(value, dict) and value.get("present", False):
+            corner_normals.append(list(value["value"]))
+    return normalize3(normal), centre, corner_normals
+
+
+def outward_facets(e, node_name):
+    """{facet: True when its winding normal points away from the mesh centre}."""
+    vertex_count, _, facet_count = geometry_counts(e, node_name)
+    p = vertex_positions(e, node_name, range(vertex_count))
+    mesh_centre = [sum(point[k] for point in p.values()) / len(p) for k in range(3)]
+    result = {}
+    for facet in range(facet_count):
+        normal, centre, _ = facet_winding(e, node_name, facet)
+        result[facet] = dot3(normal, [centre[k] - mesh_centre[k] for k in range(3)]) > 0.0
+    return result
+
+
+def frame_node_count(e):
+    return sum(1 for node in e.call("get_scene_nodes", {"scene_name": e.scene})["nodes"] if node["name"] == "frame node")
+
+
+def run_normals_smooth(e):
+    """Flip, recalculate normals and smooth vertices, doc/plans/mesh_modeling.md
+    catalog M10."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    all_out = {facet: True for facet in range(6)}
+    expect("normals: plain box at its base counts", geometry_counts(e, BOX), base)
+    expect("normals: every face of the plain box faces outward", outward_facets(e, BOX), all_out)
+
+    # Flip one face.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=[0])
+    before_normal, _, _ = facet_winding(e, BOX, 0)
+    before = undo_count(e)
+    expect("flip one face: queued", e.call("flip_mesh_facets").get("queued"), True)
+    wait_idle(e)
+    after_normal, _, corner_normals = facet_winding(e, BOX, 0)
+    expect("flip one face: its normal reverses", round(dot3(before_normal, after_normal), 4), -1.0)
+    for i, corner_normal in enumerate(corner_normals):
+        check_true(f"flip one face: corner normal {i} follows the new winding", dot3(corner_normal, after_normal) > 0.99, str(corner_normal))
+    expect("flip one face: counts kept (one edge per vertex pair)", geometry_counts(e, BOX), base)
+    expect("flip one face: one undo entry", undo_count(e), before + 1)
+    expect("flip one face: the face stays selected", entry_of(e.call("get_mesh_component_selection"), BOX)["facets"], [0])
+    outward = outward_facets(e, BOX)
+    expect("flip one face: only face 0 faces inward", outward, {**all_out, 0: False})
+    undo_and_check(e, "flip one face", BOX, base)
+    expect("flip one face: undo restores the winding", outward_facets(e, BOX), all_out)
+
+    # Recalculate outside on a box with two flipped faces, face mode.
+    def flip_two():
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        select_on(e, BOX, facets=[0, 2])
+        e.call("flip_mesh_facets")
+        wait_idle(e)
+        expect("recalculate: two faces flipped", outward_facets(e, BOX), {**all_out, 0: False, 2: False})
+
+    flip_two()
+    select_on(e, BOX, facets=list(range(6)))
+    before = undo_count(e)
+    expect("recalculate outside (face mode): queued", e.call("recalculate_mesh_normals", {"side": "outside"}).get("queued"), True)
+    wait_idle(e)
+    expect("recalculate outside (face mode): every face outward", outward_facets(e, BOX), all_out)
+    expect("recalculate outside (face mode): one undo entry", undo_count(e), before + 1)
+    expect("recalculate outside (face mode): counts kept", geometry_counts(e, BOX), base)
+    undo_and_check(e, "recalculate outside (face mode)", BOX, base)
+
+    # Inside, face mode.
+    select_on(e, BOX, facets=list(range(6)))
+    e.call("recalculate_mesh_normals", {"side": "inside"})
+    wait_idle(e)
+    expect("recalculate inside: every face inward", outward_facets(e, BOX), {facet: False for facet in range(6)})
+    undo_and_check(e, "recalculate inside", BOX, base)
+
+    # Object mode: the whole of the selected mesh.
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("recalculate_mesh_normals", {"scene_name": e.scene, "node_name": BOX})
+    wait_idle(e)
+    expect("recalculate outside (object mode, node target): every face outward", outward_facets(e, BOX), all_out)
+    undo_and_check(e, "recalculate outside (object mode)", BOX, base)
+    expect("recalculate: undo returns to the two flipped faces", outward_facets(e, BOX), {**all_out, 0: False, 2: False})
+
+    # The keys, with the pointer over a viewport.
+    viewport = e.call("get_viewports")["viewports"][0]
+    x = viewport["x"] + (viewport["width"] / 2.0)
+    y = viewport["y"] + (viewport["height"] / 2.0)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    select_on(e, BOX, facets=list(range(6)))
+    frames = frame_node_count(e)
+    before = undo_count(e)
+    e.key("n", ["shift"])
+    wait_idle(e)
+    expect("Shift+N: every face outward", outward_facets(e, BOX), all_out)
+    expect("Shift+N: one undo entry", undo_count(e), before + 1)
+    expect("Shift+N: no frame node", frame_node_count(e), frames)
+    undo_and_check(e, "Shift+N", BOX, base)
+
+    # Undo the two-face flip.
+    undo_and_check(e, "flip two faces", BOX, base)
+    expect("normals: undo returns the plain box", outward_facets(e, BOX), all_out)
+
+    # N alone still creates a frame node; the mesh is untouched.
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    frames = frame_node_count(e)
+    e.key("n", [])
+    wait_idle(e)
+    expect("N: a frame node is created", frame_node_count(e), frames + 1)
+    expect("N: the box counts are unchanged", geometry_counts(e, BOX), base)
+    e.call("undo")
+    wait_idle(e)
+    expect("N: undo removes the frame node", frame_node_count(e), frames)
+
+    # Smooth one vertex of the Catmull-Clark box with factor 1: it lands on
+    # the average of its edge-connected neighbours.
+    vertex_count, _, facet_count = geometry_counts(e, CC_BOX)
+    facets = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": CC_BOX, "domain": "facet", "indices": list(range(facet_count))
+    })["elements"]
+    vertex = 0
+    neighbours = set()
+    for element in facets:
+        vertices = element["vertices"]
+        for i, v in enumerate(vertices):
+            if v == vertex:
+                neighbours.add(vertices[i - 1])
+                neighbours.add(vertices[(i + 1) % len(vertices)])
+    p = vertex_positions(e, CC_BOX, [vertex] + sorted(neighbours))
+    average = [sum(p[n][k] for n in neighbours) / len(neighbours) for k in range(3)]
+    base_cc = geometry_counts(e, CC_BOX)
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=[vertex])
+    before = undo_count(e)
+    result = e.call("smooth_mesh_vertices", {"factor": 1.0})
+    expect("smooth one vertex: queued", result.get("queued"), True)
+    wait_idle(e)
+    moved = vertex_position(e, CC_BOX, vertex)
+    check_true("smooth one vertex with factor 1 lands on its neighbours' average", near(moved, average), f"{moved} vs {average}")
+    expect("smooth one vertex: counts kept", geometry_counts(e, CC_BOX), base_cc)
+    expect("smooth one vertex: one undo entry", undo_count(e), before + 1)
+    expect("smooth one vertex: the vertex stays selected", entry_of(e.call("get_mesh_component_selection"), CC_BOX)["vertices"], [vertex])
+    e.call("undo")
+    wait_idle(e)
+    check_true("smooth one vertex: undo restores the position", near(vertex_position(e, CC_BOX, vertex), p[vertex]), str(vertex_position(e, CC_BOX, vertex)))
+
+    # Bad arguments are refused.
+    select_on(e, CC_BOX, vertices=[vertex])
+    try:
+        e.call("smooth_mesh_vertices", {"factor": 2.0})
+        check_true("smooth_mesh_vertices refuses factor 2", False, "no error")
+    except RuntimeError:
+        check_true("smooth_mesh_vertices refuses factor 2", True)
+    try:
+        e.call("recalculate_mesh_normals", {"side": "sideways"})
+        check_true("recalculate_mesh_normals refuses an unknown side", False, "no error")
+    except RuntimeError:
+        check_true("recalculate_mesh_normals refuses an unknown side", True)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -2248,6 +2444,8 @@ def run(e):
     run_fill_connect(e)
 
     run_bridge(e)
+
+    run_normals_smooth(e)
 
 
 def main():

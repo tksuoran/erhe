@@ -7670,6 +7670,87 @@
     "name": "bridge_mesh_loops"
   },
   {
+    "description": "Blender Flip normals (Mesh > Normals > Flip; doc/plans/mesh_modeling.md catalog M10), queued and undoable, on the active mesh-component selection: reverses the winding of the selected faces (vertex / edge mode: the faces whose vertices / edges are all selected). Each corner keeps its vertex and attributes (texture coordinates); corner normals of the flipped faces are negated and smooth vertex normals recomputed. Vertex, edge and face indices and the selection are kept. An error without a live selection in a component mode or during a modal component edit. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "flip_mesh_facets"
+  },
+  {
+    "description": "Blender Recalculate normals outside / inside (doc/plans/mesh_modeling.md catalog M10; the editor binds Shift+N to outside), queued and undoable. In a mesh component mode it acts on the faces of the live selection (vertex / edge mode: the faces whose vertices / edges are all selected); in object mode on every face of the selected meshes. For each region of those faces connected through edges with two faces, the face farthest from the region centre along its own normal line is oriented to face away from the centre and the winding propagates across the shared edges; inside inverts the result. Indices and the selection are kept. An error without a live selection in a component mode, without a selected mesh in object mode, or during a modal component edit. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        },
+        "side": {
+          "description": "outside (default) or inside",
+          "enum": [
+            "outside",
+            "inside"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "recalculate_mesh_normals"
+  },
+  {
+    "description": "Blender Smooth Vertices (Vertex > Smooth Vertices; doc/plans/mesh_modeling.md catalog M10), undoable, on the vertices of the live mesh-component selection (any of vertex, edge, face mode). Each iteration moves every selected vertex by factor toward the average of its edge-connected neighbours, using the positions from the start of the iteration; boundary vertices too. Positions only: one in-place vertex move per primitive ('Smooth Vertices' undo entry), so the geometry, its indices and the selection are kept. An error without a live selection, when no vertex moves, or during a modal component edit. Options not given take the library defaults (factor 0.5, repeat 1).",
+    "inputSchema": {
+      "properties": {
+        "factor": {
+          "description": "0 .. 1 (default 0.5): 1 moves a vertex onto its neighbours' average",
+          "type": "number"
+        },
+        "repeat": {
+          "description": "Iterations, 1 .. 1000 (default 1)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "smooth_mesh_vertices"
+  },
+  {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",
     "inputSchema": {
       "properties": {

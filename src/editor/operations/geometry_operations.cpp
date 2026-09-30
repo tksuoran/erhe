@@ -24,6 +24,7 @@
 #include "erhe_geometry/operation/connect_vertices.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/fill.hpp"
+#include "erhe_geometry/operation/flip_facets.hpp"
 #include "erhe_geometry/operation/split_components.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
@@ -681,6 +682,71 @@ Bridge_loops_operation::Bridge_loops_operation(
         }
     );
     set_description(fmt::format("Bridge Edge Loops {}", describe_entries()));
+}
+
+Flip_facets_operation::Flip_facets_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Flip Normals");
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            std::set<GEO::index_t> facets;
+            erhe::geometry::operation::get_selection_facets(before_geometry, selection_or_empty(remap_source), facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::flip_facets(before_geometry, after_geometry, facets, &remap);
+        }
+    );
+    set_description(fmt::format("Flip Normals {}", describe_entries()));
+}
+
+Recalculate_normals_operation::Recalculate_normals_operation(
+    Mesh_operation_parameters&&                   context,
+    const erhe::geometry::operation::Normal_side side
+)
+    : Mesh_operation{std::move(context)}
+{
+    const char* const name = (side == erhe::geometry::operation::Normal_side::outside)
+        ? "Recalculate Normals Outside"
+        : "Recalculate Normals Inside";
+    set_description(name);
+    // The snapshot is empty outside a mesh component mode: the whole of each
+    // selected mesh is recalculated. In a component mode, a primitive
+    // without a selection (remap_source nullptr) is left as it is.
+    const bool whole_mesh = m_parameters.component_selection.empty();
+    make_entries(
+        [side, whole_mesh](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            if (whole_mesh) {
+                erhe::geometry::operation::recalculate_facet_normals(before_geometry, after_geometry, {}, side, &remap);
+                return;
+            }
+            std::set<GEO::index_t> facets;
+            erhe::geometry::operation::get_selection_facets(before_geometry, selection_or_empty(remap_source), facets);
+            if (facets.empty()) {
+                // Nothing of this primitive is selected: flipping no facet
+                // emits it unchanged (the library's empty set would mean the
+                // whole mesh).
+                erhe::geometry::operation::flip_facets(before_geometry, after_geometry, facets, &remap);
+                return;
+            }
+            erhe::geometry::operation::recalculate_facet_normals(before_geometry, after_geometry, facets, side, &remap);
+        }
+    );
+    set_description(fmt::format("{} {}", name, describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

@@ -5,6 +5,7 @@
 
 #include "erhe_geometry/operation/bridge_loops.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
+#include "erhe_geometry/operation/flip_facets.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
@@ -250,6 +251,28 @@ class Bridge_loops_operation : public Mesh_operation
 {
 public:
     Bridge_loops_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Bridge_loops_options options);
+};
+
+// Flip (doc/plans/mesh_modeling.md catalog M10;
+// erhe::geometry::operation::flip_facets()) on the component selection
+// snapshot: reverses the winding of the facets of get_selection_facets()
+// (the selected faces, or the faces whose vertices / edges are all
+// selected). The selection is kept.
+class Flip_facets_operation : public Mesh_operation
+{
+public:
+    explicit Flip_facets_operation(Mesh_operation_parameters&& context);
+};
+
+// Recalculate normals outside / inside (catalog M10;
+// erhe::geometry::operation::recalculate_facet_normals()). With a component
+// selection snapshot it acts on the facets of get_selection_facets() (a
+// primitive without a selection is emitted unchanged); without one (object
+// mode) on every facet of each selected mesh. The selection is kept.
+class Recalculate_normals_operation : public Mesh_operation
+{
+public:
+    Recalculate_normals_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Normal_side side);
 };
 
 class Reverse_operation : public Mesh_operation

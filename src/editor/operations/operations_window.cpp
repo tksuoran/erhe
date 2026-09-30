@@ -17,6 +17,7 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/mesh_operation.hpp"
+#include "operations/move_mesh_vertices_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
@@ -785,6 +786,10 @@ Operations::Operations(
     , m_fill_selected_command              {commands, "Geometry.Fill.Selected",            [this]() -> bool { return fill_selection(); } }
     , m_connect_selected_command           {commands, "Geometry.Connect.Selected",         [this]() -> bool { return connect_vertex_path(); } }
     , m_bridge_loops_command               {commands, "Geometry.Bridge.Loops",             [this]() -> bool { return bridge_loops(); } }
+    , m_flip_normals_command               {commands, "Geometry.Normals.Flip",               [this]() -> bool { return flip_normals(); } }
+    , m_recalculate_normals_outside_command{commands, "Geometry.Normals.RecalculateOutside", [this]() -> bool { return recalculate_normals(erhe::geometry::operation::Normal_side::outside); } }
+    , m_recalculate_normals_inside_command {commands, "Geometry.Normals.RecalculateInside",  [this]() -> bool { return recalculate_normals(erhe::geometry::operation::Normal_side::inside); } }
+    , m_smooth_vertices_command            {commands, "Geometry.Smooth.Vertices",            [this]() -> bool { return smooth_vertices(); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -858,6 +863,10 @@ Operations::Operations(
     commands.register_command(&m_fill_selected_command);
     commands.register_command(&m_connect_selected_command);
     commands.register_command(&m_bridge_loops_command);
+    commands.register_command(&m_flip_normals_command);
+    commands.register_command(&m_recalculate_normals_outside_command);
+    commands.register_command(&m_recalculate_normals_inside_command);
+    commands.register_command(&m_smooth_vertices_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -928,6 +937,10 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_fill_selected_command,               "Geometry.Fill");
     commands.bind_command_to_menu(&m_connect_selected_command,            "Geometry.Connect Vertex Path");
     commands.bind_command_to_menu(&m_bridge_loops_command,                "Geometry.Bridge Edge Loops");
+    commands.bind_command_to_menu(&m_flip_normals_command,                "Geometry.Normals.Flip");
+    commands.bind_command_to_menu(&m_recalculate_normals_outside_command, "Geometry.Normals.Recalculate Outside");
+    commands.bind_command_to_menu(&m_recalculate_normals_inside_command,  "Geometry.Normals.Recalculate Inside");
+    commands.bind_command_to_menu(&m_smooth_vertices_command,             "Geometry.Smooth Vertices");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -975,6 +988,13 @@ Operations::Operations(
     // slide. J has no other binding.
     commands.bind_command_to_key(&m_fill_selected_command,      erhe::window::Key_f, erhe::commands::Button_trigger::Button_pressed, 0u);
     commands.bind_command_to_key(&m_connect_selected_command,   erhe::window::Key_j, erhe::commands::Button_trigger::Button_pressed, 0u);
+    // Shift+N recalculates normals outside (D7). The plain N (create frame
+    // node, Transform_tool) is bound without a mask; a masked binding
+    // dispatches before every mask-less one, so Shift+N reaches this command
+    // first, and N alone never matches the shift mask. Declining (no live
+    // component selection, or no selected mesh in object mode) lets Shift+N
+    // fall through to N.
+    commands.bind_command_to_key(&m_recalculate_normals_outside_command, erhe::window::Key_n, erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_shift);
 
     // Parameterized invokers for operations that can be dragged into / invoked from
     // an inventory slot. Each thunk runs its operation with the explicit snapshot
@@ -1584,6 +1604,42 @@ void Operations::imgui()
             ImGui::SliderFloat("Merge Factor", &m_bridge_loops_options.merge_factor, 0.0f, 1.0f);
             ImGui::DragInt    ("Twist",        &m_bridge_loops_options.twist_offset, 0.1f, -1000, 1000);
             ImGui::SliderInt  ("Bridge Cuts",  &m_bridge_loops_options.cuts, 0, 100);
+            ImGui::PopID();
+        }
+        if (visible("Flip Normals")) {
+            if (make_button("Flip Normals", merge_component_mode, button_size)) {
+                flip_normals();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Reverses the winding of the selected faces (vertex / edge mode: the faces whose vertices / edges are all selected)");
+            }
+        }
+        if (visible("Recalculate Outside")) {
+            if (make_button("Recalculate Outside", selection_aware_mode, button_size)) {
+                recalculate_normals(erhe::geometry::operation::Normal_side::outside);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Makes the normals of the selected faces point outside (object mode: every face of the selected meshes) (Shift+N)");
+            }
+        }
+        if (visible("Recalculate Inside")) {
+            if (make_button("Recalculate Inside", selection_aware_mode, button_size)) {
+                recalculate_normals(erhe::geometry::operation::Normal_side::inside);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Makes the normals of the selected faces point inside (object mode: every face of the selected meshes)");
+            }
+        }
+        if (visible("Smooth Vertices")) {
+            if (make_button("Smooth Vertices", merge_component_mode, button_size)) {
+                smooth_vertices();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Moves each selected vertex toward the average of its neighbours");
+            }
+            ImGui::PushID("smooth_vertices");
+            ImGui::SliderFloat("Smoothing", &m_smooth_vertices_options.factor, 0.0f, 1.0f);
+            ImGui::SliderInt  ("Repeat",    &m_smooth_vertices_options.repeat, 1, 100);
             ImGui::PopID();
         }
     }
@@ -3263,6 +3319,165 @@ auto Operations::bridge_loops(const erhe::geometry::operation::Bridge_loops_opti
         },
         true
     );
+    return true;
+}
+
+auto Operations::flip_normals() -> bool
+{
+    if (!has_component_mode_selection(m_context, "Flip Normals")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Flip_facets_operation>(std::move(params))
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::recalculate_normals(const erhe::geometry::operation::Normal_side side) -> bool
+{
+    const char* const name = (side == erhe::geometry::operation::Normal_side::outside)
+        ? "Recalculate Normals Outside"
+        : "Recalculate Normals Inside";
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if (is_mesh_component_mode(mode)) {
+        if (!has_component_mode_selection(m_context, name)) {
+            return false;
+        }
+    } else {
+        // Object mode: the whole of every selected mesh.
+        std::vector<std::shared_ptr<erhe::Item_base>> items;
+        if (!resolve_operation_items(true, Operation_reference::operands_only, items)) {
+            log_operations->info("{}: no mesh selected", name);
+            return false;
+        }
+        const bool has_mesh = std::any_of(
+            items.begin(),
+            items.end(),
+            [](const std::shared_ptr<erhe::Item_base>& item) -> bool {
+                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                return node && (erhe::scene::get_mesh(node.get()) != nullptr);
+            }
+        );
+        if (!has_mesh) {
+            log_operations->info("{}: no mesh selected", name);
+            return false;
+        }
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, side](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Recalculate_normals_operation>(std::move(params), side)
+            );
+        },
+        true
+    );
+    return true;
+}
+
+auto Operations::smooth_vertices() -> bool
+{
+    return smooth_vertices(m_smooth_vertices_options);
+}
+
+auto Operations::smooth_vertices(const erhe::geometry::operation::Smooth_vertices_options options) -> bool
+{
+    if (!has_component_mode_selection(m_context, "Smooth Vertices")) {
+        return false;
+    }
+    // Positions only: each affected primitive gets one in-place
+    // Move_mesh_vertices_operation, which keeps the Geometry object, so the
+    // component selection (keyed on it) survives the edit, its undo and redo.
+    std::vector<std::shared_ptr<Operation>> operations;
+    std::vector<GEO::vec3f>                 positions;
+    for (const Mesh_component_entry& entry : m_context.mesh_component_selection->get_entries()) {
+        if (!m_context.mesh_component_selection->is_live(entry) || entry.vertices.empty()) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh>        mesh     = entry.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!mesh || !geometry) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        if (entry.primitive_index >= primitives.size()) {
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[entry.primitive_index].primitive;
+        if (!primitive || !primitive->render_shape) {
+            continue;
+        }
+        const std::set<GEO::index_t>& vertex_set = entry.vertices.get();
+        erhe::geometry::operation::smooth_vertices(*geometry.get(), vertex_set, options, positions);
+
+        const GEO::Mesh&          geo_mesh = geometry->get_mesh();
+        std::vector<GEO::index_t> vertices;
+        std::vector<glm::vec3>    before_positions;
+        std::vector<glm::vec3>    after_positions;
+        std::size_t               slot = 0;
+        for (const GEO::index_t vertex : vertex_set) {
+            if (vertex >= geo_mesh.vertices.nb()) {
+                continue; // smooth_vertices() skips it too
+            }
+            const GEO::vec3f before = erhe::geometry::get_pointf(geo_mesh.vertices, vertex);
+            const GEO::vec3f after  = positions[slot++];
+            if ((before.x == after.x) && (before.y == after.y) && (before.z == after.z)) {
+                continue;
+            }
+            vertices.push_back(vertex);
+            before_positions.emplace_back(before.x, before.y, before.z);
+            after_positions .emplace_back(after.x, after.y, after.z);
+        }
+        if (vertices.empty()) {
+            continue;
+        }
+        const erhe::primitive::Build_info build_info{
+            .primitive_types = {
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
+            },
+            // Skinned meshes must rebuild into the skinned vertex format.
+            .buffer_info = mesh->skin
+                ? m_context.mesh_memory->make_skinned_primitive_buffer_info()
+                : m_context.mesh_memory->make_primitive_buffer_info()
+        };
+        operations.push_back(
+            std::make_shared<Move_mesh_vertices_operation>(
+                Move_mesh_vertices_operation::Parameters{
+                    .mesh             = mesh,
+                    .primitive_index  = entry.primitive_index,
+                    .geometry         = geometry,
+                    .vertices         = std::move(vertices),
+                    .before_positions = std::move(before_positions),
+                    .after_positions  = std::move(after_positions),
+                    .build_info       = build_info,
+                    .normal_style     = primitive->render_shape->get_normal_style(),
+                    .description      = "Smooth Vertices"
+                }
+            )
+        );
+    }
+    if (operations.empty()) {
+        log_operations->info("Smooth Vertices: nothing moved");
+        return false;
+    }
+    if (operations.size() == 1) {
+        m_context.operation_stack->queue(operations.front());
+    } else {
+        m_context.operation_stack->queue(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{.operations = std::move(operations)}
+            )
+        );
+    }
     return true;
 }
 

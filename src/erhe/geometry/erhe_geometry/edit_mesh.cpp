@@ -1420,6 +1420,15 @@ void Edit_mesh::set_corner_sources(const GEO::index_t facet, const GEO::index_t 
     m_facets[facet].corners[local_corner].sources.assign(sources.begin(), sources.end());
 }
 
+void Edit_mesh::reverse_facet(const GEO::index_t facet)
+{
+    ERHE_VERIFY(is_facet_alive(facet));
+    std::vector<Edit_corner>& corners = m_facets[facet].corners;
+    if (corners.size() > 2) {
+        std::reverse(corners.begin() + 1, corners.end());
+    }
+}
+
 auto Edit_mesh::create_facet_from_corners(const std::span<const Edit_corner> corners, const GEO::index_t source_facet) -> GEO::index_t
 {
     const std::size_t n = corners.size();

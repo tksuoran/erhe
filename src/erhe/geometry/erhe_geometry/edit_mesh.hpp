@@ -250,6 +250,12 @@ public:
     // Replaces the provenance (weighted source corners) of one corner.
     void set_corner_sources(GEO::index_t facet, GEO::index_t local_corner, std::span<const Edit_source> sources);
 
+    // Reverses the winding of the facet: the corners run in the opposite
+    // order, the first corner stays first, and each corner keeps its vertex
+    // and provenance. The facet's edges (and their facet lists) are
+    // unchanged.
+    void reverse_facet(GEO::index_t facet);
+
 private:
     [[nodiscard]] static auto make_edge_key(GEO::index_t vertex_a, GEO::index_t vertex_b) -> std::uint64_t;
 

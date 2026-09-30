@@ -9,6 +9,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/flip_facets.hpp`:
+  `flip_facets()` and `recalculate_facet_normals()` with `Normal_side`
+  (outside / inside): flip and recalculate normals of
+  `doc/plans/mesh_modeling.md` catalog M10, composed on `Edit_mesh`, keeping
+  every index and carrying the selection through `Component_remap`;
+  `Edit_mesh::reverse_facet()`.
+- `erhe::geometry`: `erhe_geometry/operation/smooth_vertices.hpp`:
+  `smooth_vertices()` with `Smooth_vertices_options` (factor, repeat): the
+  new positions of the selected vertices moved toward their neighbours'
+  average (catalog M10), without changing the geometry.
 - `erhe::geometry`: `erhe_geometry/operation/bridge_loops.hpp`:
   `bridge_loops()` with `Bridge_loops_options` (`Bridge_connection`
   open loop / closed loop / loop pairs, merge, merge factor, twist offset,
@@ -419,6 +429,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   drag) aborts.
 
 ### Fixed
+
+- `erhe::geometry`: `Geometry::build_edges()` creates one edge per vertex
+  pair when two facets traverse the pair in the same direction (a winding
+  flip between them); it created a second, facet-less edge for the pair.
 
 - `erhe::geometry`: `Geometry::update_connectivity()` orders the corners
   of every vertex into a fan (`get_vertex_corners()`); it stopped at the

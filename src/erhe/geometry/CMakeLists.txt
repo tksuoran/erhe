@@ -70,6 +70,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/edit_mesh_operation.hpp
     erhe_geometry/operation/fill.cpp
     erhe_geometry/operation/fill.hpp
+    erhe_geometry/operation/flip_facets.cpp
+    erhe_geometry/operation/flip_facets.hpp
     erhe_geometry/operation/generate_frame_field_tangents.cpp
     erhe_geometry/operation/generate_frame_field_tangents.hpp
     erhe_geometry/operation/generate_tangents.cpp
@@ -90,6 +92,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/merge_vertices.hpp
     erhe_geometry/operation/subdivide_edges.cpp
     erhe_geometry/operation/subdivide_edges.hpp
+    erhe_geometry/operation/smooth_vertices.cpp
+    erhe_geometry/operation/smooth_vertices.hpp
     erhe_geometry/operation/split_components.cpp
     erhe_geometry/operation/split_components.hpp
     erhe_geometry/operation/normalize.cpp

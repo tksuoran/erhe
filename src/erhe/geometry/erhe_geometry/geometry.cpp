@@ -1405,53 +1405,42 @@ void Geometry::build_edges()
 
     m_vertex_pair_to_edge.clear();
 
-    // First pass - shared edges
+    // First pass - shared edges: one edge per vertex pair that some facet
+    // traverses from the lower to the higher vertex, numbered in order of
+    // first appearance. Two facets traversing a pair in the same direction
+    // (a winding flip between them, e.g. after flipping one facet) share the
+    // one edge.
     {
     ERHE_PROFILE_SCOPE("build_edges: first pass");
-    // The shared edges are counted first and created in one call:
+    // The shared edges are numbered first and created in one call:
     // create_edge() resizes every edge attribute store once per edge.
     GEO::index_t shared_edge_count = 0;
-    for (GEO::index_t facet : m_mesh.facets) {
-        for (GEO::index_t corner : m_mesh.facets.corners(facet)) {
-            const GEO::index_t next_corner = m_mesh.facets.next_corner_around_facet(facet, corner);
-            if (m_mesh.facet_corners.vertex(corner) < m_mesh.facet_corners.vertex(next_corner)) {
-                ++shared_edge_count;
-            }
-        }
-    }
-    m_vertex_pair_to_edge.reserve(shared_edge_count);
-    GEO::index_t next_shared_edge = (shared_edge_count > 0) ? m_mesh.edges.create_edges(shared_edge_count) : 0;
+    m_vertex_pair_to_edge.reserve(m_mesh.facet_corners.nb() / 2);
     for (GEO::index_t facet : m_mesh.facets) {
         const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
         for (GEO::index_t local_facet_corner = 0; local_facet_corner < facet_corner_count; ++local_facet_corner) {
-            const GEO::index_t corner       = m_mesh.facets.corner(facet, local_facet_corner);
-            const GEO::index_t next_corner_ = m_mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
-            const GEO::index_t next_corner  = m_mesh.facets.next_corner_around_facet(facet, corner);
-            ERHE_VERIFY(next_corner_ == next_corner);
-            const GEO::index_t a            = m_mesh.facet_corners.vertex(corner);
-            const GEO::index_t b            = m_mesh.facet_corners.vertex(next_corner);
+            const GEO::index_t corner      = m_mesh.facets.corner(facet, local_facet_corner);
+            const GEO::index_t next_corner = m_mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
+            ERHE_VERIFY(next_corner == m_mesh.facets.next_corner_around_facet(facet, corner));
+            const GEO::index_t a           = m_mesh.facet_corners.vertex(corner);
+            const GEO::index_t b           = m_mesh.facet_corners.vertex(next_corner);
             ++facet_edge_count;
             ERHE_VERIFY(a != b);
-            if (a < b) { // This does not work for non-shared edges going wrong direction
-                const GEO::index_t edge = next_shared_edge++;
-                m_mesh.edges.set_vertex(edge, 0, a);
-                m_mesh.edges.set_vertex(edge, 1, b);
+            if (a < b) {
                 const std::pair<GEO::index_t, GEO::index_t> key{a, b};
-                m_vertex_pair_to_edge.insert({key, edge});
-
-                //erhe::geometry::log_geometry->info(
-                //    "pass 1: created edge {} from facet {} corners {} and {} - vertices {} and {}",
-                //    edge, facet, corner, next_corner, a, b
-                //);
-            //} else {
-            //    erhe::geometry::log_geometry->info(
-            //        "pass 1: NOT created edge from facet {} corners {} and {} - vertices {} and {}",
-            //        facet, corner, next_corner, a, b
-            //    );
+                if (m_vertex_pair_to_edge.insert({key, shared_edge_count}).second) {
+                    ++shared_edge_count;
+                }
             }
         }
     }
-
+    // The edges were cleared above, so the new ones start at index 0.
+    const GEO::index_t first_shared_edge = (shared_edge_count > 0) ? m_mesh.edges.create_edges(shared_edge_count) : 0;
+    ERHE_VERIFY(first_shared_edge == 0);
+    for (const std::pair<const std::pair<GEO::index_t, GEO::index_t>, GEO::index_t>& entry : m_vertex_pair_to_edge) {
+        m_mesh.edges.set_vertex(entry.second, 0, entry.first.first);
+        m_mesh.edges.set_vertex(entry.second, 1, entry.first.second);
+    }
     }
 
     // Second pass - non-shared edges wrong direction or non-manifold wrong direction

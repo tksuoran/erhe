@@ -405,6 +405,9 @@ private:
     auto action_fill_mesh_selection           (const nlohmann::json& args) -> std::string;
     auto action_connect_mesh_vertices         (const nlohmann::json& args) -> std::string;
     auto action_bridge_mesh_loops             (const nlohmann::json& args) -> std::string;
+    auto action_flip_mesh_facets              (const nlohmann::json& args) -> std::string;
+    auto action_recalculate_mesh_normals      (const nlohmann::json& args) -> std::string;
+    auto action_smooth_mesh_vertices          (const nlohmann::json& args) -> std::string;
     auto action_set_gizmo_visibility          (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
 

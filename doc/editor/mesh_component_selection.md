@@ -152,6 +152,7 @@ bindings allow it, exact modifier masks):
 | `Geometry.Separate.Selection` | P | Move the selection's faces into a new mesh beside the original |
 | `Geometry.Fill.Selected` | F | Fill: faces from the selection's vertices, edges or faces (any of vertex, edge, face mode) |
 | `Geometry.Connect.Selected` | J | Connect vertex path between the selected vertices (vertex or edge mode) |
+| `Geometry.Normals.RecalculateOutside` | Shift+N | Recalculate the normals of the selection's faces outside (object mode: every face of the selected meshes) |
 
 The object `Selection` binds the same keys (`Selection.delete`,
 `Selection.cut`); both of its commands decline in that state and the two
@@ -169,9 +170,16 @@ vertex and edge mode) and while a modal component edit runs: F is also the
 fly camera's frame-selection key (bound without a mask, so it frames in
 object mode) and a slide's flip key (the slide's F is declared after the
 fill command and receives the key because fill declines during the slide).
+Shift+N carries the shift mask; the plain N (create a frame node) is bound
+without a mask, so the masked Shift+N dispatches first and N alone never
+matches it. Shift+N declines without a live component selection in a
+component mode and without a selected mesh in object mode, and the key then
+falls through to N. Flip (`Geometry.Normals.Flip`), recalculate inside
+(`Geometry.Normals.RecalculateInside`) and smooth vertices
+(`Geometry.Smooth.Vertices`) have no key (Blender reaches them from menus).
 Every one of these commands, and every Operations window button acting on
 the component selection (delete, dissolve, merge, subdivide, split, rip,
-separate, inset, bevel, fill, connect, bridge), declines while a modal
+separate, inset, bevel, fill, connect, bridge, flip, recalculate, smooth), declines while a modal
 component edit (slide, loop cut, inset, bevel, knife) runs, so Delete during
 a G slide deletes nothing.
 
@@ -349,6 +357,17 @@ command ends with a flush (section 3).
   vertex, edge or face mode (`Bridge_loops_operation`,
   `doc/editor/operations.md`); an invalid loop selection leaves the mesh
   unchanged (logged).
+- `flip_mesh_facets` - no options; needs a live selection in vertex, edge or
+  face mode (`Flip_facets_operation`): the faces of the selection reverse
+  their winding; indices and the selection are kept.
+- `recalculate_mesh_normals` - `side` (`outside` default, `inside`); the
+  faces of the live selection in a component mode, every face of the
+  selected meshes in object mode (`Recalculate_normals_operation`).
+- `smooth_mesh_vertices` - `factor` (0.5, in [0, 1]), `repeat` (1, in
+  [1, 1000]); needs a live selection in vertex, edge or face mode; one
+  in-place "Smooth Vertices" vertex move per primitive, so indices and the
+  selection are kept; an error when no vertex moves. Node targets do not
+  apply (it reads the component selection only).
 
 The geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
