@@ -31,8 +31,10 @@
 ✓PHASE-3+4-DONE-except-M9
 ✓M9::{split_components.hpp(split_facets/split_edges/rip_vertices/extract_facets)+Y/V/P+Separate_selection_operation(new-node-after-original;by-loose-parts/material-not-implemented)+MCP;197-geometry-tests;node-order-verify-extended}
 ✓PHASES-1-4-DONE
-⚡M11+M12::Screen_snap+knife(no-plane-query-on-IScene->plane-vs-CPU-facets;first-hit-rays-for-occlusion)
-?phase-6::M13a-bevel->M15-fill->M14-bridge->M16-connect->M13b
+✓M11+M12::{Knife_cut-library(f0fe636b0;209-geometry-tests)+K-knife-mode(Screen_snap,A/X/Y/Z,drag-hold,dbl-click-close,RMB-end,Ctrl+Z,C-cut-through,Enter/Space,Esc)+MCP-knife_cut_mesh+move-mode-snap-option(untested-at-runtime);verify-324/324;knife-hand-check-pending}
+✓PHASE-5-DONE
+⚡M13a::bevel-first-version(edges,1-segment,offset/width,loop-slide)
+?M15-fill->M14-bridge->M16-connect->M13b
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
