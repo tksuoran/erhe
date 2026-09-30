@@ -117,9 +117,14 @@ What is missing, as the concrete facts the catalog scores against:
   one `Fork_geometry_operation` (before and after primitives) so the whole
   gesture is one undo entry; cancel restores the before primitive without
   touching the operation stack.
-- **D4. Slide is a transform mode.** `Mesh_transform_mode` gains
-  `edge_slide` and `vertex_slide`, next to the extrude modes, with the rail
-  rules of section 4.6. Loop cut chains into edge slide for its second step.
+- **D4. Slide is a transform mode, and scalar modes drive a pointer drag.**
+  `Mesh_transform_mode` gains `edge_slide` and `vertex_slide`, next to the
+  extrude modes, with the rail rules of section 4.6. `Mesh_component_transform`
+  has, beside its gizmo-matrix path, a scalar path (begin, apply a factor,
+  commit, cancel) that a pointer drag started from the component tool
+  drives without a gizmo handle; Escape cancels any component edit by
+  restoring the before positions and primitive without queueing an
+  operation. Slide, inset, bevel and loop cut's slide step use this path.
 - **D5. Preselection overlays and snapping through the existing hover.**
   Loop cut and knife draw their candidate (the ring to cut, the cut
   polyline) in `tool_render` from the content `Hover_entry` and the D1
@@ -138,8 +143,9 @@ What is missing, as the concrete facts the catalog scores against:
   injected input. The injected-input tests of `Mcp_test` cover the gesture.
 - **D7. Keys follow Blender**, and every binding goes through the Commands
   overrides (`doc/editor/input_bindings.md`): Alt+click loop select,
-  Ctrl+Alt+click ring select, Ctrl+R loop cut, K knife, G G slide (vertex
-  slide in vertex mode, edge slide otherwise), M merge menu, X delete menu,
+  Ctrl+Alt+click ring select, Ctrl+R loop cut, K knife, G slide (vertex
+  slide in vertex mode, edge slide otherwise; the gizmo is the grab, so
+  the plain G is free for the slide), M merge menu, X delete menu,
   Ctrl+X dissolve, I inset, Ctrl+B bevel, F fill, J connect, Ctrl+A select
   all (plain A is the fly camera's strafe key), Alt+A select none, Ctrl+I
   invert, L select linked under the cursor, Ctrl+L select linked from the
