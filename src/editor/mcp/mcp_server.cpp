@@ -747,6 +747,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "dissolve_limited",               &Mcp_server::action_dissolve_limited              },
         { "merge_mesh_vertices",            &Mcp_server::action_merge_mesh_vertices           },
         { "merge_mesh_by_distance",         &Mcp_server::action_merge_mesh_by_distance        },
+        { "subdivide_mesh_edges",           &Mcp_server::action_subdivide_mesh_edges          },
         { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
         { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },
         { "set_transform_mode",             &Mcp_server::action_set_transform_mode            },

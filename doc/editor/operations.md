@@ -50,6 +50,17 @@ Implements the undo/redo operation system and all concrete editor operations.
     mesh, and the MCP tool passes a mesh-local `position`.
     `Merge_by_distance` runs on the component selection when the snapshot
     holds one, else on the whole of every mesh of the object selection.
+  - `Subdivide_edges` (`doc/plans/mesh_modeling.md` section 4.5,
+    `erhe_geometry/operation/subdivide_edges.hpp`, a
+    `Subdivide_edges_options`: cuts, smoothness, only quads) on the
+    mesh-component selection: the library derives the edges from the
+    snapshot's set (`get_selection_edges()`: the selected edges, every edge
+    of the selected facets, every edge between two selected vertices). In
+    edge mode the operation installs the result's inner edges (the edges the
+    fills created) as the selection, falling back to the split halves of the
+    general remap when no fill ran; in vertex and face mode the general
+    remap stays (the selected vertices, the facets descended from the
+    selected facets).
 
 - **Binary operations** (extend `Compound_operation`): `Union`, `Intersection`, `Difference` -- CSG operations.
 
@@ -65,7 +76,7 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit); refreshes normals, rebuilds static physics.
   - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
 
-- **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered.
+- **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered. The Subdivide Edges button (enabled with a selection in vertex, edge or face mode) comes with the cuts, smoothness and only-quads widgets as `Operations` members; its command is `Geometry.Subdivide.Edges` (no key: Blender reaches it from a menu).
 
 ## Primitive swaps keep the node in place
 

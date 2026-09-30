@@ -31,6 +31,7 @@
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -1685,6 +1686,38 @@ auto Mcp_server::action_merge_mesh_by_distance(const json& args) -> std::string
         {"threshold",          options.threshold},
         {"use_centroid",       options.use_centroid},
         {"include_unselected", options.include_unselected}
+    }).dump();
+}
+
+auto Mcp_server::action_subdivide_mesh_edges(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    // Explicit-state rule (doc/agents/mcp_api_guidelines.md): the option
+    // defaults are the library defaults, never the Operations window's widgets.
+    erhe::geometry::operation::Subdivide_edges_options options{};
+    options.cuts       = args.value("cuts",       options.cuts);
+    options.smoothness = args.value("smoothness", options.smoothness);
+    options.only_quads = args.value("only_quads", options.only_quads);
+    if ((options.cuts < 1) || (options.cuts > 500)) {
+        return make_error_content("cuts must be in [1, 500]");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->subdivide_edges(options);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Subdivide edges needs a live selection in a mesh component mode (vertex, edge or face)");
+    }
+    return make_json_content({
+        {"queued",     true},
+        {"cuts",       options.cuts},
+        {"smoothness", options.smoothness},
+        {"only_quads", options.only_quads}
     }).dump();
 }
 

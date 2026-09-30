@@ -777,6 +777,7 @@ Operations::Operations(
     , m_merge_at_last_command              {commands, "Geometry.Merge.AtLast",             [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::at_last); } }
     , m_merge_collapse_command             {commands, "Geometry.Merge.Collapse",           [this]() -> bool { return merge_vertices(erhe::geometry::operation::Merge_type::collapse); } }
     , m_merge_by_distance_command          {commands, "Geometry.Merge.ByDistance",         [this]() -> bool { return merge_by_distance(); } }
+    , m_subdivide_edges_command            {commands, "Geometry.Subdivide.Edges",          [this]() -> bool { return subdivide_edges(); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -843,6 +844,7 @@ Operations::Operations(
     commands.register_command(&m_merge_at_last_command);
     commands.register_command(&m_merge_collapse_command);
     commands.register_command(&m_merge_by_distance_command);
+    commands.register_command(&m_subdivide_edges_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -906,6 +908,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_merge_at_last_command,               "Geometry.Merge Vertices.At Last");
     commands.bind_command_to_menu(&m_merge_collapse_command,              "Geometry.Merge Vertices.Collapse");
     commands.bind_command_to_menu(&m_merge_by_distance_command,           "Geometry.Merge Vertices.By Distance");
+    commands.bind_command_to_menu(&m_subdivide_edges_command,             "Geometry.Subdivide Edges");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -1423,6 +1426,19 @@ void Operations::imgui()
             ImGui::DragFloat("Threshold", &m_merge_by_distance_options.threshold, 0.0001f, 0.0f, 100.0f, "%.5f");
             ImGui::Checkbox("Centroid",           &m_merge_by_distance_options.use_centroid);
             ImGui::Checkbox("Include Unselected", &m_merge_by_distance_options.include_unselected);
+            ImGui::PopID();
+        }
+        if (visible("Subdivide Edges")) {
+            if (make_button("Subdivide Edges", merge_component_mode, button_size)) {
+                subdivide_edges();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Splits the selected edges (face mode: the facets' edges; vertex mode: the edges between selected vertices) and fills the facets");
+            }
+            ImGui::PushID("subdivide_edges");
+            ImGui::SliderInt  ("Cuts",       &m_subdivide_edges_options.cuts, 1, 100);
+            ImGui::SliderFloat("Smoothness", &m_subdivide_edges_options.smoothness, 0.0f, 1.0f);
+            ImGui::Checkbox   ("Only Quads", &m_subdivide_edges_options.only_quads);
             ImGui::PopID();
         }
     }
@@ -2962,6 +2978,34 @@ auto Operations::merge_by_distance(const erhe::geometry::operation::Merge_by_dis
                 std::make_shared<Merge_by_distance_operation>(std::move(params), options)
             );
         }
+    );
+    return true;
+}
+
+auto Operations::subdivide_edges() -> bool
+{
+    return subdivide_edges(m_subdivide_edges_options);
+}
+
+auto Operations::subdivide_edges(const erhe::geometry::operation::Subdivide_edges_options options) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
+        log_operations->info("Subdivide Edges needs a mesh component mode (vertex, edge or face)");
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("Subdivide Edges: nothing selected in {} mode", c_str(mode));
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Subdivide_edges_operation>(std::move(params), options)
+            );
+        },
+        true
     );
     return true;
 }

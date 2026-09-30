@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/subdivide_edges.hpp`:
+  `subdivide_edges()` with `Subdivide_edges_options` and
+  `Subdivide_edges_result`, and `get_selection_edges()`: subdivide edges of
+  `doc/plans/mesh_modeling.md` section 4.5 (cuts, smoothness, only quads, the
+  per-facet fill patterns including grid fill), composed on `Edit_mesh`,
+  reporting the inner vertices, edges and facets and carrying a component
+  selection through `Component_remap`.
 - `erhe::geometry`: `erhe_geometry/operation/merge_vertices.hpp`: `merge_vertices()`
   with `Merge_type` (`at_center`, `at_position`, `at_first`, `at_last`,
   `collapse`) and `Merge_vertices_options`, and `merge_by_distance()` with

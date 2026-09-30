@@ -221,8 +221,14 @@ command ends with a flush (section 3).
 - `merge_mesh_by_distance` - `threshold` (default 1e-4), `use_centroid`
   (default true), `include_unselected` (default false); on the component
   selection when one is active, else on the selected meshes.
+- `subdivide_mesh_edges` - `cuts` (1 .. 500, default 1), `smoothness`
+  (default 0), `only_quads` (default false); needs a live selection in
+  vertex, edge or face mode (the selected edges, the edges of the selected
+  facets, the edges between selected vertices). In edge mode the edges the
+  fills created are the selection afterwards (the split halves when no fill
+  ran).
 
-The five geometry tools queue an undoable operation and return
+The six geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
 / `node_id` / `node_name` + `scene_name`) override the object selection as
 for `merge_faces`.

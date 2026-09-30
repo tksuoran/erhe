@@ -32,6 +32,7 @@
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/repair.hpp"
+#include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
@@ -493,6 +494,42 @@ Merge_by_distance_operation::Merge_by_distance_operation(
         }
     );
     set_description(fmt::format("Merge by Distance {}", describe_entries()));
+}
+
+Subdivide_edges_operation::Subdivide_edges_operation(
+    Mesh_operation_parameters&&                              context,
+    const erhe::geometry::operation::Subdivide_edges_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description(fmt::format("Subdivide Edges ({} cuts)", options.cuts));
+    make_entries(
+        [options](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            std::set<std::pair<GEO::index_t, GEO::index_t>> edges;
+            erhe::geometry::operation::get_selection_edges(before_geometry, selection, edges);
+            erhe::geometry::operation::Subdivide_edges_result result;
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::subdivide_edges(before_geometry, after_geometry, edges, options, &result, &remap);
+            // The snapshot holds the active mode's set only: edges => edge
+            // mode, where the inner edges become the selection.
+            const bool edge_mode = !selection.edges.empty();
+            if (edge_mode && (remap_destination != nullptr) && !result.inner_edges.empty()) {
+                remap_destination->vertices.clear();
+                remap_destination->facets.clear();
+                remap_destination->edges.clear();
+                remap_destination->edges.insert(result.inner_edges.begin(), result.inner_edges.end());
+            }
+        }
+    );
+    set_description(fmt::format("Subdivide Edges ({} cuts) {}", options.cuts, describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

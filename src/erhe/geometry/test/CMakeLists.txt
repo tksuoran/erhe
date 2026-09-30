@@ -30,6 +30,7 @@ add_executable(${_target}
     test_merge_vertices.cpp
     test_plane_intersection.cpp
     test_selective_operation_normals.cpp
+    test_subdivide_edges.cpp
     test_subdivision_chain.cpp
     test_timing_harness.cpp
     test_topology_walkers.cpp

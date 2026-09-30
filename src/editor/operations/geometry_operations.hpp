@@ -8,6 +8,7 @@
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/subdivide_edges.hpp"
 
 #include <glm/glm.hpp>
 
@@ -163,6 +164,22 @@ class Merge_by_distance_operation : public Mesh_operation
 {
 public:
     Merge_by_distance_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Merge_by_distance_options options);
+};
+
+// Subdivide edges (doc/plans/mesh_modeling.md section 4.5,
+// erhe_geometry/operation/subdivide_edges.hpp) on the component selection
+// snapshot: the edges of the selection's set, whichever mode it comes from
+// (edge mode: the selected edges; face mode: every edge of the selected
+// facets; vertex mode: every edge between two selected vertices). After the
+// operation, an edge-mode selection is the new inner edges (the edges the
+// fills created, as loop cut needs) when there are any, else the halves of
+// the split edges; a vertex- or face-mode selection follows the general
+// remap (the selected vertices; the facets descended from the selected
+// facets). A primitive without a selection is emitted unchanged.
+class Subdivide_edges_operation : public Mesh_operation
+{
+public:
+    Subdivide_edges_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Subdivide_edges_options options);
 };
 
 class Reverse_operation : public Mesh_operation

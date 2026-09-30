@@ -389,6 +389,7 @@ private:
     auto action_dissolve_limited              (const nlohmann::json& args) -> std::string;
     auto action_merge_mesh_vertices           (const nlohmann::json& args) -> std::string;
     auto action_merge_mesh_by_distance        (const nlohmann::json& args) -> std::string;
+    auto action_subdivide_mesh_edges          (const nlohmann::json& args) -> std::string;
     auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;

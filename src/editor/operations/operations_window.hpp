@@ -20,6 +20,7 @@
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "windows/property_editor.hpp"
 
 #include <imgui/imgui.h>
@@ -238,6 +239,13 @@ public:
     // the window's options. Returns false when there is nothing to act on.
     auto merge_by_distance() -> bool;
     auto merge_by_distance(erhe::geometry::operation::Merge_by_distance_options options) -> bool;
+    // Subdivide edges (doc/plans/mesh_modeling.md section 4.5) on the
+    // mesh-component selection: needs a live selection in a vertex, edge or
+    // face mode (the library derives the edges from that set); returns false,
+    // queueing nothing, otherwise. The no-argument form uses the window's
+    // cuts / smoothness / only-quads options.
+    auto subdivide_edges() -> bool;
+    auto subdivide_edges(erhe::geometry::operation::Subdivide_edges_options options) -> bool;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -426,6 +434,7 @@ private:
     erhe::commands::Lambda_command m_merge_at_last_command;
     erhe::commands::Lambda_command m_merge_collapse_command;
     erhe::commands::Lambda_command m_merge_by_distance_command;
+    erhe::commands::Lambda_command m_subdivide_edges_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).
@@ -438,6 +447,10 @@ private:
     // commands (the MCP tools take their own arguments).
     bool                                                 m_merge_uvs{false};
     erhe::geometry::operation::Merge_by_distance_options m_merge_by_distance_options{};
+
+    // Subdivide edges options edited in the "Components" section and read by
+    // Geometry.Subdivide.Edges (the MCP tool takes its own arguments).
+    erhe::geometry::operation::Subdivide_edges_options   m_subdivide_edges_options{};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

@@ -14,7 +14,9 @@ MCP tool and the Delete / Ctrl+X keys, each followed by undo, comparing
 get_mesh_geometry_info counts. Merge (section 4.4) is checked on the
 Catmull-Clark box (at center, collapse, at position with the survivor's
 position read back, the M key) and merge by distance on the plain box, each followed by
-undo. Operations whose result has no facet (merge by distance of the whole
+undo. Subdivide edges (section 4.5) is checked on the plain box: two opposite
+edges of one face with one and two cuts, and every edge with one cut (grid
+fill), each with the selection afterwards (the inner edges) and undo. Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
 logs/editor_stderr.txt.
@@ -639,6 +641,54 @@ def run_merge(e):
     e.call("set_mesh_component_mode", {"mode": "object"})
 
 
+def run_subdivide_edges(e):
+    """Subdivide edges (doc/plans/mesh_modeling.md section 4.5) on the plain box."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("subdivide: plain box at its base counts", geometry_counts(e, BOX), base)
+    face_vertices = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": BOX, "domain": "facet", "indices": [0]
+    })["elements"][0]["vertices"]
+    opposite = [sorted([face_vertices[0], face_vertices[1]]), sorted([face_vertices[2], face_vertices[3]])]
+
+    # Two opposite edges of one face, one cut: the face becomes two quads
+    # joined by one inner edge, its two neighbours get a boundary vertex:
+    # (8 + 2, 12 + 2 + 1, 6 + 1).
+    for cuts, expected in ((1, (10, 15, 7)), (2, (12, 18, 8))):
+        e.call("set_mesh_component_mode", {"mode": "edge"})
+        select_on(e, BOX, edges=opposite)
+        result = e.call("subdivide_mesh_edges", {"scene_name": e.scene, "node_name": BOX, "cuts": cuts})
+        expect(f"subdivide_mesh_edges cuts {cuts} queued", result.get("queued"), True)
+        wait_idle(e)
+        expect(f"subdivide two opposite edges, cuts {cuts} -> {expected}", geometry_counts(e, BOX), expected)
+        edges = entry_of(e.call("get_mesh_component_selection"), BOX)["edges"]
+        expect(f"subdivide cuts {cuts}: the selection is the {cuts} inner edge(s)", len(edges), cuts)
+        check_true(f"subdivide cuts {cuts}: the inner edges join new vertices",
+                   all(min(edge) >= 8 for edge in edges), str(edges))
+        undo_and_check(e, f"subdivide two opposite edges, cuts {cuts}", BOX, base)
+
+    # Every edge, one cut: each face becomes a 3 x 3 vertex grid of four
+    # quads around a new centre vertex: (8 + 12 + 6, 24 + 6 * 4, 6 * 4).
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    e.call("select_all_mesh_components", {"scene_name": e.scene, "node_name": BOX})
+    e.call("subdivide_mesh_edges", {"scene_name": e.scene, "node_name": BOX})
+    wait_idle(e)
+    expect("subdivide every edge, cuts 1 -> (26, 48, 24)", geometry_counts(e, BOX), (26, 48, 24))
+    edges = entry_of(e.call("get_mesh_component_selection"), BOX)["edges"]
+    expect("subdivide every edge: the selection is the 24 inner edges", len(edges), 24)
+    undo_and_check(e, "subdivide every edge", BOX, base)
+
+    # Without a live selection the tool is refused.
+    e.call("clear_mesh_component_selection")
+    try:
+        e.call("subdivide_mesh_edges", {"scene_name": e.scene, "node_name": BOX})
+        check_true("subdivide without a selection is refused", False, "no error")
+    except RuntimeError:
+        check_true("subdivide without a selection is refused", True)
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
 def run_empty_results(e, process):
     """Operations whose result has no facet: the mesh keeps an empty
     primitive that renders and raytraces nothing (doc/erhe/primitive.md
@@ -768,6 +818,8 @@ def run(e):
     run_delete_dissolve(e)
 
     run_merge(e)
+
+    run_subdivide_edges(e)
 
 
 def main():

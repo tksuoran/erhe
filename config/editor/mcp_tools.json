@@ -6756,6 +6756,46 @@
     "name": "merge_mesh_by_distance"
   },
   {
+    "description": "Subdivide edges (doc/plans/mesh_modeling.md section 4.5), queued and undoable: every edge of the active mesh-component selection (edge mode: the selected edges; face mode: every edge of the selected facets; vertex mode: every edge between two selected vertices) is split cuts times at even spacing, and each facet is filled by the pattern of its split edges (quad: opposite pair connects, adjacent pair nests plus one corner-to-corner edge, three edges connect the opposite pair and fan the middle cuts to the nearest connecting edge, four edges grid fill; triangle: one edge fans to the opposite corner, three edges a triangular lattice; any facet with two split edges connects the two runs pairwise; otherwise the new vertices stay on the boundary). A facet whose two split edges share a vertex and are collinear is not filled. In edge mode the edges the fills created are selected afterwards (the split halves when no fill ran); vertex and face modes keep the remapped selection. An error without a live selection. Options not given take the library defaults. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
+    "inputSchema": {
+      "properties": {
+        "cuts": {
+          "description": "Cuts per edge, 1 .. 500 (default 1)",
+          "type": "integer"
+        },
+        "node_id": {
+          "description": "Single explicit target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Explicit target node ids; the previous selection is restored after the call",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single explicit target node name",
+          "type": "string"
+        },
+        "only_quads": {
+          "description": "Fill only quads; other facets keep the new vertices on their boundary (default false)",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "Scene for node targets (required with node_ids / node_id / node_name)",
+          "type": "string"
+        },
+        "smoothness": {
+          "description": "0 keeps the cuts on the straight edge; 1 moves them onto the curve built from the endpoint normals (default 0)",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "name": "subdivide_mesh_edges"
+  },
+  {
     "description": "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.",
     "inputSchema": {
       "properties": {
