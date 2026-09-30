@@ -751,6 +751,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
         { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },
         { "set_transform_mode",             &Mcp_server::action_set_transform_mode            },
+        { "slide_mesh_components",          &Mcp_server::action_slide_mesh_components         },
+        { "cancel_component_edit",          &Mcp_server::action_cancel_component_edit         },
         { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
         { "get_transform_state",            &Mcp_server::query_transform_state                },
         { "get_editor_references",          &Mcp_server::query_editor_references              },

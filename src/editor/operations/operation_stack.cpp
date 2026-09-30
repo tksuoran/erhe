@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
+#include "transform/transform_tool.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -221,12 +222,30 @@ void Operation_stack::update()
     m_undone.clear();
 }
 
+auto Operation_stack::get_undo_block_reason() const -> const char*
+{
+    // Undo / redo must not run underneath a live mesh component edit (the G
+    // slide, a gizmo component drag, a numeric component edit): it snapshots
+    // positions and primitives the undone operation would change beneath it
+    // (doc/editor/transform.md "Scalar edits").
+    if ((m_context.transform_tool != nullptr) && m_context.transform_tool->is_component_edit_active()) {
+        return m_context.transform_tool->is_scalar_drag_active()
+            ? "a mesh component slide is in progress (confirm or cancel it first)"
+            : "a mesh component edit is in progress (finish or cancel it first)";
+    }
+    return nullptr;
+}
+
 void Operation_stack::undo()
 {
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
 
     if (m_executed.empty()) {
+        return;
+    }
+    if (const char* const reason = get_undo_block_reason(); reason != nullptr) {
+        log_operations->info("Undo declined: {}", reason);
         return;
     }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
@@ -330,6 +349,10 @@ void Operation_stack::redo()
     if (m_undone.empty()) {
         return;
     }
+    if (const char* const reason = get_undo_block_reason(); reason != nullptr) {
+        log_operations->info("Redo declined: {}", reason);
+        return;
+    }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();
     m_executing = true;
@@ -342,14 +365,14 @@ auto Operation_stack::can_undo() const -> bool
 {
     verify_main_thread();
 
-    return !m_executed.empty();
+    return !m_executed.empty() && (get_undo_block_reason() == nullptr);
 }
 
 auto Operation_stack::can_redo() const -> bool
 {
     verify_main_thread();
 
-    return !m_undone.empty();
+    return !m_undone.empty() && (get_undo_block_reason() == nullptr);
 }
 
 auto Operation_stack::get_undo_stack() const -> const std::vector<std::shared_ptr<Operation>>&

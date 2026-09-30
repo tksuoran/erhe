@@ -1818,13 +1818,82 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
     const std::string   mode_str = args.value("mode", "");
     Mesh_transform_mode mode     = Mesh_transform_mode::move;
     if (!::from_string(mode_str, mode)) {
-        return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_group_normal, extrude_vertex_normal)");
+        return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_group_normal, extrude_vertex_normal, edge_slide, vertex_slide)");
     }
     m_context.editor_settings->transform_mode = mode;
     if (m_context.app_settings != nullptr) {
         m_context.app_settings->settings_store().touch();
     }
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
+}
+
+auto Mcp_server::action_slide_mesh_components(const json& args) -> std::string
+{
+    // The numeric form of the slides (doc/plans/mesh_modeling.md D6, section
+    // 4.6): begin, one step, commit - one undo entry. Explicit-state rule
+    // (doc/agents/mcp_api_guidelines.md): the option defaults are fixed here.
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    if ((m_context.mesh_component_selection == nullptr) || !is_mesh_component_mode(m_context.mesh_component_selection->get_mode())) {
+        return make_error_content("slide_mesh_components needs a mesh component mode (vertex, edge or face) with a live selection");
+    }
+    const std::string kind_str = args.value("kind", std::string{"edge"});
+    Scalar_edit_kind  kind     = Scalar_edit_kind::edge_slide;
+    if (kind_str == "edge") {
+        kind = Scalar_edit_kind::edge_slide;
+    } else if (kind_str == "vertex") {
+        kind = Scalar_edit_kind::vertex_slide;
+    } else {
+        return make_error_content("Invalid kind: " + kind_str + " (edge, vertex)");
+    }
+    if (!args.contains("factor") || !args["factor"].is_number()) {
+        return make_error_content("factor (number) is required");
+    }
+    Scalar_input input{};
+    input.factor  = args["factor"].get<float>();
+    input.even    = args.value("even",    false);
+    input.flipped = args.value("flipped", false);
+    input.clamp   = args.value("clamp",   true);
+    if (args.contains("direction")) {
+        const json& direction = args["direction"];
+        if (!direction.is_array() || (direction.size() != 3)) {
+            return make_error_content("direction must be [x, y, z] (world space)");
+        }
+        input.drag_direction_world = glm::vec3{direction[0].get<float>(), direction[1].get<float>(), direction[2].get<float>()};
+    } else if (kind == Scalar_edit_kind::vertex_slide) {
+        return make_error_content("kind vertex needs direction [x, y, z] (world space) for the neighbour pick");
+    }
+
+    Scalar_edit_result result{};
+    std::string        error;
+    if (!m_context.transform_tool->run_scalar_edit(kind, input, result, error)) {
+        return make_error_content(error);
+    }
+    json out = {
+        {"kind",           kind_str},
+        {"factor",         input.factor},
+        {"even",           input.even},
+        {"flipped",        input.flipped},
+        {"clamp",          input.clamp},
+        {"slide_vertices", result.slide_vertices},
+        {"moved_vertices", result.moved_vertices},
+        {"queued",         result.moved_vertices > 0}
+    };
+    if (kind == Scalar_edit_kind::edge_slide) {
+        out["loops"] = result.loops;
+    }
+    return make_json_content(out).dump();
+}
+
+auto Mcp_server::action_cancel_component_edit(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    const bool cancelled = m_context.transform_tool->cancel_component_edit();
+    return make_json_content(json{{"cancelled", cancelled}}).dump();
 }
 
 auto Mcp_server::action_set_gizmo_visibility(const json& args) -> std::string

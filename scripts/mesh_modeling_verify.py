@@ -16,7 +16,13 @@ Catmull-Clark box (at center, collapse, at position with the survivor's
 position read back, the M key) and merge by distance on the plain box, each followed by
 undo. Subdivide edges (section 4.5) is checked on the plain box: two opposite
 edges of one face with one and two cuts, and every edge with one cut (grid
-fill), each with the selection afterwards (the inner edges) and undo. Operations whose result has no facet (merge by distance of the whole
+fill), each with the selection afterwards (the inner edges) and undo. Edge
+and vertex slide (section 4.6) are checked on the Catmull-Clark box: the
+middle edge loop slid halfway to either side, even and even + flipped, the
+corner texcoords re-interpolated at the slid positions, a refused selection,
+a vertex slid onto a neighbour, each followed by undo, and the G key slide in
+a viewport cancelled (MCP cancel_component_edit and Escape, positions back and
+no undo entry) and confirmed (Enter, one undo entry). Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
 logs/editor_stderr.txt.
@@ -689,6 +695,273 @@ def run_subdivide_edges(e):
     e.call("set_mesh_component_mode", {"mode": "object"})
 
 
+def vertex_positions(e, node_name, vertices):
+    """{vertex: [x, y, z]} (mesh-local) of node_name's first primitive."""
+    elements = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": node_name, "domain": "vertex", "indices": list(vertices)
+    })["elements"]
+    result = {}
+    for element in elements:
+        position = element["position"]
+        if isinstance(position, dict):
+            position = [position["x"], position["y"], position["z"]]
+        result[element["index"]] = list(position)
+    return result
+
+
+def distance(a, b):
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+
+def near(a, b, tolerance=1e-4):
+    return distance(a, b) <= tolerance
+
+
+def corner_texcoord(e, node_name, corner):
+    element = e.call("get_mesh_attribute_values", {
+        "scene_name": e.scene, "node_name": node_name, "domain": "corner", "indices": [corner]
+    })["elements"][0]
+    value = element.get("attributes", {}).get("corner_texcoord_0")
+    if (not isinstance(value, dict)) or (not value.get("present", False)):
+        return None
+    return list(value["value"])
+
+
+def undo_count(e):
+    return len(e.call("get_undo_redo_stack")["undo"])
+
+
+def run_slide(e):
+    """Edge slide and vertex slide (doc/plans/mesh_modeling.md section 4.6,
+    doc/editor/transform.md "Scalar edits") on the Catmull-Clark box."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {
+        "scene_name": e.scene, "node_name": CC_BOX,
+        "translation": [0.0, -200.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]
+    })
+    e.advance(2)
+    base = geometry_counts(e, CC_BOX)
+    expect("slide: Catmull-Clark box at its base counts", base, (26, 48, 24))
+    p = vertex_positions(e, CC_BOX, range(base[0]))
+
+    # The middle edge loop: the edges whose two vertices lie at y = 0.
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    e.call("select_all_mesh_components", {"scene_name": e.scene, "node_name": CC_BOX})
+    edges = entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"]
+    middle = sorted(sorted(edge) for edge in edges if abs(p[edge[0]][1]) < 1e-5 and abs(p[edge[1]][1]) < 1e-5)
+    expect("the box's middle loop has 8 edges", len(middle), 8)
+    loop_vertices = sorted({v for edge in middle for v in edge})
+    expect("the middle loop has 8 vertices", len(loop_vertices), 8)
+    # Each loop vertex's rails: its neighbours above and below the loop.
+    rail = {}
+    for v in loop_vertices:
+        neighbours = [edge[0] if edge[1] == v else edge[1] for edge in edges if v in edge]
+        up = [n for n in neighbours if p[n][1] > 1e-5]
+        down = [n for n in neighbours if p[n][1] < -1e-5]
+        expect(f"loop vertex {v} has one rail up and one down", (len(up), len(down)), (1, 1))
+        rail[v] = {"up": up[0], "down": down[0]}
+
+    def select_loop():
+        e.call("set_mesh_component_mode", {"mode": "edge"})
+        e.call("select_mesh_loop", {"scene_name": e.scene, "node_name": CC_BOX, "edge": middle[0], "kind": "edge_loop"})
+        loop = sorted(sorted(edge) for edge in entry_of(e.call("get_mesh_component_selection"), CC_BOX)["edges"])
+        return loop
+
+    expect("select_mesh_loop from a middle edge -> the 8 middle edges", select_loop(), middle)
+
+    def slide(label, **kwargs):
+        args = {"kind": "edge"}
+        args.update(kwargs)
+        result = e.call("slide_mesh_components", args)
+        wait_idle(e)
+        expect(f"{label}: topology unchanged", geometry_counts(e, CC_BOX), base)
+        return result, vertex_positions(e, CC_BOX, loop_vertices)
+
+    def undo_slide(label):
+        e.call("undo")
+        wait_idle(e)
+        after = vertex_positions(e, CC_BOX, loop_vertices)
+        check_true(f"{label}: undo restores the positions", all(near(after[v], p[v], 1e-6) for v in loop_vertices),
+                   str({v: after[v] for v in loop_vertices[:2]}))
+
+    # Factor 0.5: every loop vertex halfway toward one rail side, all on the same side.
+    result, after = slide("edge slide 0.5", factor=0.5)
+    expect("edge slide 0.5: 8 slide vertices in 1 loop, 8 moved",
+           (result.get("slide_vertices"), result.get("loops"), result.get("moved_vertices")), (8, 1, 8))
+    side = "up" if after[loop_vertices[0]][1] > 0.0 else "down"
+    other = "down" if side == "up" else "up"
+    midpoints = {v: [(a + b) * 0.5 for a, b in zip(p[v], p[rail[v][side]])] for v in loop_vertices}
+    check_true(f"edge slide 0.5: every loop vertex at the midpoint of its {side} rail",
+               all(near(after[v], midpoints[v]) for v in loop_vertices),
+               f"vertex {loop_vertices[0]} at {after[loop_vertices[0]]}, expected {midpoints[loop_vertices[0]]}")
+
+    # Correct UVs: a slid corner of a facet on the slid side takes the
+    # texcoord of its new position, halfway along the facet's edge.
+    v = loop_vertices[0]
+    target = rail[v][side]
+    facet_corners = None
+    for facet in range(base[2]):
+        element = e.call("get_mesh_attribute_values", {
+            "scene_name": e.scene, "node_name": CC_BOX, "domain": "facet", "indices": [facet]
+        })["elements"][0]
+        if (v in element["vertices"]) and (target in element["vertices"]):
+            facet_corners = dict(zip(element["vertices"], element["corners"]))
+            break
+    check_true("a facet holds the loop vertex and its rail end", facet_corners is not None)
+    if facet_corners is not None:
+        uv_slid = corner_texcoord(e, CC_BOX, facet_corners[v])
+        uv_end = corner_texcoord(e, CC_BOX, facet_corners[target])
+        undo_slide("edge slide 0.5")
+        uv_start = corner_texcoord(e, CC_BOX, facet_corners[v])
+        check_true("the Catmull-Clark box has corner texcoords", uv_start is not None and uv_slid is not None)
+        if (uv_start is not None) and (uv_slid is not None):
+            expected_uv = [(a + b) * 0.5 for a, b in zip(uv_start, uv_end)]
+            check_true("edge slide 0.5: the slid corner's texcoord is re-interpolated (halfway along the facet edge)",
+                       near(uv_slid, expected_uv, 1e-4), f"got {uv_slid}, expected {expected_uv} (start {uv_start})")
+            check_true("undo restores the corner texcoord", near(corner_texcoord(e, CC_BOX, facet_corners[v]), uv_start, 1e-6))
+    else:
+        undo_slide("edge slide 0.5")
+
+    # Factor -0.5: the other side.
+    select_loop()
+    _, after = slide("edge slide -0.5", factor=-0.5)
+    midpoints = {v: [(a + b) * 0.5 for a, b in zip(p[v], p[rail[v][other]])] for v in loop_vertices}
+    check_true(f"edge slide -0.5: every loop vertex at the midpoint of its {other} rail",
+               all(near(after[v], midpoints[v]) for v in loop_vertices),
+               f"vertex {loop_vertices[0]} at {after[loop_vertices[0]]}, expected {midpoints[loop_vertices[0]]}")
+    undo_slide("edge slide -0.5")
+
+    # Even: every vertex moves the same distance (the rails differ in length).
+    rail_lengths = sorted(round(distance(p[v], p[rail[v][side]]), 5) for v in loop_vertices)
+    check_true("the loop's rails differ in length (even is observable)", rail_lengths[0] != rail_lengths[-1], str(rail_lengths))
+    select_loop()
+    _, after = slide("edge slide 0.5 even", factor=0.5, even=True)
+    moved = [distance(after[v], p[v]) for v in loop_vertices]
+    check_true("edge slide 0.5 even: every loop vertex moved the same distance",
+               (max(moved) - min(moved)) < 1e-4 and min(moved) > 1e-3, str([round(m, 5) for m in moved]))
+    undo_slide("edge slide even")
+
+    # Even + flipped: every vertex ends the same distance from its rail end.
+    select_loop()
+    _, after = slide("edge slide 0.5 even flipped", factor=0.5, even=True, flipped=True)
+    to_end = [distance(after[v], p[rail[v][side]]) for v in loop_vertices]
+    check_true("edge slide 0.5 even flipped: every loop vertex ends the same distance from its rail end",
+               (max(to_end) - min(to_end)) < 1e-4, str([round(d, 5) for d in to_end]))
+    undo_slide("edge slide even flipped")
+
+    # Refused: three selected edges at one vertex.
+    corner = min(range(base[0]), key=lambda i: -(p[i][0] + p[i][1] + p[i][2]))
+    corner_edges = [edge for edge in edges if corner in edge]
+    select_on(e, CC_BOX, edges=corner_edges)
+    try:
+        e.call("slide_mesh_components", {"kind": "edge", "factor": 0.5})
+        check_true("edge slide with a vertex on 3 selected edges is refused", False, "no error")
+    except RuntimeError:
+        check_true("edge slide with a vertex on 3 selected edges is refused", True)
+
+    # Vertex slide: one vertex onto a neighbour.
+    v = loop_vertices[0]
+    n = rail[v]["up"]
+    e.call("set_mesh_component_mode", {"mode": "vertex"})
+    select_on(e, CC_BOX, vertices=[v])
+    direction = [b - a for a, b in zip(p[v], p[n])]
+    result = e.call("slide_mesh_components", {"kind": "vertex", "factor": 1.0, "direction": direction})
+    wait_idle(e)
+    expect("vertex slide: 1 slide vertex, 1 moved", (result.get("slide_vertices"), result.get("moved_vertices")), (1, 1))
+    position = vertex_positions(e, CC_BOX, [v])[v]
+    check_true("vertex slide factor 1 lands on the neighbour", near(position, p[n]), f"got {position}, expected {p[n]}")
+    e.call("undo")
+    wait_idle(e)
+    check_true("vertex slide: undo restores the vertex", near(vertex_positions(e, CC_BOX, [v])[v], p[v], 1e-6))
+
+    # Transform mode edge_slide: the gizmo / numeric translation drives the
+    # slide - the translation projected on the first slide vertex's rail is
+    # the factor, so every loop vertex moves the same fraction of its rail.
+    e.call("set_transform_mode", {"mode": "edge_slide"})
+    select_loop()
+    e.advance(2)
+    anchor = e.call("get_transform_state")["anchor_frame"]["translation"]
+    e.call("transform_selection", {"translation": [anchor[0], anchor[1] + 0.05, anchor[2]]})
+    wait_idle(e)
+    after = vertex_positions(e, CC_BOX, loop_vertices)
+    fractions = []
+    off_rail = 0.0
+    for v in loop_vertices:
+        rail_vector = [b - a for a, b in zip(p[v], p[rail[v]["up"]])]
+        moved = [b - a for a, b in zip(p[v], after[v])]
+        t = sum(a * b for a, b in zip(moved, rail_vector)) / sum(c * c for c in rail_vector)
+        fractions.append(t)
+        off_rail = max(off_rail, distance(moved, [t * c for c in rail_vector]))
+    check_true("transform mode edge_slide: an upward translation slides every loop vertex the same fraction up its rail",
+               (min(fractions) > 1e-3) and ((max(fractions) - min(fractions)) < 1e-3) and (off_rail < 1e-4),
+               f"fractions {[round(t, 5) for t in fractions]}, off rail {off_rail:.6f}")
+    expect("transform mode edge_slide: the undo entry is the edge slide", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Edge Slide")
+    expect("transform mode edge_slide: topology unchanged", geometry_counts(e, CC_BOX), base)
+    undo_slide("transform mode edge_slide")
+    e.call("set_transform_mode", {"mode": "move"})
+
+    # The G key in a viewport: live slide, cancelled and confirmed.
+    viewport = place_in_front_of_camera(e, CC_BOX, distance=5.0)
+    x = viewport["x"] + (viewport["width"] / 2.0)
+    y = viewport["y"] + (viewport["height"] / 2.0)
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+
+    def start_g_slide(label):
+        select_loop()
+        e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+        e.advance(2)
+        e.key("g", [])
+        e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y + 30.0, "frame": 0}]})
+        e.advance(3)
+        live = vertex_positions(e, CC_BOX, loop_vertices)
+        largest = max(distance(live[v], p[v]) for v in loop_vertices)
+        check_true(f"{label}: the G slide moves the loop with the pointer", largest > 1e-5,
+                   f"largest displacement {largest:.5f}")
+
+    before_undo = undo_count(e)
+    start_g_slide("cancel_component_edit")
+    result = e.call("cancel_component_edit")
+    e.advance(2)
+    expect("cancel_component_edit cancels the running slide", result.get("cancelled"), True)
+    restored = vertex_positions(e, CC_BOX, loop_vertices)
+    check_true("cancel_component_edit: positions back at the start", all(near(restored[v], p[v], 0.0) for v in loop_vertices),
+               str({v: restored[v] for v in loop_vertices[:2]}))
+    wait_idle(e)
+    expect("cancel_component_edit: no undo entry", undo_count(e), before_undo)
+    expect("cancel_component_edit with nothing active -> cancelled false", e.call("cancel_component_edit").get("cancelled"), False)
+
+    start_g_slide("Escape")
+    try:
+        e.call("undo")
+        check_true("undo over MCP during a G slide is refused", False, "no error")
+    except RuntimeError as error:
+        check_true("undo over MCP during a G slide is refused", "slide" in str(error), str(error))
+    expect("the refused undo leaves the undo count", undo_count(e), before_undo)
+    e.key("escape", [])
+    wait_idle(e)
+    restored = vertex_positions(e, CC_BOX, loop_vertices)
+    check_true("Escape: positions back at the start", all(near(restored[v], p[v], 0.0) for v in loop_vertices))
+    expect("Escape: no undo entry", undo_count(e), before_undo)
+
+    start_g_slide("Enter")
+    live = vertex_positions(e, CC_BOX, loop_vertices)
+    e.key("enter", [])
+    wait_idle(e)
+    expect("Enter confirms the G slide: one undo entry", undo_count(e), before_undo + 1)
+    expect("the undo entry is the edge slide", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Edge Slide")
+    committed = vertex_positions(e, CC_BOX, loop_vertices)
+    check_true("Enter keeps the slid positions", all(near(committed[v], live[v], 1e-5) for v in loop_vertices))
+    expect("G slide: topology unchanged", geometry_counts(e, CC_BOX), base)
+    undo_slide("G slide")
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": CC_BOX, "translation": [0.0, -200.0, 0.0]})
+    e.advance(2)
+
+
 def run_empty_results(e, process):
     """Operations whose result has no facet: the mesh keeps an empty
     primitive that renders and raytraces nothing (doc/erhe/primitive.md
@@ -820,6 +1093,8 @@ def run(e):
     run_merge(e)
 
     run_subdivide_edges(e)
+
+    run_slide(e)
 
 
 def main():

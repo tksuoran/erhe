@@ -82,8 +82,12 @@ public:
     );
     ~Operation_stack() noexcept override;
 
+    // can_undo() / can_redo() are false and undo() / redo() decline while
+    // get_undo_block_reason() names a reason: a live mesh component edit
+    // (doc/editor/transform.md "Scalar edits"). nullptr when undo is free.
     [[nodiscard]] auto can_undo      () const -> bool;
     [[nodiscard]] auto can_redo      () const -> bool;
+    [[nodiscard]] auto get_undo_block_reason() const -> const char*;
     void queue(const std::shared_ptr<Operation>& operation);
 
     // Thread-safe variant of queue() for async worker completions (the

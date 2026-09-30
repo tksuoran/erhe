@@ -215,6 +215,47 @@ private:
     Component_selection_action m_action;
 };
 
+// G: starts the pointer-driven slide of the mesh component selection
+// (doc/editor/transform.md "Scalar edits"): vertex slide in vertex mode, edge
+// slide in edge and face mode. Consumes the key only when the slide starts.
+class Component_slide_command : public erhe::commands::Command
+{
+public:
+    Component_slide_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// The modal actions of a running component slide.
+enum class Component_modal_action : unsigned int {
+    confirm        = 0, // Enter, left click
+    cancel         = 1, // Escape, right click (Escape also cancels a gizmo component edit)
+    toggle_even    = 2, // E
+    toggle_flipped = 3, // F
+    toggle_clamp   = 4  // C (Alt held: unclamped while held)
+};
+
+[[nodiscard]] auto c_str(Component_modal_action action) -> const char*;
+
+// Key or mouse button command running one Component_modal_action. Consumes
+// its input only while a component slide runs (cancel: while any mesh
+// component edit runs), so the key falls through to its other bindings
+// otherwise. The mouse button commands are Ready for the length of the slide,
+// which ranks them above the other left / right press commands.
+class Component_modal_command : public erhe::commands::Command
+{
+public:
+    Component_modal_command(erhe::commands::Commands& commands, App_context& context, const char* name, Component_modal_action action);
+    void try_ready() override;
+    auto try_call () -> bool override;
+
+private:
+    App_context&           m_context;
+    Component_modal_action m_action;
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -279,6 +320,14 @@ public:
     // Runs `action` and returns true only while a mesh component mode is
     // active (and, for select_linked_under_cursor, a component is hovered).
     [[nodiscard]] auto run_selection_action(Component_selection_action action) -> bool;
+
+    // Called by Component_slide_command (G): starts the pointer slide in the
+    // hovered viewport. Called by Component_modal_command: runs the action
+    // while the slide runs.
+    [[nodiscard]] auto begin_slide     () -> bool;
+    [[nodiscard]] auto run_modal_action(Component_modal_action action) -> bool;
+    // True while a pointer slide runs: the selection gestures stand down.
+    [[nodiscard]] auto is_slide_active () const -> bool;
 
     // Select all targets: the meshes of the live entries plus the meshes of
     // the object Selection that component selection can address; when both
@@ -488,6 +537,14 @@ private:
     Component_selection_action_command                        m_select_linked_from_selection_command;
     Component_loop_select_command                             m_loop_select_command;
     Component_loop_select_command                             m_ring_select_command;
+    Component_slide_command                                   m_slide_command;
+    Component_modal_command                                   m_modal_confirm_command;
+    Component_modal_command                                   m_modal_cancel_command;
+    Component_modal_command                                   m_modal_toggle_even_command;
+    Component_modal_command                                   m_modal_toggle_flipped_command;
+    Component_modal_command                                   m_modal_toggle_clamp_command;
+    Component_modal_command                                   m_modal_confirm_click_command;
+    Component_modal_command                                   m_modal_cancel_click_command;
 
     // Select all target scratch (cleared at use, capacity kept).
     std::vector<Mesh_component_target>                        m_select_all_targets;

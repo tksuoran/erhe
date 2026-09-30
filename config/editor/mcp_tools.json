@@ -7128,7 +7128,7 @@
     "name": "get_transform_state"
   },
   {
-    "description": "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), extrude_group_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag), or extrude_vertex_normal (same topology, but each vertex slides along its own normal). Persisted in editor settings; applies to subsequent component edits.",
+    "description": "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), extrude_group_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag), extrude_vertex_normal (same topology, but each vertex slides along its own normal), edge_slide (the selected edge loops slide along their rails; the gizmo translation projected on the first slide vertex's rail is the factor) or vertex_slide (each selected vertex slides toward the neighbour the translation points at; the translation projected on the first vertex's chosen edge is the factor). Persisted in editor settings; applies to subsequent component edits.",
     "inputSchema": {
       "properties": {
         "mode": {
@@ -7137,7 +7137,9 @@
             "move",
             "extrude",
             "extrude_group_normal",
-            "extrude_vertex_normal"
+            "extrude_vertex_normal",
+            "edge_slide",
+            "vertex_slide"
           ],
           "type": "string"
         }
@@ -7148,6 +7150,57 @@
       "type": "object"
     },
     "name": "set_transform_mode"
+  },
+  {
+    "description": "Edge slide or vertex slide of the live mesh-component selection (doc/plans/mesh_modeling.md section 4.6, doc/editor/transform.md 'Scalar edits'), the numeric form of the G key slide: begins the slide, places the vertices for one factor and commits one undoable 'Edge Slide' / 'Vertex Slide' operation (a move of the slid vertices carrying the corner texcoords re-interpolated at their new positions). Edge slide: every selected vertex must be on one or two selected edges, every selected edge manifold or boundary; each vertex slides along its rail on one side of its loop (factor > 0: the first side, < 0: the second), loops oriented against the first slide vertex. Vertex slide: each selected vertex slides toward the neighbour whose direction is nearest to 'direction'; factor 1 lands on it. Returns the slide vertex count, the moved vertex count and (edge) the loop count. An error when the selection cannot slide or another component edit is active.",
+    "inputSchema": {
+      "properties": {
+        "clamp": {
+          "description": "Clamp the factor to [-1, 1] (edge) or [0, 1] (vertex); default true. Unclamped, the factor extrapolates along the rail",
+          "type": "boolean"
+        },
+        "direction": {
+          "description": "Vertex slide: world-space direction [x, y, z] choosing each vertex's neighbour (required for kind vertex)",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "even": {
+          "description": "Every vertex moves the same distance: the factor times the first slide vertex's rail (edge) or chosen edge (vertex) length; default false",
+          "type": "boolean"
+        },
+        "factor": {
+          "description": "The slide factor",
+          "type": "number"
+        },
+        "flipped": {
+          "description": "With even: the distance is measured from the far end of each rail; default false",
+          "type": "boolean"
+        },
+        "kind": {
+          "description": "edge (default) or vertex",
+          "enum": [
+            "edge",
+            "vertex"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "factor"
+      ],
+      "type": "object"
+    },
+    "name": "slide_mesh_components"
+  },
+  {
+    "description": "Cancel the active mesh component edit - a G key slide in progress, or the component edit of a gizmo drag - the way Escape does: positions, the before primitive of an extruded or forked mesh, the selection and the GPU buffers return to the edit's start and no operation is queued. Returns cancelled false when no component edit was active.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "cancel_component_edit"
   },
   {
     "description": "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.",

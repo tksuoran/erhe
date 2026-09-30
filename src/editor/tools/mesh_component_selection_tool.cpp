@@ -21,6 +21,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -449,6 +450,59 @@ auto Component_loop_select_command::try_call_with_input(erhe::commands::Input_ar
     set_inactive();
     return consumed;
 }
+
+Component_slide_command::Component_slide_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Mesh_component_selection.slide"}
+    , m_context{context}
+{
+}
+
+auto Component_slide_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->begin_slide();
+}
+
+auto c_str(const Component_modal_action action) -> const char*
+{
+    switch (action) {
+        case Component_modal_action::confirm:        return "confirm";
+        case Component_modal_action::cancel:         return "cancel";
+        case Component_modal_action::toggle_even:    return "toggle_even";
+        case Component_modal_action::toggle_flipped: return "toggle_flipped";
+        case Component_modal_action::toggle_clamp:   return "toggle_clamp";
+        default:                                     return "?";
+    }
+}
+
+Component_modal_command::Component_modal_command(
+    erhe::commands::Commands&    commands,
+    App_context&                 context,
+    const char*                  name,
+    const Component_modal_action action
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_action {action}
+{
+}
+
+void Component_modal_command::try_ready()
+{
+    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_slide_active()) {
+        set_ready();
+    }
+}
+
+auto Component_modal_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->run_modal_action(m_action);
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -476,6 +530,14 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_select_linked_from_selection_command{commands, context, Component_selection_action::select_linked_from_selection}
     , m_loop_select_command                 {commands, context, "Mesh_component_selection.loop_select", Loop_select_gesture::loop}
     , m_ring_select_command                 {commands, context, "Mesh_component_selection.ring_select", Loop_select_gesture::ring}
+    , m_slide_command                       {commands, context}
+    , m_modal_confirm_command               {commands, context, "Mesh_component_selection.modal_confirm",        Component_modal_action::confirm}
+    , m_modal_cancel_command                {commands, context, "Mesh_component_selection.modal_cancel",         Component_modal_action::cancel}
+    , m_modal_toggle_even_command           {commands, context, "Mesh_component_selection.modal_toggle_even",    Component_modal_action::toggle_even}
+    , m_modal_toggle_flipped_command        {commands, context, "Mesh_component_selection.modal_toggle_flipped", Component_modal_action::toggle_flipped}
+    , m_modal_toggle_clamp_command          {commands, context, "Mesh_component_selection.modal_toggle_clamp",   Component_modal_action::toggle_clamp}
+    , m_modal_confirm_click_command         {commands, context, "Mesh_component_selection.modal_confirm_click",  Component_modal_action::confirm}
+    , m_modal_cancel_click_command          {commands, context, "Mesh_component_selection.modal_cancel_click",   Component_modal_action::cancel}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -569,6 +631,38 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     for (const auto& [command, modifier_mask] : loop_select_buttons) {
         commands.bind_command_to_mouse_button(command, erhe::window::Mouse_button_left, Button_trigger::Button_released, modifier_mask);
     }
+
+    // Slide (doc/editor/transform.md "Scalar edits"): G starts it, and while
+    // it runs Enter / left click confirm, Escape / right click cancel, E / F /
+    // C toggle even / flipped / clamp. The keys carry the exact mask 0 (no
+    // modifier) so they dispatch before the mask-less bindings of the same
+    // keys (fly camera E, frame F, paint gesture C, log pause Escape), which
+    // they fall through to while no slide runs. The mouse buttons take any
+    // modifiers: Alt (unclamped) may be held at the click.
+    const std::pair<Component_modal_command*, erhe::window::Keycode> modal_keys[] = {
+        {&m_modal_confirm_command,        erhe::window::Key_enter},
+        {&m_modal_confirm_command,        erhe::window::Key_kp_enter},
+        {&m_modal_cancel_command,         erhe::window::Key_escape},
+        {&m_modal_toggle_even_command,    erhe::window::Key_e},
+        {&m_modal_toggle_flipped_command, erhe::window::Key_f},
+        {&m_modal_toggle_clamp_command,   erhe::window::Key_c}
+    };
+    m_slide_command.set_host(this);
+    commands.register_command(&m_slide_command);
+    commands.bind_command_to_key(&m_slide_command, erhe::window::Key_g, Button_trigger::Button_pressed, 0u);
+    for (Component_modal_command* command : {
+        &m_modal_confirm_command, &m_modal_cancel_command, &m_modal_toggle_even_command,
+        &m_modal_toggle_flipped_command, &m_modal_toggle_clamp_command,
+        &m_modal_confirm_click_command, &m_modal_cancel_click_command
+    }) {
+        command->set_host(this);
+        commands.register_command(command);
+    }
+    for (const auto& [command, key] : modal_keys) {
+        commands.bind_command_to_key(command, key, Button_trigger::Button_pressed, 0u);
+    }
+    commands.bind_command_to_mouse_button(&m_modal_confirm_click_command, erhe::window::Mouse_button_left,  Button_trigger::Button_pressed);
+    commands.bind_command_to_mouse_button(&m_modal_cancel_click_command,  erhe::window::Mouse_button_right, Button_trigger::Button_pressed);
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
@@ -858,9 +952,79 @@ auto Mesh_component_selection_tool::edge_world_normal(
     return (len > 1e-6f) ? (world / len) : glm::vec3{0.0f};
 }
 
+auto Mesh_component_selection_tool::begin_slide() -> bool
+{
+    const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
+    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr)) {
+        return false;
+    }
+    Scene_view* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return false;
+    }
+    Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+    if (viewport_scene_view == nullptr) {
+        return false;
+    }
+    const Scalar_edit_kind kind = (mode == Mesh_component_mode::vertex)
+        ? Scalar_edit_kind::vertex_slide
+        : Scalar_edit_kind::edge_slide;
+    if (!m_context.transform_tool->begin_scalar_drag(kind, *viewport_scene_view)) {
+        return false;
+    }
+    // Ready for the length of the slide: ranks the click commands above the
+    // other press commands of the same buttons.
+    m_modal_confirm_click_command.set_ready();
+    m_modal_cancel_click_command.set_ready();
+    return true;
+}
+
+auto Mesh_component_selection_tool::is_slide_active() const -> bool
+{
+    return (m_context.transform_tool != nullptr) && m_context.transform_tool->is_scalar_drag_active();
+}
+
+auto Mesh_component_selection_tool::run_modal_action(const Component_modal_action action) -> bool
+{
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return false;
+    }
+    bool consumed = false;
+    switch (action) {
+        case Component_modal_action::confirm: {
+            if (transform_tool->is_scalar_drag_active()) {
+                transform_tool->confirm_scalar_drag();
+                consumed = true;
+            }
+            break;
+        }
+        case Component_modal_action::cancel: {
+            consumed = transform_tool->cancel_component_edit();
+            break;
+        }
+        case Component_modal_action::toggle_even:    consumed = transform_tool->toggle_scalar_drag_option(Scalar_drag_option::even);    break;
+        case Component_modal_action::toggle_flipped: consumed = transform_tool->toggle_scalar_drag_option(Scalar_drag_option::flipped); break;
+        case Component_modal_action::toggle_clamp:   consumed = transform_tool->toggle_scalar_drag_option(Scalar_drag_option::clamp);   break;
+        default: break;
+    }
+    if (consumed) {
+        log_selection->trace("slide modal action {}", c_str(action));
+    }
+    if (!transform_tool->is_scalar_drag_active()) {
+        m_modal_confirm_click_command.set_inactive();
+        m_modal_cancel_click_command.set_inactive();
+    }
+    return consumed;
+}
+
 auto Mesh_component_selection_tool::try_ready() const -> bool
 {
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
+        return false;
+    }
+    // A running slide owns the clicks (confirm / cancel).
+    if (is_slide_active()) {
         return false;
     }
     // In Paint gesture sub-mode the paint command handles clicks (one dab); the
@@ -1403,16 +1567,17 @@ void Mesh_component_selection_tool::viewport_toolbar()
         // boundary, bridges it with new faces, then moves the duplicates along the gizmo
         // delta; Extrude (Group Normal) does the same topology change but slides each
         // disjoint subset along its own average normal; Extrude (Vertex Normal) slides each
-        // vertex along its own normal. The item order matches the Mesh_transform_mode enum
-        // values (move, extrude, extrude_group_normal, extrude_vertex_normal).
+        // vertex along its own normal; Edge Slide / Vertex Slide map the gizmo translation to
+        // the slide factor. The item order matches the Mesh_transform_mode enum values
+        // (move, extrude, extrude_group_normal, extrude_vertex_normal, edge_slide, vertex_slide).
         int               transform_index   = static_cast<int>(m_context.editor_settings->transform_mode);
-        const char* const transform_items[] = {"Move", "Extrude", "Extrude (Group Normal)", "Extrude (Vertex Normal)"};
+        const char* const transform_items[] = {"Move", "Extrude", "Extrude (Group Normal)", "Extrude (Vertex Normal)", "Edge Slide", "Vertex Slide"};
         if (erhe::imgui::combo_fit_width("##mesh_transform_mode", &transform_index, transform_items, IM_ARRAYSIZE(transform_items))) {
             m_context.editor_settings->transform_mode = static_cast<Mesh_transform_mode>(transform_index);
             m_context.app_settings->settings_store().touch();
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves. Extrude (Group Normal): extrudes, then each disjoint subset slides along its own average normal by the drag amount. Extrude (Vertex Normal): extrudes, then each vertex slides along its own normal.");
+            ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves. Extrude (Group Normal): extrudes, then each disjoint subset slides along its own average normal by the drag amount. Extrude (Vertex Normal): extrudes, then each vertex slides along its own normal. Edge Slide: the selected edge loops slide along their rails by the drag along the nearest vertex's rail. Vertex Slide: each selected vertex slides toward the neighbour the drag points at. G starts a slide from the pointer in any transform mode (Enter / click confirms, Escape / right click cancels, E even, F flipped, C or Alt unclamped).");
         }
     }
 
@@ -1804,7 +1969,7 @@ auto Mesh_component_selection_tool::run_selection_action(const Component_selecti
 
 auto Mesh_component_selection_tool::box_select_try_ready() const -> bool
 {
-    if (m_gesture_mode != Component_gesture_mode::box) {
+    if ((m_gesture_mode != Component_gesture_mode::box) || is_slide_active()) {
         return false;
     }
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
@@ -1888,7 +2053,7 @@ void Mesh_component_selection_tool::box_select_release()
 
 auto Mesh_component_selection_tool::paint_select_try_ready() const -> bool
 {
-    if (m_gesture_mode != Component_gesture_mode::paint) {
+    if ((m_gesture_mode != Component_gesture_mode::paint) || is_slide_active()) {
         return false;
     }
     if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
@@ -2012,6 +2177,11 @@ void Mesh_component_selection_tool::adjust_brush_radius(const float wheel_delta)
 
 void Mesh_component_selection_tool::gesture_update()
 {
+    // The pointer slide follows the pointer (a no-op unless a slide runs and
+    // the pointer or an option changed).
+    if (m_context.transform_tool != nullptr) {
+        m_context.transform_tool->update_scalar_drag();
+    }
     const bool have_devices = (m_context.id_renderer != nullptr) && (m_context.graphics_device != nullptr);
 
     // Debug/test (MCP debug_region_select): drive a region scan over an explicit

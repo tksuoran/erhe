@@ -30,6 +30,109 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 - **`Rotation_inspector`** -- The Transform window's Rotation group: the rotation shown and edited as a quaternion, a matrix, axis-angle, or Euler angles in any of the 12 axis orders. The Euler angles are read from and written to the quaternion directly (`erhe_math/euler_angles.hpp`, see [../erhe/math.md](../erhe/math.md)), so they cover the quaternion's double cover: q and -q show different angles, and editing an angle keeps the node's quaternion in the hemisphere the angles name. While the angles shown still give nearly the node's quaternion (within 30 degrees, sign-aware) - after an edit in the row ends, or while the gizmo turns the node - reading the rotation back picks, of every angle triple that gives the quaternion, the one nearest to the angles shown (`quaternion_to_euler_angles_near()`), so angles dragged or typed anywhere in (-360, 360] degrees stay as edited and gizmo rotation moves them continuously; a rotation that jumped (selection change, undo) is shown in the canonical ranges; MCP `get_transform_rotation` reports the angles shown. `scripts/rotation_inspector_smoke_test.py` checks this against a running editor by typing into the Euler fields.
 
+## Scalar edits
+
+`Mesh_component_transform` has, beside its gizmo-matrix path, a scalar path
+for the modeling operations driven by one number (`doc/plans/mesh_modeling.md`
+D4, section 4.6): `begin_scalar(context, Scalar_edit_kind)` builds the slide
+data of the live mesh component selection, `apply_scalar(context,
+Scalar_input)` places the vertices for one factor (geometry, GPU vertex and
+edge-line buffers and live normals, through the same per-vertex write as the
+matrix path), `commit()` queues the edit and `cancel()` restores its start.
+The slide data is persistent scratch on the transform (`Slide_vertex`: the
+vertex, its world-space start and the world-space offsets to its two rail
+ends), cleared and refilled per edit. Fork mode forks a shared geometry on
+the first step that moves a vertex, as for a move.
+
+- **Edge slide** (`Scalar_edit_kind::edge_slide`) takes the selected edges
+  of every live entry (edge and face mode, and the derived edges in vertex
+  mode). It refuses to start unless every selected vertex is on one or two
+  selected edges and every selected edge has one or two facets. The
+  vertices chain into loops (open loops from an end, closed loops from any
+  vertex). The first loop edge's facets are side 0 and side 1; each later
+  edge's facets take the side of the previous edge's facet their fan around
+  the shared vertex reaches first (which covers the same facet and the same
+  rail target), and a facet whose fan ends at a boundary takes the side the
+  previous edge had no facet on. A vertex's rail end on a side is the far
+  vertex of the other edge, at that vertex, of the side facet of its loop
+  edge(s): when its two loop edges give the same far vertex, or only one
+  loop edge has a facet on that side, that vertex; when both loop edges lie
+  in one facet on that side and the vertex has valence 2, the opposite
+  corner of a quad or, in an n-gon, the point where the facet's in-plane
+  direction perpendicular to the loop leaves the facet; otherwise (the loop
+  turns) the intersection of the line through the previous rail end
+  parallel to the previous loop edge and the line through the next rail end
+  parallel to the next loop edge when it lies inside the cone the two rails
+  span, else the midpoint of the two rail ends. A side without a facet is a
+  zero rail. The factor is in [-1, 1]: positive slides each vertex toward
+  its side 0 end, negative toward side 1. Loops orient against the active
+  slide vertex's rails (world space: the loop vertex nearest to it; pointer
+  drag: on screen), so parallel loops move together.
+- **Vertex slide** (`Scalar_edit_kind::vertex_slide`) takes the selected
+  vertices; each slides toward one of its edge neighbours (refused for a
+  vertex without one). The neighbour is the one whose direction has the
+  largest dot product with the drag direction, re-picked on every step
+  while clamped and frozen once picked when unclamped. The factor is in
+  [0, 1]; 1 lands on the neighbour.
+- `Scalar_input::even` moves every vertex the same distance along its rail:
+  the factor times the active vertex's rail (edge slide; the first non-zero
+  rail on that side when the active one has none) or chosen edge (vertex
+  slide) length. `flipped` (with even) measures that distance from the far
+  end of each rail. `clamp` off leaves the factor unclamped; the edge slide
+  keeps the side of the last clamped step and extrapolates along it.
+- **Correct UVs**: `commit()` of a slide re-samples, for every corner of
+  every facet around a slid vertex, the corner texcoords (sets 0 to 2, where
+  every corner of the facet has one) at the vertex's new position from the
+  facet's pre-slide corners, with mean value coordinates in the facet's
+  pre-slide plane (Blender's "correct UVs", always on). The queued
+  `Move_mesh_vertices_operation` (labelled "Edge Slide" / "Vertex Slide")
+  carries those corner texcoords beside the positions, so undo and redo
+  restore both.
+- **Transform modes** `edge_slide` and `vertex_slide` (the toolbar's
+  transform mode combo, MCP `set_transform_mode`) make the gizmo drive the
+  scalar path: `begin()` builds the slide, and `apply()` maps the
+  translation of the gizmo delta (its rotation and scale do not apply) to
+  the factor - for edge slide the translation projected on the first slide
+  vertex's rail on the side it points to (`dot(t, a) / |a|^2` when
+  `dot(t, a - b) >= 0`, else `-dot(t, b) / |b|^2`), for vertex slide the
+  translation re-picks the neighbours and is projected on the first
+  vertex's chosen edge - so the Transform window's numeric translation
+  drives a slide as well.
+- **Pointer drag**: `Transform_tool::begin_scalar_drag(kind, view)` starts a
+  modal scalar edit at the pointer position without a gizmo handle; the
+  component tool's G key (`Mesh_component_selection.slide`,
+  `doc/editor/mesh_component_selection.md`) calls it: vertex slide in vertex
+  mode, edge slide in edge and face mode, in every transform mode. The
+  active slide vertex is the one projecting nearest to the pointer. Each
+  frame, while the drag runs and only when the pointer or an option
+  changed, `update_scalar_drag()` projects the drag since the start onto the
+  active vertex's projected rail: edge slide toward the rail end on the side
+  the drag points to (1 at that end), vertex slide toward the chosen
+  neighbour (re-picked by the drag direction on screen while clamped). The
+  start view is dereferenced only while it is the hovered view. Enter or a
+  left click confirms (`confirm_scalar_drag()` commits); Escape or a right
+  click cancels; E, F and C toggle even, flipped and clamp, and Alt held
+  unclamps. While the drag runs the gizmo drag, the component click, box and
+  paint gestures and the loop select stand down.
+- **Cancel**: `Mesh_component_transform::cancel()` writes the start
+  positions back (with the normals the primitive build wrote from the
+  geometry's attributes) or, for an extruded or forked group, swaps the
+  before primitive back, which also makes the pre-edit selection entry live
+  again; it releases the optimization holds, queues the re-optimization of
+  the restored primitive and queues no operation.
+  `Transform_tool::cancel_component_edit()` cancels the pointer drag or the
+  mesh component edit of a gizmo drag (Escape, MCP `cancel_component_edit`),
+  and a scene close cancels an edit of that scene's meshes.
+- **Undo and redo decline while a mesh component edit is live** (the G
+  slide, a gizmo component drag, a numeric component edit in progress):
+  `Operation_stack::get_undo_block_reason()` names the edit, `can_undo()` /
+  `can_redo()` are false and `undo()` / `redo()` return without acting, so
+  the Undo / Redo commands (Ctrl+Z / Ctrl+Y), the Operations window buttons
+  and the MCP `undo` / `redo` (an error naming the edit) all decline.
+- MCP `slide_mesh_components` (`kind` edge | vertex, `factor`, `even`,
+  `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
+  commit through `Transform_tool::run_scalar_edit()`.
+
 ## Public API / Integration Points
 
 - `Transform_tool` is registered as a tool and activated from the hotbar

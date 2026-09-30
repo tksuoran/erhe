@@ -157,6 +157,31 @@ no popup menu, so M merges at center and the other merge types are the
 Operations window's Components buttons and `Geometry.Merge.*` commands. M
 declines (the key falls through) without a live component selection.
 
+### Slide keys
+
+G starts a pointer slide of the live component selection
+(`doc/editor/transform.md` "Scalar edits"): vertex slide in vertex mode,
+edge slide in edge and face mode. The gizmo is the grab, so the plain G is
+the slide (Blender's G G). While the slide runs, the modal commands below
+consume their input; otherwise they decline and the key falls through
+(Escape also cancels the mesh component edit of a gizmo drag). The keys are
+bound with the exact modifier mask 0, so they dispatch before the mask-less
+bindings of the same keys (fly camera E, frame F, paint gesture C, the log
+window's Escape). The click commands are Ready for the length of the slide,
+which ranks them above the other press commands of their buttons; the
+component click, box, paint and loop select gestures stand down meanwhile.
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Mesh_component_selection.slide` | G | Start the slide at the pointer |
+| `Mesh_component_selection.modal_confirm` | Enter / Numpad Enter | Confirm (one undo entry) |
+| `Mesh_component_selection.modal_confirm_click` | Left press | Confirm |
+| `Mesh_component_selection.modal_cancel` | Escape | Cancel (positions back, no undo entry) |
+| `Mesh_component_selection.modal_cancel_click` | Right press | Cancel |
+| `Mesh_component_selection.modal_toggle_even` | E | Toggle even |
+| `Mesh_component_selection.modal_toggle_flipped` | F | Toggle flipped |
+| `Mesh_component_selection.modal_toggle_clamp` | C | Toggle clamp (Alt held: unclamped while held) |
+
 The toolbar has All / None / Invert / Linked buttons (Linked is the
 from-selection form) beside Clear while a component mode is active. Ctrl+A
 and Alt+A share the A key with the fly camera's strafe binding, which has no
@@ -227,6 +252,18 @@ command ends with a flush (section 3).
   facets, the edges between selected vertices). In edge mode the edges the
   fills created are the selection afterwards (the split halves when no fill
   ran).
+
+- `slide_mesh_components` - `kind` (`edge`, the default, or `vertex`),
+  `factor` (required), `even`, `flipped` (default false), `clamp` (default
+  true), `direction` ([x, y, z] world space, required for `vertex`): the
+  numeric slide of `doc/editor/transform.md` "Scalar edits" (begin, one
+  step, commit, one undo entry); returns `slide_vertices`,
+  `moved_vertices`, `loops` (edge) and `queued`. Needs a live selection in
+  a component mode; refused when it cannot slide or another component edit
+  is active.
+- `cancel_component_edit` - cancels the running G slide or the mesh
+  component edit of a gizmo drag like Escape; `cancelled` is false when
+  none was active.
 
 The six geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`
@@ -483,7 +520,9 @@ that dedups on the CPU; every supported GL device has compute, since OpenGL
   select all / none, select linked and their keys, and vertex / edge mode
   box and brush select (`debug_region_select`) on a box, loop, ring and
   face loop select (`select_mesh_loop` and Alt / Ctrl+Alt clicks) on the
-  box, a torus and a one-sided rectangle, including the boundary cycle; it
+  box, a torus and a one-sided rectangle, including the boundary cycle, and
+  the edge and vertex slides (`slide_mesh_components`, the `edge_slide`
+  transform mode, the G key with cancel and confirm) on a Catmull-Clark box; it
   writes the editor's stderr to `logs/editor_stderr.txt`; the `Mcp_test`
   case `mesh_component_flush_and_select_all` covers the face-to-vertex flush
   and select all in CI.

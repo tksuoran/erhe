@@ -10,6 +10,7 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "editor_log.hpp"
+#include "input_state.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_transform_operation.hpp"
@@ -356,6 +357,12 @@ void Transform_tool::on_close_scene(Close_scene_message& message)
     // bodies of a closing scene (doc/editor/coding_rules.md "Scene-hosted references in
     // editor parts"): the physics world goes away with the scene.
     m_physics_drag.on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+
+    // A mesh component edit of the closing scene's meshes ends without an
+    // operation (doc/editor/coding_rules.md "Scene-hosted references").
+    if (m_component_transform.references_item_host(static_cast<erhe::Item_host*>(message.scene_root.get()))) {
+        cancel_component_edit();
+    }
 }
 
 void Transform_tool::on_items_removed(Items_removed_message& message)
@@ -1352,6 +1359,10 @@ auto Transform_tool::on_drag_ready() -> bool
 
     if (m_scripted_drag_active) {
         log_trs_tool->trace("Transform tool cannot start drag - a scripted drag is held");
+        return false;
+    }
+    if (m_scalar_drag.active || m_component_transform.is_scalar_active()) {
+        log_trs_tool->trace("Transform tool cannot start drag - a scalar component edit is active");
         return false;
     }
 
@@ -2488,6 +2499,165 @@ void Transform_tool::commit_component_edit()
 auto Transform_tool::is_component_edit_active() const -> bool
 {
     return m_component_transform.is_active() || m_lattice_point_transform.is_active();
+}
+
+auto Transform_tool::begin_scalar_drag(const Scalar_edit_kind kind, Viewport_scene_view& view) -> bool
+{
+    if (m_scalar_drag.active || is_component_edit_active() || is_transform_tool_active() || m_scripted_drag_active) {
+        return false;
+    }
+    if (m_component_source != Component_source::mesh_components) {
+        return false;
+    }
+    const std::optional<glm::vec2> position = view.get_position_in_viewport();
+    if (!position.has_value()) {
+        return false;
+    }
+    if (!m_component_transform.begin_scalar(m_context, kind)) {
+        return false;
+    }
+    // The active slide vertex is the one nearest to the pointer; edge slide
+    // loops orient against it on screen.
+    m_component_transform.select_active_slide_vertex(view, position.value());
+    m_scalar_drag                = Scalar_drag{};
+    m_scalar_drag.active         = true;
+    m_scalar_drag.view           = &view;
+    m_scalar_drag.start_position = position.value();
+    log_trs_tool->info(
+        "{} started: {} vertices",
+        c_str(kind),
+        m_component_transform.get_slide_vertex_count()
+    );
+    update_scalar_drag();
+    return true;
+}
+
+void Transform_tool::update_scalar_drag()
+{
+    if (!m_scalar_drag.active) {
+        return;
+    }
+    if (!m_component_transform.is_scalar_active()) {
+        m_scalar_drag = Scalar_drag{}; // ended elsewhere (scene close)
+        return;
+    }
+    // The start view is dereferenced only while it is the hovered view; with
+    // the pointer elsewhere the drag holds its last step.
+    Viewport_scene_view* const view = m_scalar_drag.view;
+    if ((view == nullptr) || (get_hover_scene_view() != view)) {
+        return;
+    }
+    const std::optional<glm::vec2> position = view->get_position_in_viewport();
+    if (!position.has_value()) {
+        return;
+    }
+    const bool alt   = (m_context.input_state != nullptr) && m_context.input_state->alt;
+    const bool clamp = m_scalar_drag.clamp && !alt;
+    if (m_scalar_drag.applied && (m_scalar_drag.last_position == position.value()) && (m_scalar_drag.last_clamp == clamp)) {
+        return; // nothing changed since the last step
+    }
+    m_scalar_drag.applied       = true;
+    m_scalar_drag.last_position = position.value();
+    m_scalar_drag.last_clamp    = clamp;
+
+    const glm::vec2        delta = position.value() - m_scalar_drag.start_position;
+    const Scalar_edit_kind kind  = m_component_transform.get_scalar_kind();
+    if ((kind == Scalar_edit_kind::vertex_slide) && clamp) {
+        m_component_transform.pick_vertex_slide_neighbours(*view, delta);
+    }
+    Slide_screen_frame frame{};
+    if (!m_component_transform.get_active_slide_screen_frame(*view, frame)) {
+        return;
+    }
+
+    // The factor is the drag projected on the active vertex's projected rail:
+    // edge slide toward side a (positive) or side b (negative), vertex slide
+    // toward the chosen neighbour (1 at the neighbour).
+    const glm::vec2 rail_a = frame.side_a - frame.origin;
+    const glm::vec2 rail_b = frame.side_b - frame.origin;
+    const auto along = [&delta](const glm::vec2 rail) -> float {
+        const float length_squared = glm::dot(rail, rail);
+        return (length_squared > 1e-6f) ? (glm::dot(delta, rail) / length_squared) : 0.0f;
+    };
+    float factor = 0.0f;
+    if (kind == Scalar_edit_kind::vertex_slide) {
+        factor = along(rail_a);
+    } else if (clamp) {
+        m_scalar_drag.last_side = (glm::dot(delta, rail_a - rail_b) >= 0.0f) ? 0u : 1u;
+        factor = (m_scalar_drag.last_side == 0u) ? along(rail_a) : -along(rail_b);
+    } else {
+        // Unclamped: measured along the side of the last clamped step.
+        factor = (m_scalar_drag.last_side == 0u) ? along(rail_a) : -along(rail_b);
+    }
+
+    Scalar_input input{};
+    input.factor  = factor;
+    input.even    = m_scalar_drag.even;
+    input.flipped = m_scalar_drag.flipped;
+    input.clamp   = clamp;
+    m_component_transform.apply_scalar(m_context, input);
+}
+
+void Transform_tool::confirm_scalar_drag()
+{
+    if (!m_scalar_drag.active) {
+        return;
+    }
+    update_scalar_drag();
+    m_scalar_drag = Scalar_drag{};
+    m_component_transform.commit(m_context);
+}
+
+auto Transform_tool::toggle_scalar_drag_option(const Scalar_drag_option option) -> bool
+{
+    if (!m_scalar_drag.active) {
+        return false;
+    }
+    switch (option) {
+        case Scalar_drag_option::even:    m_scalar_drag.even    = !m_scalar_drag.even;    break;
+        case Scalar_drag_option::flipped: m_scalar_drag.flipped = !m_scalar_drag.flipped; break;
+        case Scalar_drag_option::clamp:   m_scalar_drag.clamp   = !m_scalar_drag.clamp;   break;
+        default: break;
+    }
+    m_scalar_drag.applied = false; // re-apply with the new option
+    update_scalar_drag();
+    return true;
+}
+
+auto Transform_tool::cancel_component_edit() -> bool
+{
+    m_scalar_drag = Scalar_drag{};
+    if (!m_component_transform.is_active()) {
+        return false;
+    }
+    m_component_transform.cancel(m_context);
+    log_trs_tool->info("Mesh component edit cancelled");
+    return true;
+}
+
+auto Transform_tool::run_scalar_edit(
+    const Scalar_edit_kind kind,
+    const Scalar_input&    input,
+    Scalar_edit_result&    result,
+    std::string&           error
+) -> bool
+{
+    if (m_scalar_drag.active || is_component_edit_active() || is_transform_tool_active() || m_scripted_drag_active) {
+        error = "another transform or component edit is active";
+        return false;
+    }
+    if (!m_component_transform.begin_scalar(m_context, kind)) {
+        error = (kind == Scalar_edit_kind::edge_slide)
+            ? "edge slide refused: needs a live selection whose vertices are each on one or two selected edges, every selected edge manifold or boundary"
+            : "vertex slide refused: needs a live selection of vertices with neighbours";
+        return false;
+    }
+    m_component_transform.apply_scalar(m_context, input);
+    result.slide_vertices = m_component_transform.get_slide_vertex_count();
+    result.loops          = (kind == Scalar_edit_kind::edge_slide) ? m_component_transform.get_slide_loop_count() : 0;
+    result.moved_vertices = m_component_transform.count_moved_vertices();
+    m_component_transform.commit(m_context);
+    return true;
 }
 
 void Transform_tool::touch()

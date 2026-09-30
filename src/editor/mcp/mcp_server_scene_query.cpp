@@ -2145,6 +2145,11 @@ auto Mcp_server::undo_or_redo(const json& args, const bool undo) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    if (const char* const reason = m_context.operation_stack->get_undo_block_reason(); reason != nullptr) {
+        json r = make_text_content(std::string{undo ? "Undo" : "Redo"} + " refused: " + reason);
+        r["isError"] = true;
+        return r.dump();
+    }
     const std::size_t count = args.value("count", std::size_t{1});
     json performed = json::array();
     for (std::size_t i = 0; i < count; ++i) {

@@ -68,21 +68,26 @@ void refresh_geometry_normals(erhe::geometry::Geometry& geometry)
 Move_mesh_vertices_operation::Move_mesh_vertices_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
-    set_description("Move " + std::to_string(m_parameters.vertices.size()) + " mesh vertices");
+    set_description(
+        m_parameters.description.empty()
+            ? ("Move " + std::to_string(m_parameters.vertices.size()) + " mesh vertices")
+            : m_parameters.description
+    );
 }
 
 void Move_mesh_vertices_operation::execute(App_context& context)
 {
-    apply(context, m_parameters.after_positions);
+    apply(context, State::after);
 }
 
 void Move_mesh_vertices_operation::undo(App_context& context)
 {
-    apply(context, m_parameters.before_positions);
+    apply(context, State::before);
 }
 
-void Move_mesh_vertices_operation::apply(App_context& context, const std::vector<glm::vec3>& positions)
+void Move_mesh_vertices_operation::apply(App_context& context, const State state)
 {
+    const std::vector<glm::vec3>& positions = (state == State::after) ? m_parameters.after_positions : m_parameters.before_positions;
     if (!m_parameters.mesh || !m_parameters.geometry) {
         set_error("Move_mesh_vertices_operation: mesh or geometry is null");
         return;
@@ -121,6 +126,11 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
     for (std::size_t i = 0, end = m_parameters.vertices.size(); i < end; ++i) {
         const glm::vec3& p = positions[i];
         set_pointf(geo_mesh.vertices, m_parameters.vertices[i], GEO::vec3f{p.x, p.y, p.z});
+    }
+    erhe::geometry::Mesh_attributes& attributes = m_parameters.geometry->get_attributes();
+    for (const Corner_texcoord_change& change : m_parameters.corner_texcoords) {
+        const glm::vec2& texcoord = (state == State::after) ? change.after : change.before;
+        attributes.corner_texcoord(change.set).set(change.corner, GEO::vec2f{texcoord.x, texcoord.y});
     }
     refresh_geometry_normals(*m_parameters.geometry);
 

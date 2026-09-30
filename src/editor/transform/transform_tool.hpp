@@ -68,6 +68,24 @@ class Node_physics;
 class Scene_root;
 class Move_tool;
 class Rotate_tool;
+class Viewport_scene_view;
+
+// The modal toggles of a pointer scalar drag (doc/editor/transform.md
+// "Scalar edits"): E even, F flipped, C clamp.
+enum class Scalar_drag_option : unsigned int {
+    even    = 0,
+    flipped = 1,
+    clamp   = 2
+};
+
+// What a numeric scalar edit (Transform_tool::run_scalar_edit) did.
+class Scalar_edit_result
+{
+public:
+    std::size_t slide_vertices{0};
+    std::size_t loops         {0}; // edge slide
+    std::size_t moved_vertices{0};
+};
 class Scale_tool;
 class Subtool;
 class Tools;
@@ -353,6 +371,27 @@ public:
     [[nodiscard]] auto is_component_mode      () const -> bool { return shared.component_mode; }
     [[nodiscard]] auto is_component_edit_active() const -> bool;
 
+    // Pointer-driven scalar edit of the mesh component selection
+    // (doc/editor/transform.md "Scalar edits"), started from the component
+    // tool (G) at the pointer position in `view`, without a gizmo handle.
+    // update_scalar_drag() runs once per frame and maps the pointer motion
+    // since the start to the factor (only while the drag is active, and only
+    // when the pointer or an option changed); confirm commits, and
+    // cancel_component_edit() restores the start state. Refused while a
+    // gizmo drag, a scripted drag or another component edit is active.
+    auto begin_scalar_drag        (Scalar_edit_kind kind, Viewport_scene_view& view) -> bool;
+    void update_scalar_drag       ();
+    void confirm_scalar_drag      ();
+    auto toggle_scalar_drag_option(Scalar_drag_option option) -> bool;
+    [[nodiscard]] auto is_scalar_drag_active() const -> bool { return m_scalar_drag.active; }
+    // Cancels the active mesh component edit - the pointer scalar drag, or
+    // the edit of a gizmo drag - restoring its start state and queueing no
+    // operation. False when no mesh component edit is active.
+    auto cancel_component_edit    () -> bool;
+    // Numeric scalar edit (MCP slide_mesh_components): begin, one step with
+    // `input`, commit. False (error set) when refused.
+    auto run_scalar_edit(Scalar_edit_kind kind, const Scalar_input& input, Scalar_edit_result& result, std::string& error) -> bool;
+
     Transform_tool_shared shared;
 
 private:
@@ -471,6 +510,24 @@ private:
 
     Mesh_component_transform m_component_transform;
     Lattice_point_transform  m_lattice_point_transform;
+
+    // The pointer scalar drag. `view` is the view it started in; it is only
+    // dereferenced while it is still the hovered view.
+    class Scalar_drag
+    {
+    public:
+        bool                 active        {false};
+        Viewport_scene_view* view          {nullptr};
+        glm::vec2            start_position{0.0f};
+        glm::vec2            last_position {0.0f};
+        bool                 applied       {false}; // last_position / last_clamp are valid
+        bool                 last_clamp    {true};
+        unsigned int         last_side     {0};     // edge slide: side of the last clamped step
+        bool                 even          {false};
+        bool                 flipped       {false};
+        bool                 clamp         {true};
+    };
+    Scalar_drag m_scalar_drag;
 
     // Interactive FABRIK IK for a translate drag of a bone. Chain discovery
     // runs lazily on the first adjust_translation() of a drag (attempted
