@@ -700,6 +700,8 @@ erhe_target_sources_grouped(
     tools/navigation_gizmo_tool.hpp
     tools/paint_tool.cpp
     tools/paint_tool.hpp
+    tools/screen_snap.cpp
+    tools/screen_snap.hpp
     tools/selection_tool.cpp
     tools/selection_tool.hpp
     tools/tool.cpp

@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `Knife_cut::end_polyline()`, `Knife_cut::close_polyline()`
+  and `Knife_cut::get_polyline_count()`: several polylines per knife cut, each
+  ended or closed on its own; `undo_last_point()` reopens the polyline of the
+  removed point, and `Knife_options::close_polyline` closes the current
+  polyline.
 - `erhe::geometry`: `erhe_geometry/operation/knife_cut.hpp`: `Knife_cut` (an
   `Edit_mesh_operation` driven point by point: `add_point()`,
   `undo_last_point()`, `get_preview_segments()`, `finish()`) and the one-shot

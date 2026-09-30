@@ -1894,7 +1894,9 @@ auto Mcp_server::action_cancel_component_edit(const json& args) -> std::string
     if (m_context.transform_tool == nullptr) {
         return make_error_content("Transform tool not available");
     }
-    const bool cancelled = m_context.transform_tool->cancel_component_edit();
+    // The knife mode edits nothing before its confirm; cancelling it ends it.
+    const bool knife_cancelled = (m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->cancel_knife();
+    const bool cancelled       = knife_cancelled || m_context.transform_tool->cancel_component_edit();
     return make_json_content(json{{"cancelled", cancelled}}).dump();
 }
 
@@ -1979,6 +1981,172 @@ auto Mcp_server::action_loop_cut_mesh(const json& args) -> std::string
     out["edge_count"]     = after_mesh.edges.nb();
     out["facet_count"]    = after_mesh.facets.nb();
     out["queued"]         = true;
+    return make_json_content(out).dump();
+}
+
+auto Mcp_server::action_knife_cut_mesh(const json& args) -> std::string
+{
+    // The numeric knife (doc/plans/mesh_modeling.md D6, section 4.7;
+    // doc/editor/mesh_modeling.md): one polyline of cut points in mesh space,
+    // cut and committed as one undo entry. Explicit-state rule
+    // (doc/agents/mcp_api_guidelines.md): the option defaults are fixed here.
+    Mesh_component_selection*      selection = m_context.mesh_component_selection;
+    Mesh_component_selection_tool* tool      = m_context.mesh_component_selection_tool;
+    if ((selection == nullptr) || (tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    if (!is_mesh_component_mode(selection->get_mode())) {
+        return make_error_content("knife_cut_mesh needs a vertex, edge or face mode (set_mesh_component_mode)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::vector<Mesh_component_target> targets;
+    append_mesh_component_targets(erhe::scene::get_mesh(node.get()), targets);
+    const Mesh_component_target* target = nullptr;
+    for (const Mesh_component_target& candidate : targets) {
+        if (candidate.primitive_index == primitive_index) {
+            target = &candidate;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        return make_error_content("Node has no component-selectable mesh primitive at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+    const erhe::geometry::Geometry& geometry     = *target->geometry;
+    const GEO::Mesh&                geo_mesh     = geometry.get_mesh();
+    const GEO::index_t              vertex_count = geo_mesh.vertices.nb();
+
+    const auto read_vec3 = [](const json& value, glm::vec3& out) -> bool {
+        if (!value.is_array() || (value.size() != 3)) {
+            return false;
+        }
+        out = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        return true;
+    };
+    const auto vertex_position = [&geo_mesh](const GEO::index_t vertex) -> glm::vec3 {
+        return erhe::geometry::to_glm_vec3(erhe::geometry::get_pointf(geo_mesh.vertices, vertex));
+    };
+
+    if (!args.contains("points") || !args["points"].is_array() || args["points"].empty()) {
+        return make_error_content("points (a list of cut points) is required");
+    }
+    std::vector<erhe::geometry::operation::Knife_point> points;
+    for (std::size_t i = 0, end = args["points"].size(); i < end; ++i) {
+        const json&       entry  = args["points"][i];
+        const std::string prefix = "points[" + std::to_string(i) + "]: ";
+        const std::string snap   = entry.value("snap", "facet");
+        erhe::geometry::operation::Knife_point point{};
+        glm::vec3  position{0.0f};
+        const bool has_position = entry.contains("position") && read_vec3(entry["position"], position);
+        if (entry.contains("position") && !has_position) {
+            return make_error_content(prefix + "position must be [x, y, z]");
+        }
+        if (snap == "vertex") {
+            const GEO::index_t vertex = entry.value("vertex", GEO::NO_INDEX);
+            if (vertex >= vertex_count) {
+                return make_error_content(prefix + "vertex must be below vertex_count " + std::to_string(vertex_count));
+            }
+            point.snap   = erhe::geometry::operation::Knife_snap::vertex;
+            point.vertex = vertex;
+            if (!has_position) {
+                position = vertex_position(vertex);
+            }
+        } else if (snap == "edge") {
+            if (!entry.contains("edge") || !entry["edge"].is_array() || (entry["edge"].size() != 2)) {
+                return make_error_content(prefix + "edge (a [v0, v1] vertex-index pair) is required for an edge point");
+            }
+            const GEO::index_t v0 = entry["edge"][0].get<GEO::index_t>();
+            const GEO::index_t v1 = entry["edge"][1].get<GEO::index_t>();
+            if ((v0 >= vertex_count) || (v1 >= vertex_count) || (v0 == v1) || (geometry.get_edge(v0, v1) == GEO::NO_EDGE)) {
+                return make_error_content(prefix + "(" + std::to_string(v0) + ", " + std::to_string(v1) + ") is not an edge");
+            }
+            point.snap    = erhe::geometry::operation::Knife_snap::edge;
+            point.edge_v0 = v0;
+            point.edge_v1 = v1;
+            if (!has_position) {
+                position = 0.5f * (vertex_position(v0) + vertex_position(v1));
+            }
+        } else if (snap == "facet") {
+            const GEO::index_t facet = entry.value("facet", GEO::NO_INDEX);
+            if (facet >= geo_mesh.facets.nb()) {
+                return make_error_content(prefix + "facet must be below facet_count " + std::to_string(geo_mesh.facets.nb()));
+            }
+            if (!has_position) {
+                return make_error_content(prefix + "position is required for a facet point");
+            }
+            point.snap  = erhe::geometry::operation::Knife_snap::facet;
+            point.facet = facet;
+        } else {
+            return make_error_content(prefix + "snap must be vertex, edge or facet");
+        }
+        point.position = GEO::vec3f{position.x, position.y, position.z};
+        points.push_back(point);
+    }
+
+    erhe::geometry::operation::Knife_options options{};
+    options.cut_through    = args.value("cut_through", false);
+    options.close_polyline = args.value("close",       false);
+
+    std::optional<erhe::geometry::operation::Knife_view> view{};
+    if (args.contains("view")) {
+        const json& view_json = args["view"];
+        glm::vec3 eye      {0.0f};
+        glm::vec3 direction{0.0f};
+        if (!view_json.contains("eye") || !read_vec3(view_json["eye"], eye)) {
+            return make_error_content("view.eye ([x, y, z] world) is required");
+        }
+        if (!view_json.contains("direction") || !read_vec3(view_json["direction"], direction)) {
+            return make_error_content("view.direction ([x, y, z] world) is required");
+        }
+        if (!view_json.contains("clip_from_world") || !view_json["clip_from_world"].is_array() || (view_json["clip_from_world"].size() != 16)) {
+            return make_error_content("view.clip_from_world (16 floats, column-major) is required");
+        }
+        glm::mat4 clip_from_world{1.0f};
+        for (int column = 0; column < 4; ++column) {
+            for (int row = 0; row < 4; ++row) {
+                clip_from_world[column][row] = view_json["clip_from_world"][static_cast<std::size_t>((column * 4) + row)].get<float>();
+            }
+        }
+        const float width  = view_json.value("viewport_width",  1.0f);
+        const float height = view_json.value("viewport_height", 1.0f);
+        if ((width <= 0.0f) || (height <= 0.0f)) {
+            return make_error_content("view.viewport_width and view.viewport_height must be positive");
+        }
+        view = make_knife_view(
+            clip_from_world,
+            eye,
+            direction,
+            view_json.value("perspective", true) ? Knife_projection::perspective : Knife_projection::orthographic,
+            width,
+            height,
+            *node
+        );
+    }
+
+    Knife_cut_result result{};
+    std::string      error;
+    if (!tool->knife_cut(*target, view.has_value() ? &view.value() : nullptr, points, options, result, error)) {
+        return make_error_content(error);
+    }
+    const GEO::Mesh& after_mesh = target->mesh->get_primitives()[primitive_index].primitive->render_shape->get_geometry_const()->get_mesh();
+    json out = mesh_component_selection_json(*selection);
+    out["changed"]      = result.changed;
+    out["cut_vertices"] = result.cut_vertices;
+    out["cut_edges"]    = result.cut_edges;
+    out["cut_through"]  = options.cut_through;
+    out["close"]        = options.close_polyline;
+    out["vertex_count"] = after_mesh.vertices.nb();
+    out["edge_count"]   = after_mesh.edges.nb();
+    out["facet_count"]  = after_mesh.facets.nb();
+    out["queued"]       = result.changed;
     return make_json_content(out).dump();
 }
 

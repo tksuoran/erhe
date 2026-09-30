@@ -48,6 +48,10 @@ public:
     float                    edge_normal_blend    {0.5f};
     bool                     translate_snap_enable{false};
     float                    translate_snap       {0.1f};
+    // Move transform mode of mesh components: the drag snaps the anchor to
+    // the nearest vertex or edge of the facet under the pointer
+    // (doc/editor/transform.md "Snap to vertices / edges"). Session state.
+    bool                     snap_to_components   {false};
     // Translate-dragging a bone with a valid ancestor chain solves the chain
     // with FABRIK IK instead of translating the bone (see
     // doc/plans/rigging/fabrik_ik.md). Off = plain FK translation.

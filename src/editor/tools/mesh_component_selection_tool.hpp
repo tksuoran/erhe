@@ -4,9 +4,11 @@
 
 #include "app_message.hpp"
 #include "tools/mesh_component_selection.hpp" // Mesh_component_mode
+#include "tools/screen_snap.hpp"
 #include "transform/mesh_component_transform.hpp" // Scalar_input, Scalar_topology_step
 #include "erhe_commands/command.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
+#include "erhe_geometry/operation/knife_cut.hpp"
 #include "erhe_geometry/topology.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -15,17 +17,20 @@
 
 #include <glm/glm.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
 namespace erhe::geometry { class Geometry; }
-namespace erhe::scene    { class Mesh; }
+namespace erhe::scene    { class Mesh; class Xformable; using Node = Xformable; }
 
 namespace editor {
 
@@ -235,11 +240,13 @@ private:
 
 // The modal actions of a running component slide.
 enum class Component_modal_action : unsigned int {
-    confirm        = 0, // Enter, left click
-    cancel         = 1, // Escape, right click (Escape also cancels a gizmo component edit)
+    confirm        = 0, // Enter
+    cancel         = 1, // Escape (also cancels a gizmo component edit)
     toggle_even    = 2, // E
     toggle_flipped = 3, // F
-    toggle_clamp   = 4  // C (Alt held: unclamped while held)
+    toggle_clamp   = 4, // C (Alt held: unclamped while held; the knife: cut through)
+    confirm_click  = 5, // left press: confirm (the knife: add a cut point)
+    cancel_click   = 6  // right press: cancel (the knife: end the polyline)
 };
 
 [[nodiscard]] auto c_str(Component_modal_action action) -> const char*;
@@ -253,8 +260,9 @@ class Component_modal_command : public erhe::commands::Command
 {
 public:
     Component_modal_command(erhe::commands::Commands& commands, App_context& context, const char* name, Component_modal_action action);
-    void try_ready() override;
-    auto try_call () -> bool override;
+    void try_ready          () override;
+    auto try_call           () -> bool override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
     App_context&           m_context;
@@ -345,6 +353,88 @@ private:
     Inset_action m_action;
 };
 
+// The knife keys (doc/editor/mesh_modeling.md): K starts the knife mode;
+// while it runs Space confirms, Ctrl+Z removes the last cut point, A cycles
+// the angle constraint and X / Y / Z lock an axis. Enter confirms, Escape
+// cancels, C toggles cut through and the clicks add points / end the
+// polyline through Component_modal_command.
+enum class Knife_action : unsigned int {
+    start       = 0, // K
+    confirm     = 1, // Space
+    undo_point  = 2, // Ctrl+Z
+    cycle_angle = 3, // A
+    lock_x      = 4, // X
+    lock_y      = 5, // Y
+    lock_z      = 6  // Z
+};
+
+[[nodiscard]] auto c_str(Knife_action action) -> const char*;
+
+// Key command running one Knife_action. start consumes the key only when the
+// knife mode starts, the others only while it runs, so the keys fall through
+// to their other bindings (hotbar Space, fly camera A, brush Z / X) otherwise.
+class Component_knife_command : public erhe::commands::Command
+{
+public:
+    Component_knife_command(erhe::commands::Commands& commands, App_context& context, const char* name, Knife_action action);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+    Knife_action m_action;
+};
+
+// The knife's angle constraint (A cycles off -> screen -> relative -> off):
+// the candidate point's screen direction from the previous point is rounded
+// to 30 degree steps, measured from the screen X axis (screen) or from the
+// screen direction of the edge the previous point lies on (relative; as
+// screen when the previous point is not on an edge).
+enum class Knife_angle_constraint : unsigned int {
+    off      = 0,
+    screen   = 1,
+    relative = 2
+};
+
+[[nodiscard]] auto c_str(Knife_angle_constraint constraint) -> const char*;
+
+// The knife's axis lock (X / Y / Z; the same key again unlocks): the
+// candidate point is the point of the world axis line through the previous
+// point nearest to the pointer ray.
+enum class Knife_axis_lock : unsigned int {
+    none = 0,
+    x    = 1,
+    y    = 2,
+    z    = 3
+};
+
+// The projection of a Knife_view built from world-space camera data.
+enum class Knife_projection : unsigned int {
+    perspective  = 0,
+    orthographic = 1
+};
+
+// A Knife_view in the mesh space of `node` from a world-space view:
+// clip_from_mesh = clip_from_world * world_from_node, the eye and the view
+// direction transformed to mesh space.
+[[nodiscard]] auto make_knife_view(
+    const glm::mat4&         clip_from_world,
+    const glm::vec3&         eye_in_world,
+    const glm::vec3&         view_direction_in_world,
+    Knife_projection         projection,
+    float                    viewport_width,
+    float                    viewport_height,
+    const erhe::scene::Node& node
+) -> erhe::geometry::operation::Knife_view;
+
+// What a knife cut did (Mesh_component_selection_tool::knife_cut()).
+class Knife_cut_result
+{
+public:
+    bool        changed     {false}; // false: the points made no cut edge, nothing was done
+    std::size_t cut_vertices{0};
+    std::size_t cut_edges   {0};
+};
+
 // What an inset did (Mesh_component_selection_tool::inset()).
 class Inset_result
 {
@@ -427,7 +517,7 @@ public:
     [[nodiscard]] auto run_modal_action(Component_modal_action action) -> bool;
     // True while a pointer slide runs.
     [[nodiscard]] auto is_slide_active () const -> bool;
-    // True while a pointer slide, the loop cut mode or the inset mode runs:
+    // True while a pointer slide, the loop cut, inset or knife mode runs:
     // the selection gestures stand down and the modal click commands own the
     // clicks.
     [[nodiscard]] auto is_modal_active () const -> bool;
@@ -479,6 +569,34 @@ public:
         const erhe::geometry::operation::Inset_faces_options& options,
         Inset_result&                                         result,
         std::string&                                          error
+    ) -> bool;
+
+    // Knife (doc/editor/mesh_modeling.md). begin_knife() (K) starts the knife
+    // mode over a hovered content mesh in a component mode; the first cut
+    // point picks the mesh the session cuts. run_knife_action() runs a
+    // modal key while it runs (false when it does not run, so the key falls
+    // through). cancel_knife() ends the mode with the mesh untouched (false
+    // when it does not run).
+    [[nodiscard]] auto begin_knife      () -> bool;
+    [[nodiscard]] auto run_knife_action (Knife_action action) -> bool;
+    auto               cancel_knife     () -> bool;
+    [[nodiscard]] auto is_knife_active  () const -> bool { return m_knife.active; }
+    [[nodiscard]] auto get_knife_options() const -> const erhe::geometry::operation::Knife_options& { return m_knife.options; }
+
+    // The numeric knife (MCP knife_cut_mesh, doc/plans/mesh_modeling.md D6):
+    // one polyline of cut points (mesh space) cut into target with the
+    // options, seen from `view` (mesh space) or, when view is null, from the
+    // camera of the last hovered viewport; the cut edges become the
+    // selection in edge mode and the cut is one undo entry "Knife". Points
+    // that make no cut edge change nothing (result.changed false, nothing
+    // queued). False (error set) when refused.
+    auto knife_cut(
+        const Mesh_component_target&                            target,
+        const erhe::geometry::operation::Knife_view*            view,
+        std::span<const erhe::geometry::operation::Knife_point> points,
+        const erhe::geometry::operation::Knife_options&         options,
+        Knife_cut_result&                                       result,
+        std::string&                                            error
     ) -> bool;
 
     // Select all targets: the meshes of the live entries plus the meshes of
@@ -748,6 +866,101 @@ private:
     void end_inset();
     Inset_state                       m_inset{};
 
+    // Knife mode (K). The record replays the session into a new Knife_cut
+    // when cut through changes (occlusion changes every segment); Ctrl+Z
+    // drops the last point record (and the end / close records after it).
+    enum class Knife_record_kind : unsigned int {
+        point          = 0,
+        end_polyline   = 1,
+        close_polyline = 2
+    };
+    class Knife_record
+    {
+    public:
+        Knife_record_kind                      kind                {Knife_record_kind::point};
+        erhe::geometry::operation::Knife_point point               {};
+        glm::vec2                              position_in_viewport{0.0f, 0.0f};
+    };
+    // The snapped point under the pointer and the rubber band end. valid:
+    // a point on the session mesh (before the first point: any content
+    // mesh) that add_point() accepts; has_position: the rubber band end,
+    // also on the view plane through the previous point when nothing is hit.
+    class Knife_candidate
+    {
+    public:
+        bool                                      valid               {false};
+        bool                                      has_position        {false};
+        erhe::geometry::operation::Knife_point    point               {};
+        std::weak_ptr<erhe::scene::Mesh>          mesh                {};
+        std::size_t                               primitive_index     {0};
+        std::shared_ptr<erhe::geometry::Geometry> geometry            {};
+        glm::vec3                                 position_in_world   {0.0f};
+        glm::vec2                                 position_in_viewport{0.0f, 0.0f};
+    };
+    class Knife_state
+    {
+    public:
+        bool                                                  active             {false};
+        erhe::geometry::operation::Knife_options              options            {};
+        Knife_angle_constraint                                angle_constraint   {Knife_angle_constraint::off};
+        Knife_axis_lock                                       axis_lock          {Knife_axis_lock::none};
+        // The session, set by the first point.
+        std::weak_ptr<erhe::scene::Mesh>                      mesh               {};
+        std::size_t                                           primitive_index    {0};
+        std::shared_ptr<erhe::geometry::Geometry>             geometry           {}; // the source; the Knife_cut references it
+        erhe::geometry::operation::Knife_view                 view               {};
+        std::shared_ptr<erhe::geometry::Geometry>             destination        {};
+        std::unique_ptr<erhe::geometry::operation::Knife_cut> cut                {};
+        std::vector<Knife_record>                             records            {};
+        bool                                                  polyline_open      {false};
+        // Pointer presses: double click (close) and drag-hold (add points).
+        bool                                                  drag_held          {false};
+        bool                                                  has_last_press     {false};
+        std::chrono::steady_clock::time_point                 last_press_time    {};
+        glm::vec2                                             last_press_position{0.0f, 0.0f};
+        glm::vec2                                             last_added_position{0.0f, 0.0f};
+    };
+    [[nodiscard]] auto is_knife_session_live() const -> bool;
+    [[nodiscard]] auto get_knife_snap_radius(const Viewport_scene_view& view, glm::vec2 cursor) -> float;
+    [[nodiscard]] auto raycast_knife_mesh(
+        const Viewport_scene_view&                view,
+        glm::vec2                                 position_in_viewport,
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        std::size_t                               primitive_index,
+        const erhe::geometry::Geometry&           geometry,
+        GEO::index_t&                             out_facet,
+        glm::vec3&                                out_position_in_world
+    ) const -> bool;
+    void update_knife_candidate  ();
+    void update_knife_preview    ();
+    void knife_press             ();
+    void knife_end_polyline      ();
+    void knife_undo_point        ();
+    void knife_toggle_cut_through();
+    auto knife_add_candidate     () -> bool;
+    void rebuild_knife_cut       ();
+    void confirm_knife           ();
+    void end_knife               ();
+    // Finishes `cut` into destination, swaps its primitive in, switches to
+    // edge mode with the cut edges selected and queues one
+    // Fork_geometry_operation "Knife". result.changed false (and nothing
+    // done) when the cut made no cut edge.
+    auto commit_knife_cut(
+        const Mesh_component_target&                     target,
+        erhe::geometry::operation::Knife_cut&            cut,
+        const std::shared_ptr<erhe::geometry::Geometry>& destination,
+        Knife_cut_result&                                result,
+        std::string&                                     error
+    ) -> bool;
+    Knife_state                                    m_knife{};
+    Knife_candidate                                m_knife_candidate{};
+    Screen_snap                                    m_screen_snap{};
+    std::vector<std::pair<GEO::vec3f, GEO::vec3f>> m_knife_segments{};       // mesh space (cleared at use, capacity kept)
+    std::vector<erhe::renderer::Line>              m_knife_lines{};          // world space preview lines
+    std::vector<glm::vec3>                         m_knife_points{};         // world space preview points
+    const Scene_view*                              m_knife_preview_view{nullptr};
+    std::vector<glm::vec2>                         m_knife_nearby{};         // snap density scratch
+
     Loop_cut_state                    m_loop_cut{};
     Loop_cut_preview                  m_loop_cut_preview{};
     std::vector<GEO::index_t>         m_loop_cut_ring{};         // edge indices (cleared at use, capacity kept)
@@ -821,6 +1034,13 @@ private:
     Component_inset_command                                   m_inset_individual_command;
     Component_inset_command                                   m_inset_boundary_command;
     Component_inset_command                                   m_inset_relative_command;
+    Component_knife_command                                   m_knife_command;
+    Component_knife_command                                   m_knife_confirm_command;
+    Component_knife_command                                   m_knife_undo_point_command;
+    Component_knife_command                                   m_knife_cycle_angle_command;
+    Component_knife_command                                   m_knife_lock_x_command;
+    Component_knife_command                                   m_knife_lock_y_command;
+    Component_knife_command                                   m_knife_lock_z_command;
 
     // Select all target scratch (cleared at use, capacity kept).
     std::vector<Mesh_component_target>                        m_select_all_targets;

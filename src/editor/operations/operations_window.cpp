@@ -3104,6 +3104,12 @@ namespace {
         log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
         return false;
     }
+    // A modal gesture (slide, loop cut, inset, knife) owns the mesh and its
+    // keys: the knife's Y axis lock must not split (split and separate).
+    if ((context.mesh_component_selection_tool != nullptr) && context.mesh_component_selection_tool->is_modal_active()) {
+        log_operations->info("{} declined: a modal mesh edit is running", operation_name);
+        return false;
+    }
     return true;
 }
 

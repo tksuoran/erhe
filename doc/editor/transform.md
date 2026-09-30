@@ -150,6 +150,21 @@ the first step that moves a vertex, as for a move.
   `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
   commit through `Transform_tool::run_scalar_edit()`.
 
+## Snap to vertices / edges
+
+The viewport toolbar's "Snap to vertices / edges" checkbox (shown in the
+mesh component modes with the Move transform mode;
+`Transform_tool_settings::snap_to_components`, session state) snaps a gizmo
+translate drag of mesh components: on each drag update `Move_tool` runs
+`Screen_snap` (`doc/editor/mesh_modeling.md` "Screen snap") on the facet under
+the pointer (the content hover) with an edge radius of 10 pixels times the UI
+scale and a vertex radius of 0.75 of it, the selected vertices of that
+mesh's live entry (the dragged ones) and their edges excluded. When it finds
+a vertex or an edge point, the translation is the one that lands the anchor
+(its drag-start position) there, projected onto the dragged axis or plane,
+in place of the pointer's translation and the translate snap; otherwise the
+drag follows the pointer as usual.
+
 ## Public API / Integration Points
 
 - `Transform_tool` is registered as a tool and activated from the hotbar

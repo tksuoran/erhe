@@ -40,6 +40,11 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/projection.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -55,6 +60,7 @@
 #include <imgui/imgui.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <mutex>
@@ -482,6 +488,8 @@ auto c_str(const Component_modal_action action) -> const char*
         case Component_modal_action::toggle_even:    return "toggle_even";
         case Component_modal_action::toggle_flipped: return "toggle_flipped";
         case Component_modal_action::toggle_clamp:   return "toggle_clamp";
+        case Component_modal_action::confirm_click:  return "confirm_click";
+        case Component_modal_action::cancel_click:   return "cancel_click";
         default:                                     return "?";
     }
 }
@@ -503,6 +511,18 @@ void Component_modal_command::try_ready()
     if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_modal_active()) {
         set_ready();
     }
+}
+
+auto Component_modal_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    // The clicks act on the press only: a press command still Ready at the
+    // release (the knife re-arms them for its many clicks) sees the release
+    // too.
+    const bool click = (m_action == Component_modal_action::confirm_click) || (m_action == Component_modal_action::cancel_click);
+    if (click && !input.variant.button_pressed) {
+        return false;
+    }
+    return try_call();
 }
 
 auto Component_modal_command::try_call() -> bool
@@ -599,6 +619,50 @@ auto Component_inset_command::try_call() -> bool
     }
     return m_context.mesh_component_selection_tool->run_inset_action(m_action);
 }
+
+auto c_str(const Knife_action action) -> const char*
+{
+    switch (action) {
+        case Knife_action::start:       return "start";
+        case Knife_action::confirm:     return "confirm";
+        case Knife_action::undo_point:  return "undo_point";
+        case Knife_action::cycle_angle: return "cycle_angle";
+        case Knife_action::lock_x:      return "lock_x";
+        case Knife_action::lock_y:      return "lock_y";
+        case Knife_action::lock_z:      return "lock_z";
+        default:                        return "?";
+    }
+}
+
+auto c_str(const Knife_angle_constraint constraint) -> const char*
+{
+    switch (constraint) {
+        case Knife_angle_constraint::off:      return "off";
+        case Knife_angle_constraint::screen:   return "screen";
+        case Knife_angle_constraint::relative: return "relative";
+        default:                               return "?";
+    }
+}
+
+Component_knife_command::Component_knife_command(
+    erhe::commands::Commands& commands,
+    App_context&              context,
+    const char*               name,
+    const Knife_action        action
+)
+    : Command  {commands, name}
+    , m_context{context}
+    , m_action {action}
+{
+}
+
+auto Component_knife_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->run_knife_action(m_action);
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -632,8 +696,8 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_modal_toggle_even_command           {commands, context, "Mesh_component_selection.modal_toggle_even",    Component_modal_action::toggle_even}
     , m_modal_toggle_flipped_command        {commands, context, "Mesh_component_selection.modal_toggle_flipped", Component_modal_action::toggle_flipped}
     , m_modal_toggle_clamp_command          {commands, context, "Mesh_component_selection.modal_toggle_clamp",   Component_modal_action::toggle_clamp}
-    , m_modal_confirm_click_command         {commands, context, "Mesh_component_selection.modal_confirm_click",  Component_modal_action::confirm}
-    , m_modal_cancel_click_command          {commands, context, "Mesh_component_selection.modal_cancel_click",   Component_modal_action::cancel}
+    , m_modal_confirm_click_command         {commands, context, "Mesh_component_selection.modal_confirm_click",  Component_modal_action::confirm_click}
+    , m_modal_cancel_click_command          {commands, context, "Mesh_component_selection.modal_cancel_click",   Component_modal_action::cancel_click}
     , m_loop_cut_command                    {commands, context, "Mesh_component_selection.loop_cut",                 Loop_cut_action::start,           0}
     , m_loop_cut_more_cuts_command          {commands, context, "Mesh_component_selection.loop_cut_more_cuts",       Loop_cut_action::more_cuts,       0}
     , m_loop_cut_fewer_cuts_command         {commands, context, "Mesh_component_selection.loop_cut_fewer_cuts",      Loop_cut_action::fewer_cuts,      0}
@@ -645,6 +709,13 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_inset_individual_command            {commands, context, "Mesh_component_selection.inset_toggle_individual", Inset_action::toggle_individual}
     , m_inset_boundary_command              {commands, context, "Mesh_component_selection.inset_toggle_boundary",   Inset_action::toggle_boundary}
     , m_inset_relative_command              {commands, context, "Mesh_component_selection.inset_toggle_relative",   Inset_action::toggle_relative}
+    , m_knife_command                       {commands, context, "Mesh_component_selection.knife",              Knife_action::start}
+    , m_knife_confirm_command               {commands, context, "Mesh_component_selection.knife_confirm",      Knife_action::confirm}
+    , m_knife_undo_point_command            {commands, context, "Mesh_component_selection.knife_undo_point",   Knife_action::undo_point}
+    , m_knife_cycle_angle_command           {commands, context, "Mesh_component_selection.knife_cycle_angle",  Knife_action::cycle_angle}
+    , m_knife_lock_x_command                {commands, context, "Mesh_component_selection.knife_lock_x",       Knife_action::lock_x}
+    , m_knife_lock_y_command                {commands, context, "Mesh_component_selection.knife_lock_y",       Knife_action::lock_y}
+    , m_knife_lock_z_command                {commands, context, "Mesh_component_selection.knife_lock_z",       Knife_action::lock_z}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -842,11 +913,35 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
         commands.bind_command_to_key(command, key, Button_trigger::Button_pressed, 0u);
     }
 
+    // Knife (doc/editor/mesh_modeling.md): K starts it; while it runs Space
+    // confirms, Ctrl+Z removes the last cut point, A cycles the angle
+    // constraint, X / Y / Z lock an axis (Enter / Escape / C and the clicks
+    // are the modal commands above). The exact masks dispatch them before the
+    // mask-less bindings of the same keys (hotbar Space, fly camera A, brush
+    // Z / X), which they fall through to while the mode does not run. Ctrl+Z
+    // reaches the knife because the undo command declines while the knife
+    // runs (Operation_stack::get_undo_block_reason()).
+    const std::pair<Component_knife_command*, std::pair<erhe::window::Keycode, uint32_t>> knife_keys[] = {
+        {&m_knife_command,             {erhe::window::Key_k,     0u}},
+        {&m_knife_confirm_command,     {erhe::window::Key_space, 0u}},
+        {&m_knife_undo_point_command,  {erhe::window::Key_z,     erhe::window::Key_modifier_bit_ctrl}},
+        {&m_knife_cycle_angle_command, {erhe::window::Key_a,     0u}},
+        {&m_knife_lock_x_command,      {erhe::window::Key_x,     0u}},
+        {&m_knife_lock_y_command,      {erhe::window::Key_y,     0u}},
+        {&m_knife_lock_z_command,      {erhe::window::Key_z,     0u}}
+    };
+    for (const auto& [command, key] : knife_keys) {
+        command->set_host(this);
+        commands.register_command(command);
+        commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
+    }
+
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
             Tool::on_message(message);
             update_loop_preview();
             update_loop_cut_preview();
+            update_knife_candidate();
         }
     );
     // The loop and loop cut previews follow the hover: Hover_mesh_message is
@@ -855,6 +950,7 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
         [this](Hover_mesh_message&) {
             update_loop_preview();
             update_loop_cut_preview();
+            update_knife_candidate();
         }
     );
     m_mode_changed_subscription = app_message_bus.mesh_component_mode_changed.subscribe(
@@ -864,6 +960,11 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
             if (m_loop_cut.active && !is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
                 end_loop_cut();
             }
+            // Leaving the component modes ends the knife mode (nothing cut).
+            if (m_knife.active && !is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
+                log_selection->info("Knife cancelled: the component mode ended");
+                end_knife();
+            }
             invalidate_loop_cut_preview();
         }
     );
@@ -871,6 +972,8 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
         [this](Mesh_geometry_changed_message&) {
             invalidate_loop_preview();
             invalidate_loop_cut_preview();
+            // A swap of the knife's mesh ends the knife (checked there).
+            update_knife_candidate();
         }
     );
 }
@@ -953,6 +1056,8 @@ auto Mesh_component_selection_tool::on_loop_select(const Loop_select_gesture ges
 void Mesh_component_selection_tool::on_modifiers_changed()
 {
     update_loop_preview();
+    // Shift (edge midpoints) and Ctrl (no snapping) change the knife point.
+    update_knife_candidate();
 }
 
 void Mesh_component_selection_tool::invalidate_loop_preview()
@@ -1141,7 +1246,7 @@ auto Mesh_component_selection_tool::edge_world_normal(
 auto Mesh_component_selection_tool::begin_slide() -> bool
 {
     const Mesh_component_mode mode = m_mesh_component_selection.get_mode();
-    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active || m_inset.active) {
+    if (!is_mesh_component_mode(mode) || (m_context.transform_tool == nullptr) || m_loop_cut.active || m_inset.active || m_knife.active) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -1172,7 +1277,7 @@ auto Mesh_component_selection_tool::is_slide_active() const -> bool
 
 auto Mesh_component_selection_tool::is_modal_active() const -> bool
 {
-    return m_loop_cut.active || m_inset.active || is_slide_active();
+    return m_loop_cut.active || m_inset.active || m_knife.active || is_slide_active();
 }
 
 auto Mesh_component_selection_tool::run_modal_action(const Component_modal_action action) -> bool
@@ -1181,11 +1286,35 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
     if (transform_tool == nullptr) {
         return false;
     }
+    // The knife mode: Enter confirms, Escape cancels, a left press adds a
+    // cut point (a double click closes the polyline), a right press ends the
+    // polyline, C toggles cut through; the other toggles fall through.
+    if (m_knife.active) {
+        bool knife_consumed = true;
+        switch (action) {
+            case Component_modal_action::confirm:       confirm_knife();            break;
+            case Component_modal_action::cancel:        static_cast<void>(cancel_knife()); break;
+            case Component_modal_action::confirm_click: knife_press();              break;
+            case Component_modal_action::cancel_click:  knife_end_polyline();       break;
+            case Component_modal_action::toggle_clamp:  knife_toggle_cut_through(); break;
+            default:                                    knife_consumed = false;     break;
+        }
+        if (!is_modal_active()) {
+            m_modal_confirm_click_command.set_inactive();
+            m_modal_cancel_click_command.set_inactive();
+        }
+        return knife_consumed;
+    }
+    // Outside the knife the clicks confirm and cancel.
+    const Component_modal_action modal_action =
+        (action == Component_modal_action::confirm_click) ? Component_modal_action::confirm :
+        (action == Component_modal_action::cancel_click)  ? Component_modal_action::cancel  :
+        action;
     // The inset mode: confirm commits, cancel restores the mesh, E toggles
     // even offset; the other toggles fall through.
     if (m_inset.active) {
         bool inset_consumed = false;
-        switch (action) {
+        switch (modal_action) {
             case Component_modal_action::confirm: confirm_inset(); inset_consumed = true; break;
             case Component_modal_action::cancel:  cancel_inset();  inset_consumed = true; break;
             case Component_modal_action::toggle_even: {
@@ -1209,9 +1338,9 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
     // ends the mode with the mesh untouched; the toggles fall through.
     if (m_loop_cut.active) {
         bool loop_cut_consumed = false;
-        if (action == Component_modal_action::confirm) {
+        if (modal_action == Component_modal_action::confirm) {
             loop_cut_consumed = confirm_loop_cut();
-        } else if (action == Component_modal_action::cancel) {
+        } else if (modal_action == Component_modal_action::cancel) {
             log_selection->info("Loop cut cancelled");
             end_loop_cut();
             loop_cut_consumed = true;
@@ -1223,7 +1352,7 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
         return loop_cut_consumed;
     }
     bool consumed = false;
-    switch (action) {
+    switch (modal_action) {
         case Component_modal_action::confirm: {
             if (transform_tool->is_scalar_drag_active()) {
                 transform_tool->confirm_scalar_drag();
@@ -1241,7 +1370,7 @@ auto Mesh_component_selection_tool::run_modal_action(const Component_modal_actio
         default: break;
     }
     if (consumed) {
-        log_selection->trace("slide modal action {}", c_str(action));
+        log_selection->trace("slide modal action {}", c_str(modal_action));
     }
     if (!transform_tool->is_scalar_drag_active()) {
         m_modal_confirm_click_command.set_inactive();
@@ -1484,7 +1613,7 @@ auto Mesh_component_selection_tool::begin_loop_cut() -> bool
     if (m_loop_cut.active) {
         return true;
     }
-    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode()) || (m_context.transform_tool == nullptr)) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode()) || (m_context.transform_tool == nullptr) || m_knife.active) {
         return false;
     }
     if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
@@ -1839,6 +1968,896 @@ auto Mesh_component_selection_tool::loop_cut(
 }
 #pragma endregion Loop cut
 
+#pragma region Knife
+namespace {
+
+constexpr float c_knife_base_snap_radius_px     = 10.0f;
+constexpr float c_knife_vertex_radius_factor    = 0.75f;          // the vertex radius, of the edge radius
+constexpr float c_knife_angle_increment         = 0.52359877559f; // 30 degrees
+constexpr float c_knife_double_click_distance   = 6.0f;
+constexpr std::chrono::milliseconds c_knife_double_click_time{300};
+
+[[nodiscard]] auto to_geo_vec3f(const glm::vec3& v) -> GEO::vec3f
+{
+    return GEO::vec3f{v.x, v.y, v.z};
+}
+
+[[nodiscard]] auto is_perspective(const erhe::scene::Projection::Type type) -> bool
+{
+    switch (type) {
+        case erhe::scene::Projection::Type::orthographic_horizontal:
+        case erhe::scene::Projection::Type::orthographic_vertical:
+        case erhe::scene::Projection::Type::orthographic:
+        case erhe::scene::Projection::Type::orthographic_rectangle: {
+            return false;
+        }
+        default: {
+            return true;
+        }
+    }
+}
+
+// The camera view of a viewport as a Knife_view in the mesh space of node.
+[[nodiscard]] auto make_viewport_knife_view(
+    const Viewport_scene_view&             view,
+    const erhe::scene::Node&               node,
+    erhe::geometry::operation::Knife_view& out_view
+) -> bool
+{
+    const std::shared_ptr<erhe::scene::Camera> camera = view.get_camera();
+    if (!camera || (camera->projection() == nullptr)) {
+        return false;
+    }
+    const erhe::math::Viewport&                     viewport          = view.get_projection_viewport();
+    const erhe::scene::Camera_projection_transforms transforms        = camera->projection_transforms(viewport, view.get_reverse_depth(), view.get_depth_range(), view.get_conventions());
+    const glm::mat4                                 world_from_camera = camera->world_from_node();
+    out_view = make_knife_view(
+        transforms.clip_from_world.get_matrix(),
+        glm::vec3{world_from_camera[3]},
+        -glm::vec3{world_from_camera[2]},
+        is_perspective(camera->projection()->projection_type) ? Knife_projection::perspective : Knife_projection::orthographic,
+        static_cast<float>(viewport.width),
+        static_cast<float>(viewport.height),
+        node
+    );
+    return true;
+}
+
+// The pointer ray through a viewport position, from the near side.
+[[nodiscard]] auto get_viewport_ray(
+    const Viewport_scene_view& view,
+    const glm::vec2            position_in_viewport,
+    glm::vec3&                 out_origin,
+    glm::vec3&                 out_direction
+) -> bool
+{
+    const std::shared_ptr<erhe::scene::Camera> camera = view.get_camera();
+    const std::optional<glm::vec3>             a      = view.unproject_to_world(glm::vec3{position_in_viewport, 0.0f});
+    const std::optional<glm::vec3>             b      = view.unproject_to_world(glm::vec3{position_in_viewport, 1.0f});
+    if (!camera || !a.has_value() || !b.has_value()) {
+        return false;
+    }
+    const glm::vec3 eye       = glm::vec3{camera->world_from_node()[3]};
+    const bool      a_is_near = (glm::distance2(a.value(), eye) <= glm::distance2(b.value(), eye));
+    const glm::vec3 near_point = a_is_near ? a.value() : b.value();
+    const glm::vec3 far_point  = a_is_near ? b.value() : a.value();
+    const glm::vec3 direction  = far_point - near_point;
+    const float     length     = glm::length(direction);
+    if (length <= 0.0f) {
+        return false;
+    }
+    out_origin    = near_point;
+    out_direction = direction / length;
+    return true;
+}
+
+} // anonymous namespace
+
+auto make_knife_view(
+    const glm::mat4&         clip_from_world,
+    const glm::vec3&         eye_in_world,
+    const glm::vec3&         view_direction_in_world,
+    const Knife_projection   projection,
+    const float              viewport_width,
+    const float              viewport_height,
+    const erhe::scene::Node& node
+) -> erhe::geometry::operation::Knife_view
+{
+    const glm::mat4 clip_from_mesh  = clip_from_world * node.world_from_node();
+    const glm::mat4 node_from_world = node.node_from_world();
+    erhe::geometry::operation::Knife_view view;
+    for (GEO::index_t row = 0; row < 4; ++row) {
+        for (GEO::index_t column = 0; column < 4; ++column) {
+            view.clip_from_mesh(row, column) = static_cast<double>(clip_from_mesh[column][row]);
+        }
+    }
+    view.viewport_width  = viewport_width;
+    view.viewport_height = viewport_height;
+    const glm::vec3 eye_in_mesh       = glm::vec3{node_from_world * glm::vec4{eye_in_world, 1.0f}};
+    const glm::vec3 direction_in_mesh = glm::mat3{node_from_world} * view_direction_in_world;
+    const float     direction_length  = glm::length(direction_in_mesh);
+    view.eye_in_mesh            = to_geo_vec3f(eye_in_mesh);
+    view.view_direction_in_mesh = to_geo_vec3f((direction_length > 0.0f) ? (direction_in_mesh / direction_length) : direction_in_mesh);
+    view.perspective            = (projection == Knife_projection::perspective);
+    return view;
+}
+
+auto Mesh_component_selection_tool::is_knife_session_live() const -> bool
+{
+    return m_mesh_component_selection.is_live(m_knife.mesh.lock(), m_knife.primitive_index, m_knife.geometry);
+}
+
+auto Mesh_component_selection_tool::get_knife_snap_radius(const Viewport_scene_view& view, const glm::vec2 cursor) -> float
+{
+    const float ui_scale = (m_context.app_settings != nullptr) ? m_context.app_settings->get_ui_scale() : 1.0f;
+    const float base     = c_knife_base_snap_radius_px * ui_scale;
+    const std::shared_ptr<erhe::scene::Mesh> mesh = m_knife.mesh.lock();
+    if (!mesh || m_knife_segments.empty()) {
+        return base;
+    }
+    // The knife's cut vertices (the pending cut edges' ends) within twice the
+    // base radius of the cursor: dense regions snap tighter.
+    const glm::mat4 world_from_node = mesh->world_from_node();
+    m_knife_nearby.clear();
+    const auto count_end = [&](const GEO::vec3f& p) {
+        const std::optional<glm::vec3> projected = view.project_to_viewport(glm::vec3{world_from_node * glm::vec4{to_glm_vec3(p), 1.0f}});
+        if (!projected.has_value()) {
+            return;
+        }
+        const glm::vec2 q{projected.value()};
+        if (glm::distance(q, cursor) > (2.0f * base)) {
+            return;
+        }
+        for (const glm::vec2& known : m_knife_nearby) {
+            if (glm::distance(known, q) < 0.5f) {
+                return;
+            }
+        }
+        m_knife_nearby.push_back(q);
+    };
+    for (const std::pair<GEO::vec3f, GEO::vec3f>& segment : m_knife_segments) {
+        count_end(segment.first);
+        count_end(segment.second);
+    }
+    return Screen_snap::get_snap_radius(base, m_knife_nearby.size());
+}
+
+auto Mesh_component_selection_tool::raycast_knife_mesh(
+    const Viewport_scene_view&                view,
+    const glm::vec2                           position_in_viewport,
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const std::size_t                         primitive_index,
+    const erhe::geometry::Geometry&           geometry,
+    GEO::index_t&                             out_facet,
+    glm::vec3&                                out_position_in_world
+) const -> bool
+{
+    glm::vec3 origin{0.0f};
+    glm::vec3 direction{0.0f};
+    if (!mesh || !get_viewport_ray(view, position_in_viewport, origin, direction)) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = view.get_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+    erhe::raytrace::IScene& raytrace_scene = scene_root->get_raytrace_scene();
+    erhe::raytrace::Ray ray{
+        .origin    = origin,
+        .t_near    = 0.0f,
+        .direction = direction,
+        .time      = 0.0f,
+        .t_far     = 9999.0f,
+        .mask      = Hover_entry::raytrace_slot_masks[Hover_entry::content_slot],
+        .id        = 0,
+        .flags     = 0
+    };
+    erhe::raytrace::Hit hit;
+    raytrace_scene.intersect(ray, hit);
+    if (hit.instance == nullptr) {
+        return false;
+    }
+    const erhe::scene::Raytrace_primitive* const raytrace_primitive = static_cast<const erhe::scene::Raytrace_primitive*>(hit.instance->get_user_data());
+    if ((raytrace_primitive == nullptr) || (raytrace_primitive->mesh != mesh.get()) || (raytrace_primitive->primitive_index != primitive_index)) {
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if ((primitive_index >= primitives.size()) || !primitives[primitive_index].primitive) {
+        return false;
+    }
+    const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitives[primitive_index].primitive->get_shape_for_raytrace();
+    if (!shape || (shape->get_geometry_const().get() != &geometry)) {
+        return false;
+    }
+    const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.geometry, hit.triangle_id);
+    if (facet == GEO::NO_INDEX) {
+        return false;
+    }
+    out_facet             = facet;
+    out_position_in_world = ray.origin + (ray.t_far * ray.direction);
+    return true;
+}
+
+void Mesh_component_selection_tool::update_knife_candidate()
+{
+    m_knife_candidate = Knife_candidate{};
+    if (!m_knife.active) {
+        update_knife_preview();
+        return;
+    }
+    // The mesh the session cuts was swapped, or left the scene.
+    if (m_knife.cut && !is_knife_session_live()) {
+        log_selection->warn("Knife cancelled: its mesh changed or left the scene");
+        end_knife();
+        return;
+    }
+    Scene_view* const          scene_view = get_hover_scene_view();
+    Viewport_scene_view* const view       = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+    const std::optional<glm::vec2> cursor_opt = (view != nullptr) ? view->get_position_in_viewport() : std::optional<glm::vec2>{};
+    if (!cursor_opt.has_value()) {
+        update_knife_preview();
+        return;
+    }
+    const glm::vec2 cursor      = cursor_opt.value();
+    const bool      ignore_snap = (m_context.input_state != nullptr) && m_context.input_state->control;
+    const bool      midpoint    = (m_context.input_state != nullptr) && m_context.input_state->shift;
+    const float     radius      = get_knife_snap_radius(*view, cursor);
+
+    // The previous point of the open polyline, in world and viewport space.
+    const std::shared_ptr<erhe::scene::Mesh> session_mesh = m_knife.mesh.lock();
+    bool      has_previous      = m_knife.polyline_open && session_mesh && !m_knife.records.empty();
+    glm::vec3 previous_world    {0.0f};
+    glm::vec2 previous_viewport {0.0f, 0.0f};
+    float     previous_depth    {0.0f};
+    if (has_previous) {
+        previous_world = glm::vec3{session_mesh->world_from_node() * glm::vec4{to_glm_vec3(m_knife.records.back().point.position), 1.0f}};
+        const std::optional<glm::vec3> projected = view->project_to_viewport(previous_world);
+        if (projected.has_value()) {
+            previous_viewport = glm::vec2{projected.value()};
+            previous_depth    = projected.value().z;
+        } else {
+            has_previous = false;
+        }
+    }
+
+    // The constraints move the pointer's screen position (axis lock first).
+    glm::vec2 target      = cursor;
+    bool      constrained = false;
+    if (has_previous && (m_knife.axis_lock != Knife_axis_lock::none)) {
+        glm::vec3 axis{0.0f};
+        axis[static_cast<int>(m_knife.axis_lock) - 1] = 1.0f;
+        glm::vec3 origin{0.0f};
+        glm::vec3 direction{0.0f};
+        if (get_viewport_ray(*view, cursor, origin, direction)) {
+            const std::optional<erhe::math::Closest_points<float>> closest = erhe::math::closest_points<float>(previous_world, previous_world + axis, origin, origin + direction);
+            if (closest.has_value()) {
+                const std::optional<glm::vec3> projected = view->project_to_viewport(closest.value().P);
+                if (projected.has_value()) {
+                    target      = glm::vec2{projected.value()};
+                    constrained = true;
+                }
+            }
+        }
+    } else if (has_previous && (m_knife.angle_constraint != Knife_angle_constraint::off)) {
+        const glm::vec2 delta = cursor - previous_viewport;
+        if (glm::length(delta) > 0.0f) {
+            float reference = 0.0f;
+            const erhe::geometry::operation::Knife_point& previous_point = m_knife.records.back().point;
+            if (
+                (m_knife.angle_constraint == Knife_angle_constraint::relative) &&
+                (previous_point.snap == erhe::geometry::operation::Knife_snap::edge) &&
+                m_knife.geometry
+            ) {
+                const GEO::Mesh&               geo_mesh = m_knife.geometry->get_mesh();
+                const glm::mat4                world_from_node = session_mesh->world_from_node();
+                const std::optional<glm::vec3> a = view->project_to_viewport(glm::vec3{world_from_node * glm::vec4{to_glm_vec3(get_pointf(geo_mesh.vertices, previous_point.edge_v0)), 1.0f}});
+                const std::optional<glm::vec3> b = view->project_to_viewport(glm::vec3{world_from_node * glm::vec4{to_glm_vec3(get_pointf(geo_mesh.vertices, previous_point.edge_v1)), 1.0f}});
+                if (a.has_value() && b.has_value() && (glm::distance(glm::vec2{a.value()}, glm::vec2{b.value()}) > 0.0f)) {
+                    reference = std::atan2(b.value().y - a.value().y, b.value().x - a.value().x);
+                }
+            }
+            const float     angle     = std::atan2(delta.y, delta.x) - reference;
+            const float     rounded   = (std::round(angle / c_knife_angle_increment) * c_knife_angle_increment) + reference;
+            const glm::vec2 direction{std::cos(rounded), std::sin(rounded)};
+            target      = previous_viewport + (direction * glm::dot(delta, direction));
+            constrained = true;
+        }
+    }
+
+    // The mesh point under the (constrained) pointer: the hover, or a ray
+    // cast at the constrained position against the session mesh.
+    std::shared_ptr<erhe::scene::Mesh>        mesh{};
+    std::size_t                               primitive_index{0};
+    std::shared_ptr<erhe::geometry::Geometry> geometry{};
+    GEO::index_t                              facet{GEO::NO_INDEX};
+    glm::vec3                                 hit_world{0.0f};
+    bool                                      hit{false};
+    if (!constrained) {
+        const Pick_result pick_result = pick(*scene_view);
+        const bool same_session =
+            !m_knife.cut ||
+            (
+                (pick_result.mesh            == session_mesh)            &&
+                (pick_result.primitive_index == m_knife.primitive_index) &&
+                (pick_result.geometry        == m_knife.geometry)
+            );
+        const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
+        if (pick_result.valid && same_session && content.position.has_value()) {
+            mesh            = pick_result.mesh;
+            primitive_index = pick_result.primitive_index;
+            geometry        = pick_result.geometry;
+            facet           = pick_result.facet;
+            hit_world       = content.position.value();
+            hit             = true;
+        }
+    } else if (session_mesh && m_knife.geometry) {
+        hit = raycast_knife_mesh(*view, target, session_mesh, m_knife.primitive_index, *m_knife.geometry, facet, hit_world);
+        if (hit) {
+            mesh            = session_mesh;
+            primitive_index = m_knife.primitive_index;
+            geometry        = m_knife.geometry;
+        }
+    }
+
+    if (hit) {
+        const glm::mat4 world_from_node = mesh->world_from_node();
+        Screen_snap_result snap_result{};
+        if (!ignore_snap && !constrained) {
+            static_cast<void>(
+                m_screen_snap.snap(
+                    Screen_snap_query{
+                        .view             = view,
+                        .world_from_node  = world_from_node,
+                        .geometry         = geometry.get(),
+                        .facet            = facet,
+                        .cursor           = cursor,
+                        .vertex_radius_px = radius * c_knife_vertex_radius_factor,
+                        .edge_radius_px   = radius,
+                        .edge_point       = midpoint ? Screen_snap_edge_point::midpoint : Screen_snap_edge_point::nearest
+                    },
+                    snap_result
+                )
+            );
+        }
+        erhe::geometry::operation::Knife_point point{};
+        switch (snap_result.kind) {
+            case Screen_snap_kind::vertex: {
+                point.position = to_geo_vec3f(snap_result.position_in_mesh);
+                point.snap     = erhe::geometry::operation::Knife_snap::vertex;
+                point.vertex   = snap_result.vertex;
+                m_knife_candidate.position_in_world    = snap_result.position_in_world;
+                m_knife_candidate.position_in_viewport = snap_result.position_in_viewport;
+                break;
+            }
+            case Screen_snap_kind::edge: {
+                point.position = to_geo_vec3f(snap_result.position_in_mesh);
+                point.snap     = erhe::geometry::operation::Knife_snap::edge;
+                point.edge_v0  = snap_result.edge_v0;
+                point.edge_v1  = snap_result.edge_v1;
+                m_knife_candidate.position_in_world    = snap_result.position_in_world;
+                m_knife_candidate.position_in_viewport = snap_result.position_in_viewport;
+                break;
+            }
+            case Screen_snap_kind::none:
+            default: {
+                point.position = to_geo_vec3f(mesh->transform_point_from_world_to_local(hit_world));
+                point.snap     = erhe::geometry::operation::Knife_snap::facet;
+                point.facet    = facet;
+                m_knife_candidate.position_in_world    = hit_world;
+                m_knife_candidate.position_in_viewport = target;
+                break;
+            }
+        }
+        m_knife_candidate.valid           = true;
+        m_knife_candidate.has_position    = true;
+        m_knife_candidate.point           = point;
+        m_knife_candidate.mesh            = mesh;
+        m_knife_candidate.primitive_index = primitive_index;
+        m_knife_candidate.geometry        = geometry;
+    } else if (has_previous) {
+        // Nothing of the mesh under the pointer: the rubber band ends on the
+        // view plane through the previous point (no point can be added).
+        const std::optional<glm::vec3> on_plane = view->unproject_to_world(glm::vec3{target, previous_depth});
+        if (on_plane.has_value()) {
+            m_knife_candidate.has_position         = true;
+            m_knife_candidate.position_in_world    = on_plane.value();
+            m_knife_candidate.position_in_viewport = target;
+        }
+    }
+    update_knife_preview();
+
+    // Drag-hold (cut through off): a point each time the pointer moved more
+    // than the snap radius since the last point.
+    if (m_knife.drag_held) {
+        const bool held = (m_context.input_state != nullptr) && m_context.input_state->mouse_button[erhe::window::Mouse_button_left];
+        if (!held) {
+            m_knife.drag_held = false;
+        } else if (
+            !m_knife.options.cut_through &&
+            m_knife_candidate.valid &&
+            (glm::distance(m_knife_candidate.position_in_viewport, m_knife.last_added_position) > radius)
+        ) {
+            if (knife_add_candidate()) {
+                update_knife_candidate();
+            }
+        }
+    }
+}
+
+void Mesh_component_selection_tool::update_knife_preview()
+{
+    m_knife_lines.clear();
+    m_knife_points.clear();
+    m_knife_segments.clear();
+    m_knife_preview_view = get_hover_scene_view();
+    if (!m_knife.active) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = m_knife.mesh.lock();
+    if (m_knife.cut && mesh) {
+        const glm::mat4 world_from_node = mesh->world_from_node();
+        const auto to_world = [&world_from_node](const GEO::vec3f& p) -> glm::vec3 {
+            return glm::vec3{world_from_node * glm::vec4{to_glm_vec3(p), 1.0f}};
+        };
+        m_knife.cut->get_preview_segments(m_knife_segments);
+        for (const std::pair<GEO::vec3f, GEO::vec3f>& segment : m_knife_segments) {
+            m_knife_lines.push_back(erhe::renderer::Line{to_world(segment.first), to_world(segment.second)});
+        }
+        for (const Knife_record& record : m_knife.records) {
+            if (record.kind == Knife_record_kind::point) {
+                m_knife_points.push_back(to_world(record.point.position));
+            }
+        }
+        if (m_knife.polyline_open && !m_knife.records.empty() && m_knife_candidate.has_position) {
+            m_knife_lines.push_back(erhe::renderer::Line{to_world(m_knife.records.back().point.position), m_knife_candidate.position_in_world});
+        }
+    }
+    if (m_knife_candidate.valid) {
+        m_knife_points.push_back(m_knife_candidate.position_in_world);
+    }
+}
+
+auto Mesh_component_selection_tool::begin_knife() -> bool
+{
+    if (m_knife.active) {
+        return true;
+    }
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode()) || (m_context.transform_tool == nullptr)) {
+        return false;
+    }
+    if (is_modal_active() || m_context.transform_tool->is_component_edit_active()) {
+        return false;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    if ((scene_view == nullptr) || (scene_view->as_viewport_scene_view() == nullptr) || !pick(*scene_view).valid) {
+        return false;
+    }
+    end_knife(); // a fresh session: default options, no record
+    m_knife.active = true;
+    // Ready for the length of the mode (gesture_update re-arms them after
+    // each press): the clicks add points and end polylines.
+    m_modal_confirm_click_command.set_ready();
+    m_modal_cancel_click_command.set_ready();
+    log_selection->info("Knife started");
+    update_knife_candidate();
+    return true;
+}
+
+void Mesh_component_selection_tool::end_knife()
+{
+    m_knife.active           = false;
+    m_knife.options          = erhe::geometry::operation::Knife_options{};
+    m_knife.angle_constraint = Knife_angle_constraint::off;
+    m_knife.axis_lock        = Knife_axis_lock::none;
+    m_knife.mesh.reset();
+    m_knife.primitive_index  = 0;
+    m_knife.geometry.reset();
+    m_knife.view             = erhe::geometry::operation::Knife_view{};
+    m_knife.destination.reset();
+    m_knife.cut.reset();
+    m_knife.records.clear();
+    m_knife.polyline_open    = false;
+    m_knife.drag_held        = false;
+    m_knife.has_last_press   = false;
+    m_knife_candidate        = Knife_candidate{};
+    m_knife_lines.clear();
+    m_knife_points.clear();
+    m_knife_segments.clear();
+    m_knife_preview_view     = nullptr;
+    if (!is_modal_active()) {
+        m_modal_confirm_click_command.set_inactive();
+        m_modal_cancel_click_command.set_inactive();
+    }
+}
+
+auto Mesh_component_selection_tool::cancel_knife() -> bool
+{
+    if (!m_knife.active) {
+        return false;
+    }
+    log_selection->info("Knife cancelled");
+    end_knife();
+    return true;
+}
+
+auto Mesh_component_selection_tool::knife_add_candidate() -> bool
+{
+    if (!m_knife_candidate.valid) {
+        log_selection->info("Knife: no point of the mesh under the pointer");
+        return false;
+    }
+    if (!m_knife.cut) {
+        // The first point: the session cuts this mesh, seen from this view.
+        Scene_view* const          scene_view = get_hover_scene_view();
+        Viewport_scene_view* const view       = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+        const std::shared_ptr<erhe::scene::Mesh> mesh = m_knife_candidate.mesh.lock();
+        if (!mesh || !m_knife_candidate.geometry) {
+            return false;
+        }
+        const erhe::geometry::Geometry& geometry = *m_knife_candidate.geometry;
+        if (!geometry.has_connectivity() || !geometry.has_edge_connectivity()) {
+            log_selection->warn("Knife: the geometry's connectivity is not built: {}", mesh->get_name());
+            return false;
+        }
+        erhe::geometry::operation::Knife_view knife_view{};
+        if ((view == nullptr) || !make_viewport_knife_view(*view, *mesh, knife_view)) {
+            return false;
+        }
+        m_knife.mesh            = mesh;
+        m_knife.primitive_index = m_knife_candidate.primitive_index;
+        m_knife.geometry        = m_knife_candidate.geometry;
+        m_knife.view            = knife_view;
+        m_knife.destination     = std::make_shared<erhe::geometry::Geometry>(geometry.get_name());
+        m_knife.cut             = std::make_unique<erhe::geometry::operation::Knife_cut>(*m_knife.geometry, *m_knife.destination, m_knife.view, m_knife.options);
+    }
+    const std::size_t point_count = m_knife.cut->get_point_count();
+    m_knife.cut->add_point(m_knife_candidate.point);
+    if (m_knife.cut->get_point_count() == point_count) {
+        return false;
+    }
+    m_knife.records.push_back(
+        Knife_record{
+            .kind                 = Knife_record_kind::point,
+            .point                = m_knife_candidate.point,
+            .position_in_viewport = m_knife_candidate.position_in_viewport
+        }
+    );
+    m_knife.polyline_open       = true;
+    m_knife.last_added_position = m_knife_candidate.position_in_viewport;
+    log_selection->trace("Knife: point {} added", m_knife.cut->get_point_count());
+    update_knife_preview();
+    return true;
+}
+
+void Mesh_component_selection_tool::knife_press()
+{
+    Scene_view* const              scene_view = get_hover_scene_view();
+    Viewport_scene_view* const     view       = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+    const std::optional<glm::vec2> cursor     = (view != nullptr) ? view->get_position_in_viewport() : std::optional<glm::vec2>{};
+    if (!cursor.has_value()) {
+        return;
+    }
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    const bool double_click =
+        m_knife.has_last_press &&
+        ((now - m_knife.last_press_time) <= c_knife_double_click_time) &&
+        (glm::distance(cursor.value(), m_knife.last_press_position) <= c_knife_double_click_distance);
+    m_knife.has_last_press      = true;
+    m_knife.last_press_time     = now;
+    m_knife.last_press_position = cursor.value();
+
+    // Double click: close the current polyline (the first press added the
+    // point). A polyline of fewer than three points just ends.
+    if (double_click && m_knife.polyline_open && m_knife.cut) {
+        std::size_t polyline_points = 0;
+        for (auto i = m_knife.records.rbegin(); (i != m_knife.records.rend()) && (i->kind == Knife_record_kind::point); ++i) {
+            ++polyline_points;
+        }
+        if (polyline_points >= 3) {
+            m_knife.records.push_back(Knife_record{.kind = Knife_record_kind::close_polyline});
+            m_knife.cut->close_polyline();
+            log_selection->info("Knife: polyline closed");
+        } else {
+            m_knife.records.push_back(Knife_record{.kind = Knife_record_kind::end_polyline});
+            m_knife.cut->end_polyline();
+        }
+        m_knife.polyline_open  = false;
+        m_knife.drag_held      = false;
+        m_knife.has_last_press = false;
+        update_knife_candidate();
+        return;
+    }
+    update_knife_candidate();
+    if (knife_add_candidate()) {
+        m_knife.drag_held = true;
+        update_knife_candidate();
+    }
+}
+
+void Mesh_component_selection_tool::knife_end_polyline()
+{
+    if (!m_knife.polyline_open || !m_knife.cut) {
+        return;
+    }
+    m_knife.records.push_back(Knife_record{.kind = Knife_record_kind::end_polyline});
+    m_knife.cut->end_polyline();
+    m_knife.polyline_open = false;
+    m_knife.drag_held     = false;
+    log_selection->trace("Knife: polyline ended");
+    update_knife_candidate();
+}
+
+void Mesh_component_selection_tool::knife_undo_point()
+{
+    if (!m_knife.cut) {
+        return;
+    }
+    while (!m_knife.records.empty() && (m_knife.records.back().kind != Knife_record_kind::point)) {
+        m_knife.records.pop_back();
+    }
+    if (m_knife.records.empty()) {
+        return;
+    }
+    m_knife.records.pop_back();
+    m_knife.cut->undo_last_point();
+    // The library reopens the polyline of the removed point when it keeps
+    // points; a polyline that lost its only point is gone.
+    m_knife.polyline_open = !m_knife.records.empty() && (m_knife.records.back().kind == Knife_record_kind::point);
+    m_knife.drag_held     = false;
+    log_selection->info("Knife: last point removed ({} left)", m_knife.cut->get_point_count());
+    update_knife_candidate();
+}
+
+void Mesh_component_selection_tool::rebuild_knife_cut()
+{
+    if (!m_knife.cut || !m_knife.geometry) {
+        return;
+    }
+    m_knife.destination = std::make_shared<erhe::geometry::Geometry>(m_knife.geometry->get_name());
+    m_knife.cut         = std::make_unique<erhe::geometry::operation::Knife_cut>(*m_knife.geometry, *m_knife.destination, m_knife.view, m_knife.options);
+    for (const Knife_record& record : m_knife.records) {
+        switch (record.kind) {
+            case Knife_record_kind::point:          m_knife.cut->add_point(record.point); break;
+            case Knife_record_kind::end_polyline:   m_knife.cut->end_polyline();          break;
+            case Knife_record_kind::close_polyline: m_knife.cut->close_polyline();        break;
+            default: break;
+        }
+    }
+}
+
+void Mesh_component_selection_tool::knife_toggle_cut_through()
+{
+    m_knife.options.cut_through = !m_knife.options.cut_through;
+    log_selection->info("Knife: cut through {}", m_knife.options.cut_through ? "on" : "off");
+    // Occlusion changes every segment: replay the record with the option.
+    rebuild_knife_cut();
+    update_knife_candidate();
+}
+
+auto Mesh_component_selection_tool::run_knife_action(const Knife_action action) -> bool
+{
+    if (action == Knife_action::start) {
+        return begin_knife();
+    }
+    if (!m_knife.active) {
+        return false;
+    }
+    switch (action) {
+        case Knife_action::confirm: {
+            confirm_knife();
+            break;
+        }
+        case Knife_action::undo_point: {
+            knife_undo_point();
+            break;
+        }
+        case Knife_action::cycle_angle: {
+            m_knife.angle_constraint = static_cast<Knife_angle_constraint>((static_cast<unsigned int>(m_knife.angle_constraint) + 1u) % 3u);
+            log_selection->info("Knife: angle constraint {}", c_str(m_knife.angle_constraint));
+            update_knife_candidate();
+            break;
+        }
+        case Knife_action::lock_x:
+        case Knife_action::lock_y:
+        case Knife_action::lock_z: {
+            const Knife_axis_lock lock =
+                (action == Knife_action::lock_x) ? Knife_axis_lock::x :
+                (action == Knife_action::lock_y) ? Knife_axis_lock::y :
+                Knife_axis_lock::z;
+            m_knife.axis_lock = (m_knife.axis_lock == lock) ? Knife_axis_lock::none : lock;
+            log_selection->info("Knife: axis lock {}", static_cast<unsigned int>(m_knife.axis_lock));
+            update_knife_candidate();
+            break;
+        }
+        case Knife_action::start:
+        default: {
+            break;
+        }
+    }
+    return true;
+}
+
+void Mesh_component_selection_tool::confirm_knife()
+{
+    if (!m_knife.cut || m_knife.records.empty()) {
+        log_selection->info("Knife: nothing to cut");
+        end_knife();
+        return;
+    }
+    if (!is_knife_session_live()) {
+        log_selection->warn("Knife cancelled: its mesh changed or left the scene");
+        end_knife();
+        return;
+    }
+    const Mesh_component_target target{
+        .mesh            = m_knife.mesh.lock(),
+        .primitive_index = m_knife.primitive_index,
+        .geometry        = m_knife.geometry
+    };
+    std::unique_ptr<erhe::geometry::operation::Knife_cut> cut         = std::move(m_knife.cut);
+    std::shared_ptr<erhe::geometry::Geometry>             destination = m_knife.destination;
+    end_knife();
+    Knife_cut_result result{};
+    std::string      error;
+    if (!commit_knife_cut(target, *cut, destination, result, error)) {
+        log_selection->warn("Knife refused: {}", error);
+    }
+}
+
+auto Mesh_component_selection_tool::commit_knife_cut(
+    const Mesh_component_target&                     target,
+    erhe::geometry::operation::Knife_cut&            cut,
+    const std::shared_ptr<erhe::geometry::Geometry>& destination,
+    Knife_cut_result&                                result,
+    std::string&                                     error
+) -> bool
+{
+    result = Knife_cut_result{};
+    Mesh_component_selection& selection = m_mesh_component_selection;
+    if (!is_mesh_component_mode(selection.get_mode())) {
+        error = "knife needs a vertex, edge or face mode";
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& mesh = target.mesh;
+    if (!mesh || !target.geometry || !destination || (mesh->get_item_host() == nullptr) || (m_context.mesh_memory == nullptr)) {
+        error = "knife needs a mesh in a scene";
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if (
+        (target.primitive_index >= primitives.size())               ||
+        !primitives[target.primitive_index].primitive               ||
+        !primitives[target.primitive_index].primitive->render_shape ||
+        (primitives[target.primitive_index].primitive->render_shape->get_geometry_const() != target.geometry)
+    ) {
+        error = "knife target is not the mesh primitive's current geometry";
+        return false;
+    }
+    const erhe::scene::Mesh_primitive before_mesh_primitive = primitives[target.primitive_index];
+
+    erhe::geometry::operation::Knife_result knife_result{};
+    cut.finish(&knife_result, nullptr);
+    result.cut_vertices = knife_result.cut_vertices.size();
+    result.cut_edges    = knife_result.cut_edges.size();
+    if (knife_result.cut_edges.empty()) {
+        log_selection->info("Knife: the points make no cut edge on '{}'; nothing changed", mesh->get_name());
+        return true;
+    }
+
+    for (const std::string& warning : destination->sanitize()) {
+        log_selection->warn("Knife on '{}' sanitized: {}", mesh->get_name(), warning);
+    }
+    const std::string validation_error = destination->validate();
+    if (!validation_error.empty()) {
+        error = "knife result failed validation: " + validation_error;
+        return false;
+    }
+    destination->process({.flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+    });
+
+    const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *destination);
+    std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(destination);
+    const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
+    const bool raytrace_ok   = after_primitive->make_raytrace();
+    if (!renderable_ok || !raytrace_ok) {
+        error = "knife: building the result primitive failed";
+        return false;
+    }
+    erhe::scene::Mesh_primitive after_mesh_primitive = before_mesh_primitive;
+    after_mesh_primitive.primitive = after_primitive;
+
+    // Swap the cut in place; the pre-cut selection entry goes dormant with
+    // the before geometry.
+    {
+        erhe::Item_host* const item_host = mesh->get_item_host();
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+        std::vector<erhe::scene::Mesh_primitive> new_primitives = primitives;
+        new_primitives[target.primitive_index] = after_mesh_primitive;
+        swap_mesh_primitives(mesh, new_primitives);
+    }
+    m_context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = mesh});
+
+    // Edge mode after the swap (the dormant pre-cut entry stays as it was
+    // for an undo), then the cut edges are the selection.
+    selection.set_mode(Mesh_component_mode::edge);
+    std::set<GEO::index_t>  vertices;
+    std::set<Mesh_edge_key> edges;
+    for (const std::pair<GEO::index_t, GEO::index_t>& cut_edge : knife_result.cut_edges) {
+        edges.insert(make_edge_key(cut_edge.first, cut_edge.second));
+        vertices.insert(cut_edge.first);
+        vertices.insert(cut_edge.second);
+    }
+    selection.set_after_operation(mesh, target.primitive_index, destination, vertices, std::set<GEO::index_t>{}, edges);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Fork_geometry_operation>(
+            Fork_geometry_operation::Parameters{
+                .mesh            = mesh,
+                .primitive_index = target.primitive_index,
+                .before          = before_mesh_primitive,
+                .after           = after_mesh_primitive,
+                .description     = "Knife"
+            }
+        )
+    );
+    result.changed = true;
+    log_selection->info(
+        "Knife: '{}' -> {} vertices, {} edges, {} facets, {} cut edges",
+        mesh->get_name(), destination->get_mesh().vertices.nb(), destination->get_mesh().edges.nb(),
+        destination->get_mesh().facets.nb(), result.cut_edges
+    );
+    return true;
+}
+
+auto Mesh_component_selection_tool::knife_cut(
+    const Mesh_component_target&                                  target,
+    const erhe::geometry::operation::Knife_view*                  view,
+    const std::span<const erhe::geometry::operation::Knife_point> points,
+    const erhe::geometry::operation::Knife_options&               options,
+    Knife_cut_result&                                             result,
+    std::string&                                                  error
+) -> bool
+{
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        error = "Transform tool not available";
+        return false;
+    }
+    if (is_modal_active() || transform_tool->is_component_edit_active()) {
+        error = "a loop cut, inset, knife, slide or other component edit is active";
+        return false;
+    }
+    if (!target.mesh || !target.geometry) {
+        error = "knife needs a mesh";
+        return false;
+    }
+    if (!target.geometry->has_connectivity() || !target.geometry->has_edge_connectivity()) {
+        error = "knife needs the geometry's connectivity, which is not built: " + target.mesh->get_name();
+        return false;
+    }
+    erhe::geometry::operation::Knife_view knife_view{};
+    if (view != nullptr) {
+        knife_view = *view;
+    } else {
+        const Viewport_scene_view* const viewport_scene_view = get_debug_scene_view();
+        if ((viewport_scene_view == nullptr) || !make_viewport_knife_view(*viewport_scene_view, *target.mesh, knife_view)) {
+            error = "no viewport camera to cut from (give a view)";
+            return false;
+        }
+    }
+    const std::shared_ptr<erhe::geometry::Geometry> destination = std::make_shared<erhe::geometry::Geometry>(target.geometry->get_name());
+    erhe::geometry::operation::Knife_cut cut{*target.geometry, *destination, knife_view, options};
+    for (const erhe::geometry::operation::Knife_point& point : points) {
+        cut.add_point(point);
+    }
+    return commit_knife_cut(target, cut, destination, result, error);
+}
+#pragma endregion Knife
+
 #pragma region Inset
 namespace {
 
@@ -2076,7 +3095,7 @@ void Mesh_component_selection_tool::apply_inset_values()
 
 auto Mesh_component_selection_tool::begin_inset() -> bool
 {
-    if (m_inset.active || m_loop_cut.active || (m_context.transform_tool == nullptr)) {
+    if (m_inset.active || m_loop_cut.active || m_knife.active || (m_context.transform_tool == nullptr)) {
         return false;
     }
     if (is_slide_active() || m_context.transform_tool->is_component_edit_active()) {
@@ -2601,7 +3620,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // The pointer hover wins; otherwise the external hover (a Geometry
     // Spreadsheet row) is drawn, in its own component kind.
     // The loop cut mode draws its own preview instead of the pointer hover.
-    Pick_result         hover      = (component_mode && !m_loop_cut.active && (get_hover_scene_view() == &context.scene_view))
+    Pick_result         hover      = (component_mode && !m_loop_cut.active && !m_knife.active && (get_hover_scene_view() == &context.scene_view))
         ? pick(context.scene_view)
         : Pick_result{};
     Mesh_component_mode hover_mode = mode;
@@ -2736,6 +3755,26 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             if (!m_scratch_indices.empty()) {
                 triangle_renderer.add_triangles(glm::mat4{1.0f}, style.hover_color, m_scratch_positions, m_scratch_indices);
             }
+        }
+    }
+
+    // Knife preview: the pending cut edges, the rubber band from the last
+    // point to the point under the pointer and the cut points, in world
+    // space, computed by update_knife_preview() on change; drawn only in the
+    // view it was computed in.
+    if (component_mode && m_knife.active && (m_knife_preview_view == &context.scene_view)) {
+        if (!m_knife_lines.empty()) {
+            line_renderer.set_thickness(style.edge_thickness - 1.0f);
+            line_renderer.add_lines(glm::mat4{1.0f}, style.hover_color, m_knife_lines);
+        }
+        m_scratch_positions.clear();
+        m_scratch_indices.clear();
+        for (const glm::vec3& point_world : m_knife_points) {
+            const float half = style.vertex_size * glm::distance(camera_position, point_world);
+            append_vertex_quad(point_world, camera_right, camera_up, half);
+        }
+        if (!m_scratch_indices.empty()) {
+            triangle_renderer.add_triangles(glm::mat4{1.0f}, style.hover_color, m_scratch_positions, m_scratch_indices);
         }
     }
 }
@@ -2889,7 +3928,16 @@ void Mesh_component_selection_tool::viewport_toolbar()
             m_context.editor_settings->transform_mode = static_cast<Mesh_transform_mode>(transform_index);
             m_context.app_settings->settings_store().touch();
         }
-        if (ImGui::IsItemHovered()) {
+        const bool transform_mode_hovered = ImGui::IsItemHovered();
+        // The move mode's vertex / edge snap (doc/editor/transform.md "Snap
+        // to vertices / edges").
+        if ((m_context.editor_settings->transform_mode == Mesh_transform_mode::move) && (m_context.transform_tool != nullptr)) {
+            ImGui::Checkbox("Snap to vertices / edges", &m_context.transform_tool->shared.settings.snap_to_components);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("While a move drag of mesh components runs, the anchor snaps to the nearest vertex or edge of the facet under the pointer (within 10 px; the dragged vertices excluded)");
+            }
+        }
+        if (transform_mode_hovered) {
             ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves. Extrude (Group Normal): extrudes, then each disjoint subset slides along its own average normal by the drag amount. Extrude (Vertex Normal): extrudes, then each vertex slides along its own normal. Edge Slide: the selected edge loops slide along their rails by the drag along the nearest vertex's rail. Vertex Slide: each selected vertex slides toward the neighbour the drag points at. G starts a slide from the pointer in any transform mode (Enter / click confirms, Escape / right click cancels, E even, F flipped, C or Alt unclamped).");
         }
     }
@@ -3498,6 +4546,17 @@ void Mesh_component_selection_tool::gesture_update()
     // The inset thickness / depth follow the pointer (a no-op unless the
     // inset mode runs and the pointer or Ctrl changed).
     update_inset_drag();
+    // The knife takes many clicks: a press leaves the click commands
+    // inactive, so they are re-armed Ready (ranking them above the other
+    // press commands of their buttons) for the length of the mode.
+    if (m_knife.active) {
+        if (m_modal_confirm_click_command.get_command_state() == erhe::commands::State::Inactive) {
+            m_modal_confirm_click_command.set_ready();
+        }
+        if (m_modal_cancel_click_command.get_command_state() == erhe::commands::State::Inactive) {
+            m_modal_cancel_click_command.set_ready();
+        }
+    }
     const bool have_devices = (m_context.id_renderer != nullptr) && (m_context.graphics_device != nullptr);
 
     // Debug/test (MCP debug_region_select): drive a region scan over an explicit

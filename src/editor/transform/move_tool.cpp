@@ -4,12 +4,20 @@
 #include "app_context.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/mesh_transform_mode.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/transform_tool.hpp"
+
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_scene/mesh.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 #include <imgui/imgui.h>
 
@@ -194,6 +202,12 @@ auto Move_tool::update(Scene_view* scene_view) -> bool
         return false;
     }
 
+    // The vertex / edge snap of the move mode, when it finds a target.
+    if (const std::optional<vec3> snapped = get_component_snap_translation(*scene_view); snapped.has_value()) {
+        m_context.transform_tool->adjust_translation(snapped.value());
+        return true;
+    }
+
     const auto& shared = get_shared();
     switch (std::popcount(m_axis_mask)) {
         case 1: {
@@ -259,6 +273,80 @@ auto Move_tool::snap(const glm::vec3 in_translation) const -> glm::vec3
     const float z = (m_axis_mask & Axis_mask::z) ? std::floor((bias.z + t.z + snap * 0.5f) / snap) * snap - bias.z : t.z;
 
     return world_from_basis * glm::vec3{x, y, z};
+}
+
+auto Move_tool::get_component_snap_translation(Scene_view& scene_view) -> std::optional<vec3>
+{
+    const auto& shared = get_shared();
+    if (
+        !shared.settings.snap_to_components ||
+        (m_context.transform_tool == nullptr) ||
+        !m_context.transform_tool->is_component_mode() ||
+        (m_context.editor_settings == nullptr) ||
+        (m_context.editor_settings->transform_mode != Mesh_transform_mode::move)
+    ) {
+        return {};
+    }
+    const int axis_count = std::popcount(m_axis_mask);
+    if ((axis_count != 1) && (axis_count != 2)) {
+        return {};
+    }
+    const Viewport_scene_view* const view = scene_view.as_viewport_scene_view();
+    if (view == nullptr) {
+        return {};
+    }
+    const std::optional<vec2> cursor = view->get_position_in_viewport();
+    const Hover_entry&        content = scene_view.get_hover(Hover_entry::content_slot);
+    const std::shared_ptr<erhe::scene::Mesh> mesh = content.scene_mesh_weak.lock();
+    if (!cursor.has_value() || !content.valid || !mesh || !content.geometry || (content.facet == GEO::NO_INDEX)) {
+        return {};
+    }
+
+    // The dragged vertices (the selected vertices of this mesh's live entry)
+    // are no snap targets: they move with the pointer.
+    const GEO::index_t vertex_count = content.geometry->get_mesh().vertices.nb();
+    m_snap_excluded_vertices.clear();
+    m_snap_excluded_vertices.resize(vertex_count, 0);
+    if (m_context.mesh_component_selection != nullptr) {
+        for (const Mesh_component_entry& entry : m_context.mesh_component_selection->get_entries()) {
+            if ((entry.mesh.lock() != mesh) || (entry.geometry.lock() != content.geometry)) {
+                continue;
+            }
+            for (const GEO::index_t vertex : entry.vertices) {
+                if (vertex < vertex_count) {
+                    m_snap_excluded_vertices[vertex] = 1;
+                }
+            }
+        }
+    }
+
+    const float ui_scale = (m_context.app_settings != nullptr) ? m_context.app_settings->get_ui_scale() : 1.0f;
+    const float radius   = 10.0f * ui_scale;
+    Screen_snap_result result{};
+    const bool found = m_screen_snap.snap(
+        Screen_snap_query{
+            .view              = view,
+            .world_from_node   = mesh->world_from_node(),
+            .geometry          = content.geometry.get(),
+            .facet             = content.facet,
+            .cursor            = cursor.value(),
+            .vertex_radius_px  = 0.75f * radius,
+            .edge_radius_px    = radius,
+            .edge_point        = Screen_snap_edge_point::nearest,
+            .excluded_vertices = m_snap_excluded_vertices
+        },
+        result
+    );
+    if (!found) {
+        return {};
+    }
+    const vec3 delta = result.position_in_world - vec3{shared.world_from_anchor_initial_state.get_translation()};
+    if (axis_count == 1) {
+        const vec3 direction = normalize(get_axis_direction());
+        return direction * dot(delta, direction);
+    }
+    const vec3 normal = normalize(get_plane_normal(!shared.settings.use_anchor_orientation()));
+    return delta - (normal * dot(delta, normal));
 }
 
 void Move_tool::update(const vec3 drag_position_in_world)

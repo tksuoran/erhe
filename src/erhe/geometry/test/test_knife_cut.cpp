@@ -462,3 +462,62 @@ TEST(KnifeCut, RemapCarriesFacetAndEdge)
     // The selected edge maps to its two halves.
     EXPECT_EQ(destination_selection.edges.size(), 2u);
 }
+
+// end_polyline(): the next point starts a new polyline, and no segment joins
+// the two; undo_last_point() reopens the previous polyline.
+TEST(KnifeCut, EndPolylineStartsANewOne)
+{
+    const std::unique_ptr<Geometry> grid = make_grid();
+    Geometry destination{"result"};
+    Knife_cut knife{*grid, destination, make_top_view(), Knife_options{}};
+    const std::array<Knife_point, 2> first = grid_quad_cut_points();
+    knife.add_point(first[0]);
+    knife.add_point(first[1]);
+    knife.end_polyline();
+    knife.add_point(edge_point(grid_vertex(3, 1), grid_vertex(4, 1), GEO::vec3f{3.5f, 1.0f, 0.0f}));
+    EXPECT_EQ(knife.get_polyline_count(), 2u);
+    std::vector<std::pair<GEO::vec3f, GEO::vec3f>> segments;
+    knife.get_preview_segments(segments);
+    EXPECT_EQ(segments.size(), 1u);
+    knife.add_point(edge_point(grid_vertex(4, 2), grid_vertex(3, 2), GEO::vec3f{3.5f, 2.0f, 0.0f}));
+    knife.get_preview_segments(segments);
+    EXPECT_EQ(segments.size(), 2u);
+
+    // Undo the two points of the second polyline: the first is current
+    // again, and a new point continues it.
+    knife.undo_last_point();
+    knife.undo_last_point();
+    EXPECT_EQ(knife.get_polyline_count(), 1u);
+    knife.get_preview_segments(segments);
+    EXPECT_EQ(segments.size(), 1u);
+    knife.end_polyline();
+    knife.add_point(edge_point(grid_vertex(3, 1), grid_vertex(4, 1), GEO::vec3f{3.5f, 1.0f, 0.0f}));
+    knife.add_point(edge_point(grid_vertex(4, 2), grid_vertex(3, 2), GEO::vec3f{3.5f, 2.0f, 0.0f}));
+
+    Knife_result result;
+    knife.finish(&result, nullptr);
+    // Two separate edge-to-edge cuts of one quad each.
+    expect_counts(destination, Counts{29, 46, 18});
+    EXPECT_EQ(result.cut_vertices.size(), 4u);
+    EXPECT_EQ(result.cut_edges.size(), 2u);
+}
+
+// close_polyline() closes the current polyline like Knife_options::close_polyline.
+TEST(KnifeCut, ClosePolylineMethod)
+{
+    const std::unique_ptr<Geometry> grid = make_grid();
+    Geometry destination{"result"};
+    Knife_cut knife{*grid, destination, make_top_view(), Knife_options{}};
+    knife.add_point(facet_point(grid_facet(1, 1), GEO::vec3f{1.3f, 1.3f, 0.0f}));
+    knife.add_point(facet_point(grid_facet(1, 1), GEO::vec3f{1.7f, 1.3f, 0.0f}));
+    knife.add_point(facet_point(grid_facet(1, 1), GEO::vec3f{1.7f, 1.7f, 0.0f}));
+    knife.add_point(facet_point(grid_facet(1, 1), GEO::vec3f{1.3f, 1.7f, 0.0f}));
+    knife.close_polyline();
+    std::vector<std::pair<GEO::vec3f, GEO::vec3f>> segments;
+    knife.get_preview_segments(segments);
+    EXPECT_EQ(segments.size(), 4u);
+    Knife_result result;
+    knife.finish(&result, nullptr);
+    expect_counts(destination, Counts{29, 46, 18});
+    EXPECT_EQ(result.cut_edges.size(), 4u);
+}

@@ -7306,6 +7306,137 @@
     "name": "inset_mesh_faces"
   },
   {
+    "description": "Blender knife (K, doc/editor/mesh_modeling.md) without the pointer: cut one polyline of points (mesh-local) into one node's mesh primitive and commit it as ONE undo entry (\"Knife\"). Each point names the element it lies on (snap vertex: vertex; edge: edge [v0, v1], position projected onto the edge, default its midpoint; facet: facet, position required). Consecutive points cut along the plane through them and the eye (perspective) or the view direction (orthographic): the crossed edges split, the crossed facets split along the cut; without cut_through only the hits a ray toward the eye reaches unoccluded are kept. close adds the segment from the last point back to the first (three points or more). The cut edges become the selection in edge mode. Points that make no cut edge change nothing (changed false, nothing queued). The view is the given view object or, when omitted, the camera of the last hovered viewport. Needs a vertex, edge or face mode; refused while a loop cut, inset, knife, slide or other component edit is active. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, cut_vertices, cut_edges and the mesh's vertex_count / edge_count / facet_count.",
+    "inputSchema": {
+      "properties": {
+        "close": {
+          "description": "Close the polyline back to its first point (default false)",
+          "type": "boolean"
+        },
+        "cut_through": {
+          "description": "Cut occluded facets too (default false)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "points": {
+          "description": "The cut points in order (one polyline)",
+          "items": {
+            "properties": {
+              "edge": {
+                "description": "snap edge: the edge as a [v0, v1] vertex-index pair",
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              "facet": {
+                "description": "snap facet: the facet index",
+                "type": "integer"
+              },
+              "position": {
+                "description": "Mesh-local position [x, y, z] (vertex: default the vertex position; edge: default the midpoint; facet: required)",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "snap": {
+                "description": "The element the point lies on (default facet)",
+                "enum": [
+                  "vertex",
+                  "edge",
+                  "facet"
+                ],
+                "type": "string"
+              },
+              "vertex": {
+                "description": "snap vertex: the vertex index",
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "view": {
+          "description": "The view the cut is made from, in world space (default: the camera of the last hovered viewport)",
+          "properties": {
+            "clip_from_world": {
+              "description": "Clip from world matrix, 16 floats, column-major",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            },
+            "direction": {
+              "description": "View direction [x, y, z] (world)",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "eye": {
+              "description": "Eye position [x, y, z] (world)",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "perspective": {
+              "description": "Perspective (true, default) or orthographic projection",
+              "type": "boolean"
+            },
+            "viewport_height": {
+              "description": "Viewport height in pixels",
+              "type": "number"
+            },
+            "viewport_width": {
+              "description": "Viewport width in pixels (the pixel tolerances are measured in it)",
+              "type": "number"
+            }
+          },
+          "required": [
+            "eye",
+            "direction",
+            "clip_from_world"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "scene_name",
+        "points"
+      ],
+      "type": "object"
+    },
+    "name": "knife_cut_mesh"
+  },
+  {
     "description": "Blender split (Y, doc/plans/mesh_modeling.md catalog M9), queued and undoable: the faces of the active mesh-component selection are disconnected from the rest of the mesh (face mode: the selected faces; vertex mode: the faces whose vertices are all selected; edge mode: the faces whose edges are all selected). Every vertex the region shares with the rest is duplicated, the region keeps the copies, positions stay. In edge mode, when the selected edges hold no complete face, the mesh is torn along the selected edges instead (edge split: each endpoint separated, a run end along the edge's continuation). The region (or the torn side's copies of the edges) is selected afterwards. An error without a live selection. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.",
     "inputSchema": {
       "properties": {

@@ -39,6 +39,12 @@ split_mesh_components of one face and of one edge (edge split), rip_mesh_vertice
 of one vertex and of one edge, separate_mesh_selection of one face (the new
 node's place in the hierarchy, its counts, undo and redo), each with undo, and
 the Y, V and P keys in a viewport.
+Knife (section 4.7, doc/editor/mesh_modeling.md) is checked through
+knife_cut_mesh on the plain box (two edge midpoints across the top face, a
+vertex to vertex diagonal, three points over two faces with and without cut
+through), each with the selection afterwards and one undo step, and through
+the K key in a viewport (click, move, click, Enter: one "Knife" undo entry;
+click, Escape: unchanged, no entry; click, click, Ctrl+Z, Enter: no cut).
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -1481,6 +1487,233 @@ def run_split_rip_separate(e):
     e.advance(2)
 
 
+def normalize3(v):
+    length = math.sqrt(sum(c * c for c in v))
+    return [c / length for c in v]
+
+
+def cross3(a, b):
+    return [(a[1] * b[2]) - (a[2] * b[1]), (a[2] * b[0]) - (a[0] * b[2]), (a[0] * b[1]) - (a[1] * b[0])]
+
+
+def dot3(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+
+def orthographic_view(center, direction, half_size, size=1000.0):
+    """A knife_cut_mesh view object: orthographic along direction, centred
+    on center (world), half_size world units to each viewport edge."""
+    f = normalize3(direction)
+    up = [0.0, 1.0, 0.0]
+    if abs(dot3(f, up)) > 0.99:
+        up = [0.0, 0.0, -1.0]
+    r = normalize3(cross3(f, up))
+    u = cross3(r, f)
+    rows = [
+        [r[0] / half_size, r[1] / half_size, r[2] / half_size, -dot3(r, center) / half_size],
+        [u[0] / half_size, u[1] / half_size, u[2] / half_size, -dot3(u, center) / half_size],
+        [0.01 * f[0], 0.01 * f[1], 0.01 * f[2], -0.01 * dot3(f, center)],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+    clip_from_world = [rows[row][column] for column in range(4) for row in range(4)]
+    eye = [center[i] - (10.0 * f[i]) for i in range(3)]
+    return {"eye": eye, "direction": f, "perspective": False,
+            "viewport_width": size, "viewport_height": size, "clip_from_world": clip_from_world}
+
+
+def find_boundary(e, viewport, inside, outside, node_name, steps=12):
+    """The window point where the segment from inside (over node_name) to
+    outside (off it) leaves node_name, by bisection with pick_at."""
+    def hits(point):
+        pick = e.call("pick_at", {"x": point[0] - viewport["x"], "y": point[1] - viewport["y"]})
+        return (pick.get("nearest") or {}).get("node") == node_name
+    if (not hits(inside)) or hits(outside):
+        return None
+    for _ in range(steps):
+        middle = [0.5 * (inside[0] + outside[0]), 0.5 * (inside[1] + outside[1])]
+        if hits(middle):
+            inside = middle
+        else:
+            outside = middle
+    return inside
+
+
+def run_knife(e):
+    """Knife (doc/plans/mesh_modeling.md section 4.7,
+    doc/editor/mesh_modeling.md): knife_cut_mesh and the K gesture."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX,
+                                  "translation": [0.0, 1.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    e.advance(2)
+    base = (8, 12, 6)
+    expect("knife: plain box at its base counts", geometry_counts(e, BOX), base)
+    p = vertex_positions(e, BOX, range(base[0]))
+    y_max = max(v[1] for v in p.values())
+    y_min = min(v[1] for v in p.values())
+    z_max = max(v[2] for v in p.values())
+    z_min = min(v[2] for v in p.values())
+    extent = max(max(abs(c) for c in v) for v in p.values())
+    top = [v for v in range(base[0]) if abs(p[v][1] - y_max) < 1e-6]
+    bottom = [v for v in range(base[0]) if abs(p[v][1] - y_min) < 1e-6]
+
+    def edge_along_x(vertices, z):
+        pair = [v for v in vertices if abs(p[v][2] - z) < 1e-6]
+        return pair if len(pair) == 2 else None
+
+    top_back = edge_along_x(top, z_min)
+    top_front = edge_along_x(top, z_max)
+    bottom_front = edge_along_x(bottom, z_max)
+    check_true("the box has the top back, top front and bottom front edges",
+               (top_back is not None) and (top_front is not None) and (bottom_front is not None))
+    if (top_back is None) or (top_front is None) or (bottom_front is None):
+        return
+    diagonal_end = None
+    for v in top:
+        if (abs(p[v][0] - p[top[0]][0]) > 1e-6) and (abs(p[v][2] - p[top[0]][2]) > 1e-6):
+            diagonal_end = v
+    check_true("the box top has a diagonal", diagonal_end is not None)
+
+    centre = [0.0, 1.0, 0.0]
+    top_view = orthographic_view(centre, [0.0, -1.0, 0.0], 2.0 * extent)
+    slanted_view = orthographic_view(centre, [0.0, -1.0, -2.0], 2.0 * extent)
+
+    def knife(points, view, **kwargs):
+        args = {"scene_name": e.scene, "node_name": BOX, "points": points, "view": view}
+        args.update(kwargs)
+        result = e.call("knife_cut_mesh", args)
+        wait_idle(e)
+        return result
+
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    before_undo = undo_count(e)
+
+    # Two edge midpoints across the top face: one cut edge, the top face in
+    # two and its two edges split: (8 + 2, 12 + 3, 6 + 1).
+    result = knife([{"snap": "edge", "edge": top_back}, {"snap": "edge", "edge": top_front}], top_view)
+    expect("knife_cut_mesh edge to edge across the top: changed, 2 cut vertices, 1 cut edge",
+           (result.get("changed"), result.get("cut_vertices"), result.get("cut_edges")), (True, 2, 1))
+    expect("knife edge to edge -> (10, 15, 7)", geometry_counts(e, BOX), (10, 15, 7))
+    selection = e.call("get_mesh_component_selection")
+    expect("knife switches to edge mode", selection.get("mode"), "edge")
+    expect("knife edge to edge: the cut edge is the selection", len(entry_of(selection, BOX)["edges"]), 1)
+    expect("knife edge to edge: one undo entry", undo_count(e), before_undo + 1)
+    expect("knife edge to edge: the undo entry is the knife", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Knife")
+    undo_and_check(e, "knife edge to edge", BOX, base)
+    expect("knife edge to edge: one undo step removes it", undo_count(e), before_undo)
+
+    # Vertex to vertex across the top diagonal: (8, 12 + 1, 6 + 1).
+    if diagonal_end is not None:
+        knife([{"snap": "vertex", "vertex": top[0]}, {"snap": "vertex", "vertex": diagonal_end}], top_view)
+        expect("knife vertex to vertex across the top diagonal -> (8, 13, 7)", geometry_counts(e, BOX), (8, 13, 7))
+        undo_and_check(e, "knife vertex to vertex", BOX, base)
+
+    # Three points over the top and the front face, seen from the front and
+    # above: two cut edges, three edge splits: (8 + 3, 12 + 5, 6 + 2). The
+    # bottom back edge lies behind the front face under the second segment;
+    # without cut through it is not cut.
+    three = [{"snap": "edge", "edge": top_back}, {"snap": "edge", "edge": top_front}, {"snap": "edge", "edge": bottom_front}]
+    result = knife(three, slanted_view)
+    expect("knife three points over two faces: 2 cut edges", result.get("cut_edges"), 2)
+    expect("knife three points over two faces -> (11, 17, 8)", geometry_counts(e, BOX), (11, 17, 8))
+    undo_and_check(e, "knife three points", BOX, base)
+    # Cut through: the bottom back edge is cut too, and the bottom face with
+    # it: (8 + 4, 12 + 7, 6 + 3).
+    result = knife(three, slanted_view, cut_through=True)
+    expect("knife three points, cut through: 3 cut edges", result.get("cut_edges"), 3)
+    expect("knife three points, cut through -> (12, 19, 9)", geometry_counts(e, BOX), (12, 19, 9))
+    undo_and_check(e, "knife three points, cut through", BOX, base)
+    expect("knife_cut_mesh: every cut undone", undo_count(e), before_undo)
+
+    # The K gesture in a viewport: the box faces the camera, scaled to half
+    # its size so its sides lie well inside the viewport; the points are 3 px
+    # inside its top and bottom edges (within the snap radius), found with
+    # pick_at.
+    e.call("clear_mesh_component_selection")
+    viewport = place_in_front_of_camera(e, BOX)
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX, "scale": [0.5, 0.5, 0.5]})
+    e.advance(2)
+    # A vertical scan right of the viewport centre (where the pointer
+    # hovers the viewport in the headless layout).
+    x = viewport["x"] + (viewport["width"] * 0.5) + (viewport["height"] * 0.02)
+    centre_y = viewport["y"] + (viewport["height"] * 0.5)
+    top = find_boundary(e, viewport, [x, centre_y], [x, viewport["y"] + 1.0], BOX)
+    bottom = find_boundary(e, viewport, [x, centre_y], [x, viewport["y"] + viewport["height"] - 1.0], BOX)
+    check_true("the box's top and bottom edges found on screen", (top is not None) and (bottom is not None), f"{top}, {bottom}")
+    if (top is None) or (bottom is None):
+        return
+    y0 = top[1] + 3.0
+    y1 = bottom[1] - 3.0
+
+    def move(y):
+        e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+        e.advance(3)
+
+    # pick_at probes the view without the pointer; leave the viewport and
+    # come back so the pointer hovers it again.
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": viewport["x"] - 20.0, "y": centre_y, "frame": 0}]})
+    e.advance(3)
+    move(y0)
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    before_undo = undo_count(e)
+
+    # K, click, move, click, Enter: one cut across the front face.
+    e.key("k", [])
+    e.call("mouse_click", {"x": x, "y": y0})
+    e.advance(2)
+    try:
+        e.call("undo")
+        check_true("undo over MCP during the knife is refused", False, "no error")
+    except RuntimeError as error:
+        check_true("undo over MCP during the knife is refused", "knife" in str(error), str(error))
+    move(y1)
+    e.call("mouse_click", {"x": x, "y": y1})
+    e.advance(2)
+    expect("K, click, click: nothing cut before the confirm", geometry_counts(e, BOX), base)
+    e.key("enter", [])
+    wait_idle(e)
+    expect("K, click, move, click, Enter -> (10, 15, 7)", geometry_counts(e, BOX), (10, 15, 7))
+    expect("K gesture: one undo entry", undo_count(e), before_undo + 1)
+    expect("K gesture: the undo entry is the knife", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Knife")
+    selection = e.call("get_mesh_component_selection")
+    expect("K gesture: edge mode with the cut edge selected",
+           (selection.get("mode"), len(entry_of(selection, BOX)["edges"])), ("edge", 1))
+    undo_and_check(e, "K gesture", BOX, base)
+    expect("K gesture: one undo step removes it", undo_count(e), before_undo)
+
+    # K, click, Escape: nothing changes, nothing is queued.
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    move(y0)
+    e.key("k", [])
+    e.call("mouse_click", {"x": x, "y": y0})
+    e.advance(2)
+    e.key("escape", [])
+    wait_idle(e)
+    expect("K, click, Escape: the box unchanged", geometry_counts(e, BOX), base)
+    expect("K, click, Escape: no undo entry", undo_count(e), before_undo)
+    expect("K, click, Escape: face mode kept", e.call("get_mesh_component_selection").get("mode"), "face")
+
+    # K, click, click, Ctrl+Z, Enter: the one point left makes no cut.
+    move(y0)
+    e.key("k", [])
+    e.call("mouse_click", {"x": x, "y": y0})
+    e.advance(2)
+    move(y1)
+    e.call("mouse_click", {"x": x, "y": y1})
+    e.advance(2)
+    e.key("z", ["ctrl"])
+    e.key("enter", [])
+    wait_idle(e)
+    expect("K, click, click, Ctrl+Z, Enter: the box unchanged", geometry_counts(e, BOX), base)
+    expect("K, click, click, Ctrl+Z, Enter: no undo entry", undo_count(e), before_undo)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BOX, "translation": [0.0, 1.0, 0.0],
+                                  "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]})
+    e.advance(2)
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -1576,6 +1809,8 @@ def run(e):
     run_inset(e)
 
     run_split_rip_separate(e)
+
+    run_knife(e)
 
 
 def main():

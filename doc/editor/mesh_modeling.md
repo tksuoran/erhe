@@ -4,9 +4,9 @@ Stability: experimental
 
 The modal mesh modeling tools of the editor: gestures that change a mesh's
 topology interactively in a viewport, in a mesh component mode
-(`doc/editor/mesh_component_selection.md`). Loop cut and inset exist; knife
-and bevel follow the same gesture lifecycle (`doc/plans/mesh_modeling.md`,
-which holds their design and the Blender behaviour each follows). The discrete operations (delete, dissolve, merge,
+(`doc/editor/mesh_component_selection.md`). Loop cut, inset and knife exist;
+bevel follows the same gesture lifecycle (`doc/plans/mesh_modeling.md`,
+which holds its design and the Blender behaviour each tool follows). The discrete operations (delete, dissolve, merge,
 subdivide) are Operations window buttons and are described in
 `doc/editor/operations.md`; the slides in `doc/editor/transform.md` "Scalar
 edits".
@@ -185,10 +185,135 @@ returns the selection plus `changed`, `inset_vertices`, `inset_facets`,
 `rim_facets` and the mesh's vertex, edge and facet counts. It needs face
 mode.
 
+## Knife
+
+Blender's knife (`doc/plans/mesh_modeling.md` section 4.7; the cut rules
+are in `erhe_geometry/operation/knife_cut.hpp` and `doc/erhe/geometry.md`).
+The knife has no slide: steps 1, 2 and 4 of the gesture lifecycle, with the
+topology step at the confirm.
+
+- **Start.** K over a content mesh in vertex, edge or face mode starts the
+  knife mode, with cut through off and no constraint. It is refused while a
+  loop cut, inset, slide or another component edit runs. The first cut
+  point picks the mesh the session cuts (one mesh primitive per session)
+  and the view it is cut from: a `Knife_view` built from the viewport's
+  camera at that moment (`clip_from_mesh` = clip_from_world times
+  world_from_node, the eye and the camera's -Z in mesh space, perspective
+  unless the projection is orthographic), kept for the session.
+- **Point under the cursor.** The hovered facet (the content hover) of the
+  session mesh gives the point: `Screen_snap` (below) snaps it to the
+  facet's nearest vertex within the vertex radius, else its nearest edge
+  within the edge radius (the edge point under the pointer, with Shift the
+  edge's midpoint), else it is the hover point inside the facet
+  (`Knife_snap::vertex` / `edge` / `facet`). Ctrl held skips snapping. The
+  edge radius is 10 pixels times the UI scale, divided by half the number of
+  the knife's cut vertices (the ends of its pending cut edges) within twice
+  that radius of the pointer when that shrinks it; the vertex radius is 0.75
+  of it.
+- **Constraints.** A cycles the angle constraint off, screen, relative: the
+  pointer's screen direction from the previous point is rounded to 30 degree
+  steps, measured from the screen X axis (screen) or from the screen
+  direction of the edge the previous point lies on (relative; the screen X
+  axis when the previous point is not on an edge), and the pointer moves to
+  its projection on that direction. X / Y / Z lock the world axis through
+  the previous point (the same key again unlocks; the lock wins over the
+  angle constraint): the pointer moves to the projection of the axis point
+  nearest to the pointer ray. A constrained point is where a ray at the
+  moved position hits the session mesh (`Scene_root::get_raytrace_scene()`),
+  a facet point, without snapping.
+- **Preview.** In the hover color: the pending cut edges
+  (`Knife_cut::get_preview_segments()`), the cut points, the point under the
+  pointer, and the rubber band from the last point of the open polyline to
+  it. With nothing of the session mesh under the pointer the rubber band ends
+  on the view plane through the previous point, and a click adds nothing.
+  The preview is recomputed on the hover, modifier and key changes only.
+- **Cut points.** A left press adds the point under the pointer
+  (`Knife_cut::add_point()`); holding the button and moving adds a point each
+  time the point moved more than the snap radius since the last one, while
+  cut through is off. A second press within 0.3 s and 6 pixels of the
+  previous (a double click) closes the polyline back to its first point
+  (three points or more; `Knife_cut::close_polyline()`) and ends it. A right
+  press ends the polyline (`Knife_cut::end_polyline()`): the next point
+  starts a new polyline, and the earlier cut edges stay. Ctrl+Z removes the
+  last point (`Knife_cut::undo_last_point()`, which also drops an end or
+  close after it). C toggles cut through: the session's record of points,
+  ends and closes is replayed into a new `Knife_cut` with the option, since
+  occlusion changes every segment. Nothing touches the mesh before the
+  confirm, and undo and redo decline while the mode runs
+  (`Operation_stack::get_undo_block_reason()`), so Ctrl+Z reaches the knife.
+- **Confirm.** Enter or Space finishes the cut into a new Geometry
+  (`Knife_cut::finish()`), builds its Primitive, swaps it in, switches to
+  edge mode with the cut edges selected and queues one
+  `Fork_geometry_operation` "Knife". Points that make no cut edge (a single
+  point, two facet points in one facet) change nothing and queue nothing.
+- **Cancel.** Escape ends the mode with the mesh untouched; so do leaving
+  the mesh component modes and MCP `cancel_component_edit`. A swap of the
+  session mesh's geometry by something else, or the mesh leaving its scene,
+  ends the mode at the next hover or geometry change.
+
+| Command | Key | Action |
+|---------|-----|--------|
+| `Mesh_component_selection.knife` | K | Start the knife mode |
+| `Mesh_component_selection.modal_confirm_click` | Left press | Add a cut point (double click: close the polyline) |
+| `Mesh_component_selection.modal_cancel_click` | Right press | End the polyline |
+| `Mesh_component_selection.modal_confirm` / `knife_confirm` | Enter, Space | Cut (one undo entry) |
+| `Mesh_component_selection.modal_cancel` | Escape | Cancel |
+| `Mesh_component_selection.knife_undo_point` | Ctrl+Z | Remove the last cut point |
+| `Mesh_component_selection.modal_toggle_clamp` | C | Toggle cut through |
+| `Mesh_component_selection.knife_cycle_angle` | A | Angle constraint off / screen / relative |
+| `Mesh_component_selection.knife_lock_x` / `_y` / `_z` | X, Y, Z | Lock (unlock) a world axis |
+
+The keys carry exact modifier masks and consume their input only while the
+mode runs (K only to start it), so Space (hotbar), A (fly camera), X / Z
+(brush rotation) keep their bindings otherwise. The Undo command, which
+Ctrl+Z also triggers, declines while the knife runs, so the knife's binding
+sees the chord. The click commands are re-armed Ready every frame of the
+mode (a press leaves them inactive) and act on the press only; the
+component click, box, paint and loop select gestures, the G slide and the
+gizmo drag stand down. Split (Y) and separate (P) decline while any modal
+gesture runs (`has_component_mode_selection()` in the Operations window), so
+Y reaches the knife's axis lock.
+
+### Numeric form
+
+`Mesh_component_selection_tool::knife_cut(target, view, points, options,
+result, error)` runs the one polyline of `points` (mesh space) through a
+`Knife_cut` seen from `view` (mesh space, from `make_knife_view()`) or, when
+it is null, from the camera of the last hovered viewport, and commits it like
+the confirm (D6). MCP `knife_cut_mesh` (`scene_name`, `node_id` /
+`node_name`, `primitive_index`, `points` as a list of {`position` [x, y, z]
+mesh-local, `snap` vertex | edge | facet, `vertex`, `edge` [v0, v1],
+`facet`}, `cut_through`, `close` and an optional `view` {`eye` [x, y, z]
+world, `direction` [x, y, z] world, `perspective`, `viewport_width`,
+`viewport_height`, `clip_from_world` 16 floats column-major}; schema in
+`config/editor/mcp_tools.json`) calls it and returns the selection plus
+`changed`, `cut_vertices`, `cut_edges` and the result's vertex, edge and
+facet counts. It needs a mesh component mode.
+
+## Screen snap
+
+`Screen_snap` (`tools/screen_snap.hpp`, `doc/plans/mesh_modeling.md` D5)
+snaps a viewport pixel position to one facet of a mesh: it projects the
+facet's corners with `Viewport_scene_view::project_to_viewport()` and
+reports the nearest vertex within `vertex_radius_px`, else the nearest edge
+within `edge_radius_px` (the edge point nearest to the pointer ray, or the
+midpoint with `Screen_snap_edge_point::midpoint`), else nothing, with the
+mesh-local, world and viewport positions of the snapped point.
+`excluded_vertices` (a per-vertex flag span) removes vertices and the edges
+at them from the candidates. `Screen_snap::get_snap_radius()` is the
+density rule: with n candidate points within twice the base radius of the
+cursor, base / (n / 2), never more than base. The projection scratch lives
+on the object, so a call allocates nothing after warm-up. The knife uses it
+for its cut points and the move transform mode for its vertex / edge snap
+(`doc/editor/transform.md` "Snap to vertices / edges").
+
 ## MCP tools
 
 - `loop_cut_mesh` - the numeric loop cut (above).
 - `inset_mesh_faces` - the numeric inset (above).
+- `knife_cut_mesh` - the numeric knife (above).
+- `cancel_component_edit` - cancels the knife mode, the G slide or the
+  mesh component edit of a gizmo drag.
 
 ## Verification
 
@@ -200,4 +325,9 @@ the single edge case on an octahedron, and through Ctrl+R in a viewport
 inset through `inset_mesh_faces` on the box (one facet with an inset vertex
 position, two adjacent facets, every facet, individual on two facets, each
 with the selection and one undo step) and through I in a viewport (move +
-Enter, move + Escape, the I and E option keys).
+Enter, move + Escape, the I and E option keys); the knife through
+`knife_cut_mesh` on the box (two edge midpoints across the top face, a
+vertex to vertex diagonal, three points over two faces with and without cut
+through, each with the selection and one undo step) and through K in a
+viewport (click, move, click, Enter: one "Knife" entry; click, Escape; click,
+click, Ctrl+Z, Enter: no cut).

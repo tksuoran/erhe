@@ -1366,8 +1366,11 @@ auto Transform_tool::on_drag_ready() -> bool
         log_trs_tool->trace("Transform tool cannot start drag - a scalar component edit is active");
         return false;
     }
-    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_loop_cut_active()) {
-        log_trs_tool->trace("Transform tool cannot start drag - the loop cut mode owns the clicks");
+    if (
+        (m_context.mesh_component_selection_tool != nullptr) &&
+        (m_context.mesh_component_selection_tool->is_loop_cut_active() || m_context.mesh_component_selection_tool->is_knife_active())
+    ) {
+        log_trs_tool->trace("Transform tool cannot start drag - the loop cut or knife mode owns the clicks");
         return false;
     }
 

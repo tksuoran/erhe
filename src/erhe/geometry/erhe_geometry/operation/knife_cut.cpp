@@ -108,6 +108,11 @@ auto Knife_cut::get_point_count() const -> std::size_t
     return m_points.size();
 }
 
+auto Knife_cut::get_polyline_count() const -> std::size_t
+{
+    return m_polylines.size();
+}
+
 void Knife_cut::add_point(const Knife_point& point)
 {
     if (m_finished) {
@@ -119,8 +124,34 @@ void Knife_cut::add_point(const Knife_point& point)
         log_operation->warn("Knife_cut::add_point(): the point names an element the mesh does not have; ignored");
         return;
     }
+    if (m_polylines.empty() || m_polyline_ended) {
+        m_polylines.push_back(Knife_polyline{.first_point = m_points.size(), .closed = false});
+        m_polyline_ended = false;
+    }
     m_points.push_back(point);
     process_point(m_points.size() - 1);
+}
+
+void Knife_cut::end_polyline()
+{
+    if (m_finished || m_polylines.empty()) {
+        return;
+    }
+    m_polyline_ended = true;
+}
+
+void Knife_cut::close_polyline()
+{
+    if (m_finished || m_polylines.empty() || m_polyline_ended) {
+        return;
+    }
+    Knife_polyline& polyline = m_polylines.back();
+    if ((m_points.size() - polyline.first_point) < 3) {
+        return;
+    }
+    polyline.closed = true;
+    process_closing(polyline, m_points.size() - 1);
+    m_polyline_ended = true;
 }
 
 void Knife_cut::undo_last_point()
@@ -129,6 +160,15 @@ void Knife_cut::undo_last_point()
         return;
     }
     m_points.pop_back();
+    if (m_polylines.back().first_point == m_points.size()) {
+        // The polyline lost its only point: the earlier polylines stay as
+        // they were, and the next point starts a new polyline.
+        m_polylines.pop_back();
+        m_polyline_ended = true;
+    } else {
+        m_polylines.back().closed = false;
+        m_polyline_ended          = false;
+    }
     rebuild();
 }
 
@@ -136,16 +176,35 @@ void Knife_cut::rebuild()
 {
     m_knife_vertices.clear();
     m_knife_edges.clear();
-    for (std::size_t i = 0; i < m_points.size(); ++i) {
-        process_point(i);
+    for (std::size_t polyline_index = 0; polyline_index < m_polylines.size(); ++polyline_index) {
+        const Knife_polyline& polyline  = m_polylines[polyline_index];
+        const std::size_t     end_point = ((polyline_index + 1) < m_polylines.size())
+            ? m_polylines[polyline_index + 1].first_point
+            : m_points.size();
+        for (std::size_t i = polyline.first_point; i < end_point; ++i) {
+            process_point(i);
+        }
+        if (polyline.closed) {
+            process_closing(polyline, end_point - 1);
+        }
     }
+}
+
+void Knife_cut::process_closing(const Knife_polyline& polyline, const std::size_t end_point)
+{
+    process_segment(m_points[end_point], m_points[polyline.first_point]);
 }
 
 void Knife_cut::process_point(const std::size_t point_index)
 {
-    if (point_index == 0) {
+    const bool starts_polyline = std::any_of(
+        m_polylines.begin(),
+        m_polylines.end(),
+        [point_index](const Knife_polyline& polyline) -> bool { return polyline.first_point == point_index; }
+    );
+    if (starts_polyline) {
         Knife_vertex element;
-        if (make_element(m_points[0], element)) {
+        if (make_element(m_points[point_index], element)) {
             static_cast<void>(find_or_add_knife_vertex(element));
         }
         return;
@@ -736,8 +795,12 @@ void Knife_cut::finish(Knife_result* const result, Component_remap* const remap)
     }
     m_finished = true;
 
-    if (m_options.close_polyline && (m_points.size() >= 3)) {
-        process_segment(m_points.back(), m_points.front());
+    if (m_options.close_polyline && !m_polylines.empty() && !m_polyline_ended) {
+        Knife_polyline& polyline = m_polylines.back();
+        if ((m_points.size() - polyline.first_point) >= 3) {
+            polyline.closed = true;
+            process_closing(polyline, m_points.size() - 1);
+        }
     }
 
     const std::size_t knife_vertex_count = m_knife_vertices.size();

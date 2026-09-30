@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -232,6 +233,12 @@ auto Operation_stack::get_undo_block_reason() const -> const char*
         return m_context.transform_tool->is_scalar_drag_active()
             ? "a mesh component slide is in progress (confirm or cancel it first)"
             : "a mesh component edit is in progress (finish or cancel it first)";
+    }
+    // The knife's Ctrl+Z removes its last cut point; the scratch is its own
+    // record, and an undo beneath it would swap the geometry it cuts
+    // (doc/editor/mesh_modeling.md "Knife").
+    if ((m_context.mesh_component_selection_tool != nullptr) && m_context.mesh_component_selection_tool->is_knife_active()) {
+        return "a knife cut is in progress (confirm or cancel it first)";
     }
     return nullptr;
 }

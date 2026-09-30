@@ -82,8 +82,13 @@ public:
 // The knife as an incremental operation, driven point by point by the knife
 // tool and finished on confirm.
 //
-// add_point(): the first point starts the polyline; every later point runs
-// the segment-to-cuts step from the previous point. Hits are the two
+// add_point(): the first point starts a polyline; every later point of the
+// polyline runs the segment-to-cuts step from the previous point.
+// end_polyline() ends the current polyline: the next add_point() starts a
+// new one, and the cut edges of the earlier polylines stay.
+// close_polyline() adds the segment from the last point of the current
+// polyline back to its first (a polyline of three points or more) and ends
+// it. Hits are the two
 // points; the vertices whose projection lies on the screen segment within
 // vertex_tolerance_px (except near a segment end, which wins); and the edges
 // of the facets crossing the cut plane whose crossing (the edge's
@@ -103,9 +108,12 @@ public:
 //
 // Nothing touches the mesh before finish(): the cut vertices and cut edges
 // are the knife's own record; undo_last_point() drops the last point and
-// replays the others.
+// replays the others: a polyline that keeps points is the current one again
+// (open, no longer closed), and after a polyline's only point the next point
+// starts a new polyline.
 //
-// finish(): splits each original edge at its cut vertices in parameter
+// finish(): closes the current polyline first when
+// Knife_options::close_polyline is set, then splits each original edge at its cut vertices in parameter
 // order, adds each facet point as a vertex (provenance: mean value
 // coordinates of its facet's corners), then splits each cut facet along its
 // cut edges with Edit_mesh::split_facet_edgenet() (a floating island is
@@ -121,8 +129,11 @@ public:
 
     // A point naming an element the source does not have is ignored (logged).
     void add_point      (const Knife_point& point);
+    void end_polyline   ();
+    void close_polyline ();
     void undo_last_point();
-    [[nodiscard]] auto get_point_count() const -> std::size_t;
+    [[nodiscard]] auto get_point_count   () const -> std::size_t;
+    [[nodiscard]] auto get_polyline_count() const -> std::size_t;
 
     // The pending cut edges in mesh space (cleared and filled).
     void get_preview_segments(std::vector<std::pair<GEO::vec3f, GEO::vec3f>>& out_segments) const;
@@ -165,7 +176,17 @@ private:
         std::size_t  knife_vertex{0};
     };
 
+    // A polyline: its first point (index into m_points), and whether
+    // close_polyline() closed it.
+    class Knife_polyline
+    {
+    public:
+        std::size_t first_point{0};
+        bool        closed     {false};
+    };
+
     void process_point    (std::size_t point_index);
+    void process_closing  (const Knife_polyline& polyline, std::size_t end_point);
     void process_segment  (const Knife_point& from, const Knife_point& to);
     void rebuild          ();
     [[nodiscard]] auto make_element  (const Knife_point& point, Knife_vertex& out_element) -> bool;
@@ -184,7 +205,9 @@ private:
 
     Knife_view                m_view;
     Knife_options             m_options;
-    std::vector<Knife_point>  m_points;
+    std::vector<Knife_point>    m_points;
+    std::vector<Knife_polyline> m_polylines;
+    bool                        m_polyline_ended{false}; // end_polyline(): the next point starts a polyline
     std::vector<Knife_vertex> m_knife_vertices;
     std::vector<Knife_edge>   m_knife_edges;
     bool                      m_finished{false};

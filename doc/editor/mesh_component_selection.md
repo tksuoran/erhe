@@ -196,6 +196,15 @@ smoothness), and the modal commands above confirm (cut, then the slide of the
 new loops) and cancel. The whole list, the preview and the gesture are in
 `doc/editor/mesh_modeling.md`.
 
+### Knife keys
+
+K (`Mesh_component_selection.knife`, mask 0) starts the knife mode over the
+hovered mesh in any component mode; while it runs a left press adds a cut
+point, a right press ends the polyline, Ctrl+Z removes the last point, C
+toggles cut through, A and X / Y / Z constrain the point, and Enter / Space
+cut and Escape cancels. The whole list and the gesture are in
+`doc/editor/mesh_modeling.md`.
+
 ### Inset keys
 
 I (`Mesh_component_selection.inset`, mask 0) starts the inset mode on the
@@ -283,13 +292,16 @@ command ends with a flush (section 3).
   `moved_vertices`, `loops` (edge) and `queued`. Needs a live selection in
   a component mode; refused when it cannot slide or another component edit
   is active.
-- `cancel_component_edit` - cancels the running G slide or the mesh
-  component edit of a gizmo drag like Escape; `cancelled` is false when
-  none was active.
+- `cancel_component_edit` - cancels the knife mode, the running G slide or
+  the mesh component edit of a gizmo drag like Escape; `cancelled` is false
+  when none was active.
 - `loop_cut_mesh` - `scene_name` + node + `primitive_index` + `edge`
   ([v0, v1]), `cuts` (default 1), `smoothness` (default 0), `factor`
   (default 0), `even`, `flipped`: the numeric loop cut of
   `doc/editor/mesh_modeling.md` (cut, slide, one undo entry).
+- `knife_cut_mesh` - `scene_name` + node + `primitive_index` + `points`,
+  `cut_through`, `close`, optional `view`: the numeric knife of
+  `doc/editor/mesh_modeling.md` (one polyline, one undo entry).
 - `inset_mesh_faces` - `thickness`, `depth` and the option booleans: the
   numeric inset of `doc/editor/mesh_modeling.md` on the live face
   selection (topology, placement, one undo entry).
