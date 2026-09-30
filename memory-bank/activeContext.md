@@ -1,7 +1,7 @@
 §MBEL:5.0
 
 [FOCUS]
-@mesh-modeling::IN-PROGRESS-2026-09-30{doc/plans/mesh_modeling.md;via-harness{user-asked;opus-coders};revised-vs-Blender-source(behaviour-ref-only:MIT-vs-GPL);M0-M22-catalog+7-phases;sec-4=per-op-rules;D2=Edit_mesh-scratch+primitives->Geometry_operation-emission;phase-1=M0a(walkers+fan-fix)->M0b(Edit_mesh)->M0c(edge_sharpness-post_processing)->M1->M10;state->progress.md}
+@mesh-modeling::IN-PROGRESS-2026-09-30{doc/plans/mesh_modeling.md;via-harness{user-asked;opus-coders};PHASES-1-4-DONE{M0-M9:walkers,Edit_mesh,selection-cmds,loop/ring-select,delete/dissolve,merge,subdivide,slide+scalar-drag+cancel,loop-cut,inset,split/rip/separate;2-pre-existing-crashes-fixed;doc/editor/mesh_modeling.md;scripts/mesh_modeling_verify.py;197-geometry-tests};phase-5=knife(M12a-library->M12b-tool+snap);phase-6=bevel-M13a,fill,bridge,connect;user-interactive-checks-pending{preview-look,rail-drawing};state->progress.md}
 @agfx-test-port::DONE-2026-09-29{38->176-Vk-tests;8-engine-fixes;remaining->doc/plans/graphics_tests_agfx_port.md;state->memory-bank/topics/graphics_tests.md}+Metal+macOS-Vk-runs-2026-09-30{175/1-skip;165/11-skip;2-test-fixes}
 @debug-line-aa::DONE-2026-09-29{doc/plans/debug_renderer_anti_aliasing.md;core+fringe-draws/pass(a81ebbfef;user-saw-joint-double-blend-on-hidden-sphere-silhouette->accepted-cost);on/off~1.7x;tests-13-Vk+GL;follow-up=joined-polylines+content-wide-lines+Metal}
 @shadow-robustness::DONE-2026-09-29{future:Metal+G7-profiling;review-issue-1-fixed-2026-09-29(node-origin-vertex-bound,far_vertices-station);review-issue-3-checked-at-runtime;review-issues-2,4..11-open}{doc/plans/shadow_robustness.md;via-harness{user-asked};root-cause=head-on-tie{all-presets-cull_back+dz_dUV=0->zero-bias;1-ulp-ref-vs-stored};phases-0..7}
