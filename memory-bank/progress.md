@@ -29,8 +29,10 @@
 ✓M5::{Ctrl+R-loop-cut:change-driven-ring-preview+modal-keys+cut(subdivide-ring)+chained-edge-slide(Scalar_topology_step)+one-Fork_geometry_operation;MCP-loop_cut_mesh;doc/editor/mesh_modeling.md-created;verify-220/220;preview-look=user-interactive-check-pending}
 ✓M7::{inset_faces.hpp(region/individual/all-options)+I-key-scalar-inset-mode(pointer=thickness,Ctrl=depth;O/I/B/E/R-rerun-step;commit-rebuilds-via-library)+MCP-inset_mesh_faces;188-geometry-tests;verify-256/256}
 ✓PHASE-3+4-DONE-except-M9
-⚡M9::split/rip/separate
-?phase-5-M11-snap+M12-knife(no-plane-query-on-IScene->test-plane-vs-CPU-facets;first-hit-rays-for-occlusion)->phase-6
+✓M9::{split_components.hpp(split_facets/split_edges/rip_vertices/extract_facets)+Y/V/P+Separate_selection_operation(new-node-after-original;by-loose-parts/material-not-implemented)+MCP;197-geometry-tests;node-order-verify-extended}
+✓PHASES-1-4-DONE
+⚡M11+M12::Screen_snap+knife(no-plane-query-on-IScene->plane-vs-CPU-facets;first-hit-rays-for-occlusion)
+?phase-6::M13a-bevel->M15-fill->M14-bridge->M16-connect->M13b
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
