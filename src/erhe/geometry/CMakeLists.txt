@@ -58,6 +58,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/bake_transform.hpp
     erhe_geometry/operation/clip_tile_tree.cpp
     erhe_geometry/operation/clip_tile_tree.hpp
+    erhe_geometry/operation/dissolve.cpp
+    erhe_geometry/operation/dissolve.hpp
     erhe_geometry/operation/edit_mesh_operation.cpp
     erhe_geometry/operation/edit_mesh_operation.hpp
     erhe_geometry/operation/generate_frame_field_tangents.cpp

@@ -713,7 +713,11 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
     // image of its first endpoint, then any inserted split midpoints in traversal
     // order, then the image of its second endpoint. Consecutive pairs are the
     // destination sub-edges (one for an unsplit edge, two or more when split).
+    // When the destination has an edge table, a sub-edge is kept only when the
+    // destination has that edge (a merged or dissolved edge has no image even
+    // though its endpoints survive).
     if (!src.edges.empty()) {
+        const bool check_edges = destination.has_edge_connectivity();
         std::vector<GEO::index_t> chain;
         for (const std::pair<GEO::index_t, GEO::index_t>& edge : src.edges) {
             const GEO::index_t a = edge.first;
@@ -737,6 +741,9 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
                 const GEO::index_t u = chain[i];
                 const GEO::index_t v = chain[i + 1];
                 if (u == v) {
+                    continue;
+                }
+                if (check_edges && (destination.get_edge(u, v) == GEO::NO_EDGE)) {
                     continue;
                 }
                 dst.edges.insert((u < v) ? std::make_pair(u, v) : std::make_pair(v, u));

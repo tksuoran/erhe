@@ -3,6 +3,7 @@
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/conway/subdivide.hpp"
+#include "erhe_geometry/operation/merge_faces.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -13,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -237,4 +239,37 @@ TEST(ComponentSelectionRemap, Edge_CatmullClark_Splits_Selected_Edge_Into_Two_Su
     ASSERT_EQ(shared.size(), 1u) << "the two sub-edges must share exactly the midpoint";
     EXPECT_GE(*shared.begin(), source_vertex_count) << "the shared midpoint must be a newly created vertex";
     EXPECT_EQ(outer, (std::set<GEO::index_t>{a, b})) << "the outer endpoints must be the original edge endpoints";
+}
+
+TEST(ComponentSelectionRemap, Edge_MergeFaces_Drops_Dissolved_Edge_Keeps_Endpoints)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(1);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    ASSERT_GT(src_mesh.edges.nb(), 0u);
+
+    GEO::index_t a = src_mesh.edges.vertex(0, 0);
+    GEO::index_t b = src_mesh.edges.vertex(0, 1);
+    if (a > b) {
+        std::swap(a, b);
+    }
+    const std::span<const GEO::index_t> edge_facets = box->get_edge_facets(0);
+    ASSERT_EQ(edge_facets.size(), 2u);
+    const std::set<GEO::index_t> selected_facets{edge_facets[0], edge_facets[1]};
+
+    Geometry_component_selection remap_source;
+    remap_source.edges    = { std::make_pair(a, b) };
+    remap_source.vertices = { a, b };
+    Geometry_component_selection remap_destination;
+    Component_remap              remap{&remap_source, &remap_destination};
+
+    // Merging the edge's two facets dissolves the edge; its endpoints stay
+    // (each is still used by a third facet of the cube).
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("merged");
+    erhe::geometry::operation::merge_faces(*box, *result, &selected_facets, &remap);
+
+    EXPECT_TRUE(remap_destination.edges.empty()) << "a dissolved edge must not be reported as selected";
+    ASSERT_EQ(remap_destination.vertices.size(), 2u);
+    for (const GEO::index_t vertex : remap_destination.vertices) {
+        EXPECT_LT(vertex, result->get_mesh().vertices.nb());
+    }
 }

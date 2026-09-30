@@ -9,6 +9,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/dissolve.hpp`: `delete_components()`,
+  `dissolve_faces()`, `dissolve_edges()`, `dissolve_vertices()` and
+  `dissolve_limited()` with the option classes `Dissolve_faces_options`,
+  `Dissolve_edges_options`, `Dissolve_vertices_options` and
+  `Dissolve_limited_options`: the delete and dissolve operations of
+  `doc/plans/mesh_modeling.md` section 4.3, composed on `Edit_mesh`, carrying a
+  component selection through `Component_remap`.
+- `erhe::geometry`: `Geometry_operation::remap_component_selection()` keeps a
+  remapped edge (or sub-edge) only when the destination has that edge, when
+  the destination has an edge table: a merged or dissolved edge is no longer
+  reported as selected while its surviving endpoints still are.
 - `erhe::geometry`: `Geometry_operation::propagate_edge_sharpness_identity()`,
   called at the end of `post_processing()`: a source edge's `edge_sharpness`
   is set on the destination edge whose two vertices each derive with weight 1

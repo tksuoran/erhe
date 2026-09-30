@@ -21,6 +21,7 @@ add_executable(${_target}
     test_convex_hull.cpp
     test_conway_texcoord_seam.cpp
     test_csg.cpp
+    test_dissolve.cpp
     test_edge_sharpness.cpp
     test_edit_mesh.cpp
     test_geometry_operation.cpp
