@@ -60,28 +60,18 @@ owns it:
 
 What is missing, as the concrete facts the catalog scores against:
 
-- Edge loops and rings: no walker exists. `build_extra_connectivity()`
-  (`src/erhe/geometry/erhe_geometry/geometry.cpp`) orders each vertex's
-  corners into a fan, and returns from the whole function at the first
-  vertex with fewer than three corners, so on an open mesh every vertex
-  after the first boundary vertex keeps its corners unordered. The
-  per-corner edge table it builds is a private scratch vector.
+- Edge loops and rings: the walkers of 4.1 exist (`topology.hpp`,
+  `doc/erhe/geometry.md`) and nothing in the editor calls them yet.
 - Selection: no select all / none / invert, no select linked, no mode
   conversion (the vertices of a face selection, the faces of an edge
   selection), no loop, ring or boundary select. Box and paint select are
   face-only.
 - Topology edits: no delete or dissolve of vertices and edges, no
   selection-aware merge, no loop cut, knife, inset, edge bevel, bridge or
-  fill. Every existing topology edit builds its destination `GEO::Mesh`
-  directly from the source in one pass; there is no mutable intermediate
-  on which a sequence of local edits (split this edge, join these two
-  facets, collapse this vertex) can be composed, which is the form every
-  Blender operator in section 4 takes.
+  fill. The `Edit_mesh` scratch of D2 exists with its primitives and
+  emission and no operation uses it yet.
 - Sliding: no edge or vertex slide; no screen-space snap to vertices or
   edges (the transform snap is grid-step only).
-- Attribute propagation: `Geometry_operation::post_processing()` copies no
-  edge attributes, so every operation except Catmull-Clark drops
-  `edge_sharpness`.
 
 ## 3. Design decisions
 
@@ -110,10 +100,11 @@ What is missing, as the concrete facts the catalog scores against:
   (`make_new_dst_vertex_from_src_vertex`, `add_corner_source`, ...), so
   `post_processing()` interpolates every attribute and
   `remap_component_selection()` carries the selection over unchanged.
-  `post_processing()` additionally carries `edge_sharpness` to each
-  destination edge whose two vertices derive from the two vertices of one
-  source edge, so creases survive every operation. Undo stays the primitive
-  swap `Mesh_operation` already performs. The interactive operations (D3)
+  `post_processing()` carries `edge_sharpness` to each destination edge
+  whose two vertices derive from the two vertices of one source edge
+  (`doc/erhe/subdivision_crease_edges.md`), and `emit()` writes the
+  scratch's own edge sharpness. Undo stays the primitive swap
+  `Mesh_operation` already performs. The interactive operations (D3)
   use the same scratch and emission for their one topology step.
 - **D3. Interactive operations build topology once, then preview
   positions in place.** Loop cut, knife, slide, inset and bevel are modal
@@ -521,7 +512,7 @@ feature needs to matter a lot to rank. Dependencies name the catalog id;
 
 | Id | Feature | Impact | Effort | Score | Depends on |
 |----|---------|-------:|-------:|------:|------------|
-| M0 | Foundation: fix the fan-order early return, `topology.hpp` walkers (4.1), `Edit_mesh` with its primitives and emission, `edge_sharpness` through `post_processing()` (D2) | 5 | 3 | 7 | - |
+| M0 | Foundation (done): the `topology.hpp` walkers (4.1), `Edit_mesh` with its primitives and emission, `edge_sharpness` through `post_processing()` (D2) | 5 | 3 | 7 | - |
 | M1 | Selection basics: all, none, invert, linked, flush and mode conversion, box and paint select in vertex and edge mode (4.2) | 4 | 1 | 7 | M0 (linked) |
 | M2 | Edge loop, edge ring, face loop and boundary loop select (4.2) | 5 | 2 | 8 | M0 |
 | M3 | Delete contexts; dissolve edges, vertices, faces-with-vertices; limited dissolve (4.3) | 5 | 2 | 8 | M0 |
