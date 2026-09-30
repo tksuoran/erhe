@@ -1502,7 +1502,7 @@ void Operations::imgui()
                 bevel_edges();
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Bevels the selected edges (vertex mode: the edges between selected vertices) by the amount below, one segment (Ctrl+B in a viewport runs it interactively)");
+                ImGui::SetTooltip("Bevels the selected edges (vertex mode: the edges between selected vertices) by the amount below, with the segments and profile below (Ctrl+B in a viewport runs it interactively)");
             }
             ImGui::PushID("bevel");
             ImGui::DragFloat("Amount", &m_bevel_options.amount, 0.001f, 0.0f, 1000.0f, "%.4f");
@@ -1513,6 +1513,11 @@ void Operations::imgui()
                     : erhe::geometry::operation::Bevel_offset_type::offset;
             }
             ImGui::Checkbox("Loop Slide", &m_bevel_options.loop_slide);
+            ImGui::SliderInt("Segments", &m_bevel_options.segments, 1, 32);
+            ImGui::SliderFloat("Profile", &m_bevel_options.profile, 0.0f, 1.0f, "%.2f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("0: straight chamfer, 0.5: quarter circle, 1: square corner (segments > 1)");
+            }
             ImGui::PopID();
         }
         if (visible("Split")) {

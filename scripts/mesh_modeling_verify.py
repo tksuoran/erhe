@@ -34,12 +34,14 @@ two adjacent facets, every facet, individual on two facets), each with the
 selection afterwards and one undo step, and through the I key in a viewport
 (move + Enter: one "Inset" undo entry; move + Escape: unchanged, no entry;
 the I and E option keys re-running the topology step).
-Bevel, first version (section 4.9 M13a, doc/editor/mesh_modeling.md) is
-checked through bevel_mesh_edges on the plain box (one edge with the edge
+Bevel (section 4.9 M13a and the segments of M13b, doc/editor/mesh_modeling.md)
+is checked through bevel_mesh_edges on the plain box (one edge with the edge
 quad selected and its vertices at the offset, every edge, width on one edge
-with the quad width), each with one undo step, and through Ctrl+B in a
-viewport (move + Enter: one "Bevel" undo entry; W and L re-running the
-topology step, then Escape: unchanged, no entry).
+with the quad width, one edge with three segments, every edge with two
+segments), each with one undo step, and through Ctrl+B in a viewport (move +
+Enter: one "Bevel" undo entry; W and L re-running the topology step, then
+Escape: unchanged, no entry; S and two wheel steps to three segments, then
+Enter: the three segment counts and one "Bevel" entry).
 Split, rip and separate (catalog M9) are checked on the plain box:
 split_mesh_components of one face and of one edge (edge split), rip_mesh_vertices
 of one vertex and of one edge, separate_mesh_selection of one face (the new
@@ -1397,7 +1399,7 @@ def distance_to_line(p, a, b):
 
 
 def run_bevel(e):
-    """Bevel, first version (doc/plans/mesh_modeling.md section 4.9 M13a,
+    """Bevel (doc/plans/mesh_modeling.md section 4.9 M13a, M13b segments,
     doc/editor/mesh_modeling.md): bevel_mesh_edges and the Ctrl+B key."""
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})
@@ -1466,6 +1468,25 @@ def run_bevel(e):
                    len(near_a) == 2 and abs(distance(near_a[0], near_a[1]) - 0.25) < 1e-4,
                    str(near_a))
     undo_and_check(e, "bevel width one edge", BOX, base)
+
+    # One edge, three segments: two three-valent ends with one beveled edge
+    # each, so no vertex patch: 10 + 2 * 2 vertices, 6 + 3 facets, 12 + 3 * 3
+    # edges; the strip is three quads.
+    result = bevel(amount=0.25, segments=3)
+    expect("bevel one edge 3 segments -> (14, 21, 9)", geometry_counts(e, BOX), (14, 21, 9))
+    expect("bevel one edge 3 segments: 3 edge facets", result.get("edge_facets"), 3)
+    expect("bevel one edge 3 segments: 1 beveled edge", result.get("beveled_edges"), 1)
+    expect("bevel one edge 3 segments: no vertex facets", result.get("vertex_facets"), 0)
+    expect("bevel one edge 3 segments: one undo entry", undo_count(e), before_undo + 1)
+    undo_and_check(e, "bevel one edge 3 segments", BOX, base)
+
+    # Every edge, two segments: the cutoff patch at every corner (a centre
+    # triangle and three corner triangles): 48 vertices, 108 edges, 62 facets.
+    result = bevel(select_all=True, amount=0.25, segments=2)
+    expect("bevel every edge 2 segments -> (48, 108, 62)", geometry_counts(e, BOX), (48, 108, 62))
+    expect("bevel every edge 2 segments: 24 edge facets", result.get("edge_facets"), 24)
+    expect("bevel every edge 2 segments: 32 vertex facets", result.get("vertex_facets"), 32)
+    undo_and_check(e, "bevel every edge 2 segments", BOX, base)
     expect("bevel: no undo entries left", undo_count(e), before_undo)
 
     # The Ctrl+B key in a viewport: Ctrl+B over the selection, move, Enter.
@@ -1513,6 +1534,31 @@ def run_bevel(e):
     expect("Ctrl+B, move, Escape: no undo entry", undo_count(e), before_undo)
     restored = vertex_positions(e, BOX, range(base[0]))
     check_true("Ctrl+B, move, Escape: positions back", all(near(restored[v], p[v], 0.0) for v in range(base[0])))
+
+    # Ctrl+B, move, S, wheel, wheel, Enter: three segments, one entry.
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.call("set_mesh_component_mode", {"mode": "edge"})
+    select_on(e, BOX, edges=[edge])
+    before_undo = undo_count(e)
+    e.key("b", ["ctrl"])
+    e.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30.0, "y": y, "frame": 0}]})
+    e.advance(3)
+    e.key("s", [])
+    e.call("mouse_wheel", {"x": x + 30.0, "y": y, "dy": 1.0})
+    e.advance(2)
+    expect("Ctrl+B, S, wheel: two segments in place", geometry_counts(e, BOX), (12, 18, 8))
+    e.call("mouse_wheel", {"x": x + 30.0, "y": y, "dy": 1.0})
+    e.advance(2)
+    expect("Ctrl+B, S, wheel, wheel: three segments in place", geometry_counts(e, BOX), (14, 21, 9))
+    e.key("enter", [])
+    wait_idle(e)
+    expect("Ctrl+B, S, wheel x2, Enter -> (14, 21, 9)", geometry_counts(e, BOX), (14, 21, 9))
+    expect("Ctrl+B, S, wheel x2, Enter: one undo entry", undo_count(e), before_undo + 1)
+    expect("Ctrl+B, S, wheel x2, Enter: the undo entry is the bevel", e.call("get_undo_redo_stack")["undo"][-1]["description"], "Bevel")
+    moved = [v for v in vertex_positions(e, BOX, range(14)).values() if distance_to_line(v, a, b) > 1e-4]
+    check_true("Ctrl+B, S, wheel x2, Enter: the new vertices moved off the edge", len(moved) == 14, str(len(moved)))
+    undo_and_check(e, "Ctrl+B, S, wheel x2, Enter", BOX, base)
 
     e.call("clear_mesh_component_selection")
     e.call("set_mesh_component_mode", {"mode": "object"})

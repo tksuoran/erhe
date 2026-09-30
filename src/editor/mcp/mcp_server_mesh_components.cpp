@@ -2210,7 +2210,7 @@ auto Mcp_server::action_inset_mesh_faces(const json& args) -> std::string
 
 auto Mcp_server::action_bevel_mesh_edges(const json& args) -> std::string
 {
-    // The numeric bevel (doc/plans/mesh_modeling.md D6, section 4.9 M13a;
+    // The numeric bevel (doc/plans/mesh_modeling.md D6, section 4.9 M13a, M13b;
     // doc/editor/mesh_modeling.md): topology, placement and commit in one
     // call, one undo entry. Explicit-state rule (doc/agents/mcp_api_guidelines.md):
     // the option defaults are the library defaults, never the Operations
@@ -2227,6 +2227,14 @@ auto Mcp_server::action_bevel_mesh_edges(const json& args) -> std::string
     erhe::geometry::operation::Bevel_edges_options options{};
     options.amount     = args.value("amount",     options.amount);
     options.loop_slide = args.value("loop_slide", options.loop_slide);
+    options.segments   = args.value("segments",   options.segments);
+    options.profile    = args.value("profile",    options.profile);
+    if ((options.segments < 1) || (options.segments > 1000)) {
+        return make_error_content("bevel_mesh_edges: segments must be 1 .. 1000");
+    }
+    if (!(options.profile >= 0.0f) || !(options.profile <= 1.0f)) {
+        return make_error_content("bevel_mesh_edges: profile must be 0 .. 1");
+    }
     const std::string offset_type = args.value("offset_type", std::string{"offset"});
     if (offset_type == "offset") {
         options.offset_type = erhe::geometry::operation::Bevel_offset_type::offset;
@@ -2245,6 +2253,8 @@ auto Mcp_server::action_bevel_mesh_edges(const json& args) -> std::string
     out["amount"]            = options.amount;
     out["offset_type"]       = offset_type;
     out["loop_slide"]        = options.loop_slide;
+    out["segments"]          = options.segments;
+    out["profile"]           = options.profile;
     out["changed"]           = result.changed;
     out["beveled_edges"]     = result.beveled_edges;
     out["boundary_vertices"] = result.boundary_vertices;

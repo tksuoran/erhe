@@ -3,6 +3,7 @@
 #include <geogram/basic/geometry.h>
 #include <geogram/basic/numeric.h>
 
+#include <cstddef>
 #include <set>
 #include <utility>
 #include <vector>
@@ -13,10 +14,11 @@ namespace erhe::geometry::operation {
 
 class Component_remap;
 
-// Bevel edges, first version (M13a) of doc/plans/mesh_modeling.md section
-// 4.9, composed on an Edit_mesh scratch (erhe_geometry/edit_mesh.hpp):
-// edges only, one segment, offset types offset and width, loop slide.
-// Blender's bevel is the behaviour reference.
+// Bevel edges (doc/plans/mesh_modeling.md section 4.9, M13a and the
+// segments and profile of M13b), composed on an Edit_mesh scratch
+// (erhe_geometry/edit_mesh.hpp): edges only, offset types offset and width,
+// loop slide, segments and profile. Blender's bevel is the behaviour
+// reference.
 //
 // A selected edge is beveled when it has exactly two facets that traverse it
 // in opposite directions; a boundary edge (one facet) or a non-manifold edge
@@ -66,6 +68,52 @@ class Component_remap;
 // vertex facet's corners average every original corner at the bevel vertex,
 // its source facet is the first facet of the fan.
 //
+// Segments and profile. With segments n > 1 each end of a beveled edge
+// gets a profile: n + 1 samples from the edge facet's corner in its right
+// facet (B_r) to the one in its left facet (B_l), the n - 1 interior ones new
+// vertices. With V the bevel vertex, C = B_r + B_l - V (the meet of the two
+// facets' offset lines in the plane of V, B_r and B_l) and (x, y) a point of
+// the unit superellipse |x|^r + |y|^r = 1 from (1, 0) to (0, 1), sample k
+// sits at C + x (B_r - C) + y (B_l - C) = V + (1 - y)(B_r - V) + (1 - x)(B_l - V).
+// The exponent is r = 1 / (1 - profile): profile 0 is the straight chamfer
+// (r = 1, the one segment line), 0.5 the quarter circle (r = 2, a true circle
+// when B_r - V and B_l - V are perpendicular and equally long), 1 the square
+// corner (r infinite: the samples lie on the two legs B_r - V - B_l, on the
+// original facets; an even count puts the middle sample at V). The samples
+// are spaced evenly by arc length on the unit curve and symmetric, so the
+// profile from B_l to B_r is the same vertices in reverse. Blender's concave
+// profiles (below its 0.25) are not offered.
+// - Each beveled edge becomes a strip of n quads between the matching samples
+//   of its two end profiles (the edge facets).
+// - A rebuilt facet whose chain holds both ends of a profile (a single
+//   beveled edge at a three-valent vertex: the facet across the vertex) gets
+//   the profile's samples between them.
+// - At a vertex with exactly two beveled edges on a closed fan the two edges
+//   share one profile (the strips continue through; no vertex facet).
+// - A vertex facet of a vertex with fewer than three beveled edges (or an
+//   open fan) gets the samples of the profiles along its sides.
+// - At a vertex with three or more beveled edges on a closed fan, the vertex
+//   patch is the cutoff pattern: side i of the one segment vertex facet is
+//   now the profile Q_i[0 .. n] (Q_i[n] = Q_i+1[0] the shared boundary
+//   vertex). With h = n / 2 (rounded down), the centre facet takes Q_i[h]
+//   and, for odd n, Q_i[n - h] of every side, in ring order (k or 2k
+//   corners); each boundary vertex Q_i[n] is filled up to the centre facet
+//   by a triangle (Q_i[n - 1], Q_i[n], Q_i+1[1]) and h - 1 quads
+//   (Q_i[n - j - 1], Q_i[n - j], Q_i+1[j], Q_i+1[j + 1]), j = 1 .. h - 1.
+//   Blender's default, the adjacent-pattern grid subdivision (ADJ), is not
+//   built.
+// Profile vertices copy their bevel vertex's provenance; their corners in a
+// rebuilt facet interpolate like a boundary vertex off the facet's edges
+// (mean value coordinates); in a strip quad they blend the corners of the
+// right and left facets at that end by the sample's index; in the vertex
+// patch they average every original corner at the vertex, as the vertex
+// facet does. The patch facets count as vertex facets.
+//
+// Edge sharpness. A beveled edge's sharpness is dropped with the edge; the
+// new edges carry none, except that an unbeveled edge a boundary vertex lies
+// on (a ring edge, shortened by the bevel) keeps its sharpness on the
+// shortened edge. Edges away from the bevel keep theirs unchanged.
+//
 // A selection without a beveled edge leaves the mesh unchanged.
 
 enum class Bevel_offset_type : unsigned int
@@ -80,17 +128,22 @@ public:
     Bevel_offset_type offset_type{Bevel_offset_type::offset};
     float             amount     {0.0f};
     bool              loop_slide {true};
+    int               segments   {1};    // clamped to 1 .. 1000; 1 is the one segment bevel
+    float             profile    {0.5f}; // clamped to 0 .. 1; see "Segments and profile" above
 };
 
-// Destination indices. boundary_vertices are the new vertices, ascending;
+// Destination indices. boundary_vertices are the new vertices (the boundary
+// vertices and, with segments > 1, the profile samples), ascending;
 // boundary_directions[i] is the direction of boundary_vertices[i] per unit
 // amount, so it sits at (its bevel vertex's original position) +
 // (amount * boundary_directions[i]). Every placement rule above is linear in
-// the amount, so the directions are exact for offset types `offset` and
-// `width` at fixed topology: a caller drives the amount by moving the
-// vertices along them without re-running the operation. edge_facets are the
-// edge facets (one per beveled edge), vertex_facets the vertex facets, both
-// ascending.
+// the amount (a profile sample is a fixed combination of its two boundary
+// vertices' directions), so the directions are exact for offset types
+// `offset` and `width`, any segments and profile, at fixed topology: a
+// caller drives the amount by moving the vertices along them without
+// re-running the operation. edge_facets are the edge facets (segments per
+// beveled edge), vertex_facets the vertex facets (with the cutoff patch
+// facets), both ascending; beveled_edges counts the beveled edges.
 class Bevel_edges_result
 {
 public:
@@ -98,6 +151,7 @@ public:
     std::vector<GEO::vec3f>   boundary_directions;
     std::vector<GEO::index_t> edge_facets;
     std::vector<GEO::index_t> vertex_facets;
+    std::size_t               beveled_edges{0};
 };
 
 // selected_edges are source vertex pairs (either order); a pair that is not

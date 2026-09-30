@@ -11,9 +11,11 @@
 #include <cmath>
 #include <cstddef>
 #include <map>
+#include <numbers>
 #include <optional>
 #include <set>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -28,6 +30,15 @@ constexpr float c_min_half_angle_sine = 0.1f;
 // Lines closer to parallel than this (squared sine of their angle) have no
 // meet.
 constexpr float c_parallel_epsilon = 1e-10f;
+
+// Segments are clamped to this.
+constexpr int c_max_segments = 1000;
+
+// A profile at or above this is the square corner (infinite exponent).
+constexpr float c_square_profile = 0.999f;
+
+// Dense angle steps of the unit superellipse for its arc length.
+constexpr int c_profile_arc_steps = 1024;
 
 using Edge_key = std::pair<GEO::index_t, GEO::index_t>;
 
@@ -61,6 +72,65 @@ void accumulate_sources(std::vector<Edit_source>& dst, const std::vector<Edit_so
         if (!found) {
             dst.emplace_back(weight, entry.second);
         }
+    }
+}
+
+// The point of the unit superellipse |x|^r + |y|^r = 1 at angle theta in
+// [0, pi / 2] (on the ray (cos theta, sin theta)); square: the max norm
+// (infinite r).
+[[nodiscard]] auto superellipse_point(const float theta, const float exponent, const bool square) -> GEO::vec2f
+{
+    const float c = std::max(0.0f, std::cos(theta));
+    const float s = std::max(0.0f, std::sin(theta));
+    const float m = std::max(c, s);
+    float norm = m;
+    if (!square) {
+        norm = m * std::pow(std::pow(c / m, exponent) + std::pow(s / m, exponent), 1.0f / exponent);
+    }
+    return GEO::vec2f{c / norm, s / norm};
+}
+
+// The segments + 1 unit profile samples (x_k, y_k), k = 0 .. segments, from
+// (1, 0) to (0, 1), spaced evenly by arc length and symmetric
+// ((x_k, y_k) = (y_n-k, x_n-k)); see the header, "Segments and profile".
+void compute_profile_samples(const int segments, const float profile, std::vector<GEO::vec2f>& out_samples)
+{
+    const std::size_t n = static_cast<std::size_t>(segments);
+    out_samples.assign(n + 1, GEO::vec2f{0.0f, 0.0f});
+    out_samples.front() = GEO::vec2f{1.0f, 0.0f};
+    out_samples.back()  = GEO::vec2f{0.0f, 1.0f};
+    if (n < 2) {
+        return;
+    }
+    const bool  square   = (profile >= c_square_profile);
+    const float exponent = square ? 0.0f : (1.0f / (1.0f - profile));
+    const float quarter  = 0.5f * std::numbers::pi_v<float>;
+
+    // Cumulative arc length over dense angle steps.
+    std::vector<float> lengths(c_profile_arc_steps + 1, 0.0f);
+    GEO::vec2f previous = superellipse_point(0.0f, exponent, square);
+    for (int i = 1; i <= c_profile_arc_steps; ++i) {
+        const float      theta = quarter * (static_cast<float>(i) / static_cast<float>(c_profile_arc_steps));
+        const GEO::vec2f point = superellipse_point(theta, exponent, square);
+        lengths[i] = lengths[i - 1] + GEO::length(point - previous);
+        previous = point;
+    }
+    const float total = lengths.back();
+    for (std::size_t k = 1; (2 * k) <= n; ++k) {
+        float theta = 0.5f * quarter; // the middle sample of an even count
+        if ((2 * k) < n) {
+            const float target = total * (static_cast<float>(k) / static_cast<float>(n));
+            int i = 0;
+            while ((i < (c_profile_arc_steps - 1)) && (lengths[i + 1] < target)) {
+                ++i;
+            }
+            const float span     = lengths[i + 1] - lengths[i];
+            const float fraction = (span > 0.0f) ? std::clamp((target - lengths[i]) / span, 0.0f, 1.0f) : 0.0f;
+            theta = quarter * ((static_cast<float>(i) + fraction) / static_cast<float>(c_profile_arc_steps));
+        }
+        const GEO::vec2f point = superellipse_point(theta, exponent, square);
+        out_samples[k]     = point;
+        out_samples[n - k] = GEO::vec2f{point.y, point.x};
     }
 }
 
@@ -174,6 +244,9 @@ public:
         : Edit_mesh_operation{source, destination}
         , m_options          {options}
     {
+        m_options.segments = std::clamp(m_options.segments, 1, c_max_segments);
+        m_options.profile  = std::clamp(m_options.profile, 0.0f, 1.0f);
+        compute_profile_samples(m_options.segments, m_options.profile, m_profile_samples);
         const GEO::index_t vertex_count = m_edit_mesh.get_vertex_slot_count();
         for (const std::pair<GEO::index_t, GEO::index_t>& pair : selected_edges) {
             if ((pair.first >= vertex_count) || (pair.second >= vertex_count) || (pair.first == pair.second)) {
@@ -239,7 +312,8 @@ public:
             result->boundary_vertices  .push_back(dst_vertex);
             result->boundary_directions.push_back(boundary.direction);
         }
-        result->edge_facets = m_dst_edge_facets;
+        result->edge_facets   = m_dst_edge_facets;
+        result->beveled_edges = m_edge_facet_sides.size();
         for (const GEO::index_t facet : m_vertex_facets) {
             result->vertex_facets.push_back(facet_to_dst[facet]);
         }
@@ -625,8 +699,61 @@ private:
             m_chains.emplace(std::pair<GEO::index_t, GEO::index_t>{ring.wedges[j].facet, vertex}, std::move(chains[j]));
         }
         if (polygon.size() >= 3) {
+            if (ring.closed && (beveled.size() >= 3)) {
+                m_cutoff_vertices.insert(vertex);
+            }
             m_polygons.emplace(vertex, std::move(polygon));
         }
+    }
+
+    // The profile of bevel vertex `vertex` between its boundary vertices a
+    // (x = 1) and b (y = 1), created once (with segments > 1) and shared by
+    // every edge facet and facet side between the two.
+    void make_profile(const GEO::index_t vertex, const std::size_t a, const std::size_t b)
+    {
+        const std::size_t n = m_profile_samples.size() - 1;
+        if (n < 2) {
+            return;
+        }
+        const Profile_key key{vertex, std::min(a, b), std::max(a, b)};
+        if (m_profiles.contains(key)) {
+            return;
+        }
+        const GEO::vec3f direction_a = m_boundary[a].direction;
+        const GEO::vec3f direction_b = m_boundary[b].direction;
+        Profile profile{.first = a, .interior = {}};
+        for (std::size_t k = 1; k < n; ++k) {
+            const GEO::vec2f& sample = m_profile_samples[k];
+            profile.interior.push_back(add_boundary_vertex(vertex, ((1.0f - sample.y) * direction_a) + ((1.0f - sample.x) * direction_b), GEO::NO_INDEX));
+        }
+        m_profiles.emplace(key, std::move(profile));
+    }
+
+    // The interior samples of the profile between boundary vertices a and b
+    // of `vertex`, in order from a to b; false (out cleared) without one.
+    auto get_profile_interior(const GEO::index_t vertex, const std::size_t a, const std::size_t b, std::vector<std::size_t>& out_interior) const -> bool
+    {
+        out_interior.clear();
+        const std::map<Profile_key, Profile>::const_iterator i = m_profiles.find(Profile_key{vertex, std::min(a, b), std::max(a, b)});
+        if (i == m_profiles.end()) {
+            return false;
+        }
+        out_interior = i->second.interior;
+        if (i->second.first != a) {
+            std::reverse(out_interior.begin(), out_interior.end());
+        }
+        return true;
+    }
+
+    // The full profile [a, interior..., b].
+    void get_profile(const GEO::index_t vertex, const std::size_t a, const std::size_t b, std::vector<std::size_t>& out_profile) const
+    {
+        std::vector<std::size_t> interior;
+        get_profile_interior(vertex, a, b, interior);
+        out_profile.clear();
+        out_profile.push_back(a);
+        out_profile.insert(out_profile.end(), interior.begin(), interior.end());
+        out_profile.push_back(b);
     }
 
     // The provenance of boundary vertex `boundary` as a corner of the
@@ -713,11 +840,38 @@ private:
             const GEO::index_t facet_l = (facet_r == edge_facets[0]) ? edge_facets[1] : edge_facets[0];
             m_edge_facet_sides.push_back(Edge_facet_sides{.v = v, .w = w, .facet_r = facet_r, .facet_l = facet_l});
         }
+        // The profiles at both ends of every beveled edge (segments > 1),
+        // before any facet uses them.
+        for (const Edge_facet_sides& sides : m_edge_facet_sides) {
+            make_profile(sides.v, m_chains.at({sides.facet_r, sides.v}).back (), m_chains.at({sides.facet_l, sides.v}).front());
+            make_profile(sides.w, m_chains.at({sides.facet_r, sides.w}).front(), m_chains.at({sides.facet_l, sides.w}).back ());
+        }
+
+        // The sharpness of the unbeveled ring edges the boundary vertices lie
+        // on, read before the rebuild replaces them.
+        std::vector<std::pair<std::size_t, float>> on_edge_sharpness;
+        for (std::size_t i = 0; i < m_boundary.size(); ++i) {
+            const Boundary_vertex& boundary = m_boundary[i];
+            if (boundary.edge_far_vertex == GEO::NO_INDEX) {
+                continue;
+            }
+            const GEO::index_t edge = m_edit_mesh.find_edge(boundary.bevel_vertex, boundary.edge_far_vertex);
+            if (edge == GEO::NO_INDEX) {
+                continue;
+            }
+            const std::optional<float> sharpness = m_edit_mesh.get_edge_sharpness(edge);
+            if (sharpness.has_value()) {
+                on_edge_sharpness.emplace_back(i, sharpness.value());
+            }
+        }
+
         // Rebuild every such facet with its bevel vertex corners replaced by
-        // the chains.
+        // the chains (with the profile samples between the two ends of a
+        // profile).
         std::vector<Edit_corner>  corners;
         std::vector<GEO::index_t> vertices;
         std::vector<Edit_source>  sources;
+        std::vector<std::size_t>  interior;
         for (const std::pair<const GEO::index_t, Facet_record>& entry : records) {
             const GEO::index_t  facet  = entry.first;
             const Facet_record& record = entry.second;
@@ -730,10 +884,18 @@ private:
                     corners.push_back(corner);
                     continue;
                 }
-                for (const std::size_t boundary_index : chain->second) {
-                    const Boundary_vertex& boundary = m_boundary[boundary_index];
+                const std::vector<std::size_t>& chain_vertices = chain->second;
+                for (std::size_t c = 0; c < chain_vertices.size(); ++c) {
+                    const Boundary_vertex& boundary = m_boundary[chain_vertices[c]];
                     interpolate_corner(record, i, boundary, sources);
                     corners.push_back(Edit_corner{.vertex = boundary.scratch_vertex, .sources = sources});
+                    if (((c + 1) < chain_vertices.size()) && get_profile_interior(corner.vertex, chain_vertices[c], chain_vertices[c + 1], interior)) {
+                        for (const std::size_t sample_index : interior) {
+                            const Boundary_vertex& sample = m_boundary[sample_index];
+                            interpolate_corner(record, i, sample, sources);
+                            corners.push_back(Edit_corner{.vertex = sample.scratch_vertex, .sources = sources});
+                        }
+                    }
                 }
             }
             if (corners.size() == record.corners.size()) {
@@ -758,12 +920,14 @@ private:
             }
         }
 
-        // The edge facets (the facet lists read above, before the rebuild).
+        // The edge facets (the facet lists read above, before the rebuild):
+        // one quad per segment between the matching samples of the profiles
+        // at the two ends (one segment: the quad (r_v, l_v, l_w, r_w)).
+        std::vector<std::size_t> profile_v;
+        std::vector<std::size_t> profile_w;
+        std::vector<Edit_source> sources_v;
+        std::vector<Edit_source> sources_w;
         for (const Edge_facet_sides& sides : m_edge_facet_sides) {
-            const std::vector<std::size_t>& chain_r_v = m_chains.at({sides.facet_r, sides.v});
-            const std::vector<std::size_t>& chain_r_w = m_chains.at({sides.facet_r, sides.w});
-            const std::vector<std::size_t>& chain_l_v = m_chains.at({sides.facet_l, sides.v});
-            const std::vector<std::size_t>& chain_l_w = m_chains.at({sides.facet_l, sides.w});
             const Facet_record& record_r = records.at(sides.facet_r);
             const Facet_record& record_l = records.at(sides.facet_l);
             const auto corner_sources = [](const Facet_record& record, const GEO::index_t vertex) -> const std::vector<Edit_source>& {
@@ -774,43 +938,149 @@ private:
                 }
                 return record.corners.front().sources;
             };
-            corners.clear();
-            corners.push_back(Edit_corner{.vertex = m_boundary[chain_r_v.back ()].scratch_vertex, .sources = corner_sources(record_r, sides.v)});
-            corners.push_back(Edit_corner{.vertex = m_boundary[chain_l_v.front()].scratch_vertex, .sources = corner_sources(record_l, sides.v)});
-            corners.push_back(Edit_corner{.vertex = m_boundary[chain_l_w.back ()].scratch_vertex, .sources = corner_sources(record_l, sides.w)});
-            corners.push_back(Edit_corner{.vertex = m_boundary[chain_r_w.front()].scratch_vertex, .sources = corner_sources(record_r, sides.w)});
-            const GEO::index_t facet = m_edit_mesh.create_facet_from_corners(corners, record_r.source_facet);
-            if (facet == GEO::NO_INDEX) {
-                log_operation->warn("bevel_edges: edge facet of edge ({}, {}) was not created", sides.v, sides.w);
+            get_profile(sides.v, m_chains.at({sides.facet_r, sides.v}).back (), m_chains.at({sides.facet_l, sides.v}).front(), profile_v);
+            get_profile(sides.w, m_chains.at({sides.facet_r, sides.w}).front(), m_chains.at({sides.facet_l, sides.w}).back (), profile_w);
+            if (profile_v.size() != profile_w.size()) {
+                log_operation->warn("bevel_edges: the profiles of edge ({}, {}) differ in size; skipped", sides.v, sides.w);
                 continue;
             }
-            m_edge_facets.push_back(facet);
+            const std::size_t last = profile_v.size() - 1;
+            // Sample k of the end at `vertex`: the right facet's corner there
+            // blended toward the left facet's by k / last.
+            const auto blend_sources = [&](const GEO::index_t vertex, const std::size_t k, std::vector<Edit_source>& out) {
+                const std::vector<Edit_source>& right = corner_sources(record_r, vertex);
+                const std::vector<Edit_source>& left  = corner_sources(record_l, vertex);
+                if (k == 0) {
+                    out = right;
+                    return;
+                }
+                if (k == last) {
+                    out = left;
+                    return;
+                }
+                const float t = static_cast<float>(k) / static_cast<float>(last);
+                out.clear();
+                accumulate_sources(out, right, 1.0f - t);
+                accumulate_sources(out, left,  t);
+            };
+            for (std::size_t j = 0; j < last; ++j) {
+                corners.clear();
+                blend_sources(sides.v, j,     sources_v);
+                corners.push_back(Edit_corner{.vertex = m_boundary[profile_v[j]].scratch_vertex, .sources = sources_v});
+                blend_sources(sides.v, j + 1, sources_v);
+                corners.push_back(Edit_corner{.vertex = m_boundary[profile_v[j + 1]].scratch_vertex, .sources = sources_v});
+                blend_sources(sides.w, j + 1, sources_w);
+                corners.push_back(Edit_corner{.vertex = m_boundary[profile_w[j + 1]].scratch_vertex, .sources = sources_w});
+                blend_sources(sides.w, j,     sources_w);
+                corners.push_back(Edit_corner{.vertex = m_boundary[profile_w[j]].scratch_vertex, .sources = sources_w});
+                const GEO::index_t facet = m_edit_mesh.create_facet_from_corners(corners, record_r.source_facet);
+                if (facet == GEO::NO_INDEX) {
+                    log_operation->warn("bevel_edges: edge facet of edge ({}, {}) was not created", sides.v, sides.w);
+                    continue;
+                }
+                m_edge_facets.push_back(facet);
+            }
         }
 
-        // Vertex facets: the boundary vertices in ring order, corners
+        // Vertex facets: the boundary vertices in ring order (with the
+        // profile samples along the sides), or the cutoff patch; corners
         // averaging every original corner at the vertex.
+        std::vector<std::size_t>              polygon;
+        std::vector<std::vector<std::size_t>> sides;
         for (const std::pair<const GEO::index_t, std::vector<std::size_t>>& entry : m_polygons) {
-            const Ring& ring = m_rings.at(entry.first);
+            const GEO::index_t vertex = entry.first;
+            const Ring&        ring   = m_rings.at(vertex);
             sources.clear();
             const float weight = 1.0f / static_cast<float>(ring.wedges.size());
             for (const Wedge& wedge : ring.wedges) {
                 const Facet_record& record = records.at(wedge.facet);
                 for (const Edit_corner& corner : record.corners) {
-                    if (corner.vertex == entry.first) {
+                    if (corner.vertex == vertex) {
                         accumulate_sources(sources, corner.sources, weight);
                     }
                 }
             }
-            corners.clear();
-            for (const std::size_t boundary_index : entry.second) {
-                corners.push_back(Edit_corner{.vertex = m_boundary[boundary_index].scratch_vertex, .sources = sources});
+            const GEO::index_t source_facet = records.at(ring.wedges.front().facet).source_facet;
+            const auto add_vertex_facet = [&](std::span<const std::size_t> boundary_indices) {
+                corners.clear();
+                for (const std::size_t boundary_index : boundary_indices) {
+                    corners.push_back(Edit_corner{.vertex = m_boundary[boundary_index].scratch_vertex, .sources = sources});
+                }
+                const GEO::index_t facet = m_edit_mesh.create_facet_from_corners(corners, source_facet);
+                if (facet == GEO::NO_INDEX) {
+                    log_operation->warn("bevel_edges: vertex facet of vertex {} was not created", vertex);
+                    return;
+                }
+                m_vertex_facets.push_back(facet);
+            };
+            const std::vector<std::size_t>& ring_polygon = entry.second;
+            const std::size_t               k            = ring_polygon.size();
+            const std::size_t               n            = m_profile_samples.size() - 1;
+            bool cutoff = (n >= 2) && m_cutoff_vertices.contains(vertex);
+            if (cutoff) {
+                sides.resize(k);
+                for (std::size_t i = 0; i < k; ++i) {
+                    get_profile(vertex, ring_polygon[i], ring_polygon[(i + 1) % k], sides[i]);
+                    if (sides[i].size() != (n + 1)) {
+                        cutoff = false; // a side without a profile: one polygon below
+                    }
+                }
             }
-            const GEO::index_t facet = m_edit_mesh.create_facet_from_corners(corners, records.at(ring.wedges.front().facet).source_facet);
-            if (facet == GEO::NO_INDEX) {
-                log_operation->warn("bevel_edges: vertex facet of vertex {} was not created", entry.first);
+            if (!cutoff) {
+                polygon.clear();
+                for (std::size_t i = 0; i < k; ++i) {
+                    polygon.push_back(ring_polygon[i]);
+                    if (get_profile_interior(vertex, ring_polygon[i], ring_polygon[(i + 1) % k], interior)) {
+                        polygon.insert(polygon.end(), interior.begin(), interior.end());
+                    }
+                }
+                add_vertex_facet(polygon);
                 continue;
             }
-            m_vertex_facets.push_back(facet);
+            // The cutoff patch (see the header).
+            const std::size_t h = n / 2;
+            polygon.clear();
+            for (std::size_t i = 0; i < k; ++i) {
+                polygon.push_back(sides[i][h]);
+                if ((n - h) != h) {
+                    polygon.push_back(sides[i][n - h]);
+                }
+            }
+            add_vertex_facet(polygon);
+            for (std::size_t i = 0; i < k; ++i) {
+                const std::vector<std::size_t>& side      = sides[i];
+                const std::vector<std::size_t>& next_side = sides[(i + 1) % k];
+                const std::size_t triangle[3] = {side[n - 1], side[n], next_side[1]};
+                add_vertex_facet(triangle);
+                for (std::size_t j = 1; j < h; ++j) {
+                    const std::size_t quad[4] = {side[n - j - 1], side[n - j], next_side[j], next_side[j + 1]};
+                    add_vertex_facet(quad);
+                }
+            }
+        }
+
+        // The shortened unbeveled ring edges keep their sharpness: from the
+        // boundary vertex to the far vertex, or to the far vertex's boundary
+        // vertex on the same edge when the far vertex is beveled too.
+        for (const std::pair<std::size_t, float>& entry : on_edge_sharpness) {
+            const Boundary_vertex& boundary = m_boundary[entry.first];
+            GEO::index_t           other    = boundary.edge_far_vertex;
+            if (m_rings.contains(other)) {
+                other = GEO::NO_INDEX;
+                for (const Boundary_vertex& candidate : m_boundary) {
+                    if ((candidate.bevel_vertex == boundary.edge_far_vertex) && (candidate.edge_far_vertex == boundary.bevel_vertex)) {
+                        other = candidate.scratch_vertex;
+                        break;
+                    }
+                }
+            }
+            if (other == GEO::NO_INDEX) {
+                continue;
+            }
+            const GEO::index_t edge = m_edit_mesh.find_edge(boundary.scratch_vertex, other);
+            if (edge != GEO::NO_INDEX) {
+                m_edit_mesh.set_edge_sharpness(edge, entry.second);
+            }
         }
 
         // The bevel vertices go, with their edges (the beveled edges and the
@@ -831,7 +1101,20 @@ private:
         GEO::index_t facet_l{GEO::NO_INDEX};
     };
 
+    // Profile of a bevel vertex between two of its boundary vertices, keyed
+    // by (bevel vertex, lower boundary index, higher boundary index).
+    using Profile_key = std::tuple<GEO::index_t, std::size_t, std::size_t>;
+    class Profile
+    {
+    public:
+        std::size_t              first{0};  // the boundary vertex at x = 1
+        std::vector<std::size_t> interior;  // samples 1 .. n - 1 from `first`
+    };
+
     Bevel_edges_options                                                          m_options;
+    std::vector<GEO::vec2f>                                                      m_profile_samples; // unit (x, y), segments + 1
+    std::map<Profile_key, Profile>                                               m_profiles;
+    std::set<GEO::index_t>                                                       m_cutoff_vertices; // closed fans with three or more beveled edges
     std::set<Edge_key>                                                           m_beveled;       // canonical scratch vertex pairs
     std::map<GEO::index_t, Ring>                                                 m_rings;         // per bevel vertex
     std::map<Edge_key, float>                                                    m_offset_scale;  // offset per unit amount, per beveled edge

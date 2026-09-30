@@ -7306,7 +7306,7 @@
     "name": "inset_mesh_faces"
   },
   {
-    "description": "Blender bevel edges, first version (Ctrl+B, doc/editor/mesh_modeling.md) without the pointer: bevel the live edge selection (vertex mode: the edges between selected vertices) of one mesh primitive (the first live entry with such edges) by amount with one segment, and commit it as ONE undo entry (\"Bevel\"). Each beveled edge becomes a quad (an edge facet), each end vertex with three or more new vertices a vertex facet, and the facets around are rebuilt around the new vertices. The edge facets become the selection (with their edges and vertices). A boundary edge (one facet) or a non-manifold edge is skipped; a selection without a bevelable edge changes nothing: changed false, nothing queued. Needs edge or vertex mode; refused while a loop cut, inset, bevel, knife, slide or other component edit is active. Option defaults are fixed here (Blender's): offset_type offset, loop_slide true. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, beveled_edges, boundary_vertices, edge_facets, vertex_facets and the mesh's vertex_count / edge_count / facet_count.",
+    "description": "Blender bevel edges (Ctrl+B, doc/editor/mesh_modeling.md) without the pointer: bevel the live edge selection (vertex mode: the edges between selected vertices) of one mesh primitive (the first live entry with such edges) by amount with the given segments and profile, and commit it as ONE undo entry (\"Bevel\"). Each beveled edge becomes a strip of segments quads (the edge facets) between the profiles at its ends, each end vertex with three or more new vertices a vertex facet (with segments > 1 and three or more beveled edges on a closed fan: the cutoff patch, a centre facet at the middle profile samples plus one triangle and segments/2 - 1 quads per corner), and the facets around are rebuilt around the new vertices. The edge facets become the selection (with their edges and vertices). A boundary edge (one facet) or a non-manifold edge is skipped; a selection without a bevelable edge changes nothing: changed false, nothing queued. Needs edge or vertex mode; refused while a loop cut, inset, bevel, knife, slide or other component edit is active. Option defaults are fixed here (Blender's): offset_type offset, loop_slide true, segments 1, profile 0.5. Returns the resulting selection (same shape as get_mesh_component_selection) plus changed, beveled_edges, boundary_vertices (every new vertex, the profile samples included), edge_facets, vertex_facets and the mesh's vertex_count / edge_count / facet_count.",
     "inputSchema": {
       "properties": {
         "amount": {
@@ -7324,6 +7324,14 @@
             "width"
           ],
           "type": "string"
+        },
+        "profile": {
+          "description": "Profile shape 0 .. 1 (default 0.5) of a bevel with segments > 1: 0 the straight chamfer, 0.5 a quarter circle, 1 the square corner (a superellipse with exponent 1 / (1 - profile))",
+          "type": "number"
+        },
+        "segments": {
+          "description": "Number of segments 1 .. 1000 (default 1): each beveled edge becomes this many quads following the profile",
+          "type": "integer"
         }
       },
       "type": "object"

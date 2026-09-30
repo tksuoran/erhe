@@ -314,6 +314,19 @@ private:
     App_context& m_context;
 };
 
+// Mouse wheel while the bevel mode runs: after S the segment count, with
+// Shift the profile; otherwise it falls through (fly-camera zoom). Kept Ready
+// while the mode runs; inactive otherwise.
+class Component_bevel_wheel_command : public erhe::commands::Command
+{
+public:
+    Component_bevel_wheel_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 // What a loop cut did (Mesh_component_selection_tool::loop_cut()).
 class Loop_cut_result
 {
@@ -356,14 +369,19 @@ private:
 
 // The bevel keys (doc/editor/mesh_modeling.md): Ctrl+B starts the bevel mode
 // in edge or vertex mode; while it runs W cycles the offset type (offset,
-// width) and L toggles loop slide (Enter / left click confirm and Escape /
-// right click cancel through Component_modal_command). S is left for the
-// segment count of the second bevel version (doc/plans/mesh_modeling.md
-// section 4.9, M13b).
+// width), L toggles loop slide, S hands the mouse wheel to the segment count,
+// PageUp / PageDown change the segment count and ] / [ the profile (Enter /
+// left click confirm and Escape / right click cancel through
+// Component_modal_command).
 enum class Bevel_action : unsigned int {
     start              = 0, // Ctrl+B
     cycle_offset_type  = 1, // W
-    toggle_loop_slide  = 2  // L
+    toggle_loop_slide  = 2, // L
+    segments_wheel     = 3, // S: the wheel changes the segment count from now on
+    more_segments      = 4, // PageUp
+    fewer_segments     = 5, // PageDown
+    more_profile       = 6, // ]
+    less_profile       = 7  // [
 };
 
 [[nodiscard]] auto c_str(Bevel_action action) -> const char*;
@@ -616,9 +634,11 @@ public:
     // selected vertices) of one mesh primitive: the topology step runs at once
     // with amount 0, then the pointer drags the amount. run_bevel_action()
     // runs a modal key while it runs (false when it does not run, so the key
-    // falls through).
-    [[nodiscard]] auto begin_bevel      () -> bool;
-    [[nodiscard]] auto run_bevel_action (Bevel_action action) -> bool;
+    // falls through); adjust_bevel_wheel() the wheel (false when it does not
+    // apply, so the wheel falls through to the camera).
+    [[nodiscard]] auto begin_bevel       () -> bool;
+    [[nodiscard]] auto run_bevel_action  (Bevel_action action) -> bool;
+    [[nodiscard]] auto adjust_bevel_wheel(float wheel_delta, uint32_t modifier_mask) -> bool;
     [[nodiscard]] auto is_bevel_active  () const -> bool { return m_bevel.active; }
     [[nodiscard]] auto get_bevel_options() const -> const erhe::geometry::operation::Bevel_edges_options& { return m_bevel.options; }
 
@@ -933,11 +953,13 @@ private:
     // (in options), the target and its edges, the running topology step, and
     // the pointer drag: the amount follows the change of the pointer's
     // distance from the press position, times mesh units per pixel at the
-    // boundary vertices' centroid.
+    // boundary vertices' centroid. segments_wheel: S was pressed, the wheel
+    // changes the segment count.
     class Bevel_state
     {
     public:
         bool                                            active         {false};
+        bool                                            segments_wheel {false};
         erhe::geometry::operation::Bevel_edges_options  options        {};
         Mesh_component_target                           target         {};
         std::set<std::pair<GEO::index_t, GEO::index_t>> edges          {};
@@ -969,6 +991,9 @@ private:
     [[nodiscard]] auto start_bevel_step() -> bool;
     void update_bevel_drag ();
     void apply_bevel_values();
+    // Sets the segment count / profile (clamped); a change re-runs the
+    // topology step with the amount kept.
+    void set_bevel_shape   (int segments, float profile);
     void confirm_bevel     ();
     void cancel_bevel      ();
     void end_bevel         ();
@@ -1145,6 +1170,12 @@ private:
     Component_bevel_command                                   m_bevel_command;
     Component_bevel_command                                   m_bevel_cycle_offset_type_command;
     Component_bevel_command                                   m_bevel_toggle_loop_slide_command;
+    Component_bevel_command                                   m_bevel_segments_wheel_command;
+    Component_bevel_command                                   m_bevel_more_segments_command;
+    Component_bevel_command                                   m_bevel_fewer_segments_command;
+    Component_bevel_command                                   m_bevel_more_profile_command;
+    Component_bevel_command                                   m_bevel_less_profile_command;
+    Component_bevel_wheel_command                             m_bevel_wheel_command;
     Component_knife_command                                   m_knife_command;
     Component_knife_command                                   m_knife_confirm_command;
     Component_knife_command                                   m_knife_undo_point_command;

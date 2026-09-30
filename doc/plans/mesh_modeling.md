@@ -464,6 +464,11 @@ arc), spread, harden normals off.
   edge, clamp overlap, vertex bevel, miters, seam and crease propagation.
   Blender's implementation of the full feature is about 8,500 lines; M13a
   is the roughly one-eighth of it that the single-segment edge case needs.
+  Built so far: segments, profile (exponent `1 / (1 - profile)`, so 0 is the
+  straight chamfer; Blender's concave range is not offered), the cutoff
+  vertex patch for three or more beveled edges and crease propagation
+  (`erhe_geometry/operation/bevel_edges.hpp`). Remaining: the ADJ vertex
+  patch, offset adjustment, clamp overlap, vertex bevel and miters.
 
 ### 4.10 Bridge, fill, connect (M14, M15, M16)
 
@@ -532,7 +537,7 @@ feature needs to matter a lot to rank. Dependencies name the catalog id;
 | M11 | `Screen_snap`: vertex, edge and midpoint snap for the knife and the move mode (D5) | 3 | 2 | 4 | - |
 | M12 | Knife (4.7), without knife project | 4 | 5 | 3 | M0, M11 |
 | M13a | Bevel first version: edges, one segment, offset and width (4.9) | 5 | 4 | 6 | M0, M2 |
-| M13b | Bevel second version: segments, profile, vertex bevel, clamp, miters (4.9) | 3 | 5 | 1 | M13a |
+| M13b | Bevel second version: segments, profile, vertex bevel, clamp, miters (4.9). Built: segments, profile (superellipse), the cutoff vertex patch, crease propagation. Remaining: the ADJ vertex patch, offset adjustment, clamp overlap, vertex bevel, miters | 3 | 5 | 1 | M13a |
 | M14 | Bridge edge loops (4.10) | 3 | 3 | 3 | M2, M4, M8 |
 | M15 | Fill (F) with the contextual order (4.10); grid fill is not implemented yet and remains | 3 | 2 | 4 | M0 |
 | M16 | Connect vertex path (4.10) | 3 | 3 | 3 | M0 |
@@ -606,7 +611,7 @@ phase extends (section 8) before the next phase starts.
 - `doc/editor/operations.md`: each new `Mesh_operation`.
 - `doc/editor/mesh_modeling.md`: the modal tools, their shared gesture
   lifecycle, keys and MCP tools. It describes loop cut, inset, knife and
-  bevel (its first version, M13a; this plan describes the second, M13b).
+  bevel (M13a and the segments and profile of M13b).
 - `doc/agents/mcp_api_guidelines.md` and the MCP tool list for the actions
   of D6.
 

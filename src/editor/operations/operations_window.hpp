@@ -256,7 +256,7 @@ public:
     // selection. False when refused (logged).
     auto inset_faces() -> bool;
     // Bevel (doc/editor/mesh_modeling.md) with the window's amount, offset
-    // type and loop slide: the numeric form of
+    // type, loop slide, segments and profile: the numeric form of
     // Mesh_component_selection_tool::bevel() on the live edge (vertex)
     // selection. False when refused (logged).
     auto bevel_edges() -> bool;

@@ -371,3 +371,283 @@ TEST(BevelEdges, RemapSelectsEdgeFacets)
     EXPECT_EQ(destination_selection.edges.size(),    4u);
     EXPECT_EQ(destination_selection.vertices.size(), 4u);
 }
+
+namespace {
+
+// The edge between the x+ and y+ facets of the cube, from z = 1 to z = -1.
+auto cube_x_y_edge(const Geometry& cube) -> std::pair<GEO::index_t, GEO::index_t>
+{
+    return cube_edge(cube, GEO::vec3f{1.0f, 1.0f, 1.0f}, GEO::vec3f{1.0f, 1.0f, -1.0f});
+}
+
+auto all_edges(const Geometry& geometry) -> Edge_set
+{
+    const GEO::Mesh& mesh = geometry.get_mesh();
+    Edge_set edges;
+    for (const GEO::index_t edge : mesh.edges) {
+        edges.insert({mesh.edges.vertex(edge, 0), mesh.edges.vertex(edge, 1)});
+    }
+    return edges;
+}
+
+// The new vertices of the one cube edge bevel at the z = 1 end, in the XY
+// plane.
+auto front_samples(const Geometry& bevel, const Bevel_edges_result& result) -> std::vector<GEO::vec2f>
+{
+    std::vector<GEO::vec2f> samples;
+    for (const GEO::index_t vertex : result.boundary_vertices) {
+        const GEO::vec3f p = position(bevel, vertex);
+        if (std::abs(p.z - 1.0f) < epsilon) {
+            samples.push_back(GEO::vec2f{p.x, p.y});
+        }
+    }
+    return samples;
+}
+
+} // anonymous namespace
+
+TEST(BevelEdges, CubeOneEdgeSegmentsCircle)
+{
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const std::pair<GEO::index_t, GEO::index_t> edge = cube_x_y_edge(*cube);
+    for (const int segments : {2, 3, 4}) {
+        Bevel_edges_result result;
+        const std::unique_ptr<Geometry> bevel = run(*cube, {edge}, Bevel_edges_options{.amount = 0.25f, .segments = segments}, result);
+        // Both ends are three-valent with one beveled edge: no vertex patch,
+        // each end gets segments - 1 samples, the strip is `segments` quads
+        // and the two end facets gain the samples.
+        const GEO::index_t n = static_cast<GEO::index_t>(segments);
+        expect_counts(*bevel, Counts{.vertices = 10 + (2 * (n - 1)), .edges = 12 + (3 * n), .facets = 6 + n});
+        EXPECT_EQ(result.beveled_edges,            1u);
+        EXPECT_EQ(result.edge_facets.size(),       static_cast<std::size_t>(n));
+        EXPECT_TRUE(result.vertex_facets.empty());
+        EXPECT_EQ(result.boundary_vertices.size(), static_cast<std::size_t>(4 + (2 * (n - 1))));
+        EXPECT_TRUE(std::is_sorted(result.boundary_vertices.begin(), result.boundary_vertices.end()));
+        const GEO::Mesh& mesh = bevel->get_mesh();
+        for (const GEO::index_t facet : result.edge_facets) {
+            EXPECT_EQ(mesh.facets.nb_corners(facet), 4u);
+            const GEO::vec3f normal = GEO::normalize(erhe::geometry::mesh_facet_normalf(mesh, facet));
+            EXPECT_GT(normal.x + normal.y, 0.5f) << "segments " << segments;
+        }
+        // Profile 0.5: a quarter circle about (0.75, 0.75), the meet of the
+        // two offset lines, radius 0.25.
+        const std::vector<GEO::vec2f> samples = front_samples(*bevel, result);
+        EXPECT_EQ(samples.size(), static_cast<std::size_t>(n + 1));
+        for (const GEO::vec2f& sample : samples) {
+            EXPECT_NEAR(GEO::length(sample - GEO::vec2f{0.75f, 0.75f}), 0.25f, 1e-4f) << "segments " << segments;
+            EXPECT_GE(sample.x, 0.75f - epsilon);
+            EXPECT_GE(sample.y, 0.75f - epsilon);
+        }
+        // The directions are exact: every new vertex minus amount times its
+        // direction is its original corner.
+        for (std::size_t i = 0; i < result.boundary_vertices.size(); ++i) {
+            const GEO::vec3f origin = position(*bevel, result.boundary_vertices[i]) - (0.25f * result.boundary_directions[i]);
+            EXPECT_TRUE(is_near(origin, GEO::vec3f{1.0f, 1.0f, 1.0f}) || is_near(origin, GEO::vec3f{1.0f, 1.0f, -1.0f}))
+                << origin.x << " " << origin.y << " " << origin.z;
+        }
+    }
+}
+
+TEST(BevelEdges, CubeOneEdgeSegmentsOneIgnoresProfile)
+{
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const std::pair<GEO::index_t, GEO::index_t> edge = cube_x_y_edge(*cube);
+    for (const float profile : {0.0f, 0.5f, 1.0f}) {
+        Bevel_edges_result result;
+        const std::unique_ptr<Geometry> bevel = run(*cube, {edge}, Bevel_edges_options{.amount = 0.25f, .segments = 1, .profile = profile}, result);
+        expect_counts(*bevel, Counts{.vertices = 10, .edges = 15, .facets = 7});
+        EXPECT_EQ(result.edge_facets.size(), 1u);
+        EXPECT_EQ(result.beveled_edges,      1u);
+    }
+}
+
+TEST(BevelEdges, CubeOneEdgeProfileChamfer)
+{
+    // Profile 0: the samples lie on the one segment line, evenly spaced.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const std::pair<GEO::index_t, GEO::index_t> edge = cube_x_y_edge(*cube);
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*cube, {edge}, Bevel_edges_options{.amount = 0.25f, .segments = 4, .profile = 0.0f}, result);
+    expect_counts(*bevel, Counts{.vertices = 16, .edges = 24, .facets = 10});
+    std::vector<GEO::vec2f> samples = front_samples(*bevel, result);
+    ASSERT_EQ(samples.size(), 5u);
+    for (const GEO::vec2f& sample : samples) {
+        EXPECT_NEAR(sample.x + sample.y, 1.75f, epsilon);
+    }
+    std::sort(samples.begin(), samples.end(), [](const GEO::vec2f& a, const GEO::vec2f& b) { return a.x < b.x; });
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        EXPECT_NEAR(samples[i].x, 0.75f + (0.0625f * static_cast<float>(i)), 1e-4f);
+    }
+}
+
+TEST(BevelEdges, CubeOneEdgeProfileSquare)
+{
+    // Profile 1: the samples lie on the two legs (the original facets); an
+    // even count puts the middle sample at the original corner.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const std::pair<GEO::index_t, GEO::index_t> edge = cube_x_y_edge(*cube);
+    for (const int segments : {2, 3, 4}) {
+        Bevel_edges_result result;
+        const std::unique_ptr<Geometry> bevel = run(*cube, {edge}, Bevel_edges_options{.amount = 0.25f, .segments = segments, .profile = 1.0f}, result);
+        EXPECT_EQ(bevel->validate(), std::string{});
+        const std::vector<GEO::vec2f> samples = front_samples(*bevel, result);
+        ASSERT_EQ(samples.size(), static_cast<std::size_t>(segments + 1));
+        std::size_t at_corner = 0;
+        for (const GEO::vec2f& sample : samples) {
+            const bool on_x_leg = (std::abs(sample.x - 1.0f) < epsilon) && (sample.y >= (0.75f - epsilon));
+            const bool on_y_leg = (std::abs(sample.y - 1.0f) < epsilon) && (sample.x >= (0.75f - epsilon));
+            EXPECT_TRUE(on_x_leg || on_y_leg) << sample.x << " " << sample.y;
+            if (on_x_leg && on_y_leg) {
+                ++at_corner;
+            }
+        }
+        EXPECT_EQ(at_corner, ((segments % 2) == 0) ? 1u : 0u) << "segments " << segments;
+    }
+}
+
+TEST(BevelEdges, CubeAllEdgesSegments2Cutoff)
+{
+    // Every vertex has three beveled edges: the cutoff patch, per vertex the
+    // centre triangle at the middle samples and one triangle per boundary
+    // vertex. 24 boundary vertices + 12 edges * 2 ends * 1 sample = 48
+    // vertices; 6 + 12 * 2 strip quads + 8 * 4 patch triangles = 62 facets;
+    // (6 * 4 + 24 * 4 + 32 * 3) / 2 = 108 edges.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*cube, all_edges(*cube), Bevel_edges_options{.amount = 0.25f, .segments = 2}, result);
+    expect_counts(*bevel, Counts{.vertices = 48, .edges = 108, .facets = 62});
+    EXPECT_EQ(result.beveled_edges,            12u);
+    EXPECT_EQ(result.boundary_vertices.size(), 48u);
+    EXPECT_EQ(result.edge_facets.size(),       24u);
+    ASSERT_EQ(result.vertex_facets.size(),     32u);
+    const GEO::Mesh& mesh = bevel->get_mesh();
+    for (const GEO::index_t facet : result.vertex_facets) {
+        EXPECT_EQ(mesh.facets.nb_corners(facet), 3u);
+    }
+    // Every facet faces away from the cube's centre, and every vertex stays
+    // inside the original cube.
+    for (GEO::index_t facet = 0; facet < mesh.facets.nb(); ++facet) {
+        GEO::vec3f centroid{0.0f, 0.0f, 0.0f};
+        for (GEO::index_t local = 0; local < mesh.facets.nb_corners(facet); ++local) {
+            centroid += position(*bevel, mesh.facets.vertex(facet, local));
+        }
+        const GEO::vec3f normal = erhe::geometry::mesh_facet_normalf(mesh, facet);
+        EXPECT_GT(GEO::dot(normal, centroid), 0.0f) << "facet " << facet;
+    }
+    for (GEO::index_t vertex = 0; vertex < mesh.vertices.nb(); ++vertex) {
+        const GEO::vec3f p = position(*bevel, vertex);
+        EXPECT_LE(std::max(std::abs(p.x), std::max(std::abs(p.y), std::abs(p.z))), 1.0f + epsilon);
+    }
+}
+
+TEST(BevelEdges, CubeAllEdgesSegments3Cutoff)
+{
+    // Odd count: the centre facet takes both middle samples of each side (a
+    // hexagon), one triangle per boundary vertex. 24 + 12 * 2 * 2 = 72
+    // vertices; 6 + 12 * 3 + 8 * (3 + 1) = 74 facets; (6 * 4 + 36 * 4 + 8 *
+    // (3 * 3 + 6)) / 2 = 144 edges.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*cube, all_edges(*cube), Bevel_edges_options{.amount = 0.25f, .segments = 3}, result);
+    expect_counts(*bevel, Counts{.vertices = 72, .edges = 144, .facets = 74});
+    EXPECT_EQ(result.edge_facets.size(),   36u);
+    ASSERT_EQ(result.vertex_facets.size(), 32u);
+    const GEO::Mesh& mesh = bevel->get_mesh();
+    std::size_t hexagons  = 0;
+    std::size_t triangles = 0;
+    for (const GEO::index_t facet : result.vertex_facets) {
+        const GEO::index_t corners = mesh.facets.nb_corners(facet);
+        hexagons  += (corners == 6) ? 1 : 0;
+        triangles += (corners == 3) ? 1 : 0;
+    }
+    EXPECT_EQ(hexagons,  8u);
+    EXPECT_EQ(triangles, 24u);
+}
+
+TEST(BevelEdges, CubeAllEdgesSegments4Cutoff)
+{
+    // Even count 4: per boundary vertex a triangle and one quad, the centre a
+    // triangle. 24 + 12 * 2 * 3 = 96 vertices; 6 + 48 + 8 * (3 + 3 + 1) = 110
+    // facets; Euler: 96 + 110 - 2 = 204 edges.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*cube, all_edges(*cube), Bevel_edges_options{.amount = 0.25f, .segments = 4}, result);
+    expect_counts(*bevel, Counts{.vertices = 96, .edges = 204, .facets = 110});
+    EXPECT_EQ(result.vertex_facets.size(), 56u);
+}
+
+TEST(BevelEdges, TwoBeveledEdgesShareProfile)
+{
+    // Two top edges meeting at (1, 1, 1): the two strips share the profile
+    // there (no vertex facet). One sample per profile, three profiles (the
+    // shared one and the two far ends): 11 + 3 vertices; 6 + 2 * 2 facets;
+    // Euler: 14 + 10 - 2 = 22 edges.
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const Edge_set edges{
+        cube_edge(*cube, GEO::vec3f{1.0f, 1.0f, 1.0f}, GEO::vec3f{ 1.0f, 1.0f, -1.0f}),
+        cube_edge(*cube, GEO::vec3f{1.0f, 1.0f, 1.0f}, GEO::vec3f{-1.0f, 1.0f,  1.0f})
+    };
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*cube, edges, Bevel_edges_options{.amount = 0.25f, .segments = 2}, result);
+    expect_counts(*bevel, Counts{.vertices = 14, .edges = 22, .facets = 10});
+    EXPECT_EQ(result.edge_facets.size(), 4u);
+    EXPECT_TRUE(result.vertex_facets.empty());
+}
+
+TEST(BevelEdges, GridInteriorEdgeSegments)
+{
+    // A flat interior edge: each four-valent end's triangle gains the
+    // profile's samples (a pentagon), which stay in the plane. 29 + 2 * 2
+    // vertices; 19 + 2 facets; Euler (a disk): 33 + 21 - 1 = 53 edges.
+    const std::unique_ptr<Geometry> grid = make_grid();
+    Bevel_edges_result result;
+    const std::unique_ptr<Geometry> bevel = run(*grid, {{grid_vertex(1, 1), grid_vertex(2, 1)}}, Bevel_edges_options{.amount = 0.25f, .segments = 3}, result);
+    expect_counts(*bevel, Counts{.vertices = 33, .edges = 53, .facets = 21});
+    EXPECT_EQ(result.edge_facets.size(),   3u);
+    ASSERT_EQ(result.vertex_facets.size(), 2u);
+    for (const GEO::index_t facet : result.vertex_facets) {
+        EXPECT_EQ(bevel->get_mesh().facets.nb_corners(facet), 5u);
+    }
+    for (const GEO::index_t vertex : result.boundary_vertices) {
+        EXPECT_NEAR(position(*bevel, vertex).z, 0.0f, epsilon);
+    }
+}
+
+TEST(BevelEdges, CreasePropagation)
+{
+    const std::unique_ptr<Geometry> cube = make_cube();
+    const std::pair<GEO::index_t, GEO::index_t> beveled = cube_x_y_edge(*cube);
+    // A crease away from the bevel, one on an edge at the beveled edge's end
+    // (shortened by the bevel) and one on the beveled edge itself (dropped).
+    const std::pair<GEO::index_t, GEO::index_t> away     = cube_edge(*cube, GEO::vec3f{-1.0f, -1.0f, 1.0f}, GEO::vec3f{-1.0f, -1.0f, -1.0f});
+    const std::pair<GEO::index_t, GEO::index_t> adjacent = cube_edge(*cube, GEO::vec3f{ 1.0f,  1.0f, 1.0f}, GEO::vec3f{ 1.0f, -1.0f,  1.0f});
+    cube->set_edge_sharpness(away.first,     away.second,     2.0f);
+    cube->set_edge_sharpness(adjacent.first, adjacent.second, 3.0f);
+    cube->set_edge_sharpness(beveled.first,  beveled.second,  4.0f);
+    for (const int segments : {1, 2}) {
+        Bevel_edges_result result;
+        const std::unique_ptr<Geometry> bevel = run(*cube, {beveled}, Bevel_edges_options{.amount = 0.25f, .segments = segments}, result);
+        EXPECT_EQ(bevel->validate(), std::string{});
+        const GEO::index_t away_a     = find_vertex(*bevel, GEO::vec3f{-1.0f, -1.0f,  1.0f});
+        const GEO::index_t away_b     = find_vertex(*bevel, GEO::vec3f{-1.0f, -1.0f, -1.0f});
+        const GEO::index_t adjacent_a = find_vertex(*bevel, GEO::vec3f{ 1.0f,  0.75f, 1.0f});
+        const GEO::index_t adjacent_b = find_vertex(*bevel, GEO::vec3f{ 1.0f, -1.0f,  1.0f});
+        ASSERT_NE(away_a,     GEO::NO_INDEX);
+        ASSERT_NE(away_b,     GEO::NO_INDEX);
+        ASSERT_NE(adjacent_a, GEO::NO_INDEX);
+        ASSERT_NE(adjacent_b, GEO::NO_INDEX);
+        EXPECT_EQ(bevel->get_edge_sharpness(away_a,     away_b),     2.0f) << "segments " << segments;
+        EXPECT_EQ(bevel->get_edge_sharpness(adjacent_a, adjacent_b), 3.0f) << "segments " << segments;
+        // No other edge is sharp: the beveled edge's crease is gone and the
+        // strip's edges carry none.
+        const GEO::Mesh&                       mesh       = bevel->get_mesh();
+        const erhe::geometry::Mesh_attributes& attributes = bevel->get_attributes();
+        std::size_t sharp = 0;
+        for (const GEO::index_t edge : mesh.edges) {
+            if (attributes.edge_sharpness.has(edge) && (attributes.edge_sharpness.get(edge) > 0.0f)) {
+                ++sharp;
+            }
+        }
+        EXPECT_EQ(sharp, 2u) << "segments " << segments;
+    }
+}

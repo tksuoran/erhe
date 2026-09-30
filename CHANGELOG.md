@@ -232,6 +232,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::geometry`: `bevel_edges()` (`erhe_geometry/operation/bevel_edges.hpp`)
+  gains segments and profile (`doc/plans/mesh_modeling.md` section 4.9, M13b):
+  `Bevel_edges_options::segments` (default 1, the unchanged one segment
+  bevel) and `Bevel_edges_options::profile` (default 0.5; a superellipse with
+  exponent `1 / (1 - profile)`, 0 chamfer, 0.5 quarter circle, 1 square
+  corner); each beveled edge becomes a strip of `segments` quads, a vertex
+  with three or more beveled edges on a closed fan is filled by the cutoff
+  patch, and an unbeveled edge shortened by the bevel keeps its sharpness.
+  `Bevel_edges_result::boundary_vertices` / `boundary_directions` include the
+  profile samples (directions exact for any amount), `edge_facets` lists every
+  strip quad, `vertex_facets` includes the patch facets, and
+  `Bevel_edges_result::beveled_edges` counts the beveled edges.
 - `erhe::primitive`: a `GEO::Mesh` / `Geometry` with no facets builds to a
   valid empty primitive instead of failing or aborting: `build_buffer_mesh()`
   and `Primitive::make_renderable_mesh()` succeed with an empty `Buffer_mesh`

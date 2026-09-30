@@ -627,6 +627,11 @@ auto c_str(const Bevel_action action) -> const char*
         case Bevel_action::start:             return "start";
         case Bevel_action::cycle_offset_type: return "cycle_offset_type";
         case Bevel_action::toggle_loop_slide: return "toggle_loop_slide";
+        case Bevel_action::segments_wheel:    return "segments_wheel";
+        case Bevel_action::more_segments:     return "more_segments";
+        case Bevel_action::fewer_segments:    return "fewer_segments";
+        case Bevel_action::more_profile:      return "more_profile";
+        case Bevel_action::less_profile:      return "less_profile";
         default:                              return "?";
     }
 }
@@ -652,6 +657,20 @@ auto Component_bevel_command::try_call() -> bool
         return m_context.mesh_component_selection_tool->begin_bevel();
     }
     return m_context.mesh_component_selection_tool->run_bevel_action(m_action);
+}
+
+Component_bevel_wheel_command::Component_bevel_wheel_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Mesh_component_selection.bevel_wheel"}
+    , m_context{context}
+{
+}
+
+auto Component_bevel_wheel_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->adjust_bevel_wheel(input.variant.vector2.relative_value.y, input.modifier_mask);
 }
 
 auto c_str(const Knife_action action) -> const char*
@@ -746,6 +765,12 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_bevel_command                       {commands, context, "Mesh_component_selection.bevel",                   Bevel_action::start}
     , m_bevel_cycle_offset_type_command     {commands, context, "Mesh_component_selection.bevel_cycle_offset_type", Bevel_action::cycle_offset_type}
     , m_bevel_toggle_loop_slide_command     {commands, context, "Mesh_component_selection.bevel_toggle_loop_slide", Bevel_action::toggle_loop_slide}
+    , m_bevel_segments_wheel_command        {commands, context, "Mesh_component_selection.bevel_segments_wheel",    Bevel_action::segments_wheel}
+    , m_bevel_more_segments_command         {commands, context, "Mesh_component_selection.bevel_more_segments",     Bevel_action::more_segments}
+    , m_bevel_fewer_segments_command        {commands, context, "Mesh_component_selection.bevel_fewer_segments",    Bevel_action::fewer_segments}
+    , m_bevel_more_profile_command          {commands, context, "Mesh_component_selection.bevel_more_profile",      Bevel_action::more_profile}
+    , m_bevel_less_profile_command          {commands, context, "Mesh_component_selection.bevel_less_profile",      Bevel_action::less_profile}
+    , m_bevel_wheel_command                 {commands, context}
     , m_knife_command                       {commands, context, "Mesh_component_selection.knife",              Knife_action::start}
     , m_knife_confirm_command               {commands, context, "Mesh_component_selection.knife_confirm",      Knife_action::confirm}
     , m_knife_undo_point_command            {commands, context, "Mesh_component_selection.knife_undo_point",   Knife_action::undo_point}
@@ -811,24 +836,33 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
     // Bevel (doc/editor/mesh_modeling.md): Ctrl+B starts it in edge or vertex
-    // mode; while it runs W cycles the offset type and L toggles loop slide.
+    // mode; while it runs W cycles the offset type, L toggles loop slide, S
+    // hands the wheel to the segment count, PageUp / PageDown change the
+    // segment count and ] / [ the profile; Shift+wheel changes the profile.
     // The exact masks dispatch them before the mask-less bindings of the same
-    // keys (fly camera W), which they fall through to while the mode does not
-    // run; L is declared before select linked (L, the same exact mask) so the
-    // toggle sees the key first. S stays unbound until the segments of the
-    // second bevel version (doc/plans/mesh_modeling.md section 4.9, M13b).
+    // keys (fly camera W, S, PageUp, PageDown), which they fall through to
+    // while the mode does not run; L is declared before select linked (L, the
+    // same exact mask) so the toggle sees the key first.
     {
         using erhe::commands::Button_trigger;
         const std::pair<Component_bevel_command*, std::pair<erhe::window::Keycode, uint32_t>> bevel_keys[] = {
-            {&m_bevel_command,                   {erhe::window::Key_b, erhe::window::Key_modifier_bit_ctrl}},
-            {&m_bevel_cycle_offset_type_command, {erhe::window::Key_w, 0u}},
-            {&m_bevel_toggle_loop_slide_command, {erhe::window::Key_l, 0u}}
+            {&m_bevel_command,                   {erhe::window::Key_b,             erhe::window::Key_modifier_bit_ctrl}},
+            {&m_bevel_cycle_offset_type_command, {erhe::window::Key_w,             0u}},
+            {&m_bevel_toggle_loop_slide_command, {erhe::window::Key_l,             0u}},
+            {&m_bevel_segments_wheel_command,    {erhe::window::Key_s,             0u}},
+            {&m_bevel_more_segments_command,     {erhe::window::Key_page_up,       0u}},
+            {&m_bevel_fewer_segments_command,    {erhe::window::Key_page_down,     0u}},
+            {&m_bevel_more_profile_command,      {erhe::window::Key_right_bracket, 0u}},
+            {&m_bevel_less_profile_command,      {erhe::window::Key_left_bracket,  0u}}
         };
         for (const auto& [command, key] : bevel_keys) {
             command->set_host(this);
             commands.register_command(command);
             commands.bind_command_to_key(command, key.first, Button_trigger::Button_pressed, key.second);
         }
+        m_bevel_wheel_command.set_host(this);
+        commands.register_command           (&m_bevel_wheel_command);
+        commands.bind_command_to_mouse_wheel(&m_bevel_wheel_command);
     }
 
     // Blender selection keys. Each consumes the key only in a component mode.
@@ -3389,7 +3423,13 @@ auto Mesh_component_selection_tool::inset(
 #pragma region Bevel
 namespace {
 
-// The bevel of doc/plans/mesh_modeling.md section 4.9 (M13a) into a new
+// The bevel mode's segment count range and profile step (the keys and the
+// wheel).
+constexpr int   c_bevel_min_segments = 1;
+constexpr int   c_bevel_max_segments = 32;
+constexpr float c_bevel_profile_step = 0.05f;
+
+// The bevel of doc/plans/mesh_modeling.md section 4.9 (M13a, M13b) into a new
 // Geometry, processed like an inset result; out_selection receives the
 // remapped selection (the edge facets with their edges and vertices). Null
 // (error set) when the result fails validation.
@@ -3523,7 +3563,7 @@ auto Mesh_component_selection_tool::perform_bevel(
     if (!after_geometry) {
         return false;
     }
-    out_result.beveled_edges     = bevel_result.edge_facets.size();
+    out_result.beveled_edges     = bevel_result.beveled_edges;
     out_result.boundary_vertices = bevel_result.boundary_vertices.size();
     out_result.edge_facets       = bevel_result.edge_facets.size();
     out_result.vertex_facets     = bevel_result.vertex_facets.size();
@@ -3575,8 +3615,11 @@ auto Mesh_component_selection_tool::perform_bevel(
     for (const GEO::vec3f& direction : bevel_result.boundary_directions) {
         out_step.inset_directions.push_back(bevel_vec3(direction));
     }
-    // The commit re-runs the bevel from the before geometry with the final
-    // amount, so the committed result equals the numeric form's.
+    // The directions are exact for any segments and profile (every new
+    // vertex is linear in the amount), so the drag moves the vertices along
+    // them. The commit re-runs the bevel from the before geometry with the
+    // final amount, so the committed result (corner attributes included)
+    // equals the numeric form's.
     const std::string mesh_name = mesh->get_name();
     out_step.rebuild = [before_geometry, edges, options, mesh_name](const Scalar_input& input) -> std::shared_ptr<erhe::geometry::Geometry> {
         erhe::geometry::operation::Bevel_edges_options final_options = options;
@@ -3591,8 +3634,8 @@ auto Mesh_component_selection_tool::perform_bevel(
         return geometry;
     };
     log_selection->info(
-        "Bevel: '{}' {} edges (amount {}, {}, loop slide {}) -> {} vertices, {} facets, {} edge facets, {} vertex facets",
-        mesh->get_name(), edges.size(), options.amount, c_str(options.offset_type), options.loop_slide ? "on" : "off",
+        "Bevel: '{}' {} edges (amount {}, {}, loop slide {}, segments {}, profile {}) -> {} vertices, {} facets, {} edge facets, {} vertex facets",
+        mesh->get_name(), edges.size(), options.amount, c_str(options.offset_type), options.loop_slide ? "on" : "off", options.segments, options.profile,
         after_geometry->get_mesh().vertices.nb(), after_geometry->get_mesh().facets.nb(), out_result.edge_facets, out_result.vertex_facets
     );
     return true;
@@ -3709,6 +3752,7 @@ auto Mesh_component_selection_tool::begin_bevel() -> bool
     // press commands of their buttons.
     m_modal_confirm_click_command.set_ready();
     m_modal_cancel_click_command.set_ready();
+    m_bevel_wheel_command.set_ready();
     log_selection->info("Bevel started on '{}': {} edges", mesh->get_name(), m_bevel.edges.size());
     return true;
 }
@@ -3730,6 +3774,21 @@ auto Mesh_component_selection_tool::run_bevel_action(const Bevel_action action) 
             options.loop_slide = !options.loop_slide;
             break;
         }
+        case Bevel_action::segments_wheel: {
+            m_bevel.segments_wheel = true;
+            log_selection->info("Bevel: the wheel changes the segment count ({})", options.segments);
+            return true;
+        }
+        case Bevel_action::more_segments:
+        case Bevel_action::fewer_segments: {
+            set_bevel_shape(options.segments + ((action == Bevel_action::more_segments) ? 1 : -1), options.profile);
+            return true;
+        }
+        case Bevel_action::more_profile:
+        case Bevel_action::less_profile: {
+            set_bevel_shape(options.segments, options.profile + ((action == Bevel_action::more_profile) ? c_bevel_profile_step : -c_bevel_profile_step));
+            return true;
+        }
         case Bevel_action::start:
         default: {
             return false;
@@ -3742,6 +3801,48 @@ auto Mesh_component_selection_tool::run_bevel_action(const Bevel_action action) 
         end_bevel();
     }
     return true;
+}
+
+auto Mesh_component_selection_tool::adjust_bevel_wheel(const float wheel_delta, const uint32_t modifier_mask) -> bool
+{
+    if (!m_bevel.active) {
+        return false;
+    }
+    const bool shift = (modifier_mask & erhe::window::Key_modifier_bit_shift) != 0;
+    if (!shift && !m_bevel.segments_wheel) {
+        return false; // the camera zooms
+    }
+    if (wheel_delta == 0.0f) {
+        return true;
+    }
+    const bool up = (wheel_delta > 0.0f);
+    if (shift) {
+        return run_bevel_action(up ? Bevel_action::more_profile : Bevel_action::less_profile);
+    }
+    return run_bevel_action(up ? Bevel_action::more_segments : Bevel_action::fewer_segments);
+}
+
+void Mesh_component_selection_tool::set_bevel_shape(const int segments, const float profile)
+{
+    if (!m_bevel.active) {
+        return;
+    }
+    erhe::geometry::operation::Bevel_edges_options& options = m_bevel.options;
+    const int   clamped_segments = std::clamp(segments, c_bevel_min_segments, c_bevel_max_segments);
+    // Round to the step so repeated steps land on 0, 0.05, ... 1 exactly.
+    const float clamped_profile  = std::clamp(std::round(profile / c_bevel_profile_step) * c_bevel_profile_step, 0.0f, 1.0f);
+    if ((clamped_segments == options.segments) && (clamped_profile == options.profile)) {
+        return;
+    }
+    options.segments = clamped_segments;
+    options.profile  = clamped_profile;
+    log_selection->info("Bevel: segments {}, profile {}", options.segments, options.profile);
+    // The segment count and the profile change the topology and the
+    // directions: the step is re-run from the before primitive, the amount
+    // kept.
+    if (!start_bevel_step()) {
+        end_bevel();
+    }
 }
 
 void Mesh_component_selection_tool::update_bevel_drag()
@@ -3805,6 +3906,7 @@ void Mesh_component_selection_tool::end_bevel()
 {
     // Drops the references to the mesh, its geometries and the view.
     m_bevel = Bevel_state{};
+    m_bevel_wheel_command.set_inactive();
 }
 
 auto Mesh_component_selection_tool::bevel(
@@ -5259,6 +5361,7 @@ void Mesh_component_selection_tool::gesture_update()
     Scene_view* const hover_scene_view = get_hover_scene_view();
     const bool paint_wheel_active =
         !m_loop_cut.active &&
+        !m_bevel.active &&
         (m_gesture_mode == Component_gesture_mode::paint) &&
         is_mesh_component_mode(m_mesh_component_selection.get_mode()) &&
         (hover_scene_view != nullptr) &&
@@ -5274,6 +5377,12 @@ void Mesh_component_selection_tool::gesture_update()
         m_loop_cut_wheel_command.set_ready();
     } else {
         m_loop_cut_wheel_command.set_inactive();
+    }
+    // The bevel wheel (segments after S, Shift: profile) likewise.
+    if (m_bevel.active) {
+        m_bevel_wheel_command.set_ready();
+    } else {
+        m_bevel_wheel_command.set_inactive();
     }
 }
 

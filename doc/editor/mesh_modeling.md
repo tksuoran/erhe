@@ -4,8 +4,8 @@ Stability: experimental
 
 The modal mesh modeling tools of the editor: gestures that change a mesh's
 topology interactively in a viewport, in a mesh component mode
-(`doc/editor/mesh_component_selection.md`): loop cut, inset, bevel (its
-first version) and knife (`doc/plans/mesh_modeling.md` holds their design
+(`doc/editor/mesh_component_selection.md`): loop cut, inset, bevel and
+knife (`doc/plans/mesh_modeling.md` holds their design
 and the Blender behaviour each tool follows). The discrete operations (delete, dissolve, merge,
 subdivide) are Operations window buttons and are described in
 `doc/editor/operations.md`; the slides in `doc/editor/transform.md` "Scalar
@@ -187,11 +187,16 @@ mode.
 
 ## Bevel
 
-Blender's bevel, first version (`doc/plans/mesh_modeling.md` section 4.9,
-M13a): edges only, one segment, offset types `offset` and `width`, loop
-slide. Segments, profile, clamp overlap, vertex bevel, miters and the other
-options of section 4.9 are the plan's second version (M13b). The rules are in
-`erhe_geometry/operation/bevel_edges.hpp` and `doc/erhe/geometry.md`.
+Blender's bevel (`doc/plans/mesh_modeling.md` section 4.9, M13a and part of
+M13b): edges only, offset types `offset` and `width`, loop slide, segments and
+profile. A beveled edge becomes a strip of `segments` quads following the
+profile (0 a straight chamfer, 0.5 a quarter circle, 1 the square corner);
+at a vertex with three or more beveled edges the corner is filled by the
+cutoff patch (a centre facet at the profiles' middle samples, triangles and
+quads toward each corner). Blender's adjacent-pattern grid patch (ADJ),
+offset adjustment, clamp overlap, vertex bevel and miters remain for M13b.
+The rules are in `erhe_geometry/operation/bevel_edges.hpp` and
+`doc/erhe/geometry.md`.
 
 - **Start.** Ctrl+B in edge mode (the selected edges) or vertex mode (the
   edges between selected vertices), with the pointer over a viewport, starts
@@ -208,15 +213,20 @@ options of section 4.9 are the plan's second version (M13b). The rules are in
 - **Slide.** A `Scalar_edit_kind::bevel` edit
   (`Transform_tool::begin_scalar_edit()`) moves each new vertex to its
   original vertex's position plus the amount times its direction
-  (`Bevel_edges_result`; every placement rule is linear in the amount, so
-  the directions are exact). The pointer drives the amount: the pointer's
+  (`Bevel_edges_result`; every placement rule, the profile samples
+  included, is linear in the amount, so the directions are exact for any
+  segments and profile and an amount change never re-runs the topology
+  step). The pointer drives the amount: the pointer's
   distance from the press position times the mesh units per pixel at the
   centroid of the new vertices, as for inset.
 - **Options.** The mode starts from the library defaults (offset type
-  `offset`, loop slide on). W cycles the offset type (offset, width) and L
-  toggles loop slide; each cancels the running edit and re-runs the
-  topology step, keeping the amount. S stays unbound until the segments of
-  M13b.
+  `offset`, loop slide on, one segment, profile 0.5). W cycles the offset
+  type (offset, width), L toggles loop slide, PageUp / PageDown change the
+  segment count (1 .. 32), ] / [ the profile by 0.05 (0 .. 1). S hands the
+  mouse wheel to the segment count for the rest of the mode (before it the
+  wheel zooms the camera); Shift+wheel changes the profile. Each change
+  cancels the running edit and re-runs the topology step, keeping the
+  amount.
 - **Confirm / cancel.** Enter or a left click commits one
   `Fork_geometry_operation` "Bevel": the step's rebuild re-runs the bevel
   from the before geometry with the final amount, so the result equals the
@@ -229,13 +239,19 @@ options of section 4.9 are the plan's second version (M13b). The rules are in
 | `Mesh_component_selection.bevel` | Ctrl+B | Start the bevel mode |
 | `Mesh_component_selection.bevel_cycle_offset_type` | W | Cycle the offset type |
 | `Mesh_component_selection.bevel_toggle_loop_slide` | L | Toggle loop slide |
+| `Mesh_component_selection.bevel_segments_wheel` | S | The wheel changes the segment count |
+| `Mesh_component_selection.bevel_more_segments` / `bevel_fewer_segments` | PageUp / PageDown | One segment more / fewer |
+| `Mesh_component_selection.bevel_more_profile` / `bevel_less_profile` | ] / [ | Profile + / - 0.05 |
+| `Mesh_component_selection.bevel_wheel` | wheel (after S), Shift+wheel | Segments, profile |
 | `Mesh_component_selection.modal_confirm` / `modal_confirm_click` | Enter, left press | Commit |
 | `Mesh_component_selection.modal_cancel` / `modal_cancel_click` | Escape, right press | Cancel |
 
-W and L carry the exact modifier mask 0 and consume their key only while the
-mode runs, falling through otherwise (W to the fly camera, L to select
-linked; the bevel's L is declared first, so it sees the key before select
-linked while the mode runs).
+W, L, S, PageUp, PageDown, ] and [ carry the exact modifier mask 0 and
+consume their key only while the mode runs, falling through otherwise (W and
+S to the fly camera, PageUp / PageDown to the loop cut and the fly camera, L
+to select linked; the bevel's L is declared first, so it sees the key before
+select linked while the mode runs). The wheel command is Ready only while the
+mode runs and declines a plain wheel before S, so the camera still zooms.
 
 ### Numeric form
 
@@ -244,9 +260,10 @@ live edge (vertex) selection with the options' amount and queues one
 `Fork_geometry_operation` "Bevel" (D6); a selection without a bevelable edge
 changes nothing (`Bevel_result::changed` false, nothing queued). The
 Operations window's "Bevel" button (Components section) runs it with the
-window's amount, offset type and loop slide. MCP `bevel_mesh_edges`
-(`amount` default 0, `offset_type` `offset` | `width` default `offset`,
-`loop_slide` default true; schema in `config/editor/mcp_tools.json`) calls
+window's amount, offset type, loop slide, segments and profile. MCP
+`bevel_mesh_edges` (`amount` default 0, `offset_type` `offset` | `width`
+default `offset`, `loop_slide` default true, `segments` 1 .. 1000 default 1,
+`profile` 0 .. 1 default 0.5; schema in `config/editor/mcp_tools.json`) calls
 it and returns the selection plus `changed`, `beveled_edges`,
 `boundary_vertices`, `edge_facets`, `vertex_facets` and the mesh's vertex,
 edge and facet counts. It needs edge or vertex mode.
@@ -394,9 +411,11 @@ position, two adjacent facets, every facet, individual on two facets, each
 with the selection and one undo step) and through I in a viewport (move +
 Enter, move + Escape, the I and E option keys); bevel through
 `bevel_mesh_edges` on the box (one edge with the edge quad selected at the
-offset, every edge, width on one edge, each with one undo step) and through
-Ctrl+B in a viewport (move + Enter: one "Bevel" entry; W, L, Escape:
-unchanged, no entry); the knife through
+offset, every edge, width on one edge, one edge with three segments, every
+edge with two segments, each with one undo step) and through Ctrl+B in a
+viewport (move + Enter: one "Bevel" entry; W, L, Escape: unchanged, no entry;
+S, two wheel steps, Enter: the three segment strip and one "Bevel" entry); the
+knife through
 `knife_cut_mesh` on the box (two edge midpoints across the top face, a
 vertex to vertex diagonal, three points over two faces with and without cut
 through, each with the selection and one undo step) and through K in a
