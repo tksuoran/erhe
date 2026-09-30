@@ -124,19 +124,31 @@ weights.
 
 ## Which operations carry creases
 
-- Topology-preserving operations (transform, reverse, normalize, repair)
-  propagate sharpness through
-  `Geometry_operation::propagate_edge_sharpness_identity()`, which maps source
-  edges to destination edges via `m_vertex_src_to_dst` after post-processing.
+- Every `Geometry_operation` carries sharpness by identity:
+  `post_processing()` ends with
+  `Geometry_operation::propagate_edge_sharpness_identity()`, which runs after
+  the destination edges are built and, for each source edge carrying a value,
+  sets it on the destination edge between the two destination vertices whose
+  single vertex source is that edge's source vertex (normalized weight 1, found
+  through `m_vertex_src_to_dst`). An edge that survives with both of its
+  vertices keeps its crease (triangulate, kis); an edge whose vertices are
+  blended, dropped or replaced loses it (dual, the smoothed vertices of a
+  subdivision), and so do the operations that record no vertex sources
+  (boolean, remesh).
+- Catmull-Clark writes its Chaikin child sharpness after `post_processing()`
+  returns, so its values replace the identity result on every edge both rules
+  reach.
+- Operations that copy the mesh instead of calling `post_processing()`
+  (reverse, normalize) keep the edge attribute with the copy.
   `Geometry::merge` and `copy_with_transform` raw-copy edge attributes.
   `transform_mesh`'s non-identity path copies without attributes and transforms
   an explicit channel list, so `edge_sharpness` has to appear in that list and
   in `copy_attributes()` - it was missing once, and `bake_transform` (and the
   graph transform node) silently dropped creases as a result.
-- Operations that destroy edge identity - boolean, remesh, decimate, conway,
-  triangulate - drop sharpness.
-- Sqrt3 subdivision ignores the attribute: it is a triangle scheme, and
-  sharpness values are simply absent on its result.
+- `operation::Edit_mesh_operation` writes each scratch edge's sharpness to its
+  destination edge itself.
+- Sqrt3 subdivision has no sharpness rule of its own (it is a triangle
+  scheme); only the identity rule applies to its result.
 - Crossing creases are not representable: the paper forbids two creases sharing
   an edge and treats 3 or more sharp edges at a vertex as a hard corner, and
   erhe does the same. There is no per-vertex sharpness attribute.

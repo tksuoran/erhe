@@ -6,8 +6,11 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/bake_transform.hpp"
+#include "erhe_geometry/operation/conway/dual.hpp"
+#include "erhe_geometry/operation/conway/kis.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
+#include "erhe_geometry/operation/triangulate.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 
 #include <geogram/basic/command_line.h>
@@ -37,6 +40,19 @@ auto make_processed_cube() -> std::unique_ptr<Geometry>
     erhe::geometry::shapes::make_cube(geometry->get_mesh(), 1.0f);
     geometry->process({.flags = process_flags});
     return geometry;
+}
+
+// Number of destination edges carrying a present edge_sharpness value.
+auto count_sharp_edges(const Geometry& geometry) -> std::size_t
+{
+    const erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+    std::size_t count = 0;
+    for (GEO::index_t edge : geometry.get_mesh().edges) {
+        if (attributes.edge_sharpness.has(edge)) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 } // anonymous namespace
@@ -133,6 +149,66 @@ TEST(Edge_sharpness, survives_topology_preserving_operations)
         erhe::geometry::operation::bake_transform(*source, baked, transform);
         baked.process({.flags = process_flags});
         EXPECT_EQ(baked.get_edge_sharpness(v0, v1), 3.5f);
+    }
+}
+
+// Geometry_operation::post_processing() identity rule
+// (propagate_edge_sharpness_identity()): a source edge whose two vertices map
+// to weight-1 destination vertices keeps its sharpness on the destination
+// edge between them. triangulate and kis keep every source vertex (same
+// indices, created first) and every source edge; dual has no destination
+// vertex derived from a single source vertex, so no sharpness survives.
+TEST(Edge_sharpness, survives_post_processing_identity)
+{
+    std::unique_ptr<Geometry> source = make_processed_cube();
+    const GEO::Mesh& src_mesh = source->get_mesh();
+    const GEO::index_t v0 = src_mesh.edges.vertex(0, 0);
+    const GEO::index_t v1 = src_mesh.edges.vertex(0, 1);
+    source->set_edge_sharpness(v0, v1, 1.75f);
+
+    const auto expect_same_vertex_position = [&](const Geometry& destination, const GEO::index_t vertex) {
+        ASSERT_LT(vertex, destination.get_mesh().vertices.nb());
+        const GEO::vec3f src_position = erhe::geometry::get_pointf(src_mesh.vertices, vertex);
+        const GEO::vec3f dst_position = erhe::geometry::get_pointf(destination.get_mesh().vertices, vertex);
+        EXPECT_EQ(src_position.x, dst_position.x);
+        EXPECT_EQ(src_position.y, dst_position.y);
+        EXPECT_EQ(src_position.z, dst_position.z);
+    };
+
+    {
+        Geometry triangulated{"triangulated"};
+        erhe::geometry::operation::triangulate(*source, triangulated);
+        expect_same_vertex_position(triangulated, v0);
+        expect_same_vertex_position(triangulated, v1);
+        EXPECT_EQ(triangulated.get_edge_sharpness(v0, v1), 1.75f);
+        EXPECT_EQ(count_sharp_edges(triangulated), 1u);
+    }
+    {
+        Geometry kised{"kis"};
+        erhe::geometry::operation::kis(*source, kised);
+        expect_same_vertex_position(kised, v0);
+        expect_same_vertex_position(kised, v1);
+        EXPECT_EQ(kised.get_edge_sharpness(v0, v1), 1.75f);
+        EXPECT_EQ(count_sharp_edges(kised), 1u);
+    }
+    {
+        // reverse / normalize copy the mesh (no post_processing()); chained
+        // after triangulate the value still survives.
+        Geometry triangulated{"triangulated"};
+        erhe::geometry::operation::triangulate(*source, triangulated);
+        Geometry reversed{"reversed"};
+        erhe::geometry::operation::reverse(triangulated, reversed);
+        EXPECT_EQ(reversed.get_edge_sharpness(v0, v1), 1.75f);
+        Geometry normalized{"normalized"};
+        erhe::geometry::operation::normalize(reversed, normalized);
+        EXPECT_EQ(normalized.get_edge_sharpness(v0, v1), 1.75f);
+        EXPECT_EQ(count_sharp_edges(normalized), 1u);
+    }
+    {
+        Geometry dualed{"dual"};
+        erhe::geometry::operation::dual(*source, dualed);
+        ASSERT_GT(dualed.get_mesh().edges.nb(), 0u);
+        EXPECT_EQ(count_sharp_edges(dualed), 0u);
     }
 }
 

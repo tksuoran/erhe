@@ -8,6 +8,9 @@
 #include <geogram/mesh/mesh_intersection.h>
 
 #include <algorithm>
+#include <optional>
+#include <utility>
+#include <vector>
 
 namespace erhe::geometry::operation {
 
@@ -764,6 +767,50 @@ void Geometry_operation::post_processing(const uint64_t process_flags, const uin
     {
         Scoped_phase_timer phase_timer{"process"};
         destination.process({.flags = process_flags});
+    }
+
+    // Needs the destination edge store built by process() above.
+    propagate_edge_sharpness_identity();
+}
+
+void Geometry_operation::propagate_edge_sharpness_identity()
+{
+    if (!destination.has_edge_connectivity()) {
+        return; // no destination edge store (process flags without build_edges)
+    }
+    const Mesh_attributes& src_attributes  = source.get_attributes();
+    const GEO::index_t     nb_dst_vertices = destination_mesh.vertices.nb();
+
+    // m_vertex_src_to_dst is value-initialized (gaps read as 0) and an
+    // operation may map a source vertex to a blend of sources, so accept a
+    // destination vertex only when its single vertex source is this source
+    // vertex.
+    const auto identity_image_of_src_vertex = [&](const GEO::index_t src_vertex) -> GEO::index_t {
+        if (static_cast<std::size_t>(src_vertex) >= m_vertex_src_to_dst.size()) {
+            return GEO::NO_VERTEX;
+        }
+        const GEO::index_t dst_vertex = m_vertex_src_to_dst[src_vertex];
+        if ((dst_vertex >= nb_dst_vertices) || (static_cast<std::size_t>(dst_vertex) >= m_dst_vertex_sources.size())) {
+            return GEO::NO_VERTEX;
+        }
+        const std::vector<std::pair<float, GEO::index_t>>& sources = m_dst_vertex_sources.get(dst_vertex);
+        if ((sources.size() != 1) || (sources.front().second != src_vertex) || (sources.front().first <= 0.0f)) {
+            return GEO::NO_VERTEX;
+        }
+        return dst_vertex;
+    };
+
+    for (GEO::index_t src_edge : source_mesh.edges) {
+        const std::optional<float> sharpness = src_attributes.edge_sharpness.try_get(src_edge);
+        if (!sharpness.has_value()) {
+            continue;
+        }
+        const GEO::index_t dst_vertex_a = identity_image_of_src_vertex(source_mesh.edges.vertex(src_edge, 0));
+        const GEO::index_t dst_vertex_b = identity_image_of_src_vertex(source_mesh.edges.vertex(src_edge, 1));
+        if ((dst_vertex_a == GEO::NO_VERTEX) || (dst_vertex_b == GEO::NO_VERTEX) || (dst_vertex_a == dst_vertex_b)) {
+            continue;
+        }
+        destination.set_edge_sharpness(dst_vertex_a, dst_vertex_b, sharpness.value()); // no-op without such an edge
     }
 }
 

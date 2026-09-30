@@ -14,7 +14,7 @@ Geogram), and primitive shape generators.
 - `Mesh_attributes` -- Typed wrappers (`Attribute_present<T>`) for all standard vertex/corner/facet attributes (normals, tangents, tex coords, colors, joint data, IDs).
 - `Attribute_present<T>` -- Binds a `GEO::Attribute<T>` with a presence flag per element.
 - `Attribute_descriptor` -- Describes an attribute's name, transform mode, and interpolation mode.
-- `Geometry_operation` -- Base class for operations that transform a source geometry into a destination.
+- `Geometry_operation` -- Base class for operations that transform a source geometry into a destination. `post_processing()` ends with `propagate_edge_sharpness_identity()`, which carries `edge_sharpness` to each destination edge whose two vertices derive with weight 1 from the two vertices of one source edge (`doc/erhe/subdivision_crease_edges.md`, "Which operations carry creases").
 - `Mesh_info` / `Mesh_serials` -- Statistics and change-tracking for mesh data.
 
 ## Public API

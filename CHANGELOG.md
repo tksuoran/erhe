@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `Geometry_operation::propagate_edge_sharpness_identity()`,
+  called at the end of `post_processing()`: a source edge's `edge_sharpness`
+  is set on the destination edge whose two vertices each derive with weight 1
+  from that edge's two vertices, so creases survive every operation that keeps
+  the edge (triangulate, kis), not only Catmull-Clark.
 - `erhe::graphics`: `Alpha_mode` (`premultiplied` | `straight`) and a trailing
   `alpha_mode` parameter on both `Image_loader::open()` overloads (default
   `premultiplied`, the previous behavior): `straight` makes PNG / JPEG decode

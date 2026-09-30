@@ -313,6 +313,15 @@ protected:
 
     void copy_mesh_attributes();
 
+    // Identity rule for edge_sharpness, run by post_processing() after the
+    // destination edges are built: a source edge carrying edge_sharpness sets
+    // the same value on the destination edge whose two vertices each derive
+    // from exactly one of the source edge's vertices (a single vertex source
+    // entry naming that source vertex, i.e. normalized weight 1). Operations
+    // with their own sharpness rule (Catmull-Clark's Chaikin rule) write
+    // after post_processing() returns and therefore override this.
+    void propagate_edge_sharpness_identity();
+
 protected:
     [[nodiscard]] static auto get_size_to_include(std::size_t old_size, std::size_t i) -> size_t;
 };
