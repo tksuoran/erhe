@@ -14,7 +14,12 @@
 ✓M1-DONE
 ✓crash-fixed::{root=Transform_tool-conflated-shared.component_mode(anchor-exists)-with-gizmo-ownership;m_component_source=mesh_components-while-any-component-mode-active;is_node_selection_driving();Mcp_-93/93}
 !trap::cpptrace-crash-stack-goes-to-stderr{verify-scripts-discard-it->capture-stderr-when-diagnosing}
-⚡M2::loop/ring/face-loop/boundary-select{Alt+click,Ctrl+Alt+click;mouse-bindings-take-exact-modifier-mask}
+✓M2::{select_loop+Alt/Ctrl+Alt-click+Shift+boundary-cycle+hover-preview(change-driven)+select_mesh_loop-MCP;verify-all-pass;preview-look=user-interactive-check-pending}
+✓PHASE-2-DONE
+⚡M3a::library-delete+dissolve-ops-on-Edit_mesh+unit-tests
+?M3b::editor-delete/dissolve-integration+MCP+verify
+?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
+!no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 
 [TASK::rigging-phase-2]{started-2026-09-18;via-harness}
