@@ -784,6 +784,7 @@ Operations::Operations(
     , m_separate_selection_command         {commands, "Geometry.Separate.Selection",       [this]() -> bool { return static_cast<bool>(separate_selection()); } }
     , m_fill_selected_command              {commands, "Geometry.Fill.Selected",            [this]() -> bool { return fill_selection(); } }
     , m_connect_selected_command           {commands, "Geometry.Connect.Selected",         [this]() -> bool { return connect_vertex_path(); } }
+    , m_bridge_loops_command               {commands, "Geometry.Bridge.Loops",             [this]() -> bool { return bridge_loops(); } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
     , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
@@ -856,6 +857,7 @@ Operations::Operations(
     commands.register_command(&m_separate_selection_command);
     commands.register_command(&m_fill_selected_command);
     commands.register_command(&m_connect_selected_command);
+    commands.register_command(&m_bridge_loops_command);
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
@@ -925,6 +927,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_separate_selection_command,          "Geometry.Separate Selection");
     commands.bind_command_to_menu(&m_fill_selected_command,               "Geometry.Fill");
     commands.bind_command_to_menu(&m_connect_selected_command,            "Geometry.Connect Vertex Path");
+    commands.bind_command_to_menu(&m_bridge_loops_command,                "Geometry.Bridge Edge Loops");
     commands.bind_command_to_menu(&m_dissolve_faces_command,              "Geometry.Dissolve.Faces");
     commands.bind_command_to_menu(&m_dissolve_edges_command,              "Geometry.Dissolve.Edges");
     commands.bind_command_to_menu(&m_dissolve_vertices_command,           "Geometry.Dissolve.Vertices");
@@ -1559,6 +1562,24 @@ void Operations::imgui()
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Splits faces between the selected vertices; two vertices without a shared face are joined along a cutting plane path (J)");
             }
+        }
+        if (visible("Bridge Edge Loops")) {
+            if (make_button("Bridge Edge Loops", merge_component_mode, button_size)) {
+                bridge_loops();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Bridges the selected edge loops with faces (face mode: deletes the selected faces and bridges their boundaries)");
+            }
+            ImGui::PushID("bridge_loops");
+            int connection = static_cast<int>(m_bridge_loops_options.connection);
+            if (ImGui::Combo("Connect Loops", &connection, "Open Loop\0Closed Loop\0Loop Pairs\0")) {
+                m_bridge_loops_options.connection = static_cast<erhe::geometry::operation::Bridge_connection>(connection);
+            }
+            ImGui::Checkbox   ("Merge",        &m_bridge_loops_options.merge);
+            ImGui::SliderFloat("Merge Factor", &m_bridge_loops_options.merge_factor, 0.0f, 1.0f);
+            ImGui::DragInt    ("Twist",        &m_bridge_loops_options.twist_offset, 0.1f, -1000, 1000);
+            ImGui::SliderInt  ("Bridge Cuts",  &m_bridge_loops_options.cuts, 0, 100);
+            ImGui::PopID();
         }
     }
 
@@ -2907,8 +2928,32 @@ namespace {
     }
 }
 
-// True when mode is the current component mode and a live entry has a
-// non-empty set of it; logs the reason otherwise.
+// True when a vertex, edge or face mode is active with a live selection and
+// no modal component edit runs; logs the reason otherwise. Every command that
+// acts on the component selection goes through it.
+[[nodiscard]] auto has_component_mode_selection(const App_context& context, const char* operation_name) -> bool
+{
+    const Mesh_component_selection* mesh_component_selection = context.mesh_component_selection;
+    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
+    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
+        log_operations->info("{} needs a mesh component mode (vertex, edge or face)", operation_name);
+        return false;
+    }
+    if (!mesh_component_selection->has_live_mode_selection()) {
+        log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
+        return false;
+    }
+    // A modal gesture (slide, loop cut, inset, bevel, knife) owns the mesh and
+    // its keys: the knife's Y axis lock must not split, a slide's F must not
+    // fill, Delete during a slide must not delete.
+    if ((context.mesh_component_selection_tool != nullptr) && context.mesh_component_selection_tool->is_modal_active()) {
+        log_operations->info("{} declined: a modal mesh edit is running", operation_name);
+        return false;
+    }
+    return true;
+}
+
+// has_component_mode_selection() in the given mode.
 [[nodiscard]] auto has_mode_selection(const App_context& context, const Mesh_component_mode mode, const char* operation_name) -> bool
 {
     const Mesh_component_selection* mesh_component_selection = context.mesh_component_selection;
@@ -2916,11 +2961,7 @@ namespace {
         log_operations->info("{} needs {} mode", operation_name, c_str(mode));
         return false;
     }
-    if (!mesh_component_selection->has_live_mode_selection()) {
-        log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
-        return false;
-    }
-    return true;
+    return has_component_mode_selection(context, operation_name);
 }
 
 } // anonymous namespace
@@ -2991,7 +3032,7 @@ auto Operations::dissolve_vertices(const erhe::geometry::operation::Dissolve_ver
 
 auto Operations::delete_selected_components() -> bool
 {
-    if ((m_context.mesh_component_selection == nullptr) || !m_context.mesh_component_selection->has_live_mode_selection()) {
+    if (!has_component_mode_selection(m_context, "Delete")) {
         return false;
     }
     const std::optional<erhe::geometry::Delete_context> delete_context = get_mode_delete_context();
@@ -3003,7 +3044,7 @@ auto Operations::delete_selected_components() -> bool
 
 auto Operations::dissolve_selected_components() -> bool
 {
-    if ((m_context.mesh_component_selection == nullptr) || !m_context.mesh_component_selection->has_live_mode_selection()) {
+    if (!has_component_mode_selection(m_context, "Dissolve")) {
         return false;
     }
     switch (m_context.mesh_component_selection->get_mode()) {
@@ -3056,14 +3097,7 @@ auto Operations::merge_vertices(
     const std::optional<glm::vec3>                          world_position
 ) -> bool
 {
-    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
-    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
-    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
-        log_operations->info("Merge needs a mesh component mode (vertex, edge or face)");
-        return false;
-    }
-    if (!mesh_component_selection->has_live_mode_selection()) {
-        log_operations->info("Merge: nothing selected in {} mode", c_str(mode));
+    if (!has_component_mode_selection(m_context, "Merge")) {
         return false;
     }
     async_for_selected_nodes_with_mesh(
@@ -3104,7 +3138,7 @@ auto Operations::merge_by_distance(const erhe::geometry::operation::Merge_by_dis
 auto Operations::inset_faces() -> bool
 {
     Mesh_component_selection_tool* const tool = m_context.mesh_component_selection_tool;
-    if (tool == nullptr) {
+    if ((tool == nullptr) || !has_component_mode_selection(m_context, "Inset")) {
         return false;
     }
     Inset_result result{};
@@ -3119,7 +3153,7 @@ auto Operations::inset_faces() -> bool
 auto Operations::bevel_edges() -> bool
 {
     Mesh_component_selection_tool* const tool = m_context.mesh_component_selection_tool;
-    if (tool == nullptr) {
+    if ((tool == nullptr) || !has_component_mode_selection(m_context, "Bevel")) {
         return false;
     }
     Bevel_result result{};
@@ -3138,14 +3172,7 @@ auto Operations::subdivide_edges() -> bool
 
 auto Operations::subdivide_edges(const erhe::geometry::operation::Subdivide_edges_options options) -> bool
 {
-    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
-    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
-    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
-        log_operations->info("Subdivide Edges needs a mesh component mode (vertex, edge or face)");
-        return false;
-    }
-    if (!mesh_component_selection->has_live_mode_selection()) {
-        log_operations->info("Subdivide Edges: nothing selected in {} mode", c_str(mode));
+    if (!has_component_mode_selection(m_context, "Subdivide Edges")) {
         return false;
     }
     async_for_selected_nodes_with_mesh(
@@ -3158,34 +3185,6 @@ auto Operations::subdivide_edges(const erhe::geometry::operation::Subdivide_edge
     );
     return true;
 }
-
-namespace {
-
-// True when a vertex, edge or face mode is active with a live selection;
-// logs the reason otherwise.
-[[nodiscard]] auto has_component_mode_selection(const App_context& context, const char* operation_name) -> bool
-{
-    const Mesh_component_selection* mesh_component_selection = context.mesh_component_selection;
-    const Mesh_component_mode mode = (mesh_component_selection != nullptr) ? mesh_component_selection->get_mode() : Mesh_component_mode::object;
-    if ((mode != Mesh_component_mode::vertex) && (mode != Mesh_component_mode::edge) && (mode != Mesh_component_mode::face)) {
-        log_operations->info("{} needs a mesh component mode (vertex, edge or face)", operation_name);
-        return false;
-    }
-    if (!mesh_component_selection->has_live_mode_selection()) {
-        log_operations->info("{}: nothing selected in {} mode", operation_name, c_str(mode));
-        return false;
-    }
-    // A modal gesture (slide, loop cut, inset, bevel, knife) owns the mesh and
-    // its keys: the knife's Y axis lock must not split, a slide's F must not
-    // fill (split, separate, fill, connect).
-    if ((context.mesh_component_selection_tool != nullptr) && context.mesh_component_selection_tool->is_modal_active()) {
-        log_operations->info("{} declined: a modal mesh edit is running", operation_name);
-        return false;
-    }
-    return true;
-}
-
-} // anonymous namespace
 
 auto Operations::split_components() -> bool
 {
@@ -3241,6 +3240,27 @@ auto Operations::connect_vertex_path() -> bool
     return true;
 }
 
+auto Operations::bridge_loops() -> bool
+{
+    return bridge_loops(m_bridge_loops_options);
+}
+
+auto Operations::bridge_loops(const erhe::geometry::operation::Bridge_loops_options options) -> bool
+{
+    if (!has_component_mode_selection(m_context, "Bridge Edge Loops")) {
+        return false;
+    }
+    async_for_selected_nodes_with_mesh(
+        [this, options](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Bridge_loops_operation>(std::move(params), options)
+            );
+        },
+        true
+    );
+    return true;
+}
+
 auto Operations::rip_vertices() -> bool
 {
     std::optional<glm::vec3> world_position{};
@@ -3261,8 +3281,7 @@ auto Operations::rip_vertices(
         log_operations->info("Rip needs vertex or edge mode");
         return false;
     }
-    if (!mesh_component_selection->has_live_mode_selection()) {
-        log_operations->info("Rip: nothing selected in {} mode", c_str(mode));
+    if (!has_component_mode_selection(m_context, "Rip")) {
         return false;
     }
     async_for_selected_nodes_with_mesh(

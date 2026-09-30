@@ -33,6 +33,7 @@
 #include "erhe_geometry/operation/merge_vertices.hpp"
 #include "erhe_geometry/operation/project_texcoords.hpp"
 #include "erhe_geometry/operation/split_components.hpp"
+#include "erhe_geometry/operation/bridge_loops.hpp"
 #include "erhe_geometry/operation/subdivide_edges.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
@@ -2636,6 +2637,56 @@ auto Mcp_server::action_connect_mesh_vertices(const json& args) -> std::string
         return make_error_content("Connect vertex path needs a live selection in vertex or edge mode and no running component edit");
     }
     return make_json_content({{"queued", true}}).dump();
+}
+
+auto Mcp_server::action_bridge_mesh_loops(const json& args) -> std::string
+{
+    // Bridge edge loops (doc/plans/mesh_modeling.md section 4.10, catalog
+    // M14) on the live component selection. Explicit-state rule
+    // (doc/agents/mcp_api_guidelines.md): the option defaults are the library
+    // defaults, never the Operations window's widgets.
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Bridge_loops_options options{};
+    const std::string connection = args.value("connection", std::string{"open_loop"});
+    if (connection == "open_loop") {
+        options.connection = erhe::geometry::operation::Bridge_connection::open_loop;
+    } else if (connection == "closed_loop") {
+        options.connection = erhe::geometry::operation::Bridge_connection::closed_loop;
+    } else if (connection == "loop_pairs") {
+        options.connection = erhe::geometry::operation::Bridge_connection::loop_pairs;
+    } else {
+        return make_error_content("connection must be open_loop, closed_loop or loop_pairs");
+    }
+    options.merge        = args.value("merge",        options.merge);
+    options.merge_factor = args.value("merge_factor", options.merge_factor);
+    options.twist_offset = args.value("twist_offset", options.twist_offset);
+    options.cuts         = args.value("cuts",         options.cuts);
+    if ((options.merge_factor < 0.0f) || (options.merge_factor > 1.0f)) {
+        return make_error_content("merge_factor must be in [0, 1]");
+    }
+    if ((options.cuts < 0) || (options.cuts > 500)) {
+        return make_error_content("cuts must be in [0, 500]");
+    }
+    bool queued = false;
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        queued = m_context.operations->bridge_loops(options);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    if (!queued) {
+        return make_error_content("Bridge edge loops needs a live selection in a mesh component mode (vertex, edge or face) and no running component edit");
+    }
+    return make_json_content({
+        {"queued",       true},
+        {"connection",   connection},
+        {"merge",        options.merge},
+        {"merge_factor", options.merge_factor},
+        {"twist_offset", options.twist_offset},
+        {"cuts",         options.cuts}
+    }).dump();
 }
 
 auto Mcp_server::action_separate_mesh_selection(const json& args) -> std::string

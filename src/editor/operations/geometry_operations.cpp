@@ -20,6 +20,7 @@
 #include "erhe_geometry/operation/conway/meta.hpp"
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/bridge_loops.hpp"
 #include "erhe_geometry/operation/connect_vertices.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/fill.hpp"
@@ -656,6 +657,30 @@ Connect_vertices_operation::Connect_vertices_operation(Mesh_operation_parameters
         }
     );
     set_description(fmt::format("Connect Vertex Path {}", describe_entries()));
+}
+
+Bridge_loops_operation::Bridge_loops_operation(
+    Mesh_operation_parameters&&                           context,
+    const erhe::geometry::operation::Bridge_loops_options options
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Bridge Edge Loops");
+    make_entries(
+        [options](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            const erhe::geometry::operation::Geometry_component_selection& selection = selection_or_empty(remap_source);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::bridge_loops(before_geometry, after_geometry, selection, options, nullptr, &remap);
+        }
+    );
+    set_description(fmt::format("Bridge Edge Loops {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

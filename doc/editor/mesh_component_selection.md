@@ -168,6 +168,11 @@ vertex and edge mode) and while a modal component edit runs: F is also the
 fly camera's frame-selection key (bound without a mask, so it frames in
 object mode) and a slide's flip key (the slide's F is declared after the
 fill command and receives the key because fill declines during the slide).
+Every one of these commands, and every Operations window button acting on
+the component selection (delete, dissolve, merge, subdivide, split, rip,
+separate, inset, bevel, fill, connect, bridge), declines while a modal
+component edit (slide, loop cut, inset, bevel, knife) runs, so Delete during
+a G slide deletes nothing.
 
 ### Slide keys
 
@@ -337,6 +342,12 @@ command ends with a flush (section 3).
   fill leaves the mesh unchanged (logged).
 - `connect_mesh_vertices` - no options; needs a live selection in vertex or
   edge mode (`Connect_vertices_operation`).
+- `bridge_mesh_loops` - `connection` (`open_loop` default, `closed_loop`,
+  `loop_pairs`), `merge` (false), `merge_factor` (0.5, in [0, 1]),
+  `twist_offset` (0), `cuts` (0, in [0, 500]); needs a live selection in
+  vertex, edge or face mode (`Bridge_loops_operation`,
+  `doc/editor/operations.md`); an invalid loop selection leaves the mesh
+  unchanged (logged).
 
 The geometry tools queue an undoable operation and return
 `{queued: true, ...}` with the options they used; node targets (`node_ids`

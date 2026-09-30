@@ -18,6 +18,7 @@
 #include "operations/mesh_operation.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/bevel_edges.hpp"
+#include "erhe_geometry/operation/bridge_loops.hpp"
 #include "erhe_geometry/operation/inset_faces.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/merge_vertices.hpp"
@@ -281,6 +282,12 @@ public:
     // knife) runs, so their keys fall through.
     auto fill_selection() -> bool;
     auto connect_vertex_path() -> bool;
+    // Bridge edge loops (catalog M14, Bridge_loops_operation) on a vertex,
+    // edge or face mode selection, with the window's options (the MCP tool
+    // passes its own). Returns false, queueing nothing, without a live
+    // selection or while a modal component edit runs.
+    auto bridge_loops() -> bool;
+    auto bridge_loops(erhe::geometry::operation::Bridge_loops_options options) -> bool;
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set
@@ -475,6 +482,7 @@ private:
     erhe::commands::Lambda_command m_separate_selection_command;
     erhe::commands::Lambda_command m_fill_selected_command;
     erhe::commands::Lambda_command m_connect_selected_command;
+    erhe::commands::Lambda_command m_bridge_loops_command;
 
     // Dissolve options edited in the Operations window "Components" section and
     // read by the dissolve commands (the MCP tools take their own arguments).
@@ -499,6 +507,10 @@ private:
     // Bevel options edited in the "Components" section (the MCP tool takes its
     // own arguments).
     erhe::geometry::operation::Bevel_edges_options       m_bevel_options{.amount = 0.1f};
+
+    // Bridge edge loops options edited in the "Components" section and read by
+    // Geometry.Bridge.Loops (the MCP tool takes its own arguments).
+    erhe::geometry::operation::Bridge_loops_options      m_bridge_loops_options{};
 
     // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
     // post-processing regenerates facet texture coordinates

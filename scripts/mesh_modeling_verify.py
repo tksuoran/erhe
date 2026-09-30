@@ -57,6 +57,13 @@ face selected), a nothing-to-fill pair, connect_mesh_vertices of two vertices
 of one face and of two antipodal vertices (the cutting plane path), each with
 undo, and the F and J keys in a viewport (one undo entry each; F in object
 mode queues nothing).
+Bridge edge loops (section 4.10, catalog M14) is checked through
+bridge_mesh_loops: the plain box's top and bottom faces bridge nothing (each
+bridge quad would repeat a side face), and on a box with one interior plane
+along y the top and bottom faces are deleted and their rims bridged through
+the inside (plain, with one cut, and merged at factor 0.25), each with undo.
+The Delete key during a G slide deletes nothing (the component commands
+decline while a modal component edit runs).
 Operations whose result has no facet (merge by distance of the whole
 box, delete of every face) are checked to leave an empty mesh the editor keeps
 rendering, followed by undo. The editor's stderr (where a crash stack goes) is written to
@@ -979,6 +986,20 @@ def run_slide(e):
     restored = vertex_positions(e, CC_BOX, loop_vertices)
     check_true("Escape: positions back at the start", all(near(restored[v], p[v], 0.0) for v in loop_vertices))
     expect("Escape: no undo entry", undo_count(e), before_undo)
+
+    # Delete during the slide: the component commands decline while a modal
+    # component edit runs, so nothing is deleted and no entry is queued.
+    start_g_slide("Delete during a G slide")
+    e.key("delete", [])
+    e.advance(2)
+    wait_idle(e)
+    expect("Delete during a G slide deletes nothing", geometry_counts(e, CC_BOX), base)
+    expect("Delete during a G slide queues no operation", undo_count(e), before_undo)
+    e.key("escape", [])
+    wait_idle(e)
+    restored = vertex_positions(e, CC_BOX, loop_vertices)
+    check_true("Delete during a G slide: Escape still cancels the slide", all(near(restored[v], p[v], 0.0) for v in loop_vertices))
+    expect("Delete during a G slide: no undo entry after Escape", undo_count(e), before_undo)
 
     start_g_slide("Enter")
     live = vertex_positions(e, CC_BOX, loop_vertices)
@@ -2000,6 +2021,84 @@ def run_fill_connect(e):
     e.advance(2)
 
 
+BRIDGE_BOX = "mm_bridge_box"
+
+
+def top_and_bottom_faces(e, node_name, facet_count):
+    """The two facets with the highest and lowest mean vertex y."""
+    p = vertex_positions(e, node_name, range(geometry_counts(e, node_name)[0]))
+    mean_y = {}
+    e.call("set_mesh_component_mode", {"mode": "face"})
+    for facet in range(facet_count):
+        select_on(e, node_name, facets=[facet])
+        vertices = entry_of(e.call("get_mesh_component_selection"), node_name)["vertices"]
+        mean_y[facet] = sum(p[v][1] for v in vertices) / len(vertices)
+    ordered = sorted(mean_y, key=lambda facet: mean_y[facet])
+    return [ordered[0], ordered[-1]]
+
+
+def run_bridge(e):
+    """Bridge edge loops, doc/plans/mesh_modeling.md section 4.10 (catalog
+    M14)."""
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+    base = (8, 12, 6)
+    expect("bridge: plain box at its base counts", geometry_counts(e, BOX), base)
+
+    # The plain box: each bridge quad between the top and bottom rims would
+    # repeat a side face, so nothing is bridged and the box stays as it was.
+    faces = top_and_bottom_faces(e, BOX, base[2])
+    select_on(e, BOX, facets=faces)
+    before_undo = undo_count(e)
+    e.call("bridge_mesh_loops")
+    wait_idle(e)
+    expect("bridge the plain box's top and bottom faces: nothing bridged", geometry_counts(e, BOX), base)
+    if undo_count(e) > before_undo:
+        undo_and_check(e, "bridge nothing", BOX, base)
+
+    # A box with one interior plane along y: 12 vertices, 20 edges, 10 faces.
+    e.call("create_shape", {"scene_name": e.scene, "shape": "box", "name": BRIDGE_BOX, "steps": [0, 1, 0], "motion_mode": "none"})
+    e.advance(4)
+    e.call("set_node_transform", {"scene_name": e.scene, "node_name": BRIDGE_BOX, "translation": [0.0, 400.0, 0.0]})
+    e.advance(2)
+    tall = (12, 20, 10)
+    expect("bridge: box with one interior y plane", geometry_counts(e, BRIDGE_BOX), tall)
+    faces = top_and_bottom_faces(e, BRIDGE_BOX, tall[2])
+
+    def bridge(label, expected, arguments, selected_facets):
+        e.call("set_mesh_component_mode", {"mode": "face"})
+        select_on(e, BRIDGE_BOX, facets=faces)
+        before = undo_count(e)
+        result = e.call("bridge_mesh_loops", arguments)
+        expect(f"{label}: queued", result.get("queued"), True)
+        wait_idle(e)
+        expect(f"{label} -> {expected}", geometry_counts(e, BRIDGE_BOX), expected)
+        expect(f"{label}: one undo entry", undo_count(e), before + 1)
+        if selected_facets is not None:
+            expect(f"{label}: the bridge faces are selected",
+                   len(entry_of(e.call("get_mesh_component_selection"), BRIDGE_BOX)["facets"]), selected_facets)
+        undo_and_check(e, label, BRIDGE_BOX, tall)
+
+    # The caps go, their rims are bridged through the inside: 4 rungs, 4 quads.
+    bridge("bridge the top and bottom faces", (12, 24, 12), {}, 4)
+    # One cut: 4 rung midpoints, each bridge quad split in two.
+    bridge("bridge with one cut", (16, 32, 16), {"cuts": 1}, 8)
+    # Merge at 0.25: the rims weld (12 - 4 vertices); the upper and lower side
+    # quads of each column then share one vertex set and one of each pair goes.
+    bridge("bridge with merge at 0.25", (8, 12, 4), {"merge": True, "merge_factor": 0.25}, None)
+
+    # Bad arguments are refused.
+    select_on(e, BRIDGE_BOX, facets=faces)
+    try:
+        e.call("bridge_mesh_loops", {"connection": "spiral"})
+        check_true("bridge_mesh_loops refuses an unknown connection", False, "no error")
+    except RuntimeError:
+        check_true("bridge_mesh_loops refuses an unknown connection", True)
+
+    e.call("clear_mesh_component_selection")
+    e.call("set_mesh_component_mode", {"mode": "object"})
+
+
 def run(e):
     # First, while nothing is object-selected: it moves the box.
     run_region_select(e)
@@ -2101,6 +2200,8 @@ def run(e):
     run_knife(e)
 
     run_fill_connect(e)
+
+    run_bridge(e)
 
 
 def main():

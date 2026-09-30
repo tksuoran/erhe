@@ -9,6 +9,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::geometry`: `erhe_geometry/operation/bridge_loops.hpp`:
+  `bridge_loops()` with `Bridge_loops_options` (`Bridge_connection`
+  open loop / closed loop / loop pairs, merge, merge factor, twist offset,
+  cuts) and `Bridge_loops_result`: bridge edge loops of
+  `doc/plans/mesh_modeling.md` section 4.10 (facet selections deleted and
+  their region boundaries bridged, unequal loops with beautified triangles,
+  merge through the weld core, cuts through `subdivide_edges()`), composed on
+  `Edit_mesh`, selecting the bridge facets through `Component_remap`.
 - `erhe::geometry`: `erhe_geometry/operation/fill.hpp`: `fill_selection()`
   with `Fill_result`: fill (F) of `doc/plans/mesh_modeling.md` section 4.10
   (two vertices closing a boundary chain, a free vertex plus a chain, edge

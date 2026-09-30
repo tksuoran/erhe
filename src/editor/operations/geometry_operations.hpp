@@ -3,6 +3,7 @@
 #include "operations/mesh_operation.hpp"
 #include "operations/compound_operation.hpp"
 
+#include "erhe_geometry/operation/bridge_loops.hpp"
 #include "erhe_geometry/operation/dissolve.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
@@ -236,6 +237,19 @@ class Connect_vertices_operation : public Mesh_operation
 {
 public:
     explicit Connect_vertices_operation(Mesh_operation_parameters&& context);
+};
+
+// Bridge edge loops (doc/plans/mesh_modeling.md section 4.10, catalog M14;
+// erhe::geometry::operation::bridge_loops()) on the component selection
+// snapshot: face mode deletes the selected faces and bridges their region
+// boundaries; edge and vertex mode bridge the loops of the selected edges
+// (vertex mode: the edges between selected vertices). The bridge faces are
+// selected afterwards. An invalid selection (a vertex with three loop edges,
+// fewer than two loops, ...) emits the primitive unchanged (logged).
+class Bridge_loops_operation : public Mesh_operation
+{
+public:
+    Bridge_loops_operation(Mesh_operation_parameters&& context, erhe::geometry::operation::Bridge_loops_options options);
 };
 
 class Reverse_operation : public Mesh_operation

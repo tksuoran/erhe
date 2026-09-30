@@ -762,6 +762,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "separate_mesh_selection",        &Mcp_server::action_separate_mesh_selection       },
         { "fill_mesh_selection",            &Mcp_server::action_fill_mesh_selection           },
         { "connect_mesh_vertices",          &Mcp_server::action_connect_mesh_vertices         },
+        { "bridge_mesh_loops",              &Mcp_server::action_bridge_mesh_loops             },
         { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
         { "get_transform_state",            &Mcp_server::query_transform_state                },
         { "get_editor_references",          &Mcp_server::query_editor_references              },
