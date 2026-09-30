@@ -16,6 +16,8 @@ erhe_target_sources_grouped(
     erhe_geometry/plane_intersection.hpp
     erhe_geometry/self_intersection.cpp
     erhe_geometry/self_intersection.hpp
+    erhe_geometry/topology.cpp
+    erhe_geometry/topology.hpp
 
     erhe_geometry/operation/csg/difference.cpp
     erhe_geometry/operation/csg/difference.hpp

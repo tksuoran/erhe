@@ -123,6 +123,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Light_projections::apply()` into `Light_view_relative_transforms`
   (`Light_projections::light_view_relative_transforms`).
 
+- `erhe::geometry`: `erhe_geometry/topology.hpp` topology walkers
+  `walk_edge_loop()`, `walk_edge_ring()`, `walk_face_loop()`,
+  `walk_boundary_loop()` and `walk_connected_region()`, with the delimit
+  flag types `Edge_loop_delimit` / `Region_delimit` and the `Walk_shape`
+  result (`open` | `closed`); and `Geometry::get_corner_edge(corner)`, the
+  edge of the facet edge starting at a corner, valid until the next
+  `build_edges()`.
+
 ### Changed
 
 - `erhe::renderer`: `Primitive_renderer::add_cone` and `add_capsule` classify
@@ -287,6 +295,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   drag) aborts.
 
 ### Fixed
+
+- `erhe::geometry`: `Geometry::update_connectivity()` orders the corners
+  of every vertex into a fan (`get_vertex_corners()`); it stopped at the
+  first vertex with fewer than three corners, leaving the corners of every
+  later vertex of an open mesh unordered. An open fan (boundary vertex)
+  runs from one boundary edge to the other.
 
 - `erhe::commands`: `Command_binding::c_type_strings` misses no `Type` any
   more (it lacked `Controller_axis` / `Controller_button`), and

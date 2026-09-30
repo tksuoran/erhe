@@ -1303,6 +1303,12 @@ auto Geometry::get_edge_facets(GEO::index_t edge) const -> std::span<const GEO::
     return m_edge_to_facets.get(edge);
 }
 
+auto Geometry::get_corner_edge(GEO::index_t corner) const -> GEO::index_t
+{
+    ERHE_VERIFY(corner < m_corner_to_edge.size());
+    return m_corner_to_edge[corner];
+}
+
 auto Geometry::has_connectivity() const -> bool
 {
     return
@@ -1315,7 +1321,8 @@ auto Geometry::has_edge_connectivity() const -> bool
     return
         (m_mesh.edges.nb() > 0) &&
         (m_edge_to_facets.size()  == m_mesh.edges.nb()) &&
-        (m_vertex_to_edges.size() == m_mesh.vertices.nb());
+        (m_vertex_to_edges.size() == m_mesh.vertices.nb()) &&
+        (m_corner_to_edge.size()  == m_mesh.facet_corners.nb());
 }
 
 auto Geometry::get_edge(const GEO::index_t v0, const GEO::index_t v1) const -> GEO::index_t
@@ -1499,7 +1506,7 @@ void Geometry::build_edges()
     }
 
     // The edge of every facet edge is looked up once, while counting.
-    m_corner_to_edge_scratch.resize(m_mesh.facet_corners.nb()); // capacity kept
+    m_corner_to_edge.resize(m_mesh.facet_corners.nb()); // capacity kept
     m_edge_to_facets.begin_count(edge_count);
     for (GEO::index_t facet : m_mesh.facets) {
         const GEO::index_t facet_corner_count = m_mesh.facets.nb_corners(facet);
@@ -1516,14 +1523,14 @@ void Geometry::build_edges()
             ERHE_VERIFY(edge_i != m_vertex_pair_to_edge.end());
             const GEO::index_t edge = edge_i->second;
             ERHE_VERIFY(edge < edge_count);
-            m_corner_to_edge_scratch[corner] = edge;
+            m_corner_to_edge[corner] = edge;
             m_edge_to_facets.count(edge);
         }
     }
     m_edge_to_facets.begin_fill();
     for (GEO::index_t facet : m_mesh.facets) {
         for (GEO::index_t corner : m_mesh.facets.corners(facet)) {
-            m_edge_to_facets.add(m_corner_to_edge_scratch[corner], facet);
+            m_edge_to_facets.add(m_corner_to_edge[corner], facet);
         }
     }
     }
@@ -1674,14 +1681,22 @@ void build_extra_connectivity(
         }
     }
 
+    // Fan order: the corners of a vertex are ordered so that consecutive
+    // corners share an edge. Walking from a corner to the next one crosses
+    // the corner's previous facet edge (prev vertex -> vertex): the next
+    // corner is the one whose next vertex is this corner's prev vertex. A
+    // closed fan (interior vertex) starts at the vertex's first corner. An
+    // open fan (boundary vertex) starts at the corner that no other corner
+    // of the fan leads to - the corner whose previous edge in fan order is a
+    // boundary edge - so the whole fan comes out in one sweep. A vertex with
+    // several fans (non-manifold) gets them one after another.
     class Vertex_corner_info
     {
     public:
-        GEO::index_t vertex     {GEO::NO_INDEX};
         GEO::index_t corner     {GEO::NO_INDEX};
         GEO::index_t prev_vertex{GEO::NO_INDEX};
         GEO::index_t next_vertex{GEO::NO_INDEX};
-        bool         used       {false};
+        bool         placed     {false};
     };
 
     std::vector<Vertex_corner_info> vertex_corner_infos;
@@ -1689,8 +1704,8 @@ void build_extra_connectivity(
 
     for (GEO::index_t vertex : mesh.vertices) {
         const std::span<GEO::index_t> vertex_corners = vertex_to_corners.get_mutable(vertex);
-        if (vertex_corners.size() < 3) {
-            return;
+        if (vertex_corners.size() < 2) {
+            continue;
         }
         vertex_corner_infos.clear();
 
@@ -1705,11 +1720,10 @@ void build_extra_connectivity(
                     const GEO::index_t next_facet_corner = mesh.facets.corner(facet, (local_facet_corner + 1) % facet_corner_count);
                     vertex_corner_infos.push_back(
                         Vertex_corner_info{
-                            .vertex      = vertex,
                             .corner      = vertex_corner,
                             .prev_vertex = mesh.facet_corners.vertex(prev_facet_corner),
                             .next_vertex = mesh.facet_corners.vertex(next_facet_corner),
-                            .used        = false
+                            .placed      = false
                         }
                     );
                     break;
@@ -1717,25 +1731,54 @@ void build_extra_connectivity(
             }
         }
 
-        // Find chained entries
-        for (GEO::index_t left_slot = 0, end = static_cast<GEO::index_t>(vertex_corner_infos.size()); left_slot < end; ++left_slot) {
-            const GEO::index_t  left_next_slot = (left_slot + 1) % end;
-            Vertex_corner_info& left_entry     = vertex_corner_infos[left_slot];
-            Vertex_corner_info& next           = vertex_corner_infos[left_next_slot];
-            for (GEO::index_t right_slot = 0; right_slot< end; ++right_slot) {
-                Vertex_corner_info& right_entry = vertex_corner_infos[right_slot];
-                if (right_entry.used) {
+        const std::size_t info_count = vertex_corner_infos.size();
+        std::size_t       out_slot   = 0;
+        while (out_slot < info_count) {
+            // Fan start: the first unplaced corner no unplaced corner leads to;
+            // the first unplaced corner when every one is led to (closed fan).
+            std::size_t start = info_count;
+            std::size_t first_unplaced = info_count;
+            for (std::size_t candidate = 0; candidate < info_count; ++candidate) {
+                const Vertex_corner_info& candidate_info = vertex_corner_infos[candidate];
+                if (candidate_info.placed) {
                     continue;
                 }
-                if (right_entry.next_vertex == left_entry.prev_vertex) {
-                    right_entry.used = true;
-                    if (right_slot != left_next_slot) {
-                        std::swap(next, right_entry);
+                if (first_unplaced == info_count) {
+                    first_unplaced = candidate;
+                }
+                bool led_to = false;
+                for (std::size_t other = 0; other < info_count; ++other) {
+                    const Vertex_corner_info& other_info = vertex_corner_infos[other];
+                    if ((other != candidate) && !other_info.placed && (other_info.prev_vertex == candidate_info.next_vertex)) {
+                        led_to = true;
+                        break;
                     }
+                }
+                if (!led_to) {
+                    start = candidate;
                     break;
                 }
             }
-            vertex_corners[left_slot] = left_entry.corner;
+            if (start == info_count) {
+                start = first_unplaced;
+            }
+
+            // Sweep the fan from its start.
+            std::size_t current = start;
+            while (current != info_count) {
+                Vertex_corner_info& current_info = vertex_corner_infos[current];
+                current_info.placed = true;
+                vertex_corners[out_slot++] = current_info.corner;
+                std::size_t next = info_count;
+                for (std::size_t candidate = 0; candidate < info_count; ++candidate) {
+                    const Vertex_corner_info& candidate_info = vertex_corner_infos[candidate];
+                    if (!candidate_info.placed && (candidate_info.next_vertex == current_info.prev_vertex)) {
+                        next = candidate;
+                        break;
+                    }
+                }
+                current = next;
+            }
         }
     }
 }

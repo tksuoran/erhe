@@ -937,12 +937,16 @@ public:
     [[nodiscard]] auto get_corner_facet  (GEO::index_t corner) const -> GEO::index_t;
     [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> std::span<const GEO::index_t>;
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
+    // The edge of the facet edge that starts at `corner` (from the corner's
+    // vertex to the next corner's vertex in its facet). Valid until the next
+    // build_edges().
+    [[nodiscard]] auto get_corner_edge   (GEO::index_t corner) const -> GEO::index_t;
 
     // True when update_connectivity() has run for the current element counts,
     // so get_vertex_corners() and get_corner_facet() may be called.
     [[nodiscard]] auto has_connectivity     () const -> bool;
     // True when the mesh has edges and build_edges() has run for them, so
-    // get_edge_facets() and get_vertex_edges() may be called.
+    // get_edge_facets(), get_vertex_edges() and get_corner_edge() may be called.
     [[nodiscard]] auto has_edge_connectivity() const -> bool;
 
     // Semi-sharp crease sharpness accessors (see doc/erhe/subdivision_crease_edges.md).
@@ -1041,7 +1045,7 @@ private:
     std::vector<GEO::index_t>              m_corner_to_facet;
     Index_lists                            m_edge_to_facets;
     Index_lists                            m_vertex_to_edges;
-    std::vector<GEO::index_t>              m_corner_to_edge_scratch; // build_edges(): edge of the facet edge starting at each corner
+    std::vector<GEO::index_t>              m_corner_to_edge; // build_edges(): edge of the facet edge starting at each corner
 
     struct Edge_hash
     {
