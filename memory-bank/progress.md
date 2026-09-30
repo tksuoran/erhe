@@ -24,8 +24,10 @@
 ✓crash-2-fixed::{empty-Geometry->empty-Primitive(no-ranges,no-IGeometry);glTF-export-skips-facetless-primitives;erhe_primitive_tests-48}
 ✓M8::{subdivide_edges.hpp(patterns:opposite/path/3-edge/grid/tri-fan/lattice/2-run;smoothness=Hermite);177-geometry-tests;editor+MCP-subdivide_mesh_edges;verify-119/119}
 !gap::component-transform-has-NO-pointer-driven-scalar-drag(gizmo-handle-required)+NO-cancel-path+no-G-key->needed-by-M6-slide/M7-inset/M5-loop-cut->commit-'scalar-drag+cancel'-first
-⚡scalar-drag::Mesh_component_transform-scalar-modes+pointer-drag-command+Escape-cancel
-?M6-slide->M7-inset(scalar-mode)->M5-loop-cut->M9
+✓scalar-drag+M6::{Mesh_component_transform-scalar-path(begin_scalar/apply_scalar/cancel)+Transform_tool-pointer-drag+G/Enter/Esc/E/F/C-on-component-tool(exact-mask-0)+undo/redo-blocked-during-live-edit(Operation_stack::get_undo_block_reason)+correct-UVs-at-commit+edge_slide/vertex_slide-modes;MCP-slide_mesh_components/cancel_component_edit;verify-173/173}
+?left::Mcp_test-injected-input-slide-case;on-screen-rail-drawing;pointer-wrap
+⚡M7::inset-as-scalar-mode
+?M5-loop-cut->M9
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
