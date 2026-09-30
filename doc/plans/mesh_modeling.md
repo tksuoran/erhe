@@ -149,10 +149,10 @@ What is missing, as the concrete facts the catalog scores against:
   overrides (`doc/editor/input_bindings.md`): Alt+click loop select,
   Ctrl+Alt+click ring select, Ctrl+R loop cut, K knife, G G slide (vertex
   slide in vertex mode, edge slide otherwise), M merge menu, X delete menu,
-  Ctrl+X dissolve, I inset, Ctrl+B bevel, F fill, J connect, A select all,
-  Alt+A select none, Ctrl+I invert, L select linked under the cursor,
-  Ctrl+L select linked from the selection. Modal keys per tool are in
-  section 4.
+  Ctrl+X dissolve, I inset, Ctrl+B bevel, F fill, J connect, Ctrl+A select
+  all (plain A is the fly camera's strafe key), Alt+A select none, Ctrl+I
+  invert, L select linked under the cursor, Ctrl+L select linked from the
+  selection. Modal keys per tool are in section 4.
 
 ## 4. Operation behaviour
 
