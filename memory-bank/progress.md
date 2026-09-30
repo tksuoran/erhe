@@ -17,7 +17,10 @@
 ✓M2::{select_loop+Alt/Ctrl+Alt-click+Shift+boundary-cycle+hover-preview(change-driven)+select_mesh_loop-MCP;verify-all-pass;preview-look=user-interactive-check-pending}
 ✓PHASE-2-DONE
 ✓M3a::{dissolve.hpp:delete_components+dissolve_faces/edges/vertices/limited;155-geometry-tests;remap_component_selection-drops-edges-absent-in-destination}
-⚡M3b::editor-delete/dissolve-integration+MCP+verify
+✓M3b::{5-Mesh_operations+Delete-key/Ctrl+X-mode-dispatch(try_call-state-check)+Components-section+MCP-delete/dissolve/dissolve_limited;verify-74/74}
+✓M3-DONE
+?follow-up::Edit-menu-Delete-declines-while-component-selection-live(route-to-component-delete);limited-dissolve-no-op-still-records-undo-entry
+⚡M4a::library-merge-ops(center/first/last/position/collapse/by-distance-via-octree-radius-search-as-weld)+tests
 ?M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
 !no-3D-cursor-in-editor->merge-at-cursor=hovered-point(UI)|explicit-position(MCP)
 ?M1+M10->phase-2-M2->phase-3-M3,M4,M8,M7,M9->phase-4-M6,M5->phase-5-M11,M12->phase-6-M13a,M15,M14,M16,M13b
